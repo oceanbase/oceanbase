@@ -38,7 +38,7 @@ rpc::frame::ObReqTransport mock_transport(nullptr, nullptr);
 static int init_dm()
 {
   int ret = OB_SUCCESS;
-  GCTX.server_id_ = 10086;
+  (void) GCTX.set_server_id(4095);
   ObAddr self;
   self.set_ip_addr("127.0.0.1", 8086);
   if (OB_FAIL(dm->init(self, 1))) {

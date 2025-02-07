@@ -202,6 +202,7 @@ public:
     return lib::is_oracle_mode() ? " SUM_OPNSIZE(\"%.*s\")/decode(COUNT(*),0,1,COUNT(*))" : " SUM_OPNSIZE(`%.*s`)/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
   }
   virtual int decode(ObObj &obj) override;
+  virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
 };
 
 class ObStatLlcBitmap : public ObStatColItem

@@ -37,8 +37,13 @@ int ObExprFunValues::calc_result_type1(ObExprResType &type,
 {
   UNUSED(type_ctx);
   type.set_type(text.get_type());
-  type.set_collation_level(text.get_collation_level());
-  type.set_collation_type(text.get_collation_type());
+  if (ob_is_collection_sql_type(text.get_type())
+      || ob_is_user_defined_sql_type(text.get_type())) {
+    type.set_subschema_id(text.get_subschema_id());
+  } else {
+    type.set_collation_level(text.get_collation_level());
+    type.set_collation_type(text.get_collation_type());
+  }
   type.set_accuracy(text.get_accuracy());
   return OB_SUCCESS;
 }

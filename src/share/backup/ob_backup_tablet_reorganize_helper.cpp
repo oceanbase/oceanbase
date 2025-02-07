@@ -15,6 +15,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/hash/ob_hashset.h"
+#include "share/ob_tablet_reorganize_history_table_operator.h"
 
 using namespace oceanbase::common::hash;
 using namespace oceanbase::common;
@@ -96,11 +97,10 @@ int ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(common::ObMySQL
     const uint64_t tenant_id, const common::ObTabletID &tablet_id, share::ObLSID &ls_id, bool &reorganized)
 {
   int ret = OB_SUCCESS;
-  // TODO(yanfeng): wait auto_split branch merge
-  // if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::check_tablet_has_reorganized(
-  //     sql_proxy, tenant_id, tablet_id, ls_id, reorganized))) {
-  //   LOG_WARN("failed to check tablet has reorganized", K(ret), K(tenant_id), K(tablet_id), K(ls_id));
-  // }
+  if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::check_tablet_has_reorganized(
+      sql_proxy, tenant_id, tablet_id, ls_id, reorganized))) {
+    LOG_WARN("failed to check tablet has reorganized", K(ret), K(tenant_id), K(tablet_id), K(ls_id));
+  }
   return ret;
 }
 
@@ -200,24 +200,23 @@ int ObBackupTabletReorganizeHelper::get_all_tablet_reorganize_history_infos_(
     common::ObIArray<ObTabletReorganizeInfo> &history_infos)
 {
   int ret = OB_SUCCESS;
-  // TODO(yanfeng): wait auto_split branch merge
-  // ObArray<ReorganizeTabletPair> tablet_pairs;
-  // if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_all_split_tablet_pairs(
-  //     sql_proxy, tenant_id, ls_id, tablet_pairs))) {
-  //   LOG_WARN("failed to get all split tablet pairs", K(ret));
-  // } else {
-  //   ObTabletReorganizeInfo info;
-  //   ARRAY_FOREACH_X(tablet_pairs, idx, cnt, OB_SUCC(ret)) {
-  //     const ReorganizeTabletPair &pair = tablet_pairs.at(idx);
-  //     info.tenant_id_ = tenant_id;
-  //     info.ls_id_ = ls_id;
-  //     info.src_tablet_id_ = pair.src_tablet_id_;
-  //     info.dest_tablet_id_ = pair.dest_tablet_id_;
-  //     if (OB_FAIL(history_infos.push_back(info))) {
-  //       LOG_WARN("failed to push back", K(ret));
-  //     }
-  //   }
-  // }
+  ObArray<ReorganizeTabletPair> tablet_pairs;
+  if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_all_split_tablet_pairs(
+      sql_proxy, tenant_id, ls_id, tablet_pairs))) {
+    LOG_WARN("failed to get all split tablet pairs", K(ret));
+  } else {
+    ObTabletReorganizeInfo info;
+    ARRAY_FOREACH_X(tablet_pairs, idx, cnt, OB_SUCC(ret)) {
+      const ReorganizeTabletPair &pair = tablet_pairs.at(idx);
+      info.tenant_id_ = tenant_id;
+      info.ls_id_ = ls_id;
+      info.src_tablet_id_ = pair.src_tablet_id_;
+      info.dest_tablet_id_ = pair.dest_tablet_id_;
+      if (OB_FAIL(history_infos.push_back(info))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
   return ret;
 }
 

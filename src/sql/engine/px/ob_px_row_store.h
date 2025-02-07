@@ -42,7 +42,8 @@ public:
       cur_iter_rows_(0),
       recv_list_rows_(0),
       datum_iter_(NULL),
-      row_iter_(NULL),
+      vec_row_iter_(NULL),
+      row_meta_(),
       curr_vector_(),
       id_(id)
   {
@@ -58,7 +59,7 @@ public:
   {
     return (recv_list_rows_ > cur_iter_rows_)
         || (NULL != datum_iter_ && datum_iter_->is_valid() && datum_iter_->has_next())
-        || (NULL != row_iter_ && row_iter_->is_valid() && row_iter_->has_next());
+        || (NULL != vec_row_iter_ && vec_row_iter_->is_valid() && vec_row_iter_->has_next());
   }
 
   // return left rows for non interm result.
@@ -67,10 +68,14 @@ public:
   int64_t left_rows() const
   {
     int64_t rows = 0;
-    if (NULL != datum_iter_) {
+    // The order cannot be changed.
+    // In the special vectorization 2.0 scenario,
+    // there will be a mock empty datum_iter_,
+    // so we need to prioritize checking vec_row_iter_.
+    if (NULL != vec_row_iter_) {
+      rows = (vec_row_iter_->is_valid() && vec_row_iter_->has_next()) ? INT64_MAX : 0;
+    } else if (NULL != datum_iter_) {
       rows = (datum_iter_->is_valid() && datum_iter_->has_next()) ? INT64_MAX : 0;
-    } else if (OB_UNLIKELY(NULL != row_iter_)) {
-      rows = (row_iter_->is_valid() && row_iter_->has_next()) ? INT64_MAX : 0;
     } else {
       rows = recv_list_rows_ - cur_iter_rows_;
     }
@@ -156,7 +161,8 @@ private:
 
   // store iterator for interm result iteration.
   ObChunkDatumStore::Iterator *datum_iter_;
-  ObChunkRowStore::Iterator *row_iter_;
+  ObTempRowStore::Iterator *vec_row_iter_;
+  RowMeta row_meta_;
   dtl::ObDtlMsgType msg_type_;
   dtl::ObDtlVectors curr_vector_;
   int64_t id_;

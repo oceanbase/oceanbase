@@ -49,6 +49,11 @@ uint64_t __attribute__((weak)) get_current_tenant_id_for_dblink()
   return oceanbase::OB_INVALID_ID;
 }
 
+uint64_t __attribute__((weak)) get_max_dblink_conn_per_observer()
+{
+  return 256;
+}
+
 namespace oceanbase
 {
 namespace common
@@ -109,7 +114,7 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
 {
   int ret = OB_SUCCESS;
   int64_t value = 0;
-  obsys::ObRLockGuard wg(lock_);
+  obsys::ObWLockGuard wg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));
@@ -142,7 +147,7 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
       connection = next;
     }
     if (OB_SUCC(ret) && OB_FAIL(dblink_conn_map_.erase_refactored(sessid))) {
-      LOG_WARN("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));;
+      LOG_WARN("failed to erase_refactored", K(tenant_id_), K(sessid), K(ret));
     }
   }
   return ret;
@@ -151,7 +156,7 @@ int ObTenantDblinkKeeper::clean_dblink_conn(uint32_t sessid, bool force_disconne
 int ObTenantDblinkKeeper::set_dblink_conn(uint32_t sessid, common::sqlclient::ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard wg(lock_);
+  obsys::ObWLockGuard wg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));
@@ -203,7 +208,7 @@ int ObTenantDblinkKeeper::get_dblink_conn(uint32_t sessid, uint64_t dblink_id,
   dblink_conn = NULL;
   ObArray<int64_t> *dblink_conn_array = NULL;
   int64_t value = 0;
-  obsys::ObRLockGuard wg(lock_);
+  obsys::ObRLockGuard rg(lock_);
   if (!dblink_conn_map_.created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("dblink_conn_map_ is not inited", K(ret), K(tenant_id_), K(sessid));

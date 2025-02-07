@@ -138,7 +138,8 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 6: {
-        if (0 >= palf_stat.config_version_.to_string(config_version_buf_, VARCHAR_128)) {
+        if (0 >= palf_stat.config_version_.to_string(config_version_buf_,
+              palf::LogConfigVersion::CONFIG_VERSION_LEN)) {
           SERVER_LOG(WARN, "config_version_ to_string failed", K(ret), K(palf_stat));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(config_version_buf_));

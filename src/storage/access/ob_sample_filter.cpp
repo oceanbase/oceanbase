@@ -26,7 +26,7 @@ ObSampleFilterExecutor::ObSampleFilterExecutor(
     common::ObIAllocator &alloc,
     ObPushdownSampleFilterNode &filter,
     sql::ObPushdownOperator &op)
-    : ObPushdownFilterExecutor(alloc, op, sql::PushdownExecutorType::SAMPLE_FILTER_EXECUTOR),
+    : ObPushdownFilterExecutor(alloc, op, sql::PushdownExecutorType::HYBRID_SAMPLE_FILTER_EXECUTOR),
       row_num_(0),
       seed_(-1),
       percent_(100),
@@ -593,7 +593,7 @@ int ObRowSampleFilter::init(
     sql::ObPushdownFilterFactory filter_factory(allocator);
     if (OB_FAIL(filter_factory.alloc(sql::PushdownFilterType::SAMPLE_FILTER, 0, sample_node_))) {
       LOG_WARN("Failed to alloc pushdown sample filter node", K(ret));
-    } else if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, *op))) {
+    } else if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::HYBRID_SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, *op))) {
       LOG_WARN("Failed to alloc pushdown sample filter executor", K(ret));
     } else if (OB_FAIL(static_cast<ObSampleFilterExecutor *>(sample_filter_)->init(sample_info, is_reverse_scan, allocator))) {
       LOG_WARN("Failed to init ObSampleFilterExecutor", K(ret));

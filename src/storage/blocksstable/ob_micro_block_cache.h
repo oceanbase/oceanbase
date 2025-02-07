@@ -248,9 +248,9 @@ public:
     logic_micro_id_ = logic_micro_id;
     data_checksum_ = data_checksum;
   }
-  OB_INLINE void set_rowkey_col_descs(const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+  OB_INLINE void set_table_read_info(const ObITableReadInfo *table_read_info)
   {
-    rowkey_col_descs_ = rowkey_col_descs;
+    table_read_info_ = table_read_info;
   }
 protected:
   friend class ObIMicroBlockCache;
@@ -289,7 +289,7 @@ protected:
   ObMicroBlockDesMeta block_des_meta_;
   bool use_block_cache_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
+  const ObITableReadInfo *table_read_info_;
   DISALLOW_COPY_AND_ASSIGN(ObIMicroBlockIOCallback);
 };
 
@@ -414,7 +414,7 @@ public:
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
       common::ObKVCacheHandle &cache_handle,
-      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) = 0;
+      const ObITableReadInfo *table_read_info = nullptr) = 0;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -481,7 +481,7 @@ public:
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
       common::ObKVCacheHandle &cache_handle,
-      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
+      const ObITableReadInfo *table_read_info = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,
@@ -529,7 +529,7 @@ public:
       ObIAllocator &allocator,
       const ObMicroBlockCacheValue *&micro_block,
       common::ObKVCacheHandle &cache_handle,
-      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr) override;
+      const ObITableReadInfo *table_read_info = nullptr) override;
   virtual int reserve_kvpair(
       const ObMicroBlockDesc &micro_block_desc,
       ObKVCacheInstHandle &inst_handle,

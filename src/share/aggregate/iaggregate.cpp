@@ -39,8 +39,17 @@ extern int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_c
                                     ObIAllocator &allocator, IAggregate *&agg);
 extern int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                                 ObIAllocator &allocator, IAggregate *&agg);
+extern int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx,
+                                                         const int64_t agg_col_id,
+                                                         ObIAllocator &allocator, IAggregate *&agg);
 extern int init_sysbit_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                  ObIAllocator &allocator, IAggregate *&agg);
+
+extern int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                   ObIAllocator &allocator, IAggregate *&agg);
+extern int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                  ObIAllocator &allocator, IAggregate *&agg);
+
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
     ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
@@ -74,11 +83,14 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_SUM, sum, i);
         INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum, i);
         INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT, approx_count_distinct, i);
-        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, approx_count_distinct_synopsis, i);
         INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, approx_count_distinct, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_OR, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_AND, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_XOR, sysbit, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUPING, grouping, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUPING_ID, grouping, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -170,6 +182,8 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     RTSIZE(VEC_TC_DEC_INT256),            // dec_int256
     RTSIZE(VEC_TC_DEC_INT512),            // dec_int512
     string_reserved_size,                 // collection
+    RTSIZE(VEC_TC_MYSQL_DATE),                  // mysql date
+    RTSIZE(VEC_TC_MYSQL_DATETIME),              // mysql datetime
     string_reserved_size,                 // roaringbitmap
   };
   static_assert(sizeof(reserved_sizes) / sizeof(reserved_sizes[0]) == MAX_VEC_TC, "");
@@ -179,7 +193,7 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
                                               aggr_info.expr_->datum_meta_.precision_);
   if (aggr_info.is_implicit_first_aggr()) {
     ret_size += string_reserved_size; // <char *, len>;
-  } else if (aggr_info.get_expr_type() == T_FUN_COUNT) {
+  } else if (aggr_info.get_expr_type() == T_FUN_COUNT || aggr_info.get_expr_type() == T_FUN_GROUPING) {
     // count returns ObNumberType in oracle mode,
     // we use int64_t as row counts recording type, and cast int64_t to ObNumberType in
     // `collect_group_result`

@@ -32,12 +32,11 @@ public:
   virtual ~ObTableQueryP() {}
 
   virtual int deserialize() override;
+  virtual int before_process() override;
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
-  virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
-  virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
   virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
   virtual bool is_kv_processor() override { return true; }
@@ -45,7 +44,6 @@ protected:
 private:
   int init_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
   int query_and_result(table::ObTableApiScanExecutor *executor);
-  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
 
 private:
   common::ObArenaAllocator allocator_;

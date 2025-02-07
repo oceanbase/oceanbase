@@ -51,16 +51,12 @@ const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
-                                double &filter_selectivity,
-                                ObIArray<ObExprSelPair> &all_predicate_sel,
                                 const ObOptimizerContext &opt_ctx)
 {
   int ret = OB_SUCCESS;
   GET_COST_MODEL();
   if (OB_FAIL(model->cost_nestloop(est_cost_info,
-                                  cost,
-                                  filter_selectivity,
-                                  all_predicate_sel))) {
+                                   cost))) {
     LOG_WARN("failed to est cost for nestloop join", K(ret));
   }
   return ret;
@@ -512,6 +508,8 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
     for (int i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
       const ColumnItem &column_item = columns.at(i);
       ObColumnRefRawExpr *column_expr = column_item.expr_;
+      const OptColumnMeta *column_meta = NULL == table_meta ? NULL :
+                                         table_meta->get_column_meta(column_expr->get_column_id());
       if (OB_ISNULL(column_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -520,23 +518,11 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
                  !column_expr->is_explicited_reference() ||
                  column_expr->is_hidden_column()) {
         // do nothing
+      } else if (OB_NOT_NULL(column_meta) && table_meta->use_opt_stat() && column_meta->get_avg_len() != 0) {
+        width += column_meta->get_avg_len();
       } else {
-        ObGlobalColumnStat stat;
-        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
-            OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                table_meta->get_ref_table_id(),
-                                                                table_meta->get_all_used_parts(),
-                                                                column_expr->get_column_id(),
-                                                                table_meta->get_all_used_global_parts(),
-                                                                table_meta->get_rows(),
-                                                                table_meta->get_scale_ratio(),
-                                                                stat))) {
-          LOG_WARN("failed to get column stat", K(ret));
-        } else if (stat.avglen_val_ != 0) {
-          width += stat.avglen_val_;
-        } else {
-          width += get_estimate_width_from_type(column_expr->get_result_type());
-        }
+        // non base table column expr use estimation
+        width += get_estimate_width_from_type(column_expr->get_result_type());
       }
     }
   }
@@ -567,19 +553,11 @@ int ObOptEstCost::estimate_width_for_exprs(const OptTableMetas &table_metas,
         uint64_t table_id = column_expr->get_table_id();
         ObGlobalColumnStat stat;
         const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
+        const OptColumnMeta *column_meta = NULL == table_meta ? NULL :
+                                           table_meta->get_column_meta(column_expr->get_column_id());
         // base table column expr use statistic
-        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
-            OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                                table_meta->get_ref_table_id(),
-                                                                table_meta->get_all_used_parts(),
-                                                                column_expr->get_column_id(),
-                                                                table_meta->get_all_used_global_parts(),
-                                                                table_meta->get_rows(),
-                                                                table_meta->get_scale_ratio(),
-                                                                stat))) {
-          LOG_WARN("failed to get column stat", K(ret));
-        } else if (stat.avglen_val_ != 0) {
-          width += stat.avglen_val_;
+        if (OB_NOT_NULL(column_meta) && table_meta->use_opt_stat() && column_meta->get_avg_len() != 0) {
+          width += column_meta->get_avg_len();
         } else {
           // non base table column expr use estimation
           width += get_estimate_width_from_type(column_expr->get_result_type());

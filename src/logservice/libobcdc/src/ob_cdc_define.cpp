@@ -36,7 +36,7 @@ TenantTransID::~TenantTransID()
 void TenantTransID::reset()
 {
   tenant_id_ = common::OB_INVALID_TENANT_ID;
-  trans_id_ = -1;
+  trans_id_.reset();
 }
 
 int TenantTransID::compare(const TenantTransID &other) const
@@ -88,12 +88,21 @@ PartTransID::~PartTransID()
 void PartTransID::reset()
 {
   tls_id_.reset();
-  trans_id_ = -1;
+  trans_id_.reset();
 }
 
 bool PartTransID::operator==(const PartTransID &part_trans_id) const
 {
   return trans_id_ == part_trans_id.trans_id_ && tls_id_ == part_trans_id.get_tls_id();
+}
+
+PartTransID &PartTransID::operator=(const PartTransID &other)
+{
+  if (this != &other) {
+    this->tls_id_ = other.get_tls_id();
+    this->trans_id_ = other.get_tx_id();
+  }
+  return *this;
 }
 
 uint64_t PartTransID::hash() const

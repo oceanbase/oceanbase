@@ -24,6 +24,7 @@ class ObDatumRowUtils
 public:
   static int ob_create_row(ObIAllocator &allocator, int64_t col_count, ObDatumRow *&datum_row);
   static int ob_create_rows(ObIAllocator &allocator, int64_t row_count, int64_t col_count, ObDatumRow *&datum_rows);
+  static int ob_create_rows_shallow_copy(ObIAllocator &allocator, const ObIArray<ObDatumRow *> &src_rows, ObDatumRow *&datum_rows);
   // TODO@xuanxi: rewrite it when store rowkey is no longer needed
   static int prepare_rowkey(
     const ObDatumRow &datum_row,

@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -31,6 +34,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "log/ob_shared_log_utils.h"
 #endif
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 // 测试OSS需要设置如下几个环境变量
 //export BUCKET=xxxx
@@ -202,9 +206,12 @@ int upload_blocks(const uint64_t dst_tenant_id,
   const int64_t UPLOAD_SIZE = PALF_PHY_BLOCK_SIZE;
   char *read_buf_ptr = reinterpret_cast<char*>(ob_malloc_align(LOG_DIO_ALIGN_SIZE, UPLOAD_SIZE, "test"));
   LogReader log_reader;
+  LogIOAdapter io_adapter;
   if (NULL == read_buf_ptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(log_reader.init(src_dir, PALF_PHY_BLOCK_SIZE))) {
+  } else if (OB_FAIL(io_adapter.init(dst_tenant_id, LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
+    PALF_LOG(WARN, "init io_adapter failed", K(dst_tenant_id), K(ret));
+  } else if (OB_FAIL(log_reader.init(src_dir, PALF_PHY_BLOCK_SIZE, &io_adapter))) {
     PALF_LOG(WARN, "init log_reader failed", KP(src_dir));
   } else if (OB_FAIL(handler.init())) {
     PALF_LOG(WARN, "init hstartandler failed", KP(src_dir));
@@ -215,9 +222,9 @@ int upload_blocks(const uint64_t dst_tenant_id,
     block_id_t curr_block_id = start_block_id;
     ReadBuf read_buf(read_buf_ptr, UPLOAD_SIZE + LOG_DIO_ALIGN_SIZE);
     int64_t out_read_size = 0;
-    LogIteratorInfo info;
+    LogIOContext io_ctx(LogIOUser::DEFAULT);
     while (curr_block_id < end_block_id) {
-      if (OB_FAIL(log_reader.pread(curr_block_id, 0, UPLOAD_SIZE, read_buf, out_read_size, &info))) {
+      if (OB_FAIL(log_reader.pread(curr_block_id, 0, UPLOAD_SIZE, read_buf, out_read_size, io_ctx))) {
         PALF_LOG(WARN, "pread failed", KP(src_dir));
       } else if (OB_FAIL(handler.upload(dst_tenant_id, dst_palf_id, curr_block_id, read_buf_ptr, UPLOAD_SIZE))) {
         PALF_LOG(WARN, "upload failed", KP(src_dir));

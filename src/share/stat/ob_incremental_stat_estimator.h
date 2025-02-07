@@ -52,6 +52,18 @@ public:
   static int derive_global_index_stat_by_part_index_stats(const ObTableStatParam &param,
                                                           const ObIArray<ObOptTableStat *> &part_index_stats,
                                                           ObIArray<ObOptTableStat *> &all_index_stats);
+
+  static int derive_part_index_column_stat_by_subpart_index(ObExecContext &ctx,
+                                                            ObIAllocator &alloc,
+                                                            const ObTableStatParam &param,
+                                                            const ObIArray<ObOptStat> &part_index_stats,
+                                                            ObIArray<ObOptStat> &approx_part_opt_stats);
+
+  static int derive_global_index_column_stat_by_part_index(ObExecContext &ctx,
+                                                           ObIAllocator &alloc,
+                                                           const ObTableStatParam &param,
+                                                           const ObIArray<ObOptStat> &part_index_stats,
+                                                           ObOptStat &global_opt_stat);
 private:
   static int do_derive_part_stats_from_subpart_stats(
     ObExecContext &ctx,

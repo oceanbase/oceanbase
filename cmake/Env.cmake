@@ -1,4 +1,5 @@
 ob_define(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
+ob_define(FILE_PREFIX "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.")
 ob_define(OB_LD_BIN ld)
 ob_define(ASAN_IGNORE_LIST "${CMAKE_SOURCE_DIR}/asan_ignore_list.txt")
 
@@ -6,7 +7,7 @@ ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
-ob_define(OB_BUILD_CDC OFF)
+ob_define(BUILD_CDC_ONLY OFF)
 ob_define(OB_USE_CLANG ON)
 ob_define(OB_ERRSIM OFF)
 ob_define(BUILD_NUMBER 1)
@@ -23,7 +24,10 @@ ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
 ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
-ob_define(LTO_JOBS 16)
+ob_define(LTO_JOBS all)
+ob_define(LTO_CACHE_DIR "${CMAKE_BINARY_DIR}/cache")
+ob_define(LTO_CACHE_POLICY cache_size=100%:cache_size_bytes=0k:cache_size_files=0:prune_after=0s:prune_interval=72h)
+ob_define(NEED_PARSER_CACHE ON)
 # get compiler from build.sh
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
@@ -44,6 +48,12 @@ ob_define(OB_DISABLE_LSE OFF)
 
 ob_define(OB_DISABLE_PIE OFF)
 
+ob_define(OB_ENABLE_MCMODEL OFF)
+
+ob_define(USE_LTO_CACHE OFF)
+# odps jni
+ob_define(OB_BUILD_JNI_ODPS ON)
+
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
@@ -54,6 +64,7 @@ if(WITH_COVERAGE)
 
   add_compile_options(${CMAKE_COVERAGE_COMPILE_OPTIONS})
   set(DEBUG_PREFIX "")
+  set(FILE_PREFIX "")
 endif()
 
 ob_define(AUTO_FDO_OPT "")
@@ -68,6 +79,9 @@ ob_define(THIN_LTO_CONCURRENCY_LINK "")
 if(ENABLE_THIN_LTO)
   set(THIN_LTO_OPT "-flto=thin")
   set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=${LTO_JOBS}")
+  if(USE_LTO_CACHE)
+    set(THIN_LTO_CONCURRENCY_LINK "${THIN_LTO_CONCURRENCY_LINK},--thinlto-cache-dir=${LTO_CACHE_DIR},--thinlto-cache-policy=${LTO_CACHE_POLICY}")
+  endif()
 endif()
 
 set(HOTFUNC_OPT "")
@@ -76,13 +90,24 @@ if(ENABLE_HOTFUNC)
 endif()
 
 set(BOLT_OPT "")
-if(ENABLE_BOLT)
+if((ENABLE_BOLT OR (NOT DEFINED ENABLE_BOLT AND ENABLE_BOLT_AUTO)) AND NOT OB_BUILD_OPENSOURCE)
   EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
   if( ${ARCHITECTURE} STREQUAL "x86_64" )
     message(STATUS "build with bolt opt")
     set(BOLT_OPT "-Wl,--emit-relocs")
     ob_define(OB_ENABLE_BOLT ON)
   endif()
+endif()
+
+ob_define(CPP_STANDARD_20 OFF)
+if(CPP_STANDARD_20)
+  message(STATUS "Using C++20 standard")
+  set(CMAKE_CXX_FLAGS "-std=gnu++20")
+  ob_define(CPP_STANDARD_20 ON)
+  add_definitions(-DCPP_STANDARD_20)
+else()
+  message(STATUS "Using C++11 standard")
+  set(CMAKE_CXX_FLAGS "-std=gnu++11")
 endif()
 
 if(OB_DISABLE_PIE)
@@ -121,6 +146,7 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_DBLINK ON)
   # odps
   ob_define(OB_BUILD_CPP_ODPS ON)
+
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
 
@@ -184,8 +210,14 @@ if(OB_BUILD_CPP_ODPS)
   add_definitions(-DOB_BUILD_CPP_ODPS)
 endif()
 
+if (OB_BUILD_JNI_ODPS)
+ add_definitions(-DOB_BUILD_JNI_ODPS)
+endif()
+
 # should not use initial-exec for tls-model if building OBCDC.
-if(NOT OB_BUILD_CDC)
+if(BUILD_CDC_ONLY)
+  add_definitions(-DOB_BUILD_CDC_DISABLE_VSAG)
+else()
   add_definitions(-DENABLE_INITIAL_EXEC_TLS_MODEL)
 endif()
 
@@ -217,6 +249,14 @@ if (OB_USE_CLANG)
       NO_DEFAULT_PATH)
   endif()
 
+  if(CPP_STANDARD_20)
+    execute_process(COMMAND ${OB_CC} --version OUTPUT_VARIABLE CLANG_VERSION_STRING)
+    string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" CLANG_VERSION ${CLANG_VERSION_STRING})
+    if(CLANG_VERSION VERSION_LESS "17.0.0")
+      message(FATAL_ERROR "Clang version must be at least 17.0.0 if CPP_STANDARD_20 is ON, Please run the cmake process with '-DCPP_STANDARD_20=ON --init'")
+    endif()
+  endif()
+
   if (OB_CXX)
     message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
   else()
@@ -232,18 +272,18 @@ if (OB_USE_CLANG)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
 
   if (OB_USE_ASAN)
-    ob_define(CMAKE_ASAN_FLAG "-fstack-protector-strong -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
+    ob_define(CMAKE_ASAN_FLAG "-mllvm -asan-stack=0 -fsanitize=address -fno-optimize-sibling-calls -fsanitize-blacklist=${ASAN_IGNORE_LIST}")
   endif()
 
   if (OB_USE_LLD)
-    set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
+    set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld -Wno-unused-command-line-argument")
     set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
     set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1 ${HOTFUNC_OPT}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
-  set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} -std=gnu++11")
-  set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
-  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} ${THIN_LTO_CONCURRENCY_LINK} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${FILE_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
+  set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${FILE_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
+  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${FILE_PREFIX} ${AUTO_FDO_OPT}")
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${PIE_OPT} ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT} ${CMAKE_COVERAGE_EXE_LINKER_OPTIONS}")
 else() # not clang, use gcc

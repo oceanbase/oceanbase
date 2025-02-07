@@ -33,9 +33,11 @@ common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy) {
 int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 {
   if (PNIO_OK != io_err) {
-    if (PNIO_TIMEOUT == io_err) {
+    if (PNIO_TIMEOUT == io_err || PNIO_DISCONNECT == io_err || PNIO_PKT_TERMINATE == io_err) {
+      // these pnio error means not sure rpc was successfully sent
       send_ret_ = OB_TIMEOUT;
     } else {
+      // OB_RPC_SEND_ERROR means the rpc must not have been sent out
       send_ret_ = OB_RPC_SEND_ERROR;
       RPC_LOG_RET(WARN, send_ret_, "pnio error", KP(buf), K(sz), K(io_err));
     }

@@ -193,6 +193,9 @@ public:
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }
 
+  void set_client_type(const obrpc::ObCdcClientType client_type) { client_type_ = client_type; }
+  obrpc::ObCdcClientType get_client_type() const { return client_type_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(start_lsn),
@@ -438,6 +441,9 @@ public:
 
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
+
+  void set_progress(const int64_t progress) { progress_ = progress; }
+  int64_t get_progress() const { return progress_; }
 
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }

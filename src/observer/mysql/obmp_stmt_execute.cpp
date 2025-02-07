@@ -558,7 +558,8 @@ int ObMPStmtExecute::before_process()
     }
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     const char* pos = pkt.get_cdata();
-    analysis_checker_.init(pos, pkt.get_clen());
+    // pkt.get_cdata() do not include 1 byte for `request command code`
+    analysis_checker_.init(pos, pkt.get_clen() - 1);
     int32_t stmt_id = -1; //INVALID_STMT_ID
     uint32_t ps_stmt_checksum = 0;
     ObSQLSessionInfo *session = NULL;
@@ -903,19 +904,18 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
     }
     if (OB_SUCC(ret) && params_num_ > 0) {
-      // Step1: 处理空值位图
-      int64_t bitmap_types = (params_num_ + 7) / 8;
-      const char *bitmap = pos;
-      pos += bitmap_types;
       ParamTypeArray &param_types = ps_session_info->get_param_types();
       ParamTypeInfoArray param_type_infos;
       ParamCastArray param_cast_infos;
-
       ParamTypeArray returning_param_types;
       ParamTypeInfoArray returning_param_type_infos;
-      int64_t len = bitmap_types + 1/*new_param_bound_flag*/;
-      PS_DEFENSE_CHECK(len) // bitmap_types
+
+      // Step1: 处理空值位图
+      const char *bitmap = pos;
+      int64_t bitmap_types = (params_num_ + 7) / 8;
+      PS_DEFENSE_CHECK(bitmap_types + 1)  // null value bitmap + new param bound flag
       {
+        pos += bitmap_types;
         // Step2: 获取new_param_bound_flag字段
         ObMySQLUtil::get_int1(pos, new_param_bound_flag);
         if (new_param_bound_flag == 1) {
@@ -1285,6 +1285,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
   ObPsStmtId inner_stmt_id = OB_INVALID_ID;
@@ -1292,6 +1293,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
 
   single_process_timestamp_ = ObTimeUtility::current_time();
 
@@ -1304,14 +1306,18 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
     ObWaitEventStat total_wait_desc;
     int64_t execution_id = 0;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        audit_record.exec_record_.record_start(di);
+        audit_record.exec_record_.record_start();
       }
 
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
       result.set_has_more_result(has_more_result);
       result.set_ps_protocol();
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
@@ -1326,6 +1332,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
         ctx_.retry_times_ = retry_ctrl_.get_retry_times();
         session.reset_plsql_exec_time();
+        session.reset_plsql_compile_time();
         if (OB_ISNULL(ctx_.schema_guard_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("newest schema is NULL", K(ret));
@@ -1382,11 +1389,23 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event) {
-        audit_record.exec_record_.record_end(di);
-        record_stat(result.get_stmt_type(), exec_end_timestamp_);
+        audit_record.exec_record_.record_end();
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret);
+        audit_record.stmt_type_ = result.get_stmt_type();
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.update_event_stage_state();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+        sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+        ObString sql_id = ObString::make_string(ctx_.sql_id_);
+        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                   ctx_.cur_sql_,
+                                                   result.get_physical_plan());
       }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1431,6 +1450,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (NULL != plan || result.is_pl_stmt(result.get_stmt_type())) {
         audit_record.partition_hit_ = session.partition_hit().get_bool();
       }
       audit_record.affected_rows_ = result.get_affected_rows();
@@ -1445,8 +1466,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
       audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
-      audit_record.sql_ = const_cast<char *>(ctx_.cur_sql_.ptr());
-      audit_record.sql_len_ = min(ctx_.cur_sql_.length(), OB_MAX_SQL_LENGTH);
+      audit_record.sql_ = const_cast<char *>(ctx_.raw_sql_.ptr());
+      audit_record.sql_len_ = min(ctx_.raw_sql_.length(), OB_MAX_SQL_LENGTH);
       audit_record.sql_cs_type_ = session.get_local_collation_connection();
       audit_record.ps_stmt_id_ = stmt_id_;
       audit_record.ps_inner_stmt_id_ = inner_stmt_id;
@@ -1454,6 +1475,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.params_value_len_ = params_value_len_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }
@@ -1779,7 +1801,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   setup_wb(session);
   //============================ 注意这些变量的生命周期 ================================
   ObSMConnection *conn = get_conn();
-  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -1793,7 +1814,6 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     } else if (OB_FAIL(session.update_timezone_info())) {
       LOG_WARN("fail to update time zone info", K(ret));
     } else if (is_arraybinding_) {
-      need_response_error = false;
       bool optimization_done = false;
       if (ctx_.can_reroute_sql_) {
         ctx_.can_reroute_sql_ = false;
@@ -1810,6 +1830,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
                                                            async_resp_used, optimization_done))) {
         LOG_WARN("fail to try_batch_multi_stmt_optimization", K(ret));
       } else if (!optimization_done) {
+        need_response_error = false;
         ctx_.multi_stmt_item_.set_ps_mode(true);
         ctx_.multi_stmt_item_.set_ab_cnt(0);
         for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_size_; ++i) {
@@ -1841,24 +1862,19 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
+
+      /* Function setup_user_resource_group cause performance regression.
+          No need to setup group_id here,
+          Only setup group_id in MPConnect
+      */
       if (is_conn_valid()) {
-        int bak_ret = ret;
-        ObSQLSessionInfo *sess = NULL;
-        if (OB_FAIL(get_session(sess))) {
-          LOG_WARN("get session fail", K(ret));
-        } else if (OB_ISNULL(sess)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session is NULL or invalid", K(ret));
-        } else {
-          // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-          if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
-            LOG_WARN("fail setup user resource group", K(ret));
-          }
-        }
-        if (sess != NULL) {
-          revert_session(sess);
-        }
-        ret = OB_SUCC(bak_ret) ? ret : bak_ret;
+        // int bak_ret = ret;
+        // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+        // if (OB_FAIL(setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess))) {
+        //   LOG_WARN("fail setup user resource group", K(ret));
+        // }
+        set_request_expect_group_id(&session);
+        // ret = OB_SUCC(bak_ret) ? ret : bak_ret;
       }
     }
     ObThreadLogLevelUtils::clear();
@@ -1972,7 +1988,8 @@ int ObMPStmtExecute::process()
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
       FLTSpanGuard(ps_execute);
-      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                     receive_ts, get_receive_timestamp(),
                     client_info, session.get_client_info(),
                     module_name, session.get_module_name(),
@@ -1983,6 +2000,8 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
+      session.set_enable_mysql_compatible_dates(
+        session.get_enable_mysql_compatible_dates_from_config());
 
       need_response_error = false;
       need_disconnect = false;
@@ -3170,6 +3189,7 @@ int ObMPStmtExecute::parse_oracle_interval_ds_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ds(data, length, value, scale))) {
       LOG_WARN("fail to decode interval day to second", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ds(value);
       param.set_scale(scale);
     }
@@ -3191,6 +3211,7 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
     if (OB_FAIL(ObTimeConverter::decode_interval_ym(data, length, value, scale))) {
       LOG_WARN("fail to decode interval year to month", K(ret), K(length));
     } else {
+      data += length;
       param.set_interval_ym(value);
       param.set_scale(scale);
     }
@@ -3199,11 +3220,18 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
   return ret;
 }
 
-void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time) const
+void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time,
+                                  const sql::ObSQLSessionInfo& session,
+                                  const int64_t ret) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
-    EVENT_INC(SQL_##type##_COUNT);              \
+    if (!session.get_is_in_retry()) {           \
+      EVENT_INC(SQL_##type##_COUNT);            \
+      if (OB_SUCCESS != ret) {                  \
+        EVENT_INC(SQL_FAIL_COUNT);              \
+      }                                         \
+    }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   if (lib::is_diagnose_info_enabled()) {
@@ -3217,8 +3245,13 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
         ADD_STMT_STAT(UPDATE);
         ADD_STMT_STAT(DELETE);
         default: {
-          EVENT_INC(SQL_OTHER_COUNT);
           EVENT_ADD(SQL_OTHER_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_OTHER_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
         }
       }
     }

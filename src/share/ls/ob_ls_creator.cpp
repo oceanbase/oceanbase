@@ -34,6 +34,7 @@
 #endif
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "share/restore/ob_tenant_clone_table_operator.h"
+#include "share/ob_global_stat_proxy.h" // for ObGlobalStatProxy
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -456,6 +457,8 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       int tmp_ret = OB_SUCCESS;
       ObArray<int> return_code_array;
       const common::ObReplicaProperty replica_property;
+      storage::ObMajorMVMergeInfo major_mv_merge_info;
+      major_mv_merge_info.reset();
       lib::Worker::CompatMode new_compat_mode = compat_mode == ORACLE_MODE ?
                                          lib::Worker::CompatMode::ORACLE :
                                          lib::Worker::CompatMode::MYSQL;
@@ -465,9 +468,9 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
         const ObLSReplicaAddr &addr = addrs.at(i);
         if (OB_FAIL(arg.init(tenant_id_, id_, addr.replica_type_,
                 replica_property, tenant_info, create_scn, new_compat_mode,
-                create_with_palf, palf_base_info))) {
+                create_with_palf, palf_base_info, major_mv_merge_info))) {
           LOG_WARN("failed to init create log stream arg", KR(ret), K(addr), K(create_with_palf), K(replica_property),
-              K_(id), K_(tenant_id), K(tenant_info), K(create_scn), K(new_compat_mode), K(palf_base_info));
+              K_(id), K_(tenant_id), K(tenant_info), K(create_scn), K(new_compat_mode), K(palf_base_info), K(major_mv_merge_info));
         } else if (OB_TMP_FAIL(create_ls_proxy_.call(addr.addr_, ctx.get_timeout(),
                 GCONF.cluster_id, tenant_id_, arg))) {
           LOG_WARN("failed to all async rpc", KR(tmp_ret), K(addr), K(ctx.get_timeout()),

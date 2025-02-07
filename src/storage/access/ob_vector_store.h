@@ -108,7 +108,6 @@ protected:
   ObGroupByCellBase *group_by_cell_;
   const ObTableIterParam *iter_param_;
   sql::ObBitVector *skip_bit_;
-  bool need_check_group_by_;
 };
 
 }

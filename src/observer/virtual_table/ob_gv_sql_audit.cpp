@@ -637,6 +637,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           }
           break;
         }
+        case USER_CLIENT_PORT: {
+          cells[cell_idx].set_int(0);
+        } break;
         case TENANT_ID: {
           cells[cell_idx].set_int(record.data_.tenant_id_);
         } break;
@@ -703,6 +706,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                 ObCharset::get_default_charset()));
           }
+        } break;
+        case TRANS_STATUS: {
+          cells[cell_idx].set_null();
         } break;
         case PLAN_ID: {
           cells[cell_idx].set_int(record.data_.plan_id_);
@@ -1063,7 +1069,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
         case NETWORK_WAIT_TIME: {
-          cells[cell_idx].set_null();
+          cells[cell_idx].set_uint64(record.data_.exec_record_.network_wait_time_);
         } break;
         case STMT_TYPE: {
           ObString stmt_type_name;
@@ -1104,12 +1110,22 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           int64_t len = min(record.data_.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
           cells[cell_idx].set_varchar(record.data_.proxy_user_name_,
                                       static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
         } break;
         //format_sql_id
         case FORMAT_SQL_ID: {
-          cells[cell_idx].set_varchar("");
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.format_sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.format_sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
           cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
+        } break;
+        case PLSQL_COMPILE_TIME: {
+          cells[cell_idx].set_int(record.data_.plsql_compile_time_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

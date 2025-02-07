@@ -640,6 +640,7 @@ void ObDupTableLSLeaseMgr::print_lease_diag_info_log(const bool is_master)
                      DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(),
                      common::ObTime2Str::ob_timestamp_str(cur_time), lease_diag_info_log_buf_);
     } else {
+      ObCStringHelper helper;
       _DUP_TABLE_LOG(
           INFO,
           "[%sFollower Lease Info] tenant: %lu, ls: %lu , current_time = %s\n"
@@ -649,13 +650,13 @@ void ObDupTableLSLeaseMgr::print_lease_diag_info_log(const bool is_master)
           DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, tenant_id, ls_id.id(),
           common::ObTime2Str::ob_timestamp_str(cur_time), DupTableDiagStd::DUP_DIAG_INDENT_SPACE,
           DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-          to_cstring(cur_time >= follower_lease_info_.lease_expired_ts_),
+          helper.convert(cur_time >= follower_lease_info_.lease_expired_ts_),
           follower_lease_info_.durable_lease_.request_ts_,
           common::ObTime2Str::ob_timestamp_str(follower_lease_info_.durable_lease_.request_ts_),
           common::ObTime2Str::ob_timestamp_str(follower_lease_info_.lease_expired_ts_),
           follower_lease_info_.durable_lease_.lease_interval_us_,
-          to_cstring(follower_lease_info_.last_lease_scn_),
-          to_cstring(follower_lease_info_.lease_acquire_scn_));
+          helper.convert(follower_lease_info_.last_lease_scn_),
+          helper.convert(follower_lease_info_.lease_acquire_scn_));
     }
   }
 }
@@ -851,14 +852,16 @@ int ObDupTableLSLeaseMgr::DiagInfoGenerator::operator()(
 {
   int ret = OB_SUCCESS;
 
-  const char *addr_str = to_cstring(hash_pair.first);
-
   ret = ::oceanbase::common::databuff_printf(
       info_buf_, info_buf_len_, info_buf_pos_,
-      "%s[%sConfirmed Lease] owner=%s, is_expired=%s, request_ts=%lu, request_ts(date)=%s, "
-      "lease_expired_time=%s, lease_interval_us=%lu\n",
-      DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, addr_str,
-      to_cstring(cur_time_ >= hash_pair.second.lease_expired_ts_),
+      "%s[%sConfirmed Lease] owner=",
+      DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX);
+  OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+      info_buf_, info_buf_len_, info_buf_pos_, hash_pair.first);
+  OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+      info_buf_, info_buf_len_, info_buf_pos_, ", is_expired=%s, request_ts=%lu, "
+      "request_ts(date)=%s, lease_expired_time=%s, lease_interval_us=%lu\n",
+      cur_time_ >= hash_pair.second.lease_expired_ts_ ? "True" : "False",
       hash_pair.second.confirmed_lease_info_.request_ts_,
       common::ObTime2Str::ob_timestamp_str(hash_pair.second.confirmed_lease_info_.request_ts_),
       common::ObTime2Str::ob_timestamp_str(hash_pair.second.lease_expired_ts_),
@@ -866,20 +869,22 @@ int ObDupTableLSLeaseMgr::DiagInfoGenerator::operator()(
 
   if (OB_SUCC(ret) && need_cache_) {
     if (hash_pair.second.cache_lease_req_.is_invalid()) {
-
       ret = ::oceanbase::common::databuff_printf(
-          info_buf_, info_buf_len_, info_buf_pos_,
-          "%s[%sCached Lease] owner=%s, No Lease Request Cache\n",
-          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX,
-          addr_str);
+          info_buf_, info_buf_len_, info_buf_pos_, "%s[%sCached Lease] owner=",
+          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX);
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          info_buf_, info_buf_len_, info_buf_pos_, hash_pair.first);
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          info_buf_, info_buf_len_, info_buf_pos_, ", No Lease Request Cache\n");
     } else {
-
       ret = ::oceanbase::common::databuff_printf(
-          info_buf_, info_buf_len_, info_buf_pos_,
-          "%s[%sCached Lease] owner=%s, request_ts=%lu, request_ts(date)=%s, "
-          "handle_request_time=%lu, handle_request_time(date)=%s, request_lease_interval_us "
-          "=%lu\n",
-          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX, addr_str,
+          info_buf_, info_buf_len_, info_buf_pos_, "%s[%sCached Lease] owner=",
+          DupTableDiagStd::DUP_DIAG_INDENT_SPACE, DupTableDiagStd::DUP_DIAG_COMMON_PREFIX);
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          info_buf_, info_buf_len_, info_buf_pos_, hash_pair.first);
+      OB_SUCCESS != ret ? : ret = ::oceanbase::common::databuff_printf(
+          info_buf_, info_buf_len_, info_buf_pos_, ", request_ts=%lu, request_ts(date)=%s, "
+          "handle_request_time=%lu, handle_request_time(date)=%s, request_lease_interval_us =%lu\n",
           hash_pair.second.cache_lease_req_.request_ts_,
           common::ObTime2Str::ob_timestamp_str(hash_pair.second.cache_lease_req_.request_ts_),
           hash_pair.second.cache_lease_req_.lease_acquire_ts_,

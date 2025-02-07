@@ -176,6 +176,7 @@ const char *const OB_STR_PREV_INC_BACKUP_SET_ID = "prev_inc_backup_set_id";
 const char *const OB_STRING_MJAOR_DATA = "major_data";
 const char *const OB_STRING_MINOR_DATA = "minor_data";
 const char *const OB_STR_COMMENT = "comment";
+const char *const OB_STR_COMPLETION_TS = "completion_ts";
 const char *const OB_STR_RETRY_ID = "retry_id";
 const char *const OB_STR_START_TURN_ID = "start_turn_id";
 const char *const OB_STR_FILE_COUNT = "file_count";
@@ -397,6 +398,8 @@ const char *const OB_STR_TENANT_BACKUP_SET_INFOS = "tenant_backup_set_infos";
 const char *const OB_STR_FORMAT_FILE_NAME = "format";
 const char *const OB_STR_DIAGNOSE_INFO = "diagnose_info";
 const char *const OB_STR_LOCALITY_INFO = "locality_info";
+const char *const OB_STR_TENANT_PARAMETER_INFO = "tenant_parameter";
+const char *const OB_STR_CLUSTER_PARAMETER_INFO = "cluster_parameter";
 const char *const OB_STR_DEST_TYPE = "dest_type";
 const char *const OB_STR_RETRY_COUNT = "retry_count";
 const char *const OB_STR_DELETED = "DELETED";
@@ -431,6 +434,7 @@ const char *const OB_STR_MAX_BANDWIDTH = "max_bandwidth";
 const char *const OB_STR_MAX_IOPS_AND_MAX_BANDWIDTH = "max_iops, max_bandwidth";
 const char *const OB_STR_TABLE_LIST = "table_list";
 const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
+const char *const OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST = "major_compaction_mview_dep_tablet_list";
 
 enum ObBackupFileType
 {
@@ -474,6 +478,8 @@ enum ObBackupFileType
   BACKUP_TABLET_METAS_INFO = 37,
   BACKUP_TABLE_LIST_FILE = 38,
   BACKUP_TABLE_LIST_META_FILE = 39,
+  BACKUP_MVIEW_DEP_TABLET_LIST_FILE = 40,
+  BACKUP_PARAMETERS_INFO = 41,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
@@ -1270,6 +1276,7 @@ public:
     BEFORE_BACKUP_LOG = 11,
     BACKUP_LOG = 12,
     BACKUP_FUSE_TABLET_META = 13,
+    PREPARE_BACKUP_LOG = 14,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}

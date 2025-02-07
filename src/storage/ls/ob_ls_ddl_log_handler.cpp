@@ -300,6 +300,18 @@ int ObLSDDLLogHandler::replay(const void *buffer,
         ret = replay_ddl_start_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
+      case ObDDLClogType::DDL_TABLET_SPLIT_START_LOG: {
+        ret = replay_tablet_split_start_log_(log_buf, buf_size, tmp_pos, log_scn);
+        break;
+      }
+      case ObDDLClogType::DDL_TABLET_SPLIT_FINISH_LOG: {
+        ret = replay_tablet_split_finish_log_(log_buf, buf_size, tmp_pos, log_scn);
+        break;
+      }
+      case ObDDLClogType::DDL_TABLET_FREEZE_LOG: {
+        ret = replay_tablet_freeze_log_(log_buf, buf_size, tmp_pos, log_scn);
+        break;
+      }
       #ifdef OB_BUILD_SHARED_STORAGE
       case ObDDLClogType::DDL_FINISH_LOG: {
         ret = replay_ddl_finish_log_(log_buf, buf_size, tmp_pos, log_scn);
@@ -588,6 +600,24 @@ int ObLSDDLLogHandler::replay_ddl_start_log_(const char *log_buf,
   return ret;
 }
 
+int ObLSDDLLogHandler::replay_tablet_split_start_log_(const char *log_buf,
+                                                      const int64_t buf_size,
+                                                      int64_t pos,
+                                                      const SCN &log_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletSplitStartLog log;
+  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
+    LOG_WARN("deserialize tablet split start log failed", K(ret));
+  } else if (OB_FAIL(ddl_log_replayer_.replay_split_start(log, log_scn))) {
+    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+      LOG_WARN("replay tablet split start log failed", K(ret), K(log));
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
 void ObLSDDLLogHandler::add_ddl_event(const int ret, const ObString &ddl_event_stmt)
 {
   SERVER_EVENT_ADD("ddl", ddl_event_stmt.ptr(),
@@ -602,6 +632,24 @@ int ObLSDDLLogHandler::add_tablet(const ObTabletID &tablet_id)
   int ret = OB_SUCCESS;
   if (OB_FAIL(active_ddl_kv_mgr_.add_tablet(tablet_id))) {
     LOG_WARN("add tablet failed", K(ret));
+  }
+  return ret;
+}
+
+int ObLSDDLLogHandler::replay_tablet_split_finish_log_(const char *log_buf,
+                                                      const int64_t buf_size,
+                                                      int64_t pos,
+                                                      const SCN &log_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletSplitFinishLog log;
+  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
+    LOG_WARN("deserialize tablet split start log failed", K(ret));
+  } else if (OB_FAIL(ddl_log_replayer_.replay_split_finish(log, log_scn))) {
+    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+      LOG_WARN("replay tablet split finish log failed", K(ret), K(log));
+      ret = OB_EAGAIN;
+    }
   }
   return ret;
 }
@@ -624,5 +672,23 @@ int ObLSDDLLogHandler::get_tablets(common::ObIArray<ObTabletID> &tablet_ids)
   return ret;
 }
 
+int ObLSDDLLogHandler::replay_tablet_freeze_log_(const char *log_buf,
+                                                 const int64_t buf_size,
+                                                 int64_t pos,
+                                                 const SCN &log_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletFreezeLog log;
+  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
+    LOG_WARN("deserialize tablet freeze log failed", K(ret));
+  } else if (OB_FAIL(ddl_log_replayer_.replay_tablet_freeze(log, log_scn))) {
+    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
+      LOG_WARN("replay tablet freeze log failed", K(ret), K(log));
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
 }
-}
+
+} // namespace storage
+} // namespace oceanbase

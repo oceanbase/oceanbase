@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SHARE
 
 #include "share/config/ob_config_helper.h"
 #include "share/config/ob_config.h"
@@ -37,7 +38,7 @@
 #include "lib/utility/utility.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/vector_index/ob_vector_index_util.h"
-
+#include "share/backup/ob_tenant_archive_mgr.h"
 namespace oceanbase
 {
 using namespace share;
@@ -632,6 +633,11 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
   return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
+bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const
+{
+  return STRLEN(t.str()) < 16; // length of MySQL version is less then 16
+}
+
 bool ObConfigPublishSchemaModeChecker::check(const ObConfigItem& t) const
 {
   return 0 == t.case_compare(PUBLISH_SCHEMA_MODE_BEST_EFFORT)
@@ -883,6 +889,23 @@ bool ObConfigPlanCacheGCChecker::check(const ObConfigItem &t) const
     }
   }
   return is_valid;
+}
+
+bool ObConfigSTScredentialChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool flag = true;
+  const char *tmp_credential = t.str();
+  ObStsCredential key;
+  if (OB_ISNULL(tmp_credential) || OB_UNLIKELY(strlen(tmp_credential) <= 0
+      || strlen(tmp_credential) > OB_MAX_STS_CREDENTIAL_LENGTH)) {
+    flag = false;
+    OB_LOG(WARN, "invalid sts credential", KP(tmp_credential));
+  } else if (OB_FAIL(check_sts_credential_format(tmp_credential, key))) {
+    flag = false;
+    OB_LOG(WARN, "fail to check sts credential format", K(ret), K(key), KP(tmp_credential));
+  }
+  return flag;
 }
 
 bool ObConfigUseLargePagesChecker::check(const ObConfigItem &t) const
@@ -1146,8 +1169,32 @@ int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObS
     spm_mode = 0;
   } else if (0 == string.case_compare("OnlineEvolve")) {
     spm_mode = 1;
+  } else if (0 == string.case_compare("BaselineFirst")) {
+    uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (cluster_version >= CLUSTER_VERSION_4_3_5_0 ||
+        (cluster_version >= MOCK_CLUSTER_VERSION_4_2_5_0 && cluster_version < CLUSTER_VERSION_4_3_0_0)) {
+      spm_mode = 2;
+    } else {
+      spm_mode = -1;
+    }
   }
   return spm_mode;
+}
+
+bool ObDefaultLoadModeChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  bool result = false;
+  if (0 == tmp_str.case_compare("DISABLED")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("FULL_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_DIRECT_WRITE")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("INC_REPLACE_DIRECT_WRITE")) {
+    result = true;
+  }
+  return result;
 }
 
 int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
@@ -1298,9 +1345,73 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
 }
 
 bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
+  bool bret = true;
   const ObString tmp_str(t.str());
-  return 0 == tmp_str.case_compare("ROW") || 0 == tmp_str.case_compare("COLUMN") ||
-      0 == tmp_str.case_compare("COMPOUND");
+  // Note: Shared-Storage mode does not support column store in default. if want to test
+  // column store under shared-storage mode, then need to set tracepoint.
+  bool is_column_store_supported = true;
+  if (GCTX.is_shared_storage_mode()) {
+    int tmp_ret = OB_E(EventTable::EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP) OB_SUCCESS;
+    is_column_store_supported = (tmp_ret != OB_SUCCESS);
+  }
+  if (is_column_store_supported) {
+    bret = ((0 == tmp_str.case_compare("ROW")) ||
+            (0 == tmp_str.case_compare("COLUMN")) ||
+            (0 == tmp_str.case_compare("COMPOUND")));
+  } else {
+    bret = (0 == tmp_str.case_compare("ROW"));
+  }
+  return bret;
+}
+
+bool ObConfigDDLNoLoggingChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t) {
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  uint64_t data_version = 0;
+  const bool value = ObConfigBoolParser::get(t.value_.ptr(), is_valid);
+
+  if (!is_valid) {
+  } else if (!GCTX.is_shared_storage_mode()) {
+    is_valid = false;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set no logging in shared nothing mode");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    is_valid = false;
+    OB_LOG(WARN, "failed to get mini data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_5_0) {
+    is_valid = false;
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "it's not allowded to set no logging during cluster updating process", K(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set no logging during cluster updating process");
+  }
+  if (!is_valid) {
+  } else {
+    if (OB_SYS_TENANT_ID == tenant_id) {
+      /* sys tenant not no allow archive */
+    } else {
+      ObArchivePersistHelper archive_op;
+      ObArchiveMode archive_mode;
+      common::ObMySQLProxy *sql_proxy = nullptr;
+      if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_))  {
+        is_valid = false;
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "invalid sql proxy", K(ret), KP(sql_proxy));
+      } else if (OB_FAIL(archive_op.init(tenant_id))) {
+        is_valid = false;
+        OB_LOG(WARN, "failed to init archive op", K(ret), K(tenant_id));
+      } else if (OB_FAIL(archive_op.get_archive_mode(*sql_proxy, archive_mode))) {
+        is_valid = false;
+        OB_LOG(WARN, "failed to get archive mode", K(ret));
+      } else if (value && archive_mode.is_archivelog()) {
+        is_valid = false;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's no allowded to set no logging during archive");
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    is_valid = false;
+  }
+  return is_valid;
 }
 
 bool ObConfigMigrationChooseSourceChecker::check(const ObConfigItem &t) const
@@ -1411,6 +1522,20 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
   return bret;
 }
 
+bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("all")
+    || 0 == v_str.case_compare("read")
+    || 0 == v_str.case_compare("write");
+}
+
+bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
+}
+
 bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;
@@ -1427,5 +1552,62 @@ bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
   return valid;
 }
 
+bool ObConfigReplicaParallelMigrationChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("auto")
+      || 0 == v_str.case_compare("on")
+      || 0 == v_str.case_compare("off");
+}
+
+bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
+{
+  // When compliantRfc3986Encoding is set to true:
+  // - Adhere to RFC 3986 by supporting the encoding of reserved characters
+  //   such as '-', '_', '.', '$', '@', etc.
+  // - This approach mitigates inconsistencies in server behavior when accessing
+  //   COS using the S3 SDK.
+  // Otherwise, the reserved characters will not be encoded,
+  // following the default behavior of the S3 SDK.
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  if (0 == tmp_str.case_compare("default")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(false);
+  } else if (0 == tmp_str.case_compare("compliantRfc3986Encoding")) {
+    bret = true;
+    Aws::Http::SetCompliantRfc3986Encoding(true);
+  } else {
+    bret = false;
+  }
+  return bret;
+}
+
+bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("auto")
+          || 0 == tmp_str.case_compare("forced")
+          || 0 == tmp_str.case_compare("disabled"));
+  return bret;
+}
+
+bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    bret = true;
+  }
+  return bret;
+}
+
+bool ObConfigDefaultOrganizationChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("INDEX")
+      || 0 == tmp_str.case_compare("HEAP");
+}
 } // end of namepace common
 } // end of namespace oceanbase

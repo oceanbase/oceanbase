@@ -51,10 +51,16 @@ int ChunkRowMeta::init(const ObExprPtrIArray &exprs, const int32_t extra_size)
           LOG_WARN("get unexpected null pointer", K(ret));
         } else if (is_fixed_length(e->datum_meta_.type_)) {
           int16_t len = get_type_fixed_length(e->datum_meta_.type_);
-          column_length_.at(i) = len;
-          column_offset_.at(i) = var_data_off_;
-          var_data_off_ += len;
-          fixed_cnt_++;
+          if (len <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fixed column len should larger than zero",
+              K(ret), K(len), K(e->datum_meta_.type_));
+          } else {
+            column_length_.at(i) = len;
+            column_offset_.at(i) = var_data_off_;
+            var_data_off_ += len;
+            fixed_cnt_++;
+          }
         } else {
           column_length_.at(i) = 0;
           column_offset_.at(i) = 0;
@@ -101,10 +107,16 @@ int ChunkRowMeta::init(const ObIArray<storage::ObColumnSchemaItem> &col_array,  
           fixed_cnt_++;
         } else if (is_fixed_length(col_array.at(i).col_type_.get_type())) {
           int16_t len = get_type_fixed_length(col_array.at(i).col_type_.get_type());
-          column_length_.at(i) = len;
-          column_offset_.at(i) = var_data_off_;
-          var_data_off_ += len;
-          fixed_cnt_++;
+          if (len <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fixed column len should larger than zero",
+              K(ret), K(len), K(col_array.at(i).col_type_.get_type()));
+          } else {
+            column_length_.at(i) = len;
+            column_offset_.at(i) = var_data_off_;
+            var_data_off_ += len;
+            fixed_cnt_++;
+          }
         } else {
           column_length_.at(i) = 0;
           column_offset_.at(i) = 0;

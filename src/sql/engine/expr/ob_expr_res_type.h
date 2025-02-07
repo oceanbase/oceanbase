@@ -23,6 +23,7 @@
 #include "lib/utility/utility.h"
 #include "common/ob_accuracy.h"
 #include "common/object/ob_obj_type.h"
+#include "lib/enumset/ob_enum_set_meta.h"
 
 namespace oceanbase
 {
@@ -338,6 +339,16 @@ public:
   }
 
   uint64_t get_cast_mode() const { return cast_mode_; }
+
+  OB_INLINE void mark_enum_set_with_subschema()
+  {
+    if (is_enum_or_set()) {
+      set_scale(ObEnumSetMeta::MetaState::READY);
+    }
+  }
+  OB_INLINE bool is_enum_set_with_subschema() const
+  { return is_enum_or_set() && get_scale() == ObEnumSetMeta::MetaState::READY; }
+  OB_INLINE void reset_enum_set_meta_state() { set_scale(ObEnumSetMeta::MetaState::UNINITIALIZED); }
   uint64_t hash(uint64_t seed) const
   {
     seed = common::do_hash(type_, seed);
@@ -353,6 +364,11 @@ public:
 //      seed = common::do_hash(row_calc_cmp_types_.at(i), seed);
 //    }
     return seed;
+  }
+  int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
   }
   // others.
   INHERIT_TO_STRING_KV(N_META,

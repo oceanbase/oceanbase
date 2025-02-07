@@ -205,12 +205,20 @@ struct ObOTimestampTinyData {
     time_us_ = v.time_us_;
     return *this;
   }
-  ObOTimestampData to_timestamp_data() {
+  ObOTimestampData to_timestamp_data() const {
     ObOTimestampData res;
     res.time_ctx_.time_desc_ = desc_;
     res.time_ctx_.tz_desc_ = 0;
     res.time_us_ = time_us_;
     return res;
+  }
+
+  // add ==, < operator use to vec no null normalized cmp
+  inline bool operator == (const ObOTimestampTinyData &other) const {
+    return to_timestamp_data() == other.to_timestamp_data();
+  }
+  inline bool operator < (const ObOTimestampTinyData &other) const {
+    return to_timestamp_data() < other.to_timestamp_data();
   }
   uint16_t desc_;
   int64_t time_us_;

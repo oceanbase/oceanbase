@@ -28,9 +28,11 @@ namespace observer
 {
 class ObTableLoadParam;
 class ObTableLoadStoreCtx;
+class ObTableLoadStoreTableCtx;
 
 class ObTableLoadMerger
 {
+  friend class ObTableLoadPreSorter;
   class MergeTaskProcessor;
   class RescanTaskProcessor;
   class DelLobTaskProcessor;
@@ -38,7 +40,7 @@ class ObTableLoadMerger
   class RescanTaskCallback;
   class DelLobTaskCallback;
 public:
-  ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx);
+  ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx, ObTableLoadStoreTableCtx *store_table_ctx);
   ~ObTableLoadMerger();
   int init();
   int start();
@@ -62,10 +64,13 @@ private:
   int handle_rescan_thread_finish(const int ret_code);
   void handle_del_lob_task_finish(ObDirectLoadPartitionDelLobTask *&del_lob_task);
   int handle_del_lob_thread_finish(int ret_code);
+public:
+  ObTableLoadStoreTableCtx * const store_table_ctx_;
 private:
+  common::ObArenaAllocator allocator_;
   ObTableLoadStoreCtx * const store_ctx_;
   const ObTableLoadParam &param_;
-  ObTableLoadTableCompactConfigMainTable table_compact_config_;
+  ObTableLoadTableCompactConfig  * table_compact_config_;
   ObTableLoadTableCompactConfigLobIdTable lob_id_compact_config_;
   ObTableLoadTableCompactCtx table_compact_ctx_;
   ObTableLoadTableCompactCtx lob_id_compact_ctx_;

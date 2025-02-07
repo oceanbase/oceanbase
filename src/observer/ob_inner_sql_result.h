@@ -39,7 +39,7 @@ class ObInnerSQLResult : public common::sqlclient::ObMySQLResult
 {
   friend class ObInnerSQLConnection;
 public:
-  explicit ObInnerSQLResult(sql::ObSQLSessionInfo &session);
+  explicit ObInnerSQLResult(sql::ObSQLSessionInfo &session, bool is_inner_session);
   virtual ~ObInnerSQLResult();
   int init();
   int init(bool has_tenant_resource);
@@ -144,6 +144,9 @@ public:
   void set_compat_mode(lib::Worker::CompatMode mode);
   bool is_inited() const { return is_inited_; }
   void set_is_read(const bool is_read) { is_read_ = is_read; }
+  bool is_inner_session() const { return is_inner_session_; }
+  void set_is_inner_session(bool is_inner_session)
+  { is_inner_session_ = is_inner_session; }
 private:
   virtual int inner_get_number(const int64_t col_idx, common::number::ObNumber &nmb_val,
       IAllocator &allocator) const;
@@ -222,6 +225,7 @@ private:
   bool has_tenant_resource_;
   omt::ObTenant *tenant_;
   ObLDHandle handle_;
+  bool is_inner_session_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLResult);
 };

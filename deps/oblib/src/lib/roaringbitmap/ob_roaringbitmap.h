@@ -22,6 +22,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/allocator/page_arena.h"
+#include "src/logservice/ob_log_service.h"
 
 
 namespace oceanbase {
@@ -32,10 +33,12 @@ namespace common {
 
 #define ROARING_TRY_CATCH(statement)                               \
     try {                                                          \
-      statement;                                                   \
+      if (OB_SUCC(ret)) {                                          \
+        statement;                                                 \
+      }                                                            \
     } catch (const std::bad_alloc &e) {                            \
       ret = OB_ALLOCATE_MEMORY_FAILED;                             \
-      LOG_WARN("fail to alloc memory in croaring", K(ret));        \
+      FLOG_WARN("fail to alloc memory in croaring", K(ret));       \
     }
 
 static const uint32_t RB_VERSION_SIZE = sizeof(uint8_t);
@@ -102,6 +105,12 @@ public:
   int value_or(ObRoaringBitmap *rb);
   int value_xor(ObRoaringBitmap *rb);
   int value_andnot(ObRoaringBitmap *rb);
+  int subset(ObRoaringBitmap *res_rb,
+             uint64_t limit,
+             uint64_t offset = 0,
+             bool reverse = false,
+             uint64_t range_start = 0,
+             uint64_t range_end = UINT64_MAX);
 
   int optimize();
   int deserialize(const ObString &rb_bin, bool need_validate = false);
@@ -132,6 +141,8 @@ public:
 
   int convert_to_bitmap();
 
+  TO_STRING_KV(KP_(allocator), K_(version), K_(type), K_(single_value), KP_(bitmap), K_(set));
+
 private:
   ObIAllocator* allocator_;
   uint8_t version_;
@@ -140,6 +151,46 @@ private:
   hash::ObHashSet<uint64_t> set_;
   roaring::api::roaring64_bitmap_t *bitmap_;
 
+};
+
+class ObRoaringBitmapIter
+{
+  public:
+  ObRoaringBitmapIter(ObRoaringBitmap *rb)
+      : rb_(rb),
+        iter_(nullptr),
+        inited_(false),
+        curr_val_(0),
+        val_idx_(0) {}
+  virtual ~ObRoaringBitmapIter() = default;
+
+  int init();
+  inline uint64_t get_curr_value() { return curr_val_; };
+  inline uint64_t get_val_idx() { return val_idx_; };
+  int get_next();
+  void deinit() {
+    inited_ = false;
+    if (OB_NOT_NULL(iter_)) {
+      roaring::api::roaring64_iterator_free(iter_);
+      iter_ = nullptr;
+    }
+    return;
+  }
+  void destory() {
+    deinit();
+    if (OB_NOT_NULL(rb_)) {
+      rb_->set_empty();
+      rb_ = nullptr;
+    }
+    return;
+  }
+
+  private:
+  ObRoaringBitmap *rb_;
+  roaring::api::roaring64_iterator_t* iter_;
+  bool inited_;
+  uint64_t curr_val_;
+  uint64_t val_idx_;
 };
 
 } // namespace common

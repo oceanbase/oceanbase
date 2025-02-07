@@ -245,7 +245,8 @@ public:
               px_detectable_ids_(),
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
-              sqc_order_gi_tasks_(false)
+              sqc_order_gi_tasks_(false),
+              locations_order_()
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -378,6 +379,7 @@ public:
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
   int16_t get_branch_id_base() const { return branch_id_base_; }
+  ObIArray<std::pair<int64_t, bool>> &get_locations_order() { return locations_order_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
                K_(branch_id_base), K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
@@ -457,6 +459,8 @@ private:
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
+  // record ordering of locations. first is operator id of table scan and second is asc.
+  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
 };
 
 class ObDfo
@@ -485,6 +489,7 @@ public:
     root_op_spec_(nullptr),
     child_dfos_(),
     has_scan_(false),
+    has_das_(false),
     has_dml_op_(false),
     has_need_branch_id_op_(false),
     has_temp_scan_(false),
@@ -556,6 +561,10 @@ public:
   inline void get_root(const ObOpSpec *&root) const { root = root_op_spec_; }
   inline void set_scan(bool has_scan) { has_scan_ = has_scan; }
   inline bool has_scan_op() const { return has_scan_; }
+
+  inline void set_das(bool has_das) { has_das_ = has_das; }
+
+  inline bool has_das_op() const { return has_das_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
   inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
@@ -771,6 +780,7 @@ private:
   const ObOpSpec *root_op_spec_;
   common::ObSEArray<ObDfo *, 4> child_dfos_;
   bool has_scan_; // DFO 中包含至少一个 scan 算子，或者仅仅包含一个dml
+  bool has_das_;  // DFO 中包含至少一个 das 算子
   bool has_dml_op_; // DFO中可能包含一个dml
   bool has_need_branch_id_op_; // DFO 中有算子需要分配branch_id
   bool has_temp_scan_;
@@ -1044,7 +1054,6 @@ public:
   inline void set_execution_id(int64_t execution_id) { execution_id_ = execution_id; }
   inline int64_t get_execution_id() const { return execution_id_; }
   inline void set_result(int rc) { rc_ = rc; }
-  inline bool has_result() const { return rc_ <= 0; }
   inline int get_result() const { return rc_; }
   void set_das_retry_rc(int das_retry_rc)
   { das_retry_rc_ = (das_retry_rc_ == common::OB_SUCCESS ? das_retry_rc : das_retry_rc_); }

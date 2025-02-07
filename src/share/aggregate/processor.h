@@ -72,19 +72,12 @@ public:
   }
 
   inline int add_batch_for_multi_groups(const int32_t start_agg_id, const int32_t end_agg_id,
-                                        AggrRowPtr *agg_rows, const int64_t batch_size)
+                                        AggrRowPtr *agg_rows, const int64_t batch_size,
+                                        uint16_t *selector, int64_t selector_cnt)
   {
     int ret = OB_SUCCESS;
-    int size = 0;
     OB_ASSERT(batch_size <= agg_ctx_.eval_ctx_.max_batch_size_);
-    if (OB_ISNULL(row_selector_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "unexpected null selector", K(ret));
-    }
-    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
-      if (OB_NOT_NULL(agg_rows[i])) { row_selector_[size++] = i; }
-    }
-    RowSelector iter(row_selector_, size);
+    RowSelector iter(selector, selector_cnt);
     for (int col_id = start_agg_id; OB_SUCC(ret) && col_id < end_agg_id; col_id++) {
       if (OB_FAIL(aggregates_.at(col_id)->add_batch_for_multi_groups(agg_ctx_, agg_rows, iter,
                                                                      batch_size, col_id))) {
@@ -121,6 +114,7 @@ public:
   int generate_group_rows(AggrRowPtr *row_arr, const int32_t batch_size);
   int add_one_aggregate_row(AggrRowPtr data, const int32_t row_size,
                                    bool push_agg_row = true);
+  int add_batch_aggregate_rows(AggrRowPtr *ptrs, uint16_t *selector, int64_t selector_cnt, bool push_agg_row);
 
   inline int64_t get_aggr_used_size() const
   {
@@ -177,14 +171,13 @@ public:
 
   // FIXME: support all aggregate functions
   inline static bool all_supported_aggregate_functions(const ObIArray<sql::ObRawExpr *> &aggr_exprs,
-                                                       bool is_scalar_gby = false)
+                                                       bool use_hash_rollup = false)
   {
     bool supported = true;
     for (int i = 0; supported && i < aggr_exprs.count(); i++) {
       ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs.at(i));
       OB_ASSERT(agg_expr != NULL);
-      // TODO: remove distinct constraint @zongmei.zzm
-      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type());
+      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(), use_hash_rollup);
     }
     return supported;
   }

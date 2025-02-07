@@ -22,7 +22,11 @@ add_library(zlib_lite_objs OBJECT
 add_library(zlib_lite_qpl
   codec_deflate_qpl.cpp)
 
-target_compile_options(zlib_lite_objs PRIVATE -fvisibility=hidden)
+set(ZLIB_LITE_COMPILE_DEFINITIONS -fvisibility=hidden)
+if (CPP_STANDARD_20)
+  set(ZLIB_LITE_COMPILE_DEFINITIONS ${ZLIB_LITE_COMPILE_DEFINITIONS} -Wno-deprecated-non-prototype)
+endif()
+target_compile_options(zlib_lite_objs PRIVATE ${ZLIB_LITE_COMPILE_DEFINITIONS})
 
 if(${ARCHITECTURE} STREQUAL "x86_64")
   target_include_directories(zlib_lite_objs PUBLIC "${DEP_DIR}/include/")

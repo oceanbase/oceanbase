@@ -405,9 +405,12 @@
 #include "sql/engine/expr/ob_expr_priv_xml_binary.h"
 #include "sql/engine/expr/ob_expr_xmlparse.h"
 #include "sql/engine/expr/ob_expr_xml_element.h"
+#include "sql/engine/expr/ob_expr_xml_forest.h"
+#include "sql/engine/expr/ob_expr_xml_concat.h"
 #include "sql/engine/expr/ob_expr_xml_attributes.h"
 #include "sql/engine/expr/ob_expr_extract_value.h"
 #include "sql/engine/expr/ob_expr_extract_xml.h"
+#include "sql/engine/expr/ob_expr_existsnode_xml.h"
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
@@ -440,6 +443,7 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_gtid.h"
 #include "sql/engine/expr/ob_expr_array.h"
 #include "sql/engine/expr/ob_expr_vec_vid.h"
 #include "sql/engine/expr/ob_expr_vec_type.h"
@@ -458,7 +462,15 @@
 #include "sql/engine/expr/ob_expr_rb_calc.h"
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
+#include "sql/engine/expr/ob_expr_rb_select.h"
+#include "sql/engine/expr/ob_expr_rb_build.h"
 #include "sql/engine/expr/ob_expr_array_contains.h"
+#include "sql/engine/expr/ob_expr_array_to_string.h"
+#include "sql/engine/expr/ob_expr_string_to_array.h"
+#include "sql/engine/expr/ob_expr_array_append.h"
+#include "sql/engine/expr/ob_expr_element_at.h"
+#include "sql/engine/expr/ob_expr_array_cardinality.h"
+#include "sql/engine/expr/ob_expr_tokenize.h"
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -466,7 +478,23 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_enhanced_aes_encrypt.h"
 #include "sql/engine/expr/ob_expr_split_part.h"
+#include "sql/engine/expr/ob_expr_inner_decode_like.h"
+#include "sql/engine/expr/ob_expr_inner_double_to_int.h"
+#include "sql/engine/expr/ob_expr_inner_decimal_to_year.h"
+#include "sql/engine/expr/ob_expr_array_overlaps.h"
+#include "sql/engine/expr/ob_expr_array_contains_all.h"
+#include "sql/engine/expr/ob_expr_array_distinct.h"
+#include "sql/engine/expr/ob_expr_array_remove.h"
+#include "sql/engine/expr/ob_expr_array_map.h"
+#include "sql/engine/expr/ob_expr_calc_odps_size.h"
+#include "sql/engine/expr/ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "sql/engine/expr/ob_expr_priv_st_geohash.h"
+#include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
+#include "sql/engine/expr/ob_expr_to_pinyin.h"
+
+
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1105,6 +1133,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSTSymDifference);
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
+    REG_OP(ObExprPrivSTGeoHash);
+    REG_OP(ObExprPrivSTMakePoint);
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprArray);
     /* vector index */
@@ -1117,6 +1147,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorL2Distance);
     REG_OP(ObExprVectorCosineDistance);
     REG_OP(ObExprVectorIPDistance);
+    REG_OP(ObExprVectorNegativeIPDistance);
     REG_OP(ObExprVectorL1Distance);
     REG_OP(ObExprVectorDims);
     REG_OP(ObExprVectorNorm);
@@ -1144,8 +1175,19 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbAndnotNull2empty);
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
+    REG_OP(ObExprRbSelect);
+    REG_OP(ObExprRbBuild);
     REG_OP(ObExprGetPath);
+    REG_OP(ObExprGTIDSubset);
+    REG_OP(ObExprGTIDSubtract);
+    REG_OP(ObExprWaitForExecutedGTIDSet);
+    REG_OP(ObExprWaitUntilSQLThreadAfterGTIDs);
     REG_OP(ObExprArrayContains);
+    REG_OP(ObExprArrayToString);
+    REG_OP(ObExprStringToArray);
+    REG_OP(ObExprArrayAppend);
+    REG_OP(ObExprElementAt);
+    REG_OP(ObExprArrayCardinality);
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprAuditLogSetFilter);
     REG_OP(ObExprAuditLogRemoveFilter);
@@ -1155,7 +1197,22 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSm3);
     REG_OP(ObExprSm4Encrypt);
     REG_OP(ObExprSm4Decrypt);
+    REG_OP(ObExprEnhancedAesEncrypt);
+    REG_OP(ObExprEnhancedAesDecrypt);
     REG_OP(ObExprSplitPart);
+    REG_OP(ObExprInnerIsTrue);
+    REG_OP(ObExprInnerDecodeLike);
+    REG_OP(ObExprInnerDoubleToInt);
+    REG_OP(ObExprInnerDecimalToYear);
+    REG_OP(ObExprTokenize);
+    REG_OP(ObExprArrayOverlaps);
+    REG_OP(ObExprArrayContainsAll);
+    REG_OP(ObExprArrayDistinct);
+    REG_OP(ObExprArrayRemove);
+    REG_OP(ObExprArrayMap);
+    REG_OP(ObExprGetMySQLRoutineParameterTypeStr);
+    REG_OP(ObExprCalcOdpsSize);
+    REG_OP(ObExprToPinyin);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1343,6 +1400,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprFromTz);
   REG_OP_ORCL(ObExprSpatialCellid);
   REG_OP_ORCL(ObExprSpatialMbr);
+  REG_OP_ORCL(ObExprToPinyin);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);
@@ -1461,9 +1519,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprPrivXmlBinary);
   REG_OP_ORCL(ObExprXmlparse);
   REG_OP_ORCL(ObExprXmlElement);
+  REG_OP_ORCL(ObExprXmlConcat);
+  REG_OP_ORCL(ObExprXmlForest);
   REG_OP_ORCL(ObExprXmlAttributes);
   REG_OP_ORCL(ObExprExtractValue);
   REG_OP_ORCL(ObExprExtractXml);
+  REG_OP_ORCL(ObExprExistsNodeXml);
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
@@ -1485,6 +1546,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprGetPath);
   REG_OP_ORCL(ObExprDecodeTraceId);
   REG_OP_ORCL(ObExprSplitPart);
+  REG_OP_ORCL(ObExprInnerIsTrue);
+  REG_OP_ORCL(ObExprInnerDecodeLike);
+  REG_OP_ORCL(ObExprInnerDoubleToInt);
+  REG_OP_ORCL(ObExprCalcOdpsSize);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

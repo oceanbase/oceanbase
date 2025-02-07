@@ -22,6 +22,7 @@ namespace oceanbase
 namespace commom
 {
 class ObAddr;
+class ObIOManager;
 }
 
 namespace rpc
@@ -35,6 +36,11 @@ class ObReqTransport;
 namespace obrpc
 {
 class ObBatchRpc;
+}
+namespace share
+{
+class ObLocalDevice;
+class ObResourceManager;
 }
 namespace palf
 {
@@ -61,6 +67,9 @@ public:
                              common::ObILogAllocator *alloc_mgr,
                              ILogBlockPool *log_block_pool,
                              PalfMonitorCb *monitor,
+                             share::ObLocalDevice *log_local_device,
+                             share::ObResourceManager *resource_manager,
+                             common::ObIOManager *io_manager,
                              PalfEnv *&palf_env);
   // static interface
   // destroy the palf env, and set "palf_env" to NULL.
@@ -120,8 +129,8 @@ public:
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }
   // should be removed in version 4.2.0.0
   int update_replayable_point(const SCN &replayable_scn);
+  int start();
 private:
-  int start_();
   void stop_();
   void wait_();
   void destroy_();

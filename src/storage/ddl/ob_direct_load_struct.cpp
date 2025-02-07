@@ -182,7 +182,8 @@ ObDDLInsertRowIterator::ObDDLInsertRowIterator()
     lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     lob_slice_id_(0),
     lob_cols_cnt_(0),
-    is_skip_lob_(false)
+    is_skip_lob_(false),
+    total_slice_cnt_(-1)
 {
   lob_id_cache_.set(1/*start*/, 0/*end*/);
 }
@@ -200,6 +201,7 @@ int ObDDLInsertRowIterator::init(
     const int64_t context_id,
     const ObTabletSliceParam &tablet_slice_param,
     const int64_t lob_cols_cnt,
+    const int64_t total_slice_cnt,
     const bool is_skip_lob)
 {
   int ret = OB_SUCCESS;
@@ -212,9 +214,10 @@ int ObDDLInsertRowIterator::init(
         || !tablet_id.is_valid()
         || context_id < 0
         // no need check tablet slice param, invalid when slice empty
-        || lob_cols_cnt < 0)) {
+        || lob_cols_cnt < 0
+        || (is_shared_storage_dempotent_mode(agent.get_direct_load_type()) && total_slice_cnt < 0))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(source_tenant_id), KP(slice_row_iter), K(ls_id), K(tablet_id), K(context_id), K(tablet_slice_param), K(lob_cols_cnt));
+    LOG_WARN("invalid argument", K(ret), K(source_tenant_id), KP(slice_row_iter), K(ls_id), K(tablet_id), K(context_id), K(tablet_slice_param), K(lob_cols_cnt), K(total_slice_cnt));
   } else if (lob_cols_cnt > 0 && tablet_slice_param.is_valid()
       && OB_FAIL(lob_id_generator_.init(tablet_slice_param.slice_idx_ * ObTabletSliceParam::LOB_ID_SEQ_INTERVAL, // start
                                         ObTabletSliceParam::LOB_ID_SEQ_INTERVAL, // interval
@@ -230,6 +233,9 @@ int ObDDLInsertRowIterator::init(
     const int64_t parallel_idx = tablet_slice_param.slice_idx_ >= 0 ? tablet_slice_param.slice_idx_ : 0;
     is_skip_lob_ = is_skip_lob;
     is_inited_ = true;
+    if ((is_shared_storage_dempotent_mode(ddl_agent_->get_direct_load_type()))) {
+      total_slice_cnt_ = total_slice_cnt;
+    }
     if (OB_FAIL(macro_seq_.set_parallel_degree(parallel_idx))) {
       LOG_WARN("set failed", K(ret), K(parallel_idx));
   #ifdef OB_BUILD_SHARED_STORAGE
@@ -343,6 +349,9 @@ int ObDDLInsertRowIterator::switch_to_new_lob_slice()
   slice_info.data_tablet_id_ = current_tablet_id_;
   slice_info.slice_id_ = lob_slice_id_;
   slice_info.context_id_ = context_id_;
+  if (is_shared_storage_dempotent_mode(ddl_agent_->get_direct_load_type())) {
+    slice_info.total_slice_cnt_ = total_slice_cnt_;
+  }
   ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
   ObTabletID lob_meta_tablet_id;
   int64_t CACHE_SIZE_REQUESTED = AUTO_INC_CACHE_SIZE;
@@ -570,6 +579,7 @@ void ObChunkSliceStore::reset()
   target_store_idx_ = -1;
   row_cnt_ = 0;
   arena_allocator_ = nullptr;
+  is_canceled_ = false;
   is_inited_ = false;
 }
 
@@ -714,7 +724,9 @@ int ObChunkSliceStore::close()
   }
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_stores_.count(); ++i) {
-      if (OB_FAIL(datum_stores_.at(i)->finish_add_row(true/*need_dump*/))) {
+      if (OB_FAIL(datum_stores_.at(i)->dump(true/*all_dump*/))) {
+        LOG_WARN("dump failed", K(ret));
+      } else if (OB_FAIL(datum_stores_.at(i)->finish_add_row(true/*need_dump*/))) {
         LOG_WARN("finish add row failed", K(ret));
       }
     }
@@ -723,6 +735,343 @@ int ObChunkSliceStore::close()
   return ret;
 }
 
+int ObChunkSliceStore::fill_column_group(const int64_t cg_idx,
+                                         ObCOSliceWriter *cur_writer,
+                                         ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChunkSliceStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= datum_stores_.count() || nullptr == cur_writer)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(datum_stores_.count()), K(cg_idx), KP(cur_writer));
+  } else {
+    sql::ObCompactStore *cur_datum_store = datum_stores_.at(cg_idx);
+    const ObChunkDatumStore::StoredRow *stored_row = nullptr;
+    bool has_next = false;
+    int64_t cg_row_inserted_cnt = 0;
+    while (OB_SUCC(ret) && OB_SUCC(cur_datum_store->has_next(has_next)) && has_next) {
+      if (OB_FAIL(cur_datum_store->get_next_row(stored_row))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("get next row failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(cur_writer->append_row(stored_row))) {
+          LOG_WARN("append row failed", K(ret), KPC(stored_row));
+        } else {
+          ++cg_row_inserted_cnt;
+          if (0 == cg_row_inserted_cnt % 100) {
+            if (OB_NOT_NULL(insert_monitor)) {
+              (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, 100);
+            }
+            if (OB_UNLIKELY(is_canceled_)) {
+              ret = OB_CANCELED;
+              LOG_WARN("fill column group is canceled", KR(ret));
+            } else if (OB_FAIL(share::dag_yield())) {
+              LOG_WARN("dag yield failed", K(ret)); // exit for dag task as soon as possible after canceled.
+            } else if (OB_FAIL(THIS_WORKER.check_status())) {
+              LOG_WARN("check status failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(insert_monitor)) {
+        (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, cg_row_inserted_cnt % 100);
+      }
+      cur_datum_store->reset();
+    }
+  }
+  return ret;
+}
+
+/**
+ * ObChunkBatchSliceStore
+ */
+
+void ObChunkBatchSliceStore::reset()
+{
+  is_inited_ = false;
+  if (OB_NOT_NULL(arena_allocator_)) {
+    for (int64_t i = 0; i < cg_ctxs_.count(); ++i) {
+      ColumnGroupCtx *cg_ctx = cg_ctxs_.at(i);
+      cg_ctx->~ColumnGroupCtx();
+      arena_allocator_->free(cg_ctx);
+      cg_ctx = nullptr;
+    }
+  }
+  cg_ctxs_.reset();
+  arena_allocator_ = nullptr;
+  column_count_ = 0;
+  rowkey_column_count_ = 0;
+  row_cnt_ = 0;
+  start_key_.reset();
+  is_canceled_ = false;
+}
+
+int ObChunkBatchSliceStore::init(const int64_t rowkey_column_count,
+                                 const ObStorageSchema *storage_schema,
+                                 ObArenaAllocator &allocator,
+                                 const ObIArray<ObColumnSchemaItem> &col_array,
+                                 const int64_t dir_id,
+                                 const int64_t parallelism,
+                                 const int64_t max_batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObChunkBatchSliceStore init twice", KR(ret), KP(this));
+  } else if (OB_ISNULL(storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null schema", KR(ret), K(*this));
+  } else if (OB_UNLIKELY(rowkey_column_count <= 0 || max_batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(rowkey_column_count), K(max_batch_size));
+  } else if (OB_FAIL(prepare_column_group_ctxs(MTL_ID(), storage_schema, allocator, col_array, dir_id, parallelism, max_batch_size))) {
+    LOG_WARN("fail to prepare datum stores");
+  } else {
+    arena_allocator_ = &allocator;
+    column_count_ = col_array.count();
+    rowkey_column_count_ = rowkey_column_count;
+    is_inited_ = true;
+  }
+  LOG_DEBUG("init chunk batch slice store", KR(ret), KPC(this));
+  return ret;
+}
+
+int ObChunkBatchSliceStore::prepare_column_group_ctxs(
+    const uint64_t tenant_id,
+    const ObStorageSchema *storage_schema,
+    ObIAllocator &allocator,
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t dir_id,
+    const int64_t parallelism,
+    const int64_t max_batch_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t chunk_mem_limit = 64 * 1024L; // 64K
+  if (OB_UNLIKELY(tenant_id <= 0 || nullptr == storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), KP(storage_schema));
+  } else {
+    const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
+    ObArray<ObColumnSchemaItem> column_items;
+    column_items.set_attr(ObMemAttr(tenant_id, "tmp_cg_item"));
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_schemas.count(); ++i) {
+      const ObStorageColumnGroupSchema &cg_schema = cg_schemas.at(i);
+      ObCompressorType compressor_type = cg_schema.compressor_type_;
+      compressor_type = NONE_COMPRESSOR == compressor_type ? (CS_ENCODING_ROW_STORE == cg_schema.row_store_type_ ? ZSTD_1_3_8_COMPRESSOR : NONE_COMPRESSOR) : compressor_type;
+      column_items.reuse();
+      if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(compressor_type,
+                                                          parallelism,
+                                                          compressor_type))) {
+        LOG_WARN("fail to get temp store compress type", KR(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cg_schema.column_cnt_; ++j) {
+        const int64_t column_idx = cg_schema.get_column_idx(j); // all_cg column_idxs_ = null
+        if (OB_UNLIKELY(column_idx >= col_array.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column idex", KR(ret), K(i), K(j), K(column_idx), K(cg_schema), K(col_array.count()));
+        } else if (OB_FAIL(column_items.push_back(col_array.at(column_idx)))) {
+          LOG_WARN("fail to push_back col_item", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        const int64_t skip_size = ObBitVector::memory_size(max_batch_size);
+        void *skip_mem = nullptr;
+        ColumnGroupCtx *cg_ctx = nullptr;
+        if (OB_ISNULL(cg_ctx = OB_NEWx(ColumnGroupCtx, &allocator))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to new ColumnGroupCtx", KR(ret));
+        } else if (OB_FAIL(ObTempColumnStore::init_vectors(column_items, cg_ctx->allocator_, cg_ctx->vectors_))) {
+          LOG_WARN("fail to init vectors", KR(ret), K(i), K(column_items));
+        } else if (OB_FAIL(cg_ctx->store_.init(cg_ctx->vectors_,
+                                               max_batch_size,
+                                               ObMemAttr(tenant_id, "DL_VEC_STORE"),
+                                               chunk_mem_limit,
+                                               true/*enable_dump*/,
+                                               compressor_type))) {
+          LOG_WARN("failed to init temp column store", KR(ret), K(i), K(column_items));
+        } else if (OB_FAIL(cg_ctx->append_vectors_.prepare_allocate(cg_schema.column_cnt_))) {
+          LOG_WARN("fail to prepare allocate", KR(ret), K(cg_schema.column_cnt_));
+        } else if (OB_ISNULL(skip_mem = allocator.alloc(skip_size))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc skip buf", KR(ret));
+        } else {
+          cg_ctx->cg_schema_ = cg_schema;
+          cg_ctx->store_.set_dir_id(dir_id);
+          cg_ctx->store_.get_inner_allocator().set_tenant_id(tenant_id);
+          cg_ctx->brs_.skip_ = to_bit_vector(skip_mem);
+          cg_ctx->brs_.skip_->reset(max_batch_size);
+          cg_ctx->brs_.size_ = 0;
+          cg_ctx->brs_.set_all_rows_active(true);
+          LOG_INFO("set dir id", K(dir_id));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(cg_ctxs_.push_back(cg_ctx))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          if (nullptr != cg_ctx) {
+            cg_ctx->~ColumnGroupCtx();
+            allocator.free(cg_ctx);
+            cg_ctx = nullptr;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObChunkBatchSliceStore::init_start_key()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = arena_allocator_->alloc(sizeof(ObStorageDatum) * rowkey_column_count_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc datums", KR(ret), K(rowkey_column_count_));
+  } else {
+    start_key_.datums_ = new (buf) ObStorageDatum[rowkey_column_count_];
+    start_key_.datum_cnt_ = rowkey_column_count_;
+  }
+  return ret;
+}
+
+int ObChunkBatchSliceStore::append_batch(const ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChunkBatchSliceStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(datum_rows.get_column_count() < column_count_ || datum_rows.row_count_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(column_count_), K(datum_rows.get_column_count()), K(datum_rows.row_count_));
+  } else {
+    int64_t stored_rows_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_ctxs_.count(); ++i) {
+      ColumnGroupCtx *cg_ctx = cg_ctxs_.at(i);
+      const ObStorageColumnGroupSchema &cg_schema = cg_ctx->cg_schema_;
+      for (int64_t j = 0; j < cg_schema.column_cnt_; ++j) {
+        const int64_t column_idx = cg_schema.get_column_idx(j);
+        cg_ctx->append_vectors_.at(j) = datum_rows.vectors_.at(column_idx);
+      }
+      cg_ctx->brs_.size_ = datum_rows.row_count_;
+      if (OB_FAIL(cg_ctx->store_.add_batch(cg_ctx->append_vectors_, cg_ctx->brs_, stored_rows_count))) {
+        LOG_WARN("fail to add batch", KR(ret), K(i), K(cg_schema));
+      } else if (OB_UNLIKELY(stored_rows_count != datum_rows.row_count_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected rows count", KR(ret), K(stored_rows_count), K(datum_rows.row_count_));
+      }
+    }
+    // save start_key_
+    if (OB_SUCC(ret) && 0 == row_cnt_) {
+      bool is_null = false;
+      const char *payload = nullptr;
+      ObLength length = 0;
+      ObStorageDatum tmp_datum;
+      if (OB_FAIL(init_start_key())) {
+        LOG_WARN("fail to init start key", KR(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_count_; ++i) {
+        ObIVector *vec = datum_rows.vectors_.at(i);
+        vec->get_payload(0, is_null, payload, length);
+        tmp_datum.shallow_copy_from_datum(ObDatum(payload, length, is_null));
+        if (OB_FAIL(start_key_.datums_[i].deep_copy(tmp_datum, *arena_allocator_))) {
+          LOG_WARN("fail to deep copy storage datum", KR(ret), K(tmp_datum));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      row_cnt_ += datum_rows.row_count_;
+    }
+  }
+  return ret;
+}
+
+int ObChunkBatchSliceStore::close()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChunkBatchSliceStore not init", KR(ret), KP(this));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cg_ctxs_.count(); ++i) {
+      ColumnGroupCtx *cg_ctx = cg_ctxs_.at(i);
+      if (OB_FAIL(cg_ctx->store_.dump(true/*all_dump*/))) {
+        LOG_WARN("fail to dump", KR(ret));
+      } else if (OB_FAIL(cg_ctx->store_.finish_add_row(true/*need_dump*/))) {
+        LOG_WARN("fail to finish add row", KR(ret));
+      } else {
+        cg_ctx->store_.reset_batch_ctx();
+        cg_ctx->append_vectors_.reset();
+      }
+    }
+  }
+  LOG_DEBUG("chunk batch slice store closed", KR(ret), K(start_key_));
+  return ret;
+}
+
+int ObChunkBatchSliceStore::fill_column_group(const int64_t cg_idx,
+                                              ObCOSliceWriter *writer,
+                                              ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObChunkBatchSliceStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= cg_ctxs_.count() || nullptr == writer)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(cg_ctxs_.count()), K(cg_idx), KP(writer));
+  } else {
+    ColumnGroupCtx *cg_ctx = cg_ctxs_.at(cg_idx);
+    ObTempColumnStore::Iterator iterator;
+    int64_t read_rows = 0;
+    if (OB_FAIL(cg_ctx->store_.begin(iterator))) {
+      LOG_WARN("fail to begin iterator", KR(ret));
+    }
+    while (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(is_canceled_)) {
+        ret = OB_CANCELED;
+        LOG_WARN("fill column group is canceled", KR(ret));
+      } else if (OB_FAIL(share::dag_yield())) {
+        LOG_WARN("dag yield failed", K(ret)); // exit for dag task as soon as possible after canceled.
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(iterator.get_next_batch(cg_ctx->vectors_, read_rows))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next batch", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(writer->append_batch(cg_ctx->vectors_, read_rows))) {
+        LOG_WARN("fail to append batch", KR(ret));
+      } else {
+        if (OB_NOT_NULL(insert_monitor)) {
+          (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, read_rows);
+        }
+      }
+    }
+    iterator.reset();
+    if (OB_SUCC(ret)) {
+      cg_ctx->store_.reset();
+      cg_ctx->vectors_.reset();
+      cg_ctx->allocator_.reset();
+    }
+  }
+  return ret;
+}
+
+/**
+ * ObMacroBlockSliceStore
+ */
 
 int ObMacroBlockSliceStore::init(
     ObTabletDirectLoadMgr *tablet_direct_load_mgr,
@@ -760,7 +1109,9 @@ int ObMacroBlockSliceStore::init(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else if (OB_FAIL(static_cast<ObDDLRedoLogWriterCallback *>(ddl_redo_callback_)->init(
-          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn,
+          ls_id, table_key.tablet_id_,
+          tablet_direct_load_mgr->get_is_no_logging() ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE,
+          table_key, ddl_task_id, start_scn,
           data_format_version,
           tablet_direct_load_mgr->get_task_cnt(),
           tablet_direct_load_mgr->get_cg_cnt(),
@@ -809,6 +1160,18 @@ int ObMacroBlockSliceStore::append_row(const blocksstable::ObDatumRow &datum_row
   return ret;
 }
 
+int ObMacroBlockSliceStore::append_batch(const blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMacroBlockSliceStore not init", KR(ret), KP(this));
+  } else if (OB_FAIL(macro_block_writer_.append_batch(datum_rows))) {
+    LOG_WARN("macro block writer append batch failed", K(ret));
+  }
+  return ret;
+}
+
 int ObMacroBlockSliceStore::close()
 {
   int ret = OB_SUCCESS;
@@ -843,7 +1206,9 @@ int ObMultiSliceStore::init(
     const ObStorageSchema *storage_schema,
     const ObIArray<ObColumnSchemaItem> &col_schema,
     const int64_t dir_id,
-    const int64_t parallelism)
+    const int64_t parallelism,
+    const bool use_batch_store,
+    const int64_t max_batch_size)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -866,12 +1231,26 @@ int ObMultiSliceStore::init(
     LOG_WARN("fail to allocate memory for row slice store", K(ret));
   } else if (OB_FAIL(row_slice_store_->init(tablet_direct_load_mgr, data_seq, start_scn, true /*need_process_cs_replica*/))) {
     LOG_WARN("fail to init row slice store", K(ret), KPC(tablet_direct_load_mgr), K(data_seq), K(start_scn));
-  } else if (OB_ISNULL(column_slice_store_ = OB_NEWx(ObChunkSliceStore, &allocator))){
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for column slice store", K(ret));
-  } else if (OB_FAIL(column_slice_store_->init(rowkey_column_count, cs_replica_schema_, allocator, col_schema, dir_id, parallelism))) {
-    LOG_WARN("fail to init column slice store", K(ret), K(dir_id), K(parallelism), KPC(storage_schema), K(col_schema), K(rowkey_column_count));
   } else {
+    if (use_batch_store) {
+      ObChunkBatchSliceStore *column_slice_store = nullptr;
+      if (OB_ISNULL(column_slice_store_ = column_slice_store = OB_NEWx(ObChunkBatchSliceStore, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObChunkBatchSliceStore", KR(ret));
+      } else if (OB_FAIL(column_slice_store->init(rowkey_column_count, cs_replica_schema_, allocator, col_schema, dir_id, parallelism, max_batch_size))) {
+        LOG_WARN("fail to init chunk batch slice store", K(ret), K(dir_id), K(parallelism), KPC(storage_schema), K(col_schema), K(rowkey_column_count), K(max_batch_size));
+      }
+    } else {
+      ObChunkSliceStore *column_slice_store = nullptr;
+      if (OB_ISNULL(column_slice_store_ = column_slice_store = OB_NEWx(ObChunkSliceStore, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObChunkSliceStore", KR(ret));
+      } else if (OB_FAIL(column_slice_store->init(rowkey_column_count, cs_replica_schema_, allocator, col_schema, dir_id, parallelism))) {
+        LOG_WARN("fail to init chunk slice store", K(ret), K(dir_id), K(parallelism), KPC(storage_schema), K(col_schema), K(rowkey_column_count));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     is_inited_ = true;
     arena_allocator_ = &allocator;
     LOG_DEBUG("[CS-Replica] Successfully init multi slice store", K(ret), KPC(this));
@@ -900,6 +1279,23 @@ int ObMultiSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
   return ret;
 }
 
+int ObMultiSliceStore::append_batch(const blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMultiSliceStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(nullptr == row_slice_store_ ||  nullptr == column_slice_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected slice store", KR(ret), KP(row_slice_store_), KP(column_slice_store_));
+  } else if (OB_FAIL(row_slice_store_->append_batch(datum_rows))) {
+    LOG_WARN("fail to append batch to row slice store", KR(ret));
+  } else if (OB_FAIL(column_slice_store_->append_batch(datum_rows))) {
+    LOG_WARN("fail to append batch to column slice store", KR(ret));
+  }
+  return ret;
+}
+
 int ObMultiSliceStore::close()
 {
   int ret = OB_SUCCESS;
@@ -919,6 +1315,33 @@ int ObMultiSliceStore::close()
   return ret;
 }
 
+int ObMultiSliceStore::fill_column_group(const int64_t cg_idx,
+                                         ObCOSliceWriter *writer,
+                                         ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMultiSliceStore not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(nullptr == column_slice_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected column slice store is null", KR(ret), KP(column_slice_store_));
+  } else if (OB_FAIL(column_slice_store_->fill_column_group(cg_idx, writer, insert_monitor))) {
+    LOG_WARN("fail to fill column group", KR(ret), K(cg_idx), KP(writer));
+  }
+  return ret;
+}
+
+void ObMultiSliceStore::cancel()
+{
+  if (OB_NOT_NULL(row_slice_store_)) {
+    row_slice_store_->cancel();
+  }
+  if (OB_NOT_NULL(column_slice_store_)) {
+    column_slice_store_->cancel();
+  }
+}
+
 int64_t ObMultiSliceStore::get_row_count() const
 {
   return column_slice_store_->get_row_count();
@@ -927,6 +1350,15 @@ int64_t ObMultiSliceStore::get_row_count() const
 int64_t ObMultiSliceStore::get_next_block_start_seq() const
 {
   return row_slice_store_->get_next_block_start_seq();
+}
+
+ObDatumRowkey ObMultiSliceStore::get_compare_key() const
+{
+  ObDatumRowkey rowkey;
+  if (OB_NOT_NULL(column_slice_store_)) {
+    rowkey = column_slice_store_->get_compare_key();
+  }
+  return rowkey;
 }
 
 void ObMultiSliceStore::reset()
@@ -946,7 +1378,7 @@ void ObMultiSliceStore::reset()
 void ObMultiSliceStore::free_memory(ObArenaAllocator &allocator)
 {
   if (OB_NOT_NULL(column_slice_store_)) {
-    column_slice_store_->~ObChunkSliceStore();
+    column_slice_store_->~ObTabletSliceStore();
     allocator.free(column_slice_store_);
     column_slice_store_ = nullptr;
   }
@@ -977,7 +1409,7 @@ bool ObTabletDDLParam::is_valid() const
 ObDirectLoadSliceWriter::ObDirectLoadSliceWriter()
   : is_inited_(false), writer_type_(ObDirectLoadSliceWriterType::WRITER_TYPE_MAX), is_canceled_(false), start_seq_(), tablet_direct_load_mgr_(nullptr),
     slice_store_(nullptr), meta_write_iter_(nullptr), row_iterator_(nullptr),
-    allocator_(lib::ObLabel("SliceWriter"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), row_offset_(-1)
+    allocator_(lib::ObLabel("SliceWriter"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), lob_allocator_(nullptr), row_offset_(-1)
 {
 }
 
@@ -997,6 +1429,11 @@ ObDirectLoadSliceWriter::~ObDirectLoadSliceWriter()
     row_iterator_->~ObLobMetaRowIterator();
     allocator_.free(row_iterator_);
     row_iterator_ = nullptr;
+  }
+  if (nullptr != lob_allocator_) {
+    lob_allocator_->reset();
+    allocator_.free(lob_allocator_);
+    lob_allocator_= nullptr;
   }
   allocator_.reset();
   row_offset_ = -1;
@@ -1036,7 +1473,9 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     const ObStorageSchema *storage_schema,
     const SCN &start_scn,
     const ObString vec_idx_param,
-    const int64_t vec_dim)
+    const int64_t vec_dim,
+    const bool use_batch_store,
+    const int64_t max_batch_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1073,9 +1512,17 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     } else if (OB_ISNULL(multi_slice_store = OB_NEWx(ObMultiSliceStore, &allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for multi slice store failed", K(ret));
-    } else if (OB_FAIL(multi_slice_store->init(allocator_, tablet_direct_load_mgr_, start_seq_, start_scn,
-                          schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                          storage_schema, tablet_direct_load_mgr_->get_column_info(), dir_id, parallelism))) {
+    } else if (OB_FAIL(multi_slice_store->init(allocator_,
+                                               tablet_direct_load_mgr_,
+                                               start_seq_,
+                                               start_scn,
+                                               schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                                               storage_schema,
+                                               tablet_direct_load_mgr_->get_column_info(),
+                                               dir_id,
+                                               parallelism,
+                                               use_batch_store,
+                                               max_batch_size))) {
       LOG_WARN("init multi slice store failed", K(ret), KPC_(tablet_direct_load_mgr), KPC(storage_schema));
     } else {
       slice_store_ = multi_slice_store;
@@ -1086,22 +1533,38 @@ int ObDirectLoadSliceWriter::prepare_slice_store_if_need(
     }
   } else if (is_full_direct_load(tablet_direct_load_mgr_->get_direct_load_type()) && is_column_store) {
     writer_type_ = ObDirectLoadSliceWriterType::COL_STORE_WRITER;
-    ObChunkSliceStore *chunk_slice_store = nullptr;
     if (OB_ISNULL(storage_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("null schema", K(ret), K(*this));
-    } else if (OB_ISNULL(chunk_slice_store = OB_NEWx(ObChunkSliceStore, &allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for chunk slice store failed", K(ret));
-    } else if (OB_FAIL(chunk_slice_store->init(schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
-                                    storage_schema, allocator_, tablet_direct_load_mgr_->get_column_info(), dir_id, parallelism))) {
-      LOG_WARN("init chunk slice store failed", K(ret), KPC(storage_schema));
     } else {
-      slice_store_ = chunk_slice_store;
-    }
-    if (OB_FAIL(ret) && nullptr != chunk_slice_store) {
-      chunk_slice_store->~ObChunkSliceStore();
-      allocator_.free(chunk_slice_store);
+      if (use_batch_store) {
+        ObChunkBatchSliceStore *chunk_slice_store = nullptr;
+        if (OB_ISNULL(slice_store_ = chunk_slice_store = OB_NEWx(ObChunkBatchSliceStore, &allocator_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to new ObChunkBatchSliceStore", KR(ret));
+        } else if (OB_FAIL(chunk_slice_store->init(schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                                                   storage_schema,
+                                                   allocator_,
+                                                   tablet_direct_load_mgr_->get_column_info(),
+                                                   dir_id,
+                                                   parallelism,
+                                                   max_batch_size))) {
+          LOG_WARN("fail to init chunk batch slice store", K(ret), KPC(storage_schema));
+        }
+      } else {
+        ObChunkSliceStore *chunk_slice_store = nullptr;
+        if (OB_ISNULL(slice_store_ = chunk_slice_store = OB_NEWx(ObChunkSliceStore, &allocator_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to new ObChunkSliceStore", KR(ret));
+        } else if (OB_FAIL(chunk_slice_store->init(schema_rowkey_column_num + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                                                   storage_schema,
+                                                   allocator_,
+                                                   tablet_direct_load_mgr_->get_column_info(),
+                                                   dir_id,
+                                                   parallelism))) {
+          LOG_WARN("fail to init chunk slice store", K(ret), KPC(storage_schema));
+        }
+      }
     }
   } else {
     writer_type_ = ObDirectLoadSliceWriterType::ROW_STORE_WRITER;
@@ -1163,14 +1626,24 @@ int ObDirectLoadSliceWriter::prepare_iters(
   int ret = OB_SUCCESS;
   row_iter = nullptr;
 
-  if (OB_ISNULL(meta_write_iter_)) {
+  if (OB_ISNULL(lob_allocator_)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(common::ObArenaAllocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc lob allocator failed", K(ret));
+    } else {
+      lob_allocator_ = new (buf) common::ObArenaAllocator("LobWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(meta_write_iter_)) {
     void *buf = nullptr;
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObLobMetaWriteIter)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc lob meta write iter failed", K(ret));
     } else {
       // keep allocator is same as insert_lob_column
-      meta_write_iter_ = new (buf) ObLobMetaWriteIter(&allocator, ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE);
+      meta_write_iter_ = new (buf) ObLobMetaWriteIter(lob_allocator_, ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE);
     }
   }
 
@@ -1195,7 +1668,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
       LOG_WARN("tx_desc should not be null if is incremental_direct_load", K(ret), K(direct_load_type),
           K(ls_id), K(tablet_id), K(trans_version), K(seq_no), K(obj_type), K(cs_type), K(trans_id));
     } else if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-        allocator, tx_desc, pk_interval, ls_id, tablet_id/* tablet_id of main table */, tablet_direct_load_mgr_->get_tablet_id()/*tablet id of lob meta table*/,
+        allocator, *lob_allocator_, tx_desc, pk_interval, ls_id, tablet_id/* tablet_id of main table */, tablet_direct_load_mgr_->get_tablet_id()/*tablet id of lob meta table*/,
         obj_type, cs_type, lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
       LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(src_tenant_id));
     } else if (OB_FAIL(row_iterator_->init(meta_write_iter_, trans_id,
@@ -1225,13 +1698,22 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
-  } else if (DATA_VERSION_4_3_0_0 > data_format_version) {
-    if (OB_FAIL(fill_lob_into_memtable(allocator, info, lob_column_idxs, col_types, lob_inrow_threshold, datum_row))) {
-      LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
+      const int64_t idx = lob_column_idxs.at(i);
+      const ObObjMeta &col_type = col_types.at(i);
+      ObStorageDatum &datum = datum_row.storage_datums_[idx];
+      if (DATA_VERSION_4_3_0_0 > data_format_version) {
+        if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, datum))) {
+          LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
+        }
+      } else {
+        if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
+            pk_interval, col_type, lob_inrow_threshold, datum))) {
+          LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
+        }
+      }
     }
-  } else if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-      pk_interval, lob_column_idxs, col_types, lob_inrow_threshold, datum_row))) {
-    LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
   }
   return ret;
 }
@@ -1239,25 +1721,19 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
 int ObDirectLoadSliceWriter::fill_lob_into_memtable(
     ObIAllocator &allocator,
     const ObBatchSliceWriteInfo &info,
-    const ObArray<int64_t> &lob_column_idxs,
-    const ObArray<common::ObObjMeta> &col_types,
+    const common::ObObjMeta &col_type,
     const int64_t lob_inrow_threshold,
-    blocksstable::ObDatumRow &datum_row)
+    blocksstable::ObStorageDatum &datum)
 {
   // to insert lob data into memtable.
   int ret = OB_SUCCESS;
-  const int64_t timeout_ts =
-      ObTimeUtility::fast_current_time() + (ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT * lob_column_idxs.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
-    const int64_t idx = lob_column_idxs.at(i);
-    ObStorageDatum &datum = datum_row.storage_datums_[idx];
-    ObLobStorageParam lob_storage_param;
-    lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
-    if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-      allocator, info.ls_id_, info.data_tablet_id_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(),
-      lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
-      LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
-    }
+  const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  ObLobStorageParam lob_storage_param;
+  lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
+  if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
+    allocator, info.ls_id_, info.data_tablet_id_, col_type.get_type(), col_type.get_collation_type(),
+    lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
+    LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
   }
   return ret;
 }
@@ -1268,71 +1744,288 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
     const SCN &start_scn,
     const ObBatchSliceWriteInfo &info,
     share::ObTabletCacheInterval &pk_interval,
-    const ObArray<int64_t> &lob_column_idxs,
-    const ObArray<common::ObObjMeta> &col_types,
+    const common::ObObjMeta &col_type,
     const int64_t lob_inrow_threshold,
-    blocksstable::ObDatumRow &datum_row)
+    blocksstable::ObStorageDatum &datum)
 {
   // to insert lob data into macro block.
   int ret = OB_SUCCESS;
   int64_t unused_affected_rows = 0;
-  const int64_t timeout_ts =
-      ObTimeUtility::fast_current_time() + (ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT * lob_column_idxs.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
-    int64_t idx = lob_column_idxs.at(i);
-    ObStorageDatum &datum = datum_row.storage_datums_[idx];
-    if (!datum.is_nop() && !datum.is_null()) {
-      {
-        ObLobMetaRowIterator *row_iter = nullptr;
-        if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
-            info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(),
-            info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, info.direct_load_type_,
-            info.tx_desc_, pk_interval, row_iter))) {
-          LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
-        } else {
-          while (OB_SUCC(ret)) {
-            const blocksstable::ObDatumRow *cur_row = nullptr;
-            if (OB_FAIL(THIS_WORKER.check_status())) {
-              LOG_WARN("check status failed", K(ret));
-            } else if (ATOMIC_LOAD(&is_canceled_)) {
-              ret = OB_CANCELED;
-              LOG_WARN("fil lob task canceled", K(ret), K(is_canceled_));
-            } else if (OB_FAIL(row_iter->get_next_row(cur_row))) {
-              if (OB_ITER_END == ret) {
-                ret = OB_SUCCESS;
-                break;
-              } else {
-                LOG_WARN("get next row failed", K(ret));
-              }
-            } else if (OB_ISNULL(cur_row) || !cur_row->is_valid()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid args", KR(ret), KPC(cur_row));
-            } else if (OB_FAIL(check_null(false/*is_index_table*/, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
-              LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
-            } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
-                false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, nullptr /*storage_schema*/, start_scn,
-                ObString()/*unsued*/, 0/*unsued*/))) {
-              LOG_WARN("prepare macro block writer failed", K(ret));
-            } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
-              LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row));
+  const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+  if (!datum.is_nop() && !datum.is_null()) {
+    {
+      ObLobMetaRowIterator *row_iter = nullptr;
+      if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
+          info.data_tablet_id_, info.trans_version_, col_type.get_type(), col_type.get_collation_type(),
+          info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, info.direct_load_type_,
+          info.tx_desc_, pk_interval, row_iter))) {
+        LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
+      } else {
+        while (OB_SUCC(ret)) {
+          const blocksstable::ObDatumRow *cur_row = nullptr;
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("check status failed", K(ret));
+          } else if (ATOMIC_LOAD(&is_canceled_)) {
+            ret = OB_CANCELED;
+            LOG_WARN("fil lob task canceled", K(ret), K(is_canceled_));
+          } else if (OB_FAIL(row_iter->get_next_row(cur_row))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("get next row failed", K(ret));
             }
-            if (OB_SUCC(ret)) {
-              ++unused_affected_rows;
-              LOG_DEBUG("sstable insert op append row", K(unused_affected_rows), KPC(cur_row));
-            }
-          }
-          if (OB_SUCC(ret) && OB_NOT_NULL(meta_write_iter_) && OB_FAIL(meta_write_iter_->check_write_length())) {
-            LOG_WARN("check_write_length fail", K(ret), KPC(meta_write_iter_));
+          } else if (OB_ISNULL(cur_row) || !cur_row->is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid args", KR(ret), KPC(cur_row));
+          } else if (OB_FAIL(check_null(false/*is_index_table*/, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
+            LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
+          } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
+              false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, nullptr /*storage_schema*/, start_scn,
+              ObString()/*unsued*/, 0/*unsued*/))) {
+            LOG_WARN("prepare macro block writer failed", K(ret));
+          } else if (OB_FAIL(slice_store_->append_row(*cur_row))) {
+            LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row));
           }
           if (OB_SUCC(ret)) {
-            if (OB_NOT_NULL(meta_write_iter_)) {
-              meta_write_iter_->reuse();
-            }
-            if (OB_NOT_NULL(row_iterator_)) {
-              row_iterator_->reuse();
-            }
+            ++unused_affected_rows;
+            LOG_DEBUG("sstable insert op append row", K(unused_affected_rows), KPC(cur_row));
           }
         }
+        if (OB_SUCC(ret) && OB_NOT_NULL(meta_write_iter_) && OB_FAIL(meta_write_iter_->check_write_length())) {
+          LOG_WARN("check_write_length fail", K(ret), KPC(meta_write_iter_));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_NOT_NULL(meta_write_iter_)) {
+            meta_write_iter_->reuse();
+          }
+          if (OB_NOT_NULL(row_iterator_)) {
+            row_iterator_->reuse();
+          }
+          if (OB_NOT_NULL(lob_allocator_)) {
+            lob_allocator_->reuse();
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+static bool fast_check_vector_is_all_null(ObIVector *vector, const int64_t batch_size)
+{
+  bool is_all_null = false;
+  VectorFormat format = vector->get_format();
+  switch (format) {
+    case VEC_FIXED:
+    case VEC_DISCRETE:
+    case VEC_CONTINUOUS:
+      is_all_null = static_cast<ObBitmapNullVectorBase *>(vector)->get_nulls()->is_all_true(batch_size);
+      break;
+    default:
+      break;
+  }
+  return is_all_null;
+}
+
+static int new_discrete_vector(VecValueTypeClass value_tc,
+                               const int64_t max_batch_size,
+                               ObIAllocator &allocator,
+                               ObDiscreteBase *&result_vec)
+{
+  int ret = OB_SUCCESS;
+  result_vec = nullptr;
+  ObIVector *vector = nullptr;
+  switch (value_tc) {
+#define DISCRETE_VECTOR_INIT_SWITCH(value_tc)                           \
+  case value_tc: {                                                      \
+    using VecType = RTVectorType<VEC_DISCRETE, value_tc>;               \
+    static_assert(sizeof(VecType) <= ObIVector::MAX_VECTOR_STRUCT_SIZE, \
+                  "vector size exceeds MAX_VECTOR_STRUCT_SIZE");        \
+    vector = OB_NEWx(VecType, &allocator, nullptr, nullptr, nullptr);   \
+    break;                                                              \
+  }
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
+#undef DISCRETE_VECTOR_INIT_SWITCH
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected discrete vector value type class", KR(ret), K(value_tc));
+      break;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(vector)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc vecttor", KR(ret));
+  } else {
+    ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+    const int64_t nulls_size = ObBitVector::memory_size(max_batch_size);
+    const int64_t lens_size = sizeof(int32_t) * max_batch_size;
+    const int64_t ptrs_size = sizeof(char *) * max_batch_size;
+    ObBitVector *nulls = nullptr;
+    int32_t *lens = nullptr;
+    char **ptrs = nullptr;
+    if (OB_ISNULL(nulls = to_bit_vector(allocator.alloc(nulls_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(nulls_size));
+    } else if (OB_ISNULL(lens = static_cast<int32_t *>(allocator.alloc(lens_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(lens_size));
+    } else if (OB_ISNULL(ptrs = static_cast<char **>(allocator.alloc(ptrs_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
+    } else {
+      nulls->reset(max_batch_size);
+      discrete_vec->set_nulls(nulls);
+      discrete_vec->set_lens(lens);
+      discrete_vec->set_ptrs(ptrs);
+      result_vec = discrete_vec;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
+    const uint64_t table_id,
+    ObIAllocator &allocator,
+    ObIAllocator &iter_allocator,
+    const SCN &start_scn,
+    const ObBatchSliceWriteInfo &info,
+    share::ObTabletCacheInterval &pk_interval,
+    const ObArray<int64_t> &lob_column_idxs,
+    const ObArray<common::ObObjMeta> &col_types,
+    const int64_t lob_inrow_threshold,
+    blocksstable::ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t data_format_version = tablet_direct_load_mgr_->get_data_format_version();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
+  } else {
+    ObStorageDatum temp_datum;
+    for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
+      const int64_t idx = lob_column_idxs.at(i);
+      const ObObjMeta &col_type = col_types.at(i);
+      ObIVector *vector = datum_rows.vectors_.at(idx);
+      const VectorFormat format = vector->get_format();
+      if (fast_check_vector_is_all_null(vector, datum_rows.row_count_)) {
+        // do nothing
+        continue;
+      }
+      switch (format) {
+        case VEC_CONTINUOUS:
+        {
+          ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
+          ObDiscreteBase *discrete_vec = nullptr;
+          char *data = continuous_vec->get_data();
+          uint32_t *offsets = continuous_vec->get_offsets();
+          char **ptrs = nullptr;
+          ObLength *lens = nullptr;
+          VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
+                                                        col_type.get_scale(),
+                                                        PRECISION_UNKNOWN_YET);
+          if (OB_FAIL(new_discrete_vector(value_tc, datum_rows.row_count_, allocator, discrete_vec))) {
+            LOG_WARN("fail to new discrete vector", KR(ret));
+          } else {
+            ptrs = discrete_vec->get_ptrs();
+            lens = discrete_vec->get_lens();
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < datum_rows.row_count_; ++j) {
+            if (continuous_vec->is_null(j)) {
+              discrete_vec->set_null(j);
+            } else {
+              temp_datum.ptr_ = data + offsets[j];
+              temp_datum.len_ = offsets[j + 1] - offsets[j];
+              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
+                }
+              } else {
+                if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
+                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                ptrs[j] = const_cast<char *>(temp_datum.ptr_);
+                lens[j] = temp_datum.len_;
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            datum_rows.vectors_.at(idx) = discrete_vec;
+          }
+          break;
+        }
+        case VEC_DISCRETE:
+        {
+          ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+          char **ptrs = discrete_vec->get_ptrs();
+          ObLength *lens =discrete_vec->get_lens();
+          for (int64_t j = 0; OB_SUCC(ret) && j < datum_rows.row_count_; ++j) {
+            if (!discrete_vec->is_null(j)) {
+              temp_datum.ptr_ = ptrs[j];
+              temp_datum.len_ = lens[j];
+              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
+                }
+              } else {
+                if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
+                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                ptrs[j] = const_cast<char *>(temp_datum.ptr_);
+                lens[j] = temp_datum.len_;
+              }
+            }
+          }
+          break;
+        }
+        case VEC_UNIFORM:
+        {
+          ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+          ObDatum *datums = uniform_vec->get_datums();
+          for (int64_t j = 0; OB_SUCC(ret) && j < datum_rows.row_count_; ++j) {
+            ObDatum &datum = datums[j];
+            if (!datum.is_null()) {
+              temp_datum.ptr_ = datum.ptr_;
+              temp_datum.len_ = datum.len_;
+              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
+                }
+              } else {
+                if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
+                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                  LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                datum.ptr_ = temp_datum.ptr_;
+                datum.len_ = temp_datum.len_;
+              }
+            }
+          }
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected lob vector format", KR(ret), K(i), K(format));
+          break;
       }
     }
   }
@@ -1424,7 +2117,9 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     while (OB_SUCC(ret)) {
       arena.reuse();
       const blocksstable::ObDatumRow *cur_row = nullptr;
-      if (OB_FAIL(THIS_WORKER.check_status())) {
+      if (OB_FAIL(share::dag_yield())) {
+        LOG_WARN("dag yield failed", K(ret), K(affected_rows)); // exit for dag task as soon as possible after canceled.
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (ATOMIC_LOAD(&is_canceled_)) {
         ret = OB_CANCELED;
@@ -1477,12 +2172,12 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
             ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
           }
         } else {
-          LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row), KPC(cur_row));
+          LOG_WARN("macro block writer append row failed", K(ret), KPC(cur_row));
         }
       }
       if (OB_SUCC(ret)) {
         ++affected_rows;
-        LOG_DEBUG("sstable insert op append row", KPC(cur_row), KPC(cur_row));
+        LOG_DEBUG("sstable insert op append row", KPC(cur_row));
         if ((affected_rows % 100 == 0) && OB_NOT_NULL(insert_monitor)) {
           (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, 100);
           (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, 100);
@@ -1492,6 +2187,92 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     if (OB_SUCC(ret) && OB_NOT_NULL(insert_monitor)) {
       (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, affected_rows % 100);
       (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, affected_rows % 100);
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSliceWriter::fill_sstable_slice(
+    const SCN &start_scn,
+    const uint64_t table_id,
+    const ObTabletID &tablet_id,
+    const ObStorageSchema *storage_schema,
+    const blocksstable::ObBatchDatumRows &datum_rows,
+    const ObTableSchemaItem &schema_item,
+    const ObDirectLoadType &direct_load_type,
+    const ObArray<ObColumnSchemaItem> &column_items,
+    const int64_t dir_id,
+    const int64_t parallelism,
+    ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  const bool is_full_direct_load_task = is_full_direct_load(direct_load_type);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null schema", K(ret), K(*this));
+  } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_canceled_))) {
+    ret = OB_CANCELED;
+    LOG_WARN("fil sstable task canceled", K(ret), K(is_canceled_));
+  } else {
+    ObArenaAllocator arena("SliceW_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    const ObDataStoreDesc &data_desc = tablet_direct_load_mgr_->get_sqc_build_ctx().data_block_desc_.get_desc();
+    const int64_t max_batch_size = tablet_direct_load_mgr_->get_sqc_build_ctx().build_param_.runtime_only_param_.max_batch_size_;
+    if (OB_UNLIKELY(datum_rows.get_column_count() != data_desc.get_col_desc_array().count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", KR(ret), K(datum_rows.get_column_count()), K(data_desc.get_col_desc_array()));
+    } else { // row reshape
+      for (int64_t i = 0; OB_SUCC(ret) && i < datum_rows.get_column_count(); ++i) {
+        const ObColDesc &col_desc = data_desc.get_col_desc_array().at(i);
+        ObIVector *vector = datum_rows.vectors_.at(i);
+        if (i >= schema_item.rowkey_column_num_ && i < schema_item.rowkey_column_num_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()) {
+          // skip multi version column
+        } else if (OB_UNLIKELY(i >= column_items.count()) || OB_UNLIKELY(!column_items.at(i).is_valid_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column schema is wrong", K(ret), K(i), K(column_items));
+        } else if (OB_FAIL(ObDASUtils::reshape_vector_value(column_items.at(i).col_type_,
+                                                            column_items.at(i).col_accuracy_,
+                                                            arena,
+                                                            vector,
+                                                            datum_rows.row_count_))) {
+          LOG_WARN("fail to reshape vector value", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_null(schema_item.is_index_table_, schema_item.rowkey_column_num_, datum_rows))) {
+      LOG_WARN("fail to check null value in row", KR(ret));
+    } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_,
+                                                   schema_item.is_column_store_,
+                                                   dir_id,
+                                                   parallelism,
+                                                   storage_schema,
+                                                   start_scn,
+                                                   schema_item.vec_idx_param_,
+                                                   schema_item.vec_dim_,
+                                                   true/*use_batch_store*/,
+                                                   max_batch_size))) {
+      LOG_WARN("prepare macro block writer failed", K(ret));
+    } else if (OB_FAIL(slice_store_->append_batch(datum_rows))) {
+      if (is_full_direct_load_task && OB_ERR_PRIMARY_KEY_DUPLICATE == ret && schema_item.is_unique_index_) {
+        int report_ret_code = OB_SUCCESS;
+        LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
+        (void) report_unique_key_dumplicated(ret, table_id, datum_rows, tablet_direct_load_mgr_->get_tablet_id(), report_ret_code); // ignore ret
+        if (OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
+          //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
+          ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
+        }
+      } else {
+        LOG_WARN("macro block writer append batch failed", K(ret));
+      }
+    } else {
+      LOG_DEBUG("sstable insert op append batch", K(datum_rows.row_count_));
+      if (OB_NOT_NULL(insert_monitor)) {
+        (void) ATOMIC_AAF(&insert_monitor->scanned_row_cnt_, datum_rows.row_count_);
+        (void) ATOMIC_AAF(&insert_monitor->inserted_row_cnt_, datum_rows.row_count_);
+      }
     }
   }
   return ret;
@@ -1533,6 +2314,118 @@ int ObDirectLoadSliceWriter::report_unique_key_dumplicated(
   return ret;
 }
 
+int ObDirectLoadSliceWriter::report_unique_key_dumplicated(
+    const int ret_code,
+    const uint64_t table_id,
+    const ObBatchDatumRows &datum_rows,
+    const ObTabletID &tablet_id,
+    int &report_ret_code)
+{
+  int ret = OB_SUCCESS;
+  report_ret_code = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+          MTL_ID(), schema_guard))) {
+    LOG_WARN("get tenant schema failed", K(ret), K(table_id), K(MTL_ID()), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(),
+          table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(MTL_ID()), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(MTL_ID()), K(table_id));
+  } else {
+    const int64_t rowkey_column_num = table_schema->get_rowkey_column_num();
+    ObMemAttr mem_attr(MTL_ID(), "DL_Temp");
+    ObArenaAllocator allocator(mem_attr);
+    ObArray<ObColDesc> col_descs;
+    blocksstable::ObStorageDatumUtils datum_utils;
+    char index_key_buffer[OB_TMP_BUF_SIZE_256] = { 0 };
+    int64_t task_id = 0;
+    ObDatumRowkey key1, key2;
+    ObDatumRowkey *index_key = nullptr, *prev_key = nullptr, *next_key = nullptr;
+    ObDDLErrorMessageTableOperator::ObDDLErrorInfo error_info;
+    col_descs.set_block_allocator(ModulePageAllocator(allocator));
+
+    if (OB_FAIL(table_schema->get_rowkey_column_ids(col_descs))) {
+      LOG_WARN("fail to get rowkey column ids", KR(ret));
+    } else if (OB_FAIL(datum_utils.init(col_descs,
+                                        rowkey_column_num,
+                                        lib::is_oracle_mode(),
+                                        allocator,
+                                        true/*no need compare multiple version cols*/))) {
+      LOG_WARN("fail to init datum utils", KR(ret), K(col_descs), K(rowkey_column_num));
+    }
+
+    // init keys for compare
+    if (OB_SUCC(ret)) {
+      const int64_t datum_cnt = rowkey_column_num * 2;
+      ObStorageDatum *datums = nullptr;
+      if (OB_ISNULL(datums = static_cast<ObStorageDatum*>(allocator.alloc(sizeof(ObStorageDatum) * datum_cnt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc datums", KR(ret), K(datum_cnt));
+      } else {
+        key1.assign(datums, rowkey_column_num);
+        key2.assign(datums + rowkey_column_num, rowkey_column_num);
+        prev_key = &key1;
+        next_key = &key2;
+      }
+    }
+    // find dumplicated key
+    if (OB_SUCC(ret)) {
+      bool is_null = false;
+      const char *payload = nullptr;
+      ObLength length = 0;
+      ObStorageDatum tmp_datum;
+      int cmp_ret = 0;
+      bool find_dumplicated_key = false;
+      // init prev key
+      for (int64_t j = 1; OB_SUCC(ret) && j < rowkey_column_num; ++j) {
+        ObIVector *vector = datum_rows.vectors_.at(j);
+        vector->get_payload(0, is_null, payload, length);
+        prev_key->datums_[j].shallow_copy_from_datum(ObDatum(payload, length, is_null));
+      }
+      for (int64_t i = 1; OB_SUCC(ret) && !find_dumplicated_key && i < datum_rows.row_count_; ++i) {
+        // set next key
+        for (int64_t j = 1; OB_SUCC(ret) && j < rowkey_column_num; ++j) {
+          ObIVector *vector = datum_rows.vectors_.at(j);
+          vector->get_payload(i, is_null, payload, length);
+          next_key->datums_[j].shallow_copy_from_datum(ObDatum(payload, length, is_null));
+        }
+        // compare key
+        if (OB_FAIL(next_key->compare(*prev_key, datum_utils, cmp_ret))) {
+          LOG_WARN("fail to compare rowkey", KR(ret), KPC(prev_key), KPC(next_key));
+        } else if (0 == cmp_ret) {
+          find_dumplicated_key = true;
+        } else {
+          std::swap(prev_key, next_key);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        index_key = prev_key;
+        if (!find_dumplicated_key) {
+          // first key is dumplicated key
+          for (int64_t j = 1; OB_SUCC(ret) && j < rowkey_column_num; ++j) {
+            ObIVector *vector = datum_rows.vectors_.at(j);
+            vector->get_payload(0, is_null, payload, length);
+            index_key->datums_[j].shallow_copy_from_datum(ObDatum(payload, length, is_null));
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDDLErrorMessageTableOperator::extract_index_key(*table_schema, *index_key, index_key_buffer, OB_TMP_BUF_SIZE_256))) {   // read the unique key that violates the unique constraint
+      LOG_WARN("extract unique index key failed", K(ret), KPC(index_key), K(index_key_buffer));
+    } else if (OB_FAIL(ObDDLErrorMessageTableOperator::get_index_task_info(*GCTX.sql_proxy_, *table_schema, error_info))) {
+      LOG_WARN("get task id of index table failed", K(ret), K(task_id), K(table_schema));
+    } else if (OB_FAIL(ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(ret_code, *table_schema, ObCurTraceId::get_trace_id_str(),
+            error_info.task_id_, error_info.parent_task_id_, tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer, report_ret_code))) {
+      LOG_WARN("generate index ddl error message", K(ret), K(ret), K(report_ret_code));
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadSliceWriter::check_null(
     const bool is_index_table,
     const int64_t rowkey_column_num,
@@ -1556,50 +2449,48 @@ int ObDirectLoadSliceWriter::check_null(
   return ret;
 }
 
-int ObDirectLoadSliceWriter::fill_aggregated_column_group(
-    const int64_t cg_idx,
-    ObCOSliceWriter *cur_writer,
-    ObIArray<sql::ObCompactStore *> &datum_stores)
+int ObDirectLoadSliceWriter::check_null(
+    const bool is_index_table,
+    const int64_t rowkey_column_num,
+    const ObBatchDatumRows &datum_rows) const
 {
   int ret = OB_SUCCESS;
-  datum_stores.reset();
-  ObChunkSliceStore *chunk_slice_store = static_cast<ObChunkSliceStore *>(slice_store_);
+  if (is_index_table) {
+    // index table is index-organized but can have null values in index column
+  } else if (OB_UNLIKELY(rowkey_column_num > datum_rows.get_column_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rowkey column number", KR(ret), K(rowkey_column_num), K(datum_rows.get_column_count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; ++i) {
+      ObIVector *vector = datum_rows.vectors_.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < datum_rows.row_count_; ++j) {
+        if (OB_UNLIKELY(vector->is_null(j))) {
+          ret = OB_ER_INVALID_USE_OF_NULL;
+          LOG_WARN("invalid null cell for row key column", KR(ret), K(i), K(j), KPC(vector));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadSliceWriter::fill_aggregated_column_group(
+    const int64_t cg_idx,
+    ObCOSliceWriter *cur_writer)
+{
+  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (nullptr == chunk_slice_store || is_empty()) {
+  } else if (nullptr == slice_store_ || is_empty()) {
     // do nothing
     LOG_INFO("chunk slice store is null or empty", K(ret),
-        KPC(chunk_slice_store), KPC(tablet_direct_load_mgr_));
+        KPC(slice_store_), KPC(tablet_direct_load_mgr_));
   } else if (ATOMIC_LOAD(&is_canceled_)) {
     ret = OB_CANCELED;
     LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
-  } else if (cg_idx < 0 || cg_idx > chunk_slice_store->datum_stores_.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid cg idx", K(ret), K(cg_idx), K(chunk_slice_store->datum_stores_));
-  } else {
-    sql::ObCompactStore *cur_datum_store = chunk_slice_store->datum_stores_.at(cg_idx);
-    const ObChunkDatumStore::StoredRow *stored_row = nullptr;
-    bool has_next = false;
-    while (OB_SUCC(ret) && OB_SUCC(cur_datum_store->has_next(has_next)) && has_next) {
-      if (OB_FAIL(cur_datum_store->get_next_row(stored_row))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("get next row failed", K(ret));
-        }
-      } else {
-        if (OB_FAIL(cur_writer->append_row(stored_row))) {
-          LOG_WARN("append row failed", K(ret), KPC(stored_row));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(datum_stores.push_back(cur_datum_store))) {
-        LOG_WARN("fail to push datum store", K(ret));
-      }
-    }
+  } else if (OB_FAIL(slice_store_->fill_column_group(cg_idx, cur_writer, nullptr/*insert_monitor*/))) {
+    LOG_WARN("fail to fill column group", KR(ret), KPC(slice_store_), K(cg_idx));
   }
   return ret;
 }
@@ -1628,6 +2519,7 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   ObTxDesc *tx_desc = nullptr;
   ObMacroBlockSliceStore *macro_block_slice_store = nullptr;
   ObVectorIndexSliceStore *vec_idx_slice_store = static_cast<ObVectorIndexSliceStore *>(slice_store_);
+  const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1637,7 +2529,7 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   } else if (OB_ISNULL(vec_idx_slice_store)) {
     // do nothing
     LOG_INFO("[vec index debug] maybe no data for this tablet", K(tablet_direct_load_mgr_->get_tablet_id()));
-  } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(tablet_direct_load_mgr_->get_ls_id(), false/*is_for_read*/, INT64_MAX - ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT, tx_desc))) {
+  } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(tablet_direct_load_mgr_->get_ls_id(), false/*is_for_read*/, timeout_us, tx_desc))) {
     LOG_WARN("fail to get tx_desc", K(ret));
   } else if (OB_FAIL(vec_idx_slice_store->serialize_vector_index(&allocator_, tx_desc, lob_inrow_threshold))) {
     LOG_WARN("fail to do vector index snapshot data serialize", K(ret));
@@ -1695,7 +2587,6 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
 {
   int ret = OB_SUCCESS;
   const bool need_process_cs_replica = tablet_direct_load_mgr_->need_process_cs_replica();
-  const ObChunkSliceStore *chunk_slice_store = nullptr;
   ObStorageSchema *cs_replica_storage_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1706,13 +2597,9 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
   } else if (OB_UNLIKELY(row_offset_ < 0)) {
     ret = OB_ERR_SYS;
     LOG_WARN("row offset not set", K(ret), K(row_offset_));
-  } else if (OB_ISNULL(slice_store_) || is_empty()
-          || OB_ISNULL(chunk_slice_store = need_process_cs_replica
-                       ? static_cast<ObMultiSliceStore *>(slice_store_)->get_column_slice_store()
-                       : static_cast<ObChunkSliceStore *>(slice_store_))) {
+  } else if (OB_ISNULL(slice_store_) || is_empty()) {
     // do nothing
-    LOG_INFO("slice_store_ is null or empty", K(ret), KPC_(slice_store),
-        KPC(chunk_slice_store), KPC(tablet_direct_load_mgr_));
+    LOG_INFO("slice_store_ is null or empty", K(ret), KPC_(slice_store), KPC(tablet_direct_load_mgr_));
   } else if (ATOMIC_LOAD(&is_canceled_)) {
     ret = OB_CANCELED;
     LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
@@ -1721,7 +2608,7 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
   } else if (need_process_cs_replica && OB_FAIL(cs_replica_storage_schema->init(allocator_, *storage_schema,
                 false /*skip_column_info*/, nullptr /*column_group_schema*/, true /*generate_cs_replica_cg_array*/))) {
     LOG_WARN("failed to init storage schema for cs replica", K(ret), KPC(storage_schema));
-  } else if (OB_FAIL(inner_fill_column_group(chunk_slice_store, need_process_cs_replica ? cs_replica_storage_schema : storage_schema, start_scn, insert_monitor))) {
+  } else if (OB_FAIL(inner_fill_column_group(slice_store_, need_process_cs_replica ? cs_replica_storage_schema : storage_schema, start_scn, insert_monitor))) {
     LOG_WARN("failed to fill column group", K(ret));
   }
 
@@ -1735,7 +2622,7 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
 
 
 int ObDirectLoadSliceWriter::inner_fill_column_group(
-    const ObChunkSliceStore *chunk_slice_store,
+    ObTabletSliceStore *slice_store,
     const ObStorageSchema *storage_schema,
     const SCN &start_scn,
     ObInsertMonitor* insert_monitor)
@@ -1745,7 +2632,7 @@ int ObDirectLoadSliceWriter::inner_fill_column_group(
     const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema->get_column_groups();
     FLOG_INFO("[DDL_FILL_CG] fill column group start",
         "tablet_id", tablet_direct_load_mgr_->get_tablet_id(),
-        "row_count", chunk_slice_store->get_row_count(),
+        "row_count", slice_store->get_row_count(),
         "column_group_count", cg_schemas.count());
 
     // 1. reserve writers
@@ -1759,42 +2646,10 @@ int ObDirectLoadSliceWriter::inner_fill_column_group(
         cur_writer->reset();
         if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, tablet_direct_load_mgr_, start_seq_, row_offset_, start_scn, tablet_direct_load_mgr_->need_process_cs_replica()))) {
           LOG_WARN("init co ddl writer failed", K(ret), KPC(cur_writer), K(cg_idx), KPC(this));
-        } else {
-          sql::ObCompactStore *cur_datum_store = chunk_slice_store->datum_stores_.at(cg_idx);
-          const ObChunkDatumStore::StoredRow *stored_row = nullptr;
-          bool has_next = false;
-          int64_t cg_row_inserted_cnt = 0;
-          while (OB_SUCC(ret) && OB_SUCC(cur_datum_store->has_next(has_next)) && has_next) {
-            if (OB_FAIL(cur_datum_store->get_next_row(stored_row))) {
-              if (OB_ITER_END == ret) {
-                ret = OB_SUCCESS;
-                break;
-              } else {
-                LOG_WARN("get next row failed", K(ret));
-              }
-            } else {
-              if (OB_FAIL(cur_writer->append_row(stored_row))) {
-                LOG_WARN("append row failed", K(ret), KPC(stored_row));
-              } else {
-                ++cg_row_inserted_cnt;
-                if ((0 == cg_row_inserted_cnt % 100) && OB_NOT_NULL(insert_monitor)) {
-                  (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, 100);
-                }
-              }
-            }
-          }
-          if (OB_SUCC(ret)) {
-            // 3. close writers
-            if (OB_FAIL(cur_writer->close())) {
-              LOG_WARN("close co ddl writer failed", K(ret));
-            } else {
-              // 4. reset datum store (if fail, datum store will free when ~ObDirectLoadSliceWriter())
-              cur_datum_store->reset();
-              if (OB_NOT_NULL(insert_monitor)) {
-                (void) ATOMIC_AAF(&insert_monitor->inserted_cg_row_cnt_, cg_row_inserted_cnt % 100);
-              }
-            }
-          }
+        } else if (OB_FAIL(slice_store->fill_column_group(cg_idx, cur_writer, insert_monitor))) {
+          LOG_WARN("fail to fill column group", KR(ret), K(cg_idx));
+        } else if (OB_FAIL(cur_writer->close())) {
+          LOG_WARN("close co ddl writer failed", K(ret));
         }
       }
     }
@@ -1804,17 +2659,25 @@ int ObDirectLoadSliceWriter::inner_fill_column_group(
     }
     FLOG_INFO("[DDL_FILL_CG] fill column group finished",
         "tablet_id", tablet_direct_load_mgr_->get_tablet_id(),
-        "row_count", chunk_slice_store->get_row_count(),
+        "row_count", slice_store->get_row_count(),
         "column_group_count", cg_schemas.count());
   }
   return ret;
 }
 
+void ObDirectLoadSliceWriter::cancel()
+{
+  ATOMIC_SET(&is_canceled_, true);
+  if (OB_NOT_NULL(slice_store_)) {
+    slice_store_->cancel();
+  }
+}
 
 void ObCOSliceWriter::reset()
 {
   is_inited_ = false;
   cg_row_.reset();
+  datum_rows_.reset();
   macro_block_writer_.reset();
   flush_callback_.reset();
   index_builder_.reset();
@@ -1859,7 +2722,9 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
         LOG_WARN("invalid cg idx", K(ret), K(cg_idx), K(tablet_direct_load_mgr->get_sqc_build_ctx().cg_index_builders_.count()));
       } else {
         ObSSTableIndexItem &cur_item = tablet_direct_load_mgr->get_sqc_build_ctx().cg_index_builders_.at(cg_idx);
-        if (OB_FAIL(flush_callback_.init(ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id,
+        if (OB_FAIL(flush_callback_.init(ls_id, table_key.tablet_id_,
+                tablet_direct_load_mgr->get_is_no_logging() ? DDL_MB_SS_EMPTY_DATA_TYPE : DDL_MB_DATA_TYPE,
+                table_key, ddl_task_id,
                 start_scn, data_format_version, tablet_direct_load_mgr->get_task_cnt(),
                 tablet_direct_load_mgr->get_cg_cnt(), tablet_direct_load_mgr->get_direct_load_type(), row_id_offset))) {
           LOG_WARN("fail to init redo log writer callback", KR(ret));
@@ -1886,6 +2751,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
                                 table_key.get_snapshot_version(),
                                 data_format_version,
                                 tablet_direct_load_mgr->get_micro_index_clustered(),
+                                tablet_direct_load_mgr->get_tablet_transfer_seq(),
                                 SCN::min_scn(),
                                 &cg_schema,
                                 cg_idx,
@@ -1910,7 +2776,10 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
     if (OB_SUCC(ret)) {
       if (OB_FAIL(cg_row_.init(cg_schema.column_cnt_))) {
         LOG_WARN("init column group row failed", K(ret));
+      } else if (OB_FAIL(datum_rows_.vectors_.prepare_allocate(cg_schema.column_cnt_))) {
+        LOG_WARN("fail to prepare allocate", K(ret));
       } else {
+        datum_rows_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
         cg_idx_ = cg_idx;
         cg_schema_ = &cg_schema;
         is_inited_ = true;
@@ -1931,6 +2800,27 @@ int ObCOSliceWriter::append_row(const sql::ObChunkDatumStore::StoredRow *stored_
     LOG_WARN("project column group row failed", K(ret));
   } else if (OB_FAIL(macro_block_writer_.append_row(cg_row_))) {
     LOG_WARN("write column group row failed", K(ret));
+  }
+  return ret;
+}
+
+int ObCOSliceWriter::append_batch(const ObIArray<ObIVector *> &vectors, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(vectors.count() != datum_rows_.get_column_count() || batch_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(vectors.count()), K(batch_size), K(datum_rows_.get_column_count()));
+  } else {
+    for (int64_t i = 0; i < datum_rows_.get_column_count(); ++i) {
+      datum_rows_.vectors_.at(i) = vectors.at(i);
+    }
+    datum_rows_.row_count_ = batch_size;
+    if (OB_FAIL(macro_block_writer_.append_batch(datum_rows_))) {
+      LOG_WARN("write column group row failed", K(ret));
+    }
   }
   return ret;
 }
@@ -2051,7 +2941,7 @@ int ObVectorIndexSliceStore::init(
     } else if (FALSE_IT(ctx_.data_tablet_id_ = five_tablet_handle.get_obj()->get_data_tablet_id())) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(ctx_.data_tablet_id_, data_tablet_handle))) {
       LOG_WARN("fail to get tablet handle", K(ret), K(ctx_.data_tablet_id_));
-    } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
       LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet_handle));
     } else {
       ctx_.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;

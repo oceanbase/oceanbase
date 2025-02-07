@@ -735,15 +735,17 @@ int ObIndexBlockMacroIterator::get_cs_range(
   int64_t data_begin = 0;
   int64_t data_end = 0;
   int64_t micro_start_row_offset = 0;
+
+  // Need to pay attention!!!
+  // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
+  common::ObArenaAllocator io_allocator("cs_range");
   ObStorageObjectHandle macro_handle;
   ObStorageObjectReadInfo read_info;
-  common::ObArenaAllocator io_allocator("cs_range");
 
   read_info.offset_ = sstable_->get_macro_offset();
   read_info.size_ = sstable_->get_macro_read_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   read_info.macro_block_id_ = block_id;

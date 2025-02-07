@@ -111,3 +111,12 @@ call geom_insert(10000);
 explain select x,y,st_astext(poi) from gis_point order by x,y desc limit 1;
 
 drop table if exists gis_point;
+
+# test for SRS_ID column
+--disable_warnings
+drop table if exists t_test_srs_id_column;
+--enable_warnings
+CREATE TABLE `t_test_srs_id_column` ( `id` INT PRIMARY KEY, `c1` POINT NOT NULL SRID 4326, `c2` GEOMETRY NOT NULL SRID 4326, `c3` POLYGON NOT NULL SRID 4326, `c4` GEOMETRY NOT NULL );
+SELECT `COLUMN_NAME`, `COLUMN_TYPE` /*!80003 ,`SRS_ID` */ FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_NAME` = 't_test_srs_id_column';
+drop table t_test_srs_id_column;
+

@@ -198,6 +198,36 @@ int ObTenantResColMappingInfo::get_group_id(uint64_t rule_id, const ObString &us
   return ret;
 }
 
+int64_t ObTenantResColMappingInfo::to_string(char* buf, int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(databuff_printf(buf, buf_len, pos, "tenant_id:%lu, ", tenant_id_))) {
+    ret = databuff_printf(buf, buf_len, pos, "version: %ld, ", version_);
+  }
+  if (OB_SUCC(ret)) {
+    common::hash::ObHashMap<ColumnNameKey, uint64_t>::PrintFunctor fn1(buf, buf_len, pos);
+    if (OB_SUCC(databuff_printf(buf, buf_len, pos, "rule_id_map:{"))) {
+      if (OB_SUCC(rule_id_map_.foreach_refactored(fn1))) {
+        ret = databuff_printf(buf, buf_len, pos, "} ");
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    common::hash::ObHashMap<RuleValueKey, RuleValue>::PrintFunctor fn2(buf, buf_len, pos);
+    if (OB_SUCC(databuff_printf(buf, buf_len, pos, "group_id_map:{"))) {
+      if (OB_SUCC(group_id_map_.foreach_refactored(fn2))) {
+        ret = databuff_printf(buf, buf_len, pos, "} ");
+      }
+    }
+  }
+  if (OB_SUCCESS != ret) {
+    pos = 0;
+    databuff_printf(buf, buf_len, pos, "{...}");
+  }
+  return pos;
+}
+
 int ObResourceColMappingRuleManager::init()
 {
   int ret = OB_SUCCESS;
@@ -339,4 +369,22 @@ int64_t ObResourceColMappingRuleManager::get_column_mapping_version(uint64_t ten
   }
   tenant_rule_infos_.revert(res_info);
   return version;
+}
+
+int64_t ObResourceColMappingRuleManager::to_string(char* buf, int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(databuff_printf(buf, buf_len, pos, "{"))) {
+    common::ObLinkHashMap<ObResTenantId, ObTenantResColMappingInfo, AllocHandle>::PrintFunctor fn(buf, buf_len, pos);
+    ret = const_cast<common::ObLinkHashMap<ObResTenantId, ObTenantResColMappingInfo, AllocHandle> &>(tenant_rule_infos_).for_each(fn);
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buf, buf_len, pos, "}");
+    }
+  }
+  if (OB_SUCCESS != ret) {
+    pos = 0;
+    databuff_printf(buf, buf_len, pos, "{...}");
+  }
+  return pos;
 }

@@ -1,3 +1,6 @@
+// owner: gengli.wzy
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -228,10 +231,10 @@ TEST_F(ObTabletFlushTest, test_special_tablet_flush)
             ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
             ->common_checkpoints_[ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
 
-  ObLockMemtable *lock_memtable
-    = dynamic_cast<ObLockMemtable *>(dynamic_cast<ObLSTxService *>(checkpoint_executor
-            ->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
-            ->common_checkpoints_[ObCommonCheckpointType::LOCK_MEMTABLE_TYPE]);
+  ObTableHandleV2 table_handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ls->lock_table_.get_lock_memtable(table_handle));
+  ASSERT_EQ(OB_SUCCESS, table_handle.get_lock_memtable(lock_memtable));
 
   ObTxDataMemtableMgr *tx_data_mgr
     = dynamic_cast<ObTxDataMemtableMgr *>(dynamic_cast<ObLSTxService *>(checkpoint_executor

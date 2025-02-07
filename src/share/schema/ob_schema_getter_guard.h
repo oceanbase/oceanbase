@@ -470,6 +470,7 @@ public:
 
   // for readonly
   int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
+  int is_user_empty_passwd(const ObUserLoginInfo &login_info, bool &is_empty_passwd_account);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
                         SSL *ssl_st,
@@ -637,27 +638,33 @@ public:
   int check_outline_exist_with_name(const uint64_t tenant_id,
                                     const uint64_t database_id,
                                     const common::ObString &outline_name,
+                                    const bool is_format,
                                     uint64_t &outline_id,
                                     bool &exist);
   int check_outline_exist_with_sql(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &paramlized_sql,
+                                   const bool is_format,
                                    bool &exist);
   int check_outline_exist_with_sql_id(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &sql_id,
+                                   const bool is_format,
                                    bool &exist) ;
   int get_outline_info_with_name(const uint64_t tenant_id,
                                  const uint64_t database_id,
                                  const common::ObString &name,
+                                 const bool is_format,
                                  const ObOutlineInfo *&outline_info);
   int get_outline_info_with_name(const uint64_t tenant_id,
                                  const common::ObString &db_name,
                                  const common::ObString &outline_name,
+                                 const bool is_format,
                                  const ObOutlineInfo *&outline_info);
   int get_outline_info_with_signature(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &signature,
+                                      const bool is_format,
                                       const ObOutlineInfo *&outline_info);
   //package
   int check_package_exist(uint64_t tenant_id, uint64_t database_id,
@@ -776,6 +783,7 @@ public:
   int get_outline_info_with_sql_id(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &sql_id,
+                                      const bool is_format,
                                       const ObOutlineInfo *&outline_info) ;
   //about user define function
   int check_udf_exist_with_name(const uint64_t tenant_id,
@@ -1075,6 +1083,10 @@ public:
       const uint64_t column_id,
       bool &is_key);
 
+  int get_range_part_high_bound(const ObTableSchema &table_schema,
+                                const common::ObTabletID &tablet_id,
+                                ObIAllocator &allocator,
+                                common::ObRowkey &high_bound);
   int deep_copy_index_name_map(common::ObIAllocator &allocator,
                                ObIndexNameMap &index_name_cache);
   #define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(SCHEMA, SCHEMA_TYPE)     \

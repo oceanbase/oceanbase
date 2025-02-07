@@ -231,7 +231,9 @@ public:
   int64_t get_size_used();
 
   int get_leaf_size_used(int64_t idx, int64_t &size);
-  int release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer);
+  int need_clean_leaf_queue(int64_t idx, bool &need_clean);
+  int release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer,
+                    bool is_destroyed);
 
 private:
   int construct_leaf_queue();

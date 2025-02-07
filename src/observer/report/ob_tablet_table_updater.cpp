@@ -627,6 +627,12 @@ int ObTabletTableUpdater::generate_tasks_(
       bool is_remove_task = false;
       if (OB_TENANT_NOT_IN_SERVER != ret && OB_LS_NOT_EXIST != ret && OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to fill tablet replica info", KR(ret), KPC(task));
+      } else if (OB_EAGAIN == ret) {
+        if (OB_TMP_FAIL(add_task_(*task))) {
+          LOG_WARN("fail to add task", KR(tmp_ret), KPC(task));
+        } else {
+          ret = OB_SUCCESS; // do not affect report of other tablets
+        }
       } else if (OB_TENANT_NOT_IN_SERVER == ret) {
         is_remove_task = true;
         ret = OB_SUCCESS;
@@ -931,7 +937,7 @@ int ObTabletTableUpdater::throttle_(
   const static int64_t sleep_step_us = 20 * 1000; // 20ms
   for (; !is_stop_ && sleep_us > 0;
       sleep_us -= sleep_step_us) {
-    ob_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)));
+    ob_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)), true /*is_idle_sleep*/);
   }
   return ret;
 }

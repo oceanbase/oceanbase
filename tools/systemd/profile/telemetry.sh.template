@@ -4,46 +4,55 @@ url="https://openwebapi.oceanbase.com/api/web/oceanbase/report"
 type=@CPACK_PACKAGE_NAME@
 version=@CPACK_PACKAGE_VERSION@
 release=@CPACK_RPM_PACKAGE_RELEASE@
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
 ip=$(hostname -I | awk '/^[0-9]/ {print $1; exit}')
 hostHash=$(echo -n "$ip" | sha1sum | awk '{print $1}')
-osName=$(cat /etc/os-release | grep "^ID=" | cut -f2 -d=)
-osRelease=$(cat /etc/os-release | grep "^VERSION_ID=" | cut -f2 -d=)
+osName=$(cat /etc/os-release | grep "^ID=" | cut -f2 -d= | tr -d '"')
+osRelease=$(cat /etc/os-release | grep "^VERSION_ID=" | cut -f2 -d= | tr -d '"')
 cnf_file='/etc/oceanbase.cnf'
+json_pre_file="$prefix/profile/telemetry-pre.json"
+json_file="$prefix/profile/telemetry.json"
 
 step='none'
 reporter='none'
 
-jsonData=$(jq -n --arg reporter "$reporter" \
-                 --arg type "$type" \
-                 --arg step "$step" \
-                 --arg version "$version" \
-                 --arg release "$revision" \
-                 --arg hostHash "$hostHash" \
-                 --arg osName "$osName" \
-                 --arg osRelease "$osRelease" '{
-  component: "ocs",
-  content: {
-    reporter: $reporter,
-    type: $type,
-    step: $step,
-    version: $version,
-    release: $release,
-    hostHash: $hostHash,
-    osName: $osName,
-    osRelease: $osRelease,
-    observerConfig: {}
-  }
-}')
-
 function add_observer_config {
+    rm -rf $json_file
+    cp $json_pre_file $json_file
+    local temp_file=$(mktemp)
+    first_observer_configration=true
+
     while IFS='=' read -r key value; do
+        # delete empty and comment line
+        if [[ ! $key || $key =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
         key=$(echo "$key" | awk '{$1=$1};1')
         value=$(echo "$value" | awk '{$1=$1};1')
         value=$(echo "$value" | sed 's/^"//' | sed 's/"$//')
         if [[ -n "$key" && ! "$key" =~ ^\; && $key != *"rootPwd"* ]]; then
-            jsonData=$(echo "$jsonData" | jq --arg parent "content" --arg child "observerConfig" --arg key "$key" --arg value "$value" '.[$parent][$child][$key] = $value')
+            if $first_observer_configration; then
+                first_observer_configration=false
+                sed "s/\"observerConfig\": {}/\"observerConfig\": {\n                \"$key\": \"$value\"\n            }/" "$json_file" > "$temp_file"
+            else
+                observer_config_line=$(grep -n "observerConfig" $json_file | head -n 1 | cut -d: -f1)
+                sed "$((observer_config_line+1))i\\        \"$key\": \"$value\"," "$json_file" > "$temp_file"
+            fi
+            mv "$temp_file" "$json_file"
         fi
     done < "$cnf_file"
+}
+
+function update_json {
+    sed -i "s|#reporter#|${reporter}|g" $json_file
+    sed -i "s|#type#|${type}|g" $json_file
+    sed -i "s|#step#|${step}|g" $json_file
+    sed -i "s|#version#|${version}|g" $json_file
+    sed -i "s|#release#|${release}|g" $json_file
+    sed -i "s|#hostHash#|${hostHash}|g" $json_file
+    sed -i "s|#osName#|${osName}|g" $json_file
+    sed -i "s|#osRelease#|${osRelease}|g" $json_file
 }
 
 # Function Name: do_telemetry
@@ -73,12 +82,11 @@ function do_telemetry {
         reporter="systemd"
         add_observer_config
     fi
-    jsonData=$(echo "$jsonData" | jq --arg parent "content" --arg key "reporter" --arg value "$reporter" '.[$parent][$key] = $value')
-    jsonData=$(echo "$jsonData" | jq --arg parent "content" --arg key "step" --arg value "$step" '.[$parent][$key] = $value')
+    update_json
 
     nohup curl -X POST \
         -H "Content-Type: application/json" \
-        -d "$jsonData" "$url" >/dev/null 2>&1 &
+        -d @"$json_file" "$url" >/dev/null 2>&1 &
 }
 
 if [[ -z "$TELEMETRY_MODE" ]] || ( [[ "$TELEMETRY_MODE" =~ ^-?[0-9]+$ ]] && [[ "$TELEMETRY_MODE" -eq 1 ]] ); then

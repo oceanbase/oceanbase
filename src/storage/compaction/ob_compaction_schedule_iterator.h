@@ -13,6 +13,8 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/literals/ob_literals.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "common/ob_tablet_id.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {

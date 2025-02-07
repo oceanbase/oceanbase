@@ -16,6 +16,7 @@
 #include "ob_plugin_vector_index_util.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "share/ob_unit_getter.h"
 
 namespace oceanbase
 {
@@ -123,9 +124,6 @@ void ObVectorQueryVidIterator::reset()
   is_init_ = false;
   total_ = 0;
   cur_pos_ = 0;
-  if (OB_NOT_NULL(allocator_)) {
-    allocator_->reset();
-  }
 }
 
 int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult &first,
@@ -239,6 +237,18 @@ int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenan
   return ret;
 }
 
+
+int ObPluginVectorIndexHelper::vsag_errcode_2ob(int vsag_errcode)
+{
+  int ret = OB_ERR_VSAG_RETURN_ERROR;
+  if (vsag_errcode == 10) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("vsag failed to allocator.", K(ret), K(vsag_errcode));
+  } else {
+    LOG_WARN("get vsag failed.", K(ret), K(vsag_errcode));
+  }
+  return ret;
+}
 
 };
 };

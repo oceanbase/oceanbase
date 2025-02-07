@@ -21,6 +21,7 @@ namespace oceanbase
 namespace sql
 {
 
+class ObTransmitSpec;
 class ObPxCoordInfo;
 class ObDfoMgr
 {
@@ -64,6 +65,7 @@ private:
   int create_dfo(common::ObIAllocator &allocator,
                  const ObOpSpec *dfo_root_op,
                  ObDfo *&dfo) const;
+  int64_t get_adaptive_px_dop(const ObTransmitSpec &spec, ObExecContext &exec_ctx) const;
 protected:
   common::ObIAllocator &allocator_;
   bool inited_;
@@ -98,7 +100,8 @@ public:
   static int assign_worker(ObDfoMgr &dfo_mgr,
                            int64_t expected_worker_count,
                            int64_t minimal_worker_count,
-                           int64_t admited_worker_count);
+                           int64_t admited_worker_count,
+                           bool use_adaptive_px_dop);
   static int get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
                                    const bool get_minimal,
                                    int64_t &total_assigned);

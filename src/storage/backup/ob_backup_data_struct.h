@@ -34,7 +34,7 @@ class ObLocationService;
 namespace backup {
 
 static const int64_t OB_DEFAULT_BACKUP_CONCURRENCY = 2;
-static const int64_t OB_MAX_BACKUP_CONCURRENCY = 128;
+static const int64_t OB_MAX_BACKUP_CONCURRENCY = 8;
 static const int64_t OB_MAX_BACKUP_MEM_BUF_LEN = 8 * 1024 * 1024;  // 8MB
 static const int64_t OB_MAX_BACKUP_INDEX_BUF_SIZE = 16 * 1024;     // 16KB;
 static const int64_t OB_MAX_BACKUP_FILE_SIZE = 4 * 1024 * 1024;
@@ -275,7 +275,7 @@ public:
 };
 
 struct ObBackupDeviceMacroBlockId;
-typedef ObBackupPhysicalID ObBackupLinkedBlockAddr;
+typedef ObBackupDeviceMacroBlockId ObBackupLinkedBlockAddr;
 
 struct ObBackupMacroBlockIndex {
   OB_UNIS_VERSION(1);
@@ -441,6 +441,7 @@ public:
   bool is_valid() const;
   void reset();
   int get_backup_index_file_type(ObBackupFileType &backup_file_type) const;
+  uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(K_(tablet_id), K_(meta_type));
 
   common::ObTabletID tablet_id_;
@@ -475,7 +476,7 @@ public:
 public:
   ObBackupDeviceMacroBlockId();
   ~ObBackupDeviceMacroBlockId();
-  int get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+  int get_backup_macro_block_index(
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const;
   int set(const int64_t backup_set_id, const int64_t ls_id, const int64_t dir_id,
       const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
@@ -564,7 +565,9 @@ public:
 };
 
 struct ObBackupSSTableMeta {
-  OB_UNIS_VERSION(1);
+  static const int64_t OB_BACKUP_SSTABLE_META_V1 = 1;
+  static const int64_t OB_BACKUP_SSTABLE_META_V2 = 2;
+  OB_UNIS_VERSION(OB_BACKUP_SSTABLE_META_V2);
 
 public:
   ObBackupSSTableMeta();
@@ -574,12 +577,18 @@ public:
   int assign(const ObBackupSSTableMeta &backup_sstable_meta);
 
   TO_STRING_KV(K_(tablet_id), K_(sstable_meta), K_(logic_id_list),
-      K_(entry_block_addr_for_other_block), K_(total_other_block_count));
+      K_(entry_block_addr_for_other_block), K_(total_other_block_count),
+      K_(is_major_compaction_mview_dep));
   common::ObTabletID tablet_id_;
   blocksstable::ObMigrationSSTableParam sstable_meta_;
   common::ObSArray<blocksstable::ObLogicMacroBlockId> logic_id_list_;
   ObBackupLinkedBlockAddr entry_block_addr_for_other_block_;
   int64_t total_other_block_count_;
+  bool is_major_compaction_mview_dep_;
+
+private:
+  int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
 };
 
 struct ObBackupMacroBlockIDPair final {
@@ -661,6 +670,7 @@ public:
   void reset();
   bool is_valid() const;
   bool operator==(const ObBackupMetaIndex &other) const;
+  uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(
       K_(meta_key), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length));
   ObBackupMetaKey meta_key_;

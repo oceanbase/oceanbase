@@ -372,9 +372,10 @@ public:
       if (i % 3 == 0) {
         fprintf(stderr, "\n        ");
       }
+      ObCStringHelper helper;
       fprintf(stderr, "(start_scn=%-20s, commit_version=%-20s) ",
-              to_cstring(commit_versions.array_.at(i).start_scn_),
-              to_cstring(commit_versions.array_.at(i).commit_version_));
+              helper.convert(commit_versions.array_.at(i).start_scn_),
+              helper.convert(commit_versions.array_.at(i).commit_version_));
     }
     fprintf(stderr, "\npre-process data end.\n");
   }

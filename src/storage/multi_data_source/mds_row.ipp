@@ -525,6 +525,32 @@ struct CheckNodeSnapshotAndSeqNoOP {
 };
 template <typename K, typename V>
 template <typename READ_OP>
+int MdsRow<K, V>::get_latest_committed(READ_OP &&read_operation) const
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(typeid(V).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(5_ms);
+  MdsRLockGuard lg(MdsRowBase<K, V>::lock_);
+  if (MDS_FAIL(get_with_read_wrapper_(read_operation,
+    [&](const UserMdsNode<K, V> &node, bool &can_read) -> int {
+      if (node.is_committed_()) {
+        can_read = true;
+      }
+      return OB_SUCCESS;
+    }
+  ))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsRow get_latest_committed failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsRow get_latest_committed success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename K, typename V>
+template <typename READ_OP>
 int MdsRow<K, V>::get_by_writer(READ_OP &&read_operation,
                                 const MdsWriter &writer,
                                 const share::SCN snapshot,
@@ -776,9 +802,10 @@ int64_t MdsRow<K, V>::to_string(char *buf, const int64_t buf_len) const
   if (MdsRowBase<K, V>::p_mds_unit_) {
     p_mds_table = MdsRowBase<K, V>::p_mds_unit_->p_mds_table_;
   }
-  databuff_printf(buf, buf_len, pos, "sorted_list={%s}, ", to_cstring(sorted_list_));
-  databuff_printf(buf, buf_len, pos, "mds_table={%s}, ", p_mds_table ? to_cstring(*p_mds_table) : "NULL");
-  databuff_printf(buf, buf_len, pos, "key={%s}", MdsRowBase<K, V>::key_ ? to_cstring(* MdsRowBase<K, V>::key_) : "NULL");
+  databuff_print_multi_objs(buf, buf_len, pos, "sorted_list={", sorted_list_, "}, ");
+  // databuff_print_multi_objs support NULL pointer
+  databuff_print_multi_objs(buf, buf_len, pos, "mds_table={", p_mds_table, "}, ");
+  databuff_print_multi_objs(buf, buf_len, pos, "key={", MdsRowBase<K, V>::key_, "}");
   return pos;
 }
 
@@ -830,7 +857,7 @@ int MdsRow<K, V>::fill_virtual_info(const Key &key,
   constexpr int64_t buffer_size = 512_B;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(key)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, key))) {
   } else if (OB_FAIL(sorted_list_.for_each_node(FillVirtualInfoOP(ObString(pos, stack_buffer), mds_node_info_array, unit_id)))) {
     MDS_LOG_SCAN(WARN, "failed to fill virtual info");
   }

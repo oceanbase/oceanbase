@@ -123,8 +123,17 @@ public:
 class ObIndexTreePrefetcher
 {
 public:
+  enum ObPrefetcherType : uint8_t
+  {
+    BASIC = 0,
+    MULTI_GET = 1,
+    MULTI_SCAN = 2,
+    INVALID_TYPE
+  };
+public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
+      prefetcher_type_(BASIC),
       iter_type_(0),
       cur_level_(0),
       index_tree_height_(0),
@@ -163,8 +172,9 @@ public:
   int single_prefetch(ObSSTableReadHandle &read_handle);
   int lookup_in_index_tree(ObSSTableReadHandle &read_handle, const bool force_prefetch);
   OB_INLINE bool is_valid() { return is_inited_; }
+  OB_INLINE ObPrefetcherType get_prefetcher_type() { return prefetcher_type_; }
   ObMicroBlockDataHandle &get_last_data_handle() { return last_micro_block_handle_; }
-  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(iter_type), K_(cur_level), K_(index_tree_height),
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(prefetcher_type), K_(iter_type), K_(cur_level), K_(index_tree_height),
       K_(max_rescan_height), K_(max_rescan_range_cnt), K_(data_version), K_(table_scan_cnt), K_(index_scanner),
       KPC_(sstable), KPC_(iter_param), K_(last_micro_block_handle));
 protected:
@@ -188,6 +198,8 @@ protected:
       ObTableAccessContext &access_ctx);
   OB_INLINE bool is_first_scan() const { return nullptr == sstable_; }
   OB_INLINE bool is_rescan() const { return 1 < table_scan_cnt_; }
+  OB_INLINE bool is_multi_get() const { return prefetcher_type_ == MULTI_GET; }
+  OB_INLINE bool need_cache_last_block() const { return is_rescan() || is_multi_get(); }
 private:
   ObMicroBlockDataHandle &get_read_handle(const int64_t level)
   {
@@ -198,6 +210,7 @@ protected:
   static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   bool is_inited_;
+  ObPrefetcherType prefetcher_type_;
   int16_t iter_type_;
   int16_t cur_level_;
   int16_t index_tree_height_;
@@ -322,7 +335,9 @@ public:
       max_handle_prefetching_cnt_(0),
       rowkeys_(nullptr),
       ext_read_handles_()
-  {}
+  {
+    prefetcher_type_ = MULTI_GET;
+  }
   virtual ~ObIndexTreeMultiPrefetcher() { reset(); }
   virtual void reset() override;
   virtual void reuse() override;
@@ -403,7 +418,9 @@ public:
       read_handles_(),
       tree_handles_(nullptr),
       multi_io_params_()
-  {}
+  {
+    prefetcher_type_ = MULTI_SCAN;
+  }
   virtual ~ObIndexTreeMultiPassPrefetcher();
   virtual void reset() override;
   virtual void reuse() override;
@@ -658,9 +675,37 @@ protected:
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
     }
 #ifdef OB_BUILD_SHARED_STORAGE
+    OB_INLINE int try_prefetch_data_macro_block(
+        const int64_t level,
+        const ObIndexTreeMultiPassPrefetcher &prefetcher,
+        const ObMicroIndexInfo &index_info)
+    {
+      int ret = OB_SUCCESS;
+      MacroBlockId macro_id;
+      if (!GCTX.is_shared_storage_mode()
+          || !prefetcher.use_multi_block_prefetch_
+          || prefetcher.index_tree_height_ - 1 != level
+          || !index_info.has_valid_shared_macro_id()
+          || !prefetcher.sstable_->is_major_sstable()
+          || prefetcher.sstable_->is_small_sstable()
+          || !ObStoreRowIterator::is_scan(prefetcher.iter_type_)) {
+        // do nothing
+      } else if (FALSE_IT(macro_id = index_info.get_shared_data_macro_id())) {
+      } else if (OB_UNLIKELY(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO != macro_id.storage_object_type()))  {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "macro id type is not SHARED_MAJOR_DATA_MACRO");
+      } else if (OB_FAIL(prefetch_macro_block(macro_id))) {
+        STORAGE_LOG(WARN, "fail to prefetch data macro block", K(ret), K(level));
+      } else {
+        STORAGE_LOG(DEBUG, "succeed to prefetch data macro block", K(level), K(macro_id));
+      }
+      return ret;
+    }
+
     OB_INLINE int prefetch_macro_block(const MacroBlockId &macro_id)
     {
       int ret = OB_SUCCESS;
+      const ObStorageObjectType object_type = macro_id.storage_object_type();
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
       } else if (OB_UNLIKELY(!macro_id.is_valid())) {

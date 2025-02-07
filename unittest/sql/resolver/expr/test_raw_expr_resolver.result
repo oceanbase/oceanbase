@@ -54,7 +54,9 @@
       ],
       "value": {
         "BIGINT":1
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_NUMBER",
@@ -84,7 +86,9 @@
       ],
       "value": {
         "DECIMAL":"1"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_VARCHAR",
@@ -116,9 +120,12 @@
         "VARCHAR":"\",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [1] '1' like '1' 
 {
@@ -178,7 +185,9 @@
         "VARCHAR":"1",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_VARCHAR",
@@ -210,7 +219,9 @@
         "VARCHAR":"1",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_VARCHAR",
@@ -242,9 +253,12 @@
         "VARCHAR":"\",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [2] 2 in (1, 2, 3) 
 {
@@ -304,7 +318,9 @@
       ],
       "value": {
         "BIGINT":2
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_ROW",
@@ -361,7 +377,9 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -391,7 +409,9 @@
           ],
           "value": {
             "BIGINT":2
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -421,11 +441,15 @@
           ],
           "value": {
             "BIGINT":3
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [3] 2 not in (1, 2, 3) 
 {
@@ -485,7 +509,9 @@
       ],
       "value": {
         "BIGINT":2
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_ROW",
@@ -542,7 +568,9 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -572,7 +600,9 @@
           ],
           "value": {
             "BIGINT":2
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -602,11 +632,15 @@
           ],
           "value": {
             "BIGINT":3
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [4] 1 or 1 
 {
@@ -694,9 +728,12 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_BOOL",
@@ -754,11 +791,15 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [5] 100 and 0 
 {
@@ -844,9 +885,12 @@
           ],
           "value": {
             "BIGINT":100
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_BOOL",
@@ -904,11 +948,15 @@
           ],
           "value": {
             "BIGINT":0
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [6] 100 or 0 and 100 
 {
@@ -996,9 +1044,12 @@
           ],
           "value": {
             "BIGINT":100
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_AND",
@@ -1083,9 +1134,12 @@
               ],
               "value": {
                 "BIGINT":0
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
-          ]
+          ],
+          "expr_hash":0
         },
          {
           "item_type":"T_OP_BOOL",
@@ -1143,13 +1197,18 @@
               ],
               "value": {
                 "BIGINT":100
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
-          ]
+          ],
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [7] case name  when 'sam' then 'yong'  when 'lee' then 'handsome'  else 'good' end
 {
@@ -1224,7 +1283,8 @@
     "is_mul_key_column":false,
     "is_strict_json_column":0,
     "srs_id":-1,
-    "udt_set_id":0
+    "udt_set_id":0,
+    "expr_hash":0
   },
   "default": {
     "item_type":"T_VARCHAR",
@@ -1256,7 +1316,9 @@
       "VARCHAR":"good",
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
-    }
+    },
+    "is_dynamic_questionmark":false,
+    "expr_hash":0
   },
   "when": [
      {
@@ -1289,7 +1351,9 @@
         "VARCHAR":"sam",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_VARCHAR",
@@ -1321,7 +1385,9 @@
         "VARCHAR":"lee",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
   "then": [
@@ -1355,7 +1421,9 @@
         "VARCHAR":"yong",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_VARCHAR",
@@ -1387,10 +1455,13 @@
         "VARCHAR":"handsome",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
-  "decode":false
+  "decode":false,
+  "expr_hash":0
 }
 [8] case when 1>0 then 'true' else 'false' end
 {
@@ -1450,7 +1521,9 @@
       "VARCHAR":"false",
       "collation":"utf8mb4_general_ci",
       "coercibility":"COERCIBLE"
-    }
+    },
+    "is_dynamic_questionmark":false,
+    "expr_hash":0
   },
   "when": [
      {
@@ -1508,7 +1581,9 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -1538,9 +1613,12 @@
           ],
           "value": {
             "BIGINT":0
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
   ],
   "then": [
@@ -1574,10 +1652,13 @@
         "VARCHAR":"true",
         "collation":"utf8mb4_general_ci",
         "coercibility":"COERCIBLE"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
-  "decode":false
+  "decode":false,
+  "expr_hash":0
 }
 [9] now()
 {
@@ -1618,7 +1699,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [10] utc_timestamp()
 {
@@ -1659,7 +1741,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [11] floor(3.14)
 {
@@ -1720,7 +1803,9 @@
       ],
       "value": {
         "DECIMAL":"3.14"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
   "enum_set_values": [
@@ -1729,7 +1814,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [12] count(*)
 {
@@ -1773,7 +1859,8 @@
     "type":0
   },
   "expr_in_inner_stmt":false,
-  "pl_agg_udf_expr":null
+  "pl_agg_udf_expr":null,
+  "expr_hash":0
 }
 [13] max(c1)
 {
@@ -1851,7 +1938,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     }
   ],
   "distinct":false,
@@ -1866,7 +1954,8 @@
     "type":0
   },
   "expr_in_inner_stmt":false,
-  "pl_agg_udf_expr":null
+  "pl_agg_udf_expr":null,
+  "expr_hash":0
 }
 [14] c1 in (select t1 from table1)
 {
@@ -1943,7 +2032,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_REF_QUERY",
@@ -1981,9 +2071,11 @@
       "enum_set_values": [
       ],
       "children": [
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [15] 1=(select c1 from table1 where c2>20)
 {
@@ -2042,7 +2134,9 @@
       ],
       "value": {
         "BIGINT":1
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_REF_QUERY",
@@ -2080,9 +2174,11 @@
       "enum_set_values": [
       ],
       "children": [
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [16] (t1,t2)=(select c1, c2 from table1)
 {
@@ -2185,7 +2281,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2233,9 +2330,11 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_REF_QUERY",
@@ -2273,9 +2372,11 @@
       "enum_set_values": [
       ],
       "children": [
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [17] 10
 {
@@ -2306,7 +2407,9 @@
   ],
   "value": {
     "BIGINT":10
-  }
+  },
+  "is_dynamic_questionmark":false,
+  "expr_hash":0
 }
 [18] @@auto_increment_increment
 {
@@ -2369,7 +2472,9 @@
         "VARCHAR":"auto_increment_increment",
         "collation":"utf8mb4_general_ci",
         "coercibility":"SYSCONST"
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_INT",
@@ -2399,7 +2504,9 @@
       ],
       "value": {
         "BIGINT":0
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
   "enum_set_values": [
@@ -2408,7 +2515,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [19] @a
 {
@@ -2473,7 +2581,8 @@
         "coercibility":"IMPLICIT"
       },
       "is_contain_assign":false,
-      "query_has_udf":false
+      "query_has_udf":false,
+      "expr_hash":0
     }
   ],
   "enum_set_values": [
@@ -2482,7 +2591,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [20] c1
 {
@@ -2531,7 +2641,8 @@
   "is_mul_key_column":false,
   "is_strict_json_column":0,
   "srs_id":-1,
-  "udt_set_id":0
+  "udt_set_id":0,
+  "expr_hash":0
 }
 [21] 10+10
 {
@@ -2589,7 +2700,9 @@
       ],
       "value": {
         "BIGINT":10
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     },
      {
       "item_type":"T_INT",
@@ -2619,9 +2732,12 @@
       ],
       "value": {
         "BIGINT":10
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [22] not 10
 {
@@ -2709,11 +2825,15 @@
           ],
           "value": {
             "BIGINT":10
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [23] c1+c2=c3+c4
 {
@@ -2815,7 +2935,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2863,9 +2984,11 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_ADD",
@@ -2939,7 +3062,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -2987,11 +3111,14 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [24] c1=3
 {
@@ -3068,7 +3195,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_INT",
@@ -3098,9 +3226,12 @@
       ],
       "value": {
         "BIGINT":3
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [25] c1>1
 {
@@ -3177,7 +3308,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_INT",
@@ -3207,9 +3339,12 @@
       ],
       "value": {
         "BIGINT":1
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [26] c1 > c2
 {
@@ -3284,7 +3419,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -3332,9 +3468,11 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [27] c1 in (1,2,3,4)
 {
@@ -3413,7 +3551,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_ROW",
@@ -3470,7 +3609,9 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3500,7 +3641,9 @@
           ],
           "value": {
             "BIGINT":2
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3530,7 +3673,9 @@
           ],
           "value": {
             "BIGINT":3
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3560,11 +3705,15 @@
           ],
           "value": {
             "BIGINT":4
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [28] c1 between 2 and 10
 {
@@ -3668,7 +3817,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3698,9 +3848,12 @@
           ],
           "value": {
             "BIGINT":2
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_LE",
@@ -3776,7 +3929,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3806,11 +3960,15 @@
           ],
           "value": {
             "BIGINT":10
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [29] 10+10+c1
 {
@@ -3896,7 +4054,9 @@
           ],
           "value": {
             "BIGINT":10
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -3926,9 +4086,12 @@
           ],
           "value": {
             "BIGINT":10
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -3976,9 +4139,11 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [30] c1 = 1 + 2
 {
@@ -4056,7 +4221,8 @@
       "is_mul_key_column":false,
       "is_strict_json_column":0,
       "srs_id":-1,
-      "udt_set_id":0
+      "udt_set_id":0,
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_ADD",
@@ -4113,7 +4279,9 @@
           ],
           "value": {
             "BIGINT":1
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -4143,11 +4311,15 @@
           ],
           "value": {
             "BIGINT":2
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [31] c1 between 10+10 and 30
 {
@@ -4253,7 +4425,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_OP_ADD",
@@ -4310,7 +4483,9 @@
               ],
               "value": {
                 "BIGINT":10
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             },
              {
               "item_type":"T_INT",
@@ -4340,11 +4515,15 @@
               ],
               "value": {
                 "BIGINT":10
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
-          ]
+          ],
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_LE",
@@ -4420,7 +4599,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -4450,11 +4630,15 @@
           ],
           "value": {
             "BIGINT":30
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [32] 1+c1 > ? and 'abc' || c2 = 'def'
 {
@@ -4600,7 +4784,9 @@
                   ],
                   "value": {
                     "BIGINT":1
-                  }
+                  },
+                  "is_dynamic_questionmark":false,
+                  "expr_hash":0
                 },
                  {
                   "item_type":"T_REF_COLUMN",
@@ -4648,9 +4834,11 @@
                   "is_mul_key_column":false,
                   "is_strict_json_column":0,
                   "srs_id":-1,
-                  "udt_set_id":0
+                  "udt_set_id":0,
+                  "expr_hash":0
                 }
-              ]
+              ],
+              "expr_hash":0
             },
              {
               "item_type":"T_QUESTIONMARK",
@@ -4682,9 +4870,12 @@
               ],
               "value": {
                 "UNKNOWN":0
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
-          ]
+          ],
+          "expr_hash":0
         },
          {
           "item_type":"T_OP_BOOL",
@@ -4744,11 +4935,15 @@
                 "VARCHAR":"abc",
                 "collation":"utf8mb4_general_ci",
                 "coercibility":"COERCIBLE"
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
-          ]
+          ],
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     },
      {
       "item_type":"T_OP_EQ",
@@ -4824,7 +5019,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_VARCHAR",
@@ -4856,11 +5052,15 @@
             "VARCHAR":"def",
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [33] binary binary 'abc' collate utf8_general_ci collate utf8_bin
 {
@@ -5013,7 +5213,9 @@
                     "VARCHAR":"abc",
                     "collation":"utf8mb4_general_ci",
                     "coercibility":"COERCIBLE"
-                  }
+                  },
+                  "is_dynamic_questionmark":false,
+                  "expr_hash":0
                 },
                  {
                   "item_type":"T_INT",
@@ -5043,7 +5245,9 @@
                   ],
                   "value": {
                     "BIGINT":45
-                  }
+                  },
+                  "is_dynamic_questionmark":false,
+                  "expr_hash":0
                 }
               ],
               "enum_set_values": [
@@ -5052,7 +5256,8 @@
               "dblink_id":-1,
               "local_session_var": { },
               "local_session_var_id":-1,
-              "mview_id":-1
+              "mview_id":-1,
+              "expr_hash":0
             },
              {
               "item_type":"T_INT",
@@ -5082,7 +5287,9 @@
               ],
               "value": {
                 "BIGINT":46
-              }
+              },
+              "is_dynamic_questionmark":false,
+              "expr_hash":0
             }
           ],
           "enum_set_values": [
@@ -5091,7 +5298,8 @@
           "dblink_id":-1,
           "local_session_var": { },
           "local_session_var_id":-1,
-          "mview_id":-1
+          "mview_id":-1,
+          "expr_hash":0
         },
          {
           "item_type":"T_INT",
@@ -5121,7 +5329,9 @@
           ],
           "value": {
             "BIGINT":-4290838506
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
       ],
       "enum_set_values": [
@@ -5130,7 +5340,8 @@
       "dblink_id":-1,
       "local_session_var": { },
       "local_session_var_id":-1,
-      "mview_id":-1
+      "mview_id":-1,
+      "expr_hash":0
     },
      {
       "item_type":"T_INT",
@@ -5160,7 +5371,9 @@
       ],
       "value": {
         "BIGINT":-4290838506
-      }
+      },
+      "is_dynamic_questionmark":false,
+      "expr_hash":0
     }
   ],
   "enum_set_values": [
@@ -5169,7 +5382,8 @@
   "dblink_id":-1,
   "local_session_var": { },
   "local_session_var_id":-1,
-  "mview_id":-1
+  "mview_id":-1,
+  "expr_hash":0
 }
 [34] X not like Y
 {
@@ -5274,7 +5488,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -5322,7 +5537,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_VARCHAR",
@@ -5354,11 +5570,15 @@
             "VARCHAR":"\",
             "collation":"utf8mb4_general_ci",
             "coercibility":"COERCIBLE"
-          }
+          },
+          "is_dynamic_questionmark":false,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }
 [35] Z not regexp A
 {
@@ -5461,7 +5681,8 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -5509,9 +5730,12 @@
           "is_mul_key_column":false,
           "is_strict_json_column":0,
           "srs_id":-1,
-          "udt_set_id":0
+          "udt_set_id":0,
+          "expr_hash":0
         }
-      ]
+      ],
+      "expr_hash":0
     }
-  ]
+  ],
+  "expr_hash":0
 }

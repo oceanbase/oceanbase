@@ -462,7 +462,7 @@ int ObBackupTabletMetaFuser::sort_iters_(MERGE_ITER_ARRAY &fuse_iters)
     // no need sort
   } else {
     ObBackupTabletMetaIteratorComparator comp(ret);
-    std::sort(fuse_iters.begin(), fuse_iters.end(), comp);
+    lib::ob_sort(fuse_iters.begin(), fuse_iters.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort iterators", K(ret), K(fuse_iters));
     }

@@ -1,3 +1,6 @@
+// owner: baichangmin.bcm
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -12,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #define private public
+#define protected public
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_macro_block.h"
 #include "mtlenv/mock_tenant_module_env.h"
@@ -64,6 +68,7 @@ void TestIndexBlockRowStruct::SetUp()
   static_desc.ls_id_.id_ = 1;
   static_desc.tablet_id_.id_ = 1;
   static_desc.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  static_desc.tablet_transfer_seq_ = 0;
   data_desc.micro_block_size_ = 8 * 1024;
   static_desc.micro_block_size_limit_ = 8 * 1024;
   col_desc.row_column_count_ = rowkey_column_count + 1;

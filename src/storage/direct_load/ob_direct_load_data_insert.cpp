@@ -89,8 +89,16 @@ int ObDirectLoadDataInsert::get_next_row(const ObDatumRow *&datum_row)
   } else if (OB_UNLIKELY(datum_row->count_ != param_.store_column_count_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected column count", KR(ret), K(datum_row->count_), K(param_.store_column_count_));
-  } else if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(*datum_row))) {
-    LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row));
+  } else {
+    if (datum_row->row_flag_.is_delete()) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
+        LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+      }
+    } else {
+      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
+        LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+      }
+    }
   }
 
   return ret;
@@ -132,6 +140,10 @@ int ObDirectLoadSSTableDataInsert::init(
     } else if (OB_FAIL(data_insert_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init data insert", KR(ret));
     } else {
+      row_flag_.uncontain_hidden_pk_ = false;
+      row_flag_.has_multi_version_cols_ = false;
+      // row_flag_.has_delete_row_ = ?;
+      column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }
@@ -189,6 +201,10 @@ int ObDirectLoadMultipleSSTableDataInsert::init(
     } else if (OB_FAIL(data_insert_.init(param, &scan_merge_))) {
       LOG_WARN("fail to init data insert", KR(ret));
     } else {
+      row_flag_.uncontain_hidden_pk_ = false;
+      row_flag_.has_multi_version_cols_ = false;
+      // row_flag_.has_delete_row_ = ?;
+      column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }

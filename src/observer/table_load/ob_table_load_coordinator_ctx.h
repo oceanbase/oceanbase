@@ -37,13 +37,16 @@ class ObTableLoadTransCtx;
 class ObTableLoadCoordinatorTrans;
 class ObITableLoadTaskScheduler;
 class ObTableLoadErrorRowHandler;
+class ObTableLoadEmptyInsertTabletCtxManager;
 
 class ObTableLoadCoordinatorCtx
 {
 public:
   ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadCoordinatorCtx();
-  int init(const common::ObIArray<uint64_t> &column_ids, ObTableLoadExecCtx *exec_ctx);
+  int init(const common::ObIArray<uint64_t> &column_ids,
+           const common::ObIArray<ObTabletID> &tablet_ids,
+           ObTableLoadExecCtx *exec_ctx);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
@@ -114,8 +117,8 @@ public:
                               common::ObIAllocator &allocator) const;
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
-  int init_partition_location();
   int init_complete();
+  int init_partition_location_and_store_infos();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadSegmentID &segment_id,
@@ -124,10 +127,17 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
+  void add_to_all_server_event();
+  int init_partition_ids(const ObIArray<ObTabletID> &tablet_ids);
+  int init_empty_insert_tablet_ctx_manager();
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
   ObTableLoadSchema target_schema_;
+  common::ObArray<table::ObTableLoadPartitionId> partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> target_partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> empty_partition_ids_;
+  common::ObArray<table::ObTableLoadPartitionId> empty_target_partition_ids_;
   ObTableLoadPartitionLocation partition_location_;
   ObTableLoadPartitionLocation target_partition_location_;
   ObTableLoadPartitionCalc partition_calc_;
@@ -136,6 +146,7 @@ public:
   ObTableLoadExecCtx *exec_ctx_;
   table::ObTableLoadResultInfo result_info_;
   ObTableLoadErrorRowHandler *error_row_handler_;
+  ObTableLoadEmptyInsertTabletCtxManager *empty_insert_tablet_ctx_manager_;
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {
@@ -144,6 +155,15 @@ public:
     share::AutoincParam autoinc_param_;
   };
   SessionContext *session_ctx_array_;
+  struct StoreInfo
+  {
+    StoreInfo() : enable_heart_beat_(false) {}
+    ~StoreInfo() {}
+    ObAddr addr_;
+    bool enable_heart_beat_;
+    TO_STRING_KV(K_(addr), K_(enable_heart_beat));
+  };
+  common::ObArray<StoreInfo> store_infos_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {

@@ -772,10 +772,10 @@ int ObTransformConditionalAggrCoalesce::coalesce_cond_aggrs(ObIArray<ObAggFunRaw
                                            new_case_expr))) {
         LOG_WARN("failed to build case when exprs", K(ret));
       } else if (OB_FALSE_IT(cast_case_expr = new_case_expr)) {
-      } else if (ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
                                                                 cond_aggr,
                                                                 cast_case_expr,
-                                                                ctx_->session_info_)) {
+                                                                ctx_->session_info_))) {
         LOG_WARN("failed to add cast", K(ret));
       } else if (OB_FAIL(case_exprs.push_back(cast_case_expr))) {
         LOG_WARN("failed to push back expr", K(ret));

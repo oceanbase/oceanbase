@@ -104,11 +104,12 @@ const int64_t MAX_LOCK_ID_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_ROWKEY_BUF_LENGTH = 512;
 const int64_t MAX_LOCK_REMOTE_ADDR_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_MODE_BUF_LENGTH = 8;
-const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 16;
+const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_LOCK_OP_STATUS_BUF_LENGTH = 16;
 const int64_t MAX_LOCK_OP_EXTRA_INFO_LENGTH = 256;
 const int64_t MAX_LOCK_DETECT_PARAM_LENGTH = 512;
+const int64_t MAX_LOCK_OP_PRIORITY_BUF_LENGTH = 16;
 const int64_t MAX_SERVICE_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_CHECKPOINT_TYPE_BUF_LENGTH = 32;
 const int64_t MAX_FREEZE_CHECKPOINT_LOCATION_BUF_LENGTH = 16;
@@ -188,15 +189,18 @@ OB_INLINE bool is_valid_group(const uint64_t group_id)
   return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
 }
 
-OB_INLINE bool is_user_group(const uint64_t group_id)
+OB_INLINE bool is_resource_manager_group(const uint64_t group_id)
 {
   return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
 }
-
+OB_INLINE bool is_sys_group(const uint64_t group_id)
+{
+  return group_id >= 0 && group_id < USER_RESOURCE_GROUP_START_ID;
+}
 OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 {
   //other group or user group
-  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
+  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_resource_manager_group(group_id);
 }
 
 // See ObDeviceHealthStatus for more information
@@ -209,7 +213,7 @@ typedef ObPreciseDateTime ObCreateTime;
 typedef uint64_t ObPsStmtId;
 
 const int32_t NOT_CHECK_FLAG = 0;
-const int64_t MAX_SERVER_COUNT = 1024;
+const int64_t MAX_SERVER_COUNT = 4095;
 const uint64_t OB_SERVER_USER_ID = 0;
 const int64_t OB_MAX_INDEX_PER_TABLE = 128;
 const int64_t OB_MAX_SSTABLE_PER_TABLE = OB_MAX_INDEX_PER_TABLE + 1;
@@ -315,6 +319,7 @@ const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL = 64; // Compatible with mysql
 const int64_t OB_MAX_CONSTRAINT_EXPR_LENGTH = 2048;
 const int64_t OB_MAX_TABLESPACE_NAME_LENGTH = 128;
 const int64_t OB_MAX_UDF_NAME_LENGTH = 64;
+const int64_t OB_MAX_ASH_PL_NAME_LENGTH = 32;
 const int64_t OB_MAX_DL_NAME_LENGTH = 128;
 const int64_t OB_MAX_USER_NAME_LENGTH = 64; // Not compatible with Oracle (Oracle is 128), the logic is greater than when an error is reported
 const int64_t OB_MAX_USER_NAME_BUF_LENGTH = OB_MAX_USER_NAME_LENGTH + 1;
@@ -462,7 +467,6 @@ const int64_t OB_DEFAULT_STREAM_WAIT_TIMEOUT = 30L * 1000L * 1000L; // 30s
 const int64_t OB_DEFAULT_STREAM_RESERVE_TIME = 2L * 1000L * 1000L; // 2s
 const int64_t OB_DEFAULT_JOIN_BATCH_COUNT = 10000;
 const int64_t OB_AIO_TIMEOUT_US = 5L * 1000L * 1000L; //5s
-const int64_t OB_DEFAULT_TENANT_COUNT = 100000; //10w
 const int64_t OB_ONLY_SYS_TENANT_COUNT = 2;
 const int64_t OB_MAX_SERVER_SESSION_CNT = 32767;
 const int64_t OB_MAX_SERVER_TENANT_CNT = 1000;
@@ -517,6 +521,7 @@ const int64_t OB20_PROTOCOL_EXTRA_INFO_LENGTH = 4;  // for the length of extra i
 const int16_t OB20_PROTOCOL_VERSION_VALUE = 20;
 
 const int OB_THREAD_NAME_BUF_LEN = 16;
+const int OB_EXTENED_THREAD_NAME_BUF_LEN = 32;
 
 enum ObCSProtocolType
 {
@@ -648,7 +653,10 @@ const char *const OB_MLOG_ROWID_COLUMN_NAME = "M_ROW$$";
 
 const uint64_t OB_MAX_TMP_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                       - OB_END_RESERVED_COLUMN_ID_NUM;
-const int32_t OB_COUNT_AGG_PD_COLUMN_ID = INT32_MAX - 1;
+// pseudo column id used in special table scan
+const uint64_t OB_COUNT_AGG_PD_COLUMN_ID = INT32_MAX - 1;
+const uint64_t OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID = INT32_MAX - 2;
+
 const int64_t OB_MAX_AUTOINC_SEQ_VALUE = (1L << 40) - 1; // max value for 40bit
 
 const char *const OB_UPDATE_MSG_FMT = "Rows matched: %ld  Changed: %ld  Warnings: %ld";
@@ -867,6 +875,8 @@ const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
 const uint64_t INVALID_COLUMN_GROUP_ID = 0;
 const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
 const uint64_t COLUMN_GROUP_START_ID = 1000;
+const uint64_t ALL_COLUMN_GROUP_ID = 1001;
+const uint64_t ROWKEY_COLUMN_GROUP_ID = 1002;
 const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
 const int64_t OB_CG_NAME_PREFIX_LENGTH = 5; // length of cg prefix like "__cg_"
 const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = OB_MAX_COLUMN_NAME_LENGTH * OB_MAX_CHAR_LEN + OB_CG_NAME_PREFIX_LENGTH; //(max_column_name_length(128) * ob_max_char_len(3)) + prefix
@@ -911,7 +921,6 @@ const char *const OB_RESTORE_USER_NAME = "__oceanbase_inner_restore_user";
 const char *const OB_DRC_USER_NAME = "__oceanbase_inner_drc_user";
 const char *const OB_SYS_TENANT_NAME = "sys";
 const char *const OB_FAKE_TENANT_NAME = "fake_tenant";
-const char *const OB_GTS_TENANT_NAME = "gts";
 const char *const OB_SYS_HOST_NAME = "%";
 const char *const OB_DEFAULT_HOST_NAME = "%";
 // const char *const OB_MONITOR_TENANT_NAME = "monitor";
@@ -946,7 +955,6 @@ const double OB_DATA_CPU = 2.5;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
 const uint64_t OB_SYS_TENANT_ID = 1;
-const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
@@ -1499,6 +1507,7 @@ const int64_t OB_MERGE_COMMENT_INNER_STR_LENGTH = 800;
 const int64_t OB_CKM_ERROR_INFO_STR_LENGTH = 1024;
 const int64_t OB_COMPACTION_STATUS_STR_LENGTH = 256;
 const int64_t OB_STORAGE_PATH_STR_LENGTH = 256;
+const int64_t OB_MERGE_REASON_STR_LENGTH = 32;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1732,6 +1741,7 @@ const int64_t OB_MALLOC_NORMAL_BLOCK_SIZE = (1LL << 13) - 256;                 /
 const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 256;                 // 64KB
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
+const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
@@ -2030,6 +2040,8 @@ const int64_t MAX_CONSTRAINT_NAME_LEN = 128;
 const char *const OB_LOG_ROW_VALUE_PARTIAL_LOB = "partial_lob";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_JSON = "partial_json";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_ALL = "partial_all";
+// default duplicate read consistency is strong
+const int64_t OB_DEFAULT_DUPLICATE_READ_CONSISTENCY = 0;
 // json partial update expr flag
 enum ObJsonPartialUpdateFlag
 {
@@ -2064,6 +2076,12 @@ OB_INLINE bool is_valid_idx(const int64_t idx)
 OB_INLINE bool is_valid_server_id(const uint64_t server_id)
 {
   return (0 < server_id) && (OB_INVALID_ID != server_id);
+}
+
+// check whether a server_index is valid
+OB_INLINE bool is_valid_server_index(const uint64_t server_index)
+{
+  return (0 < server_index) && (server_index <= MAX_SERVER_COUNT);
 }
 
 //check whether an tenant_id is valid
@@ -2532,7 +2550,8 @@ struct ObNumberDesc
   if (OB_SUCCESS == ret  \
       && OB_SUCCESS != (ret = row.set_cell(table_id, ++column_id, obj))) \
   {\
-    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", to_cstring(obj), ret); \
+    ObCStringHelper helper; \
+    _OB_LOG(WARN, "failed to set cell=%s, ret=%d", helper.convert(obj), ret); \
   }
 
 OB_INLINE int64_t &get_tid_cache()
@@ -2597,6 +2616,21 @@ OB_INLINE char* ob_get_origin_thread_name()
   return ori_tname;
 }
 
+OB_INLINE char* ob_get_extended_thread_name()
+{
+  thread_local char ext_tname[oceanbase::OB_EXTENED_THREAD_NAME_BUF_LEN] = {0};
+  return ext_tname;
+}
+
+OB_INLINE char* ob_get_tname_v2()
+{
+  char *ret_tname = ob_get_extended_thread_name();
+  if ('\0' == ret_tname[0]) {
+    ret_tname = ob_get_tname();
+  }
+  return ret_tname;
+}
+
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";
 static const char* REPLAY_SERVICE_THREAD_NAME = "ReplaySrv";
 
@@ -2624,6 +2658,7 @@ OB_INLINE uint64_t ob_set_thread_tenant_id(uint64_t tenant_id)
 
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()
+#define GETTNAME_V2() ob_get_tname_v2()
 #define GET_TENANT_ID() ob_get_tenant_id()
 #define gettid GETTID
 #define GET_CLUSTER_ID() ob_get_cluster_id()

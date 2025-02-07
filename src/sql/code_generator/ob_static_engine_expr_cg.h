@@ -107,7 +107,8 @@ public:
       rt_question_mark_eval_(false),
       need_flatten_gen_col_(true),
       cur_cluster_version_(cur_cluster_version),
-      gen_questionmarks_(allocator, param_cnt)
+      gen_questionmarks_(allocator, param_cnt),
+      contain_dynamic_eval_rt_qm_(false)
   {
   }
   virtual ~ObStaticEngineExprCG() {}
@@ -139,7 +140,7 @@ public:
 
   int detect_batch_size(const ObRawExprUniqueSet &exprs, int64_t &batch_size,
                         int64_t config_maxrows, int64_t config_target_maxsize,
-                        const double scan_cardinality);
+                        const double scan_cardinality, int64_t lob_rowsets_max_rows);
 
   // TP workload VS AP workload:
   // TableScan cardinality(accessed rows) is used to determine TP load so far
@@ -156,6 +157,7 @@ public:
   void set_batch_size(const int64_t v) { batch_size_ = v; }
 
   void set_rt_question_mark_eval(const bool v) { rt_question_mark_eval_ = v; }
+  void set_contain_dynamic_eval_rt_qm(const bool v) { contain_dynamic_eval_rt_qm_ = v; }
 
   static int generate_partial_expr_frame(const ObPhysicalPlan &plan,
                                          ObExprFrameInfo &partial_expr_frame_info,
@@ -169,7 +171,8 @@ public:
                                     ObIAllocator &alloctor,
                                     ObSQLSessionInfo *session,
                                     share::schema::ObSchemaGetterGuard *schema_guard,
-                                    ObTempExpr *&temp_expr);
+                                    ObTempExpr *&temp_expr,
+                                    bool contain_dynamic_eval_rt_qm_ = false);
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);
 
@@ -446,11 +449,16 @@ private:
   // Certain exprs can NOT be executed vectorizely. Check the exps within this
   // routine
   ObExprBatchSize
-  get_expr_execute_size(const common::ObIArray<ObRawExpr *> &raw_exprs);
+  get_expr_execute_size(const common::ObIArray<ObRawExpr *> &raw_exprs, int64_t lob_rowsets_max_rows);
   inline bool is_large_data(ObObjType type) {
     bool b_large_data = false;
-    if (type == ObLongTextType || type == ObMediumTextType ||
-        type == ObLobType) {
+    if (type == ObLongTextType
+        || type == ObMediumTextType
+        || type == ObTextType
+        || type == ObLobType
+        || type == ObJsonType
+        || type == ObUserDefinedSQLType
+        || type == ObCollectionSQLType) {
       b_large_data = true;
     }
     return b_large_data;
@@ -494,6 +502,7 @@ private:
   bool need_flatten_gen_col_;
   uint64_t cur_cluster_version_;
   common::ObFixedArray<ObRawExpr *, common::ObIAllocator> gen_questionmarks_;
+  bool contain_dynamic_eval_rt_qm_;
 };
 
 } // end namespace sql

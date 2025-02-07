@@ -94,7 +94,7 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
   } else if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        log_plan,
+                                        log_plan->get_plan_root(),
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
@@ -127,7 +127,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        plan,
+                                        plan->get_plan_root(),
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   }
@@ -164,7 +164,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
   return ret;
 }
 
-int ObSqlPlan::print_sql_plan(ObLogPlan* plan,
+int ObSqlPlan::print_sql_plan(ObLogicalOperator* plan_top,
                               ExplainType type,
                               const ObExplainDisplayOpt& option,
                               ObIArray<common::ObString> &plan_strs)
@@ -177,7 +177,7 @@ int ObSqlPlan::print_sql_plan(ObLogPlan* plan,
   if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
-                                        plan,
+                                        plan_top,
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
   } else if (OB_FAIL(format_sql_plan(sql_plan_infos,
@@ -282,22 +282,39 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
   ObDelUpdLogPlan *del_upd_plan = NULL;
   outline_global_hint.pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
   outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   const ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
   } else {
+    bool has_set_parallel = false;
     outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
-    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan)) && del_upd_plan->use_pdml()) {
-      outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))) {
+      if (del_upd_plan->use_pdml()) {
+        outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+      }
+
+      if (del_upd_plan->get_can_use_parallel_das_dml()) {
+        has_set_parallel = true;
+        outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+        if (plan.get_optimizer_context().is_use_auto_dop()) {
+          outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
+        } else {
+          outline_global_hint.merge_parallel_hint(del_upd_plan->get_max_dml_parallel());
+        }
+      }
     }
-    if (plan.get_optimizer_context().is_use_auto_dop()) {
+    if (has_set_parallel) {
+      // set parallel_ before
+    } else if (plan.get_optimizer_context().is_use_auto_dop()) {
       outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
     }
   }
-
+  LOG_TRACE("after construct_outline_global_hint", K(outline_global_hint.parallel_das_dml_option_),
+            K(outline_global_hint.pdml_option_), K(outline_global_hint.parallel_));
   return ret;
 }
 
@@ -597,16 +614,16 @@ int ObSqlPlan::inner_escape_quotes(char* &ptr, int64_t &length)
 }
 
 int ObSqlPlan::get_sql_plan_infos(PlanText &plan_text,
-                                  ObLogPlan* plan,
+                                  ObLogicalOperator* plan_top,
                                   ObIArray<ObSqlPlanItem*> &sql_plan_infos)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(plan)) {
+  if (OB_ISNULL(plan_top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null plan", K(ret));
   //get operator tree info
   } else if (OB_FAIL(get_plan_tree_infos(plan_text,
-                                         plan->get_plan_root(),
+                                         plan_top,
                                          sql_plan_infos,
                                          0,
                                          1,
@@ -617,19 +634,19 @@ int ObSqlPlan::get_sql_plan_infos(PlanText &plan_text,
     LOG_WARN("unexpect null plan", K(ret));
   //get used hint、outline info
   } else if (OB_FAIL(get_plan_used_hint_info(plan_text,
-                                             plan,
+                                             plan_top,
                                              sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan outline info", K(ret));
   } else if (OB_FAIL(get_qb_name_trace(plan_text,
-                                      plan,
+                                      plan_top->get_plan(),
                                       sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get qb name trace", K(ret));
   } else if (OB_FAIL(get_plan_outline_info(plan_text,
-                                           plan,
+                                           plan_top,
                                            sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan outline info", K(ret));
   } else if (OB_FAIL(get_plan_other_info(plan_text,
-                                         plan,
+                                         plan_top->get_plan(),
                                          sql_plan_infos.at(0)))) {
     LOG_WARN("failed to get plan other info", K(ret));
   }
@@ -677,16 +694,16 @@ int ObSqlPlan::get_plan_tree_infos(PlanText &plan_text,
 }
 
 int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
-                                      ObLogPlan* plan,
+                                      ObLogicalOperator* plan_top,
                                       ObSqlPlanItem* sql_plan_item)
 {
   int ret = OB_SUCCESS;
   const ObQueryCtx *query_ctx = NULL;
   //print_plan_tree:print_used_hint
-  if (OB_ISNULL(plan) || OB_ISNULL(sql_plan_item) ||
-      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(plan_top) || OB_ISNULL(plan_top->get_plan()) || OB_ISNULL(sql_plan_item) ||
+      OB_ISNULL(query_ctx = plan_top->get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(plan), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(plan_top), K(query_ctx));
   } else {
     const ObQueryHint &query_hint = query_ctx->get_query_hint();
     PlanText temp_text;
@@ -697,7 +714,7 @@ int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
     BUF_PRINT_CONST_STR("  /*+", temp_text);
     BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
     BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);
-    if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan->get_plan_root()))) {
+    if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan_top))) {
       LOG_WARN("failed to get plan tree used hint", K(ret));
     } else if (OB_FAIL(query_hint.print_qb_name_hints(temp_text))) {
       LOG_WARN("failed to print qb name hints", K(ret));
@@ -772,15 +789,15 @@ int ObSqlPlan::get_qb_name_trace(PlanText &plan_text,
 }
 
 int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
-                                    ObLogPlan* plan,
+                                    ObLogicalOperator* plan_top,
                                     ObSqlPlanItem* sql_plan_item)
 {
   int ret = OB_SUCCESS;
   const ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(plan) || OB_ISNULL(sql_plan_item) ||
-      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(plan_top) || OB_ISNULL(plan_top->get_plan()) || OB_ISNULL(sql_plan_item) ||
+      OB_ISNULL(query_ctx = plan_top->get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(plan), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(plan_top), K(query_ctx));
   } else {
     PlanText temp_text;
     temp_text.is_used_hint_ = false;
@@ -793,13 +810,13 @@ int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
     BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);
     BUF_PRINT_CONST_STR("BEGIN_OUTLINE_DATA", temp_text);
     const ObQueryHint &query_hint = query_ctx->get_query_hint();
-    if (OB_FAIL(reset_plan_tree_outline_flag(plan->get_plan_root()))) {
+    if (OB_FAIL(reset_plan_tree_outline_flag(plan_top))) {
       LOG_WARN("failed to reset plan tree outline flag", K(ret));
-    } else if (OB_FAIL(get_plan_tree_outline(temp_text, plan->get_plan_root()))) {
+    } else if (OB_FAIL(get_plan_tree_outline(temp_text, plan_top))) {
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(temp_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(get_global_hint_outline(temp_text, *plan))) {
+    } else if (OB_FAIL(get_global_hint_outline(temp_text, *plan_top->get_plan()))) {
       LOG_WARN("failed to get plan global hint outline", K(ret));
     } else {
       BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
@@ -864,56 +881,59 @@ int ObSqlPlan::get_plan_other_info(PlanText &plan_text,
     LOG_WARN("unexpect null param", K(ret));
   } else {
     ObObjPrintParams print_params(query_ctx->get_timezone_info());
-    BEGIN_BUF_PRINT
     ObPhyPlanType plan_type = plan->get_optimizer_context().get_phy_plan_type();
-    if (OB_FAIL(BUF_PRINTF("  Plan Type:"))) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-    } else if (OB_FAIL(BUF_PRINTF("%.*s",
-                                  ob_plan_type_str(plan_type).length(),
-                                  ob_plan_type_str(plan_type).ptr()))) {
-    } else {
-      ret = BUF_PRINTF(NEW_LINE);
-    }
-
-    const ParamStore *params = NULL;
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(params = plan->get_optimizer_context().get_params())) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (params->count() <= 0) {
-      //do nothing
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    } else { /* Do nothing */ }
-    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
-      if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
+    ret = OB_E(EventTable::EN_PRINT_CONSTRAINTS_INFO) OB_SUCCESS;
+    bool only_show_constraint = OB_SUCCESS != ret && EXPLAIN_UNINITIALIZED == plan_text.type_;
+    ret = OB_SUCCESS;
+    BEGIN_BUF_PRINT
+    if (OB_SUCC(ret) && !only_show_constraint) {
+      if (OB_FAIL(BUF_PRINTF("  Plan Type:"))) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      } else if (OB_FAIL(BUF_PRINTF("%.*s",
+                                    ob_plan_type_str(plan_type).length(),
+                                    ob_plan_type_str(plan_type).ptr()))) {
       } else {
-        int64_t save_pos = pos;
-        if (OB_FAIL(params->at(i).print_sql_literal(buf,
-                                                    buf_len,
-                                                    pos,
-                                                    print_params))) {
-          //ignore size overflow error
-          pos = save_pos;
-        }
-        if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-        } else { /* Do nothing */ }
-      }
-    }
-
-    const ObPlanNotes &notes = plan->get_optimizer_context().get_plan_notes();
-    if (notes.count() <= 0 || OB_FAIL(ret)) {
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
-    } else if (OB_FAIL(BUF_PRINTF("  Note:"))) { /* Do nothing */
-    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < notes.count(); i++) {
-      if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-      } else {
-        pos += notes.at(i).to_string(buf + pos, buf_len - pos);
         ret = BUF_PRINTF(NEW_LINE);
+      }
+      const ParamStore *params = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(params = plan->get_optimizer_context().get_params())) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (params->count() <= 0) {
+        //do nothing
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      } else { /* Do nothing */ }
+      for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
+        if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
+        } else {
+          int64_t save_pos = pos;
+          if (OB_FAIL(params->at(i).print_sql_literal(buf,
+                                                      buf_len,
+                                                      pos,
+                                                      print_params))) {
+            //ignore size overflow error
+            pos = save_pos;
+          }
+          if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+          } else { /* Do nothing */ }
+        }
+      }
+      const ObPlanNotes &notes = plan->get_optimizer_context().get_plan_notes();
+      if (notes.count() <= 0 || OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
+      } else if (OB_FAIL(BUF_PRINTF("  Note:"))) { /* Do nothing */
+      } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) { /* Do nothing */
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < notes.count(); i++) {
+        if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        } else {
+          pos += notes.at(i).to_string(buf + pos, buf_len - pos);
+          ret = BUF_PRINTF(NEW_LINE);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1094,11 +1114,28 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
   } else if (sql_plan_infos.empty()) {
     //do nothing
   } else {
-    if (EXPLAIN_BASIC == type) {
+    if (EXPLAIN_PLAN_TABLE == type) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+        LOG_WARN("failed to print plan", K(ret));
+      }
+    } else if (EXPLAIN_BASIC == type) {
       if (OB_FAIL(format_basic_plan_table(sql_plan_infos, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));
       } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
         LOG_WARN("failed to print plan output", K(ret));
+      }
+    } else if (EXPLAIN_UNINITIALIZED == type) {
+      if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
+        LOG_WARN("failed to print plan", K(ret));
+      } else if (OB_FAIL(format_plan_output(sql_plan_infos, plan_text))) {
+        LOG_WARN("failed to print plan output", K(ret));
+      } else {
+        ret = OB_E(EventTable::EN_PRINT_CONSTRAINTS_INFO) OB_SUCCESS;
+        bool only_show_constraint = OB_SUCCESS != ret;
+        ret = OB_SUCCESS;
+        if (only_show_constraint && OB_FAIL(format_other_info(sql_plan_infos, plan_text))) {
+          LOG_WARN("failed to print other info", K(ret));
+        }
       }
     } else if (EXPLAIN_OUTLINE == type) {
       if (OB_FAIL(format_plan_table(sql_plan_infos, option, plan_text))) {
@@ -2212,7 +2249,7 @@ int ObSqlPlan::format_plan_to_json(ObIArray<ObSqlPlanItem*> &sql_plan_infos, Pla
     plan_text.pos_ += tidy.to_string(plan_text.buf_ + plan_text.pos_,
                                      plan_text.buf_len_ - plan_text.pos_);
     if (plan_text.buf_len_ - plan_text.pos_ > 0) {
-      plan_text.buf_[plan_text.pos_ + 1] = '\0';
+      plan_text.buf_[plan_text.pos_] = '\0';
     } else {
       plan_text.buf_[plan_text.buf_len_ - 1] = '\0';
     }

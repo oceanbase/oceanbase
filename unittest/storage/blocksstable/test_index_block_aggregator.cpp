@@ -343,7 +343,7 @@ void TestIndexBlockAggregator::serialize_agg_row(
   int64_t size = 0;
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, agg_row_writer_.init(full_agg_metas_, agg_row, allocator_));
-  size = agg_row_writer_.get_data_size();
+  size = agg_row_writer_.get_serialize_data_size();
   buf = static_cast<char *>(allocator_.alloc(size));
   ASSERT_TRUE(nullptr != buf);
   ASSERT_EQ(OB_SUCCESS, agg_row_writer_.write_agg_data(buf, size, pos));

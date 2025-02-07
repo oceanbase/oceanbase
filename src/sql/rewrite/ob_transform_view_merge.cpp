@@ -192,6 +192,8 @@ int ObTransformViewMerge::transform_in_from_item(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->has_rollup()) {
+    OPT_TRACE("stmt contain rollup, can not merge from item");
   } else {
     int64_t i = 0;
     while (OB_SUCC(ret) && i < stmt->get_from_item_size()) {
@@ -408,6 +410,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          parent_stmt->is_hierarchical_query(),
+                                         false,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -461,6 +464,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          !can_push_where,
+                                         true,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -480,6 +484,7 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
 
 int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
                                                ObSelectStmt *child_stmt,
+                                               bool in_joined_table,
                                                bool &can_be) {
   int ret = OB_SUCCESS;
   can_be = false;
@@ -538,8 +543,9 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   } else if (!is_select_expr_valid) {
     can_be = false;
   } else if (0 == child_stmt->get_from_item_size()) {
-    //当 view 为 select ... from dual, 若上层非层次查询, 允许视图合并
-    can_be = parent_stmt->is_single_table_stmt()
+    // 当 view 为 select ... from dual, 若上层非层次查询
+    // 且上层是单表查询, 或者上层不是 JOIN, 则可以合并
+    can_be = (parent_stmt->is_single_table_stmt() || !in_joined_table)
              && !parent_stmt->is_hierarchical_query();
   } else if (OB_FAIL(child_stmt->has_ref_assign_user_var(has_ref_assign_user_var))) {
     LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
@@ -593,6 +599,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
                                               ObSelectStmt *child_stmt,
                                               ViewMergeHelper &helper,
                                               bool need_check_subquery,
+                                              bool in_joined_table,
                                               bool &can_be)
 {
   int ret = OB_SUCCESS;
@@ -601,7 +608,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, can_be))) {
+  } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, in_joined_table, can_be))) {
     LOG_WARN("failed to check", K(ret));
   } else if (can_be) {
     has_rollup = parent_stmt->is_select_stmt() &&
@@ -621,14 +628,11 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
       }
     }
   }
-  //stmt不能包含rand函数
   if (OB_SUCC(ret) && can_be) {
-    bool has_rand = false;
-    if (OB_FAIL(child_stmt->has_rand(has_rand))) {
+    if (OB_FAIL(child_stmt->is_query_deterministic(can_be))) {
       LOG_WARN("failed to get rand flag", K(ret));
-    } else if (has_rand) {
-      can_be = false;
-      OPT_TRACE("view has random expr, can not merge");
+    } else if (!can_be) {
+      OPT_TRACE("view is not deterministic, can not merge");
     }
   }
   if (OB_SUCC(ret) && can_be) {

@@ -159,6 +159,7 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
             LOG_USER_ERROR(OB_ERR_DATABASE_LINK_EXPECTED);
           }
         } else {
+          ObCStringHelper helper;
           db_name.reset();
           table_name.reset();
           if (OB_FAIL(resolve_table_relation_node(table_node,
@@ -193,17 +194,17 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                 } else if (!is_exists) {
                   if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
                     ret = OB_ERR_MVIEW_NOT_EXIST;
-                    LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                    LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, helper.convert(db_name), helper.convert(table_name));
                   } else {
                     ret = OB_TABLE_NOT_EXIST;
-                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
+                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name), helper.convert(table_name));
                   }
                 } else {
                   uint64_t db_id = OB_INVALID_ID;
                   const share::schema::ObSimpleTableSchemaV2 *table_view_schema = NULL;
                   if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, db_id))) {
                     SQL_RESV_LOG(WARN, "failed to get db id", K(db_name), K(ret));
-                  } else if (OB_FAIL(schema_checker_->get_simple_table_schema(tenant_id, 
+                  } else if (OB_FAIL(schema_checker_->get_simple_table_schema(tenant_id,
                                           db_id, table_name, false, table_view_schema))) {
                     SQL_RESV_LOG(WARN, "failed to get simple table schema", K(db_id),
                                   K(table_name), K(ret));
@@ -216,13 +217,13 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                     if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
                       ret = OB_ERR_MVIEW_NOT_EXIST;
                       SQL_RESV_LOG(WARN, "mview not exist", KR(ret));
-                      LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
+                      LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, helper.convert(db_name),
+                          helper.convert(table_name));
                     } else {
                       ret = OB_TABLE_NOT_EXIST;
                       SQL_RESV_LOG(WARN, "table not exist", KR(ret));
-                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
+                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name),
+                          helper.convert(table_name));
                     }
                   } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
                                 tenant_id,
@@ -238,11 +239,11 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                     if (OB_TABLE_NOT_EXIST == ret) {
                       if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
                         ret = OB_ERR_MVIEW_NOT_EXIST;
-                        LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name),
-                            to_cstring(table_name));
+                        LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, helper.convert(db_name),
+                            helper.convert(table_name));
                       } else {
-                        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                            to_cstring(table_name));
+                        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name),
+                            helper.convert(table_name));
                       }
                     }
                     SQL_RESV_LOG(WARN, "failed to check ora ddl priv",

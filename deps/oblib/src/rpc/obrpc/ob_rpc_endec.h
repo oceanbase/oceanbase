@@ -17,6 +17,8 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "lib/compress/ob_compressor_pool.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -44,6 +46,7 @@ template <typename T>
       int64_t session_id = 0
     )
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
   int ret = common::OB_SUCCESS;
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
@@ -137,12 +140,12 @@ template <typename T>
       if (session_id) {
         pkt.set_session_id(session_id);
       }
-    }
-    if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
-      RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
-    } else {
-      req = header_buf;
-      req_sz = header_sz + payload_sz;
+      if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
+        RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
+      } else {
+        req = header_buf;
+        req_sz = header_sz + payload_sz;
+      }
     }
   }
   return ret;
@@ -151,6 +154,7 @@ template <typename T>
 template <typename T>
 int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacket &pkt, ObRpcResultCode &rcode)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(pkt.decode(resp_buf, resp_sz))) {

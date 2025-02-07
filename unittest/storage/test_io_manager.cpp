@@ -104,6 +104,7 @@ static void TearDownTestCase()
 {
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(1002);
+  oceanbase::MockTenantModuleEnv::get_instance().destroy();
 }
 
 static void get_random_io_info(ObIOInfo &io_info)
@@ -111,9 +112,8 @@ static void get_random_io_info(ObIOInfo &io_info)
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_.first_id_ = ObRandom::rand(0, 10000);
   io_info.fd_.second_id_ = ObRandom::rand(0, 10000);
-  io_info.fd_.device_handle_ = THE_IO_DEVICE;
+  io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   io_info.flag_.set_mode(static_cast<ObIOMode>(ObRandom::rand(0, (int)ObIOMode::MAX_MODE - 1)));
-  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID); // 0 means default
   io_info.flag_.set_wait_event(ObRandom::rand(1, 9999));
   io_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   io_info.offset_ = ObRandom::rand(1, 1000L * 1000L * 1000L);
@@ -171,7 +171,6 @@ TEST_F(TestIOStruct, IOFlag)
 
   // normal usage
   flag.set_mode(ObIOMode::READ);
-  flag.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   flag.set_wait_event(99);
   ASSERT_TRUE(flag.is_valid());
 
@@ -208,11 +207,10 @@ TEST_F(TestIOStruct, IOInfo)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 0;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   info.tenant_id_ = OB_SERVER_TENANT_ID;
   info.fd_ = fd;
   info.flag_.set_mode(ObIOMode::READ);
-  info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   info.flag_.set_wait_event(1);
   info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   info.offset_ = 80;
@@ -305,7 +303,7 @@ TEST_F(TestIOStruct, IORequest)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   // default invalid
   ObIOResult result;
   ASSERT_FALSE(result.is_inited_);
@@ -327,7 +325,6 @@ TEST_F(TestIOStruct, IORequest)
   read_info.tenant_id_ = OB_SERVER_TENANT_ID;
   read_info.fd_ = fd;
   read_info.flag_.set_mode(ObIOMode::READ);
-  read_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   read_info.flag_.set_wait_event(1);
   read_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   read_info.offset_ = 89;
@@ -336,7 +333,6 @@ TEST_F(TestIOStruct, IORequest)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req.tenant_io_mgr_.get_ptr()->io_usage_.init(1));
   ASSERT_FAIL(result.init(read_info)); //not init cond yet
   ASSERT_FALSE(result.is_inited_);
 
@@ -571,8 +567,6 @@ TEST_F(TestIOStruct, IOGroupUsage)
   ASSERT_NEAR(avg_total_delay, 1000, 100);
 }
 
-
-
 TEST_F(TestIOStruct, IOScheduler)
 {
   ObIOCalibration::get_instance().init();
@@ -598,7 +592,7 @@ TEST_F(TestIOStruct, IOScheduler)
   ObIOUsage io_usage;
   ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   io_clock.destroy();
-  ASSERT_SUCC(io_usage.init(1));
+  ASSERT_SUCC(io_usage.init(1002, 1));
   ASSERT_SUCC(io_clock.init(1002, tenant_config, &io_usage));
   //ASSERT_SUCC(scheduler.schedule_request(io_clock, req));
 
@@ -640,7 +634,7 @@ TEST_F(TestIOStruct, MClockQueue)
   ASSERT_TRUE(io_config.is_valid());
   ObTenantIOClock tenant_clock;
   ObIOUsage io_usage;
-  ASSERT_SUCC(io_usage.init(io_config.group_configs_.count()));
+  ASSERT_SUCC(io_usage.init(500, io_config.group_configs_.count()));
   ASSERT_SUCC(io_usage.refresh_group_num(io_config.group_configs_.count()));
   ASSERT_SUCC(tenant_clock.init(1002, io_config, &io_usage));
   ObMClockQueue mqueue1;
@@ -694,7 +688,7 @@ TEST_F(TestIOStruct, IOResult)
   ObIOFd fd;
   fd.first_id_ = 0;
   fd.second_id_ = 1;
-  fd.device_handle_ = THE_IO_DEVICE;
+  fd.device_handle_ = &LOCAL_DEVICE_INSTANCE;
 
   void *result_buf = holder.get_ptr()->io_allocator_.alloc(sizeof(ObIOResult));
   ObIOResult *result = new (result_buf) ObIOResult;
@@ -720,7 +714,7 @@ TEST_F(TestIOStruct, IOResult)
   read_info.tenant_id_ = OB_SERVER_TENANT_ID;
   read_info.fd_ = fd;
   read_info.flag_.set_mode(ObIOMode::READ);
-  read_info.flag_.set_resource_group_id(10005);
+  SET_GROUP_ID(10005);
   read_info.flag_.set_wait_event(1);
   read_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   read_info.offset_ = 89;
@@ -729,7 +723,6 @@ TEST_F(TestIOStruct, IOResult)
   read_info.user_data_buf_ = user_buf;
 
   ASSERT_TRUE(read_info.is_valid());
-  ASSERT_SUCC(req->tenant_io_mgr_.get_ptr()->io_usage_.init(1));
 
   ASSERT_FAIL(result->init(read_info));
   ASSERT_FALSE(result->is_inited_);
@@ -855,51 +848,55 @@ TEST_F(TestIOStruct, IOFaultDetector)
   ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
   ASSERT_TRUE(DEVICE_HEALTH_ERROR == dhs);
   ASSERT_TRUE(disk_abnormal_time > 0);
+  detector.reset_device_health();
+  ASSERT_SUCC(detector.get_device_health_status(dhs, disk_abnormal_time));
+  ASSERT_TRUE(DEVICE_HEALTH_NORMAL == dhs);
+  ASSERT_TRUE(0 == disk_abnormal_time);
 }
 
-class TestIOManager : public TestIOStruct
-{
-  // basic use resource manager
-public:
-  static void SetUpTestCase()
-  {
-  }
+// class TestIOManager : public TestIOStruct
+// {
+//   // basic use resource manager
+// public:
+//   static void SetUpTestCase()
+//   {
 
-  static void TearDownTestCase()
-  {
-    oceanbase::MockTenantModuleEnv::get_instance().destroy();
-  }
+//   }
 
-  virtual void SetUp()
-  {
-    OB_IO_MANAGER.destroy();
-    const int64_t memory_limit = 10L * 1024L * 1024L * 1024L; // 10GB
-    ASSERT_SUCC(OB_IO_MANAGER.init(memory_limit));
-    ASSERT_SUCC(OB_IO_MANAGER.start());
+//   static void TearDownTestCase()
+//   {
+//     oceanbase::MockTenantModuleEnv::get_instance().destroy();
+//   }
 
-    // add io device
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(THE_IO_DEVICE, 16, 2, 1024));
+//   virtual void SetUp()
+//   {
+//     //OB_IO_MANAGER.destroy();
+//     const int64_t memory_limit = 10L * 1024L * 1024L * 1024L; // 10GB
+//     //ASSERT_SUCC(OB_IO_MANAGER.init(memory_limit));
+//     //ASSERT_SUCC(OB_IO_MANAGER.start());
+//     // add io device
+//     //ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(&LOCAL_DEVICE_INSTANCE, 16, 2, 1024));
 
-    // add tenant io manager
-    const uint64_t tenant_id = OB_SERVER_TENANT_ID;
-    ObTenantIOConfig io_config;
-    io_config.memory_limit_ = memory_limit;
-    io_config.callback_thread_count_ = 2;
-    io_config.unit_config_.min_iops_ = 10000;
-    io_config.unit_config_.max_iops_ = 100000;
-    io_config.unit_config_.weight_ = 100;
-    io_config.group_configs_.at(0).min_percent_ = 100;
-    io_config.group_configs_.at(0).max_percent_ = 100;
-    io_config.group_configs_.at(0).weight_percent_ = 100;
-  }
-  virtual void TearDown()
-  {
-    OB_IO_MANAGER.stop();
-    OB_IO_MANAGER.destroy();
-  }
-};
+//     // add tenant io manager
+//     const uint64_t tenant_id = OB_SERVER_TENANT_ID;
+//     ObTenantIOConfig io_config;
+//     io_config.memory_limit_ = memory_limit;
+//     io_config.callback_thread_count_ = 2;
+//     io_config.unit_config_.min_iops_ = 10000;
+//     io_config.unit_config_.max_iops_ = 100000;
+//     io_config.unit_config_.weight_ = 100;
+//     io_config.group_configs_.at(0).min_percent_ = 100;
+//     io_config.group_configs_.at(0).max_percent_ = 100;
+//     io_config.group_configs_.at(0).weight_percent_ = 100;
+//   }
+//   virtual void TearDown()
+//   {
+//     OB_IO_MANAGER.stop();
+//     OB_IO_MANAGER.destroy();
+//   }
+// };
 
-TEST_F(TestIOManager, memory_pool)
+TEST_F(TestIOStruct, memory_pool)
 {
   ObRefHolder<ObTenantIOManager> tenant_holder;
   ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(500, tenant_holder));
@@ -938,19 +935,22 @@ TEST_F(TestIOManager, memory_pool)
   tenant_holder.get_ptr()->io_allocator_.free(req1);
 }
 
-TEST_F(TestIOManager, simple)
+TEST_F(TestIOStruct, simple)
 {
+  const int64_t memory_limit = 10L * 1024L * 1024L * 1024L; // 10GB
+  ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(&LOCAL_DEVICE_INSTANCE));
+  ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(&LOCAL_DEVICE_INSTANCE, 16, 2, 1024));
   ObIOFd fd;
-  ASSERT_SUCC(THE_IO_DEVICE->open(TEST_ROOT_DIR "/test_io_file", O_CREAT | O_DIRECT | O_TRUNC | O_RDWR, 0644, fd));
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.open(TEST_ROOT_DIR "/test_io_file", O_CREAT | O_DIRECT | O_TRUNC | O_RDWR, 0644, fd));
   ASSERT_TRUE(fd.is_valid());
   ObIOManager &io_mgr = ObIOManager::get_instance();
 
   // fallocate
   const int64_t FILE_SIZE = 4 * 1024 * 1024;
-  ASSERT_SUCC(THE_IO_DEVICE->fallocate(fd, 0, 0, FILE_SIZE)); // 4M
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.fallocate(fd, 0, 0, FILE_SIZE)); // 4M
   {
     oceanbase::common::ObIODFileStat stat_buf;
-    ASSERT_SUCC(THE_IO_DEVICE->stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
+    ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
     ASSERT_EQ(FILE_SIZE, stat_buf.size_);
   }
 
@@ -960,9 +960,8 @@ TEST_F(TestIOManager, simple)
   ObIOInfo io_info;
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_ = fd;
-  io_info.fd_.device_handle_ = THE_IO_DEVICE;
+  io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
   io_info.flag_.set_write();
-  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(100);
   io_info.offset_ = 0;
   io_info.size_ = write_io_size;
@@ -978,7 +977,7 @@ TEST_F(TestIOManager, simple)
   // check size
   {
     oceanbase::common::ObIODFileStat stat_buf;
-    ASSERT_SUCC(THE_IO_DEVICE->stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
+    ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.stat(TEST_ROOT_DIR "/test_io_file", stat_buf));
     ASSERT_EQ(FILE_SIZE, stat_buf.size_);
   }
 
@@ -1029,9 +1028,8 @@ TEST_F(TestIOManager, simple)
   io_handle.reset();
   // ASSERT_EQ(10, tmp_number); // callback destructor called
 
-  ASSERT_SUCC(THE_IO_DEVICE->close(fd));
+  ASSERT_SUCC(LOCAL_DEVICE_INSTANCE.close(fd));
 }
-
 
 struct IOPerfDevice
 {
@@ -1295,7 +1293,7 @@ int prepare_file(const char *file_path, const int64_t file_size, int32_t &fd)
   return ret;
 }
 
-TEST_F(TestIOManager, tenant)
+TEST_F(TestIOStruct, tenant)
 {
   ObTenantIOConfig default_config = ObTenantIOConfig::default_instance();
   default_config.unit_config_.max_iops_ = 20000L;
@@ -1307,7 +1305,7 @@ TEST_F(TestIOManager, tenant)
   device.device_id_ = 1;
   strcpy(device.file_path_, "./perf_test");
   device.file_size_ = 1024L * 1024L * 1024L;
-  device.device_handle_ = static_cast<ObLocalDevice *>(THE_IO_DEVICE);
+  device.device_handle_ = static_cast<ObLocalDevice *>(&LOCAL_DEVICE_INSTANCE);
   prepare_file(device.file_path_, device.file_size_, device.fd_);
   load.device_ = &device;
   load.device_id_ = 1; // unused
@@ -1327,9 +1325,10 @@ TEST_F(TestIOManager, tenant)
   runner.destroy();
 }
 
-TEST_F(TestIOManager, perf)
+TEST_F(TestIOStruct, perf)
 {
   // use multi thread to do some io stress, maybe use test_io_performance
+  int ret = OB_SUCCESS;
   bool is_perf_config_exist = false;
   ASSERT_SUCC(FileDirectoryUtils::is_exists(GROUP_PERF_CONFIG_FILE, is_perf_config_exist));
   if (!is_perf_config_exist) {
@@ -1345,12 +1344,11 @@ TEST_F(TestIOManager, perf)
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
 
-  ObIOManager::get_instance().destroy();
+  //ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
-
+  //ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
+  //ASSERT_SUCC(ObIOManager::get_instance().start());
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
   ASSERT_TRUE(nullptr != device_buf);
@@ -1359,7 +1357,7 @@ TEST_F(TestIOManager, perf)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
+    //ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1389,18 +1387,19 @@ TEST_F(TestIOManager, perf)
   }
   free(runner_buf);
 
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-//    ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(device_handle));
-    device_handle->destroy();
-  }
-  free(device_buf);
+  //ObIOManager::get_instance().stop();
+  //ObIOManager::get_instance().destroy();
+//   for (int64_t i = 0; i < perf_devices.count(); ++i) {
+//     ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
+// //    ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(device_handle));
+//     device_handle->destroy();
+//   }
+//   free(device_buf);
   LOG_INFO("wenqu: perf finished");
 }
 
-TEST_F(TestIOManager, alloc_memory)
+
+TEST_F(TestIOStruct, alloc_memory)
 {
   // use multi thread to do some io stress, maybe use test_io_performance
   bool is_perf_config_exist = false;
@@ -1418,11 +1417,8 @@ TEST_F(TestIOManager, alloc_memory)
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
 
-  ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
@@ -1432,7 +1428,6 @@ TEST_F(TestIOManager, alloc_memory)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1461,16 +1456,9 @@ TEST_F(TestIOManager, alloc_memory)
     runner->destroy();
   }
   free(runner_buf);
+}
 
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-    device_handle->destroy();
-  }
-  free(device_buf);}
-
-TEST_F(TestIOManager, IOTracer)
+TEST_F(TestIOStruct, IOTracer)
 {
   // use multi thread to do modify group_io_config
   bool is_perf_config_exist = false;
@@ -1488,11 +1476,8 @@ TEST_F(TestIOManager, IOTracer)
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
 
-  ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
@@ -1502,7 +1487,6 @@ TEST_F(TestIOManager, IOTracer)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1545,18 +1529,11 @@ TEST_F(TestIOManager, IOTracer)
   free(runner_buf);
   free(modifyer_buf);
 
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-//    ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(device_handle));
-    device_handle->destroy();
-  }
-  free(device_buf);
   LOG_INFO("wenqu: modify finished");
 }
 
-TEST_F(TestIOManager, ModifyIOPS)
+
+TEST_F(TestIOStruct, ModifyIOPS)
 {
   // use multi thread to do modify group_io_config
   bool is_perf_config_exist = false;
@@ -1574,11 +1551,8 @@ TEST_F(TestIOManager, ModifyIOPS)
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
 
-  ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
@@ -1588,7 +1562,6 @@ TEST_F(TestIOManager, ModifyIOPS)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1630,19 +1603,11 @@ TEST_F(TestIOManager, ModifyIOPS)
   }
   free(runner_buf);
   free(modifyer_buf);
-
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-//    ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(device_handle));
-    device_handle->destroy();
-  }
-  free(device_buf);
   LOG_INFO("wenqu: modify finished");
 }
 
-TEST_F(TestIOManager, ModifyCallbackThread)
+
+TEST_F(TestIOStruct, ModifyCallbackThread)
 {
   // use multi thread to do modify group_io_config
   bool is_perf_config_exist = false;
@@ -1660,11 +1625,8 @@ TEST_F(TestIOManager, ModifyCallbackThread)
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
 
-  ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
 
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
@@ -1674,7 +1636,6 @@ TEST_F(TestIOManager, ModifyCallbackThread)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1716,18 +1677,10 @@ TEST_F(TestIOManager, ModifyCallbackThread)
   }
   free(runner_buf);
   free(modifier_buf);
-
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-    device_handle->destroy();
-  }
-  free(device_buf);
   LOG_INFO("modify callback thread finished");
 }
 
-TEST_F(TestIOManager, ModifyGroupIO)
+TEST_F(TestIOStruct, ModifyGroupIO)
 {
   // use multi thread to do modify group_io_config
   bool is_perf_config_exist = false;
@@ -1744,11 +1697,8 @@ TEST_F(TestIOManager, ModifyGroupIO)
   ASSERT_TRUE(perf_devices.count() > 0);
   ASSERT_TRUE(perf_tenants.count() > 0);
   ASSERT_TRUE(perf_loads.count() > 0);
-  ObIOManager::get_instance().destroy();
   const int64_t memory_limit = 30L * 1024L * 1024L * 1024L; // 30GB
   const int64_t queue_depth = 100L;
-  ASSERT_SUCC(ObIOManager::get_instance().init(memory_limit, queue_depth, scheduler_config.sender_count_));
-  ASSERT_SUCC(ObIOManager::get_instance().start());
   // prepare devices and files
   char *device_buf = (char *)malloc(sizeof(ObLocalDevice) * perf_devices.count());
   ASSERT_TRUE(nullptr != device_buf);
@@ -1757,7 +1707,6 @@ TEST_F(TestIOManager, ModifyGroupIO)
     ASSERT_SUCC(prepare_file(curr_config.file_path_, curr_config.file_size_, curr_config.fd_));
     ObLocalDevice *device = new (device_buf + sizeof(ObLocalDevice) * i) ObLocalDevice;
     ASSERT_SUCC(init_device(curr_config.media_id_, *device));
-    ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(device, curr_config.async_channel_count_, curr_config.sync_channel_count_, curr_config.max_io_depth_));
     curr_config.device_handle_ = device;
   }
   // prepare tenant io manager
@@ -1805,31 +1754,25 @@ TEST_F(TestIOManager, ModifyGroupIO)
   }
   free(runner_buf);
   free(modifyer_buf);
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
-  for (int64_t i = 0; i < perf_devices.count(); ++i) {
-    ObLocalDevice *device_handle = perf_devices.at(i).device_handle_;
-//    ASSERT_SUCC(OB_IO_MANAGER.remove_device_channel(device_handle));
-    device_handle->destroy();
-  }
-  free(device_buf);
   LOG_INFO("qilu: modify group finished");
 }
 
 
-TEST_F(TestIOManager, abnormal)
+TEST_F(TestIOStruct, abnormal)
 {
   // simulate submit failure
   // simulate get_event failure
   // simulate device hang
 }
 
-#define LOG_FILE_PATH "./test_io_manager.log"
+#define LOG_FILE_PATH "./test_io_manager_v2.log"
 
 int main(int argc, char **argv)
 {
+  int ret = OB_SUCCESS;
+  LOG_INFO("io scheduler V2 test begin");
   set_memory_limit(20L * 1024L * 1024L * 1024L);
-  system("rm -rf " LOG_FILE_PATH "*");
+  GCONF._enable_tree_based_io_scheduler = true;
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   oceanbase::common::ObLogger::get_logger().set_file_name(LOG_FILE_PATH, true);
   testing::InitGoogleTest(&argc, argv);

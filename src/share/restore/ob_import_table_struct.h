@@ -25,8 +25,14 @@ namespace share
 class ObImportResult final
 {
 public:
+  enum TablesImportResult
+  {
+    SUCCESS = 0,
+    PARTIAL_SUCCESS = 1,
+    FAILED = 2,
+  };
   using Comment = common::ObFixedLengthString<OB_COMMENT_LENGTH>;
-  ObImportResult(): is_succeed_(true), comment_() {}
+  ObImportResult(): is_succeed_(true), tables_import_result_(TablesImportResult::SUCCESS), comment_() {}
   ~ObImportResult() {}
   void set_result(const bool is_succeed, const Comment &comment = "");
   int set_result(const bool is_succeed, const char *buf);
@@ -37,10 +43,15 @@ public:
   const ObString get_comment_str() const { return comment_.str(); }
   bool is_succeed() const { return is_succeed_; }
   bool is_comment_setted() const { return !comment_.is_empty(); }
+  const char *get_tables_import_result_str() const;
+  void set_tables_import_result(TablesImportResult tables_import_result) { tables_import_result_ = tables_import_result; };
+  void set_tables_import_result(const int64_t finished_table_count, const int64_t failed_table_count);
+  int set_tables_import_result(const char *str);
   ObImportResult &operator=(const ObImportResult &result);
-  TO_STRING_KV(K_(is_succeed), K_(comment));
+  TO_STRING_KV(K_(is_succeed), K_(comment), K_(tables_import_result));
 private:
   bool is_succeed_;
+  TablesImportResult tables_import_result_;
   Comment comment_;
 };
 
@@ -212,8 +223,10 @@ public:
     RECONSTRUCT_REF_CONSTRAINT = 2,
     CANCELING = 3,
     IMPORT_FINISH = 4,
+    IMPORT_FAILED = 5,
     MAX_STATUS
   };
+
   ObImportTableJobStatus(): status_(MAX_STATUS) {}
   ~ObImportTableJobStatus() {}
   ObImportTableJobStatus(const Status &status): status_(status) {}
@@ -231,7 +244,8 @@ public:
   bool operator !=(const Status &other) const { return status_ != other; }
   operator Status() const { return status_; }
   bool is_valid() const { return status_ >= INIT && status_ < MAX_STATUS; }
-  bool is_finish() const { return IMPORT_FINISH == status_; }
+  bool is_finish() const { return IMPORT_FINISH == status_ || IMPORT_FAILED == status_; }
+  bool is_import_finish() const { return IMPORT_FINISH == status_; }
 
   Status get_status() const { return status_; }
   static ObImportTableJobStatus get_next_status(const ObImportTableJobStatus &cur_status);

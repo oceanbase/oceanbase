@@ -75,10 +75,11 @@ TEST(TestObMemtableKey, test_encode_decode)
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_EQ(res_rowkey, rk.get_rowkey());
 
-  fprintf(stdout, "orig_rowkey=[%s]\n", to_cstring(rk.get_rowkey()));
-  fprintf(stdout, "res_rowkey=[%s]\n", to_cstring(res_rowkey));
-  fprintf(stdout, "orig_mtk=[%s]\n", to_cstring(mtk));
-  fprintf(stdout, "dup_mtk=[%s]\n", to_cstring(*dup_mtk));
+  ObCStringHelper helper;
+  fprintf(stdout, "orig_rowkey=[%s]\n", helper.convert(rk.get_rowkey()));
+  fprintf(stdout, "res_rowkey=[%s]\n", helper.convert(res_rowkey));
+  fprintf(stdout, "orig_mtk=[%s]\n", helper.convert(mtk));
+  fprintf(stdout, "dup_mtk=[%s]\n", helper.convert(*dup_mtk));
 }
 
 }

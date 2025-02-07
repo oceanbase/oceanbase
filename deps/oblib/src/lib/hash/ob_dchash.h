@@ -291,7 +291,8 @@ public:
     }
 #ifdef ENABLE_DEBUG_LOG
     if (tg.get_diff() > 100000) {
-      _OB_LOG(INFO, "ObDCHash insert cost too much time, click diff (%s)", to_cstring(tg));
+      ObCStringHelper helper;
+      _OB_LOG(INFO, "ObDCHash insert cost too much time, click diff (%s)", helper.convert(tg));
     }
 #endif
 
@@ -403,7 +404,9 @@ private:
       }
     }
     if (tg.get_diff() > 100000) {
-      _OB_LOG(INFO, "ObDCHash alloc and init array cost too much time, click diff (%s)", to_cstring(tg));
+      ObCStringHelper helper;
+      _OB_LOG(INFO, "ObDCHash alloc and init array cost too much time, click diff (%s)",
+          helper.convert(tg));
     }
     return array;
   }

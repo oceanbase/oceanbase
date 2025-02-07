@@ -121,6 +121,7 @@ namespace sql
     int est_window_function_part_cnt();
     virtual int compute_property() override;
     virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
+    virtual int compute_op_parallel_and_server_info() override;
   private:
     ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
 

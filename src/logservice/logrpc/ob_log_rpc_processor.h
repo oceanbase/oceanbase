@@ -120,17 +120,25 @@ DEFINE_LOGSERVICE_RPC_PROCESSOR(LogFlashbackMsgP,
                                 obrpc::ObLogServiceRpcProxy,
                                 LogFlashbackMsg,
                                 obrpc::OB_LOG_FLASHBACK_CMD);
+
+#ifdef OB_BUILD_ARBITRATION
+DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogProbeRsP,
+                                     obrpc::ObLogServiceRpcProxy,
+                                     LogProbeRsReq,
+                                     LogProbeRsResp,
+                                     obrpc::OB_LOG_PROBE_RS);
+#endif
 DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetCkptReqP,
                                      obrpc::ObLogServiceRpcProxy,
                                      LogGetCkptReq,
                                      LogGetCkptResp,
                                      obrpc::OB_LOG_GET_LS_CKPT);
 
+#ifdef OB_BUILD_SHARED_STORAGE
 DEFINE_LOGSERVICE_RPC_PROCESSOR(LogSyncBaseLSNReqP,
                                 obrpc::ObLogServiceRpcProxy,
                                 LogSyncBaseLSNReq,
                                 obrpc::OB_LOG_SYNC_BASE_LSN_REQ);
-#ifdef OB_BUILD_SHARED_STORAGE
 DEFINE_LOGSERVICE_RPC_PROCESSOR(LogAcquireRebuildInfoP,
                                 obrpc::ObLogServiceRpcProxy,
                                 LogAcquireRebuildInfoMsg,

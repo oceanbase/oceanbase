@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_
 
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
@@ -42,7 +42,7 @@ public:
 
 private:
   int evict_file_from_list_(const bool &is_meta, const int64_t expected_evict_page_num, int64_t &actual_evict_page_num);
-  int pop_file_from_list_(const bool &is_meta, ObTmpFileHandle &file_handle);
+  int pop_file_from_list_(const bool &is_meta, ObSNTmpFileHandle &file_handle);
 private:
   ObSpinLock data_list_lock_;
   TmpFileEvictionList file_data_eviction_list_;
@@ -53,4 +53,4 @@ private:
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_ELIMINATION_MANAGER_H_

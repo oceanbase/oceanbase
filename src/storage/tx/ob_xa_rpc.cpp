@@ -686,8 +686,7 @@ int ObXAHbRespP::process()
   return ret;
 }
 
-template <ObRpcPacketCode PC>
-void ObXARPCCB<PC>::statistics()
+void ob_xa_rpc_cb_statistics(uint64_t tenant_id_, int64_t start_ts_)
 {
   int ret = OB_SUCCESS;
   if (is_valid_tenant_id(tenant_id_) && 0 < start_ts_) {

@@ -35,6 +35,7 @@ using namespace storage;
 using namespace table;
 using namespace transaction;
 using namespace transaction::tablelock;
+using namespace common;
 
 ObTableLoadInstance::ObTableLoadInstance()
   : execute_ctx_(nullptr),
@@ -114,7 +115,7 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // start direct load
-    else if (OB_FAIL(start_direct_load(param, column_ids))) {
+    else if (OB_FAIL(start_direct_load(param, column_ids, tablet_ids))) {
       LOG_WARN("fail to start direct load", KR(ret));
     }
     // init succ
@@ -210,7 +211,7 @@ int ObTableLoadInstance::start_stmt(
   }
   if (OB_SUCC(ret)) {
     stmt_ctx_.is_started_ = true;
-    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_));
+    LOG_INFO("start stmt succeed", KR(ret), K(stmt_ctx_), K(param));
   }
   return ret;
 }
@@ -373,7 +374,7 @@ int ObTableLoadInstance::lock_table_in_tx()
   while (OB_SUCC(ret) && !lock_succeed) {
     if (OB_FAIL(execute_ctx_->check_status())) {
       LOG_WARN("failed to check status", KR(ret));
-    } else if (OB_FAIL(table_lock_service->lock_table(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
+    } else if (OB_FAIL(table_lock_service->lock(*tx_desc, stmt_ctx_.tx_param_, lock_table_arg))) {
       if (OB_EAGAIN == ret) {
         ob_usleep(sleep_time);
         ret = OB_SUCCESS;
@@ -451,6 +452,7 @@ int ObTableLoadInstance::start_redef_table(
     ddl_param.snapshot_version_ = start_res.snapshot_version_;
     ddl_param.data_version_ = start_res.data_format_version_;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    ddl_param.is_no_logging_ = start_res.is_no_logging_;
     LOG_INFO("start redef table succeed", K(ddl_param));
   }
   return ret;
@@ -488,7 +490,8 @@ int ObTableLoadInstance::abort_redef_table()
 }
 
 int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
-                                           const ObIArray<uint64_t> &column_ids)
+                                           const ObIArray<uint64_t> &column_ids,
+                                           const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
@@ -496,12 +499,11 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
   if (OB_UNLIKELY(nullptr != table_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table ctx is not null", KR(ret));
-  } else if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(ObTableLoadService::alloc_ctx(table_ctx))) {
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, execute_ctx_->exec_ctx_))) {
+  } else if (OB_FAIL(table_ctx->init(param, stmt_ctx_.ddl_param_, session_info, ObString::make_string(""), execute_ctx_->exec_ctx_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, execute_ctx_))) {
+  } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, column_ids, tablet_ids, execute_ctx_))) {
     LOG_WARN("fail to coordinator init ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));
@@ -509,8 +511,9 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
     table_ctx_ = table_ctx;
   }
   if (OB_FAIL(ret)) {
+    // table_ctx没有初始化成功不能赋值给table_ctx_
     if (nullptr != table_ctx) {
-      ObTableLoadService::free_ctx(table_ctx);
+      ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
   }
@@ -524,7 +527,6 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
       LOG_WARN("fail to wait begin finish", KR(ret));
     }
   }
-
   return ret;
 }
 

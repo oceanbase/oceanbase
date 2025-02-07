@@ -307,10 +307,12 @@ struct ObPCParamEqualInfo
   ObPCParamEqualInfo():use_abs_cmp_(false) {}
   inline bool operator==(const ObPCParamEqualInfo &other) const
   {
-    bool cmp_ret = first_param_idx_ == other.first_param_idx_ &&
-                   second_param_idx_ == other.second_param_idx_ &&
-                   use_abs_cmp_ == other.use_abs_cmp_;
-
+    bool cmp_ret = (first_param_idx_ == other.first_param_idx_ &&
+                    second_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_) ||
+                   (second_param_idx_ == other.first_param_idx_ &&
+                    first_param_idx_ == other.second_param_idx_ &&
+                    use_abs_cmp_ == other.use_abs_cmp_);
     return cmp_ret;
   }
 };
@@ -619,6 +621,8 @@ struct ObPlanStat
   common::ObString outline_data_;
   common::ObString hints_info_;
   bool hints_all_worked_;
+  bool is_inner_;
+  bool is_use_auto_dop_;
 
 
   ObPlanStat()
@@ -673,6 +677,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
+      first_exec_usec_(0),
+      sample_times_(0),
+      sample_exec_row_count_(0),
+      sample_exec_usec_(0),
       sessid_(0),
       plan_tmp_tbl_name_str_len_(0),
       is_use_jit_(false),
@@ -691,7 +699,9 @@ struct ObPlanStat
       block_cache_miss_cnt_(0),
       pre_cal_expr_handler_(NULL),
       plan_hash_value_(0),
-      hints_all_worked_(true)
+      hints_all_worked_(true),
+      is_inner_(false),
+      is_use_auto_dop_(false)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -747,6 +757,10 @@ struct ObPlanStat
       is_expired_(false),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
+      first_exec_usec_(rhs.first_exec_usec_),
+      sample_times_(rhs.sample_times_),
+      sample_exec_row_count_(rhs.sample_exec_row_count_),
+      sample_exec_usec_(rhs.sample_exec_usec_),
       sessid_(rhs.sessid_),
       plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
       is_use_jit_(rhs.is_use_jit_),
@@ -765,7 +779,9 @@ struct ObPlanStat
       block_cache_miss_cnt_(rhs.block_cache_miss_cnt_),
       pre_cal_expr_handler_(rhs.pre_cal_expr_handler_),
       plan_hash_value_(rhs.plan_hash_value_),
-      hints_all_worked_(rhs.hints_all_worked_)
+      hints_all_worked_(rhs.hints_all_worked_),
+      is_inner_(rhs.is_inner_),
+      is_use_auto_dop_(rhs.is_use_auto_dop_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -1025,11 +1041,18 @@ public:
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
+    enable_distributed_das_scan_(false),
+    enable_das_batch_rescan_flag_(0),
     enable_var_assign_use_das_(false),
     enable_das_keep_order_(false),
+    enable_nlj_spf_use_rich_format_(false),
     bloom_filter_ratio_(0),
     enable_hyperscan_regexp_engine_(false),
     realistic_runtime_bloom_filter_size_(false),
+    enable_parallel_das_dml_(false),
+    direct_load_allow_fallback_(false),
+    default_load_mode_(0),
+    hash_rollup_policy_(0),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1072,11 +1095,18 @@ public:
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
+  bool enable_distributed_das_scan_;
+  int64_t enable_das_batch_rescan_flag_;
   bool enable_var_assign_use_das_;
   bool enable_das_keep_order_;
+  bool enable_nlj_spf_use_rich_format_;
   int bloom_filter_ratio_;
   bool enable_hyperscan_regexp_engine_;
   bool realistic_runtime_bloom_filter_size_;
+  bool enable_parallel_das_dml_;
+  bool direct_load_allow_fallback_;
+  int default_load_mode_;
+  int hash_rollup_policy_;
 
 private:
   // current cluster config version_

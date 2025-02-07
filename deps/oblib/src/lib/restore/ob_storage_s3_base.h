@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_vslice_alloc.h"
 #include <algorithm>
 #include <iostream>
+#include "lib/utility/ob_tracepoint.h"
 
 #pragma push_macro("private")
 #undef private
@@ -70,9 +71,6 @@ static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
 static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
 static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;   // 10ms
-// max allowed idle duration for a s3 client: 12h
-static constexpr int64_t MAX_S3_CLIENT_IDLE_DURATION = 12 * 3600 * 1000 * 1000L;
-static constexpr int64_t MAX_S3_CLIENT_MAP_THRESHOLD = 500;
 
 // TODO: check length
 static constexpr int MAX_S3_REGION_LENGTH = 128;
@@ -129,6 +127,9 @@ protected:
   }
 };
 
+int set_max_s3_client_idle_duration_us(const int64_t duration_us);
+int64_t get_max_s3_client_idle_duration_us();
+
 struct ObS3Account
 {
   ObS3Account();
@@ -136,10 +137,9 @@ struct ObS3Account
   void reset();
   bool is_valid() const { return is_valid_; }
   int64_t hash() const;
-  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id));
+  TO_STRING_KV(K_(is_valid), K_(delete_mode), K_(region), K_(endpoint), K_(access_id), KP_(secret_key), K_(sts_token), K_(addressing_model));
 
   int parse_from(const char *storage_info_str, const int64_t size);
-  int set_field(const char *value, char *field, const uint32_t field_length);
 
   bool is_valid_;
   int64_t delete_mode_;
@@ -147,6 +147,8 @@ struct ObS3Account
   char endpoint_[MAX_S3_ENDPOINT_LENGTH];
   char access_id_[MAX_S3_ACCESS_ID_LENGTH];     // ak
   char secret_key_[MAX_S3_SECRET_KEY_LENGTH];   // sk
+  ObSTSToken sts_token_;
+  ObStorageAddressingModel addressing_model_;
 };
 
 class ObS3MemoryManager : public Aws::Utils::Memory::MemorySystemInterface
@@ -199,6 +201,7 @@ public:
   ObS3Client();
   virtual ~ObS3Client();
   int init(const ObS3Account &account);
+  int check_status();
   void destroy();
   bool is_stopped() const;
   bool try_stop(const int64_t timeout = STOP_S3_TIMEOUT_US);
@@ -247,7 +250,8 @@ private:
 
   template<typename RequestType, typename OutcomeType>
   int do_s3_operation_(S3OperationFunc<RequestType, OutcomeType> s3_op_func,
-                       const RequestType &request, OutcomeType &outcome);
+                       const RequestType &request, OutcomeType &outcome,
+                       const int64_t retry_timeout_us = ObObjectStorageTenantGuard::get_timeout_us());
 
 private:
   SpinRWLock lock_;
@@ -283,6 +287,55 @@ private:
   hash::ObHashMap<int64_t, ObS3Client *> s3_client_map_;
 };
 
+template <typename OutcomeType>
+class ObStorageS3RetryStrategy : public ObStorageIORetryStrategy<OutcomeType>
+{
+public:
+  using typename ObStorageIORetryStrategy<OutcomeType>::RetType;
+  using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
+  using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
+
+  ObStorageS3RetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
+      : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
+  {}
+  virtual ~ObStorageS3RetryStrategy() {}
+
+  virtual void log_error(
+      const RetType &outcome, const int64_t attempted_retries) const override
+  {
+    const char *request_id = outcome.GetResult().GetRequestId().c_str();
+    if (outcome.GetResult().GetRequestId().empty()) {
+      const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+      Aws::Http::HeaderValueCollection::const_iterator it = headers.find("x-amz-request-id");
+      if (it != headers.end()) {
+        request_id = it->second.c_str();
+      }
+    }
+    const int code = static_cast<int>(outcome.GetError().GetResponseCode());
+    const char *exception = outcome.GetError().GetExceptionName().c_str();
+    const char *err_msg = outcome.GetError().GetMessage().c_str();
+    OB_LOG_RET(WARN, OB_SUCCESS, "S3 log error",
+        K(start_time_us_), K(timeout_us_), K(attempted_retries),
+        K(request_id), K(code), K(exception), K(err_msg));
+  }
+
+protected:
+  virtual bool should_retry_impl_(
+      const RetType &outcome, const int64_t attempted_retries) const override
+  {
+    bool bret = false;
+    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+      bret = true;
+      OB_LOG(INFO, "errsim object storage IO retry", K(outcome.IsSuccess()));
+    } else if (outcome.IsSuccess()) {
+      bret = false;
+    } else if (outcome.GetError().ShouldRetry()) {
+      bret = true;
+    }
+    return bret;
+  }
+};
+
 struct S3ObjectMeta : public ObStorageObjectMetaBase
 {
 };
@@ -297,10 +350,10 @@ public:
     try {
       ret = std::mem_fn(f)(obj, std::forward<Args>(args)...);
     } catch (const std::exception &e) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught exception when doing s3 operation", K(ret), K(e.what()), KP(this));
     } catch (...) {
-      ret = OB_S3_ERROR;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "caught unknown exception when doing s3 operation", K(ret), KP(this));
     }
     return ret;
@@ -343,7 +396,6 @@ protected:
 private:
   bool is_inited_;
   ObS3Account s3_account_;
-
   friend class ObStorageS3Util;
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3Base);
 };

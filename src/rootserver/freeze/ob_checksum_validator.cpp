@@ -38,7 +38,6 @@ using namespace common;
 using namespace share;
 using namespace schema;
 using namespace compaction;
-
 ///////////////////////////////////////////////////////////////////////////////
 
 int ObChecksumValidator::init(
@@ -427,8 +426,7 @@ int ObChecksumValidator::verify_tablet_replica_checksum()
   if (OB_UNLIKELY(replica_ckm_items_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica_ckm_items_));
-  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::check_replica_checksum_items(
-    replica_ckm_items_, ls_locality_cache_.get_cs_replica_cache(), false /*is_medium_checker*/))) {
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::check_replica_checksum_items(replica_ckm_items_, false /*is_medium_checker*/))) {
     LOG_WARN("failed to verify tablet replica checksum", K(ret));
   }
   return ret;
@@ -714,7 +712,7 @@ int ObChecksumValidator::validate_index_checksum() {
   } else if (!need_validate_index_ckm_) { // no need to validate data-index checksum
     table_compaction_info_.set_index_ckm_verified();
   } else if (simple_schema_->is_index_table()) { // for index table, do not check status
-    if (OB_FAIL(handle_index_table(*simple_schema_))) {
+    if (!table_compaction_info_.is_index_ckm_verified() && OB_FAIL(handle_index_table(*simple_schema_))) {
       LOG_WARN("fail to handle index table", KR(ret), KPC_(simple_schema));
     }
   } else if (table_compaction_info_.need_check_fts_) {
@@ -756,7 +754,7 @@ int ObChecksumValidator::handle_index_table(
       index_compaction_info.set_index_ckm_verified();
     }
   } else if (fts_group_array_.need_check_fts() && index_simple_schema.is_fts_or_multivalue_index()) {
-    LOG_INFO("skip fts or multivalue index", KR(ret), K(index_simple_schema), K(index_compaction_info));
+    LOG_INFO("skip fts or multivalue index", KR(ret), K(index_table_id), K(index_compaction_info));
   } else {
       if (index_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
 #ifdef ERRSIM
@@ -901,7 +899,7 @@ int ObChecksumValidator::build_ckm_item_for_fts(const int64_t table_id,
     skip_verify = true;
   } else if (OB_FAIL(ckm_item.build(table_id, compaction_scn_, *sql_proxy_,
                                     *schema_guard_, tablet_ls_pair_cache_))) {
-    if (OB_TABLE_NOT_EXIST == ret || OB_STATE_NOT_MATCH == ret) {
+    if (OB_TABLE_NOT_EXIST == ret || OB_STATE_NOT_MATCH == ret || OB_ITEM_NOT_MATCH == ret) {
       skip_verify = true;
       ret = OB_SUCCESS;
     } else {
@@ -912,6 +910,7 @@ int ObChecksumValidator::build_ckm_item_for_fts(const int64_t table_id,
   } else {
     ckm_item.set_is_fts_index(true);
   }
+
   if (OB_FAIL(ret) || !skip_verify) {
   } else if (OB_FAIL(finish_verify_fts_ckm(table_id))) {
     LOG_WARN("failed to skip verify fts ckm", KR(ret), K(table_id));
@@ -967,7 +966,7 @@ int ObChecksumValidator::handle_fts_checksum(
         if (OB_FAIL(validate_fts_indexs(fts_group.at(idx), finish_table_ids))) {
           LOG_WARN("failed to validate doc rowkey index", KR(ret), K(idx), K(fts_group));
         } else {
-          LOG_INFO("validate index info", K(ret), K(fts_group), K(idx), K(fts_group.at(idx)));
+          LOG_INFO("validate index info", K(ret), K(fts_group), K(idx), K(fts_group.at(idx)), K(finish_table_ids));
         }
       } // for of fts_group
     } // for of fts_group_array

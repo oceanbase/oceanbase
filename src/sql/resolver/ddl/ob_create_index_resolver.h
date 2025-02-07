@@ -31,6 +31,7 @@ public:
   virtual ~ObCreateIndexResolver();
 
   virtual int resolve(const ParseNode &parse_tree);
+  ObCreateIndexStmt *get_create_index_stmt() { return static_cast<ObCreateIndexStmt*>(stmt_); };
 protected:
   int resolve_index_name_node(
       ParseNode *index_name_node,
@@ -55,10 +56,11 @@ protected:
   int check_generated_partition_column(
       share::schema::ObTableSchema &index_schema);
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column);
-  int set_table_option_to_stmt(bool is_partitioned);
+  int set_table_option_to_stmt(const uint64_t data_table_id, bool is_partitioned);
   int add_new_indexkey_for_oracle_temp_table();
   int fill_session_info_into_arg(const sql::ObSQLSessionInfo *session,
                                  ObCreateIndexStmt *crt_idx_stmt);
+  int add_based_udt_info(const share::schema::ObTableSchema &tbl_schema);
 private:
   bool is_oracle_temp_table_; //是否创建oracle的临时表上索引
   bool is_spec_block_size; //是否指定block size

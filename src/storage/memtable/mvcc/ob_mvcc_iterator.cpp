@@ -152,6 +152,11 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const SCN scn = iter->get_scn();
   const bool is_incomplete = iter->is_incomplete();
 
+  // only read elr committed data if reader has created TxCtx
+  // the reason is if the elr committed Tx finally aborted
+  // the reader can be promised also aborted
+  const bool read_elr = OB_NOT_NULL(ctx_->tx_ctx_) && is_elr;
+
   // Opt0: data is incomplete, so we need skip
   if (is_incomplete) {
     // After the success of ObMvccRow::mvcc_write_, the trans_node still cannot
@@ -161,10 +166,12 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     // from being erroneously visible.
     iter = iter->prev_;
   // Opt1: data is decided
-  } else if ((is_committed || is_aborted || (is_elr && !is_delayed_cleanout))
+  } else if ((is_committed || is_aborted || (read_elr && !is_delayed_cleanout))
       // Opt2: data is not decided while we donot need cleanout
       || (!is_delayed_cleanout
+          // read the memtable not during transfer-in
           && (!ctx_->get_tx_table_guards().src_tx_table_guard_.is_valid() ||
+              // read the transfer dest's memtable
               (memtable_ls_id_.is_valid() &&
                ctx_->get_tx_table_guards().src_tx_table_guard_.get_tx_table()->
                get_ls_id() != memtable_ls_id_))
@@ -174,7 +181,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
             (read_latest && data_tx_id == ctx_->tx_id_)))) {
     // Case 1: Cleanout can be skipped
     //         because inner tx read only care whether tx node rollbacked
-    if (is_committed || is_elr) {
+    if (is_committed || read_elr) {
       // Case 2: Data is committed, so the state is decided
       const SCN data_version = iter->trans_version_.atomic_load();
       if (read_uncommitted) {
@@ -269,14 +276,28 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
         if (OB_FAIL(try_cleanout_tx_node_(iter))) {
           TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(value_), KPC(iter));
         }
-        // NB: We rely on the row_scn and state on the tx node if we really can
-        // read from the tx node. So if the tx node is not cleanout, we must
+        // Tip1: We rely on the row_scn and state on the tx node if we really
+        // can read from the tx node. So if the tx node is not cleanout, we must
         // wait until the tx node is written back its state.
         if (0 == (++counter) % 10000
             && REACH_TIME_INTERVAL(1_s)) {
           TRANS_LOG(WARN, "waiting for the iter to be cleanout", K(ret),
                     KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
         }
+
+        // Tip2: In the transfer scenario, the tx_table and data at the src and
+        // dest are independent. Therefore, it is possible to use the src's data
+        // with the dest's tx_table. In the case, when reading from the standby,
+        // the tx_data may have already been updated while the data cannot be
+        // cleanout. Thus, it is necessary to detect and avoid such situations.
+        if (1 == counter % 10000
+            && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+          ctx_->is_standby_read_ = true;
+          TRANS_LOG(WARN, "encounter standyby read with uncleanout data", K(ret),
+                    KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
+
+        }
+
         usleep(10); // 10us
       }
       version_iter_ = iter;

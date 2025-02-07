@@ -225,19 +225,19 @@ public:
   OB_INLINE void set_block_row_range(
       const int64_t fetch_idx,
       const int64_t current,
-      const int64_t last)
+      const int64_t last,
+      const int64_t micro_row_count)
   {
     if (!is_reverse_scan_) {
       block_row_range_.set(get_data_start_id(fetch_idx) + current, get_data_start_id(fetch_idx) + last);
     } else {
-      block_row_range_.set(get_data_start_id(fetch_idx) + last, get_data_start_id(fetch_idx) + current);
+      block_row_range_.set(get_data_start_id(fetch_idx) + (micro_row_count - 1 - current), get_data_start_id(fetch_idx) + (micro_row_count - 1 - last));
     }
   }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
-  OB_INLINE int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+  OB_INLINE int init_evaluated_datums(bool &is_valid) override
   {
-    UNUSED(allocator);
-    need_convert = false;
+    is_valid = true;
     return OB_SUCCESS;
   }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(row_num), K_(interval_infos),

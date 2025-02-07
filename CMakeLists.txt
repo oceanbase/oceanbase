@@ -5,14 +5,14 @@ include(cmake/Env.cmake)
 
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.3.3.0
+    VERSION 4.3.5.1
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
 else()
   project(OceanBase
-    VERSION 4.3.3.0
+    VERSION 4.3.5.1
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
@@ -108,6 +108,13 @@ endif()
 if (OB_BUILD_PACKAGE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOB_BUILD_PACKAGE")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_BUILD_PACKAGE")
+endif()
+
+if (OB_ENABLE_MCMODEL)
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcmodel=large")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcmodel=large")
+  endif()
 endif()
 
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})

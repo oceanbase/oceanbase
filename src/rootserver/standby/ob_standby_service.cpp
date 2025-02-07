@@ -34,6 +34,8 @@
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
 #include "common/ob_tenant_data_version_mgr.h"
+#include "share/schema/ob_mview_info.h"
+#include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreSyncStatus
 
 namespace oceanbase
 {
@@ -94,7 +96,7 @@ int ObStandbyService::check_inner_stat_()
         int64_t pos = 0; \
         size_t tenant_buf_size = sizeof(tenant_info_buf) / sizeof(tenant_info_buf[0]); \
         if ((tenant_info).is_valid()) { \
-            (void)databuff_printf(tenant_info_buf, tenant_buf_size, pos, "%s", to_cstring((tenant_info))); \
+            (void)databuff_print_multi_objs(tenant_info_buf, tenant_buf_size, pos, tenant_info); \
         } else { \
             (void)databuff_printf(tenant_info_buf, tenant_buf_size, pos, "NULL"); \
         } \
@@ -461,6 +463,8 @@ int ObStandbyService::do_recover_tenant(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    LOG_WARN("failed to get tenant min version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {
@@ -1026,15 +1030,19 @@ int ObStandbyService::check_ls_restore_status_(const uint64_t tenant_id)
         int64_t ls_id = 0;
         ObString sync_status_str;
         SCN sync_scn;
+        logservice::RestoreSyncStatus restore_status;
         uint64_t sync_scn_val = OB_INVALID_SCN_VAL;
         EXTRACT_INT_FIELD_MYSQL(*result.get_result(), "LS_ID", ls_id, int64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result.get_result(), "SYNC_STATUS", sync_status_str);
         EXTRACT_UINT_FIELD_MYSQL(*result.get_result(), "SYNC_SCN", sync_scn_val, uint64_t);
 
+        restore_status = logservice::str_to_restore_sync_status(sync_status_str);
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get result", KR(ret), K(tenant_id), K(sql));
         } else if (OB_FAIL(sync_scn.convert_for_inner_table_field(sync_scn_val))) {
           LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(sync_scn_val));
+        } else if (is_valid_restore_status_for_creating_standby(restore_status)) {
+          LOG_INFO("is valid restore status", K(restore_status), K(sync_scn_val));
         } else {
           LOG_WARN("get LS restore status", KR(ret), K(tenant_id), K(ls_id), K(sync_status_str), K(sync_scn), K(sql));
           ret = OB_CREATE_STANDBY_TENANT_FAILED;

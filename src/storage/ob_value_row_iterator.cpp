@@ -156,7 +156,6 @@ ObSingleRowGetter::~ObSingleRowGetter()
 
 int ObSingleRowGetter::init_dml_access_ctx(
     ObStoreCtx &store_ctx,
-    const ObDMLBaseParam &dml_param,
     bool skip_read_lob)
 {
   int ret = OB_SUCCESS;
@@ -179,7 +178,6 @@ int ObSingleRowGetter::init_dml_access_ctx(
 }
 
 int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
-                                             const ObDMLBaseParam &dml_param,
                                              const ObIArray<uint64_t> &out_col_ids,
                                              const bool skip_read_lob)
 {
@@ -219,19 +217,17 @@ int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
     }
   }
 
-  LOG_DEBUG("init dml access param", K(ret),
-           K(out_col_ids), K(relative_table),
-           K(dml_param), K_(access_param));
+  LOG_DEBUG("init dml access param", K(ret), K(out_col_ids), K(relative_table), K_(access_param));
   return ret;
 }
 
-int ObSingleRowGetter::prepare_cached_iter_node()
+int ObSingleRowGetter::prepare_cached_iter_node(const ObDMLBaseParam &dml_param)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr != cached_iter_node_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected not null cached iter node", K(ret), KP(cached_iter_node_));
-  } else if (can_use_global_iter_pool()) {
+  } else if (can_use_global_iter_pool(dml_param)) {
     ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
     if (OB_FAIL(iter_pool->get(ITER_TYPE, cached_iter_node_))) {
       STORAGE_LOG(WARN, "Failed to get from iter pool", K(ret));
@@ -304,19 +300,19 @@ int ObSingleRowGetter::get_next_row(blocksstable::ObDatumRow *&row)
   return ret;
 }
 
-bool ObSingleRowGetter::can_use_global_iter_pool() const
+bool ObSingleRowGetter::can_use_global_iter_pool(const ObDMLBaseParam &dml_param) const
 {
   bool use_pool = false;
-  // if (access_param_.iter_param_.tablet_id_.is_inner_tablet()) {
-  // } else if (access_param_.iter_param_.has_lob_column_out_) {
-  // } else {
-  //   const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
-  //   const int64_t col_cnt = get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count();
-  //   ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
-  //   if (OB_NOT_NULL(iter_pool)) {
-  //      use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, ITER_TYPE);
-  //   }
-  // }
+  if (access_param_.iter_param_.tablet_id_.is_inner_tablet()) {
+  } else if (access_param_.iter_param_.has_lob_column_out_) {
+  } else {
+    const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
+    const int64_t col_cnt = dml_param.table_param_->get_data_table().get_read_info().get_schema_column_count();
+    ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
+    if (OB_NOT_NULL(iter_pool)) {
+       use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, ITER_TYPE);
+    }
+  }
   return use_pool;
 }
 

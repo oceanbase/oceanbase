@@ -78,8 +78,8 @@ public:
 
 #define PS_STATIC_DEFENSE_CHECK(checker, len)              \
   if (OB_FAIL(ret)) {                                      \
-  } else if (nullptr != checker                            \
-    && OB_FAIL(checker->detection(len))) {                 \
+  } else if (nullptr != (checker)                          \
+    && OB_FAIL((checker)->detection(len))) {               \
     LOG_WARN("memory access out of bounds", K(ret));       \
   } else
 
@@ -215,7 +215,8 @@ protected:
   inline void set_param(ParamStore *params) { params_ = params; }
   sql::ObSqlCtx &get_ctx() { return ctx_; }
   ObQueryRetryCtrl &get_retry_ctrl() { return retry_ctrl_; }
-  void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_stat(const sql::stmt::StmtType type, const int64_t end_time,
+                   const sql::ObSQLSessionInfo& session, const int64_t ret) const;
   int request_params(sql::ObSQLSessionInfo *session,
                      const char* &pos,
                      uint32_t ps_stmt_checksum,

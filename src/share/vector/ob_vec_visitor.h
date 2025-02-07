@@ -256,11 +256,19 @@ public:
   {
     return get<int64_t>();
   }
+  inline int64_t get_mysql_datetime() const
+  {
+    return get<int64_t>();
+  }
   inline int64_t get_timestamp() const
   {
     return get<int64_t>();
   }
   inline int32_t get_date() const
+  {
+    return get<int32_t>();
+  }
+    inline int32_t get_mysql_date() const
   {
     return get<int32_t>();
   }

@@ -66,11 +66,23 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
     } else {
       type.set_accuracy(type2.get_accuracy());
     }
-    //对于 int 和uint64的混合类型，需要提升类型至decimal
-    if ((ObUInt64Type == type1.get_type() || ObUInt64Type == type2.get_type())
-        && ObIntType == type.get_type()) {
-      type.set_type(ObNumberType);
-      type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].get_accuracy());
+    if (ob_is_integer_type(type1.get_type()) && ob_is_integer_type(type2.get_type())) {
+      if (type1.get_type_class() == type2.get_type_class()) {
+        type.set_type(MAX(type1.get_type(), type2.get_type()));
+      } else { // unsigned and signed
+        ObObjType signed_type = (type1.get_type_class() == ObIntTC) ? type1.get_type() : type2.get_type();
+        ObObjType unsigned_type = (type1.get_type_class() == ObIntTC) ? type2.get_type() : type1.get_type();
+        int signed_type_diff = static_cast<int>(signed_type) - static_cast<int>(ObTinyIntType);
+        int unsigned_type_diff = static_cast<int>(unsigned_type) - static_cast<int>(ObUTinyIntType);
+        int res_type_diff = (unsigned_type_diff >= signed_type_diff) ? (unsigned_type_diff + 1) : signed_type_diff;
+        //对于 int 和uint64的混合类型，需要提升类型至decimal
+        if (res_type_diff > (static_cast<int>(ObIntType) - static_cast<int>(ObTinyIntType))) {
+          type.set_type(ObNumberType);
+          type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].get_accuracy());
+        } else {
+          type.set_type(static_cast<ObObjType>(res_type_diff + ObTinyIntType));
+        }
+      }
     }
 
     //set scale

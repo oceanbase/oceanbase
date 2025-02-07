@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/worker.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -40,7 +41,7 @@ Threads::~Threads()
   destroy();
 }
 
-int Threads::do_set_thread_count(int64_t n_threads)
+int Threads::do_set_thread_count(int64_t n_threads, bool async_recycle)
 {
   int ret = OB_SUCCESS;
   if (!stop_) {
@@ -50,13 +51,17 @@ int Threads::do_set_thread_count(int64_t n_threads)
       }
       for (auto i = n_threads; i < n_threads_; i++) {
         auto thread = threads_[i];
-        thread->wait();
-        thread->destroy();
-        thread->~Thread();
-        ob_free(thread);
-        threads_[i] = nullptr;
+        if (!async_recycle) {
+          thread->wait();
+          thread->destroy();
+          thread->~Thread();
+          ob_free(thread);
+          threads_[i] = nullptr;
+        }
       }
-      n_threads_ = n_threads;
+      if (!async_recycle) {
+        n_threads_ = n_threads;
+      }
     } else if (n_threads == n_threads_) {
     } else {
       auto new_threads = reinterpret_cast<Thread**>(
@@ -99,7 +104,7 @@ int Threads::do_set_thread_count(int64_t n_threads)
 int Threads::set_thread_count(int64_t n_threads)
 {
   common::SpinWLockGuard g(lock_);
-  return do_set_thread_count(n_threads);
+  return do_set_thread_count(n_threads, false);
 }
 
 int Threads::inc_thread_count(int64_t inc)
@@ -115,22 +120,48 @@ int Threads::thread_recycle()
   // idle defination: not working for more than N minutes
   common::SpinWLockGuard g(lock_);
   // int target = 10; // leave at most 10 threads as cached thread
-  return do_thread_recycle();
+  return do_thread_recycle(false);
 }
 
-int Threads::do_thread_recycle()
+int Threads::try_thread_recycle()
+{
+  common::SpinWLockGuard g(lock_);
+  return do_thread_recycle(true);
+}
+
+int Threads::do_thread_recycle(bool try_mode)
 {
   int ret = OB_SUCCESS;
   int n_threads = n_threads_;
   // destroy all stopped threads
   // px threads mark itself as stopped when it is idle for more than 10 minutes.
-  for (int i = 0; i < n_threads_; i++) {
+  for (int i = 0; OB_SUCC(ret) && i < n_threads_; i++) {
     if (nullptr != threads_[i]) {
+      bool need_destroy = false;
       if (threads_[i]->has_set_stop()) {
-        destroy_thread(threads_[i]);
-        threads_[i] = nullptr;
-        n_threads--;
-        LOG_INFO("recycle one thread", "total", n_threads_, "remain", n_threads);
+        if (try_mode) {
+          if (OB_FAIL(threads_[i]->try_wait())) {
+            if (OB_EAGAIN == ret) {
+              ret = OB_SUCCESS;
+              LOG_INFO("try_wait return eagain", KP(this), "thread", threads_[i]);
+            } else {
+              LOG_ERROR("try_wait failed", K(ret), KP(this));
+            }
+          } else {
+            need_destroy = true;
+          }
+        } else {
+          threads_[i]->wait();
+          need_destroy = true;
+        }
+        if (OB_SUCC(ret) && need_destroy) {
+          threads_[i]->destroy();
+          threads_[i]->~Thread();
+          ob_free(threads_[i]);
+          threads_[i] = nullptr;
+          n_threads--;
+          LOG_INFO("recycle one thread", KP(this), "total", n_threads_, "remain", n_threads);
+        }
       }
     }
   }
@@ -197,6 +228,7 @@ int Threads::start()
 void Threads::run(int64_t idx)
 {
   ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
+  common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
   Worker::set_worker_to_thread_local(&worker);

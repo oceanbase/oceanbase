@@ -103,6 +103,12 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_user_priv_set(user_info->get_priv_set()));
   OZ (schema_guard.get_db_priv_set(tenant_id, user_info->get_user_id(), database_name, db_priv_set));
   OX (session.set_db_priv_set(db_priv_set));
+  OX (session.get_enable_role_array().reuse());
+  for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); ++i) {
+    if (user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
+      OZ (session.get_enable_role_array().push_back(user_info->get_role_id_array().at(i)));
+    }
+  }
   OX (session.set_shadow(true));
   if (OB_SUCC(ret)) {
     if (job_info.is_date_expression_job_class()) {

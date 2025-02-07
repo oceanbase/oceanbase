@@ -23,7 +23,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_expr_res_type_map.h"
@@ -458,7 +458,7 @@ int ObObj2strHelper::convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
     common::ObIAllocator &allocator) const
 {
   const ObString &wkb = obj.get_string();
-  return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, 0);
+  return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, -1 /*use default prec*/, true /*output_srid0*/);
 }
 
 int ObObj2strHelper::convert_xmltype_to_text_(

@@ -116,8 +116,12 @@ int ObCodeGenerator::detect_batch_size(
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     // TODO bin.lb: move to optimizer and more sophisticated rules
     bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    // if tenant config is invalid, use 8 as lob_rowsets_max_rows, compatible to origin behavior
+    int64_t lob_rowsets_max_rows = tenant_config.is_valid() ? tenant_config->_lob_rowsets_max_rows : 8;
     const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
-    if (OB_FAIL(opt_params->get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+    if (OB_FAIL(opt_params->get_integer_opt_param(ObOptParamHint::LOB_ROWSETS_MAX_ROWS, lob_rowsets_max_rows))) {
+      LOG_WARN("get integer opt param failed", K(ret));
+    } else if (OB_FAIL(opt_params->get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
       LOG_WARN("fail to check rowsets enabled", K(ret));
     } else if (rowsets_enabled) {
       // TODO bin.lb; check all sub plans
@@ -151,7 +155,8 @@ int ObCodeGenerator::detect_batch_size(
       OZ(expr_cg.detect_batch_size(flattened_exprs, batch_size,
                                    rowsets_max_rows,
                                    tenant_config->_rowsets_target_maxsize,
-                                   scan_cardinality));
+                                   scan_cardinality,
+                                   lob_rowsets_max_rows));
       // overwrite batch size if hint is specified
       OZ(opt_params->get_integer_opt_param(ObOptParamHint::ROWSETS_MAX_ROWS, batch_size));
 
@@ -167,7 +172,8 @@ int ObCodeGenerator::detect_batch_size(
     }
     // TODO qubin.qb: remove the tracelog when rowsets/batch_size is displayed
     // in plan
-    LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size));
+    LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size),
+              K(rowsets_enabled), K(batch_size), K(has_registered_vec_op));
   }
   return ret;
 }

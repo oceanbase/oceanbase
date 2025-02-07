@@ -18,6 +18,7 @@
 #include "observer/ob_inner_sql_result.h"
 #include "ob_pl_code_generator.h"
 #include "ob_pl_compile.h"
+#include "share/ob_version.h"
 
 namespace oceanbase
 {
@@ -310,11 +311,15 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
                                                 const ObString &binary)
 {
   int ret = OB_SUCCESS;
+  char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
 
-  if (OB_FAIL(dml.add_pk_column("database_id", database_id_))
+  if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(dml.add_pk_column("database_id", database_id_))
     || OB_FAIL(dml.add_pk_column("key_id", key_id_))
     || OB_FAIL(dml.add_pk_column("compile_db_id", compile_db_id_))
     || OB_FAIL(dml.add_pk_column("arch_type", arch_type_))
+    || OB_FAIL(dml.add_pk_column("build_version", build_version))
     || OB_FAIL(dml.add_column("merge_version", merge_version))
     || OB_FAIL(dml.add_column("dll", ObHexEscapeSqlStr(binary)))) {
     LOG_WARN("add column failed", K(ret));
@@ -322,6 +327,140 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
   return ret;
 }
 
+int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
+                                                                  ObSchemaGetterGuard &schema_guard,
+                                                                  const ObPLDependencyTable &dep_schema_objs,
+                                                                  bool& exist,
+                                                                  ObSQLSessionInfo &session_info)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  uint64_t tenant_id = MTL_ID();
+  ObSchemaChecker schema_checker;
+  ObSynonymChecker synonym_checker;
+  ObString obj_name;
+  uint64_t obj_id;
+  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
+  for (int64_t i = 0; !exist && OB_SUCC(ret) && i < dep_schema_objs.count(); ++i) {
+    obj_id = dep_schema_objs.at(i).object_id_;
+    if (dep_schema_objs.at(i).is_db_explicit() &&
+       (SYNONYM_SCHEMA != dep_schema_objs.at(i).get_schema_type())) {
+      continue;
+    }
+    if (PACKAGE_SCHEMA == dep_schema_objs.at(i).get_schema_type()
+        || UDT_SCHEMA == dep_schema_objs.at(i).get_schema_type()
+        || ROUTINE_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+      tenant_id = pl::get_tenant_id_by_object_id(dep_schema_objs.at(i).object_id_);
+    }
+    switch (dep_schema_objs.at(i).get_schema_type()) {
+      case SEQUENCE_SCHEMA:
+        {
+          const ObSequenceSchema *sequence_schema = NULL;
+          if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id,
+                                                        obj_id, sequence_schema))) {
+            LOG_WARN("failed to get sequence schema", K(ret), K(obj_id));
+          } else if (nullptr == sequence_schema) {
+            LOG_WARN("get an unexpected null sequence schema", K(obj_id));
+          } else {
+            obj_name = sequence_schema->get_sequence_name();
+          }
+          break;
+        }
+      case ROUTINE_SCHEMA:
+        {
+          const ObRoutineInfo *routine_schema = NULL;
+          if (OB_FAIL(schema_guard.get_routine_info(tenant_id,
+                                                        obj_id, routine_schema))) {
+            LOG_WARN("failed to get routine_schema", K(ret), K(obj_id));
+          } else if (nullptr == routine_schema) {
+            LOG_WARN("get an unexpected null routine_schema", K(obj_id));
+          } else {
+            obj_name = routine_schema->get_routine_name();
+          }
+          break;
+        }
+      case PACKAGE_SCHEMA:
+        {
+          const ObPackageInfo *package_info = NULL;
+          if (OB_FAIL(schema_guard.get_package_info(tenant_id,
+                                                        obj_id, package_info))) {
+            LOG_WARN("failed to get package_info", K(ret), K(obj_id));
+          } else if (nullptr == package_info) {
+            LOG_WARN("get an unexpected null package_info", K(obj_id));
+          } else {
+            obj_name = package_info->get_package_name();
+          }
+          break;
+        }
+      case UDT_SCHEMA:
+        {
+          const ObUDTTypeInfo *udt_info = NULL;
+          if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
+                                                        obj_id, udt_info))) {
+            LOG_WARN("failed to get udt_info", K(ret), K(obj_id));
+          } else if (nullptr == udt_info) {
+            LOG_WARN("get an unexpected null udt_info", K(obj_id));
+          } else {
+            obj_name = udt_info->get_type_name();
+          }
+          break;
+        }
+      case TABLE_SCHEMA:
+        {
+          const ObSimpleTableSchemaV2 *table_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+                                                          obj_id,
+                                                          table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(obj_id));
+          } else if (nullptr == table_schema) {
+            LOG_WARN("get an unexpected null table schema", K(obj_id));
+          } else {
+            obj_name = table_schema->get_table_name_str();
+          }
+          break;
+        }
+      case SYNONYM_SCHEMA:
+        {
+          const ObSimpleSynonymSchema *synonym_info = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id,
+                                                          obj_id,
+                                                          synonym_info))) {
+            LOG_WARN("failed to get synonym_info", K(ret), K(obj_id));
+          } else if (nullptr == synonym_info) {
+            LOG_WARN("get an unexpected null table schema", K(obj_id));
+          } else {
+            obj_name = synonym_info->get_synonym_name_str();
+            if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
+              continue;
+            }
+          }
+          break;
+        }
+      default:
+          break;
+    }
+    const ObSimpleSynonymSchema *synonym_info = NULL;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get obj name using dependency id", K(ret), K(obj_id));
+    } else if (OB_ISNULL(obj_name)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get null obj name using dependency id", K(ret), K(obj_id));
+    } else {
+        ObString public_obj_name;
+        bool exist_with_synonym = false;
+        uint64_t object_database_id;
+        OZ (ObResolverUtils::resolve_synonym_object_recursively(schema_checker, synonym_checker, tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                               obj_name, object_database_id, public_obj_name, exist_with_synonym));
+        if (exist_with_synonym && public_obj_name != obj_name) {
+          exist = true;
+        }
+    }
+    if (OB_ERR_UNEXPECTED != ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                           const ObPLDependencyTable &dep_schema_objs,
                                           int64_t merge_version,
@@ -387,8 +526,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else {
     uint64_t action = 0;
@@ -397,6 +536,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     ObSqlString query_inner_sql;
     ObString binary;
     int64_t merge_version;
+    char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
 
     if (OB_ISNULL(session_info)) {
       ret = OB_INVALID_ARGUMENT;
@@ -404,9 +544,12 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy must not null", K(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", K(ret));
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
-      "select merge_version, dll from OCEANBASE.%s where database_id = %ld and key_id = %ld and compile_db_id = %ld and arch_type = %d",
-                        OB_ALL_NCOMP_DLL_TNAME, database_id_, key_id_, compile_db_id_, arch_type_))) {
+      "select merge_version, dll from OCEANBASE.%s where database_id = %ld and key_id = %ld "
+      "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
+        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
@@ -426,8 +569,11 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
             if (OB_SUCC(ret)) {
               bool match = false;
               int64_t tenant_schema_version = OB_INVALID_VERSION;
-              if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, tenant_schema_version))) {
-                LOG_WARN("fail to get schema version");
+              if (OB_INVALID_ID == tenant_id_belongs_) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected tenant id", K(ret));
+              } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
+                LOG_WARN("fail to get schema version", K(ret), K(tenant_id_belongs_));
               } else if (merge_version == tenant_schema_version) {
                 match = true;
                 op = ObRoutinePersistentInfo::ObPLOperation::NONE;
@@ -449,7 +595,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                 int8_t level = 0;
                 int16_t id = 0;
                 if (OB_FAIL(decode_dll(*session_info, schema_guard, exec_env, unit_ast, unit, binary.ptr(), binary.length(), pos, level, id))) {
-                  LOG_WARN("fail to decode dll", K(ret), K(level), K(id));
+                  LOG_WARN("fail to decode dll", K(ret), K(level), K(id), K(merge_version), K(tenant_schema_version));
                 } else if (0 != level || 0 != id) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("fail to decode dll", K(ret), K(level), K(id));
@@ -495,11 +641,11 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
       ObDMLExecHelper exec(*sql_proxy, exec_tenant_id);
       int64_t affected_rows = 0;
       if (ObPLOperation::UPDATE == op) {
-        if (OB_FAIL(exec.exec_update(OB_ALL_NCOMP_DLL_TNAME, dml, affected_rows))) {
+        if (OB_FAIL(exec.exec_update(OB_ALL_NCOMP_DLL_V2_TNAME, dml, affected_rows))) {
           LOG_WARN("execute update failed", K(ret));
         }
       } else {
-        if (OB_FAIL(exec.exec_insert(OB_ALL_NCOMP_DLL_TNAME, dml, affected_rows))) {
+        if (OB_FAIL(exec.exec_insert(OB_ALL_NCOMP_DLL_V2_TNAME, dml, affected_rows))) {
           LOG_WARN("execute insert failed", K(ret));
         }
       }
@@ -527,8 +673,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
     // do nothing
@@ -572,8 +718,8 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
   ObMySQLProxy *sql_proxy = nullptr;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
-  } else if (!((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) ||
-             !((data_version >= DATA_VERSION_4_2_2_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0)) {
+  } else if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) ||
+             !((data_version >= MOCK_DATA_VERSION_4_2_5_0 && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_4_0)) {
     // do nothing
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -593,7 +739,7 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
     if (OB_INVALID_ID == key_id) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key id.", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where database_id = %ld and key_id = %ld", OB_ALL_NCOMP_DLL_TNAME, database_id, key_id))) {
+    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where database_id = %ld and key_id = %ld", OB_ALL_NCOMP_DLL_V2_TNAME, database_id, key_id))) {
       LOG_WARN("delete from __all_ncomp_dll table failed.", K(ret), K(key_id));
     } else {
       if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {

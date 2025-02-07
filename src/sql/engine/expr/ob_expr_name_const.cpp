@@ -80,7 +80,9 @@ int ObExprNameConst::calc_result_type2(ObExprResType &type,
       LOG_WARN("value is not simple const expr", K(ret), K(*value_expr));
     } else {
       const ObExprResType &orig_value_type = value_expr->get_result_type();
-      if (orig_value_type.get_type() >= ObDateTimeType && orig_value_type.get_type() <= ObTimeType) {
+      if ((orig_value_type.get_type() >= ObDateTimeType && orig_value_type.get_type() <= ObTimeType)
+            || orig_value_type.get_type() == ObMySQLDateType
+            || orig_value_type.get_type() == ObMySQLDateTimeType) {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
         LOG_WARN("value can't have prefix like TIME, DATE and TIMESTAMP", K(ret), K(orig_value_type));

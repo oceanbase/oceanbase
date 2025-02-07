@@ -122,6 +122,8 @@ public:
   sql::ExternalParams *extern_param_info_;
   bool is_udt_udf_ctx_; // indicate this context is belong to a udt udf
   bool is_sync_package_var_;
+  ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
+  ObPLEnumSetCtx *enum_set_ctx_;
 };
 
 class ObPLMockSelfArg
@@ -160,6 +162,7 @@ public:
   static const char *ANONYMOUS_ARG;
   static const char *ANONYMOUS_SQL_ARG;
   static const char *ANONYMOUS_INOUT_ARG;
+  static const uint64_t ANONYMOUS_VIRTUAL_OBJECT_ID = 1;
 
 public:
   class HandlerAnalyzer
@@ -416,6 +419,7 @@ public:
                                 common::ObIAllocator &allocator,
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
+                                pl::ObPLEnumSetCtx *enum_set_ctx,
                                 bool with_rowid = false);
   static int collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
                                              const ObTableSchema* view_schema,
@@ -521,7 +525,9 @@ public:
   static int check_composite_compatible(const ObUserDefinedType *actual_param_type,
                                         const ObUserDefinedType *formal_param_type,
                                         bool &is_compatible);
-
+  int check_anonymous_array_compatible( uint64_t actual_param_type_id,
+                                        uint64_t formal_param_type_id,
+                                        bool &is_compatible);
   static
   int resolve_nocopy_params(const share::schema::ObIRoutineInfo *routine_info,
                             sql::ObUDFInfo &udf_info);
@@ -610,7 +616,8 @@ public:
                                                  const ObString &routine_name,
                                                  const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                  const ObIRoutineInfo *&routine_info);
-  int resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
+  int resolve_dblink_type_with_synonym(const ObString &cur_db_name,
+                                       const uint64_t pkg_syn_id,
                                        const ObString &type_name,
                                        ObPLCompileUnitAST &func,
                                        ObPLDataType &pl_type);
@@ -627,6 +634,16 @@ public:
   static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
+
+  static OB_INLINE bool is_unrecoverable_error(int ret)
+  {
+    return OB_ALLOCATE_MEMORY_FAILED == ret
+             || OB_ERR_UNEXPECTED == ret
+             || OB_EXCEED_QUERY_MEM_LIMIT == ret
+             || OB_TIMEOUT == ret
+             || OB_SIZE_OVERFLOW == ret;
+  }
+
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);

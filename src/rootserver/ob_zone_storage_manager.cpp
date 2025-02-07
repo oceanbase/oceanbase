@@ -233,6 +233,10 @@ int ObZoneStorageManagerBase::add_storage(const ObString &storage_path, const Ob
     } else if (OB_UNLIKELY(storage_path.empty() || zone.is_empty() || attribute.empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(storage_path), K(zone), K(attribute));
+    } else if (ObStorageUsedType::TYPE::USED_TYPE_ALL != use_for) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("adding storage only supports used for all", KR(ret), K(use_for));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding storage only supports used for all");
     } else if (OB_FAIL(ObZoneTableOperation::get_zone_info(zone, *proxy_, zone_info))) {
       LOG_WARN("failed get zone, zone not exist", "zone", zone, KR(ret));
     } else {
@@ -568,10 +572,10 @@ int ObZoneStorageManagerBase::alter_storage_authorization(const ObBackupDest &st
         if (ObZoneStorageState::ADDED != zone_storage_infos_.at(i).state_ &&
             ObZoneStorageState::CHANGED != zone_storage_infos_.at(i).state_) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("cannot support current storage state for changing", KR(ret),
+          LOG_WARN("cannot support changing current storage state when undergoing modification", KR(ret),
                    K(zone_storage_infos_.at(i)), K(i));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "cannot support current storage state for changing, it is");
+                         "cannot support changing current storage state when undergoing modification, it is");
         } else if (OB_FAIL(target_storage_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
                                                    storage_dest.get_storage_info()))) {
           LOG_WARN("failed to set storage dest", KR(ret), K(storage_dest),
@@ -650,10 +654,10 @@ int ObZoneStorageManagerBase::alter_storage_attribute(const ObString &storage_pa
         if (ObZoneStorageState::ADDED != zone_storage_infos_.at(i).state_ &&
             ObZoneStorageState::CHANGED != zone_storage_infos_.at(i).state_) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("cannot support current storage state for changing", KR(ret),
+          LOG_WARN("cannot support changing current storage state when undergoing modification", KR(ret),
                    K(zone_storage_infos_.at(i)), K(i));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "cannot support current storage state for changing, it is");
+                         "cannot support changing current storage state when undergoing modification, it is");
         } else if (OB_FAIL(target_storage_dest.set(zone_storage_infos_.at(i).dest_attr_.path_,
                                                    zone_storage_infos_.at(i).dest_attr_.endpoint_,
                                                    zone_storage_infos_.at(i).dest_attr_.authorization_,

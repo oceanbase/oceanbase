@@ -203,6 +203,16 @@ int ob_datum_to_ob_time_with_date(const T &datum,
       }
       break;
     }
+    case ObMySQLDateTC: {
+      ob_time.mode_ |= DT_TYPE_DATE;
+      ret = ObTimeConverter::mdate_to_ob_time<true>(datum.get_mysql_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ob_time.mode_ |= DT_TYPE_DATETIME;
+      ret = ObTimeConverter::mdatetime_to_ob_time<true>(datum.get_mysql_datetime(), ob_time);
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to time with date");
@@ -318,6 +328,14 @@ int ob_datum_to_ob_time_without_date(const T &datum,
       }
       break;
     }
+    case ObMySQLDateTC: {
+      ret = ObTimeConverter::mdate_to_ob_time<true>(datum.get_mysql_date(), ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ret = ObTimeConverter::mdatetime_to_ob_time<true>(datum.get_mysql_datetime(), ob_time);
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to time without date");
@@ -326,6 +344,24 @@ int ob_datum_to_ob_time_without_date(const T &datum,
   SQL_ENG_LOG(DEBUG, "end ob_datum_to_ob_time_without_date", K(type), K(ob_time), K(ret));
   return ret;
 }
+
+int get_accuracy_from_parse_node(const ObExpr &expr, ObEvalCtx &ctx,
+                                 ObAccuracy &accuracy, ObObjType &dest_type);
+
+int common_string_double(const ObExpr &expr,
+                         const ObObjType &in_type,
+                         const ObCollationType &in_cs_type,
+                         const ObObjType &out_type,
+                         const ObString &in_str,
+                         ObDatum &res_datum);
+
+int common_string_float_wrap(const ObExpr &expr,
+                             const ObString &in_str,
+                             float &out_val);
+
+int get_cast_ret_wrap(const ObCastMode &cast_mode, int ret, int &warning);
+
+
 // 进行datetime到string的转换，除了ob_datum_cast.cpp需要使用，有的表达式也需要将结果
 // 从datetime转为string, 例如ObExprTimeStampAdd
 int common_datetime_string(const ObExpr &expr,

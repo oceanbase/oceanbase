@@ -23,17 +23,10 @@ using namespace common;
 const char ObDeviceConfigParser::USED_FOR[] = "used_for=";
 const char ObDeviceConfigParser::PATH[] = "path=";
 const char ObDeviceConfigParser::ENDPOINT[] = "endpoint=";
-const char ObDeviceConfigParser::ACCESS_MODE[] = "access_mode=";
-const char ObDeviceConfigParser::ACCESS_ID[] = "access_id=";
-const char ObDeviceConfigParser::ACCESS_KEY[] = "access_key=";
-const char ObDeviceConfigParser::ENCRYPT_KEY[] = "encrypt_key=";
+const char ObDeviceConfigParser::ACCESS_INFO[] = "access_info=";
 const char ObDeviceConfigParser::ENCRYPT_INFO[] = "encrypt_info=";
 const char ObDeviceConfigParser::EXTENSION[] = "extension=";
-const char ObDeviceConfigParser::OLD_ACCESS_MODE[] = "old_access_mode=";
-const char ObDeviceConfigParser::OLD_ACCESS_ID[] = "old_access_id=";
-
-const char ObDeviceConfigParser::OLD_ACCESS_KEY[] = "old_access_key=";
-const char ObDeviceConfigParser::OLD_ENCRYPT_KEY[] = "old_encrypt_key=";
+const char ObDeviceConfigParser::OLD_ACCESS_INFO[] = "old_access_info=";
 const char ObDeviceConfigParser::OLD_ENCRYPT_INFO[] = "old_encrypt_info=";
 const char ObDeviceConfigParser::OLD_EXTENSION[] = "old_extension=";
 const char ObDeviceConfigParser::RAM_URL[] = "ram_url=";
@@ -50,94 +43,86 @@ const char ObDeviceConfigParser::MAX_BANDWIDTH[] = "max_bandwidth=";
 const char ObDeviceConfigParser::INVALID_OP_ID[] = "-1";  // because op_id in __all_zone_storage is int(20), but in DeviceConfig is uint64_t,
                                                           // op_id is init UINT64_MAX, so when ObDeviceManifest::write_head_ to manifest op_id is change as -1
 
-int ObDeviceConfigParser::parse_one_device_config(char *opt_str, ObDeviceConfig &config)
+int ObDeviceConfigParser::parse_device_config_field(const char *buf, ObDeviceConfig &device_config)
 {
   int ret = OB_SUCCESS;
-  char *token = opt_str;
-  char *saved_ptr = NULL;
-  config.reset();
-
-  for (char *str = token; OB_SUCC(ret); str = NULL) {
-    token = ::strtok_r(str, "&", &saved_ptr);
-    if (OB_ISNULL(token)) {
-      break;
-    } else {
-      // e.g., used_for=clog
-      if (OB_SUCC(parse_common_field_(token, config.used_for_, FieldType::TYPE_CHAR_ARRAY, USED_FOR, OB_MAX_STORAGE_USED_FOR_LENGTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse used_for", KR(ret), K(token));
-      // e.g., path=oss://xxx/yyy
-      } else if (OB_SUCC(parse_common_field_(token, config.path_, FieldType::TYPE_CHAR_ARRAY, PATH, OB_MAX_BACKUP_DEST_LENGTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse path", KR(ret), K(token));
-      // e.g., endpoint=xxx
-      } else if (OB_SUCC(parse_common_field_(token, config.endpoint_, FieldType::TYPE_CHAR_ARRAY, ENDPOINT, OB_MAX_BACKUP_ENDPOINT_LENGTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse endpoint", KR(ret), K(token));
-      // e.g., access_mode=access_by_id or access_id=xxx or ram_url=xxx
-      } else if (OB_SUCC(parse_access_info_(token, config.access_info_))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse access_info", KR(ret), K(token));
-      // e.g., encrypt_info=xxx
-      } else if (OB_SUCC(parse_encrypt_info_(token, config.encrypt_info_))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse encrypt_info", KR(ret), K(token));
-      // e.g., extension=xxx
-      } else if (OB_SUCC(parse_extension_(token, config.extension_))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse extension", KR(ret), K(token));
-      // e.g., old_access_mode=access_by_id or old_access_id=xxx
-      } else if (OB_SUCC(parse_access_info_(token, config.old_access_info_, true/*is_old*/))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse access_info", KR(ret), K(token));
-      // e.g., old_encrypt_info=xxx
-      } else if (OB_SUCC(parse_encrypt_info_(token, config.old_encrypt_info_, true/*is_old*/))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse encrypt_info", KR(ret), K(token));
-      // e.g., old_extension=xxx
-      } else if (OB_SUCC(parse_extension_(token, config.old_extension_, true/*is_old*/))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse extension", KR(ret), K(token));
-      // e.g., state=ADDING
-      } else if (OB_SUCC(parse_common_field_(token, config.state_, FieldType::TYPE_CHAR_ARRAY, STATE, OB_MAX_STORAGE_STATE_LENGTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse state", KR(ret), K(token));
-      // e.g., state_info=xxx
-      } else if (OB_SUCC(parse_common_field_(token, config.state_info_, FieldType::TYPE_CHAR_ARRAY, STATE_INFO, OB_MAX_STORAGE_STATE_INFO_LENGTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse state_info", KR(ret), K(token));
-      // e.g., create_timestamp=1679579590457
-      } else if (OB_SUCC(parse_common_field_(token, &(config.create_timestamp_), FieldType::TYPE_INT, CREATE_TIMESTAMP))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse create_timestamp_", KR(ret), K(token));
-      // e.g., last_check_timestamp=1679579590457
-      } else if (OB_SUCC(parse_common_field_(token, &(config.last_check_timestamp_), FieldType::TYPE_INT, LAST_CHECK_TIMESTAMP))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse last_check_timestamp", KR(ret), K(token));
-      // e.g., op_id=2
-      } else if (OB_SUCC(parse_common_field_(token, &(config.op_id_), FieldType::TYPE_UINT, OP_ID))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse op_id", KR(ret), K(token));
-      // e.g., sub_op_id=1
-      } else if (OB_SUCC(parse_common_field_(token, &(config.sub_op_id_), FieldType::TYPE_UINT, SUB_OP_ID))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse sub_op_id", KR(ret), K(token));
-      // e.g., storage_id=10
-      } else if (OB_SUCC(parse_common_field_(token, &(config.storage_id_), FieldType::TYPE_UINT, STORAGE_ID))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse storage_id", KR(ret), K(token));
-      // e.g., iops=10000
-      } else if (OB_SUCC(parse_common_field_(token, &(config.max_iops_), FieldType::TYPE_INT, MAX_IOPS))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse iops", KR(ret), K(token));
-      // e.g., bandwidth=1000000000
-      } else if (OB_SUCC(parse_common_field_(token, &(config.max_bandwidth_), FieldType::TYPE_INT, MAX_BANDWIDTH))) {
-      } else if (OB_ITEM_NOT_MATCH != ret) {
-        LOG_WARN("fail to parse bandwidth", KR(ret), K(token));
-      } else {
-        FLOG_WARN("all item not match, unknown token", KR(ret), K(token));
-      }
-    }
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is nullptr", KR(ret));
+  // e.g., used_for=clog
+  } else if (OB_SUCC(parse_common_field_(buf, device_config.used_for_, FieldType::TYPE_CHAR_ARRAY, USED_FOR, OB_MAX_STORAGE_USED_FOR_LENGTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse used_for", KR(ret), K(buf));
+  // e.g., path=oss://xxx/yyy
+  } else if (OB_SUCC(parse_common_field_(buf, device_config.path_, FieldType::TYPE_CHAR_ARRAY, PATH, OB_MAX_BACKUP_DEST_LENGTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse path", KR(ret), K(buf));
+  // e.g., endpoint=xxx
+  } else if (OB_SUCC(parse_common_field_(buf, device_config.endpoint_, FieldType::TYPE_CHAR_ARRAY, ENDPOINT, OB_MAX_BACKUP_ENDPOINT_LENGTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse endpoint", KR(ret), K(buf));
+  // e.g., access_info=access_id=xxx&encrypt_key=xxx
+  } else if (OB_SUCC(parse_access_info_(buf, device_config.access_info_))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse access_info", KR(ret), K(buf));
+  // e.g., encrypt_info=xxx
+  } else if (OB_SUCC(parse_encrypt_info_(buf, device_config.encrypt_info_))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse encrypt_info", KR(ret), K(buf));
+  // e.g., extension=xxx
+  } else if (OB_SUCC(parse_extension_(buf, device_config.extension_))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse extension", KR(ret), K(buf));
+  // e.g., old_access_info=access_id=xxx&encrypt_key=xxx
+  } else if (OB_SUCC(parse_access_info_(buf, device_config.old_access_info_, true/*is_old*/))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse access_info", KR(ret), K(buf));
+  // e.g., old_encrypt_info=xxx
+  } else if (OB_SUCC(parse_encrypt_info_(buf, device_config.old_encrypt_info_, true/*is_old*/))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse encrypt_info", KR(ret), K(buf));
+  // e.g., old_extension=xxx
+  } else if (OB_SUCC(parse_extension_(buf, device_config.old_extension_, true/*is_old*/))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse extension", KR(ret), K(buf));
+  // e.g., state=ADDING
+  } else if (OB_SUCC(parse_common_field_(buf, device_config.state_, FieldType::TYPE_CHAR_ARRAY, STATE, OB_MAX_STORAGE_STATE_LENGTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse state", KR(ret), K(buf));
+  // e.g., state_info=xxx
+  } else if (OB_SUCC(parse_common_field_(buf, device_config.state_info_, FieldType::TYPE_CHAR_ARRAY, STATE_INFO, OB_MAX_STORAGE_STATE_INFO_LENGTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse state_info", KR(ret), K(buf));
+  // e.g., create_timestamp=1679579590457
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.create_timestamp_), FieldType::TYPE_INT, CREATE_TIMESTAMP))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse create_timestamp_", KR(ret), K(buf));
+  // e.g., last_check_timestamp=1679579590457
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.last_check_timestamp_), FieldType::TYPE_INT, LAST_CHECK_TIMESTAMP))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse last_check_timestamp", KR(ret), K(buf));
+  // e.g., op_id=2
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.op_id_), FieldType::TYPE_UINT, OP_ID))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse op_id", KR(ret), K(buf));
+  // e.g., sub_op_id=1
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.sub_op_id_), FieldType::TYPE_UINT, SUB_OP_ID))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse sub_op_id", KR(ret), K(buf));
+  // e.g., storage_id=10
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.storage_id_), FieldType::TYPE_UINT, STORAGE_ID))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse storage_id", KR(ret), K(buf));
+  // e.g., iops=10000
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.max_iops_), FieldType::TYPE_INT, MAX_IOPS))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse iops", KR(ret), K(buf));
+  // e.g., bandwidth=1000000000
+  } else if (OB_SUCC(parse_common_field_(buf, &(device_config.max_bandwidth_), FieldType::TYPE_INT, MAX_BANDWIDTH))) {
+  } else if (OB_ITEM_NOT_MATCH != ret) {
+    LOG_WARN("fail to parse bandwidth", KR(ret), K(buf));
+  } else {
+    LOG_WARN("all item not match", KR(ret), K(buf));
   }
   return ret;
 }
@@ -178,43 +163,19 @@ int ObDeviceConfigParser::parse_access_info_(
     const bool is_old)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_TDE_SECURITY
-  const char *access_info_keys[] = {ACCESS_MODE, ACCESS_ID, ACCESS_KEY, RAM_URL};
-  const char *old_access_info_keys[] = {OLD_ACCESS_MODE, OLD_ACCESS_ID, OLD_ACCESS_KEY, OLD_RAM_URL};
-#else
-  const char *access_info_keys[] = {ACCESS_MODE, ACCESS_ID, ENCRYPT_KEY, RAM_URL};
-  const char *old_access_info_keys[] = {OLD_ACCESS_MODE, OLD_ACCESS_ID, OLD_ENCRYPT_KEY, OLD_RAM_URL};
-#endif
-  STATIC_ASSERT(ARRAYSIZEOF(access_info_keys) == ARRAYSIZEOF(old_access_info_keys), "key count mismatch");
-  const int64_t key_cnt = ARRAYSIZEOF(access_info_keys);
-  const char *key_name = nullptr;
-  bool is_item_match = false;
-
-  if (OB_ISNULL(token) || OB_ISNULL(access_info)) {
+  if (OB_ISNULL(token)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(token), KP(access_info));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && (i < key_cnt); ++i) {
-    key_name = is_old ? old_access_info_keys[i] : access_info_keys[i];
-    if (0 == STRNCMP(key_name, token, STRLEN(key_name))) {
-      const int64_t access_info_len = STRLEN(access_info);
-      const char *value_str = token + STRLEN(key_name);
-      if (0 == STRLEN(value_str)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("value is empty", KR(ret), K(key_name), K(token));
-      } else if (0 == access_info_len) { // first field of access_info
-        STRCPY(access_info, token);
-      } else { // not first field of access_info, need to concat '&'
-        access_info[access_info_len] = '&';
-        STRCPY(access_info + access_info_len + 1, token);
-      }
-      is_item_match = true;
-      break;
+    LOG_WARN("invalid argument", KR(ret), KP(token));
+  } else if (is_old) { // old_access_info=xxx
+    if (OB_FAIL(parse_config_type_char_array(OLD_ACCESS_INFO, token, OB_MAX_BACKUP_AUTHORIZATION_LENGTH,
+                access_info)) && (OB_ITEM_NOT_MATCH != ret)) {
+      LOG_WARN("fail to parse_config_type_char_array", KR(ret), K(OLD_ENCRYPT_INFO), K(token));
     }
-  }
-  if (OB_SUCC(ret) && !is_item_match) {
-    ret = OB_ITEM_NOT_MATCH;
+  } else { // access_info=xxx
+    if (OB_FAIL(parse_config_type_char_array(ACCESS_INFO, token, OB_MAX_BACKUP_AUTHORIZATION_LENGTH,
+                access_info)) && (OB_ITEM_NOT_MATCH != ret)) {
+      LOG_WARN("fail to parse_config_type_char_array", KR(ret), K(ENCRYPT_INFO), K(token));
+    }
   }
   return ret;
 }
@@ -282,10 +243,6 @@ int ObDeviceConfigParser::parse_config_type_char_array(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("value str is too long", KR(ret), K(key_name), "value_len",
                STRLEN(value_str), K(max_value_len));
-    // when restart server, because manifest's head.shared_storage_info_ is '\0', so head.shared_storage_info_ must be overwritten
-    // TODO:当沧溟新的bootstrap共享存储集群的代码合入了后，这里删除掉 @xiaotao.ht
-    } else if (STRLEN(value_str) == 0) {
-      MEMSET(value, 0, max_value_len);
     } else {
       STRCPY(value, value_str);
     }
@@ -363,61 +320,6 @@ int ObDeviceConfigParser::parse_config_type_uint(
     }
   } else {
     ret = OB_ITEM_NOT_MATCH;
-  }
-  return ret;
-}
-
-// 1. convert from "access_mode=access_by_id&access_id=xxx" to
-// "old_access_mode=access_by_id&old_access_id=xxx"
-// 2. convert from "access_mode=access_by_ram_url&ram_url=xxx" to
-// "old_access_mode=access_by_ram_url&old_ram_url=xxx"
-int ObDeviceConfigParser::convert_access_info_to_old(char *access_info, char *old_access_info)
-{
-  int ret = OB_SUCCESS;
-#ifndef OB_BUILD_TDE_SECURITY
-  const char *access_info_keys[] = {ACCESS_MODE, ACCESS_ID, ACCESS_KEY, RAM_URL};
-#else
-  const char *access_info_keys[] = {ACCESS_MODE, ACCESS_ID, ENCRYPT_KEY, ACCESS_KEY, RAM_URL};
-#endif
-  const int64_t key_cnt = ARRAYSIZEOF(access_info_keys);
-  const char *key_name = nullptr;
-  char *token = access_info;
-  char *saved_ptr = NULL;
-  if (OB_ISNULL(access_info) || OB_ISNULL(old_access_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(access_info), KP(old_access_info));
-  } else {
-    for (char *str = token; OB_SUCC(ret); str = NULL) {
-      token = ::strtok_r(str, "&", &saved_ptr);
-      if (OB_ISNULL(token)) {
-        break;
-      } else {
-        bool is_item_match = false;
-        for (int64_t i = 0; OB_SUCC(ret) && (i < key_cnt); ++i) {
-          key_name = access_info_keys[i];
-          if (0 == STRNCMP(key_name, token, STRLEN(key_name))) {
-            const int64_t old_access_info_len = STRLEN(old_access_info);
-            const char *value_str = token + STRLEN(key_name);
-            if (0 == STRLEN(value_str)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("value is empty", KR(ret), K(key_name), K(token));
-            } else if (0 == old_access_info_len) { // first field of old_access_info
-              STRCPY(old_access_info, "old_");
-              STRCPY(old_access_info + STRLEN("old_"), token);
-            } else { // not first field of old_access_info, need to concat '&'
-              old_access_info[old_access_info_len] = '&';
-              STRCPY(old_access_info + old_access_info_len + 1, "old_");
-              STRCPY(old_access_info + old_access_info_len + 1 + STRLEN("old_"), token);
-            }
-            is_item_match = true;
-            break;
-          }
-        }
-        if (OB_SUCC(ret) && !is_item_match) {
-          ret = OB_ITEM_NOT_MATCH;
-        }
-      }
-    }
   }
   return ret;
 }

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
 
 #include "lib/container/ob_array.h"
 #include "lib/allocator/ob_fifo_allocator.h"
@@ -85,7 +85,9 @@ public:
   }
   INHERIT_TO_STRING_KV("ObTmpFileCircleArray", ObTmpFileCircleArray,
                        K(fd_), KP(wbp_), KP(page_buckets_),
-                       KP(bucket_array_allocator_), KP(bucket_allocator_));
+                       K(sparsify_count_), K(ignored_push_count_),
+                       KP(bucket_array_allocator_), KP(bucket_allocator_),
+                       K(max_bucket_array_capacity_));
 
 private:
   class ObTmpFilePageIndexBucket : public ObTmpFileCircleArray
@@ -137,9 +139,12 @@ private:
   common::ObArray<ObTmpFilePageIndexBucket*> *page_buckets_;
   int64_t fd_;
   ObTmpWriteBufferPool* wbp_;
+  int64_t sparsify_count_;              // to keep each page indexes in cache have same sparse interval,
+                                        // we need to ignore 2^(sparsify_count_) - 1 push() calling
+  int64_t ignored_push_count_;
   int64_t max_bucket_array_capacity_;   // only allowed to modify this var in unit test!!!
 };
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_WRITE_BUFFER_INDEX_CACHE_H_

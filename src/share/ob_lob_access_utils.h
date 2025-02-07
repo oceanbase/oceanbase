@@ -44,6 +44,16 @@ OB_INLINE bool ob_enable_lob_locator_v2()
   return bret;
 }
 
+OB_INLINE void ob_use_old_lob_tx_info_if_need(ObMemLobExternFlags &flags)
+{
+  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  // [, 4,2.4) or [4.3.0, 4.3.4)
+  if (flags.has_read_snapshot_ == 1 && (cluster_version < MOCK_CLUSTER_VERSION_4_2_4_0 || (cluster_version >= CLUSTER_VERSION_4_3_0_0 && cluster_version < CLUSTER_VERSION_4_3_4_0))) {
+    flags.has_read_snapshot_ = 0;
+    flags.has_tx_info_ = 1;
+  }
+}
+
 OB_INLINE bool ob_enable_datum_cast_debug_log()
 {
   return false;
@@ -251,7 +261,7 @@ public:
   // Notice:
   // 1. all lobs created by this class should be temp lobs
   // 2. if has_lob_header_ is false, the text result should be 4.0 compatible
-  int init(const int64_t res_len, ObIAllocator *allocator = NULL);
+  virtual int init(const int64_t res_len, ObIAllocator *allocator = NULL);
   int init(const int64_t res_len, ObString &res_buffer);
 
   // copy existent loc to result

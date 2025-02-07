@@ -844,22 +844,6 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   //OB_ASSERT(true == var_node.is_system_variable_);
 
-  // collation_connection的取值有限制，不能设置成utf16
-  if (OB_SUCC(ret)) {
-    if ((0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CLIENT)
-        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CONNECTION)
-        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_RESULTS)
-        || 0 == set_var.var_name_.case_compare(OB_SV_COLLATION_CONNECTION))
-        && (in_val.get_string().prefix_match_ci("utf16"))) {
-      ret = OB_ERR_WRONG_VALUE_FOR_VAR;
-      LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
-                     set_var.var_name_.length(),
-                     set_var.var_name_.ptr(),
-                     in_val.get_string().length(),
-                     in_val.get_string().ptr());
-    }
-  }
-
   //check readonly
   if (is_set_stmt && sys_var.is_readonly()) {
     if (sys_var.is_with_upgrade() && GCONF.in_upgrade_mode()) {
@@ -1021,7 +1005,9 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
     } else if (0 != autocommit && 1 != autocommit) {
-      const char *autocommit_str = to_cstring(autocommit);
+      char autocommit_str[32] = {'\0'};
+      int64_t pos = 0;
+      (void)databuff_printf(autocommit_str, sizeof(autocommit_str), pos, "%ld", autocommit);
       ret = OB_ERR_WRONG_VALUE_FOR_VAR;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
@@ -1380,7 +1366,12 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
     LOG_WARN("unknown variable", K(set_var.var_name_), K(ret));
   } else if ((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
              (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
-             (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id)) {
+             (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id) ||
+             (SYS_VAR_GTID_EXECUTED <= var_id && SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION >= var_id) ||
+             (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   }

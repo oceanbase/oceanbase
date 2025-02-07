@@ -33,6 +33,38 @@ class ObTableLoadSqlStatistics;
 namespace storage
 {
 class ObDirectLoadInsertTableContext;
+class ObDirectLoadRowFlag;
+
+struct ObDirectLoadInsertTableRowInfo
+{
+public:
+  ObDirectLoadInsertTableRowInfo()
+    : row_flag_(),
+      mvcc_row_flag_(),
+      trans_version_(INT64_MAX),
+      trans_id_(),
+      seq_no_(0)
+  {
+  }
+  bool is_valid() const
+  {
+    return row_flag_.is_valid() &
+           mvcc_row_flag_.is_valid() &&
+           ((INT64_MAX == trans_version_ && trans_id_.is_valid() && seq_no_ > 0) ||
+            (INT64_MAX != trans_version_ && !trans_id_.is_valid() && 0 == seq_no_));
+  }
+  TO_STRING_KV(K_(row_flag),
+               K_(mvcc_row_flag),
+               K_(trans_version),
+               K_(trans_id),
+               K_(seq_no));
+public:
+  blocksstable::ObDmlRowFlag row_flag_;
+  blocksstable::ObMultiVersionRowFlag mvcc_row_flag_;
+  int64_t trans_version_;
+  transaction::ObTransID trans_id_;
+  int64_t seq_no_;
+};
 
 struct ObDirectLoadInsertTableParam
 {
@@ -49,17 +81,21 @@ public:
                K_(reserved_parallel),
                K_(rowkey_column_count),
                K_(column_count),
-               K_(lob_column_count),
+               K_(lob_inrow_threshold),
                K_(is_partitioned_table),
                K_(is_heap_table),
                K_(is_column_store),
                K_(online_opt_stat_gather),
                K_(is_incremental),
+               K_(reuse_pk),
                K_(trans_param),
                KP_(datum_utils),
                KP_(col_descs),
                KP_(cmp_funcs),
-               K_(online_sample_percent));
+               KP_(lob_column_idxs),
+               K_(online_sample_percent),
+               K_(is_no_logging),
+               K_(max_batch_size));
 
 public:
   uint64_t table_id_; // dest_table_id
@@ -71,17 +107,21 @@ public:
   int64_t reserved_parallel_;
   int64_t rowkey_column_count_;
   int64_t column_count_; // 不包含多版本列
-  int64_t lob_column_count_;
+  int64_t lob_inrow_threshold_;
   bool is_partitioned_table_;
   bool is_heap_table_;
   bool is_column_store_;
   bool online_opt_stat_gather_;
   bool is_incremental_;
+  bool reuse_pk_;
   ObDirectLoadTransParam trans_param_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
+  const common::ObIArray<int64_t> *lob_column_idxs_; // 不包含多版本列
   double online_sample_percent_;
+  bool is_no_logging_;
+  int64_t max_batch_size_;
 };
 
 struct ObDirectLoadInsertTabletWriteCtx
@@ -121,7 +161,7 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, reserved_parallel, 0);
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, rowkey_column_count, 0);
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, column_count, 0);
-  DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, lob_column_count, 0);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, lob_inrow_threshold, -1);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_partitioned_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_heap_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_column_store, false);
@@ -131,14 +171,19 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(const blocksstable::ObStorageDatumUtils *, datum_utils, nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(const common::ObIArray<share::schema::ObColDesc> *, col_descs, nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(const blocksstable::ObStoreCmpFuncs *, cmp_funcs, nullptr);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(const common::ObIArray<int64_t> *, lob_column_idxs, nullptr);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_no_logging, false);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, max_batch_size, 0);
 
 #undef DEFINE_INSERT_TABLE_PARAM_GETTER
 
-  OB_INLINE bool has_lob_storage() const { return get_lob_column_count() > 0; }
+  OB_INLINE bool has_lob_storage() const { return nullptr != param_ ? !param_->lob_column_idxs_->empty() : false; }
   OB_INLINE bool need_rescan() const { return nullptr != param_ ? (!param_->is_incremental_ && param_->is_column_store_) : false; }
-  OB_INLINE bool need_del_lob() const { return nullptr != param_ ? (param_->is_incremental_ && param_->lob_column_count_ > 0) : false; }
+  OB_INLINE bool need_del_lob() const { return nullptr != param_ ? (param_->is_incremental_ && !param_->lob_column_idxs_->empty()) : false; }
 
   const ObLobId &get_min_insert_lob_id() const { return min_insert_lob_id_; }
+
+  OB_INLINE bool is_incremental() const {return nullptr != param_ ? param_->is_incremental_ : false;};
 
 public:
   int init(ObDirectLoadInsertTableContext *table_ctx,
@@ -150,17 +195,26 @@ public:
   int cancel();
   int get_write_ctx(ObDirectLoadInsertTabletWriteCtx &write_ctx);
   int get_lob_write_ctx(ObDirectLoadInsertTabletWriteCtx &write_ctx);
-  int init_datum_row(blocksstable::ObDatumRow &datum_row);
+  int get_row_info(ObDirectLoadInsertTableRowInfo &row_info, const bool is_delete = false);
+  int init_datum_row(blocksstable::ObDatumRow &datum_row, const bool is_delete = false);
   int init_lob_datum_row(blocksstable::ObDatumRow &datum_row, const bool is_delete = true);
   int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id);
   int close_sstable_slice(const int64_t slice_id);
-  int fill_sstable_slice(const int64_t &slice_id, ObIStoreRowIterator &iter,
+  int fill_sstable_slice(const int64_t &slice_id,
+                         ObIStoreRowIterator &iter,
                          int64_t &affected_rows);
+  int fill_sstable_slice(const int64_t &slice_id,
+                         const blocksstable::ObBatchDatumRows &datum_rows);
   int open_lob_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id);
   int close_lob_sstable_slice(const int64_t slice_id);
-  int fill_lob_sstable_slice(ObIAllocator &allocator, const int64_t &lob_slice_id,
+  int fill_lob_sstable_slice(ObIAllocator &allocator,
+                             const int64_t &lob_slice_id,
                              share::ObTabletCacheInterval &pk_interval,
                              blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice(ObIAllocator &allocator,
+                             const int64_t &lob_slice_id,
+                             share::ObTabletCacheInterval &pk_interval,
+                             blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice(const int64_t &lob_slice_id,
                                   ObIStoreRowIterator &iter,
                                   int64_t &affected_rows);
@@ -251,12 +305,24 @@ public:
   OB_INLINE ObDirectLoadType get_direct_load_type() const { return ddl_ctrl_.direct_load_type_; }
 
   OB_INLINE bool need_rescan() const { return (!param_.is_incremental_ && param_.is_column_store_); }
-  OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && param_.lob_column_count_ > 0); }
+  OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && !param_.lob_column_idxs_->empty()); }
+  OB_INLINE TABLET_CTX_MAP &get_tablet_ctx_map() { return tablet_ctx_map_; }
 
   int64_t get_sql_stat_column_count() const;
   int get_sql_statistics(table::ObTableLoadSqlStatistics *&sql_statistics);
+  // 带多版本列的完整行
   int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
                             const blocksstable::ObDatumRow &datum_row);
+  int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                            const blocksstable::ObBatchDatumRows &datum_rows);
+  // 中间过程数据
+  int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                            const blocksstable::ObDatumRow &datum_row,
+                            const ObDirectLoadRowFlag &row_flag);
+  int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                            const IVectorPtrs &vectors,
+                            const int64_t row_idx,
+                            const ObDirectLoadRowFlag &row_flag);
 
   TO_STRING_KV(K_(param), K_(ddl_ctrl));
 private:

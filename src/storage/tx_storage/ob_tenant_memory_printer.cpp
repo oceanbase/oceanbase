@@ -28,7 +28,7 @@ namespace storage
 {
 void ObPrintTenantMemoryUsage::runTimerTask()
 {
-  GMEMCONF.check_500_tenant_hold(GCONF._ignore_system_memory_over_limit_error);
+  GMEMCONF.check_limit(GCONF._ignore_system_memory_over_limit_error);
   LOG_INFO("=== Run print tenant memory usage task ===");
   ObTenantMemoryPrinter &printer = ObTenantMemoryPrinter::get_instance();
   printer.print_tenant_usage();
@@ -69,8 +69,8 @@ int ObTenantMemoryPrinter::print_tenant_usage()
   } else {
     if (OB_FAIL(databuff_printf(print_buf, BUF_LEN, pos,
                                 "=== TENANTS MEMORY INFO ===\n"
-                                "divisive_memory_used=% '15ld\n",
-                                get_divisive_mem_size()))) {
+                                "unmanaged_memory_size=% '15ld\n",
+                                get_unmanaged_memory_size()))) {
       LOG_WARN("print failed", K(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().print_tenant_usage(print_buf,
                                                                                  BUF_LEN,

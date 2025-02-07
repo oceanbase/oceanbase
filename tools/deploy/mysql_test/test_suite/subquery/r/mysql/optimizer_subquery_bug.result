@@ -268,15 +268,15 @@ select /*+no_rewrite*/ sum((select sum(a) from t1)) from t1 group by b;
 ## test correlated subquery
 EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1;
 Query Plan
-===========================================================
-|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1       |57          |
-|1 |└─SUBPLAN FILTER           |    |3       |57          |
-|2 |  ├─TABLE FULL SCAN        |t1  |3       |3           |
-|3 |  └─SCALAR GROUP BY        |    |1       |18          |
-|4 |    └─DISTRIBUTED TABLE GET|t2  |1       |18          |
-===========================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SCALAR GROUP BY    |    |1       |57          |
+|1 |└─SUBPLAN FILTER   |    |3       |57          |
+|2 |  ├─TABLE FULL SCAN|t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY|    |1       |18          |
+|4 |    └─TABLE GET    |t2  |1       |18          |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(subquery(1))]), filter(nil), rowset=16
@@ -302,15 +302,15 @@ select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from
 +------------------------------------------------------+
 EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1 group by b;
 Query Plan
-===========================================================
-|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |HASH GROUP BY              |    |3       |57          |
-|1 |└─SUBPLAN FILTER           |    |3       |57          |
-|2 |  ├─TABLE FULL SCAN        |t1  |3       |3           |
-|3 |  └─SCALAR GROUP BY        |    |1       |18          |
-|4 |    └─DISTRIBUTED TABLE GET|t2  |1       |18          |
-===========================================================
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |HASH GROUP BY      |    |3       |57          |
+|1 |└─SUBPLAN FILTER   |    |3       |57          |
+|2 |  ├─TABLE FULL SCAN|t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY|    |1       |18          |
+|4 |    └─TABLE GET    |t2  |1       |18          |
+===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(subquery(1))]), filter(nil), rowset=16
@@ -463,7 +463,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -500,7 +500,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -541,7 +541,7 @@ Query Plan
 |3 |│   └─TABLE FULL SCAN            |t3   |1       |3           |
 |4 |└─SUBPLAN SCAN                   |VIEW2|1       |6           |
 |5 |  └─HASH DISTINCT                |     |1       |6           |
-|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|6 |    └─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |7 |      ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |8 |      │ └─SCALAR GROUP BY        |     |1       |3           |
 |9 |      │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -591,7 +591,7 @@ Query Plan
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
 |0 |HASH DISTINCT                |     |1       |6           |
-|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
 |4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -628,7 +628,7 @@ Query Plan
 ============================================================
 |ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |     |1       |6           |
+|0 |NESTED-LOOP JOIN CARTESIAN |     |3       |6           |
 |1 |├─SUBPLAN SCAN             |VIEW1|1       |3           |
 |2 |│ └─SCALAR GROUP BY        |     |1       |3           |
 |3 |│   └─TABLE FULL SCAN      |t2   |3       |3           |
@@ -724,14 +724,14 @@ SELECT a IN (SELECT a FROM t1 ) FROM t1  LIMIT 1;
 ## bug 
 EXPLAIN select /*+no_rewrite*/ a, (select sum(b) from t2 where t1.a = t2.a) as agg from t1 having agg > 1 and agg < 3;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SUBPLAN FILTER           |    |1       |57          |
-|1 |├─TABLE FULL SCAN        |t1  |3       |3           |
-|2 |└─SCALAR GROUP BY        |    |1       |18          |
-|3 |  └─DISTRIBUTED TABLE GET|t2  |1       |18          |
-=========================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |57          |
+|1 |├─TABLE FULL SCAN|t1  |3       |3           |
+|2 |└─SCALAR GROUP BY|    |1       |18          |
+|3 |  └─TABLE GET    |t2  |1       |18          |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [subquery(1)]), filter([subquery(1) > cast(1, DECIMAL_INT(33, 0))], [subquery(1) < cast(3, DECIMAL_INT(33, 0))]), rowset=16
@@ -902,7 +902,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MIN(10)])
  11 - output(nil), filter(nil), rowset=256
       access(nil)
- 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(1, 0))]), rowset=256
+ 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(20, 0))]), rowset=256
       access([table100_bigint.col_char_20]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true
@@ -924,19 +924,19 @@ Query Plan
 |0 |SUBPLAN FILTER                         |               |1       |22          |
 |1 |├─SUBPLAN SCAN                         |VIEW5          |1       |20          |
 |2 |│ └─SCALAR GROUP BY                    |               |1       |20          |
-|3 |│   └─MERGE ANTI JOIN                  |               |9       |19          |
+|3 |│   └─MERGE ANTI JOIN                  |               |9       |20          |
 |4 |│     ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
-|5 |│     └─SORT                           |               |1       |16          |
-|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |16          |
-|7 |│         └─HASH RIGHT ANTI JOIN NA    |               |1       |16          |
-|8 |│           ├─SUBPLAN SCAN             |VIEW2          |1       |14          |
-|9 |│           │ └─NESTED-LOOP JOIN       |               |1       |14          |
-|10|│           │   ├─SUBPLAN SCAN         |VIEW4          |1       |7           |
-|11|│           │   │ └─SCALAR GROUP BY    |               |1       |7           |
-|12|│           │   │   └─SUBPLAN SCAN     |VIEW1          |1       |7           |
-|13|│           │   │     └─TABLE FULL SCAN|table100_bigint|1       |7           |
-|14|│           │   └─TABLE FULL SCAN      |table100_bigint|100     |4           |
-|15|│           └─TABLE FULL SCAN          |table2_bigint  |2       |3           |
+|5 |│     └─SORT                           |               |1       |17          |
+|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |17          |
+|7 |│         └─HASH ANTI JOIN NA          |               |1       |17          |
+|8 |│           ├─TABLE FULL SCAN          |table2_bigint  |2       |3           |
+|9 |│           └─SUBPLAN SCAN             |VIEW2          |3       |14          |
+|10|│             └─NESTED-LOOP JOIN       |               |3       |14          |
+|11|│               ├─SUBPLAN SCAN         |VIEW4          |1       |7           |
+|12|│               │ └─SCALAR GROUP BY    |               |1       |7           |
+|13|│               │   └─SUBPLAN SCAN     |VIEW1          |1       |7           |
+|14|│               │     └─TABLE FULL SCAN|table100_bigint|1       |7           |
+|15|│               └─TABLE FULL SCAN      |table100_bigint|100     |4           |
 |16|└─TOP-N SORT                           |               |1       |3           |
 |17|  └─TABLE RANGE SCAN                   |table10_bigint |1       |3           |
 ==================================================================================
@@ -961,29 +961,29 @@ Outputs & filters:
       access([VIEW3.pk])
   7 - output([table2_bigint.pk]), filter(nil), rowset=256
       equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW2.col_decimal_20_0]), other_conds(nil)
-  8 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
-      access([VIEW2.col_decimal_20_0])
-  9 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
-      conds([cast(coalesce(VIEW4.MIN(10), ROUND(FLOOR(62)), 1), DECIMAL_INT(22, 0)) = ROUND(ABS(ROUND(FLOOR(table100_bigint.col_decimal_20_0))))]), nl_params_(nil),
-       use_batch=false
- 10 - output([VIEW4.MIN(10)]), filter(nil), rowset=256
-      access([VIEW4.MIN(10)])
- 11 - output([T_FUN_MIN(10)]), filter(nil), rowset=256
-      group(nil), agg_func([T_FUN_MIN(10)])
- 12 - output(nil), filter(nil), rowset=256
-      access(nil)
- 13 - output([1]), filter([table100_bigint.col_char_20 > cast(CONCAT(cast(table100_bigint.col_char_20, VARCHAR(1048576)), substr('nhizctdn', 1, 20)), CHAR(100))]), rowset=256
-      access([table100_bigint.col_char_20]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
- 14 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
-      access([table100_bigint.col_decimal_20_0]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
- 15 - output([table2_bigint.pk]), filter(nil), rowset=256
+  8 - output([table2_bigint.pk]), filter(nil), rowset=256
       access([table2_bigint.pk]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
+  9 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
+      access([VIEW2.col_decimal_20_0])
+ 10 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      conds([cast(coalesce(VIEW4.MIN(10), ROUND(FLOOR(62)), 1), DECIMAL_INT(22, 0)) = ROUND(ABS(ROUND(FLOOR(table100_bigint.col_decimal_20_0))))]), nl_params_(nil),
+       use_batch=false
+ 11 - output([VIEW4.MIN(10)]), filter(nil), rowset=256
+      access([VIEW4.MIN(10)])
+ 12 - output([T_FUN_MIN(10)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MIN(10)])
+ 13 - output(nil), filter(nil), rowset=256
+      access(nil)
+ 14 - output([1]), filter([table100_bigint.col_char_20 > cast(CONCAT(cast(table100_bigint.col_char_20, VARCHAR(1048576)), substr('nhizctdn', 1, 20)), CHAR(100))]), rowset=256
+      access([table100_bigint.col_char_20]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+ 15 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      access([table100_bigint.col_decimal_20_0]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
  16 - output([table10_bigint.col_decimal_20_0]), filter(nil), rowset=256
       sort_keys([table10_bigint.col_bigint, ASC], [table10_bigint.pk, DESC]), topn(1)
  17 - output([table10_bigint.pk], [table10_bigint.col_decimal_20_0], [table10_bigint.col_bigint]), filter(nil), rowset=256
@@ -1004,14 +1004,14 @@ Query Plan
 ==================================================================
 |ID|OPERATOR               |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER         |               |1       |7           |
+|0 |SUBPLAN FILTER         |               |1       |39          |
 |1 |├─TABLE FULL SCAN      |table300_bigint|1       |3           |
-|2 |└─SUBPLAN FILTER       |               |1       |5           |
-|3 |  ├─SCALAR GROUP BY    |               |1       |3           |
-|4 |  │ └─SUBPLAN FILTER   |               |1       |3           |
+|2 |└─SUBPLAN FILTER       |               |1       |36          |
+|3 |  ├─SCALAR GROUP BY    |               |1       |18          |
+|4 |  │ └─SUBPLAN FILTER   |               |1       |18          |
 |5 |  │   ├─EXPRESSION     |               |1       |1           |
-|6 |  │   └─TABLE FULL SCAN|m(idx5)        |1       |3           |
-|7 |  └─TABLE FULL SCAN    |t(idx5)        |1       |3           |
+|6 |  │   └─TABLE FULL SCAN|m(idx5)        |1       |18          |
+|7 |  └─TABLE FULL SCAN    |t(idx5)        |1       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -1049,16 +1049,16 @@ Query Plan
 =============================================================
 |ID|OPERATOR                   |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SUBPLAN FILTER             |      |1       |9           |
+|0 |SUBPLAN FILTER             |      |1       |56          |
 |1 |├─TABLE FULL SCAN          |table1|1       |3           |
-|2 |└─SUBPLAN FILTER           |      |1       |7           |
-|3 |  ├─SCALAR GROUP BY        |      |1       |5           |
-|4 |  │ └─SUBPLAN SCAN         |VIEW1 |1       |5           |
-|5 |  │   └─SCALAR GROUP BY    |      |1       |5           |
-|6 |  │     └─SUBPLAN FILTER   |      |1       |5           |
-|7 |  │       ├─TABLE FULL SCAN|tt    |1       |3           |
-|8 |  │       └─TABLE FULL SCAN|table3|1       |3           |
-|9 |  └─TABLE FULL SCAN        |tt    |1       |3           |
+|2 |└─SUBPLAN FILTER           |      |1       |54          |
+|3 |  ├─SCALAR GROUP BY        |      |1       |36          |
+|4 |  │ └─SUBPLAN SCAN         |VIEW1 |1       |36          |
+|5 |  │   └─SCALAR GROUP BY    |      |1       |36          |
+|6 |  │     └─SUBPLAN FILTER   |      |1       |36          |
+|7 |  │       ├─TABLE FULL SCAN|tt    |1       |18          |
+|8 |  │       └─TABLE FULL SCAN|table3|1       |18          |
+|9 |  └─TABLE FULL SCAN        |tt    |1       |18          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -1084,7 +1084,7 @@ Outputs & filters:
       range_key([tt.__pk_increment]), range(MIN ; MAX)always true
   8 - output([1]), filter(nil), startup_filter([:0 != 99]), rowset=16
       access(nil), partitions(p0)
-      limit(8), offset(nil), is_index_back=false, is_global_index=false, 
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([table3.__pk_increment]), range(MIN ; MAX)always true
   9 - output([:1]), filter(nil), rowset=16
       access(nil), partitions(p0)
@@ -1105,13 +1105,13 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN FILTER       |    |1       |7           |
+|0 |SUBPLAN FILTER       |    |1       |39          |
 |1 |├─SCALAR GROUP BY    |    |1       |3           |
 |2 |│ └─TABLE FULL SCAN  |t2  |2       |3           |
-|3 |└─SCALAR GROUP BY    |    |1       |5           |
-|4 |  └─SUBPLAN FILTER   |    |1       |5           |
-|5 |    ├─TABLE FULL SCAN|t1  |1       |3           |
-|6 |    └─TABLE FULL SCAN|t1  |1       |3           |
+|3 |└─SCALAR GROUP BY    |    |1       |36          |
+|4 |  └─SUBPLAN FILTER   |    |1       |36          |
+|5 |    ├─TABLE FULL SCAN|t1  |1       |18          |
+|6 |    └─TABLE FULL SCAN|t1  |1       |18          |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -1284,21 +1284,17 @@ EXPLAIN SELECT 1 AS ref0
 FROM   t5 T11 left join t1 T12 ON T11.col_char_20 < T11.col_varchar_20_key
 WHERE  T11.pk IN (SELECT Avg(T12.col_int + 1) FROM  t6 T14);
 Query Plan
-===================================================================
-|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------
-|0 |SUBPLAN FILTER                 |        |1       |2056        |
-|1 |├─NESTED-LOOP OUTER JOIN       |        |5       |3           |
-|2 |│ ├─TABLE FULL SCAN            |T11     |5       |3           |
-|3 |│ └─MATERIAL                   |        |1       |3           |
-|4 |│   └─TABLE FULL SCAN          |T12     |1       |3           |
-|5 |└─SCALAR GROUP BY              |        |1       |13          |
-|6 |  └─PX COORDINATOR             |        |1       |13          |
-|7 |    └─EXCHANGE OUT DISTR       |:EX10000|1       |12          |
-|8 |      └─MERGE GROUP BY         |        |1       |11          |
-|9 |        └─PX PARTITION ITERATOR|        |5       |11          |
-|10|          └─TABLE FULL SCAN    |T14     |5       |11          |
-===================================================================
+===============================================================
+|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |SUBPLAN FILTER                 |    |1       |452         |
+|1 |├─NESTED-LOOP OUTER JOIN       |    |5       |3           |
+|2 |│ ├─TABLE FULL SCAN            |T11 |5       |3           |
+|3 |│ └─MATERIAL                   |    |1       |3           |
+|4 |│   └─TABLE FULL SCAN          |T12 |1       |3           |
+|5 |└─SCALAR GROUP BY              |    |1       |90          |
+|6 |  └─DISTRIBUTED TABLE FULL SCAN|T14 |5       |90          |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter([cast(T11.pk, DECIMAL(11, 0)) = subquery(1)]), rowset=16
@@ -1314,16 +1310,9 @@ Outputs & filters:
       access([T12.col_int]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([T12.pk]), range(MIN ; MAX)always true
-  5 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(:0 + 1)), DECIMAL(43, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(:0 + 1)), DECIMAL(20, 0)), DECIMAL(25, 4))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(:0 + 1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(:0 + 1))])
-  6 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
-  7 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
-      dop=1
-  8 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
+  5 - output([cast(cast(T_FUN_SUM(:0 + 1), DECIMAL_INT(74, 32)) / cast(T_FUN_COUNT(:0 + 1), DECIMAL_INT(20, 0)), DECIMAL(16, 4))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)])
-  9 - output(nil), filter(nil), rowset=16
-      force partition granule
- 10 - output(nil), filter(nil), rowset=16
+  6 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([T14.pk]), range(MIN ; MAX)always true
@@ -1346,9 +1335,9 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |SUBPLAN FILTER   |    |1       |7           |
+|0 |SUBPLAN FILTER   |    |1       |39          |
 |1 |├─TABLE FULL SCAN|t1  |2       |3           |
-|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |18          |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1395,17 +1384,17 @@ FROM
   t2
 WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
 Query Plan
-====================================================================
-|ID|OPERATOR                      |NAME      |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN              |          |1       |28          |
-|1 |├─SUBPLAN SCAN                |v1        |1       |7           |
-|2 |│ └─SUBPLAN FILTER            |          |1       |7           |
-|3 |│   ├─TABLE FULL SCAN         |t1        |1       |3           |
-|4 |│   ├─TABLE FULL SCAN         |t3        |1       |3           |
-|5 |│   └─TABLE FULL SCAN         |t3        |1       |3           |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2(idx_c1)|1       |20          |
-====================================================================
+===========================================================
+|ID|OPERATOR             |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |NESTED-LOOP JOIN     |          |1       |28          |
+|1 |├─SUBPLAN SCAN       |v1        |1       |7           |
+|2 |│ └─SUBPLAN FILTER   |          |1       |7           |
+|3 |│   ├─TABLE FULL SCAN|t1        |1       |3           |
+|4 |│   ├─TABLE FULL SCAN|t3        |1       |3           |
+|5 |│   └─TABLE FULL SCAN|t3        |1       |3           |
+|6 |└─TABLE RANGE SCAN   |t2(idx_c1)|1       |20          |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([v1.c1], [v1.s_c1], [v1.s_c2], [t2.c1], [t2.c2]), filter(nil), rowset=16

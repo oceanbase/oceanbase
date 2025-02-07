@@ -635,6 +635,26 @@ int ObBackupPath::join_table_list_meta_info_file(const share::SCN &scn)
   return ret;
 }
 
+int ObBackupPath::join_major_compaction_mview_dep_tablet_list_file()
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s",
+                                     OB_STR_MAJOR_COMPACTION_MVIEW_DEP_TABLET_LIST))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
 // param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
 // result : checkpoint -> 1678226622262333112
 int ObBackupPath::parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
@@ -1353,6 +1373,46 @@ int ObBackupPathUtil::get_locality_info_path(const share::ObBackupDest &backup_t
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/tenant_parameter.obbak
+int ObBackupPathUtil::get_tenant_parameters_info_path(const share::ObBackupDest &backup_set_dest,
+  share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_TENANT_PARAMETER_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/cluster_parameter_path/cluster_parameter.[timestamp_ms].obbak
+int ObBackupPathUtil::get_cluster_parameters_info_path(const share::ObBackupDest &backup_dest,
+    const int64_t timestamp_sec, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  int64_t time_pos = 0;
+  int64_t str_pos = 0;
+  char time_buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  char str_path[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  backup_path.reset();
+  if (timestamp_sec < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(timestamp_sec));
+  } else if (OB_FAIL(backup_path.init(backup_dest.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret));
+  } else if (OB_FAIL(share::backup_time_to_strftime(timestamp_sec, time_buff, sizeof(time_buff), time_pos, 'T'/* concat */))) {
+    LOG_WARN("failed to format time tag", K(ret), K(timestamp_sec));
+  } else if (OB_FAIL(databuff_printf(str_path, sizeof(str_path), str_pos,
+      "%.*s.%.*s", static_cast<int>(strlen(OB_STR_CLUSTER_PARAMETER_INFO)), OB_STR_CLUSTER_PARAMETER_INFO,
+      static_cast<int>(time_pos), time_buff))) {
+    LOG_WARN("failed to print str path", K(ret), K(time_buff));
+  } else if (OB_FAIL(backup_path.join(str_path, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join data", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1_retry_0/ls_meta_info.obbak
 int ObBackupPathUtil::get_ls_meta_info_backup_path(const share::ObBackupDest &backup_tenant_dest,
     const ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t turn_id, 
@@ -1571,6 +1631,17 @@ int ObBackupPathUtil::get_table_list_part_file_path(const share::ObBackupDest &b
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/major_compaction_mview_dep_tablet_list
+int ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("fail to get backup set info path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_major_compaction_mview_dep_tablet_list_file())) {
+    LOG_WARN("failed to join major compaction mview dep tablet list file", K(ret));
+  }
+  return ret;
+}
 
 int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)

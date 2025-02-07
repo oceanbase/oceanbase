@@ -41,6 +41,7 @@
 #include "share/ob_ls_id.h"
 #include "share/ob_tenant_info_proxy.h"       // ObAllTenantInfo
 #include "share/scn.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -289,6 +290,7 @@ void ObArchiveFetcher::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         fetch_cond_.timedwait(wait_interval);
       }
     }

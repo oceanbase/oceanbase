@@ -38,6 +38,7 @@
 #include "sql/ob_sql_utils.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_mview_info.h"
+#include "share/ob_fts_index_builder_util.h"
 
 
 namespace oceanbase
@@ -358,12 +359,12 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                         oceanbase::common::ObCharsetType::CHARSET_BINARY == charset_type) {
                       // observer perform no conversion of result sets or error messages, you can see more detail the official website of MySQL
                     } else {
-                      ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
-                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
+                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), ObCharset::get_system_collation(), out_str))) {
                         SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
                       }
                     }
-                    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
+                    if (OB_SUCC(ret) && OB_FAIL(databuff_print_multi_objs(
+                        buf, buf_len, pos, "'", ObHexEscapeSqlStr(out_str), "'"))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
@@ -443,7 +444,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
           SHARE_SCHEMA_LOG(WARN, "fail to print lob params", K(ret));
         }
         if (OB_SUCC(ret) && !is_oracle_mode && 0 < strlen(col->get_comment())) {
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'", to_cstring(ObHexEscapeSqlStr(col->get_comment_str()))))) {
+          if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+              " COMMENT '", ObHexEscapeSqlStr(col->get_comment_str()), "'"))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print comment", K(ret));
           }
         }
@@ -1017,7 +1019,7 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
   } else if (OB_ISNULL(table_column)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "The column schema is NULL, ", K(ret));
-  } else if (OB_FAIL(table_column->get_cascaded_column_ids(ctxcat_ids))) {
+  } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(table_schema, *table_column, ctxcat_ids))) {
     STORAGE_LOG(WARN, "Failed to get cascaded column ids", K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < ctxcat_ids.count(); ++j) {
@@ -1369,8 +1371,8 @@ int ObSchemaPrinter::print_table_definition_rowkeys(const ObTableSchema &table_s
     }
     if (OB_SUCC(ret)) {
       if (!is_oracle_mode && table_schema.get_pk_comment_str().length() > 0) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'" ,
-            to_cstring(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
+        if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos, " COMMENT '" ,
+            ObHexEscapeSqlStr(table_schema.get_pk_comment_str()), "'"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print primary key comment", K(ret), K(table_schema));
         }
       }
@@ -1707,10 +1709,12 @@ int ObSchemaPrinter::print_table_definition_comment_oracle(const ObTableSchema &
   } else if (table_schema.get_comment_str().empty()) {
     //do nothing
   } else {
-    ret = databuff_printf(buf, buf_len, pos,
-                          ";\nCOMMENT ON TABLE \"%s\" is '%s'",
+    ret = databuff_print_multi_objs(buf, buf_len, pos,
+                          ";\nCOMMENT ON TABLE \"",
                           table_schema.get_table_name(),
-                          to_cstring(ObHexEscapeSqlStr(table_schema.get_comment_str())));
+                          "\" is '",
+                          ObHexEscapeSqlStr(table_schema.get_comment_str()),
+                          "'");
   }
 
   ObColumnIterByPrevNextID iter(table_schema);
@@ -1752,8 +1756,12 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   bool is_oracle_mode = false;
   const bool is_index_tbl = table_schema.is_index_table();
   const uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t data_version = OB_INVALID_VERSION;
+
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
+  }  else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
   }
   if (OB_SUCCESS == ret && !table_schema.is_external_table() && !is_index_tbl && !is_for_table_status
       && !is_no_field_options(sql_mode) && !is_no_table_options(sql_mode)) {
@@ -1929,9 +1937,10 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     }
   }
   if (OB_SUCCESS == ret && !is_oracle_mode && !is_for_table_status && table_schema.get_comment_str().length() > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                is_index_tbl ? "COMMENT '%s' " : "COMMENT = '%s' ",
-                                to_cstring(ObHexEscapeSqlStr(table_schema.get_comment_str()))))) {
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+                                is_index_tbl ? "COMMENT '" : "COMMENT = '",
+                                ObHexEscapeSqlStr(table_schema.get_comment_str()),
+                                "' "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print comment", K(ret), K(table_schema));
     }
   }
@@ -1983,6 +1992,13 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     if (table_schema.get_duplicate_scope() == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DUPLICATE_SCOPE = 'CLUSTER' "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print table duplicate scope", K(ret));
+      } else if (data_version < DATA_VERSION_4_3_4_0) {
+        SHARE_SCHEMA_LOG(INFO, "data version is less than 4.3.4, not show duplicate_read_consistency option", K(ret));
+      } else if (ObDuplicateReadConsistencyChecker::is_valid_duplicate_read_consistency(table_schema.get_duplicate_read_consistency())) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DUPLICATE_READ_CONSISTENCY = '%s' ",
+                                    ObDuplicateReadConsistencyChecker::get_duplicate_read_consistency_str(table_schema.get_duplicate_read_consistency())))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print table duplicate read consistency", K(ret));
+        }
       }
     }
   }
@@ -1999,7 +2015,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && table_schema.get_kv_attributes().length() > 0
       && NULL != table_schema.get_kv_attributes().ptr()) {
     const ObString kv_attributes = table_schema.get_kv_attributes();
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = '%.*s' ",
                             kv_attributes.length(), kv_attributes.ptr()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
     }
@@ -2020,7 +2036,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
 
 static int print_partition_func(const ObTableSchema &table_schema,
                                 ObSqlString &disp_part_str,
-                                bool is_subpart)
+                                bool is_subpart,
+                                bool strict_compat)
 {
   int ret = OB_SUCCESS;
   const ObPartitionOption &part_opt = table_schema.get_part_option();
@@ -2031,36 +2048,70 @@ static int print_partition_func(const ObTableSchema &table_schema,
   bool is_oracle_mode = false;
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
-  } else if (table_schema.is_external_table()) {
-    if (OB_FAIL(disp_part_str.append_fmt("partition by (%.*s)",
-                                              func_expr.length(),
-                                              func_expr.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to append diaplay partition expr", K(ret), K(type_str), K(func_expr));
-    }
-  } else if (OB_FAIL(get_part_type_str(is_oracle_mode, type, type_str))) {
+  } else if (!table_schema.is_external_table()
+             && OB_FAIL(get_part_type_str(is_oracle_mode, type, type_str))) {
     SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
-  } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (part_opt.get_auto_part() && part_opt.is_range_part() && !part_opt.is_interval_part()) {
+    // is auto partition table
+    // do not support show index table auto part info, because now we do not support index auto split sql grammar
+    if (!table_schema.is_index_table()) {
+      if (!strict_compat) {
+        int64_t auto_split_size = part_opt.get_auto_part_size();
+        auto_split_size = auto_split_size >> 20; // MB
+        if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s) size (\'%ldMB\')",
+                                            type_str.length(),
+                                            type_str.ptr(),
+                                            func_expr.length(),
+                                            func_expr.ptr(),
+                                            auto_split_size))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to append display auto split expr", K(ret));
+        }
+      } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
                                               type_str.length(),
                                               type_str.ptr(),
                                               func_expr.length(),
                                               func_expr.ptr()))) {
-  } else if (is_subpart) { // sub part
-    const ObPartitionOption &sub_part_opt = table_schema.get_sub_part_option();
-    ObString sub_type_str;
-    ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
-
-    const ObString &sub_func_expr = sub_part_opt.get_part_func_expr_str();
-    if (OB_FAIL(get_part_type_str(is_oracle_mode, sub_type, sub_type_str))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
-    } else if (OB_FAIL(disp_part_str.append_fmt(" subpartition by %.*s(%.*s)",
-                                                sub_type_str.length(),
-                                                sub_type_str.ptr(),
-                                                sub_func_expr.length(),
-                                                sub_func_expr.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to append diaplay partition expr",
-          K(ret), K(sub_type_str), K(sub_func_expr));
+        SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
+      }
+    } else {
+      if (OB_ISNULL(table_schema.get_part_array())) {
+        // do not show partition func expr of auto split none partition table
+      } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
+                                              type_str.length(),
+                                              type_str.ptr(),
+                                              func_expr.length(),
+                                              func_expr.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
+      }
     }
-  } else {}
+  } else {
+    if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
+                                              type_str.length(),
+                                              type_str.ptr(),
+                                              func_expr.length(),
+                                              func_expr.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
+    } else if (is_subpart) { // sub part
+      const ObPartitionOption &sub_part_opt = table_schema.get_sub_part_option();
+      ObString sub_type_str;
+      ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
+
+      const ObString &sub_func_expr = sub_part_opt.get_part_func_expr_str();
+      if (OB_FAIL(get_part_type_str(is_oracle_mode, sub_type, sub_type_str))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
+      } else if (OB_FAIL(disp_part_str.append_fmt(" subpartition by %.*s(%.*s)",
+                                                  sub_type_str.length(),
+                                                  sub_type_str.ptr(),
+                                                  sub_func_expr.length(),
+                                                  sub_func_expr.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr",
+          K(ret), K(sub_type_str), K(sub_func_expr));
+      }
+    } else {}
+  }
 
   return ret;
 }
@@ -2163,7 +2214,7 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
                                                               const ObTimeZoneInfo *tz_info) const
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_partitioned_table()
+  if ((table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
       && !table_schema.is_index_local_storage()
       && !table_schema.is_oracle_tmp_table()) {
     ObString disp_part_fun_expr_str;
@@ -2178,7 +2229,7 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
     }
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
-    } else if (OB_FAIL(print_partition_func(table_schema, disp_part_str, is_subpart))) {
+    } else if (OB_FAIL(print_partition_func(table_schema, disp_part_str, is_subpart, strict_compat_))) {
       SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
     } else if (FALSE_IT(disp_part_fun_expr_str = disp_part_str.string())) {
       // will not reach here
@@ -2447,9 +2498,10 @@ int ObSchemaPrinter::print_table_definition_table_options(
   }
 
   if (OB_SUCC(ret) && !is_for_table_status && table_schema.get_comment_str().length() > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                is_index_tbl ? "COMMENT '%s' " : "COMMENT = '%s' ",
-                                to_cstring(ObHexEscapeSqlStr(table_schema.get_comment()))))) {
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+                                is_index_tbl ? "COMMENT '" : "COMMENT = '",
+                                ObHexEscapeSqlStr(table_schema.get_comment()),
+                                "' "))) {
       OB_LOG(WARN, "fail to print comment", K(ret), K(table_schema));
     }
   }
@@ -2502,7 +2554,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
     const ObString kv_attributes = table_schema.get_kv_attributes();
     if (kv_attributes.empty()) {
       // do nothing
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = '%.*s' ",
          kv_attributes.length(), kv_attributes.ptr()))) {
       OB_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
     }
@@ -3063,6 +3115,11 @@ int ObSchemaPrinter::print_materialized_view_definition(
                                                                   agent_mode,
                                                                   tz_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print partition options", KR(ret), K(*container_table_schema));
+      } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
+                                                              buf,
+                                                              buf_len,
+                                                              pos))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
       } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id, table_id, mview_info))) {
         SHARE_SCHEMA_LOG(WARN, "fail to fecth materialized view info", KR(ret), K(table_id));
       } else if (!strict_compat_) {
@@ -3128,11 +3185,6 @@ int ObSchemaPrinter::print_materialized_view_definition(
                   && OB_FAIL(databuff_printf(buf, buf_len, pos,
                                             "ENABLE ON QUERY COMPUTATION "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print materialized view on query computation", KR(ret));
-        } else if (OB_FAIL(print_table_definition_column_group(*container_table_schema,
-                                                              buf,
-                                                              buf_len,
-                                                              pos))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print materialized view column group", KR(ret), K(*container_table_schema));
         }
       }
     }
@@ -3607,6 +3659,9 @@ int ObSchemaPrinter::print_range_partition_elements(const ObPartitionSchema *&sc
     SHARE_SCHEMA_LOG(WARN, "schema is null", K(ret));
   } else if (OB_FAIL(schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), KPC(schema));
+  } else if (schema->get_part_option().get_auto_part()
+    && OB_ISNULL(schema->get_part_array())) {
+    // in auto partition mode, part array is empty is possible. here no need to print partition element
   } else {
     ObPartition **part_array = schema->get_part_array();
     if (OB_ISNULL(part_array)) {
@@ -5639,12 +5694,12 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   const ObString &format_string = table_schema.get_external_file_format();
   const ObString &properties_string = table_schema.get_external_properties();
   const bool user_specified = table_schema.is_user_specified_partition_for_external_table();
-  bool is_odps_table = false;
-  if (OB_FAIL(ObSQLUtils::is_external_odps_table(properties_string, allocator, is_odps_table))) {
-    LOG_WARN("failed check is odps table or not", K(ret));
-  } else if (!is_odps_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps table or not", K(ret));
+  } else if (!is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
-  } else if (!is_odps_table && !pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
+  } else if (!is_odps_external_table && !pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nAUTO_REFRESH = %s", table_schema.get_external_table_auto_refresh() == 0 ? "OFF" :
                                                                                 table_schema.get_external_table_auto_refresh() == 1 ? "IMMEDIATE" : "INTERVAL"))) {
@@ -5658,19 +5713,19 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   // 2. print file format
   if (OB_SUCC(ret)) {
     ObExternalFileFormat format;
-    const ObString &format_or_properties = is_odps_table ?  properties_string : format_string;
-    if (format_or_properties.empty()) {
+    const ObString &table_format_or_properties = is_odps_external_table ?  properties_string : format_string;
+    if (table_format_or_properties.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      SHARE_SCHEMA_LOG(WARN, "format_or_properties is empty", K(ret));
-    } else if (OB_FAIL(format.load_from_string(format_or_properties, allocator))) {
+      SHARE_SCHEMA_LOG(WARN, "table_format_or_properties is empty", K(ret));
+    } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
       SHARE_SCHEMA_LOG(WARN, "fail to load from json string", K(ret));
     } else if (!(format.format_type_ > ObExternalFileFormat::INVALID_FORMAT
                  && format.format_type_ < ObExternalFileFormat::MAX_FORMAT)) {
       ret = OB_NOT_SUPPORTED;
       SHARE_SCHEMA_LOG(WARN, "unsupported to print file format", K(ret), K(format.format_type_));
-    } else if (!is_odps_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
+    } else if (!is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
-    } else if (is_odps_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES (\n"))) {
+    } else if (is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES (\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
@@ -5678,6 +5733,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       const ObCSVGeneralFormat &csv = format.csv_format_;
       const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
+      const char *compression_name = compression_algorithm_to_string(csv.compression_algorithm_);
       if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
@@ -5707,29 +5763,44 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(0 != csv.null_if_.count() &&
                         databuff_printf(buf, buf_len, pos, "\n  NULL_IF = (%.*s),", origin_format.origin_null_if_str_.length(), origin_format.origin_null_if_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
+      } else if (ObCSVGeneralFormat::ObCSVCompression::NONE != csv.compression_algorithm_ &&
+                 OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COMPRESSION = %.*s,",
+                                         static_cast<int>(STRLEN(compression_name)), compression_name))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print compression", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;
       ObString scret_str("********");
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[0], odps.access_type_.length(), odps.access_type_.ptr()))) {
+      int64_t option_names_idx = 0;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.access_type_.length(), odps.access_type_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (!odps.access_id_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[1], scret_str.length(), scret_str.ptr()))) {
+      } else if (!odps.access_id_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], scret_str.length(), scret_str.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (!odps.access_key_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[2], scret_str.length(), scret_str.ptr()))) {
+      } else if (!odps.access_key_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], scret_str.length(), scret_str.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (!odps.sts_token_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[3], scret_str.length(), scret_str.ptr()))) {
+      } else if (!odps.sts_token_.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], scret_str.length(), scret_str.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[4], odps.endpoint_.length(), odps.endpoint_.ptr()))) {
+      } else if (odps.sts_token_.empty()) {
+        option_names_idx++;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.endpoint_.length(), odps.endpoint_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[5], odps.project_.length(), odps.project_.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.tunnel_endpoint_.length(), odps.tunnel_endpoint_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[6], odps.schema_.length(), odps.schema_.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.project_.length(), odps.project_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[7], odps.table_.length(), odps.table_.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.schema_.length(), odps.schema_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[8], odps.quota_.length(), odps.quota_.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.table_.length(), odps.table_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[9], odps.compression_code_.length(), odps.compression_code_.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.quota_.length(), odps.quota_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.compression_code_.length(), odps.compression_code_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = %s,", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.collect_statistics_on_create_ ? "TRUE" : "FALSE"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+      } else if (databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], odps.region_.length(), odps.region_.ptr())) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
       }
     }

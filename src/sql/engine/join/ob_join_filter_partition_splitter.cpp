@@ -20,6 +20,7 @@
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
 #include "sql/engine/join/ob_join_filter_op.h"
+#include "src/sql/engine/ob_sql_mem_mgr_processor.h"
 
 
 namespace oceanbase
@@ -63,7 +64,7 @@ private:
 ObJoinFilterPartitionSplitter::~ObJoinFilterPartitionSplitter()
 {
   if (partition_array_.count() > 0) {
-    for (int64_t i = 0; i < part_count_; ++i) {
+    for (int64_t i = 0; i < partition_array_.count(); ++i) {
       partition_array_.at(i)->~ObPartitionStore();
     }
     // all ObPartitionStore are alloc at once, so free the first
@@ -176,8 +177,8 @@ int ObJoinFilterPartitionSplitter::create_partitions(ObIOEventObserver *io_event
   } else {
     char *mem = nullptr;
     // create partition ptr array
-    if (OB_FAIL(partition_array_.prepare_allocate(part_count_))) {
-      LOG_WARN("failed to prepare_allocate partition_array_");
+    if (OB_FAIL(partition_array_.init(part_count_))) {
+      LOG_WARN("failed to init partition_array_");
     } else {
       // create real partition
       char *mem = static_cast<char *>(malloc_alloc_->alloc(sizeof(ObPartitionStore) * part_count_));
@@ -186,14 +187,17 @@ int ObJoinFilterPartitionSplitter::create_partitions(ObIOEventObserver *io_event
         LOG_WARN("fail to alloc mem for hj part");
       }
       for (int64_t i = 0; i < part_count_ && OB_SUCC(ret); i++) {
-        partition_array_.at(i) =
+        ObPartitionStore *part_store =
             new (mem + sizeof(ObPartitionStore) * i) ObPartitionStore(tenant_id_, *malloc_alloc_);
-        if (OB_FAIL(partition_array_.at(i)->init(*exprs, max_batch_size_, compress_type_, row_extra_size_))) {
+        if (OB_FAIL(partition_array_.push_back(part_store))) {
+          LOG_WARN("failed to push_back part_store");
+        } else if (OB_FAIL(part_store->init(*exprs, max_batch_size_, compress_type_,
+                                            row_extra_size_))) {
           LOG_WARN("failed to init partition");
         } else {
-          partition_array_.at(i)->get_row_store().set_dir_id(sql_mem_processor_->get_dir_id());
-          partition_array_.at(i)->get_row_store().set_io_event_observer(io_event_observer);
-          partition_array_.at(i)->get_row_store().set_callback(sql_mem_processor_);
+          part_store->get_row_store().set_dir_id(sql_mem_processor_->get_dir_id());
+          part_store->get_row_store().set_io_event_observer(io_event_observer);
+          part_store->get_row_store().set_callback(sql_mem_processor_);
         }
       }
     }

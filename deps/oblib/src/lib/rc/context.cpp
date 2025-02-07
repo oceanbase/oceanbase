@@ -56,5 +56,14 @@ MemoryContext &MemoryContext::root()
   return root;
 }
 
+int64_t MemoryContext::tree_mem_hold()
+{
+  int64_t total = 0;
+  if (OB_LIKELY(ref_context_ != nullptr)) {
+    total = ref_context_->tree_mem_hold();
+  }
+  return total;
+}
+
 } // end of namespace lib
 } // end of namespace oceanbase

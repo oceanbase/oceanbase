@@ -457,6 +457,7 @@ int ObExprGeneratorImpl::visit(ObPlQueryRefRawExpr &expr)
       OX (pl_subquery->set_stmt_type(expr.get_stmt_type()));
       OZ (pl_subquery->deep_copy_route_sql(expr.get_route_sql()));
       OX (pl_subquery->set_result_type(expr.get_subquery_result_type()));
+      OZ (pl_subquery->set_type_info(expr.get_enum_set_values()));
       if (OB_SUCC(ret) && expr.is_ignore_fail()) {
         pl_subquery->set_ignore_fail();
       }
@@ -1780,6 +1781,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || T_FUN_PL_AGG_UDF == expr.get_expr_type()
         || T_FUN_HYBRID_HIST == expr.get_expr_type()
         || T_FUN_ORA_XMLAGG == expr.get_expr_type()
+        || T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type()
         || (T_FUN_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)) {
       ObExprOperator *op = NULL;
@@ -1816,7 +1818,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                T_FUN_KEEP_COUNT == expr.get_expr_type() ||
                T_FUN_KEEP_WM_CONCAT == expr.get_expr_type() ||
                T_FUN_HYBRID_HIST == expr.get_expr_type() ||
-               T_FUN_ORA_XMLAGG == expr.get_expr_type())) {
+               T_FUN_ORA_XMLAGG == expr.get_expr_type() ||
+               T_FUNC_SYS_ARRAY_AGG == expr.get_expr_type())) {
             ObConstRawExpr *sep_expr = static_cast<ObConstRawExpr *>(expr.get_separator_param_expr());
             // set separator
             if (NULL != sep_expr) {

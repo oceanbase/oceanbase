@@ -91,7 +91,7 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
   return ret;
 }
 
-  #define FILL_ELEM(ca, dst, offset) \
+  #define FILL_ELEM(ca, dst, offset, allocator) \
   do { \
     const ObObj *elem = NULL; \
     int64_t i = 0; \
@@ -108,10 +108,10 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
           if (OB_NOT_NULL(elem)) { \
             if (elem->is_pl_extend() &&  \
                 elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
-              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset], true))) { \
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(allocator, *elem, dst[cnt + offset], true))) { \
                 LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
               } \
-            } else if (OB_FAIL(deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset]))) { \
+            } else if (OB_FAIL(deep_copy_obj(allocator, *elem, dst[cnt + offset]))) { \
               LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
             } \
             if (OB_SUCC(ret)) {  \
@@ -209,7 +209,7 @@ int ObExprMultiSet::calc_ms_impl(common::ObIAllocator *coll_allocator,
 }
 
 int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
-                                   ObObj *objs,
+                                   ObObj *input_data,
                                    int64_t count,
                                    ObObj *&data_arr,
                                    int64_t &elem_count)
@@ -217,17 +217,26 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
   int ret = OB_SUCCESS;
   LocalNTSHashMap dmap_c;
   int res_cnt = 0;
-  if (0 == count) {
+  int64_t real_count = 0;
+  ObObj objs[count];
+  for (int64_t i = 0; i < count; ++i) {
+    // skip deleted element
+    if (ObMaxType != input_data[i].get_type()) {
+      objs[real_count] = input_data[i];
+      real_count += 1;
+    }
+  }
+  if (0 == real_count) {
     // do nothing
   } else if (OB_ISNULL(objs)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("objs array is null", K(count));
+    LOG_WARN("objs array is null", K(count), K(real_count));
   } else {
-    if (OB_FAIL(dmap_c.create(count, ObModIds::OB_SQL_HASH_SET))) {
-      LOG_WARN("fail create hash map", K(count), K(ret));
+    if (OB_FAIL(dmap_c.create(real_count, ObModIds::OB_SQL_HASH_SET))) {
+      LOG_WARN("fail create hash map", K(real_count), K(ret));
     } else {
       const ObObj *elem = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < real_count; ++i) {
         elem = objs + i;
         ret = dmap_c.set_refactored(*elem, i);
         if (OB_HASH_EXIST == ret) {
@@ -277,8 +286,9 @@ int ObExprMultiSet::calc_ms_distinct_impl(common::ObIAllocator *coll_allocator,
                                    ObMultiSetModifier ms_modifier)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_alloc;
   ObObj *tmp_res = NULL;
-  if (OB_FAIL(calc_ms_all_impl(coll_allocator, c1, c2, tmp_res,
+  if (OB_FAIL(calc_ms_all_impl(&tmp_alloc, c1, c2, tmp_res,
                                elem_count, false, ms_type, ms_modifier))) {
     LOG_WARN("calc intersect or except failed.", K(ret));
   } else if (OB_FAIL(calc_ms_one_distinct(coll_allocator,
@@ -287,10 +297,11 @@ int ObExprMultiSet::calc_ms_distinct_impl(common::ObIAllocator *coll_allocator,
                                           data_arr,
                                           elem_count))) {
     LOG_WARN("calc distinct failed.", K(ret));
-  } else {
-    if (OB_NOT_NULL(tmp_res) && OB_NOT_NULL(data_arr) && tmp_res != data_arr) {
-      coll_allocator->free(tmp_res);
-      tmp_res = NULL;
+  }
+  for (int64_t i = 0; i < elem_count; ++i) {
+    if (tmp_res[i].is_pl_extend() &&
+        tmp_res[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+      pl::ObUserDefinedType::destruct_obj(tmp_res[i], nullptr);
     }
   }
   return ret;
@@ -318,7 +329,7 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
     } else if (MULTISET_TYPE_EXCEPT == ms_type) {
       data_arr =
        static_cast<ObObj *>(coll_allocator->alloc(c1->get_actual_count() * sizeof(ObObj)));
-      FILL_ELEM(c1, data_arr, 0);
+      FILL_ELEM(c1, data_arr, 0, *coll_allocator);
       OX (elem_count = c1->get_actual_count());
     }
   } else {
@@ -433,23 +444,31 @@ int ObExprMultiSet::calc_ms_union(common::ObIAllocator *coll_allocator,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(alloc_size));
     } else {
-      FILL_ELEM(c1, tmp_res, 0);
-      FILL_ELEM(c2, tmp_res, c1->get_actual_count());
-
+      for (int64_t i = 0; i < count; ++i) {
+        new(&tmp_res[i])ObObj();
+      }
       if (OB_SUCC(ret)) {
         if (MULTISET_MODIFIER_ALL == ms_modifier) {
-          data_arr = tmp_res;
-          elem_count = count;
+          FILL_ELEM(c1, tmp_res, 0, *coll_allocator);
+          FILL_ELEM(c2, tmp_res, c1->get_actual_count(), *coll_allocator);
+          OX (data_arr = tmp_res);
+          OX (elem_count = count);
         } else if (MULTISET_MODIFIER_DISTINCT == ms_modifier) {
+          ObArenaAllocator tmp_alloc;
+          FILL_ELEM(c1, tmp_res, 0, tmp_alloc);
+          FILL_ELEM(c2, tmp_res, c1->get_actual_count(), tmp_alloc);
           if (OB_FAIL(calc_ms_one_distinct(coll_allocator,
                                           tmp_res, count,
                                           data_arr, elem_count))) {
             LOG_WARN("calc multiset union distinc failed.", K(ret));
-          } else {
-            if (OB_NOT_NULL(tmp_res) && OB_NOT_NULL(data_arr) && data_arr != tmp_res) {
-              coll_allocator->free(tmp_res);
+          }
+          for (int64_t i = 0; i < count; ++i) {
+            if (tmp_res[i].is_pl_extend() &&
+                tmp_res[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+              pl::ObUserDefinedType::destruct_obj(tmp_res[i], nullptr);
             }
           }
+          coll_allocator->free(tmp_res);
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected multiset modifier", K(ms_modifier), K(ms_type));
@@ -510,7 +529,7 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
       pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
       pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
       ObIAllocator &allocator = ctx.exec_ctx_.get_allocator();
-      ObIAllocator *collection_allocator = NULL;
+      pl::ObPLAllocator1 *collection_allocator = NULL;
       ObObj *data_arr = NULL;
       int64_t elem_count = -1;
       pl::ObPLNestedTable *coll =
@@ -538,39 +557,42 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
       } else {
         coll = new(coll)pl::ObPLNestedTable(c1->get_id());
         collection_allocator =
-                    static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
-        collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
+                    static_cast<pl::ObPLAllocator1*>(allocator.alloc(sizeof(pl::ObPLAllocator1)));
         if (OB_ISNULL(collection_allocator)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc pl collection allocator failed.", K(ret));
         } else {
-          switch (info->ms_type_) {
-            case MULTISET_TYPE_UNION:
-              if (OB_FAIL(calc_ms_union(collection_allocator,
-                                        c1, c2, data_arr, elem_count,
-                                        info->ms_type_, info->ms_modifier_))) {
-                LOG_WARN("calc multiset union failed.", K(ret));
-              }
-              break;
-            case MULTISET_TYPE_INTERSECT:
-              if (OB_FAIL(calc_ms_intersect(collection_allocator,
-                                            c1, c2, data_arr, elem_count,
-                                            info->ms_type_, info->ms_modifier_))) {
-                LOG_WARN("calc multiset union failed.", K(ret));
-              }
-              break;
-            case MULTISET_TYPE_EXCEPT:
-              if (OB_FAIL(calc_ms_except(collection_allocator,
-                                        c1, c2, data_arr, elem_count,
-                                        info->ms_type_, info->ms_modifier_))) {
-                LOG_WARN("calc multiset union failed.", K(ret));
-              }
-              break;
-            default:
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unknown multiset operation type", K(info->ms_type_),
-                                              K(info->ms_modifier_), K(ret));
-              break;
+          collection_allocator = new(collection_allocator)pl::ObPLAllocator1(pl::PL_MOD_IDX::OB_PL_COLLECTION, &allocator);
+          OZ (collection_allocator->init(nullptr));
+          if (OB_SUCC(ret)) {
+            switch (info->ms_type_) {
+              case MULTISET_TYPE_UNION:
+                if (OB_FAIL(calc_ms_union(collection_allocator,
+                                          c1, c2, data_arr, elem_count,
+                                          info->ms_type_, info->ms_modifier_))) {
+                  LOG_WARN("calc multiset union failed.", K(ret));
+                }
+                break;
+              case MULTISET_TYPE_INTERSECT:
+                if (OB_FAIL(calc_ms_intersect(collection_allocator,
+                                              c1, c2, data_arr, elem_count,
+                                              info->ms_type_, info->ms_modifier_))) {
+                  LOG_WARN("calc multiset union failed.", K(ret));
+                }
+                break;
+              case MULTISET_TYPE_EXCEPT:
+                if (OB_FAIL(calc_ms_except(collection_allocator,
+                                          c1, c2, data_arr, elem_count,
+                                          info->ms_type_, info->ms_modifier_))) {
+                  LOG_WARN("calc multiset union failed.", K(ret));
+                }
+                break;
+              default:
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unknown multiset operation type", K(info->ms_type_),
+                                                K(info->ms_modifier_), K(ret));
+                break;
+            }
           }
         }
       }

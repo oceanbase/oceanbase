@@ -58,6 +58,7 @@ ob_set_subtarget(ob_server dbms_job
   dbms_scheduler/ob_dbms_sched_job_rpc_processor.cpp
   dbms_scheduler/ob_dbms_sched_job_rpc_proxy.cpp
   dbms_scheduler/ob_dbms_sched_table_operator.cpp
+  dbms_scheduler/ob_dbms_sched_service.cpp
  )
 
 ob_set_subtarget(ob_server mysql
@@ -115,6 +116,7 @@ ob_set_subtarget(ob_server net
   net/ob_shared_storage_net_throt_rpc_proccessor.cpp
   net/ob_shared_storage_net_throt_rpc_struct.cpp
   net/ob_rpc_reverse_keepalive.cpp
+  net/ob_net_queue_traver.cpp
 )
 
 ob_set_subtarget(ob_server omt
@@ -160,10 +162,12 @@ ob_set_subtarget(ob_server table
   table/ob_table_modify_executor.cpp
   table/ob_table_replace_executor.cpp
   table/ob_table_scan_executor.cpp
+  table/ob_table_global_index_lookup_executor.cpp
   table/ob_table_update_executor.cpp
   table/ob_table_executor_factory.cpp
   table/ob_table_cg_service.cpp
   table/ob_table_cache.cpp
+  table/ob_table_schema_cache.cpp
   table/ob_table_session_pool.cpp
   table/ob_table_op_wrapper.cpp
   table/ob_table_query_common.cpp
@@ -177,7 +181,33 @@ ob_set_subtarget(ob_server table
   table/ob_table_move_response.cpp
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
+  table/ob_table_batch_service.cpp
+  table/ob_table_trans_utils.cpp
+  table/group/ob_table_group_common.cpp
+  table/group/ob_table_tenant_group.cpp
+  table/group/ob_table_group_service.cpp
+  table/group/ob_table_group_execute.cpp
+  table/ob_table_ls_execute_processor.cpp
+  table/ob_table_query_and_mutate_helper.cpp
+  table/ob_redis_execute_processor.cpp
+  table/redis/ob_redis_command_factory.cpp
+  table/redis/ob_redis_service.cpp
+  table/redis/cmd/ob_redis_list_cmd.cpp
+  table/redis/operator/ob_redis_list_operator.cpp
+  table/redis/operator/ob_redis_operator.cpp
+  table/redis/cmd/ob_redis_set_cmd.cpp
+  table/redis/cmd/ob_redis_cmd.cpp
+  table/redis/operator/ob_redis_set_operator.cpp
+  table/redis/cmd/ob_redis_zset_cmd.cpp
+  table/redis/operator/ob_redis_zset_operator.cpp
+  table/redis/cmd/ob_redis_hash_cmd.cpp
+  table/redis/operator/ob_redis_hash_operator.cpp
+  table/redis/cmd/ob_redis_string_cmd.cpp
+  table/redis/operator/ob_redis_string_operator.cpp
+  table/ob_table_audit.cpp
   table/ob_table_mode_control.cpp
+  table/ob_htable_rowkey_mgr.cpp
+  table/ob_table_client_info_mgr.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -244,6 +274,16 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_multiple_heap_table_compactor.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_stat.cpp
+  table_load/ob_table_load_index_table_projector.cpp
+  table_load/ob_table_load_store_table_ctx.cpp
+  table_load/ob_table_load_merger_manager.cpp
+  table_load/ob_table_load_index_row_handler.cpp
+  table_load/ob_table_load_data_row_handler.cpp
+  table_load/ob_table_load_open_insert_table_ctx_manager.cpp
+  table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_mem_chunk_manager.cpp
+  table_load/ob_table_load_pre_sort_writer.cpp
+  table_load/ob_table_load_empty_insert_tablet_ctx_manager.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table
@@ -336,10 +376,12 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_event.cpp
   virtual_table/ob_all_virtual_sys_parameter_stat.cpp
   virtual_table/ob_all_virtual_sys_stat.cpp
+  virtual_table/ob_all_virtual_res_mgr_sys_stat.cpp
   virtual_table/ob_all_virtual_sys_task_status.cpp
   virtual_table/ob_all_virtual_table_mgr.cpp
   virtual_table/ob_all_virtual_unit.cpp
   virtual_table/ob_all_virtual_tablet_ddl_kv_info.cpp
+  virtual_table/ob_all_virtual_ddl_diagnose_info.cpp
   virtual_table/ob_all_virtual_ddl_sim_point_stat.cpp
   virtual_table/ob_all_virtual_tablet_info.cpp
   virtual_table/ob_all_virtual_server.cpp
@@ -455,7 +497,11 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_local_cache_info.cpp
   virtual_table/ob_all_virtual_vector_index_info.cpp
   virtual_table/ob_all_virtual_session_ps_info.cpp
+  virtual_table/ob_all_virtual_sql_stat.cpp
   virtual_table/ob_all_virtual_tmp_file.cpp
+  virtual_table/ob_all_virtual_log_transport_dest_stat.cpp
+  virtual_table/ob_all_virtual_kv_client_info.cpp
+  virtual_table/ob_all_virtual_kv_group_commit_info.cpp
 )
 
 ob_server_add_target(ob_server)
@@ -507,8 +553,8 @@ endif()
 add_library(ob_main OBJECT main.cpp)
 config_ccls_flag(ob_main)
 target_link_libraries(ob_main PUBLIC ob_base)
-add_executable(observer)
-target_link_libraries(observer
+add_executable(observer_without_bolt)
+target_link_libraries(observer_without_bolt
   PRIVATE
   -Wl,--start-group
   ob_main
@@ -544,9 +590,16 @@ if (OB_ENABLE_BOLT)
   add_custom_command(
     OUTPUT fake_observer_bolt
     COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/do_bolt_opt --build_dir=${CMAKE_BINARY_DIR}
-    DEPENDS observer)
-  add_custom_target(observer_bolt ALL
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
     DEPENDS fake_observer_bolt)
+else()
+  add_custom_command(
+    OUTPUT fake_observer
+    COMMAND mv ${CMAKE_BINARY_DIR}/src/observer/observer_without_bolt ${CMAKE_BINARY_DIR}/src/observer/observer
+    DEPENDS observer_without_bolt)
+  add_custom_target(observer ALL
+    DEPENDS fake_observer)
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)

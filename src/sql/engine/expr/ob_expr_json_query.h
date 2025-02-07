@@ -66,7 +66,8 @@ private:
                           ObEvalCtx& ctx,
                           ObObjType &dest_type,
                           bool &is_cover_by_error);
-  static int set_multivalue_result(ObEvalCtx& ctx,
+  static int set_multivalue_result(bool is_array,
+                                   ObEvalCtx& ctx,
                                    ObIAllocator& allocator,
                                    ObIJsonBase* json_base,
                                    const ObExpr &expr,
@@ -167,8 +168,12 @@ struct ObJsonObjectCompare {
   int operator()(const ObObj &left, const ObObj &right)
   {
     int result = 0;
-    left.compare(right, result);
-    return result > 0 ? 1 : 0;
+    if (left.is_string_type() && right.is_string_type()) {
+      left.compare(right, CS_TYPE_UTF8MB4_GENERAL_CI, result);
+    } else {
+      left.compare(right, result);
+    }
+    return result <= 0 ? 0 : 1;
   }
 };
 

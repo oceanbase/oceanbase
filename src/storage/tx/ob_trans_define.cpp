@@ -948,6 +948,7 @@ void ObMulSourceDataNotifyArg::reset()
   notify_type_ = NotifyType::ON_ABORT;
   redo_submitted_ = false;
   redo_synced_ = false;
+  willing_to_commit_ = false;
   is_force_kill_ = false;
   is_incomplete_replay_ = false;
 }

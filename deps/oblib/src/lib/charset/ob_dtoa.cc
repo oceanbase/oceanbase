@@ -14,6 +14,8 @@
 #include "lib/charset/ob_dtoa.h"
 #include "lib/charset/ob_mysql_global.h"
 
+#include <fast_float/fast_float.h>
+
 #define DTOA_OVERFLOW 9999
 #define MAX_DECPT_FOR_F_FORMAT DBL_DIG
 #define NOT_FIXED_DEC 31
@@ -381,24 +383,78 @@ size_t ob_gcvt_strict(double x, ob_gcvt_arg_type type, int width, char *to,
   return dst - to;
 }
 
-double ob_strtod(const char *str, char **end, int *error)
-{
-  char buf[DTOA_BUF_MAX_SIZE];
-  double res = 0.0;
-  if (!(end != NULL && ((str != NULL && *end != NULL) ||
-                              (str == NULL && *end == NULL)) &&
-              error != NULL)) {
-    return 0.0;
-  }
-  res= ob_strtod_int(str, end, error, buf, sizeof(buf));
-  return (*error == 0) ? res : (res < 0 ? -DBL_MAX : DBL_MAX);
+
+inline bool is_whitespace(const char& c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 }
 
+static std::errc ob_fast_strtod(const char *str, char **end, double *result)
+{
+  std::errc ret = std::errc();
+  if (!(NULL != result
+        && end != NULL
+        && ((str != NULL && *end != NULL) || (str == NULL && *end == NULL)))) {
+    ret = std::errc::invalid_argument;
+  } else {
+    *result = 0.0;
+    int len = *end - str;
+    // skip leading and back spaces
+    int i = 0;
+    for (; i < len; ++i) {
+      if (!is_whitespace(str[i])) {
+        break;
+      }
+    }
+    if (i >= len || (i == len-1 && ('+' == str[i] || '-' == str[i]))) {
+      *end = (char *)str;
+    } else {
+      int j = len - 1;
+      for (; j >= i; j--) {
+        if (!is_whitespace(str[j])) {
+          break;
+        }
+      }
+      fast_float::from_chars_result ff_ret = fast_float::from_chars(str + i, str + j + 1, *result);
+      if (ff_ret.ec == std::errc()) {
+        *end = const_cast<char *>(ff_ret.ptr);
+        if (__builtin_isnan(*result) || __builtin_isinf(*result) || __builtin_isinf(-*result)) {
+          *end = (char *)str;
+          *result = 0.0;
+        }
+      } else {
+        ret = ff_ret.ec;
+      }
+    }
+  }
+
+  return ret;
+}
+
+double ob_strtod(const char *str, char **end, int *error)
+{
+  double res = 0.0;
+  if (std::errc() != ob_fast_strtod(str, end, &res)) {
+    //rollback to call ob_strtod_int if failed to call fast strtod
+    if (!(end != NULL
+          && ((str != NULL && *end != NULL) || (str == NULL && *end == NULL))
+          && error != NULL)) {
+      // do nothing
+    } else {
+      char buf[DTOA_BUF_MAX_SIZE];
+      res = ob_strtod_int(str, end, error, buf, sizeof(buf));
+      if (*error != 0) {
+        res = (res < 0 ? -DBL_MAX : DBL_MAX);
+      }
+    }
+  }
+
+  return res;
+}
 
 double ob_atof(const char *nptr)
 {
   int error;
-  const char *end= nptr+65535;               
+  const char *end= nptr+65535;
   return (ob_strtod(nptr, (char**) &end, &error));
 }
 

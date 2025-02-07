@@ -20,8 +20,8 @@ namespace oceanbase
 {
 namespace sql
 {
-
-typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_INDEX_PER_TABLE> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> ObReducedVisibleColSet;
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObColumnNameSet;
 /*
 #define ADD_COLUMN_NOT_NULL       (1UL << 0)
 #define MODIFY_COLUMN_NOT_NULL    (1UL << 1)
@@ -50,7 +50,9 @@ public:
   int resolve_column_options(const ParseNode &node,
                              bool &is_modify_column_visibility,
                              bool &is_drop_column,
-                             ObReducedVisibleColSet &reduced_visible_col_set);
+                             ObColumnNameSet &add_column_names_set,
+                             ObReducedVisibleColSet &reduced_visible_col_set,
+                             bool &has_drop_column);
   int resolve_index_options_oracle(const ParseNode &node);
   int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node,
                             bool &is_add_index);
@@ -62,7 +64,7 @@ public:
   int resolve_tablegroup_options(const ParseNode &node);
   int resolve_convert_to_character(const ParseNode &node);
   int resolve_foreign_key_options(const ParseNode &node);
-  int resolve_add_column(const ParseNode &node);
+  int resolve_add_column(const ParseNode &node, ObColumnNameSet &resolve_add_column);
   int resolve_alter_column(const ParseNode &node);
   int resolve_change_column(const ParseNode &node);
   int check_modify_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
@@ -93,6 +95,7 @@ public:
   int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
 
 private:
+  int fill_high_bound_val_for_split_partition(const AlterTableSchema &alter_table_schema, ObPartition& split_part);
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const obrpc::ObCreateForeignKeyArg &foreign_key_arg);
@@ -179,6 +182,9 @@ private:
                                    const share::schema::ObTableSchema &origin_table_schema);
   int resolve_split_partition(const ParseNode *node,
                               const share::schema::ObTableSchema &origin_table_schema);
+  int fill_split_source_tablet_id(const ObString& source_part_name,
+                                  const share::schema::ObTableSchema &origin_table_schema,
+                                  share::schema::AlterTableSchema &alter_table_schema);
   virtual int get_table_schema_for_check(share::schema::ObTableSchema &table_schema) override;
   //int generate_new_schema(const share::schema::ObTableSchema &origin_table_schema,
   //                        share::schema::AlterTableSchema &new_table_schema);
@@ -193,7 +199,8 @@ private:
       ObRawExpr *part_expr);
   int check_alter_part_key_allowed(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
-                                   const share::schema::ObColumnSchemaV2 &dst_col_schema);
+                                   const share::schema::ObColumnSchemaV2 &dst_col_schema,
+                                   const bool is_part_key);
   int resolve_column_group_for_column();
   int generate_index_arg_cascade();
   int resolve_alter_column_groups(const ParseNode &node);

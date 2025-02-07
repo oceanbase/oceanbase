@@ -15,6 +15,7 @@
 #define protected public
 #define private public
 #include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/blocksstable/ob_object_manager.h"
 
 
 namespace oceanbase
@@ -95,6 +96,77 @@ TEST_F(TestMacroBlockId, verification)
   ret = test_id.deserialize(buf, 23, pos);
   ASSERT_EQ(OB_DESERIALIZE_ERROR, ret);
   ASSERT_EQ(0, pos);
+}
+
+TEST_F(TestMacroBlockId, test_transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObStorageObjectOpt curr_opt;
+  MacroBlockId test_block_id;
+  uint64_t test_ls_id = 1001;
+  uint64_t test_tablet_id = 200001;
+  uint64_t test_tablet_version = ObStorageObjectOpt::INVALID_TABLET_VERSION;
+  int64_t test_transfer_seq = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
+  curr_opt.set_ss_private_tablet_meta_object_opt(test_ls_id, test_tablet_id, test_tablet_version, test_transfer_seq);
+  OB_LOG(INFO, "before set");
+  hex_dump(&test_block_id.fourth_id_,
+           sizeof(int64_t),
+           true,
+           OB_LOG_LEVEL_WARN);
+
+  // in ss mode
+  test_block_id.set_version_v2();
+  test_block_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  test_block_id.set_storage_object_type(static_cast<int64_t>(curr_opt.object_type_));
+  test_block_id.set_incarnation_id(0);
+  test_block_id.set_column_group_id(0);
+  test_block_id.set_second_id(curr_opt.ss_private_tablet_opt_.ls_id_);
+  test_block_id.set_third_id(curr_opt.ss_private_tablet_opt_.tablet_id_);
+  test_block_id.set_meta_version_id(curr_opt.ss_private_tablet_opt_.version_);
+  test_block_id.set_meta_transfer_seq(curr_opt.ss_private_tablet_opt_.tablet_transfer_seq_);
+
+  OB_LOG(INFO, "after set");
+  hex_dump(&test_block_id.fourth_id_,
+           sizeof(int64_t),
+           true,
+           OB_LOG_LEVEL_WARN);
+
+  OB_LOG(INFO, "show test_block_id", K(test_block_id), K(test_block_id.meta_transfer_seq()), K(test_block_id.meta_version_id()));
+  int64_t transfer_seq1 = test_block_id.meta_transfer_seq();
+  OB_LOG(INFO, "transfer_seq1");
+  hex_dump(&transfer_seq1,
+           sizeof(int64_t),
+           true,
+           OB_LOG_LEVEL_WARN);
+  int64_t tablet_version1 = test_block_id.meta_version_id();
+  OB_LOG(INFO, "tablet_version1");
+  hex_dump(&tablet_version1,
+           sizeof(int64_t),
+           true,
+           OB_LOG_LEVEL_WARN);
+
+  ASSERT_EQ(-1, transfer_seq1);
+  ASSERT_EQ(17592186044415, tablet_version1); // compile failed when using ObStorageObjectOpt::INVALID_TABLET_VERSION
+  ASSERT_FALSE(test_block_id.is_valid());
+
+  const int64_t buf_len = 50;
+  char buf[buf_len] = {0};
+  int64_t pos = 0;
+  ret = test_block_id.serialize(buf, 50, pos);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+  ASSERT_EQ(0, pos);
+
+  test_block_id.set_meta_transfer_seq(0);
+  test_block_id.set_meta_version_id(100002);
+
+  ret = test_block_id.serialize(buf, 50, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(32, pos);
+
+  pos = 0;
+  ret = test_block_id.deserialize(buf, 50, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(32, pos);
 }
 }
 }

@@ -118,6 +118,14 @@ int ObRemoteLogRawReader::raw_read(const palf::LSN &start_lsn,
   return ret;
 }
 
+void ObRemoteLogRawReader::update_source_cb()
+{
+  int ret = OB_SUCCESS;
+  if (inited_ && OB_FAIL(update_source_func_(id_, source_guard_.get_source()))) {
+    CLOG_LOG(WARN, "update source failed", KPC(this));
+  }
+}
+
 int ObRemoteLogRawReader::raw_read_(char *buffer, const int64_t buffer_size, int64_t &total_read_size)
 {
   int ret = OB_SUCCESS;

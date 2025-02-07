@@ -46,6 +46,10 @@ public:
     }
     return ret_val;
   }
+  void clear_array()
+  {
+    tablet_info_array_.reset();
+  }
   VIRTUAL_TO_STRING_KV(K_(param_type), K_(ls_id), K_(compaction_scn), "tablet_id_cnt", tablet_info_array_.count(), K_(tablet_info_array));
 public:
   static constexpr int64_t DEFAULT_BATCH_SIZE = 128;
@@ -102,6 +106,7 @@ public:
   ObBatchExecDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObBatchExecDag() {}
   int init_by_param(const share::ObIDagInitParam *param);
+  virtual int inner_init() { return OB_SUCCESS; }
   virtual int create_first_task() override;
   virtual bool operator == (const ObIDag &other) const override;
   virtual int64_t hash() const override { return param_.get_hash(); }
@@ -241,6 +246,8 @@ int ObBatchExecDag<TASK, PARAM>::init_by_param(
     STORAGE_LOG(WARN, "failed to init param", KR(ret), KPC(init_param));
   } else if (OB_FAIL(init_merge_history())) {
     STORAGE_LOG(WARN, "failed to init merge history", KR(ret), KPC(init_param));
+  } else if (OB_FAIL(inner_init())) {
+    STORAGE_LOG(WARN, "failed to inner init", KR(ret), KPC(init_param));
   } else {
     is_inited_ = true;
   }

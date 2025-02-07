@@ -38,7 +38,9 @@ public:
   int init(const char *log_dir, const block_id_t block_id,
            const int64_t align_size,
            const int64_t align_buf_size,
-           int64_t log_block_size, ILogBlockPool *log_block_pool);
+           int64_t log_block_size,
+           ILogBlockPool *log_block_pool,
+           LogIOAdapter *io_adapter);
   void reset(const block_id_t init_block_id);
 
   void destroy();
@@ -125,6 +127,7 @@ private:
   int dir_fd_;
   int64_t align_size_;
   int64_t align_buf_size_;
+  LogIOAdapter *io_adapter_;
   bool is_inited_;
 };
 } // end of logservice

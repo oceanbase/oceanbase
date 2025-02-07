@@ -18,6 +18,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "sql/optimizer/ob_log_distinct.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -761,11 +762,21 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
   ObPQSetHint hint;
+  bool has_push_down = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+  } else if (OB_FAIL(check_has_push_down(has_push_down))) {
+    LOG_WARN("failed to check has push down", K(ret));
+  } else if (has_push_down &&
+             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
+                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+                                ObHint::get_hint_name(T_DISTINCT_PUSHDOWN),
+                                qb_name.length(),
+                                qb_name.ptr()))) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (HASH_SET == set_algo_ &&
              OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
                                 ObQueryHint::get_outline_indent(plan_text.is_oneline_),
@@ -791,6 +802,7 @@ int ObLogSet::print_used_hint(PlanText &plan_text)
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
   } else {
     const ObHint *use_hash = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_SET);
+    const ObHint *pushdown = get_plan()->get_log_plan_hint().get_normal_hint(T_DISTINCT_PUSHDOWN);
     const bool algo_match = NULL != use_hash &&
                             ((HASH_SET == set_algo_ && use_hash->is_enable_hint())
                              || (MERGE_SET == set_algo_ && use_hash->is_disable_hint()));
@@ -801,6 +813,17 @@ int ObLogSet::print_used_hint(PlanText &plan_text)
       LOG_WARN("failed to get used pq set hint", K(ret));
     } else if (NULL != used_pq_hint && OB_FAIL(used_pq_hint->print_hint(plan_text))) {
       LOG_WARN("failed to print pq_set hint for set", K(ret), K(*used_pq_hint));
+    } else if (NULL != pushdown) {
+      bool has_push_down = false;
+      if (OB_FAIL(check_has_push_down(has_push_down))) {
+        LOG_WARN("failed to check has push down", K(ret));
+      } else {
+        bool pushdown_match = has_push_down ? pushdown->is_enable_hint()
+                                            : pushdown->is_disable_hint();
+        if (pushdown_match && OB_FAIL(pushdown->print_hint(plan_text))) {
+          LOG_WARN("failed to print used push down hint for set", K(ret), KPC(pushdown));
+        }
+      }
     }
   }
   return ret;
@@ -874,11 +897,89 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
   return ret;
 }
 
+int ObLogSet::check_has_push_down(bool &has_push_down)
+{
+  int ret = OB_SUCCESS;
+  has_push_down = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_push_down && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = NULL;
+    const ObLogicalOperator *pushdown_op = NULL;
+    if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i), K(child));
+    } else if (OB_FAIL(child->get_pushdown_op(log_op_def::LOG_DISTINCT, pushdown_op))) {
+      LOG_WARN("failed to get push down distinct", K(ret));
+    } else if (NULL == pushdown_op) {
+      // do nothing
+    } else if (OB_UNLIKELY(log_op_def::LOG_DISTINCT != pushdown_op->get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected pushdown op", K(ret), K(pushdown_op->get_type()));
+    } else if (static_cast<const ObLogDistinct*>(pushdown_op)->is_push_down()) {
+      has_push_down = true;
+    }
+  }
+  return ret;
+}
+
 int ObLogSet::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info())) {
     LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
+  } else if (DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == get_distributed_algo()) {
+    int64_t max_child_part_cnt = -1;
+    const ObLogicalOperator *child = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+      if (OB_ISNULL(child = get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set operator i-th child is null", K(ret), K(i));
+      } else {
+        max_child_part_cnt = child->get_part_cnt() > max_child_part_cnt ? child->get_part_cnt()
+                                                                        : max_child_part_cnt;
+      }
+    }
+    if (OB_SUCC(ret) && max_child_part_cnt > 0 && get_parallel() > max_child_part_cnt) {
+      int64_t reduce_parallel = max_child_part_cnt;
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_PARTITION_NONE == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(second_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
+  } else if (DistAlgo::DIST_NONE_PARTITION == get_distributed_algo()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

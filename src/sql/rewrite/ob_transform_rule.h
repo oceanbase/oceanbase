@@ -91,6 +91,13 @@ struct MvInfo {
   uint64_t mv_intersect_tbl_num_;      // number of tables that appear in both mv and origin query, used for sort mv info
 };
 
+enum TransPolicy
+{
+  DISABLE_TRANS = 0,
+  LIMITED_TRANS = 1,
+  ENABLE_TRANS = 2,
+};
+
 struct ObTransformerCtx
 {
   ObTransformerCtx()
@@ -127,7 +134,12 @@ struct ObTransformerCtx
     push_down_filters_(),
     in_accept_transform_(false),
     iteration_level_(0),
-    mv_stmt_gen_count_(0)
+    mv_stmt_gen_count_(0),
+    cbqt_policy_(TransPolicy::DISABLE_TRANS),
+    complex_cbqt_table_num_(0),
+    max_table_num_(0),
+    inline_blacklist_(),
+    materialize_blacklist_()
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -198,6 +210,13 @@ struct ObTransformerCtx
   uint64_t iteration_level_;
   ObSEArray<MvInfo, 4, common::ModulePageAllocator, true> mv_infos_; // used to perform mv rewrite
   int64_t mv_stmt_gen_count_;
+  // used for cost based query transformation control
+  TransPolicy cbqt_policy_;
+  int64_t complex_cbqt_table_num_;
+  int64_t max_table_num_;
+  /* used for CTE inline && materialize */
+  ObSEArray<ObString, 8, common::ModulePageAllocator, true> inline_blacklist_;
+  ObSEArray<ObString, 8, common::ModulePageAllocator, true> materialize_blacklist_;
 };
 
 enum TransMethod
@@ -247,6 +266,7 @@ enum TRANSFORM_TYPE {
   CONDITIONAL_AGGR_COALESCE     ,
   MV_REWRITE                    ,
   LATE_MATERIALIZATION          ,
+  DISTINCT_AGGREGATE            ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -279,6 +299,10 @@ struct ObTryTransHelper
   int fill_helper(const ObQueryCtx *query_ctx);
   int recover(ObQueryCtx *query_ctx);
   int is_filled() const { return !qb_name_counts_.empty(); }
+  /** @brief update or recover query_ctx and temp table stmt after transformation
+   * call this function after transformation has been accepted or rejected (by higher cost)
+   */
+  int finish(bool trans_happened, ObQueryCtx *query_ctx, ObTransformerCtx *trans_ctx);
 
   uint64_t available_tb_id_;
   int64_t stmt_count_;
@@ -347,7 +371,8 @@ public:
       (1L << LEFT_JOIN_TO_ANTI) |
       (1L << COUNT_TO_EXISTS) |
       (1L << CONDITIONAL_AGGR_COALESCE) |
-      (1L << SEMI_TO_INNER);
+      (1L << SEMI_TO_INNER) |
+      (1L << DISTINCT_AGGREGATE);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |
@@ -355,8 +380,20 @@ public:
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
       (1L << SEMI_TO_INNER) |
+      (1L << TEMP_TABLE_OPTIMIZATION) |
       (1L << MV_REWRITE) |
       (1L << LATE_MATERIALIZATION);
+
+  static const uint64_t ALL_EXPR_LEVEL_HEURISTICS_RULES =
+      (1L << SIMPLIFY_EXPR) |
+      (1L << SIMPLIFY_DISTINCT) |
+      (1L << SIMPLIFY_WINFUNC) |
+      (1L << SIMPLIFY_ORDERBY) |
+      (1L << SIMPLIFY_LIMIT) |
+      (1L << PROJECTION_PRUNING) |
+      (1L << PREDICATE_MOVE_AROUND) |
+      (1L << JOIN_LIMIT_PUSHDOWN) |
+      (1L << CONST_PROPAGATE);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,
@@ -517,6 +554,8 @@ private:
                                void *check_ctx,
                                bool is_trans_plan,
                                bool& is_valid);
+  int update_trans_ctx(ObDMLStmt *stmt);
+  int update_max_table_num(ObDMLStmt *stmt);
 
   bool skip_move_trans_loc() const
   {

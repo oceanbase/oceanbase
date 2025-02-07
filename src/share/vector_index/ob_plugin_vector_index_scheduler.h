@@ -29,6 +29,7 @@ namespace share
 
 class ObPluginVectorIndexService;
 class ObPluginVectorIndexMgr;
+class ObPluginVectorIndexLoadScheduler;
 
 static const int64_t VECTOR_INDEX_TABLET_ID_COUNT = 100;
 typedef ObSEArray<ObTabletID, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTabletIDArray;
@@ -58,9 +59,8 @@ class ObVectorIndexSyncLogCb : public logservice::AppendCb
 {
 public:
   ObVectorIndexSyncLogCb()
-    : log_buffer_(nullptr),
-      log_buffer_len_(0),
-      pos_(0)
+    : scheduler_(nullptr),
+      log_buffer_(nullptr)
   {
     reset();
   }
@@ -83,32 +83,19 @@ public:
     }
   }
 
-  virtual int on_success() override
-  {
-    ATOMIC_SET(&is_success_, true);
-    MEM_BARRIER();
-    ATOMIC_SET(&is_callback_invoked_, true);
-    return OB_SUCCESS;
-  }
-  virtual int on_failure() override
-  {
-    ATOMIC_SET(&is_callback_invoked_, true);
-    return OB_SUCCESS;
-  }
+  int on_success();
 
-  TO_STRING_KV(K_(is_callback_invoked), K_(is_success), K_(tablet_id_array), K_(table_id_array),
-               KP_(log_buffer), K_(log_buffer_len), K_(pos));
+  int on_failure();
+
+  TO_STRING_KV(K_(is_callback_invoked), K_(is_success), KP_(log_buffer));
   OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }
   OB_INLINE bool is_success() const { return ATOMIC_LOAD(&is_success_); }
 
 public:
-  ObVectorIndexTabletIDArray tablet_id_array_;
-  ObVectorIndexTableIDArray table_id_array_;
   static const uint32 VECTOR_INDEX_SYNC_LOG_MAX_LENGTH = 16 * 1024; // Max 16KB each log
   static const uint32_t VECTOR_INDEX_MAX_SYNC_COUNT = 512;
+  ObPluginVectorIndexLoadScheduler *scheduler_;
   char *log_buffer_;
-  uint32_t log_buffer_len_;
-  int64_t pos_;
 
 private:
   bool is_callback_invoked_;
@@ -178,8 +165,8 @@ struct ObPluginVectorIndexTaskCtx
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
   {}
-  TO_STRING_KV(K_(index_tablet_id), K_(index_table_id), K_(task_start_time), K_(last_modify_time),
-               K_(failure_times), K_(in_queue), K_(task_status));
+  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
+               K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
   ObTabletID index_tablet_id_;
   uint64_t index_table_id_;
   int64_t task_start_time_;
@@ -201,9 +188,10 @@ class ObPluginVectorIndexLoadScheduler : public common::ObTimerTask,
 public:
   ObPluginVectorIndexLoadScheduler()
     : is_inited_(false),
-      is_leader_(true),
+      is_leader_(false),
       need_do_for_switch_(false),
       is_stopped_(false),
+      is_logging_(false),
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),
@@ -250,7 +238,7 @@ public:
                                   bool &is_vector_index_table,
                                   bool &is_shared_index_table);
   void clean_deprecated_adapters();
-  int check_parital_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
+  int check_index_adpter_exist(ObPluginVectorIndexMgr *mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
@@ -265,7 +253,7 @@ public:
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
 
   // logger interfaces
-  int handle_submit_callback(const bool success, const share::SCN log_ts);
+  int handle_submit_callback(const bool success);
   int handle_replay_result(ObVectorIndexSyncLog &ls_log);
   int replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const share::SCN &log_scn);
 
@@ -288,7 +276,7 @@ public:
 
   int safe_to_destroy(bool &is_safe);
 
-  TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped),
+  TO_STRING_KV(K_(is_inited), K_(is_leader), K_(need_do_for_switch), K_(is_stopped), K_(is_logging),
                K_(tenant_id), K_(ttl_tablet_timer_tg_id), K_(interval_factor),
                K_(basic_period), K_(current_memory_config), K_(dag_ref_cnt),
                KP_(vector_index_service), KP_(ls),
@@ -316,6 +304,9 @@ private:
   bool is_leader_;
   bool need_do_for_switch_;
   bool is_stopped_;
+
+  bool is_logging_;
+  common::ObSpinLock logging_lock_;
   uint64_t tenant_id_;
   int ttl_tablet_timer_tg_id_;
   int interval_factor_;
@@ -327,6 +318,8 @@ private:
   int64_t local_schema_version_;
   ObPluginVectorIndexTenantTaskCtx local_tenant_task_;
   ObVectorIndexSyncLogCb cb_;
+  ObVectorIndexTabletIDArray tablet_id_array_;
+  ObVectorIndexTableIDArray table_id_array_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -421,6 +414,51 @@ private:
   lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObVectorIndexDag);
 };
+
+typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexTaskCtx*> VectorIndexMemSyncMap;
+typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*> VectorIndexAdaptorMap;
+class ObVectorIndexMemSyncInfo
+{
+public:
+  ObVectorIndexMemSyncInfo(uint64_t tenant_id) :
+    processing_first_mem_sync_(true),
+    first_mem_sync_map_(),
+    second_mem_sync_map_(),
+    first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),
+    second_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask"))
+  {}
+
+  ~ObVectorIndexMemSyncInfo(){}
+
+  int init(int64_t hash_capacity, uint64_t tenant_id, ObLSID &ls_id);
+  void destroy();
+
+  int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
+  int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
+  int count_processing_finished(bool &is_finished,
+                                uint32_t &total_count,
+                                uint32_t &finished_count);
+  void check_and_switch_if_needed(bool &need_sync, bool &all_finished);
+  VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
+
+private:
+  VectorIndexMemSyncMap &get_waiting_map() { return processing_first_mem_sync_ ? second_mem_sync_map_ : first_mem_sync_map_; }
+  ObIAllocator &get_processing_allocator() { return processing_first_mem_sync_ ? first_task_allocator_ : second_task_allocator_; }
+  ObIAllocator &get_waiting_allocator() { return processing_first_mem_sync_ ? second_task_allocator_ : first_task_allocator_; }
+  void switch_processing_map();
+
+  TO_STRING_KV(K_(processing_first_mem_sync), K(first_mem_sync_map_.size()), K(second_mem_sync_map_.size()));
+
+private:
+  // pingpong map/allocator for follower receive memdata sync task from log
+  bool processing_first_mem_sync_;
+  common::ObSpinLock switch_lock_;
+  VectorIndexMemSyncMap first_mem_sync_map_;
+  VectorIndexMemSyncMap second_mem_sync_map_;
+  ObArenaAllocator first_task_allocator_;
+  ObArenaAllocator second_task_allocator_;
+};
+
 
 } // namespace share
 } // namespace oceanbase

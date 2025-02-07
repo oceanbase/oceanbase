@@ -19,27 +19,6 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObDomainRowkeyComp {
-public:
-  ObDomainRowkeyComp(int &sort_ret) : result_code_(sort_ret) {}
-
-  bool operator()(const ObRowkey *left, const ObRowkey *right)
-  {
-    bool bool_ret = false;
-    if (OB_UNLIKELY(common::OB_SUCCESS != result_code_)) {
-      //do nothing
-    } else if (OB_UNLIKELY(NULL == left)
-              || OB_UNLIKELY(NULL == right)) {
-      result_code_ = common::OB_INVALID_ARGUMENT;
-      LOG_WARN_RET(result_code_, "Invaid argument, ", KP(left), KP(right), K_(result_code));
-    } else {
-      bool_ret = (*left) < (*right);
-    }
-    return bool_ret;
-  }
-
-  int &result_code_;
-};
 
 class ObDomainIndexLookupOp : public ObLocalIndexLookupOp
 {
@@ -115,68 +94,7 @@ protected:
   static const int64_t MAX_NUM_PER_BATCH = 1000;
 };
 
-class ObMulValueIndexLookupOp : public ObDomainIndexLookupOp
-{
-public:
-  explicit ObMulValueIndexLookupOp(ObIAllocator &allocator)
-    : ObDomainIndexLookupOp(allocator),
-      cmp_ret_(0),
-      aux_cmp_ret_(0),
-      aux_key_count_(0),
-      index_rowkey_cnt_(0),
-      comparer_(cmp_ret_),
-      aux_comparer_(aux_cmp_ret_),
-      sorter_(allocator),
-      aux_sorter_(allocator),
-      aux_lookup_iter_(nullptr),
-      last_rowkey_(),
-      aux_last_rowkey_(),
-      is_inited_(false) {}
 
-  virtual ~ObMulValueIndexLookupOp()
-  {
-    sorter_.clean_up();
-    sorter_.~ObExternalSort();
-
-    aux_sorter_.clean_up();
-    aux_sorter_.~ObExternalSort();
-  }
-  virtual void do_clear_evaluated_flag() override;
-  int init(const ObDASBaseCtDef *table_lookup_ctdef,
-           ObDASBaseRtDef *table_lookup_rtdef,
-           transaction::ObTxDesc *tx_desc,
-           transaction::ObTxReadSnapshot *snapshot,
-           storage::ObTableScanParam &scan_param);
-  int reuse_scan_iter(bool need_switch_param);
-protected:
-  virtual int init_scan_param() override;
-protected:
-  virtual int fetch_index_table_rowkey();
-  virtual int revert_iter() override;
-  int init_sort();
-  int save_aux_rowkeys();
-  int save_rowkeys();
-  int save_doc_id_and_rowkey();
-  int fetch_rowkey_from_aux();
-  virtual int get_next_row() override;
-  void reset_sorter();
-  virtual int reset_lookup_state() override;
-  virtual int get_aux_table_rowkey() override;
-  ObNewRowIterator*& get_aux_lookup_iter() { return aux_lookup_iter_; }
-private:
-  int cmp_ret_;
-  int aux_cmp_ret_;
-  uint32_t aux_key_count_;
-  int index_rowkey_cnt_;
-  ObDomainRowkeyComp comparer_;
-  ObDomainRowkeyComp aux_comparer_;
-  ObExternalSort<ObRowkey, ObDomainRowkeyComp> sorter_; // use ObRowKeyCompare to compare rowkey
-  ObExternalSort<ObRowkey, ObDomainRowkeyComp> aux_sorter_;
-  common::ObNewRowIterator *aux_lookup_iter_;
-  ObRowkey last_rowkey_;
-  ObRowkey aux_last_rowkey_;
-  bool is_inited_;
-};
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DOMAIN_INDEX_LOOKUP_OP_H_ */

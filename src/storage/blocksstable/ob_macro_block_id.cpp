@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "lib/utility/ob_print_utils.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/blocksstable/ob_object_manager.h"
 #include "storage/backup/ob_backup_data_struct.h"
 
 namespace oceanbase
@@ -89,11 +90,20 @@ bool MacroBlockId::is_valid() const
   bool is_valid = true;
 
   if (id_mode_ == (uint64_t)ObMacroBlockIdMode::ID_MODE_LOCAL) {
-    is_valid = second_id_ >= AUTONOMIC_BLOCK_INDEX && second_id_ < INT64_MAX && third_id_ >= 0;
+    is_valid &= MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
+    is_valid &= second_id_ >= AUTONOMIC_BLOCK_INDEX && second_id_ < INT64_MAX && third_id_ >= 0;
   } else if (id_mode_ == (uint64_t)ObMacroBlockIdMode::ID_MODE_BACKUP) {
-    is_valid = backup::ObBackupDeviceMacroBlockId::check_valid(first_id_, second_id_, third_id_);
-  } else {
-    is_valid = MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
+    // BACKUP_MODE use BACKUP_MACRO_BLOCK_ID_VERSION
+    is_valid &= backup::ObBackupDeviceMacroBlockId::check_valid(first_id_, second_id_, third_id_);
+  } else if (is_valid && id_mode_ == (uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE) {
+    is_valid &= MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
+    if (is_private_data_or_meta()) {
+      is_valid &= meta_transfer_seq() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
+            //                   -1                       : INVLAID_TABLET_TRANSFER_SEQ;
+            // ObStorageObjectOpt::INVALID_TABLET_VERSION : macro_seq / tablet_meta_version
+    } else if (is_shared_data_or_meta()) {
+      is_valid &= third_id_ != -1; // macro_seq != -1
+    }
   }
   return is_valid;
 }
@@ -115,10 +125,11 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
     databuff_printf(buf, buf_len, pos,
         "[2nd=%lu]"
         "[3rd=%lu]"
-        "[4th=%lu]}",
+        "[4th=(trans_seq=%lu,sec_id=%lu)]}",
         (uint64_t) second_id_,
         (uint64_t) third_id_,
-        (uint64_t) fourth_id_);
+        (int64_t) macro_transfer_seq_,
+        (uint64_t) tenant_seq_);
     break;
   default:
     databuff_printf(buf, buf_len, pos,
@@ -197,6 +208,8 @@ bool MacroBlockId::is_shared_data_or_meta() const
 {
   return is_id_mode_share() &&
   (
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MICRO_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
     static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
@@ -340,6 +353,7 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
   }
   DESERIALIZE_MEMBER_WITH_MEMCPY(second_id_);
   DESERIALIZE_MEMBER_WITH_MEMCPY(third_id_);
+  version_ = MACRO_BLOCK_ID_VERSION_V2;
   fourth_id_  = 0;
   return ret;
 }
@@ -351,34 +365,21 @@ int MacroBlockId::memcpy_deserialize(const char* buf, const int64_t data_len, in
  */
 bool is_read_through_storage_object_type(const ObStorageObjectType type)
 {
-  bool is_read_through = false;
+  bool read_through = false;
   switch (type) {
-    case ObStorageObjectType::SHARED_MAJOR_TABLET_META:
-    case ObStorageObjectType::SHARED_TABLET_ID:
-    case ObStorageObjectType::COMPACTION_SERVER:
-    case ObStorageObjectType::LS_COMPACTION_STATUS:
-    case ObStorageObjectType::LS_COMPACTION_LIST:
-    case ObStorageObjectType::LS_SVR_COMPACTION_STATUS:
-    case ObStorageObjectType::COMPACTION_REPORT:
-    case ObStorageObjectType::SHARED_MAJOR_GC_INFO:
-    case ObStorageObjectType::SHARED_MAJOR_META_LIST:
-    case ObStorageObjectType::TABLET_COMPACTION_STATUS:
-    case ObStorageObjectType::MAJOR_PREWARM_DATA:
-    case ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX:
-    case ObStorageObjectType::MAJOR_PREWARM_META:
-    case ObStorageObjectType::MAJOR_PREWARM_META_INDEX:
-    case ObStorageObjectType::IS_SHARED_TABLET_DELETED:
-    case ObStorageObjectType::IS_SHARED_TENANT_DELETED:
-    case ObStorageObjectType::CHECKSUM_ERROR_DUMP_MACRO: {
-      is_read_through = true;
-      break;
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+    case ObStorageObjectType::obj_id: { \
+      read_through = is_read_through; \
+      break; \
     }
+    OB_STORAGE_OBJECT_TYPE_LIST
+#undef STORAGE_OBJECT_TYPE_INFO
     default: {
-      is_read_through = false;
+      read_through = false;
       break;
     }
   }
-  return is_read_through;
+  return read_through;
 }
 
 // judge object type is only store in remote object storage
@@ -399,20 +400,13 @@ bool is_pin_storage_object_type(const ObStorageObjectType type)
 {
   bool is_pin = false;
   switch (type) {
-    case ObStorageObjectType::PRIVATE_TABLET_META:
-    case ObStorageObjectType::PRIVATE_TABLET_CURRENT_VERSION:
-    case ObStorageObjectType::LS_META:
-    case ObStorageObjectType::LS_TRANSFER_TABLET_ID_ARRAY:
-    case ObStorageObjectType::LS_ACTIVE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_PENDING_FREE_TABLET_ARRAY:
-    case ObStorageObjectType::LS_DUP_TABLE_META:
-    case ObStorageObjectType::SERVER_META:
-    case ObStorageObjectType::TENANT_DISK_SPACE_META:
-    case ObStorageObjectType::TENANT_SUPER_BLOCK:
-    case ObStorageObjectType::TENANT_UNIT_META: {
-      is_pin = true;
-      break;
+#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_valid, to_local_path_format, to_remote_path_format, get_parent_dir, create_parent_dir) \
+    case ObStorageObjectType::obj_id: { \
+      is_pin = is_pin_local; \
+      break; \
     }
+    OB_STORAGE_OBJECT_TYPE_LIST
+#undef STORAGE_OBJECT_TYPE_INFO
     default: {
       is_pin = false;
       break;

@@ -11,6 +11,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "share/schema/ob_column_schema.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -27,16 +28,22 @@ ObStaticDataStoreDesc::ObStaticDataStoreDesc()
 
 bool ObStaticDataStoreDesc::is_valid() const
 {
-  return ls_id_.is_valid()
+  bool is_valid =
+         ls_id_.is_valid()
          && tablet_id_.is_valid()
          && compressor_type_ > ObCompressorType::INVALID_COMPRESSOR
          && snapshot_version_ > 0
          && schema_version_ >= 0;
+  if (GCTX.is_shared_storage_mode()) {
+    is_valid &= (tablet_transfer_seq_ != ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ);
+  }
+  return is_valid;
 }
 
 void ObStaticDataStoreDesc::reset()
 {
   MEMSET(this, 0, sizeof(*this));
+  tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   need_submit_io_ = true;
 }
 
@@ -48,6 +55,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   compressor_type_ = desc.compressor_type_;
   ls_id_ = desc.ls_id_;
   tablet_id_ = desc.tablet_id_;
+  tablet_transfer_seq_ = desc.tablet_transfer_seq_;
   macro_block_size_ = desc.macro_block_size_;
   macro_store_size_ = desc.macro_store_size_;
   micro_block_size_limit_ = desc.micro_block_size_limit_;
@@ -62,6 +70,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   exec_mode_ = desc.exec_mode_;
   micro_index_clustered_ = desc.micro_index_clustered_;
   need_submit_io_ = desc.need_submit_io_;
+  encoding_granularity_ = desc.encoding_granularity_;
   return ret;
 }
 
@@ -105,13 +114,15 @@ int ObStaticDataStoreDesc::init(
     const ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
+    const int64_t tablet_transfer_seq,
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
-    const bool need_submit_io)
+    const bool need_submit_io,
+    const uint64_t encoding_granularity)
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(merge_type);
@@ -126,7 +137,9 @@ int ObStaticDataStoreDesc::init(
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
+    tablet_transfer_seq_ = tablet_transfer_seq;
     exec_mode_ = exec_mode;
+    encoding_granularity_ = encoding_granularity;
 
     if (compaction::is_mds_merge(merge_type_)) {
       micro_index_clustered_ = false;
@@ -857,6 +870,15 @@ int ObWholeDataStoreDesc::assign(const ObDataStoreDesc &desc)
   return ret;
 }
 
+int ObWholeDataStoreDesc::assign(const ObWholeDataStoreDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign(desc.desc_))) {
+    STORAGE_LOG(WARN, "failed to assign desc", KR(ret), K(desc));
+  }
+  return ret;
+}
+
 int ObWholeDataStoreDesc::init(
     const ObStaticDataStoreDesc &static_desc,
     const ObMergeSchema &merge_schema,
@@ -887,6 +909,7 @@ int ObWholeDataStoreDesc::init(
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const bool micro_index_clustered,
+    const int64_t tablet_transfer_seq,
     const share::SCN &end_scn,
     const storage::ObStorageColumnGroupSchema *cg_schema,
     const uint16_t table_cg_idx,
@@ -894,10 +917,20 @@ int ObWholeDataStoreDesc::init(
     const bool need_submit_io /*=true*/)
 {
   int ret = OB_SUCCESS;
+  uint64_t encoding_granularity = 0;
   reset();
-  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type,
+
+  if (is_ddl && !GCTX.is_shared_storage_mode() && cluster_version >= DATA_VERSION_4_3_3_0) {
+    // for ddl and direct load, we only limit the encoding granularit for share nothing mode
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      encoding_granularity = tenant_config->ob_encoding_granularity;
+    }
+  }
+
+  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, tablet_transfer_seq, merge_type,
                                 snapshot_version, end_scn, cluster_version,
-                                exec_mode, micro_index_clustered, need_submit_io))) {
+                                exec_mode, micro_index_clustered, need_submit_io, encoding_granularity))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));
@@ -912,7 +945,8 @@ int ObWholeDataStoreDesc::inner_init(
 {
   int ret = OB_SUCCESS;
   const bool is_major = compaction::is_major_or_meta_merge_type(static_desc_.merge_type_);
-  if (nullptr != cg_schema && !cg_schema->is_all_column_group()) {
+  if (is_major && nullptr != cg_schema && !cg_schema->is_all_column_group()) {
+    // Only normal cg and rowkey cg (which means it must be major sstable) will get in here.
     if (OB_FAIL(col_desc_.init(is_major, merge_schema, *cg_schema, table_cg_idx, static_desc_.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "failed to init data store desc for column grouo", K(ret));
     }

@@ -179,13 +179,13 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
   ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state, need_sorted_tablet_id);
   share::SCN max_transfer_scn = share::SCN::min_scn();
   static const int64_t LOCK_TIMEOUT = 100_ms; // 100ms
-  const int64_t timeout = 0;
+  const int64_t abs_timeout_us = ObTimeUtility::current_time() + LOCK_TIMEOUT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(ls_->build_tablet_iter(iter))) {
     STORAGE_LOG(WARN, "failed to build tablet iter", K(ret));
-  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(LOCK_TIMEOUT))) {
+  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(abs_timeout_us))) {
     STORAGE_LOG(WARN, "failed to lock transfer scn iter lock", K(ret));
   } else {
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -207,7 +207,7 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
       } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
       } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
         STORAGE_LOG(WARN, "failed to get tablet", K(ret), K(key));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), mds_data, timeout))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_committed(mds_data))) {
         if (OB_EMPTY_RESULT == ret) {
           STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
           ret = OB_SUCCESS;

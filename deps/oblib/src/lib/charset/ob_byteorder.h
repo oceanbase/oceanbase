@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include "lib/charset/ob_template_helper.h"
 #include <netinet/in.h>
+#include <string.h>
 
 /*
  Functions for big-endian loads and stores. These are safe to use

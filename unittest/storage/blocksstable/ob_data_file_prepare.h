@@ -69,6 +69,7 @@ private:
   int64_t disk_num_;
   ObLogFileHandler clog_file_handler_;
   ObITenantMemLimitGetter *getter_;
+  ObTimerService *timer_service_;
 };
 
 class TestDataFilePrepare : public ::testing::Test
@@ -129,7 +130,8 @@ TestDataFilePrepareUtil::TestDataFilePrepareUtil()
     allocator_(ObModIds::TEST),
     disk_num_(0),
     clog_file_handler_(),
-    getter_(nullptr)
+    getter_(nullptr),
+    timer_service_(nullptr)
 {
 }
 
@@ -267,8 +269,18 @@ int TestDataFilePrepareUtil::open()
     const int64_t sync_io_thread_count = 2;
     const int64_t max_io_depth = 256;
 
+    static ObTenantBase tenant_ctx(OB_SERVER_TENANT_ID);
+    ObTenantEnv::set_tenant(&tenant_ctx);
+    timer_service_ = OB_NEW(ObTimerService, "TimerService", OB_SERVER_TENANT_ID);
+    if (OB_FAIL(timer_service_->start())) {
+      STORAGE_LOG(WARN, "start timer service fail", K(ret), K(storage_env_));
+    } else {
+      tenant_ctx.set(timer_service_);
+    }
+
     bool need_format = false;
-    if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       STORAGE_LOG(WARN, "init device manager failed", KR(ret));
     } else if (OB_FAIL(ObIODeviceWrapper::get_instance().init(
           storage_env_.data_dir_,
@@ -336,6 +348,12 @@ void TestDataFilePrepareUtil::destory()
     } else if (0 != system(cmd)) {
       STORAGE_LOG_RET(ERROR, OB_ERR_SYS, "failed to rm data dir", K(cmd), K(errno), KERRMSG);
     }
+  }
+  if (nullptr != timer_service_) {
+    timer_service_->stop();
+    timer_service_->wait();
+    timer_service_->destroy();
+    ob_delete(timer_service_);
   }
   getter_ = nullptr;
   is_inited_ = false;

@@ -234,13 +234,20 @@ int ObPersistentLSTable::construct_ls_replica(
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(res, "learner_list", learner_list);
   EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "rebuild", rebuild_flag, int64_t, true, true, 0);
 
+  ObCStringHelper helper;
+  const char *member_list_ptr = nullptr;
+  const char *learner_list_ptr = nullptr;
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(helper.convert(member_list, member_list_ptr))) {
+    LOG_WARN("convert member_list failed", KR(ret), K(member_list));
   } else if (OB_FAIL(ObLSReplica::text2member_list(
-                to_cstring(member_list),
+                member_list_ptr,
                 member_list_to_set))) {
     LOG_WARN("text2member_list failed", KR(ret));
+  } else if (OB_FAIL(helper.convert(learner_list, learner_list_ptr))) {
+    LOG_WARN("convert learner_list failed", KR(ret), K(learner_list));
   } else if (OB_FAIL(ObLSReplica::text2learner_list(
-                to_cstring(learner_list),
+                learner_list_ptr,
                 learner_list_to_set))) {
     LOG_WARN("text2member_list for learner_list failed", KR(ret));
   } else if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {

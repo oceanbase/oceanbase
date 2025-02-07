@@ -130,12 +130,12 @@ int ObTableLoadTransBucketWriter::init_session_ctx_array()
       session_ctx->session_id_ = i + 1;
       if (!is_partitioned_) {
         ObTableLoadPartitionLocation::PartitionLocationInfo info;
-        if (OB_UNLIKELY(1 != coordinator_ctx_->ctx_->schema_.partition_ids_.count())) {
+        if (OB_UNLIKELY(1 != coordinator_ctx_->partition_ids_.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected partition id num in non partitioned table", KR(ret), "count",
-                   coordinator_ctx_->ctx_->schema_.partition_ids_.count());
+                   coordinator_ctx_->partition_ids_.count());
         } else if (FALSE_IT(session_ctx->partition_id_ =
-                              coordinator_ctx_->ctx_->schema_.partition_ids_[0])) {
+                              coordinator_ctx_->partition_ids_[0])) {
         } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_leader(
                      session_ctx->partition_id_.tablet_id_, info))) {
           LOG_WARN("failed to get leader addr", K(ret));
@@ -361,6 +361,7 @@ int ObTableLoadTransBucketWriter::write_for_non_partitioned(SessionContext &sess
     } else if (OB_FAIL(load_bucket->add_row(session_ctx.partition_id_.tablet_id_,
                                             row,
                                             param_.batch_size_,
+                                            WRITE_ROW_SIZE,
                                             need_write))) {
       LOG_WARN("fail to add row", KR(ret));
     } else if (need_write && OB_FAIL(write_load_bucket(session_ctx, load_bucket))) {
@@ -399,7 +400,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     } else if (OB_FAIL(coordinator_ctx_->partition_calc_.get_part_key(obj_rows.at(i), part_key))) {
       LOG_WARN("fail to get part key", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->partition_calc_.cast_part_key(part_key, allocator))) {
-      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_key))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
         LOG_WARN("failed to handle error row", K(ret), K(part_key));
       } else {
         ret = OB_SUCCESS;
@@ -422,7 +423,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     bool need_write = false;
     if (OB_UNLIKELY(!partition_id.is_valid())) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_keys.at(i)))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
         LOG_WARN("failed to handle error row", K(ret), K(part_keys.at(i)));
       } else {
         ret = OB_SUCCESS;
@@ -433,6 +434,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
     } else if (OB_FAIL(load_bucket->add_row(partition_id.tablet_id_,
                                             row,
                                             param_.batch_size_,
+                                            WRITE_ROW_SIZE,
                                             need_write))) {
       LOG_WARN("fail to add row", KR(ret));
     } else if (need_write && OB_FAIL(write_load_bucket(session_ctx, load_bucket))) {

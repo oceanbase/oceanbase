@@ -1,3 +1,6 @@
+// owner: saitong.zst
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -16,6 +19,7 @@
 
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "ob_index_block_data_prepare.h"
 

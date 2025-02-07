@@ -103,6 +103,33 @@ int ObVirtualSharedStorageQuota::add_one_storage_batch_row()
     }
     obrpc::ObSharedDeviceResourceArray &limits_;
   };
+  struct GetLimitV2
+  {
+    GetLimitV2(obrpc::ObSharedDeviceResourceArray &limits) : limits_(limits)
+    {}
+    int operator()(oceanbase::common::hash::HashMapPair<ObTrafficControl::ObStorageKey,
+        ObTrafficControl::ObSharedDeviceControlV2 *> &entry)
+    {
+      int ret = OB_SUCCESS;
+      int idx_begin = limits_.array_.count();
+      for (int i = 0; i < obrpc::ResourceType::ResourceTypeCnt; ++i) {
+        limits_.array_.push_back(obrpc::ObSharedDeviceResource());
+      }
+      if (OB_UNLIKELY(idx_begin < 0)
+          || OB_UNLIKELY(idx_begin + obrpc::ResourceType::ResourceTypeCnt > limits_.array_.count())) {
+      } else if (OB_UNLIKELY(OB_ISNULL(entry.second))) {
+      } else {
+        for (int i = 0; i < obrpc::ResourceType::ResourceTypeCnt; ++i) {
+          limits_.array_.at(idx_begin + i).key_ = entry.first;
+          limits_.array_.at(idx_begin + i).type_ = static_cast<obrpc::ResourceType>(i);
+          limits_.array_.at(idx_begin + i).value_ = entry.second->get_limit(static_cast<obrpc::ResourceType>(i));
+        }
+      }
+      return ret;
+    }
+    obrpc::ObSharedDeviceResourceArray &limits_;
+  };
+
   struct GetUsage
   {
     GetUsage(obrpc::ObSharedDeviceResource &resource) : resource_(resource)
@@ -150,9 +177,18 @@ int ObVirtualSharedStorageQuota::add_one_storage_batch_row()
   };
   limits.array_.reserve(OB_IO_MANAGER.get_tc().get_storage_count() * obrpc::ResourceType::ResourceTypeCnt);
   // get limits
-  GetLimit limits_fn(limits);
-  if (OB_FAIL(OB_IO_MANAGER.get_tc().foreach_limit(limits_fn))) {
-    SERVER_LOG(WARN, "predict failed", K(ret));
+  if (GCONF._enable_tree_based_io_scheduler == false) {
+    GetLimit limits_fn(limits);
+    if (OB_FAIL(OB_IO_MANAGER.get_tc().foreach_limit(limits_fn))) {
+      SERVER_LOG(WARN, "predict failed", K(ret));
+    }
+  } else {
+    GetLimitV2 limits_fn_v2(limits);
+    if (OB_FAIL(OB_IO_MANAGER.get_tc().foreach_limit_v2(limits_fn_v2))) {
+      SERVER_LOG(WARN, "predict failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(usages.array_.assign(limits.array_))) {
     SERVER_LOG(WARN, "assign failed", K(ret));
   } else {
@@ -243,7 +279,11 @@ int ObVirtualSharedStorageQuota::add_row(
         break;
       }
       case ASSIGN: {
-        cells[i].set_int(limit.value_);
+        if (limit.value_ <= 0 || limit.value_ >= INT64_MAX) {
+          cells[i].set_int(INT64_MAX);
+        } else {
+          cells[i].set_int(limit.value_);
+        }
         break;
       }
       default: {

@@ -653,7 +653,8 @@ int ObSchemaChecker::check_table_exists_with_synonym(const uint64_t tenant_id,
         // 但是目前没法区分是table不存在，还是该对象不是table。所以错误码与Oracle不一致
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
         LOG_WARN("object is synonym, but real object not exist", K(ret), K(tenant_id), K(tbl_db_name), K(tbl_name), K(obj_name));
-        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(tbl_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, helper.convert(tbl_name));
       }
     }
   } else {
@@ -704,7 +705,8 @@ int ObSchemaChecker::get_table_schema_with_synonym(const uint64_t tenant_id,
         } else if (OB_ISNULL(tbl_schema)) {
           ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
           LOG_WARN("object is synonym, but real object not exist", K(ret), K(tenant_id), K(tbl_db_name), K(tbl_name), K(obj_name));
-          LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(tbl_name));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, helper.convert(tbl_name));
         } else if (OB_FAIL(get_database_schema(tenant_id, obj_db_id, db_schema))) {
           LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(obj_db_id));
         } else if (OB_ISNULL(db_schema)) {
@@ -765,6 +767,7 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
   table_schema = NULL;
 
   const ObTableSchema *table = NULL;
+  ObCStringHelper helper;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
@@ -782,10 +785,10 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
              && 0 != table->get_session_id()
              && OB_INVALID_ID != schema_mgr_->get_session_id()) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
   } else if (table->is_materialized_view() && !(table->mv_available())) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
   } else {
     table_schema = table;
   }
@@ -857,7 +860,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
         LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(), to_cstring(table_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+            helper.convert(table_name));
       }
     } else {
       table_schema = table;
@@ -1138,8 +1143,8 @@ int ObSchemaChecker::check_column_has_index(const uint64_t tenant_id, uint64_t t
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *col_schema = NULL;
-  uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid_array[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
 
   has_index = false;
   if (IS_NOT_INIT) {
@@ -2052,7 +2057,9 @@ int ObSchemaChecker::get_idx_schema_by_origin_idx_name(const uint64_t tenant_id,
         LOG_WARN("fail to get database schema", K(tenant_id), K(database_id), K(ret));
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(), to_cstring(index_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db_schema->get_database_name(),
+            helper.convert(index_name));
       }
     } else {
       table_schema = table;

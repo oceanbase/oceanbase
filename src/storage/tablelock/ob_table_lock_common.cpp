@@ -28,6 +28,102 @@ namespace tablelock
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK[];
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK_MAP[];
 
+const char *get_name(const ObTableLockPriority intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_PRIORITY(n, type)            \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_PRIORITY
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockMode intype)
+{
+  const char *type_name = "U";
+  switch (intype) {
+#define DEF_LOCK_MODE(n, type, name)            \
+    case n:                                     \
+      type_name = #name;                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_MODE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockOpType intype)
+{
+  const char *type_name = "UNKNOWN_TYPE";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OP_TYPE(n, type)             \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObTableLockOpStatus intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OP_STATUS(n, type)             \
+    case n:                                     \
+      type_name = #type;                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OP_STATUS
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObLockOBJType intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_OBJ_TYPE(n, type)                                   \
+    case n:                                                     \
+      type_name = #type;                                        \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_OBJ_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
+const char *get_name(const ObLockOwnerType intype)
+{
+  const char *type_name = "UNKNOWN";
+  switch (static_cast<const uint64_t>(intype)) {
+#define DEF_LOCK_OWNER_TYPE(n, type)          \
+    case n:                                   \
+      type_name = #type;                      \
+      break;
+#include "ob_table_lock_def.h"
+#undef DEF_LOCK_OWNER_TYPE
+  default:
+    break;
+  }
+  return type_name;
+}
+
 bool is_deadlock_avoid_enabled(const bool is_from_sql, const int64_t timeout_us)
 {
   return (!is_from_sql && timeout_us >= MIN_DEADLOCK_AVOID_TIMEOUT_US);
@@ -150,6 +246,26 @@ int get_lock_id(const ObTabletID &tablet,
   } else if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_TABLET,
                                  tablet.id()))) {
     LOG_WARN("create lock id failed.", K(ret), K(tablet));
+  }
+  return ret;
+}
+
+int get_lock_id(const ObIArray<ObTabletID> &tablets,
+                ObIArray<ObLockID> &lock_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet;
+  ObLockID lock_id;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablets.count(); i++) {
+    tablet = tablets.at(i);
+    if (!tablet.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument ", K(ret), K(tablet));
+    } else if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_TABLET, tablet.id()))) {
+      LOG_WARN("create lock id failed.", K(ret), K(tablet));
+    } else if (OB_FAIL(lock_ids.push_back(lock_id))) {
+      LOG_WARN("push back lock id failed.", K(ret), K(tablet));
+    }
   }
   return ret;
 }
@@ -294,7 +410,9 @@ void ObTableLockOp::set(
 bool ObTableLockOp::is_valid() const
 {
   bool is_valid = false;
-  if (is_out_trans_lock_op() && owner_id_.id() == 0) {
+  if (TABLET_SPLIT == op_type_) {
+    is_valid = commit_scn_.is_valid() && !commit_scn_.is_min() && lock_id_.is_valid();
+  } else if (is_out_trans_lock_op() && owner_id_.id() == 0) {
     is_valid = false;
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "owner_id should not be 0 in out_trans lock", K_(owner_id));
   } else {

@@ -35,6 +35,7 @@ class ObMySQLTransaction;
 namespace transaction
 {
 class ObTxBufferNode;
+class ObTxLogBlock;
 }
 namespace share
 {
@@ -49,14 +50,15 @@ class ObMultiVersionSchemaService;
 class ObTenantSchema;
 }
 }
+namespace storage
+{
+class ObLS;
+class ObLSHandle;
+}
 namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
-}
-namespace transaction
-{
-class ObTxLogBlock;
 }
 namespace palf
 {
@@ -99,8 +101,6 @@ private:
  int process_upgrade_data_version_log_(const share::SCN &sync_scn,
                                        const transaction::ObTxBufferNode &node,
                                        common::ObMySQLTransaction &trans);
- int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
  int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,
@@ -129,7 +129,8 @@ private:
  int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
                                            const bool only_update_readable_scn,
                                            common::ObMySQLTransaction &trans,
-                                           const char* comment);
+                                           const char* comment,
+                                           const bool need_check_sync_scn);
 
  int process_ls_transfer_task_in_trans_(const transaction::ObTxBufferNode &node,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
@@ -144,6 +145,7 @@ private:
      bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
+ int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  int get_ls_all_replica_readable_scn_(const share::ObLSID &ls_id, share::SCN &reabable_scn);
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS

@@ -27,7 +27,8 @@ ObDASExtraData::ObDASExtraData()
     result_iter_(),
     has_more_(false),
     need_check_output_datum_(false),
-    enable_rich_format_(false)
+    enable_rich_format_(false),
+    tsc_monitor_info_(nullptr)
 {
 }
 
@@ -78,6 +79,12 @@ int ObDASExtraData::fetch_result()
   } else {
     LOG_TRACE("das fetch task result", KR(ret), K(req), K(result_));
     has_more_ = result_.has_more();
+    if (OB_NOT_NULL(tsc_monitor_info_)) {
+      tsc_monitor_info_->add_io_read_bytes(result_.io_read_bytes_);
+      tsc_monitor_info_->add_ssstore_read_bytes(result_.ssstore_read_bytes_);
+      tsc_monitor_info_->add_ssstore_read_row_cnt(result_.ssstore_read_row_cnt_);
+      tsc_monitor_info_->add_memstore_read_row_cnt(result_.memstore_read_row_cnt_);
+    }
   }
   return ret;
 }

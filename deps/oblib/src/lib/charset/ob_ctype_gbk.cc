@@ -368,7 +368,8 @@ static ObCharsetHandler ob_charset_gbk_handler=
   ob_strntoull_8bit,
   ob_strntod_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 

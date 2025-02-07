@@ -532,6 +532,8 @@ int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_i
   if (OB_ISNULL(aggr_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
+  } else if (OB_FAIL(aggr_expr->calc_hash())) {
+    LOG_WARN("failed to calc expr hash", K(ret));
   } else {
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < new_aggr_items.count(); ++i) {
@@ -2253,7 +2255,9 @@ int ObExpandAggregateUtils::add_win_exprs(ObSelectStmt *select_stmt,
       if (OB_ISNULL(new_win_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(new_win_exprs.at(i)));
-      } else if (OB_ISNULL(win_expr = select_stmt->get_same_win_func_item(new_win_exprs.at(i)))) {
+      } else if (OB_FAIL(select_stmt->get_same_win_func_item(new_win_exprs.at(i), win_expr))) {
+        LOG_WARN("failed to get same win func item", K(ret));
+      } else if (OB_ISNULL(win_expr)) {
         if (OB_FAIL(select_stmt->add_window_func_expr(new_win_exprs.at(i)))) {
           LOG_WARN("failed to add window func expr", K(ret));
         }

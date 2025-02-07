@@ -30,6 +30,7 @@ public:
   int check_exist(const ObDieingTabletMapKey &key, bool &exist);
   int reg_tablet(const ObDieingTabletMapKey &key);
   int unreg_tablet(const ObDieingTabletMapKey &key);
+  int64_t count() const { return ex_tablet_map_.size(); }
   void destroy();
 private:
   bool is_inited_;

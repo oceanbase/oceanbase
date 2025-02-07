@@ -39,11 +39,13 @@ public:
 private:
   static int check_argument(const ObObj &input_param, bool allow_null,
                             bool need_case_up, int32_t param_idx,
-                            int64_t max_len, ObString &output_param);
+                            int64_t max_len, ObString &output_param,
+                            ObIAllocator &alloc);
   static int check_client_id(const ObObj &input_param,
                              int64_t max_len,
-                             ObString &output_param);
-  static void try_caseup(ObCollationType cs_type, ObString &str_val);
+                             ObString &output_param,
+                             ObIAllocator &alloc);
+  static int try_caseup(ObCollationType cs_type, ObString &str_val, ObIAllocator &alloc);
   
   static int check_privileges(ObPLContext *pl_ctx,
                               const ObString &package_name,

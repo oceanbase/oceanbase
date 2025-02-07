@@ -23,6 +23,7 @@
 #include "logservice/ob_log_handler.h"
 #include "lib/container/ob_array_serialization.h"
 #include "share/ob_occam_thread_pool.h"
+#include "storage/ls/ob_freezer_define.h"
 
 namespace oceanbase
 {
@@ -51,7 +52,6 @@ namespace checkpoint
 {
 class ObDataCheckpoint;
 }
-
 
 class ObFreezeState
 {
@@ -199,16 +199,19 @@ public:
 
 public:
   /********************** freeze **********************/
+  // freezer interface
   int logstream_freeze(const int64_t trace_id);
-  int wait_ls_freeze_finish();
-  int wait_tablet_freeze_finish(ObIArray<ObTableHandleV2> &frozen_memtable_handles,
-                                ObIArray<ObTabletID> &freeze_failed_tablets);
-  int ls_inner_tablet_freeze(const ObTabletID &tablet_id);
   int tablet_freeze(const int64_t trace_id,
                     const ObIArray<ObTabletID> &tablet_ids,
                     const bool need_rewrite_meta,
                     ObIArray<ObTableHandleV2> &frozen_memtable_handles,
                     ObIArray<ObTabletID> &freeze_failed_tablets);
+
+  // freezer helper
+  int wait_ls_freeze_finish();
+  int wait_tablet_freeze_finish(ObIArray<ObTableHandleV2> &frozen_memtable_handles,
+                                ObIArray<ObTabletID> &freeze_failed_tablets);
+  int ls_inner_tablet_freeze(const ObTabletID &tablet_id);
   int get_all_async_freeze_tablets(const int64_t ls_epoch, ObIArray<ObTabletID> &tablet_ids);
   bool is_async_freeze_tablets_empty() const { return async_freeze_tablets_.empty(); }
   void record_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);

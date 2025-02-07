@@ -161,13 +161,15 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
 
     // init proto20 context
     bool is_proto20_supported = (OB_2_0_CS_TYPE == conn->get_cs_protocol_type());
+    bool is_proto20_compress = conn->proxy_cap_flags_.is_ob_protocol_v2_compress();
     if (is_proto20_supported) {
       proto20_context_.reset();
       proto20_context_.is_proto20_used_ = is_proto20_supported;
       proto20_context_.comp_seq_ = comp_seq;
       proto20_context_.request_id_ = conn->proto20_pkt_context_.proto20_last_request_id_;
       proto20_context_.proto20_seq_ = static_cast<uint8_t>(conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1);
-      proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + OB_MYSQL_COMPRESSED_HEADER_SIZE;
+      // if v2 compress protocol, not add compress head here
+      proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + (is_proto20_compress ? 0 : OB_MYSQL_COMPRESSED_HEADER_SIZE);
       proto20_context_.tailer_len_ = OB20_PROTOCOL_TAILER_LENGTH;
       proto20_context_.next_step_ = START_TO_FILL_STEP;
       proto20_context_.is_checksum_off_ = false;
@@ -251,7 +253,6 @@ int ObMPPacketSender::response_compose_packet(obmysql::ObMySQLPacket &pkt,
                                               sql::ObSQLSessionInfo* session,
                                               bool update_comp_pos) {
   int ret = OB_SUCCESS;
-
   comp_context_.update_last_pkt_pos(ez_buf_->last);
   if (OB_FAIL(response_packet(pkt, session))) {
     LOG_WARN("failed to response packet", K(ret));
@@ -272,7 +273,8 @@ int ObMPPacketSender::response_compose_packet(obmysql::ObMySQLPacket &pkt,
     } else if (OB_FAIL(try_encode_with(okp,
                                        ez_buf_->end - ez_buf_->pos,
                                        seri_size,
-                                       0))) {
+                                       0,
+                                       proto20_context_.is_proto20_used()))) {
       LOG_WARN("failed to encode packet", K(ret));
     } else {
       LOG_DEBUG("succ encode packet", K(okp), K(seri_size));
@@ -455,6 +457,7 @@ int ObMPPacketSender::send_error_packet(int err,
 
       char tmp_msg_buf[MAX_MSG_BUF_SIZE];
       strncpy(tmp_msg_buf, message.ptr(), message.length()); // msg_buf is overwriten
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
       msg_buf_size = snprintf(msg_buf, MAX_MSG_BUF_SIZE,
                            "%.*s\n"
                            "[%s] "
@@ -464,7 +467,7 @@ int ObMPPacketSender::send_error_packet(int err,
                            addr_buf,
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                            tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec,
-                              ObCurTraceId::get_trace_id_str());
+                              ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)));
       (void) msg_buf_size; // make compiler happy
       message = ObString::make_string(msg_buf); // default error message
     }
@@ -922,10 +925,12 @@ int ObMPPacketSender::send_eof_packet(const ObSQLSessionInfo &session,
 int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
                                       int64_t current_size,
                                       int64_t &seri_size,
-                                      int64_t try_steps)
+                                      int64_t try_steps,
+                                      bool is_composed_ok_pkt)
 {
   int ret = OB_SUCCESS;
   ObProtoEncodeParam param;
+  param.is_composed_ok_pkt_ = is_composed_ok_pkt;
   seri_size = 0;
   if (OB_ISNULL(ez_buf_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -972,12 +977,12 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
       // if failed, try flush ---> alloc larger mem ----> continue encoding
       int last_ret = param.encode_ret_;
 
-      if (need_flush_buffer()) {
+      if (need_flush_buffer() && !param.is_composed_ok_pkt_) {
         // try again with same buf size
         if (OB_FAIL(flush_buffer(false))) {
           LOG_WARN("failed to flush_buffer", K(ret), K(last_ret));
         } else {
-          ret = try_encode_with(pkt, current_size, seri_size, try_steps);
+          ret = try_encode_with(pkt, current_size, seri_size, try_steps, is_composed_ok_pkt);
         }
       } else {
         if (try_steps >= MAX_TRY_STEPS) {
@@ -994,7 +999,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
             if (OB_FAIL(resize_ezbuf(new_alloc_size))) {
               LOG_ERROR("fail to resize_ezbuf", K(ret), K(last_ret));
             } else {
-              ret = try_encode_with(pkt, new_alloc_size, seri_size, try_steps);
+              ret = try_encode_with(pkt, new_alloc_size, seri_size, try_steps, is_composed_ok_pkt);
             }
           }
         }

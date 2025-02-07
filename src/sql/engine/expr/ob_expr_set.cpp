@@ -85,7 +85,7 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
   int ret = OB_SUCCESS;
   pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj.get_ext());
   ObIAllocator &allocator = ctx.get_allocator();
-  ObIAllocator *collection_allocator = NULL;
+  pl::ObPLAllocator1 *collection_allocator = NULL;
   ObObj *data_arr = NULL;
   int64_t elem_count = 0;
 
@@ -111,13 +111,15 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
     } else {
       coll = new(coll)pl::ObPLNestedTable(c1->get_id());
       collection_allocator =
-                  static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
-      collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
+                  static_cast<pl::ObPLAllocator1*>(allocator.alloc(sizeof(pl::ObPLAllocator1)));
       if (OB_ISNULL(collection_allocator)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc pl collection allocator failed.", K(ret));
       } else {
-        if (OB_FAIL(ObExprMultiSet::calc_ms_one_distinct(collection_allocator,
+        collection_allocator = new(collection_allocator)pl::ObPLAllocator1(pl::PL_MOD_IDX::OB_PL_COLLECTION, &allocator);
+        if (OB_FAIL(collection_allocator->init(nullptr))) {
+          LOG_WARN("fail to init pl allocator", K(ret));
+        } else if (OB_FAIL(ObExprMultiSet::calc_ms_one_distinct(collection_allocator,
                                                           reinterpret_cast<ObObj *>(c1->get_data()),
                                                           c1->get_count(),
                                                           data_arr,
@@ -133,12 +135,17 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
   else if (0 != elem_count && OB_ISNULL(data_arr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected result.", K(elem_count), K(data_arr), K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(collection_allocator)) {
+      collection_allocator->~ObPLAllocator1();
+    }
   } else {
     coll->set_allocator(collection_allocator);
     coll->set_type(c1->get_type());
     coll->set_id(c1->get_id());
     coll->set_is_null(c1->is_null());
-    coll->set_element_type(c1->get_element_type());
+    coll->set_element_desc(c1->get_element_desc());
     coll->set_column_count(c1->get_column_count());
     coll->set_not_null(c1->is_not_null());
     coll->set_count(elem_count);
@@ -184,7 +191,7 @@ int ObExprSet::calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
     //Collection constructed here must be recorded and destructed at last
     if (OB_NOT_NULL(coll) &&
         OB_NOT_NULL(coll->get_allocator())) {
-      common::ObIAllocator *collection_allocator = dynamic_cast<pl::ObPLCollAllocator*>(coll->get_allocator());
+      pl::ObPLAllocator1 *collection_allocator = dynamic_cast<pl::ObPLAllocator1*>(coll->get_allocator());
       if (OB_NOT_NULL(collection_allocator)) {
         int tmp_ret = OB_SUCCESS;
         auto &exec_ctx = ctx.exec_ctx_;

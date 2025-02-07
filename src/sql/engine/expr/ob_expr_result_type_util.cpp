@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_res_type_map.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -118,10 +119,10 @@ int ObExprResultTypeUtil::get_relational_equal_type(ObObjType &type,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("the wrong type", K(type1), K(type2), K(ret));
   } else {
-    // we donot have ORACLE_RELATIONAL_EQUAL_TYPE, just use ORACLE_RELATIONAL_CMP_TYPE instead.
-    type = (lib::is_oracle_mode()
-            ? ORACLE_RELATIONAL_CMP_TYPE[type1][type2]
-            : RELATIONAL_EQUAL_TYPE[type1][type2]);
+    const ObObjType *equal_type_array = lib::is_oracle_mode()
+                                        ? ORACLE_RELATIONAL_EQUAL_TYPE
+                                        : RELATIONAL_EQUAL_TYPE;
+    type = equal_type_array[type1] == equal_type_array[type2] ? equal_type_array[type1] : ObMaxType;
   }
   return ret;
 }
@@ -253,15 +254,24 @@ int ObExprResultTypeUtil::get_div_result_type(ObObjType &result_type,
     }
   } else {
     result_type = DIV_RESULT_TYPE[type1][type2];
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     // FIXME: @zuojiao.hzj : remove this after we can keep high division calc scale
-    // using decimal int
-    bool all_decint_args = (ob_is_decimal_int(type1) && ob_is_decimal_int(type2));
+    // using decimal int as division calc types
+    bool can_use_decint_div = (ob_is_decimal_int(type1) || ob_is_integer_type(type1))
+                           && (ob_is_decimal_int(type2) || ob_is_integer_type(type2))
+                           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0
+                           && tenant_config.is_valid()
+                           && tenant_config->_enable_decimal_int_type;
     if (ob_is_decimal_int(result_type)) {
       result_type = ObNumberType;
     }
-    if (ob_is_decimal_int(result_type) && !all_decint_args) {
+    if (ob_is_decimal_int(result_type) && !can_use_decint_div) {
       result_ob1_type = ObNumberType;
       result_ob2_type = ObNumberType;
+    } else if (can_use_decint_div && result_type == ObNumberType) {
+      // use decimal int as calc type
+      result_ob1_type = ObDecimalIntType;
+      result_ob2_type = ObDecimalIntType;
     } else {
       result_ob1_type = result_type;
       result_ob2_type = result_type;
@@ -868,7 +878,7 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     ObDataType coll_elem2_type;
     bool l_is_vec = false;
     bool r_is_vec = false;
-    ObObjType element_type;
+    ObObjMeta element_meta;
     if (OB_FAIL(ObArrayExprUtils::check_array_type_compatibility(exec_ctx, type1.get_subschema_id(),
                                                                   type2.get_subschema_id(), is_compatiable))) {
       LOG_WARN("failed to check array compatibilty", K(ret));
@@ -890,8 +900,8 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
       } else {
         calc_type.set_collection(type2.get_subschema_id());
       }
-    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type.get_obj_type(), coll_elem2_type.get_obj_type(),
-                                           depth, calc_type, element_type))) {
+    } else if (OB_FAIL(get_array_calc_type(exec_ctx, coll_elem1_type, coll_elem2_type,
+                                           depth, calc_type, element_meta))) {
       LOG_WARN("failed to get array calc type", K(ret));
     }
   }
@@ -899,26 +909,56 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
 }
 
 int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
-                                              const ObObjType &type1,
-                                              const ObObjType &type2,
+                                              const ObDataType &coll_elem1_type,
+                                              const ObDataType &coll_elem2_type,
                                               uint32_t depth,
                                               ObExprResType &calc_type,
-                                              ObObjType &element_type)
+                                              ObObjMeta &element_meta)
 {
   int ret = OB_SUCCESS;
+  const ObObjType type1 = coll_elem1_type.get_obj_type();
+  const ObObjType type2 = coll_elem2_type.get_obj_type();
+  ObDataType elem_data;
   ObObjType coll_calc_type = ARITH_RESULT_TYPE[type1][type2];
+  ObCollationType calc_collection_type = CS_TYPE_INVALID;
   if (ob_is_int_uint(ob_obj_type_class(type1), ob_obj_type_class(type2))) {
     coll_calc_type = ObIntType;
-  } else if (type1 == ObFloatType && type2 == ObFloatType) {
-    coll_calc_type = ObFloatType;
+  } else if (ob_is_float_tc(type1) &&  ob_is_float_tc(type2)) {
+    if (type1 == ObFloatType || type2 == ObFloatType) {
+      coll_calc_type = ObFloatType;
+    } else {
+      coll_calc_type = ObUFloatType;
+    }
   } else if (ob_is_null(type1)) {
     coll_calc_type = type2;
   } else if (ob_is_null(type2)) {
     coll_calc_type = type1;
   }
-  ObDataType elem_data;
+  elem_data.meta_.set_type(coll_calc_type);
+  elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
+  if (type1 == ObVarcharType || type2 == ObVarcharType) {
+    coll_calc_type = ObVarcharType;
+    ObLength len1 = 0;
+    ObLength len2 = 0;
+    if (ob_is_string_tc(type1)) {
+      len1 = coll_elem1_type.get_length();
+      calc_collection_type = coll_elem1_type.get_collation_type();
+    } else {
+      len1 = ObAccuracy::MAX_ACCURACY[type1].get_precision();
+    }
+    if (ob_is_string_tc(type2)) {
+      len2 = coll_elem2_type.get_length();
+      if (calc_collection_type == CS_TYPE_INVALID) {
+        calc_collection_type = coll_elem2_type.get_collation_type();
+      }
+    } else {
+      len2 = ObAccuracy::MAX_ACCURACY[type2].get_precision();
+    }
+    elem_data.meta_.set_type(coll_calc_type);
+    elem_data.meta_.set_collation_type(calc_collection_type);
+    elem_data.set_length(MAX(len1, len2));
+  }
   uint16_t subschema_id;
-  elem_data.set_obj_type(coll_calc_type);
   const int MAX_LEN = 256;
   char type_name[MAX_LEN] = {0};
   ObString type_info;
@@ -932,7 +972,43 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
     LOG_WARN("failed get subschema id", K(ret), K(type_info));
   } else {
     calc_type.set_collection(subschema_id);
-    element_type = coll_calc_type;
+    element_meta = elem_data.meta_;
+  }
+  return ret;
+}
+
+int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObDataType &elem_type)
+{
+  int ret = OB_SUCCESS;
+  ObObjType type1 = input_type.get_type();
+  ObObjType type2 = elem_type.get_obj_type();
+  ObObjType res_type = MERGE_RESULT_TYPE[type1][type2];
+  ObObjMeta meta;
+  if (res_type == ObDecimalIntType || res_type == ObNumberType || res_type == ObUNumberType) {
+    // decimal type isn't supported in array, use double/bigint instead
+    if (input_type.get_scale() != 0 || ob_is_float_tc(type2) || ob_is_double_tc(type2)) {
+      meta.set_double();
+    } else {
+      meta.set_int();
+    }
+  } else {
+    meta.set_type(res_type);
+  }
+  if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
+    ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
+    LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
+  } else if (ob_is_string_tc(res_type)) {
+    if (ob_is_string_tc(type2)) {
+      // do nothing
+    } else {
+      // set max len to fix plan cache issue
+      meta.set_collation_type(input_type.get_collation_type());
+      elem_type.set_meta_type(meta);
+      elem_type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
+    }
+  } else {
+    elem_type.set_meta_type(meta);
+    elem_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[meta.get_type()]);
   }
   return ret;
 }

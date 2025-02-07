@@ -578,6 +578,27 @@ int ObLogHandler::get_global_learner_list(common::GlobalLearnerList &learner_lis
   return palf_handle_.get_global_learner_list(learner_list);
 }
 
+int ObLogHandler::get_stable_membership(
+    palf::LogConfigVersion &config_version,
+    common::ObMemberList &member_list,
+    int64_t &paxos_replica_num,
+    common::GlobalLearnerList &learner_list) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "loghandler is not inited or maybe destroyed", K(ret), K(id_));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "loghandler is stopped", K(ret), K_(id));
+  } else if (OB_FAIL(palf_handle_.get_stable_membership(config_version,
+      member_list, paxos_replica_num, learner_list))) {
+    CLOG_LOG(WARN, "get_stable_membership failed", K(ret), KPC(this));
+  } else {/*do nothing*/}
+  return ret;
+}
+
 int ObLogHandler::get_election_leader(common::ObAddr &addr) const
 {
   RLockGuard guard(lock_);
@@ -2012,14 +2033,14 @@ int ObLogHandler::handle_acquire_log_rebuild_info_msg(const LogAcquireRebuildInf
     } else if (msg.rebuild_replica_end_lsn_ > leader_begin_lsn) {
       CLOG_LOG(INFO, "stale msg, ignore", K(ret), K_(id), K(msg), K(leader_begin_lsn));
     } else {
-      const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
-          LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
+      // const LogRebuildType type = (leader_end_lsn.val_ - msg.rebuild_replica_end_lsn_.val_ > FAST_REBUILD_THRESHOLD)?
+      //     LogRebuildType::FULL_REBUILD: LogRebuildType::FAST_REBUILD;
+      // always execute fast rebuild
+      const LogRebuildType type = LogRebuildType::FAST_REBUILD;
       palf::LSN base_lsn;
       palf::PalfBaseInfo base_info;
-      if (LogRebuildType::FULL_REBUILD == type && OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
+      if (OB_FAIL(palf_handle_.get_base_lsn(base_lsn))) {
         CLOG_LOG(WARN, "get_base_lsn failed", K(ret), K_(id));
-      } else if (LogRebuildType::FAST_REBUILD == type && OB_FAIL(palf_handle_.get_end_lsn(base_lsn))) {
-        CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K_(id));
       } else if (FALSE_IT(base_lsn = LSN(lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE))) {
       } else if (OB_FAIL(palf_handle_.get_base_info(base_lsn, base_info))) {
         CLOG_LOG(WARN, "get_base_info failed", K(ret), K_(id));

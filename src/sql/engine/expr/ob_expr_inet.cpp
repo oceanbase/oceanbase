@@ -386,7 +386,7 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
       bool is_ip_format_invalid = false;
       if (OB_FAIL(ob_inet_aton(expr_datum, m_text, is_ip_format_invalid))) {
         LOG_WARN("fail to excute ob_inet_aton", K(ret));
-      }else if (is_ip_format_invalid) {
+      } else if (is_ip_format_invalid) {
         uint64_t cast_mode = 0;
         ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
         ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
@@ -402,9 +402,11 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
                                             sql_mode,
                                             cast_mode);
           if (CM_IS_WARN_ON_FAIL(cast_mode)) { //support no strict sql_mode
+            LOG_USER_WARN(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, "inet_aton");
             expr_datum.set_null();
           } else {
-            ret = OB_INVALID_ARGUMENT;
+            ret = OB_ERR_INCORRECT_STRING_VALUE_FOR_INET;
+            LOG_USER_ERROR(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, "inet_aton");
             LOG_WARN("fail to convert ip to int", K(ret), K(m_text));
           }
         }
@@ -486,7 +488,8 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         bool is_ip_format_invalid = false;
         ObString num_val = text.get_string();
         ObString ip_str(MAX_IP_ADDR_LENGTH, 0, buf);
-        if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)) {
+        if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_) ||
+            num_val.length() == 0) {
           is_ip_format_invalid = true;
           LOG_WARN("ip format invalid", K(ret), K(text));
         } else if (OB_FAIL(ObExprInetCommon::ip_to_str(num_val, is_ip_format_invalid, ip_str))) {
@@ -596,9 +599,12 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
                                               session->is_ignore_stmt(),
                                               sql_mode, cast_mode);
             if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+              // ignore ret
+              LOG_USER_WARN(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, "inet6_aton");
               expr_datum.set_null(); //support no strict mode
             } else {
-              ret = OB_INVALID_ARGUMENT;
+              ret = OB_ERR_INCORRECT_STRING_VALUE_FOR_INET;
+              LOG_USER_ERROR(OB_ERR_INCORRECT_STRING_VALUE_FOR_INET, "inet6_aton");
               LOG_WARN("ip format invalid", K(ret));
             }
           }

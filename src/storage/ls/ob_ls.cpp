@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/utility/utility.h"
@@ -31,6 +32,7 @@
 #ifdef OB_BUILD_ARBITRATION
 #include "rootserver/ob_arbitration_service.h"
 #endif
+#include "observer/dbms_scheduler/ob_dbms_sched_service.h"
 #include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
@@ -78,6 +80,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_public_block_gc_service.h"
 #endif
+#include "storage/tx_storage/ob_tx_leak_checker.h"
 
 namespace oceanbase
 {
@@ -88,7 +91,6 @@ using namespace rootserver;
 
 namespace storage
 {
-ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA);
 
 using namespace checkpoint;
 using namespace mds;
@@ -133,6 +135,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
                const SCN &create_scn,
+               const ObMajorMVMergeInfo &major_mv_merge_info,
                const ObLSStoreFormat &store_format,
                observer::ObIMetaReport *reporter)
 {
@@ -161,8 +164,9 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    migration_status,
                                    restore_status,
                                    create_scn,
+                                   major_mv_merge_info,
                                    store_format))) {
-    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(major_mv_merge_info));
   } else {
     rs_reporter_ = reporter;
     ls_freezer_.init(this);
@@ -503,11 +507,22 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
 {
   int ret = OB_SUCCESS;
   has_cs_replica = false;
+  ObRole role = INVALID_ROLE;
   ObMemberList member_list;
   GlobalLearnerList learner_list;
+  int64_t proposal_id = 0;
   int64_t paxos_replica_number = 0;
-  if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
-    LOG_WARN("fail to get member list and learner list", K(ret), K(ls_meta_.ls_id_));
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+    LOG_WARN("fail to get role", K(ret), KPC(this));
+  } else if (LEADER != role) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("local ls is not leader", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
+    LOG_WARN("fail to get member list and learner list", K(ret), K_(ls_meta));
   } else {
     for (int64_t i = 0; i < learner_list.get_member_number(); i++) {
       const ObMember &learner = learner_list.get_learner(i);
@@ -517,16 +532,6 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
       }
     }
   }
-
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    if (EN_LS_NOT_SEE_CS_REPLICA) {
-      has_cs_replica = false;
-      LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA", K(ret), K(has_cs_replica));
-    }
-  }
-#endif
-
   return ret;
 }
 
@@ -720,6 +725,7 @@ bool ObLS::safe_to_destroy()
                  K(ret), KP(this), KPC(this));
         ref_mgr_.print();
         PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_LS_HANDLE);
+        READ_CHECKER_PRINT(ls_meta_.ls_id_);
       }
     } else {
       LOG_INFO("this ls is safe to destroy", KP(this), KPC(this));
@@ -1011,6 +1017,7 @@ int ObLS::register_common_service()
   REGISTER_TO_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   REGISTER_TO_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   REGISTER_TO_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  REGISTER_TO_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
     REGISTER_TO_LOGSERVICE(SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE, &ls_prewarm_handler_);
@@ -1070,8 +1077,10 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(ObHeartbeatService *));
       REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+      REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
     if (is_meta_tenant(tenant_id)) {
+      REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
     }
   }
@@ -1098,6 +1107,7 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+    REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
   }
 
   if (ls_id.is_user_ls()) {
@@ -1144,6 +1154,7 @@ void ObLS::unregister_common_service_()
   UNREGISTER_FROM_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   UNREGISTER_FROM_LOGSERVICE(TRANSFER_HANDLER_LOG_BASE_TYPE, &transfer_handler_);
   UNREGISTER_FROM_LOGSERVICE(LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE, &block_tx_service_);
+  UNREGISTER_FROM_LOGSERVICE(TABLE_LOCK_LOG_BASE_TYPE, &lock_table_);
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
     UNREGISTER_FROM_LOGSERVICE(SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE, &ls_prewarm_handler_);
@@ -1202,16 +1213,20 @@ void ObLS::unregister_sys_service_()
     UNREGISTER_FROM_LOGSERVICE(CLONE_SCHEDULER_LOG_BASE_TYPE, clone_scheduler);
     if (is_sys_tenant(MTL_ID())) {
       ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
+      ObSSNTAllocService *SSNT_service = GCTX.net_frame_->get_SSNT_service();
       UNREGISTER_FROM_LOGSERVICE(NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
+      UNREGISTER_FROM_LOGSERVICE(SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE, SSNT_service);
       UNREGISTER_FROM_LOGSERVICE(WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE, GCTX.wr_service_);
       ObHeartbeatService * heartbeat_service = MTL(ObHeartbeatService*);
       UNREGISTER_FROM_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
       UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
       UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+      UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);
       UNREGISTER_FROM_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, snapshot_scheduler);
+      UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     }
   }
 }
@@ -1240,6 +1255,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+    UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
@@ -1539,6 +1555,9 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
       ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
       ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
       ls_info.tx_blocked_ = tx_blocked;
+      ls_info.mv_major_merge_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_;
+      ls_info.mv_publish_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_publish_;
+      ls_info.mv_safe_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_safe_calc_;
       ls_info.required_data_disk_size_ = required_data_disk_size;
       if (tx_blocked) {
         TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
@@ -1778,7 +1797,7 @@ int ObLS::update_tablet_table_store(
   return ret;
 }
 
-int ObLS::build_ha_tablet_new_table_store(
+int ObLS::build_tablet_with_batch_tables(
     const ObTabletID &tablet_id,
     const ObBatchUpdateTableStoreParam &param)
 {
@@ -1796,7 +1815,7 @@ int ObLS::build_ha_tablet_new_table_store(
     ret = OB_EAGAIN;
     LOG_WARN("build ha tablet new table store rebuild seq not same, need retry",
         K(ret), K(ls_id), K(tablet_id), K(rebuild_seq), K(param));
-  } else if (OB_FAIL(ls_tablet_svr_.build_ha_tablet_new_table_store(tablet_id, param))) {
+  } else if (OB_FAIL(ls_tablet_svr_.build_tablet_with_batch_tables(tablet_id, param))) {
     LOG_WARN("failed to update tablet table store", K(ret), K(ls_id), K(tablet_id), K(param));
   }
   return ret;
@@ -1951,8 +1970,10 @@ int ObLS::replay_get_tablet(
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData data;
-  bool is_committed = false;
   const bool replay_allow_tablet_not_exist = true;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_stat;// will be removed later
+  share::SCN trans_version;// will be removed later
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1963,35 +1984,34 @@ int ObLS::replay_get_tablet(
     // do nothing
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id), K(scn));
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(ls_id), K(tablet_id), K(scn));
   } else if (tablet->is_empty_shell()) {
     ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
-    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
-      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
-    } else if (!is_committed) {
+    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
+      LOG_WARN("failed to get latest tablet status", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is empty shell but user data is uncommitted, unexpected", K(ret), KPC(tablet));
-    } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
-    } else if (ObTabletStatus::DELETED != tablet_status
-        && ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status) {
+    } else if (OB_UNLIKELY(!data.tablet_status_.is_deleted_for_gc())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), KPC(tablet));
+      LOG_WARN("tablet is empty shell but user data is unexpected", K(ret), K(data), KPC(tablet));
     } else {
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
     }
   } else if ((!is_update_mds_table && scn > tablet->get_clog_checkpoint_scn())
       || (is_update_mds_table && scn > tablet->get_mds_checkpoint_scn())) {
-    if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
+    if (OB_FAIL(tablet->get_latest(data, writer, trans_stat, trans_version))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_EAGAIN;
         LOG_INFO("read empty mds data, should retry", KR(ret), K(ls_id), K(tablet_id), K(scn));
       } else {
         LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
       }
-    } else if (!is_committed) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
       if ((ObTabletStatus::NORMAL == data.tablet_status_ && data.create_commit_version_ == ObTransVersion::INVALID_TRANS_VERSION)
-          || ObTabletStatus::TRANSFER_IN == data.tablet_status_) {
+          || ObTabletStatus::TRANSFER_IN == data.tablet_status_
+          || ObTabletStatus::SPLIT_DST == data.tablet_status_) {
         ret = OB_EAGAIN;
         LOG_INFO("latest transaction has not committed yet, should retry", KR(ret), K(ls_id), K(tablet_id),
             K(scn), "clog_checkpoint_scn", tablet->get_clog_checkpoint_scn(), K(data));
@@ -2006,11 +2026,17 @@ int ObLS::replay_get_tablet(
   return ret;
 }
 
-int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int64_t input_abs_timeout_ts)
+int ObLS::logstream_freeze(const int64_t trace_id,
+                           const bool is_sync,
+                           const int64_t input_abs_timeout_ts,
+                           const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
 
-  if (is_sync) {
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (is_sync) {
     const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
@@ -2024,10 +2050,16 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
     const bool is_ls_freeze = true;
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 
-int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeout_ts)
+int ObLS::logstream_freeze_task(const int64_t trace_id,
+                                const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObClockGenerator::getClock();
@@ -2071,17 +2103,27 @@ int ObLS::logstream_freeze_task(const int64_t trace_id, const int64_t abs_timeou
 int ObLS::tablet_freeze(const ObTabletID &tablet_id,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
-  if (tablet_id.is_ls_inner_tablet()) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (tablet_id.is_ls_inner_tablet()) {
     ret = ls_freezer_.ls_inner_tablet_freeze(tablet_id);
   } else {
     ObSEArray<ObTabletID, 1> tablet_ids;
     if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
       STORAGE_LOG(WARN, "push back tablet id failed", KR(ret), K(tablet_id));
     } else {
-      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids, is_sync, input_abs_timeout_ts, need_rewrite_meta);
+      ret = tablet_freeze(checkpoint::INVALID_TRACE_ID,
+                          tablet_ids,
+                          is_sync,
+                          input_abs_timeout_ts,
+                          need_rewrite_meta,
+                          source);
     }
   }
   return ret;
@@ -2091,13 +2133,18 @@ int ObLS::tablet_freeze(const int64_t trace_id,
                         const ObIArray<ObTabletID> &tablet_ids,
                         const bool is_sync,
                         const int64_t input_abs_timeout_ts,
-                        const bool need_rewrite_meta)
+                        const bool need_rewrite_meta,
+                        const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
   STORAGE_LOG(
       DEBUG, "start tablet freeze", K(tablet_ids), K(is_sync), KTIME(input_abs_timeout_ts), K(need_rewrite_meta));
   int64_t freeze_epoch = ATOMIC_LOAD(&switch_epoch_);
-  if (need_rewrite_meta && (!is_sync)) {
+
+  if (!is_valid_freeze_source(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected freeze source", K(source));
+  } else if (need_rewrite_meta && (!is_sync)) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(ERROR,
                 "tablet freeze for rewrite meta must be sync freeze ",
@@ -2129,6 +2176,11 @@ int ObLS::tablet_freeze(const int64_t trace_id,
     (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
     (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
+
+  if (OB_SUCC(ret)) {
+    MTL(storage::ObTenantFreezer *)->record_freezer_source_event(ls_meta_.ls_id_, source);
+  }
+
   return ret;
 }
 
@@ -2214,32 +2266,29 @@ void ObLS::record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_
   (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn,
+                                      const int64_t abs_timeout_ts,
+                                      const bool is_tenant_freeze,
+                                      const ObFreezeSourceFlag source)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
-  if (!lock_myself.locked()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
-  } else {
-    if (is_tenant_freeze) {
-      ObDataCheckpoint::set_tenant_freeze();
-      LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
-    }
-    ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
-    ObDataCheckpoint::reset_tenant_freeze();
+  if (is_tenant_freeze) {
+    ObDataCheckpoint::set_tenant_freeze();
+    LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
   }
+  ObDataCheckpoint::set_freeze_source(source);
+  ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+  ObDataCheckpoint::reset_freeze_source();
+  ObDataCheckpoint::reset_tenant_freeze();
   return ret;
 }
 
 int ObLS::flush_to_recycle_clog()
 {
   int ret = OB_SUCCESS;
-
   int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
+
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2247,11 +2296,11 @@ int ObLS::flush_to_recycle_clog()
   } else if (OB_UNLIKELY(is_offline())) {
     ret = OB_MINOR_FREEZE_NOT_ALLOW;
     LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
+  } else if (FALSE_IT(ObDataCheckpoint::set_freeze_source(ObFreezeSourceFlag::CLOG_CHECKPOINT))) {
   } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(SCN::invalid_scn() /*recycle_scn*/))) {
     STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
-  } else {
-    // do nothing
   }
+  ObDataCheckpoint::reset_freeze_source();
   return ret;
 }
 
@@ -2506,6 +2555,8 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     // election, palf, log handler角色不统一时可能出现无主
     STORAGE_LOG(WARN, "diagnose rc service failed", K(ret), K(ls_id));
   }
+  DiagnoseFunctor fn(MTL_ID(), ls_id, info.read_only_tx_info_, 0, sizeof(info.read_only_tx_info_));
+  READ_CHECKER_FOR_EACH(fn);
   STORAGE_LOG(INFO, "diagnose finish", K(ret), K(info), K(ls_id));
   return ret;
 }
@@ -2735,7 +2786,7 @@ int ObLS::inner_check_allow_read_(
     LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
   }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
           || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
-              && restore_status.check_allow_read()) {
+              && (restore_status.check_allow_read() || is_sys_ls())) {
     allow_read = true;
   } else {
     allow_read = false;

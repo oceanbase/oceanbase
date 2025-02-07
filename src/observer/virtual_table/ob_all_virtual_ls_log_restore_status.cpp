@@ -71,12 +71,13 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
         SERVER_LOG(TRACE, "not restore or standby tenant", K(tenant_role), K(MTL_ID()));
       } else if (is_user_tenant(MTL_ID())) {
         if (OB_ISNULL(ls_svr)) {
-          ret = OB_ERR_UNEXPECTED;
+          // ignore ret
           SERVER_LOG(WARN, "mtl ObLSService should not be null", K(ret));
         } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
           SERVER_LOG(WARN, "get ls iter failed", K(ret));
+          ret = OB_ITER_END;
         } else if (OB_ISNULL(iter = guard.get_ptr())) {
-          ret = OB_ERR_UNEXPECTED;
+          // ignore ret
           SERVER_LOG(WARN, "ls iter is NULL", K(ret), K(iter));
         } else {
           while (OB_SUCC(ret)) {
@@ -89,7 +90,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
                 SERVER_LOG(WARN, "iter to end", K(ret));
               }
             } else if (OB_ISNULL(ls)) {
-              ret = OB_ERR_UNEXPECTED;
+              // ignore ret
               SERVER_LOG(WARN, "ls is NULL", K(ret), K(ls));
             } else {
               SERVER_LOG(TRACE, "start to iterate this log_stream", K(MTL_ID()), K(ls->get_ls_id()));
@@ -97,7 +98,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
               logservice::RestoreStatusInfo sys_restore_status_info;
               restore_handler = ls->get_log_restore_handler();
               if (OB_ISNULL(restore_handler)) {
-                ret = OB_ERR_UNEXPECTED;
+                // ignore ret
                 SERVER_LOG(WARN, "restore handler is NULL", K(ret), K(ls));
               } else if (OB_FAIL(restore_handler->get_ls_restore_status_info(restore_status_info))) {
                 SERVER_LOG(WARN, "fail to get ls restore status info");
@@ -114,7 +115,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
               } else {  // sys ls
                 rootserver::ObRecoveryLSService *ls_recovery_svr = MTL(rootserver::ObRecoveryLSService*);
                 if (OB_ISNULL(ls_recovery_svr)) {
-                  ret = OB_ERR_UNEXPECTED;
+                  // ignore ret
                   SERVER_LOG(WARN, "ls recovery service is NULL", K(ret), K(ls));
                 } else if (OB_FAIL(ls_recovery_svr->get_sys_restore_status(sys_restore_status_info))) {
                   SERVER_LOG(WARN, "get sys restore status failed", K(ls));

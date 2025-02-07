@@ -80,6 +80,10 @@ public:
     ttl_status_.status_ = OB_TTL_TASK_INVALID;
   }
 
+  OB_INLINE bool is_finished() { return is_finished_; }
+
+  OB_INLINE int64_t get_task_start_ts() { return ttl_status_.task_start_time_; }
+
   TO_STRING_KV(K_(tenant_id),
                K_(ttl_status),
                K_(is_finished));
@@ -97,11 +101,11 @@ public:
   : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
     need_reload_(true), is_leader_(true), need_do_for_switch_(true)
   {}
-  ~ObTTLTaskScheduler() {}
+  virtual ~ObTTLTaskScheduler() {}
 
   int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
 
-  int add_ttl_task(ObTTLTaskType task_type);
+  int add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigger_type);
 
   void reset_local_tenant_task();
 
@@ -110,11 +114,16 @@ public:
 
   void runTimerTask() override;
 
-  int try_add_periodic_task();
   void set_need_reload(bool need_reload) { ATOMIC_STORE(&need_reload_, need_reload); }
-
   void pause();
   void resume();
+public:
+  virtual int try_add_periodic_task();
+  virtual uint64_t get_tenant_task_table_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLE_ID; }
+  virtual uint64_t get_tenant_task_tablet_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLET_ID; }
+  virtual common::ObTTLType get_ttl_task_type() { return common::ObTTLType::NORMAL; }
+  virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg);
+  virtual int check_task_need_move(bool &need_move);
 private:
   virtual int delete_task(const uint64_t tenant_id, const uint64_t task_id);
 
@@ -142,7 +151,8 @@ private:
                             bool &is_finished);
   int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
 
-  int check_task_need_move(bool &need_move);
+  int move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
+                                        common::ObMySQLTransaction& proxy);
 private:
   int check_all_tablet_finished(bool &all_finished);
   int check_tablet_table_finished(common::ObIArray<share::ObTabletTablePair> &pairs, bool &all_finished);
@@ -153,7 +163,7 @@ private:
   static const int64_t TBALET_CHECK_BATCH_SIZE = 1024;
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t DEFAULT_TABLET_PAIR_SIZE = 1024;
-private:
+protected:
   ObTTLTenantTask tenant_task_;
   ObArray<uint64_t> del_ten_arr_;
   common::ObMySQLProxy *sql_proxy_;
@@ -170,6 +180,42 @@ private:
   bool need_do_for_switch_; // need wait follower finish after switch leader
 };
 
+class ObTTLAllTaskScheduler : public common::ObTimerTask
+{
+public:
+  ObTTLAllTaskScheduler();
+  ~ObTTLAllTaskScheduler() {}
+  int init(const uint64_t tenant_id, ObMySQLProxy &sql_proxy);
+
+  int handle_user_ttl(const obrpc::ObTTLRequestArg& arg);
+
+  int resume();
+  int pause();
+  int set_need_reload(bool need_reload);
+  void runTimerTask() override;
+private:
+  template <typename T>
+  int alloc_and_init_scheduler(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
+private:
+  ObArenaAllocator allocator_; // use to alloc ObTTLTaskScheduler
+  bool is_inited_;
+  ObTTLTaskScheduler *user_ttl_scheduler_;
+  ObSEArray<ObTTLTaskScheduler *, 4> task_schedulers_;
+};
+
+class ObTTLHRowkeyTaskScheduler : public ObTTLTaskScheduler
+{
+public:
+  ObTTLHRowkeyTaskScheduler() {}
+  ~ObTTLHRowkeyTaskScheduler() {}
+  virtual uint64_t get_tenant_task_table_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLET_ID; }
+  virtual uint64_t get_tenant_task_tablet_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLE_ID; }
+  virtual int try_add_periodic_task() override;
+  virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg) override;
+  virtual int check_task_need_move(bool &need_move) override;
+  virtual common::ObTTLType get_ttl_task_type() { return common::ObTTLType::HBASE_ROWKEY; }
+};
+
 class ObTenantTTLManager
 {
 public:
@@ -178,8 +224,8 @@ public:
     : is_inited_(false),
       clear_ttl_history_task_(),
       tenant_id_(OB_INVALID_TENANT_ID),
-      task_scheduler_(),
-      tg_id_(0)
+      task_schedulers_(),
+      tg_id_(-1)
   {}
 
   virtual ~ObTenantTTLManager() {}
@@ -195,10 +241,9 @@ private:
   bool is_inited_;
   ObClearTTLHistoryTask clear_ttl_history_task_;
   uint64_t tenant_id_;
-  ObTTLTaskScheduler task_scheduler_;
+  ObTTLAllTaskScheduler task_schedulers_;
   int tg_id_;
 };
-
 
 } // end namespace table
 } // end namespace oceanbase

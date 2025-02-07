@@ -244,7 +244,8 @@ int ObRemoteSequenceExecutor::init_dblink_connection(ObExecContext &ctx)
                                                      link_type_))) {
     LOG_WARN("failed to init dblink param ctx", K(ret));
   } else if (OB_FAIL(dblink_proxy->create_dblink_pool(param_ctx,
-                                                      dblink_schema->get_host_addr(),
+                                                      dblink_schema->get_host_name(),
+                                                      dblink_schema->get_host_port(),
                                                       dblink_schema->get_tenant_name(),
                                                       dblink_schema->get_user_name(),
                                                       dblink_schema->get_plain_password(),

@@ -31,6 +31,26 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_HIGH_PRIORITY_TABLE_LOCK_TASK, ObHighPriorityTable
 OB_DEFINE_PROCESSOR_S(TableLock, OB_OUT_TRANS_LOCK_TABLE, ObOutTransLockTableP);
 OB_DEFINE_PROCESSOR_S(TableLock, OB_OUT_TRANS_UNLOCK_TABLE, ObOutTransUnlockTableP);
 
+class ObBatchReplaceLockTaskP
+  : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_BATCH_REPLACE_TABLE_LOCK_TASK>>
+{
+public:
+  explicit ObBatchReplaceLockTaskP(const ObGlobalContext &gctx) : gctx_(gctx) {}
+
+protected:
+  int process();
+private:
+  int process_for_replace_lock_table_(
+    const transaction::tablelock::ObLockTaskBatchRequest<transaction::tablelock::ObReplaceLockParam> &arg,
+    transaction::tablelock::ObTableLockTaskResult &result);
+  int replace_lock_for_tablet_in_table_(const share::ObLSID &ls_id,
+                                        transaction::ObTxDesc &tx_desc,
+                                        const transaction::tablelock::ObReplaceLockParam &lock_param);
+
+private:
+  const ObGlobalContext &gctx_ __maybe_unused;
+};
+
 class ObAdminRemoveLockP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_REMOVE_OBJ_LOCK>>
 {
 public:
@@ -52,8 +72,7 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpdateLockP);
 };
-
-}
-}
+}  // namespace observer
+}  // namespace oceanbase
 
 #endif /* OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_RPC_PROCESSOR_H_ */

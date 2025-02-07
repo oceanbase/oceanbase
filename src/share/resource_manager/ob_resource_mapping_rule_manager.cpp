@@ -15,6 +15,7 @@
 #include "lib/string/ob_string.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "share/io/ob_io_manager.h"
 #include "observer/ob_server_struct.h"
 
 
@@ -59,7 +60,7 @@ int ObResourceMappingRuleManager::refresh_group_mapping_rule(const uint64_t tena
     for (int64_t i = 0; i < rules.count() && OB_SUCC(ret); ++i) {
       ObResourceUserMappingRule &rule = rules.at(i);
       if (OB_FAIL(group_id_name_map_.set_refactored(
-                  combine_two_ids(rule.tenant_id_, rule.group_id_),
+                  ObTenantGroupIdKey(rule.tenant_id_, rule.group_id_),
                   rule.group_name_,
                   0 /* don't overwrite */))) {
         if (OB_HASH_EXIST == ret) {
@@ -75,6 +76,59 @@ int ObResourceMappingRuleManager::refresh_group_mapping_rule(const uint64_t tena
                           rule.group_id_,
                           1 /* overwrite */))) {
           LOG_WARN("fail set group name mapping to group id", K(rule), K(ret));
+        }
+      }
+    }
+    (void)clear_deleted_group(tenant_id, rules);
+  }
+  return ret;
+}
+
+int ObResourceMappingRuleManager::clear_deleted_group(
+    const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules)
+{
+  int ret = OB_SUCCESS;
+
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_TENANT_ID;
+    LOG_WARN("invalid config", K(ret), K(tenant_id));
+  } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
+    LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
+  } else {
+    ObSEArray<share::ObTenantGroupIdKey, 16> group_id_keys;
+    ObSEArray<ObGroupName, 16> group_names;
+    GetTenantGroupIdNameFunctor functor(tenant_id, group_id_keys, group_names);
+    if (OB_FAIL(group_id_name_map_.foreach_refactored(functor))) {
+      LOG_WARN("failed to do foreach", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < group_id_keys.count(); ++i) {
+        bool is_group_id_found = false;
+        for (int64_t j = 0; !is_group_id_found && j < rules.count(); ++j) {
+          const ObResourceUserMappingRule &rule = rules.at(j);
+          if (share::ObTenantGroupIdKey(rule.tenant_id_, rule.group_id_) == group_id_keys.at(i)) {
+            is_group_id_found = true;
+          }
+        }
+        if (!is_group_id_found) {
+          uint64_t deleted_group_id = group_id_keys.at(i).group_id_;
+          ObGroupName deleted_group_name = group_names.at(i);
+          LOG_INFO("group_id need to be cleared", K(tenant_id), K(deleted_group_id), K(deleted_group_name));
+          if (GCTX.cgroup_ctrl_->is_valid()) {
+            if (OB_FAIL(GCTX.cgroup_ctrl_->remove_cgroup(tenant_id, deleted_group_id))) {
+              LOG_WARN("failed to remove cgroup", K(ret), K(tenant_id), K(deleted_group_id));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(tenant_holder.get_ptr()->delete_consumer_group_config(deleted_group_id))) {
+              LOG_WARN("delete consumer group config failed", K(ret), K(tenant_id), K(deleted_group_id));
+            } else if (OB_FAIL(group_id_name_map_.erase_refactored(group_id_keys.at(i)))) {
+              LOG_WARN("fail erase group mapping from group_map", K(deleted_group_id), K(ret));
+            } else if (OB_FAIL(
+                          group_name_id_map_.erase_refactored(share::ObTenantGroupKey(tenant_id, deleted_group_name)))) {
+              LOG_WARN("fail erase group name mapping from group id", K(deleted_group_name), K(ret));
+            }
+          }
         }
       }
     }
@@ -98,26 +152,6 @@ int ObResourceMappingRuleManager::refresh_resource_mapping_rule(
     LOG_WARN("fail refresh function mapping rule", K(tenant_id), K(plan), K(ret));
   } else {
     LOG_INFO("refresh resource mapping rule success", K(tenant_id), K(plan));
-  }
-  return ret;
-}
-
-int ObResourceMappingRuleManager::reset_mapping_rules()
-{
-  int ret = OB_SUCCESS;
-  for (common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::const_iterator user_iter = user_rule_map_.begin();
-      OB_SUCC(ret) && user_iter != user_rule_map_.end(); ++user_iter) {
-    if (OB_FAIL(user_rule_map_.set_refactored(user_iter->first, 0, 1/*overwrite*/))) {
-      LOG_WARN("failed to reset user map", K(ret), K(user_iter->first));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::const_iterator func_iter = function_rule_map_.begin();
-        OB_SUCC(ret) && func_iter != function_rule_map_.end(); ++func_iter) {
-      if (OB_FAIL(function_rule_map_.set_refactored(func_iter->first, 0, 1/*overwrite*/))) {
-        LOG_WARN("failed to reset user map", K(ret), K(func_iter->first));
-      }
-    }
   }
   return ret;
 }
@@ -205,20 +239,24 @@ int ObResourceMappingRuleManager::clear_resource_function_mapping_rule(const uin
     const ObResourceMappingRuleSet &rules)
 {
   int ret = OB_SUCCESS;
-  for (common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::const_iterator func_iter = function_rule_map_.begin();
-      OB_SUCC(ret) && func_iter != function_rule_map_.end(); ++func_iter) {
-    if (func_iter->first.tenant_id_ == tenant_id && func_iter->second > 0) {
-      bool hit = false;
-      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
-        const ObResourceMappingRule &rule = rules.at(i);
-        if (share::ObTenantFunctionKey(rule.tenant_id_, rule.value_) == func_iter->first) {
-          hit = true;
+  ObSEArray<share::ObTenantFunctionKey, 16> func_keys;
+  ObSEArray<uint64_t, 16> group_ids;
+  GetTenantFunctionRuleFunctor functor(tenant_id, func_keys, group_ids);
+  if (OB_FAIL(function_rule_map_.foreach_refactored(functor))) {
+    LOG_WARN("failed to do foreach", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < func_keys.count(); ++i) {
+      bool is_group_id_found = false;
+      for (int64_t j = 0; !is_group_id_found && j < rules.count(); ++j) {
+        const ObResourceMappingRule &rule = rules.at(j);
+        if (share::ObTenantFunctionKey(rule.tenant_id_, rule.value_) == func_keys.at(i)) {
+          is_group_id_found = true;
         }
       }
-      if (!hit) {
-        LOG_INFO("tenant function need to be cleared", "function", func_iter->first, "group_id", func_iter->second);
-        if (OB_FAIL(function_rule_map_.set_refactored(func_iter->first, 0, 1/*overwrite*/))) {
-          LOG_WARN("failed to reset user map", K(ret), K(func_iter->first));
+      if (!is_group_id_found) {
+        LOG_INFO("tenant function need to be cleared", "function", func_keys.at(i), "group_id", group_ids.at(i));
+        if (OB_FAIL(function_rule_map_.erase_refactored(func_keys.at(i)))) {
+          LOG_WARN("failed to reset user map", K(ret), K(func_keys.at(i)));
         }
       }
     }
@@ -230,23 +268,86 @@ int ObResourceMappingRuleManager::clear_resource_user_mapping_rule(const uint64_
     const ObResourceUserMappingRuleSet &rules)
 {
   int ret = OB_SUCCESS;
-  for (common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::const_iterator iter = user_rule_map_.begin();
-      OB_SUCC(ret) && iter != user_rule_map_.end(); ++iter) {
-    if (iter->first.tenant_id_ == tenant_id && iter->second > 0) {
-      bool hit = false;
-      for (int64_t i = 0; !hit && i < rules.count(); ++i) {
-        const ObResourceUserMappingRule &rule = rules.at(i);
-        if (sql::ObTenantUserKey(rule.tenant_id_, rule.user_id_) == iter->first) {
-          hit = true;
+  ObSEArray<sql::ObTenantUserKey, 16> user_keys;
+  ObSEArray<uint64_t, 16> group_ids;
+  GetTenantUserRuleFunctor functor(tenant_id, user_keys, group_ids);
+  if (OB_FAIL(user_rule_map_.foreach_refactored(functor))) {
+    LOG_WARN("failed to do foreach", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < user_keys.count(); ++i) {
+      bool is_group_id_found = false;
+      for (int64_t j = 0; !is_group_id_found && j < rules.count(); ++j) {
+        const ObResourceUserMappingRule &rule = rules.at(j);
+        if (sql::ObTenantUserKey(rule.tenant_id_, rule.user_id_) == user_keys.at(i)) {
+          is_group_id_found = true;
         }
       }
-      if (!hit) {
-        LOG_INFO("tenant user group need to be cleared", "user", iter->first, "group_id", iter->second);
-        if (OB_FAIL(user_rule_map_.set_refactored(iter->first, 0, 1/*overwrite*/))) {
-          LOG_WARN("failed to reset user map", K(ret), K(iter->first));
+      if (!is_group_id_found) {
+        LOG_INFO("tenant user group need to be cleared", "user", user_keys.at(i), "group_id", group_ids.at(i));
+        if (OB_FAIL(user_rule_map_.erase_refactored(user_keys.at(i)))) {
+          LOG_WARN("failed to reset user map", K(ret), K(user_keys.at(i)));
         }
       }
     }
   }
   return ret;
+}
+
+int64_t ObResourceMappingRuleManager::to_string(char* buf, int64_t len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "user_rule_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<sql::ObTenantUserKey, uint64_t>::PrintFunctor fn1(buf, len, pos);
+        if (OB_SUCC(user_rule_map_.foreach_refactored(fn1))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "function_rule_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t>::PrintFunctor fn2(buf, len, pos);
+        if (OB_SUCC(function_rule_map_.foreach_refactored(fn2))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "group_id_name_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<ObTenantGroupIdKey, ObGroupName>::PrintFunctor fn3(buf, len, pos);
+        if (OB_SUCC(group_id_name_map_.foreach_refactored(fn3))) {
+          ret = databuff_printf(buf, len, pos, "} ");
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = databuff_printf(buf, len, pos, "group_name_id_map:");
+    if (OB_SUCC(ret)) {
+      if (OB_SUCC(databuff_printf(buf, len, pos, "{"))) {
+        common::hash::ObHashMap<share::ObTenantGroupKey, uint64_t>::PrintFunctor fn4(buf, len, pos);
+        if (OB_SUCC(group_name_id_map_.foreach_refactored(fn4))) {
+          ret = databuff_printf(buf, len, pos, "}");
+        }
+      }
+    }
+  }
+  if (OB_SUCCESS != ret) {
+    pos = 0;
+    databuff_printf(buf, len, pos, "{...}");
+  }
+
+  return pos;
 }

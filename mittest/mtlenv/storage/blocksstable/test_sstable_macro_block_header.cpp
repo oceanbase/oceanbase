@@ -1,3 +1,6 @@
+// owner: baichangmin.bcm
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -61,6 +64,7 @@ void TestSSTableMacroBlockHeader::SetUp()
   col_desc.allocator_.set_tenant_id(500);
   static_desc.ls_id_.id_ = 1;
   static_desc.tablet_id_ = tablet_id;
+  static_desc.tablet_transfer_seq_ = 0;
   data_desc.micro_block_size_ = 8 * 1024;
   static_desc.micro_block_size_limit_ = 8 * 1024;
   col_desc.row_column_count_ = COLUMN_COUNT;

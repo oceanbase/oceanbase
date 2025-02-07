@@ -26,7 +26,7 @@ TEST(TestTenantMemoryMgr, basic)
 {
   ObTenantMemoryMgr memory_mgr(1);
   const int64_t limit = 1 * 1024 * 1024 * 1024;
-  memory_mgr.set_limit(1 * 1024 * 1024 * 1024); //1G;
+  memory_mgr.set_max(limit);
   ASSERT_TRUE(NULL ==  memory_mgr.alloc_chunk(-1, ObMemAttr()));
   ObMemAttr attr;
   attr.tenant_id_ = 2;
@@ -51,7 +51,6 @@ TEST(TestTenantMemoryMgr, basic)
   ASSERT_EQ(limit, memory_mgr.get_sum_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_item_count());
-  ASSERT_EQ(0, memory_mgr.get_rpc_hold());
   ASSERT_EQ(limit / 2, memory_mgr.get_ctx_hold_bytes()[0]);
   ASSERT_EQ(limit / 2, memory_mgr.get_ctx_hold_bytes()[1]);
   for (int64_t i = 2; i < ObCtxIds::MAX_CTX_ID; ++i) {
@@ -69,7 +68,6 @@ TEST(TestTenantMemoryMgr, basic)
   ASSERT_EQ(0, memory_mgr.get_sum_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_item_count());
-  ASSERT_EQ(0, memory_mgr.get_rpc_hold());
   for (int64_t i = 0; i < ObCtxIds::MAX_CTX_ID; ++i) {
     ASSERT_EQ(0, memory_mgr.get_ctx_hold_bytes()[i]);
   }
@@ -95,7 +93,6 @@ TEST(TestTenantMemoryMgr, basic)
   ASSERT_EQ(limit, memory_mgr.get_sum_hold());
   ASSERT_EQ(aligned_size * 10, memory_mgr.get_cache_hold());
   ASSERT_EQ(10, memory_mgr.get_cache_item_count());
-  ASSERT_EQ(0, memory_mgr.get_rpc_hold());
   ASSERT_EQ((max_alloc_count - 10) * aligned_size /2, memory_mgr.get_ctx_hold_bytes()[0]);
   ASSERT_EQ((max_alloc_count - 10) * aligned_size /2, memory_mgr.get_ctx_hold_bytes()[1]);
   for (int64_t i = 2; i < ObCtxIds::MAX_CTX_ID; ++i) {
@@ -115,7 +112,6 @@ TEST(TestTenantMemoryMgr, basic)
   ASSERT_EQ(0, memory_mgr.get_sum_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_hold());
   ASSERT_EQ(0, memory_mgr.get_cache_item_count());
-  ASSERT_EQ(0, memory_mgr.get_rpc_hold());
   for (int64_t i = 0; i < ObCtxIds::MAX_CTX_ID; ++i) {
     ASSERT_EQ(0, memory_mgr.get_ctx_hold_bytes()[i]);
   }
@@ -350,7 +346,7 @@ TEST(TestResourceMgr, basic)
 
 int main(int argc, char *argv[])
 {
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_disable_logging(true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

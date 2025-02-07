@@ -18,6 +18,7 @@
 #include "storage/backup/ob_backup_handler.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "storage/backup/ob_backup_fuse_tablet_dag.h"
+#include "storage/backup/ob_backup_complement_log.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
@@ -227,7 +228,7 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
       LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
       LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
-    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObLSBackupComplementLogDagNet>(&param))) {
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObBackupComplementLogDagNet>(&param))) {
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
       FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));

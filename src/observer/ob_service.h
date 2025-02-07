@@ -32,6 +32,8 @@ namespace share
 {
 class ObIAliveServerTracer;
 struct ObTabletReplicaChecksumItem;
+class ObTenantDagScheduler;
+class ObIDag;
 }
 namespace storage
 {
@@ -124,6 +126,11 @@ public:
   // ObRpcSwitchSchemaP @RS DDL
   int switch_schema(const obrpc::ObSwitchSchemaArg &arg, obrpc::ObSwitchSchemaResult &result);
   int calc_column_checksum_request(const obrpc::ObCalcColumnChecksumRequestArg &arg, obrpc::ObCalcColumnChecksumRequestRes &res);
+  int build_split_tablet_data_start_request(const obrpc::ObTabletSplitStartArg &arg, obrpc::ObTabletSplitStartResult &res);
+  int build_split_tablet_data_finish_request(const obrpc::ObTabletSplitFinishArg &arg, obrpc::ObTabletSplitFinishResult &res);
+  int freeze_split_src_tablet(const obrpc::ObFreezeSplitSrcTabletArg &arg, obrpc::ObFreezeSplitSrcTabletRes &res, const int64_t abs_timeout_us);
+  int fetch_split_tablet_info(const obrpc::ObFetchSplitTabletInfoArg &arg, obrpc::ObFetchSplitTabletInfoRes &res, const int64_t abs_timeout_us);
+  int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, obrpc::ObDDLBuildSingleReplicaRequestResult &res);
   int check_and_cancel_ddl_complement_data_dag(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist);
   int check_and_cancel_delete_lob_meta_row_dag(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, bool &is_dag_exist);
@@ -177,6 +184,19 @@ public:
       const obrpc::ObCheckSchemaVersionElapsedArg &arg,
       obrpc::ObCheckSchemaVersionElapsedResult &result);
   // ObRpcGetChecksumCalSnapshotP
+
+  // ObRpcCheckMemtableCntP
+  int check_memtable_cnt(
+      const obrpc::ObCheckMemtableCntArg &arg,
+      obrpc::ObCheckMemtableCntResult &result);
+  // ObRpcCheckMediumCompactionInfoListP
+  int check_medium_compaction_info_list_cnt(
+      const obrpc::ObCheckMediumCompactionInfoListArg &arg,
+      obrpc::ObCheckMediumCompactionInfoListResult &result);
+  int prepare_tablet_split_task_ranges(
+      const obrpc::ObPrepareSplitRangesArg &arg,
+      obrpc::ObPrepareSplitRangesRes &result);
+
   int check_modify_time_elapsed(
       const obrpc::ObCheckModifyTimeElapsedArg &arg,
       obrpc::ObCheckModifyTimeElapsedResult &result);
@@ -184,7 +204,6 @@ public:
   int check_ddl_tablet_merge_status(
     const obrpc::ObDDLCheckTabletMergeStatusArg &arg,
     obrpc::ObDDLCheckTabletMergeStatusResult &result);
-
   ////////////////////////////////////////////////////////////////
   // ObRpcBatchSwitchRsLeaderP @RS leader coordinator & admin
   int batch_switch_rs_leader(const ObAddr &arg);

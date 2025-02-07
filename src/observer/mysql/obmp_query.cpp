@@ -67,6 +67,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::trace;
 using namespace oceanbase::sql;
+void __attribute__((weak)) request_finish_callback();
 ObMPQuery::ObMPQuery(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       single_process_timestamp_(0),
@@ -204,7 +205,8 @@ int ObMPQuery::process()
         LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
       } else {
         FLTSpanGuard(com_query_process);
-        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),
+        char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+        FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                     receive_ts, get_receive_timestamp(),
                     client_info, session.get_client_info(),
                     module_name, session.get_module_name(),
@@ -216,6 +218,8 @@ int ObMPQuery::process()
         retry_ctrl_.set_sys_global_schema_version(sys_version);
         session.partition_hit().reset();
         session.set_pl_can_retry(true);
+        session.set_enable_mysql_compatible_dates(
+          session.get_enable_mysql_compatible_dates_from_config());
 
         bool has_more = false;
         bool force_sync_resp = false;
@@ -366,22 +370,33 @@ int ObMPQuery::process()
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
     IGNORE_RETURN record_flt_trace(session);
-  }
-
-  if (is_conn_valid()) {
-    int tmp_ret = OB_SUCCESS;
-    // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
-    // because we have to reset conn.group_id_ according to user_name.
-    // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
-    // we switch to the defined consumer group, batch_group for example,
-    // and after that, the next query will also be executed with batch_group.
-    if (OB_UNLIKELY(OB_SUCCESS !=
-            (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
-      LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    // clear thread-local variables used for queue waiting
+    // to prevent async callbacks from finishing before
+    // request_finish_callback, which may free the request.
+    // this operation should be protected by the session lock.
+    if (async_resp_used) {
+      request_finish_callback();
     }
   }
 
+  /* Function setup_user_resource_group cause performance regression.
+      No need to setup group_id here,
+      Only setup group_id in MPConnect
+  */
+  if (is_conn_valid()) {
+    // int tmp_ret = OB_SUCCESS;
+    // // Call setup_user_resource_group no matter OB_SUCC or OB_FAIL
+    // // because we have to reset conn.group_id_ according to user_name.
+    // // Otherwise, suppose we execute a query with a mapping rule on the column in the query at first,
+    // // we switch to the defined consumer group, batch_group for example,
+    // // and after that, the next query will also be executed with batch_group.
+    // if (OB_UNLIKELY(OB_SUCCESS !=
+    //         (tmp_ret = setup_user_resource_group(*conn, sess->get_effective_tenant_id(), sess)))) {
+    //   LOG_WARN("fail setup user resource group", K(tmp_ret), K(ret));
+    //   ret = OB_SUCC(ret) ? tmp_ret : ret;
+    // }
+    set_request_expect_group_id(sess);
+  }
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL);
   }
@@ -488,7 +503,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.set_curr_trans_last_stmt_end_time(0);
 
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -674,6 +688,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
   bool need_response_error = true;
@@ -681,6 +696,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   /* !!!
    * 注意req_timeinfo_guard一定要放在result前面
@@ -714,6 +730,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     } else {
       session.set_current_execution_id(GCTX.sql_engine_->get_execution_id());
       session.reset_plsql_exec_time();
+      session.reset_plsql_compile_time();
+      session.set_stmt_type(stmt::T_NONE);
       result.get_exec_context().set_need_disconnect(true);
       ctx_.schema_guard_ = schema_guard;
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
@@ -722,15 +740,16 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     }
 
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = NULL;
     if (OB_SUCC(ret)) {
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        di = ObDiagnoseSessionInfo::get_local_diagnose_info();
+        audit_record.exec_record_.record_start();
       }
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-      if (enable_perf_event) {
-        audit_record.exec_record_.record_start(di);
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value();
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx &task_ctx = result.get_exec_context().get_task_exec_ctx();
@@ -824,8 +843,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       tmp_ret = OB_E(EventTable::EN_PRINT_QUERY_SQL) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         LOG_INFO("query info:", K(sql_),
-                 "sess_id", result.get_session().get_sessid(),
-                 "trans_id", result.get_session().get_tx_id());
+              "sess_id", result.get_session().get_sessid(),
+              "database_id", result.get_session().get_database_id(),
+              "database_name", result.get_session().get_database_name(),
+              "trans_id", audit_record.trans_id_);
       }
 
       //监控项统计结束
@@ -837,11 +858,22 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event) {
-        audit_record.exec_record_.record_end(di);
-        record_stat(result.get_stmt_type(), exec_end_timestamp_);
+        audit_record.exec_record_.record_end();
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret);
+        audit_record.stmt_type_ = result.get_stmt_type();
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.update_event_stage_state();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_end_value();
+        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
+        sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
+        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                   ctx_.cur_sql_,
+                                                   result.get_physical_plan());
       }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -911,6 +943,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+      MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+      audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();
@@ -918,6 +953,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         audit_record.plan_hash_ = plan->get_plan_hash_value();
         audit_record.rule_name_ = const_cast<char *>(plan->get_rule_name().ptr());
         audit_record.rule_name_len_ = plan->get_rule_name().length();
+      }
+      if (NULL != plan || result.is_pl_stmt(result.get_stmt_type())) {
         audit_record.partition_hit_ = session.partition_hit().get_bool();
       }
       if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
@@ -950,6 +987,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       }
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
+      audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
         audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
       }
@@ -1302,35 +1340,62 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
       ret = drv.response_result(result);
     }
   } else {
-    if (need_trans_cb) {
-      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
-      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) {
-        LOG_WARN("failed to init sql end callback", K(ret));
-      } else if (OB_FAIL(drv.response_result(result))) {
-        LOG_WARN("fail response async result", K(ret));
-      }
-      async_resp_used = result.is_async_end_trans_submitted();
-    } else {
-      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this);
-      session.set_pl_query_sender(&drv);
-      session.set_ps_protocol(result.is_ps_protocol());
-      ret = drv.response_result(result);
-      session.set_pl_query_sender(NULL);
+
+#define CMD_EXEC \
+    if (need_trans_cb) {\
+      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb(); \
+      ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) { \
+        LOG_WARN("failed to init sql end callback", K(ret)); \
+      } else if (OB_FAIL(drv.response_result(result))) { \
+        LOG_WARN("fail response async result", K(ret)); \
+      } \
+      async_resp_used = result.is_async_end_trans_submitted(); \
+    } else { \
+      ObSyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this); \
+      session.set_pl_query_sender(&drv); \
+      session.set_ps_protocol(result.is_ps_protocol()); \
+      ret = drv.response_result(result); \
+      session.set_pl_query_sender(NULL); \
     }
+
+    if (result.is_pl_stmt(result.get_stmt_type())) {
+      ENABLE_SQL_MEMLEAK_GUARD;
+      CMD_EXEC;
+    } else {
+      CMD_EXEC;
+    }
+
+#undef CMD_EXEC
+
   }
 
   return ret;
 }
 
-inline void ObMPQuery::record_stat(const stmt::StmtType type, const int64_t end_time) const
+inline void ObMPQuery::record_stat(const stmt::StmtType type,
+                                   const int64_t end_time,
+                                   const sql::ObSQLSessionInfo& session,
+                                   const int64_t ret) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
-    EVENT_INC(SQL_##type##_COUNT);              \
+    if (!session.get_is_in_retry()) {           \
+      EVENT_INC(SQL_##type##_COUNT);            \
+      if (OB_SUCCESS != ret) {                  \
+        EVENT_INC(SQL_FAIL_COUNT);              \
+      }                                         \
+    }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
-  const int64_t time_cost = end_time - get_receive_timestamp();
+  int64_t start_ts = 0;
+  if (session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_ > 0) {
+    // In the scenario of multi-query, use the start time of the current query
+    start_ts = session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_;
+  } else {
+    start_ts = get_receive_timestamp();
+  }
+  const int64_t time_cost = end_time - start_ts;
   if (!THIS_THWORKER.need_retry())
   {
     switch (type)
@@ -1342,8 +1407,13 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type, const int64_t end_
       ADD_STMT_STAT(DELETE);
     default:
     {
-      EVENT_INC(SQL_OTHER_COUNT);
       EVENT_ADD(SQL_OTHER_TIME, time_cost);
+      if (!session.get_is_in_retry()) {
+        EVENT_INC(SQL_OTHER_COUNT);
+        if (OB_SUCCESS != ret) {
+          EVENT_INC(SQL_FAIL_COUNT);
+        }
+      }
     }
     }
   }

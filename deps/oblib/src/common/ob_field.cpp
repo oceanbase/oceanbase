@@ -192,18 +192,19 @@ int64_t ObField::to_string(char *buffer, int64_t len) const
   int64_t pos = 0;
   databuff_printf(buffer, len, pos,
                   "dname:%.*s, tname: %.*s, org_tname: %.*s, "
-                  "cname: %.*s, org_cname: %.*s, type: %s, "
-                  "type_owner: %.*s, type_name: %.*s,"
-                  "charset: %hu, "
-                  "decimal_scale: %hu, flags: %x, inout_mode_: %x"
-                  "is_paramed_select_item: %d,"
-                  "is_hidden_rowid: %d",
+                  "cname: %.*s, org_cname: %.*s, type: ",
                   dname_.length(), dname_.ptr(),
                   tname_.length(), tname_.ptr(),
                   org_tname_.length(), org_tname_.ptr(),
                   cname_.length(), cname_.ptr(),
-                  org_cname_.length(), org_cname_.ptr(),
-                  to_cstring(type_),
+                  org_cname_.length(), org_cname_.ptr());
+  databuff_printf(buffer, len, pos, type_);
+  databuff_printf(buffer, len, pos,
+                  ", type_owner: %.*s, type_name: %.*s,"
+                  "charset: %hu, "
+                  "decimal_scale: %hu, flags: %x, inout_mode_: %x"
+                  "is_paramed_select_item: %d,"
+                  "is_hidden_rowid: %d",
                   type_owner_.length(), type_owner_.ptr(),
                   type_name_.length(), type_name_.ptr(),
                   charsetnr_, accuracy_.get_scale(), flags_,
@@ -249,6 +250,7 @@ int ObField::update_field_mb_length()
       length_ = number::ObNumber::MAX_PRECISION - number::ObNumber::MIN_SCALE;
       break;
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
       length_ = DATETIME_MIN_LENGTH + OB_MAX_DATETIME_PRECISION;
       break;
     case ObOTimestampTC: {
@@ -277,6 +279,7 @@ int ObField::update_field_mb_length()
     case ObStringTC:
     case ObRawTC:
     case ObDateTC:
+    case ObMySQLDateTC:
     case ObYearTC:
     case ObNullTC:
     case ObJsonTC:
@@ -310,6 +313,7 @@ int ObField::get_field_mb_length(const ObObjType type,
       }
       break;
     case ObDateTC:
+    case ObMySQLDateTC:
       length = DATE_MIN_LENGTH;
       break;
     case ObYearTC:
@@ -379,6 +383,7 @@ int ObField::get_field_mb_length(const ObObjType type,
       length = accuracy.get_length();
       break;
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
       length = DATETIME_MIN_LENGTH + ((accuracy.get_scale() > 0) ? (1 + accuracy.get_scale()) : 0); /* 1 represents the decimal point in 12:12:12.3333 */
       break;
     case ObOTimestampTC:

@@ -29,9 +29,13 @@ int DebugLog::advance()
 int64_t DebugLog::to_string(char *buf, const int64_t len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, len, pos, "DebugLog(%s, ctime=%s[%ld], last_ctime=%s[%ld])",
-                  to_cstring(server_),
-                  time2str(ctime_), ctime_, time2str(last_ctime_), last_ctime_);
+  databuff_printf(buf, len, pos, "DebugLog(");
+  databuff_printf(buf, len, pos, server_);
+  char time_buf_1[OB_MAX_TIME_STR_LENGTH] = {'\0'};
+  char time_buf_2[OB_MAX_TIME_STR_LENGTH] = {'\0'};
+  databuff_printf(buf, len, pos, ", ctime=%s[%ld], last_ctime=%s[%ld])",
+      time2str(ctime_, time_buf_1, sizeof(time_buf_1)), ctime_,
+      time2str(last_ctime_, time_buf_2, sizeof(time_buf_2)), last_ctime_);
   return pos;
 }
 
@@ -210,8 +214,11 @@ int64_t ObLogGenerator::to_string(char *buf, const int64_t len) const
   if (OB_UNLIKELY(!is_inited())) {
     databuff_printf(buf, len, pos, "WARN ObLogGenerator not init");
   } else {
-    databuff_printf(buf, len, pos, "LogGenerator([%s,%s], len=%ld, frozen=%s)",
-                    to_cstring(start_cursor_), to_cstring(end_cursor_), pos_, STR_BOOL(is_frozen_));
+    databuff_printf(buf, len, pos, "LogGenerator([");
+    databuff_printf(buf, len, pos, start_cursor_);
+    databuff_printf(buf, len, pos, ",");
+    databuff_printf(buf, len, pos, end_cursor_);
+    databuff_printf(buf, len, pos, "], len=%ld, frozen=%s)", pos_, STR_BOOL(is_frozen_));
   }
   return pos;
 }
@@ -240,8 +247,9 @@ int ObLogGenerator::reset()
   int ret = OB_SUCCESS;
   if (!is_clear()) {
     ret = OB_LOG_NOT_CLEAR;
-    _OB_LOG(ERROR, "log_not_clear, [%s,%s], len=%ld", to_cstring(start_cursor_),
-            to_cstring(end_cursor_), pos_);
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "log_not_clear, [%s,%s], len=%ld", helper.convert(start_cursor_),
+            helper.convert(end_cursor_), pos_);
   } else {
     start_cursor_.reset();
     end_cursor_.reset();
@@ -263,7 +271,8 @@ int ObLogGenerator::start_log(const ObLogCursor &log_cursor)
   } else {
     start_cursor_ = log_cursor;
     end_cursor_ = log_cursor;
-    _OB_LOG(INFO, "ObLogGenerator::start_log(log_cursor=%s)", to_cstring(log_cursor));
+    ObCStringHelper helper;
+    _OB_LOG(INFO, "ObLogGenerator::start_log(log_cursor=%s)", helper.convert(log_cursor));
   }
   return ret;
 }
@@ -275,12 +284,14 @@ int ObLogGenerator:: update_cursor(const ObLogCursor &log_cursor)
     ret = OB_INVALID_ARGUMENT;
   } else if (!is_clear()) {
     ret = OB_LOG_NOT_CLEAR;
-    _OB_LOG(ERROR, "log_not_clear, [%s,%s], len=%ld", to_cstring(start_cursor_),
-            to_cstring(end_cursor_), pos_);
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "log_not_clear, [%s,%s], len=%ld", helper.convert(start_cursor_),
+            helper.convert(end_cursor_), pos_);
   } else if (end_cursor_.newer_than(log_cursor)) {
     ret = OB_DISCONTINUOUS_LOG;
-    _OB_LOG(ERROR, "end_cursor[%s].newer_than(log_cursor[%s])", to_cstring(end_cursor_),
-            to_cstring(log_cursor));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "end_cursor[%s].newer_than(log_cursor[%s])", helper.convert(end_cursor_),
+            helper.convert(log_cursor));
   } else {
     start_cursor_ = log_cursor;
     end_cursor_ = log_cursor;
@@ -341,14 +352,16 @@ static int generate_log(char *buf, const int64_t len, int64_t &pos, ObLogCursor 
   if (OB_ISNULL(buf) || 0 >= len || pos > len || OB_ISNULL(log_data) || 0 >= data_len ||
       !cursor.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+    ObCStringHelper helper;
     _OB_LOG(ERROR, "generate_log(buf=%p, len=%ld, pos=%ld, log_data=%p, data_len=%ld, cursor=%s)=>%d",
-            buf, len, pos, log_data, data_len, to_cstring(cursor), ret);
+            buf, len, pos, log_data, data_len, helper.convert(cursor), ret);
   } else if (entry.get_serialize_size() + data_len > len) {
     ret = OB_LOG_TOO_LARGE;
     _OB_LOG(WARN, "header[%ld] + data_len[%ld] > len[%ld]", entry.get_serialize_size(), data_len,
             len);
   } else if (OB_FAIL(cursor.next_entry(entry, cmd, log_data, data_len))) {
-    _OB_LOG(ERROR, "cursor[%s].next_entry()=>%d", to_cstring(cursor), ret);
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "cursor[%s].next_entry()=>%d", helper.convert(cursor), ret);
   } else if (OB_FAIL(serialize_log_entry(buf, len, pos, entry, log_data, data_len))) {
     _OB_LOG(DEBUG, "serialize_log_entry(buf=%p, len=%ld, entry[id=%ld], data_len=%ld)=>%d",
             buf, len, entry.seq_, data_len, ret);
@@ -369,8 +382,9 @@ int ObLogGenerator:: do_write_log(const LogCommand cmd, const char *log_data,
     ret = OB_INVALID_ARGUMENT;
   } else if (is_frozen_) {
     ret = OB_STATE_NOT_MATCH;
-    _OB_LOG(ERROR, "log_generator is frozen, cursor=[%s,%s]", to_cstring(start_cursor_),
-            to_cstring(end_cursor_));
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "log_generator is frozen, cursor=[%s,%s]", helper.convert(start_cursor_),
+            helper.convert(end_cursor_));
   } else if (OB_FAIL(generate_log(log_buf_, log_buf_len_ - reserved_len, pos_,
                                   end_cursor_, cmd, log_data, data_len))
              && OB_BUF_NOT_ENOUGH != ret) {
@@ -390,8 +404,9 @@ static int parse_log_buffer(const char *log_data, int64_t data_len, const ObLogC
   end_cursor = start_cursor;
   if (OB_ISNULL(log_data) || data_len <= 0 || !start_cursor.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+    ObCStringHelper helper;
     _OB_LOG(ERROR, "invalid argument, log_data=%p, data_len=%ld, start_cursor=%s",
-            log_data, data_len, to_cstring(start_cursor));
+            log_data, data_len, helper.convert(start_cursor));
   }
 
   while (OB_SUCC(ret) && pos < data_len) {
@@ -400,8 +415,9 @@ static int parse_log_buffer(const char *log_data, int64_t data_len, const ObLogC
               data_len, pos, ret);
     } else if (pos + log_entry.get_log_data_len() > data_len) {
       ret = OB_LAST_LOG_RUINNED;
-      _OB_LOG(ERROR, "last_log broken, cursor=[%s,%s]", to_cstring(start_cursor),
-              to_cstring(end_cursor));
+      ObCStringHelper helper;
+      _OB_LOG(ERROR, "last_log broken, cursor=[%s,%s]", helper.convert(start_cursor),
+              helper.convert(end_cursor));
     } else if (check_data_integrity &&
                OB_FAIL(log_entry.check_data_integrity(log_data + pos))) {
       _OB_LOG(ERROR, "log_entry.check_data_integrity()=>%d", ret);
@@ -455,17 +471,20 @@ int ObLogGenerator:: fill_batch(const char *buf, int64_t len)
     _OB_LOG(ERROR, "len[%ld] is not align[mask=%lx], ret=%d", len, ObLogConstants::LOG_FILE_ALIGN_SIZE, ret);
   } else if (is_frozen_) {
     ret = OB_BUF_NOT_ENOUGH;
-    _OB_LOG(WARN, "log_buf is frozen, end_cursor=%s, ret=%d", to_cstring(end_cursor_), ret);
+    ObCStringHelper helper;
+    _OB_LOG(WARN, "log_buf is frozen, end_cursor=%s, ret=%d", helper.convert(end_cursor_), ret);
   } else if (0 != pos_) {
     ret = OB_LOG_NOT_CLEAR;
+    ObCStringHelper helper;
     _OB_LOG(ERROR, "fill_batch(pos[%ld] != 0, end_cursor=%s, buf=%p[%ld]), ret=%d",
-            pos_, to_cstring(end_cursor_), buf, len, ret);
+            pos_, helper.convert(end_cursor_), buf, len, ret);
   } else if (len + reserved_len > log_buf_len_) {
     ret = OB_BUF_NOT_ENOUGH;
     _OB_LOG(ERROR, "len[%ld] + reserved_len[%ld] > log_buf_len[%ld], ret=%d",
             len, reserved_len, log_buf_len_, ret);
   } else if (OB_FAIL(parse_log_buffer(buf, len, start_cursor, end_cursor))) {
-    _OB_LOG(ERROR, "parse_log_buffer(buf=%p[%ld], cursor=%s)=>%d", buf, len, to_cstring(end_cursor_),
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "parse_log_buffer(buf=%p[%ld], cursor=%s)=>%d", buf, len, helper.convert(end_cursor_),
             ret);
   } else {
     MEMCPY(log_buf_, buf, len);
@@ -485,7 +504,8 @@ int ObLogGenerator:: write_log(const LogCommand cmd, const char *log_data, const
     ret = OB_INVALID_ARGUMENT;
   } else if (is_frozen_) {
     ret = OB_BUF_NOT_ENOUGH;
-    _OB_LOG(WARN, "log_buf is frozen, end_cursor=%s", to_cstring(end_cursor_));
+    ObCStringHelper helper;
+    _OB_LOG(WARN, "log_buf is frozen, end_cursor=%s", helper.convert(end_cursor_));
   } else if (OB_FAIL(do_write_log(cmd, log_data, data_len, ObLogConstants::LOG_BUF_RESERVED_SIZE))
              && OB_BUF_NOT_ENOUGH != ret) {
     _OB_LOG(WARN, "do_write_log(cmd=%d, pos=%ld, len=%ld)=>%d", cmd, pos_, data_len, ret);
@@ -581,7 +601,8 @@ int ObLogGenerator:: write_nop(const bool force_write)
   } else if (OB_FAIL(debug_log_.advance())) {
     _OB_LOG(ERROR, "debug_log.advance()=>%d", ret);
   } else if (OB_FAIL(debug_log_.serialize(nop_log_, sizeof(nop_log_), pos))) {
-    _OB_LOG(ERROR, "serialize_nop_log(%s)=>%d", to_cstring(end_cursor_), ret);
+    ObCStringHelper helper;
+    _OB_LOG(ERROR, "serialize_nop_log(%s)=>%d", helper.convert(end_cursor_), ret);
   } else if (OB_FAIL(do_write_log(OB_LOG_NOP, nop_log_, calc_nop_log_len(pos_, pos),
                                   0))) {
     _OB_LOG(ERROR, "write_log(OB_LOG_NOP, len=%ld)=>%d", calc_nop_log_len(pos_, pos), ret);

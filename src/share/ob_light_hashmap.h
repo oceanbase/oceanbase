@@ -87,7 +87,7 @@ public:
   {
     int32_t ref = ATOMIC_SAF(&ref_, x);
     if (ref < 0) {
-      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected error", K(ref_));
+      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected error", KP(this), K(ref_));
     }
     return ref;
   }

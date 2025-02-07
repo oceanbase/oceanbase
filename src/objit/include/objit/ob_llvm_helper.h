@@ -450,6 +450,12 @@ public:
   int get_int_value(const ObLLVMType &value, int64_t i, ObLLVMValue &i_value);
   int get_insert_block(ObLLVMBasicBlock &block);
 
+#ifdef CPP_STANDARD_20
+  static int64 get_integer_type_id();
+  static int64 get_pointer_type_id();
+  static int64 get_struct_type_id();
+#endif
+
 public:
   core::JitContext *get_jc() { return jc_; }
 

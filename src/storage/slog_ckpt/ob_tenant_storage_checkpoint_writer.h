@@ -71,7 +71,7 @@ public:
 
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
-  int batch_compare_and_swap_tablet(const bool is_replay_old);
+  int batch_compare_and_swap_tablet();
   int rollback();
 
 private:

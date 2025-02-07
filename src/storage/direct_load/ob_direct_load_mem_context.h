@@ -63,7 +63,8 @@ public:
                              mem_dump_task_count_(0),
                              running_dump_count_(0),
                              allocator_("TLD_mem_ctx"),
-                             has_error_(false)
+                             has_error_(false),
+                             all_trans_finished_(false)
   {
     allocator_.set_tenant_id(MTL_ID());
     tables_.set_tenant_id(MTL_ID());
@@ -104,6 +105,7 @@ public:
   lib::ObMutex mutex_;
 
   volatile bool has_error_;
+  bool all_trans_finished_;
 };
 
 }

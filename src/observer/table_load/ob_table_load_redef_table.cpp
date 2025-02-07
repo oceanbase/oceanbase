@@ -52,7 +52,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
           res.snapshot_version_,
           status,
           res.dest_table_id_,
-          res.schema_version_))) {
+          res.schema_version_,
+          res.is_no_logging_))) {
         LOG_WARN("fail to get ddl task info", KR(ret), K(arg));
       }
     }
@@ -64,6 +65,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     uint64_t tenant_id = arg.tenant_id_;
     const bool need_reorder_column_id = false;
     const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
+    int64_t foreign_key_checks = 1;
+    session_info.get_foreign_key_checks(foreign_key_checks);
     if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
                                       THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
                                       arg.parallelism_, ddl_type, session_info.get_sql_mode(),
@@ -73,7 +76,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
                                       session_info.get_local_nls_timestamp_tz_format(),
                                       session_info.get_tz_info_wrap(),
                                       arg.tablet_ids_,
-                                      need_reorder_column_id))) {
+                                      need_reorder_column_id,
+                                      foreign_key_checks))) {
       LOG_WARN("fail to init create hidden table arg", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,
         res.snapshot_version_, res.data_format_version_, session_info))) {
@@ -85,6 +89,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
       res.dest_table_id_ = create_table_res.dest_table_id_;
       res.task_id_ = create_table_res.task_id_;
       res.schema_version_ = create_table_res.schema_version_;
+      res.is_no_logging_ = create_table_res.is_no_logging_;
       LOG_INFO("succeed to create hidden table", K(arg), K(res));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);
@@ -102,6 +107,8 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
   } else if (session_info.get_ddl_info().is_mview_complete_refresh()) {
     //pass
   } else {
+    int64_t foreign_key_checks = 0;
+    session_info.get_foreign_key_checks(foreign_key_checks);
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCopyTableDependentsArg copy_table_dependents_arg;
     copy_table_dependents_arg.task_id_ = arg.task_id_;
@@ -109,6 +116,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
     copy_table_dependents_arg.copy_indexes_ = true;
     copy_table_dependents_arg.copy_constraints_ = true;
     copy_table_dependents_arg.copy_triggers_ = false;
+    copy_table_dependents_arg.copy_foreign_keys_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
     copy_table_dependents_arg.ignore_errors_ = false;
     if (OB_FAIL(ObDDLServerClient::copy_table_dependents(copy_table_dependents_arg, session_info))) {
       LOG_WARN("failed to copy table dependents", KR(ret), K(copy_table_dependents_arg));
@@ -118,6 +126,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       finish_redef_table_arg.task_id_ = arg.task_id_;
       finish_redef_table_arg.tenant_id_ = arg.tenant_id_;
 
+      ObAddr rs_addr;
       ObDDLBuildSingleReplicaResponseArg build_single_replica_response_arg;
       build_single_replica_response_arg.task_id_             = arg.task_id_;
       build_single_replica_response_arg.tenant_id_           = arg.tenant_id_;
@@ -132,6 +141,7 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       build_single_replica_response_arg.snapshot_version_    = 1;
       build_single_replica_response_arg.execution_id_        = 1;
       build_single_replica_response_arg.ret_code_            = ret;
+      build_single_replica_response_arg.server_addr_ = GCTX.self_addr();
       if (OB_FAIL(ObDDLServerClient::finish_redef_table(
             finish_redef_table_arg, build_single_replica_response_arg, session_info))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));

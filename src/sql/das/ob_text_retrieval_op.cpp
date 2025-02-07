@@ -630,7 +630,8 @@ int ObTextRetrievalMerge::do_total_doc_cnt()
 
   if (!retrieval_param_.need_relevance()) {
     // skip
-  } else if (retrieval_param_.get_ir_ctdef()->need_do_total_doc_cnt()) {
+  } else if (retrieval_param_.get_ir_ctdef()->need_calc_relevance()
+    && retrieval_param_.get_ir_ctdef()->!need_estimate_total_doc_cnt()) {
     // When estimation info not exist, or we found estimation info not accurate, calculate document count by scan
     ObITabletScan *tsc_service = MTL(ObAccessService *);
     if (OB_ISNULL(tsc_service)) {

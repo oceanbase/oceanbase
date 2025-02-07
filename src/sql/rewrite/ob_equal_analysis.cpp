@@ -20,9 +20,7 @@ using namespace common;
 namespace sql
 {
 ObEqualAnalysis::ObEqualAnalysis()
-    : equal_set_alloc_(ObMemAttr(MTL_ID(), ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS)),
-      column_set_(),
-      equal_sets_()
+    : expr_idx_map_()
 {
 
 }
@@ -30,49 +28,45 @@ ObEqualAnalysis::ObEqualAnalysis()
 int ObEqualAnalysis::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(column_set_.create(128, ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS,
-                                 ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS))) {
+  if (OB_FAIL(expr_idx_map_.create(128, ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS,
+                                   ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS))) {
     LOG_WARN("failed to create hash map", K(ret));
-  } else { /*do nothing*/ }
+  }
   return ret;
 }
 
 ObEqualAnalysis::~ObEqualAnalysis()
 {
-  reset();
+  destroy();
 }
 
-void ObEqualAnalysis::reset()
+void ObEqualAnalysis::destroy()
 {
-  //The data structure has only the clear interface
-  column_set_.reuse();
-  DLIST_REMOVE_ALL_NORET(p, equal_sets_) {
-    if (p != NULL) {
-      p->~ObEqualSet();
-      equal_set_alloc_.free(p);
-      p = NULL;
-    }
+  if (expr_idx_map_.created()) {
+    expr_idx_map_.destroy();
   }
-  equal_sets_.reset();
-  //the allocator is not equal analysis enjoy alone, so can't reset allocator at here
 }
 
-int ObEqualAnalysis::get_or_add_expr_idx(const ObRawExpr *expr, int64_t &expr_idx)
+int ObEqualAnalysis::get_expr_idx(ObRawExpr *expr, int64_t &expr_idx)
 {
   int ret = OB_SUCCESS;
   expr_idx = -1;
   EqualSetKey key;
   key.expr_ = expr;
-  if (OB_SUCC(column_set_.get_refactored(key, expr_idx))) {
+  if (OB_SUCC(expr_idx_map_.get_refactored(key, expr_idx))) {
     /*do nothing*/
   } else if (OB_HASH_NOT_EXIST != ret) {
     LOG_WARN("failed to get from hash map", K(ret), K(expr_idx));
   } else {
     ret = OB_SUCCESS;
-    expr_idx = column_set_.size();
-    if (OB_FAIL(column_set_.set_refactored(key, expr_idx))) {
+    expr_idx = expr_idx_map_.size();
+    if (OB_FAIL(expr_idx_map_.set_refactored(key, expr_idx))) {
       expr_idx = -1;
       LOG_WARN("set expr index to column set failed", K(ret), K(expr_idx));
+    } else if (OB_FAIL(parent_idx_.push_back(expr_idx))) {
+      LOG_WARN("failed to push back", K(expr_idx));
+    } else if (OB_FAIL(exprs_.push_back(expr))) {
+      LOG_WARN("failed to push back", K(ret));
     }
   }
   if (OB_SUCC(ret) && expr_idx < 0) {
@@ -82,18 +76,59 @@ int ObEqualAnalysis::get_or_add_expr_idx(const ObRawExpr *expr, int64_t &expr_id
   return ret;
 }
 
-int ObEqualAnalysis::feed_where_expr(const ObRawExpr *expr)
+int ObEqualAnalysis::find_root_idx(const int64_t expr_idx, int64_t &root_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) ||
-      (T_OP_EQ == expr->get_expr_type() &&
-       (OB_ISNULL(expr->get_param_expr(0))
-        || OB_ISNULL(expr->get_param_expr(1))))) {
+  int64_t parent_idx = -1;
+  root_idx = expr_idx;
+  if (OB_UNLIKELY(root_idx < 0 || root_idx >= parent_idx_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr idx", K(ret), K(root_idx));
+  }
+  while (OB_SUCC(ret) && parent_idx_.at(root_idx) != root_idx) {
+    parent_idx = parent_idx_.at(root_idx);
+    if (OB_UNLIKELY(parent_idx < 0 || parent_idx >= parent_idx_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expr idx", K(ret), K(parent_idx));
+    } else {
+      parent_idx_.at(root_idx) = parent_idx_.at(parent_idx);
+      root_idx = parent_idx;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    parent_idx_.at(expr_idx) = root_idx;
+  }
+  return ret;
+}
+
+int ObEqualAnalysis::union_expr(const int64_t l_idx, const int64_t r_idx)
+{
+  int ret = OB_SUCCESS;
+  int64_t l_root_idx = -1;
+  int64_t r_root_idx = -1;
+  if (l_idx == r_idx) {
+    // do nothing
+  } else if (OB_FAIL(find_root_idx(l_idx, l_root_idx))) {
+    LOG_WARN("find root idx failed", K(ret));
+  } else if (OB_FAIL(find_root_idx(r_idx, r_root_idx))) {
+    LOG_WARN("find root idx failed", K(ret));
+  } else if (l_root_idx == r_root_idx) {
+    // do nothing
+  } else {
+    parent_idx_[r_root_idx] = l_root_idx;
+  }
+  return ret;
+}
+
+int ObEqualAnalysis::feed_where_expr(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (T_OP_EQ == expr->get_expr_type()) {
     /// only add pred like `c1 = c2`
-    const ObOpRawExpr *eq_expr = static_cast<const ObOpRawExpr *>(expr);
+    ObOpRawExpr *eq_expr = static_cast<ObOpRawExpr *>(expr);
     if (OB_FAIL(add_equal_cond(*eq_expr))) {
       LOG_WARN("add equal condition failed", K(ret));
     } else {
@@ -110,77 +145,63 @@ int ObEqualAnalysis::feed_equal_sets(const EqualSets &input_equal_sets)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
     const EqualSet *eset = input_equal_sets.at(i);
-    ObExprEqualSet *equal_set = NULL;
-    //create new equal set
-    if (OB_ISNULL(eset)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null equal set", K(ret));
-    } else if (OB_ISNULL(equal_set = new_equal_set())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create new equal set failed", K(ret));
-    }
+    ObSEArray<int64_t, 4> expr_idx_array;
+    int64_t min_expr_idx = INT64_MAX;
     for (int64_t j = 0; OB_SUCC(ret) && j < eset->count(); ++j) {
       int64_t expr_idx = 0;
-      const ObRawExpr *expr;
+      ObRawExpr *expr;
       if (OB_ISNULL(expr = eset->at(j))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (OB_FAIL(get_or_add_expr_idx(expr, expr_idx))) {
-        LOG_WARN("get or add expr idx failed", K(ret));
-      }  else if (OB_FAIL(equal_set->add_expr(expr_idx, true, expr))) {
-        LOG_WARN("add expr to equal set failed", K(ret));
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (OB_FAIL(get_expr_idx(expr, expr_idx))) {
+        LOG_WARN("failed to get expr idx", K(ret), KPC(expr));
+      } else if (OB_FAIL(expr_idx_array.push_back(expr_idx))) {
+        LOG_WARN("failed to push back expr idx", K(ret));
+      } else {
+        min_expr_idx = MIN(min_expr_idx, expr_idx);
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < expr_idx_array.count(); ++j) {
+      int64_t expr_idx = expr_idx_array.at(j);
+      if (OB_FAIL(union_expr(min_expr_idx, expr_idx))) {
+        LOG_WARN("failed to union expr", K(ret), K(min_expr_idx), K(expr_idx));
       }
     }
   }
   return ret;
 }
 
-int ObEqualAnalysis::add_equal_cond(const ObOpRawExpr &expr)
+int ObEqualAnalysis::add_equal_cond(ObOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObExprEqualSet *equal_set = NULL;
   int64_t l_expr_idx = 0;
   int64_t r_expr_idx = 0;
-
+  bool type_safe = false;
   if (OB_UNLIKELY(expr.get_expr_type() != T_OP_EQ)
       || OB_ISNULL(expr.get_param_expr(0))
       || OB_ISNULL(expr.get_param_expr(1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is invalid", K(expr));
-  } else if (OB_FAIL(get_or_add_expr_idx(expr.get_param_expr(0), l_expr_idx))) {
-    LOG_WARN("get or add left expr idx failed", K(ret));
-  } else if (OB_FAIL(get_or_add_expr_idx(expr.get_param_expr(1), r_expr_idx))) {
-    LOG_WARN("get or add right expr idx failed", K(ret));
-  } else if (l_expr_idx != r_expr_idx) {
-    //左右两边是完全相等的表达式，例如c1=c1, sum(c1)=sum(c1),属于恒true范围，不具有传递关系，所以不加入集合中
-    if (OB_FAIL(find_equal_set(l_expr_idx, expr.get_param_expr(1), equal_set))) {
-      LOG_WARN("find equal set failed", K(ret), K(l_expr_idx), K(*expr.get_param_expr(1)));
-    } else if (equal_set != NULL) {
-      if (!equal_set->has_expr(r_expr_idx)) {
-        if (OB_FAIL(equal_set->add_expr(r_expr_idx, true, expr.get_param_expr(1)))) {
-          LOG_WARN("add expr to equal set failed", K(ret));
-        }
-      }
-    } else if (OB_FAIL(find_equal_set(r_expr_idx, expr.get_param_expr(0), equal_set))) {
-      LOG_WARN("find equal set failed", K(ret), K(r_expr_idx), K(*expr.get_param_expr(0)));
-    } else if (equal_set != NULL) {
-      if (!equal_set->has_expr(l_expr_idx)) {
-        if (OB_FAIL(equal_set->add_expr(l_expr_idx, true, expr.get_param_expr(0)))) {
-          LOG_WARN("add expr to equal set failed", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret) && NULL == equal_set) {
-      //create new equal set
-      if (OB_ISNULL(equal_set = new_equal_set())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("create new equal set failed", K(ret));
-      } else if (OB_FAIL(equal_set->add_expr(l_expr_idx, true, expr.get_param_expr(0)))) {
-        LOG_WARN("add expr to equal set failed", K(ret));
-      } else if (OB_FAIL(equal_set->add_expr(r_expr_idx, true, expr.get_param_expr(1)))) {
-        LOG_WARN("add expr to equal set failed", K(ret));
-      }
-    }
+  } else if (T_OP_ROW == expr.get_param_expr(0)->get_expr_type() ||
+             T_OP_ROW == expr.get_param_expr(1)->get_expr_type() ||
+             expr.get_param_expr(0)->same_as(*expr.get_param_expr(1))) {
+    // do nothing
+  } else if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(
+                                                  expr.get_param_expr(0)->get_result_type(),
+                                                  expr.get_param_expr(1)->get_result_type(),
+                                                  type_safe))) {
+    LOG_WARN("failed to check is equal transitive", K(ret), K(expr));
+  } else if (!type_safe) {
+    // do nothting
+  } else if (OB_FAIL(get_expr_idx(expr.get_param_expr(0), l_expr_idx))) {
+    LOG_WARN("failed to get left expr idx", K(ret));
+  } else if (OB_FAIL(get_expr_idx(expr.get_param_expr(1), r_expr_idx))) {
+    LOG_WARN("failed to get right expr idx", K(ret));
+  } else if (OB_UNLIKELY(l_expr_idx == r_expr_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr idx should not be same", K(ret), K(l_expr_idx), K(r_expr_idx), K(expr));
+  } else if (OB_FAIL(union_expr(l_expr_idx, r_expr_idx))) {
+    LOG_WARN("failed to union expr", K(ret), K(l_expr_idx), K(r_expr_idx));
   }
   return ret;
 }
@@ -188,115 +209,73 @@ int ObEqualAnalysis::add_equal_cond(const ObOpRawExpr &expr)
 int ObEqualAnalysis::get_equal_sets(ObIAllocator *alloc, EqualSets &equal_sets) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 8> raw_equal_set;
-  DLIST_FOREACH(equal_set, equal_sets_) {
-    raw_equal_set.reuse();
-    for (ObExprEqualSet::ColumnIterator iter = equal_set->column_begin();
-        OB_SUCC(ret) && iter != equal_set->column_end(); ++iter) {
-      if (OB_FAIL(raw_equal_set.push_back(
-                    const_cast<ObRawExpr*>(iter.get_expr_info())))) {
-        LOG_WARN("push back equal expr info failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObRawExprSetUtils::add_expr_set(
-                    alloc, raw_equal_set, equal_sets))) {
-        LOG_WARN("failed to add expr set", K(ret));
-      }
-    }
+  ObSEArray<int64_t, 4> union_set_map;
+  ObSEArray<int64_t, 4> set_count_list;
+  if (OB_ISNULL(alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_UNLIKELY(exprs_.count() != parent_idx_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", K(ret), K(exprs_.count()), K(parent_idx_.count()));
   }
-  return ret;
-}
-
-ObExprEqualSet *ObEqualAnalysis::new_equal_set()
-{
-  void *ptr = NULL;
-  ObExprEqualSet *equal_set = NULL;
-  if (NULL != (ptr = equal_set_alloc_.alloc(sizeof(ObExprEqualSet)))) {
-    equal_set = new(ptr) ObExprEqualSet();
-    if (!equal_sets_.add_last(equal_set)) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "add equal set failed");
-      equal_set->~ObEqualSet();
-      equal_set_alloc_.free(equal_set);
-      equal_set = NULL;
-    }
-  }
-  return equal_set;
-}
-
-int ObEqualAnalysis::find_equal_set(int64_t expr_idx, const ObRawExpr *new_expr, ObExprEqualSet *&equal_set_ret)
-{
-  int ret = OB_SUCCESS;
-  const ObRawExpr* const *same_expr = NULL;
-  DLIST_FOREACH(equal_set, equal_sets_) {
-    if (OB_ISNULL(equal_set)) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < parent_idx_.count(); ++i) {
+    int64_t root_idx = parent_idx_.at(i);
+    if (OB_UNLIKELY(root_idx < 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("equal set is null");
-    } else if ((same_expr = equal_set->get_expr(expr_idx)) != NULL) {
-      bool can_be = false;
-      if (OB_FAIL(expr_can_be_add_to_equal_set(*equal_set, *same_expr, new_expr, can_be))) {
-        LOG_WARN("check expr whether can be add to equal set failed", K(ret));
-      } else if (can_be) {
-        equal_set_ret = equal_set;
-        break;
+      LOG_WARN("unexpected root_idx", K(ret), K(root_idx));
+    } else if (root_idx >= union_set_map.count()) {
+      int64_t old_count = union_set_map.count();
+      if (OB_FAIL(union_set_map.prepare_allocate(root_idx + 1))) {
+        LOG_WARN("failed to prepare allocate", K(ret));
+      } else if (OB_FAIL(set_count_list.push_back(1))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        for (int64_t i = old_count; OB_SUCC(ret) && i < root_idx; ++i) {
+          union_set_map.at(i) = -1;
+        }
+        union_set_map.at(root_idx) = set_count_list.count() - 1;
+      }
+    } else if (-1 == union_set_map.at(root_idx)) {
+      if (OB_FAIL(set_count_list.push_back(1))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        union_set_map.at(root_idx) = set_count_list.count() - 1;
+      }
+    } else {
+      int64_t set_idx = union_set_map.at(root_idx);
+      ++set_count_list.at(set_idx);
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < set_count_list.count(); ++i) {
+    ObRawExprSet *expr_set = NULL;
+    void *ptr = NULL;
+    if (OB_UNLIKELY(set_count_list.at(i) < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected set count", K(set_count_list), K(parent_idx_));
+    } else if (OB_ISNULL(ptr = alloc->alloc(sizeof(ObRawExprSet)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("no memory to create ObRawExprSet", K(ret));
+    } else {
+      expr_set = new(ptr) ObRawExprSet();
+      expr_set->set_allocator(alloc);
+      if (OB_FAIL(expr_set->init(set_count_list.at(i)))) {
+        LOG_WARN("failed to init expr set", K(ret));
+      } else if (OB_FAIL(equal_sets.push_back(expr_set))) {
+        LOG_WARN("failed to push back expr set", K(ret));
       }
     }
   }
-  return ret;
-}
-
-//检查equal set中的元素和要加入equal set中的元素的compare type是否都一致
-int ObEqualAnalysis::expr_can_be_add_to_equal_set(const ObExprEqualSet &equal_set,
-                                                  const ObRawExpr *same_expr,
-                                                  const ObRawExpr *new_expr,
-                                                  bool &can_be) const
-{
-  can_be = true;
-  int ret = OB_SUCCESS;
-  //equal set中的元素至少是两个表达式
-  if (equal_set.get_column_num() <= 1 || OB_ISNULL(same_expr) || OB_ISNULL(new_expr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("arguments are invalid", K(equal_set.get_column_num()), K(same_expr), K(new_expr));
-  } else {
-    for (ObExprEqualSet::ColumnIterator iter = equal_set.column_begin();
-        OB_SUCC(ret) && can_be && iter != equal_set.column_end(); ++iter) {
-      const ObRawExpr *cur_expr = iter.get_expr_info();
-      if (OB_ISNULL(cur_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expr is null in equal set");
-      } else if (cur_expr == same_expr) {
-        //do nothing
-      } else if (OB_FAIL(check_type_equivalent(*cur_expr, *same_expr, *new_expr, can_be))) {
-        LOG_WARN("failed to check type equivalent", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-//检查两个equal set是否能够被合并成一个equal set
-//能够被合并的规则是，两个equal set有相同的表达式，并且不相同的表达式的元素都在另一个equal set中的compare type都相同
-int ObEqualAnalysis::check_whether_can_be_merged(const ObExprEqualSet &equal_set,
-                                                 const ObExprEqualSet &another_set,
-                                                 bool &can_be) const
-{
-  can_be = true;
-  int ret = OB_SUCCESS;
-  const ObRawExpr* const *same_expr = NULL;
-  if (!equal_set.intersect_equal_set(another_set)) {
-    can_be = false;
-  } else {
-    for (ObExprEqualSet::ColumnIterator iter = another_set.column_begin();
-        OB_ISNULL(same_expr) && iter != another_set.column_end(); ++iter) {
-      same_expr = equal_set.get_expr(iter.get_expr_idx());
-    }
-  }
-  for (ObExprEqualSet::ColumnIterator iter = another_set.column_begin();
-      OB_SUCC(ret) && can_be && iter != another_set.column_end(); ++iter) {
-    if (iter.get_expr_info() != *same_expr) {
-      if (OB_FAIL(expr_can_be_add_to_equal_set(equal_set, *same_expr, iter.get_expr_info(), can_be))) {
-        LOG_WARN("check expr whether can be add to equal set failed", K(ret));
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < parent_idx_.count(); ++i) {
+    int64_t root_idx = parent_idx_.at(i);
+    int64_t set_idx = union_set_map.at(root_idx);
+    if (OB_UNLIKELY(set_idx < 0 || set_idx >= equal_sets.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected set_idx", K(ret), K(root_idx));
+    } else if (OB_ISNULL(equal_sets.at(set_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null equal set", K(ret));
+    } else if (OB_FAIL(equal_sets.at(set_idx)->push_back(exprs_.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
     }
   }
   return ret;
@@ -305,91 +284,11 @@ int ObEqualAnalysis::check_whether_can_be_merged(const ObExprEqualSet &equal_set
 int ObEqualAnalysis::finish_feed()
 {
   int ret = OB_SUCCESS;
-  // merge intersected sets
-  ObExprEqualSet *another_set = NULL;
-  DLIST_FOREACH(equal_set, equal_sets_) {
-    if (OB_ISNULL(equal_set)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("equal set is null", K(equal_set));
-    } else {
-      another_set = equal_set->get_next();
+  int64_t dummy_idx = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < parent_idx_.count(); ++i) {
+    if (OB_FAIL(find_root_idx(i, dummy_idx))) {
+      LOG_WARN("failed to find root idx", K(ret));
     }
-    while (OB_SUCC(ret) && equal_sets_.get_header() != another_set) {
-      bool can_be = false;
-      if (OB_ISNULL(another_set)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("equal set is null", K(another_set));
-      } else if (OB_FAIL(check_whether_can_be_merged(*equal_set, 
-                                                     *another_set, 
-                                                     can_be))) {
-        LOG_WARN("check whether can be merged failed", K(ret));
-      } else if (!can_be) {
-        another_set = another_set->get_next();
-      } else {
-        // merge another_set into equal_set
-        for (ObExprEqualSet::ColumnIterator it = another_set->column_begin();
-            OB_SUCC(ret) && it != another_set->column_end(); ++it) {
-          if (!equal_set->has_expr(it.get_expr_idx())) {
-            if (OB_FAIL(equal_set->add_expr(it.get_expr_idx(), it.get_flag(), it.get_expr_info()))) {
-              LOG_WARN("add expr to equal set failed", K(ret));
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          ObExprEqualSet *tmp = another_set->get_next();
-          equal_sets_.remove(another_set);
-          equal_set_alloc_.free(another_set);
-          another_set = tmp;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObEqualAnalysis::check_type_equivalent(
-    const ObRawExpr &cur_expr, const ObRawExpr &same_expr,
-    const ObRawExpr &new_expr, bool &can_be)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret), K(is_stack_overflow));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (T_OP_ROW == cur_expr.get_expr_type()
-             && T_OP_ROW == new_expr.get_expr_type()
-             && T_OP_ROW == same_expr.get_expr_type()) {
-    if (cur_expr.get_param_count() != same_expr.get_param_count()
-        || same_expr.get_param_count() != new_expr.get_param_count()) {
-      can_be = false;
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && can_be && i < cur_expr.get_param_count(); i++) {
-        const ObRawExpr *c_cur = NULL;
-        const ObRawExpr *c_same = NULL;
-        const ObRawExpr *c_new = NULL;
-        if (OB_ISNULL(c_cur = cur_expr.get_param_expr(i))
-            || OB_ISNULL(c_same = same_expr.get_param_expr(i))
-            || OB_ISNULL(c_new = new_expr.get_param_expr(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL expr", K(ret), K(c_cur), K(c_same), K(c_new));
-        } else if (OB_FAIL(SMART_CALL(check_type_equivalent(*c_cur, *c_same, *c_new, can_be)))) {
-          LOG_WARN("failed to check type in row");
-        }
-      }
-    }
-  } else if (T_OP_ROW != cur_expr.get_expr_type()
-             && T_OP_ROW != new_expr.get_expr_type()
-             && T_OP_ROW != same_expr.get_expr_type()) {
-    if (OB_FAIL(ObRelationalExprOperator::is_equivalent(
-                cur_expr.get_result_type(),
-                same_expr.get_result_type(),
-                new_expr.get_result_type(), can_be))) {
-      LOG_WARN("check is equivalent failed", K(ret));
-    }
-  } else {
-    can_be = false;
   }
   return ret;
 }

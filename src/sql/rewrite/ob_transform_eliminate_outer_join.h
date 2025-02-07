@@ -194,10 +194,6 @@ private:
                                           const ObSqlBitSet<> &rel_ids,
                                           common::ObIArray<const ObRawExpr *> &col_exprs);
 
-  int get_extra_condition_from_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                      ObDMLStmt *&stmt,
-                                      ObIArray<ObRawExpr *> &conditions);
-
   /**
    * @brief check_expr_ref_column_all_in_aggr
    * check column reference only in aggr

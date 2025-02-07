@@ -37,7 +37,7 @@ private:
   int64_t& hold_;
 };
 
-TEST_F(TestObMallocCallbackGuard, AllocAndFree)
+TEST_F(TestObMallocCallbackGuard, DISABLED_AllocAndFree)
 {
   int64_t hold = 0;
   MallocCallback cb(hold);

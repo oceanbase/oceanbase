@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
+#include "share/ob_cluster_version.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "lib/ob_name_def.h"
@@ -596,7 +597,9 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_DROP_SERVER:
       case stmt::T_CREATE_LOGFILE_GROUP:
       case stmt::T_ALTER_LOGFILE_GROUP:
-      case stmt::T_DROP_LOGFILE_GROUP: {
+      case stmt::T_DROP_LOGFILE_GROUP:
+      case stmt::T_GRANT_PROXY:
+      case stmt::T_REVOKE_PROXY: {
         DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }
@@ -879,7 +882,22 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_SET_TABLE_COMMENT:
       case stmt::T_SET_COLUMN_COMMENT: {
-        DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        ObAlterTableStmt &stmt = *(static_cast<ObAlterTableStmt*>(&cmd));
+        const uint64_t tenant_id = stmt.get_tenant_id();
+        uint64_t data_version = OB_INVALID_VERSION;
+        bool is_parallel_ddl = true;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                           ObParallelDDLControlMode::SET_COMMENT, tenant_id, is_parallel_ddl))) {
+          LOG_WARN("fail to get whether is parallel set comment", KR(ret), K(tenant_id));
+        } else if (!(data_version >= DATA_VERSION_4_3_5_0
+                     || (data_version >= DATA_VERSION_4_2_2_0 && data_version <= DATA_VERSION_4_3_0_0))
+                   || !is_parallel_ddl) {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        } else {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObCommentExecutor);
+        }
         break;
       }
       case stmt::T_XA_START: {
@@ -895,11 +913,11 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_XA_COMMIT: {
-        DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaEndTransExecutor);
+        DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaCommitExecutor);
         break;
       }
       case stmt::T_XA_ROLLBACK: {
-        DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaEndTransExecutor);
+        DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaRollbackExecutor);
         break;
       }
       case stmt::T_ALTER_DISKGROUP_ADD_DISK: {
@@ -984,6 +1002,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_BACKUP_KEY: {
         DEFINE_EXECUTE_CMD(ObBackupKeyStmt, ObBackupKeyExecutor);
+        break;
+      }
+      case stmt::T_BACKUP_CLUSTER_PARAMETERS: {
+        DEFINE_EXECUTE_CMD(ObBackupClusterParamStmt, ObBackupClusterParamExecutor);
         break;
       }
       case stmt::T_CREATE_DBLINK: {

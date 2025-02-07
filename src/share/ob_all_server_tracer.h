@@ -82,6 +82,7 @@ private:
   bool has_build_;
   mutable common::SpinRWLock lock_;
   common::ObArray<ObServerInfoInTable> server_info_arr_;
+  common::ObSEArray<common::ObZone, 4> inactive_zone_list_;
 };
 
 class ObServerTraceTask : public common::ObTimerTask

@@ -19,6 +19,7 @@
 #include "common/ob_store_format.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "storage/blocksstable/ob_imicro_block_writer.h"
+#include "storage/blocksstable/ob_micro_block_header.h"
 #include "ob_stream_encoding_struct.h"
 
 
@@ -26,6 +27,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObMicroBufferWriter;
 struct ObCSColumnHeader
 {
   static const uint8_t OB_COLUMN_HEADER_V1 = 0;
@@ -302,7 +304,7 @@ struct ObCSEncodingOpt
 };
 
 
-class ObEncodingHashTable;
+class ObDictEncodingHashTable;
 class ObMicroBlockEncodingCtx;
 struct ObColumnCSEncodingCtx
 {
@@ -314,7 +316,7 @@ struct ObColumnCSEncodingCtx
   int64_t fix_data_size_;
   int64_t max_string_size_;
   const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
-  ObEncodingHashTable *ht_;
+  ObDictEncodingHashTable *ht_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
   ObMicroBufferWriter *all_string_buf_writer_;
 

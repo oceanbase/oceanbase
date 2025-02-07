@@ -14,19 +14,12 @@
 #define OB_DAS_VEC_DEFINE_H_
 
 #include "ob_das_attach_define.h"
+#include "src/share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-
-enum ObVecAuxTableIdx {
-  INV_SCAN_IDX = 0,
-  DELTA_BUFFER_TBL_IDX = 1,
-  INDEX_ID_TBL_IDX = 2,
-  SNAPSHOT_TBL_IDX = 3,
-  COM_AUX_TBL_IDX = 4
-};
 
 struct ObDASVecAuxScanCtDef : ObDASAttachCtDef
 {
@@ -36,9 +29,8 @@ public:
     : ObDASAttachCtDef(alloc, DAS_OP_VEC_SCAN),
       inv_scan_vec_id_col_(nullptr),
       vec_index_param_(),
-      dim_(0)
-  {
-  }
+      dim_(0),
+      access_pk_(false) {}
   const ObDASScanCtDef *get_inv_idx_scan_ctdef() const
   {
     const  ObDASScanCtDef *idx_scan_ctdef = nullptr;
@@ -110,6 +102,11 @@ public:
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;
   int64_t dim_;
+  ObVecIndexType vec_type_;
+  ObVectorIndexAlgorithmType algorithm_type_;
+  double selectivity_;
+  double row_count_;
+  bool access_pk_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef

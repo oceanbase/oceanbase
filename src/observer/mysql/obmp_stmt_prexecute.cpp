@@ -421,6 +421,7 @@ int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
      *    其他时候都退化成了 local 重试，不需要清理
      */
     get_ctx().cur_sql_ = sql_;
+    get_ctx().raw_sql_ = sql_;
     if (OB_FAIL(session.close_ps_stmt(stmt_id_))) {
       LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
     }

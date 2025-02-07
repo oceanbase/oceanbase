@@ -11,6 +11,9 @@
  */
 
 #include "ob_admin_dump_backup_data_executor.h"
+
+#include "src/share/io/ob_io_manager.h"
+#include "src/share/ob_device_manager.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "lib/container/ob_array.h"
 #include "storage/blocksstable/ob_data_buffer.h"
@@ -457,7 +460,7 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
       if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       } else {
-        STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
+        STORAGE_LOG(INFO, "success to advance", KPC(common_header));
       }
     }
   }
@@ -568,7 +571,12 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     OB_LOGGER.set_log_level("INFO");
   }
 
-  if (OB_FAIL(ret)) {
+  if (FAILEDx(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+    STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    STORAGE_LOG(WARN, "failed to start io manager", K(ret));
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {
@@ -592,8 +600,10 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (is_table_list_dir && OB_FAIL(handle_print_table_list_())) {
-      STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
+    } else if (is_table_list_dir) {
+      if (OB_FAIL(handle_print_table_list_())) {
+        STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
+      }
     } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
       STORAGE_LOG(WARN, "failed to check exist", K(ret), K_(backup_path), K_(storage_info));
     } else if (OB_FAIL(get_backup_file_type_())) {
@@ -610,7 +620,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "h:d:s:o:l:qc";
+  const char *opt_str = "h:d:s:o:l:qce:i:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"backup_path", 1, NULL, 'd'},
       {"storage_info", 1, NULL, 's'},
@@ -619,6 +629,8 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       {"quiet", 0, NULL, 'q' },
       {"check_exist", 0, NULL, 'c'},
       {"length", 1, NULL, 'l'},
+      {"s3_url_encode_type", 0, NULL, 'e'},
+      {"sts_credential", 0, NULL, 'i'},
       {NULL, 0, NULL, 0}};
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
@@ -658,6 +670,18 @@ int ObAdminDumpBackupDataExecutor::parse_cmd_(int argc, char *argv[])
       }
       case 'l': {
         length_ = strtoll(optarg, NULL, 10);
+        break;
+      }
+      case 'e': {
+        if (OB_FAIL(set_s3_url_encode_type(optarg))) {
+          STORAGE_LOG(WARN, "failed to set s3 url encode type", KR(ret));
+        }
+        break;
+      }
+      case 'i': {
+        if (OB_FAIL(set_sts_credential_key(optarg))) {
+          STORAGE_LOG(WARN, "failed to set sts credential", KR(ret));
+        }
         break;
       }
       default: {
@@ -785,7 +809,13 @@ int ObAdminDumpBackupDataExecutor::do_execute_()
     }
     case share::ObBackupFileType::BACKUP_TENANT_LOCALITY_INFO: {
       if (OB_FAIL(print_tenant_locality_info_())) {
-        STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+        STORAGE_LOG(WARN, "failed to print tenant locality info", K(ret));
+      }
+      break;
+    }
+    case share::ObBackupFileType::BACKUP_PARAMETERS_INFO: {
+      if (OB_FAIL(print_parameters_info_())) {
+        STORAGE_LOG(WARN, "failed to print cluster/tenant parameter info", K(ret));
       }
       break;
     }
@@ -962,6 +992,8 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf(HELP_FMT, "-o,--offset", "data offset");
   printf(HELP_FMT, "-l,--length", "data length");
   printf(HELP_FMT, "-c,--check-exist", "check file is exist or not");
+  printf(HELP_FMT, "-e,--s3_url_encode_type", "set S3 protocol url encode type");
+  printf(HELP_FMT, "-i, --sts_credential", "set STS credential");
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -973,7 +1005,14 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222'\n");
   printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
+         "-e'compliantRfc3986Encoding'");
+  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
+  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&external_id=xxx&appid=333'\n"
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
   return ret;
 }
 
@@ -1493,6 +1532,21 @@ int ObAdminDumpBackupDataExecutor::print_tenant_locality_info_()
   return ret;
 }
 
+int ObAdminDumpBackupDataExecutor::print_parameters_info_()
+{
+  int ret = OB_SUCCESS;
+  storage::ObExternParamInfoDesc param_info_desc;
+  if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_),
+    ObString(storage_info_), param_info_desc))) {
+    STORAGE_LOG(WARN, "fail to read parameters info", K(ret), K(backup_path_), K(storage_info_));
+  } else if (OB_FAIL(dump_parameters_info_(param_info_desc))) {
+    STORAGE_LOG(WARN, "fail to dump parameters info", K(ret), K(param_info_desc));
+  }
+  return ret;
+}
+
 int ObAdminDumpBackupDataExecutor::print_tenant_diagnose_info_()
 {
   int ret = OB_SUCCESS;
@@ -1750,17 +1804,13 @@ int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
 {
  int ret = OB_SUCCESS;
   ObBackupDest backup_tenant_dest;
-  ObBackupSetFileDesc latest_file_desc;
   storage::ObTenantBackupSetInfosDesc file_desc;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
     STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
   } else if(!file_desc.backup_set_infos_.empty()) {
-    latest_file_desc = file_desc.backup_set_infos_.at(file_desc.backup_set_infos_.count() - 1);
-    if (OB_FAIL(backup_tenant_dest.set(latest_file_desc.backup_path_))) {
-      STORAGE_LOG(WARN, "fail to set backup tenant dest", K(ret), K(latest_file_desc), K(storage_info_));
-    } else if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
+    if (OB_FAIL(dump_tenant_backup_set_infos_file_(file_desc.backup_set_infos_))) {
         STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
       }
   }
@@ -2169,7 +2219,8 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_(const backup::ObBacku
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Macro Block Index");
-  PrintHelper::print_dump_line("logic_id", to_cstring(index.logic_id_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("logic_id", helper.convert(index.logic_id_));
   PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.turn_id_);
@@ -2198,8 +2249,9 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_(
 int ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_(const backup::ObBackupMacroBlockIndexIndex &index)
 {
   int ret = OB_SUCCESS;
+  ObCStringHelper helper;
   PrintHelper::print_dump_title("Backup Macro Block Index Index");
-  PrintHelper::print_dump_line("logic_id", to_cstring(index.end_key_.logic_id_));
+  PrintHelper::print_dump_line("logic_id", helper.convert(index.end_key_.logic_id_));
   PrintHelper::print_dump_line("backup_set_id", index.end_key_.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.end_key_.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.end_key_.turn_id_);
@@ -2262,8 +2314,9 @@ int ObAdminDumpBackupDataExecutor::dump_macro_range_index_index_(const backup::O
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Macro Range Index Index");
-  PrintHelper::print_dump_line("end_key:start_key", to_cstring(index.end_key_.start_key_));
-  PrintHelper::print_dump_line("end_key:end_key", to_cstring(index.end_key_.end_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("end_key:start_key", helper.convert(index.end_key_.start_key_));
+  PrintHelper::print_dump_line("end_key:end_key", helper.convert(index.end_key_.end_key_));
   PrintHelper::print_dump_line("end_key:backup_set_id", index.end_key_.backup_set_id_);
   PrintHelper::print_dump_line("end_key:ls_id", index.end_key_.ls_id_.id());
   PrintHelper::print_dump_line("end_key:turn_id", index.end_key_.turn_id_);
@@ -2294,7 +2347,8 @@ int ObAdminDumpBackupDataExecutor::dump_meta_index_(const backup::ObBackupMetaIn
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup Meta Index");
-  PrintHelper::print_dump_line("meta_key", to_cstring(index.meta_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("meta_key", helper.convert(index.meta_key_));
   PrintHelper::print_dump_line("backup_set_id", index.backup_set_id_);
   PrintHelper::print_dump_line("ls_id", index.ls_id_.id());
   PrintHelper::print_dump_line("turn_id", index.turn_id_);
@@ -2372,7 +2426,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBac
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("Backup SSTable Meta");
   PrintHelper::print_dump_line("tablet_id", sstable_meta.tablet_id_.id());
-  PrintHelper::print_dump_line("table_key", to_cstring(sstable_meta.sstable_meta_.table_key_));
+  ObCStringHelper helper;
+  PrintHelper::print_dump_line("table_key", helper.convert(sstable_meta.sstable_meta_.table_key_));
   PrintHelper::print_dump_line("sstable_meta:row_count", sstable_meta.sstable_meta_.basic_meta_.row_count_);
   PrintHelper::print_dump_line("sstable_meta:occupy_size", sstable_meta.sstable_meta_.basic_meta_.occupy_size_);
   PrintHelper::print_dump_line("sstable_meta:original_size", sstable_meta.sstable_meta_.basic_meta_.original_size_);
@@ -2384,7 +2439,12 @@ int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBac
   PrintHelper::print_dump_list_start("logic_id_array");
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.logic_id_list_.count(); ++i) {
     const blocksstable::ObLogicMacroBlockId &macro_id = sstable_meta.logic_id_list_.at(i);
-    PrintHelper::print_dump_list_value(to_cstring(macro_id), i == sstable_meta.logic_id_list_.count() - 1);
+    ObCStringHelper helper;
+    const char *macro_id_str = helper.convert(macro_id);
+    if (nullptr == macro_id_str) {
+      macro_id_str = "NULL";
+    }
+    PrintHelper::print_dump_list_value(macro_id_str, i == sstable_meta.logic_id_list_.count() - 1);
   }
   PrintHelper::print_dump_list_end();
   PrintHelper::print_end_line();
@@ -2398,6 +2458,7 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
   PrintHelper::print_dump_title("Backup SSTable Macro Block ID Mapping Meta");
   PrintHelper::print_dump_line("version", mapping_meta.version_);
   PrintHelper::print_dump_line("sstable_count", mapping_meta.sstable_count_);
+  ObCStringHelper helper;
   if (OB_UNLIKELY(mapping_meta.sstable_count_ != mapping_meta.id_map_list_.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "sstable count must be equal with id mapping", K(ret), K(mapping_meta), K(mapping_meta.id_map_list_.count()));
@@ -2411,14 +2472,14 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
       const ObBackupMacroBlockIDMapping &item = *mapping_meta.id_map_list_[i];
       const ObITable::TableKey &table_key = item.table_key_;
       int64_t num_of_entries = item.id_pair_list_.count();
-      PrintHelper::print_dump_line("table_key", to_cstring(table_key));
+      PrintHelper::print_dump_line("table_key", helper.convert(table_key));
       PrintHelper::print_dump_line("num_of_entries", num_of_entries);
       for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
         const ObCompatBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
         const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
         const ObBackupPhysicalID &physical_id = pair.physical_id_;
-        PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
-        PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));
+        PrintHelper::print_dump_line("logic_id", helper.convert(logic_id));
+        PrintHelper::print_dump_line("physical_id", helper.convert(physical_id));
       }
     }
   }
@@ -2446,7 +2507,12 @@ int ObAdminDumpBackupDataExecutor::dump_tablet_to_ls_info_(const storage::ObBack
   PrintHelper::print_dump_list_start("tablet_id");
   ARRAY_FOREACH_X(tablet_to_ls_info.tablet_id_list_, i , cnt, OB_SUCC(ret)) {
     const common::ObTabletID &tablet_id = tablet_to_ls_info.tablet_id_list_.at(i);
-    PrintHelper::print_dump_list_value(to_cstring(tablet_id.id()), i == cnt - 1);
+    ObCStringHelper helper;
+    const char *tablet_id_str = helper.convert(tablet_id);
+    if (nullptr == tablet_id_str) {
+      tablet_id_str = "NULL";
+    }
+    PrintHelper::print_dump_list_value(tablet_id_str, i == cnt - 1);
   }
   PrintHelper::print_dump_list_end();
   return ret;
@@ -2465,7 +2531,77 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_locality_info_(const storage::ObE
   PrintHelper::print_dump_line("locality", locality_info.locality_.ptr());
   PrintHelper::print_dump_line("primary_zone", locality_info.primary_zone_.ptr());
   PrintHelper::print_dump_line("sys_time_zone", locality_info.sys_time_zone_.ptr());
-  PrintHelper::print_end_line();
+  if (OB_FAIL(dump_locality_resource_pool_infos_(locality_info.resource_pool_infos_))) {
+    STORAGE_LOG(WARN, "fail to dump locality resource pool info",
+      K(ret), K(locality_info.resource_pool_infos_));
+  } else {
+    PrintHelper::print_end_line();
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_locality_resource_pool_infos_(
+  const ObSArray<ObBackupResourcePool> &resource_pool_infos)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_TEXT_LENGTH] = { 0 };
+  char order_buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
+
+  PrintHelper::print_dump_line("resource_pool_list", "");
+  ARRAY_FOREACH(resource_pool_infos, i) {
+    int64_t pos = 0;
+    const share::ObResourcePool &resource_pool = resource_pool_infos.at(i).resource_pool_;
+    const share::ObUnitConfig &unit_config = resource_pool_infos.at(i).unit_config_;
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_TEXT_LENGTH, pos, "{resource_name: %s, zone_list: ",
+      resource_pool.name_.ptr()))) {
+      STORAGE_LOG(WARN, "failed to format resource pool info", K(ret), K(resource_pool));
+    }
+    ARRAY_FOREACH(resource_pool.zone_list_, j) {
+      if (OB_FAIL(databuff_printf(buf, OB_MAX_TEXT_LENGTH, pos, "%s%s", (0 == j ? "" : ";"),
+        resource_pool.zone_list_.at(j).ptr()))) {
+        STORAGE_LOG(WARN, "failed to format resource pool info", K(ret), K(resource_pool));
+      }
+    }
+    if (FAILEDx(databuff_printf(buf, OB_MAX_TEXT_LENGTH, pos, ", unit_count: %ld, unit: {"
+      "name: %s, max_cpu: %.2f, min_cpu: %.2f, memory_size: %ld, log_disk_size: %ld, "
+      "max_iops: %ld, min_iops: %ld, iops_weight: %ld}}",
+      resource_pool.unit_count_, unit_config.name().ptr(), unit_config.max_cpu(),
+      unit_config.min_cpu(), unit_config.memory_size(), unit_config.log_disk_size(),
+      unit_config.max_iops(), unit_config.min_iops(), unit_config.iops_weight()))) {
+      STORAGE_LOG(WARN, "failed to format resource pool info", K(ret), K(resource_pool),
+        K(unit_config));
+    } else if (OB_FAIL(databuff_printf(order_buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i))){
+      STORAGE_LOG(WARN, "fail to databuff print", K(ret), K(i));
+    } else {
+      PrintHelper::print_dump_line(order_buf, buf);
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_parameters_info_(const storage::ObExternParamInfoDesc &param_info)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_TEXT_LENGTH] = { 0 };
+  char order_buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
+
+  PrintHelper::print_dump_title("parameter_list");
+  ARRAY_FOREACH(param_info.param_array(), i) {
+    int64_t pos = 0;
+    const ObBackupParam &param = param_info.param_array().at(i);
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_TEXT_LENGTH, pos, "{name:%s, value:%.*s}",
+      param.name_.ptr(), static_cast<int>(param.value_.length()), param.value_.ptr()))) {
+      STORAGE_LOG(WARN, "failed to format paramters info", K(ret), K(param));
+    } else if (OB_FAIL(databuff_printf(order_buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i))){
+      STORAGE_LOG(WARN, "fail to databuff print", K(ret), K(i));
+    } else {
+      PrintHelper::print_dump_line(order_buf, buf);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    PrintHelper::print_end_line();
+  }
   return ret;
 }
 
@@ -2488,6 +2624,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
   storage::ObBackupDataStore store;
   ObTimeZoneInfoWrap time_zone_wrap;
   ObBackupDest backup_set_dest;
+
   if (OB_FAIL(backup_set_dest.set(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to set backup set dest", K(ret), K(backup_path_), K(storage_info_));
   } else if (OB_FAIL(store.init(backup_set_dest))) {
@@ -2515,6 +2652,27 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
         PrintHelper::print_dump_line(buf, str_buf);
       }
     }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_file_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos)
+{
+  int ret = OB_SUCCESS;
+  if (share::ObBackupFileType::BACKUP_TENANT_SET_INFOS == file_type_) {
+    PrintHelper::print_dump_title("tenant backup set infos");
+    ARRAY_FOREACH_X(backup_set_infos, i , cnt, OB_SUCC(ret)) {
+      const share::ObBackupSetFileDesc &backup_set_desc = backup_set_infos.at(i);
+      char buf[OB_MAX_CHAR_LEN] = { 0 };
+      char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
+      if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+        STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
+      } else if (OB_FALSE_IT(backup_set_desc.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+      } else {
+        PrintHelper::print_dump_line(buf, str_buf);
+      }
+    }
+    PrintHelper::print_end_line();
   }
   return ret;
 }

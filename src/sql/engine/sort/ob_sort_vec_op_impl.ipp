@@ -1180,7 +1180,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
   dumped = false;
   if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&mem_context_->get_malloc_allocator()))) {
     SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
     SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
   } else {
     dumped = need_dump();
@@ -1203,10 +1203,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
                                                                 UNUSED(max_memory_size);
                                                                 return need_dump();
                                                               },
-                                                              dumped, mem_context_->used()))) {
+                                                              dumped, get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
+        LOG_TRACE("trace sort need dump", K(dumped), K(get_total_used_size()), K(get_memory_limit()),
                   K(profile_.get_cache_size()), K(profile_.get_expect_size()));
       } else {
         // one-pass
@@ -1528,7 +1528,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort_inmem_data()
           prev = &rows_->at(i);
         }
         if (OB_FAIL(ret)) {
-        } else if (pd_topn_filter_.enabled()
+        } else if (pd_topn_filter_.need_update()
             && OB_FAIL(pd_topn_filter_.update_filter_data(*imms_heap_->top(), sk_row_meta_))) {
           LOG_WARN("failed to update filter data", K(ret));
         }
@@ -1950,6 +1950,15 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::sort()
 
   if (OB_FAIL(ret)) {
     // do nothing
+  } else if (sort_chunks_.get_size() == 1) {
+    SortVecOpChunk *chunk = sort_chunks_.get_first();
+    if (OB_FAIL(chunk->init_row_iter())) {
+      LOG_WARN("init iterator failed", K(ret));
+    } else {
+      set_blk_holder(&blk_holder_);
+      next_stored_row_func_ =
+        &ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_dump_stored_row;
+    }
   } else if (sort_chunks_.get_size() >= 2) {
     blk_holder_.release();
     set_blk_holder(nullptr);
@@ -2017,6 +2026,22 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_stored_row(const 
   } else {
     sk_row = ties_array_.at(ties_array_pos_);
     ties_array_pos_ += 1;
+  }
+  return ret;
+}
+
+template <typename Compare, typename Store_Row, bool has_addon>
+int ObSortVecOpImpl<Compare, Store_Row, has_addon>::array_next_dump_stored_row(
+  const Store_Row *&sk_row)
+{
+  int ret = OB_SUCCESS;
+  SortVecOpChunk *chunk = sort_chunks_.get_first();
+  if (OB_FAIL(chunk->get_next_row())) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  } else {
+    sk_row = chunk->sk_row_;
   }
   return ret;
 }

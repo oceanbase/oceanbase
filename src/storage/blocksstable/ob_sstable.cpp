@@ -259,7 +259,7 @@ ObSSTable::ObSSTable()
     meta_(nullptr)
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObSSTable) <= 256, "The size of ObSSTable will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObSSTable) <= 264, "The size of ObSSTable will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -280,8 +280,8 @@ int ObSSTable::init(
   } else if (OB_UNLIKELY(!param.is_valid()) || OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(param), KP(allocator));
-  } else if (OB_FAIL(ObITable::init(param.table_key_))) {
-    LOG_WARN("fail to initialize ObITable", K(ret), "table_key", param.table_key_);
+  } else if (OB_FAIL(ObITable::init(param.table_key()))) {
+    LOG_WARN("fail to initialize ObITable", K(ret), "table_key", param.table_key());
   } else if (OB_FAIL(init_sstable_meta(param, allocator))) {
     LOG_WARN("fail to initialize sstable meta", K(ret), K(param));
   } else if (FALSE_IT(addr_.set_mem_addr(0, sizeof(ObSSTable)))) {
@@ -289,7 +289,7 @@ int ObSSTable::init(
     LOG_WARN("fail to add macro ref", K(ret), K(inc_success));
   } else if (FALSE_IT(meta_->macro_info_.dec_linked_block_ref_cnt())) {
   } else if (FALSE_IT(is_tmp_sstable_ = true)) {
-  } else if (param.is_ready_for_read_) {
+  } else if (param.is_ready_for_read()) {
     if (OB_FAIL(check_valid_for_reading())) {
       LOG_WARN("Failed to check state", K(ret));
     }
@@ -397,9 +397,6 @@ int ObSSTable::scan(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -456,9 +453,6 @@ int ObSSTable::get(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -513,9 +507,6 @@ int ObSSTable::multi_scan(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -569,9 +560,6 @@ int ObSSTable::multi_get(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -702,9 +690,6 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
   if (OB_UNLIKELY(!rows_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(rows_info));
-  } else if (OB_UNLIKELY(rows_info.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id not match", K(ret), K_(key), K(rows_info));
   } else if (no_data_to_read()) {
     // Skip
   } else if (rows_info.all_rows_found()) {
@@ -1974,6 +1959,7 @@ int ObSSTable::get_cs_range(
 int ObSSTable::persist_linked_block_if_need(
     ObArenaAllocator &allocator,
     const ObTabletID &tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
     int64_t &macro_start_seq,
@@ -1982,16 +1968,26 @@ int ObSSTable::persist_linked_block_if_need(
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
   ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
+#ifdef ERRSIM
+  const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
+  const int64_t block_cnt_threshold = 0 == block_cnt_config_value ? ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD
+                                             : min(ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD, block_cnt_config_value);
+#else
+  const int64_t block_cnt_threshold = ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD;
+#endif
   if (OB_FAIL(get_meta(meta_handle))) {
     LOG_WARN("fail to get sstable meta", K(ret));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != meta_->macro_info_.entry_id_) {
     // linked block had been persisted
+  } else if (is_small_sstable()) {
+    // The small sstable needn't persist macro ids by linked block.
   } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
-              < ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD) {
+              < block_cnt_threshold) {
     // need not persist linked_block
   } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
     LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));
   } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(tablet_id,
+                                                          tablet_transfer_seq,
                                                           snapshot_version,
                                                           allocator,
                                                           &link_write_info,

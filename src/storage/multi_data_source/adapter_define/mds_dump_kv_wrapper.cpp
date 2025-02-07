@@ -52,16 +52,17 @@ MdsDumpKVStorageMetaInfo::MdsDumpKVStorageMetaInfo(const MdsDumpKV &mds_dump_kv)
 int64_t MdsDumpKVStorageMetaInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
+  char scn_buf[64] = {'\0'};
   databuff_printf(buf, buf_len, pos, "{");
   databuff_printf(buf, buf_len, pos, "mds_table_id:%ld, ", (int64_t)mds_table_id_);
   databuff_printf(buf, buf_len, pos, "key_crc_check_number:0x%lx, ", (int64_t)key_crc_check_number_);
   databuff_printf(buf, buf_len, pos, "data_crc_check_number:0x%lx, ", (int64_t)data_crc_check_number_);
-  databuff_printf(buf, buf_len, pos, "status:%s, ", to_cstring(status_));
-  databuff_printf(buf, buf_len, pos, "seq_no:%s, ", to_cstring(seq_no_));
+  databuff_print_multi_objs(buf, buf_len, pos, "status:", status_, ", ");
+  databuff_print_multi_objs(buf, buf_len, pos, "seq_no:", seq_no_, ", ");
   databuff_printf(buf, buf_len, pos, "writer_id:%ld, ", writer_id_);
-  databuff_printf(buf, buf_len, pos, "redo_scn:%s, ", obj_to_string(redo_scn_));
-  databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_));
-  databuff_printf(buf, buf_len, pos, "trans_version:%s", obj_to_string(trans_version_));
+  databuff_printf(buf, buf_len, pos, "redo_scn:%s", obj_to_string(redo_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_, scn_buf, sizeof(scn_buf)));
+  databuff_printf(buf, buf_len, pos, "trans_version:%s", obj_to_string(trans_version_, scn_buf, sizeof(scn_buf)));
   databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
@@ -94,7 +95,7 @@ int64_t MdsDumpKVStorageAdapter::to_string(char *buf, const int64_t buf_len) con
     key_printer.help_print<0>(true, meta_info_.mds_table_id_, type_, key_, buf, buf_len, pos);
     databuff_printf(buf, buf_len, pos, ", ");
   }
-  databuff_printf(buf, buf_len, pos, "meta_info:%s, ", to_cstring(meta_info_));
+  databuff_print_multi_objs(buf, buf_len, pos, "meta_info:", meta_info_, ", ");
   MdsDumpObjPrinter data_printer;
   if (user_data_.empty()) {
     databuff_printf(buf, buf_len, pos, "user_data:null");
@@ -127,14 +128,14 @@ int MdsDumpKVStorageAdapter::convert_to_mds_row(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       MDS_LOG(WARN, "failed to alloc buf for seriaize DumpKVStorageMetaInfo",
           K(ret), K(meta_info_size), K(allocator.total()), K(allocator.used()));
-    } else if (meta_info_.serialize(buf, meta_info_size, pos)) {
-      MDS_LOG(WARN, "failed to serialize DumpKVStorageMetaInfo", K(meta_info_), K(meta_info_size), K(pos));
+    } else if (OB_FAIL(meta_info_.serialize(buf, meta_info_size, pos))) {
+      MDS_LOG(WARN, "failed to serialize DumpKVStorageMetaInfo", K(ret), K(meta_info_), K(meta_info_size), K(pos));
     } else if (OB_UNLIKELY(pos != meta_info_size)) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG(WARN, "unexpected pos with serialize size", K(ret), K(pos), K(meta_info_size));
     } else {
       // DmlFlag: can use MdsNodeStatus to set correct dmlflag in future. @xuwang.txw
-      row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      row.row_flag_.set_flag(blocksstable::ObDmlFlag::DF_INSERT);
       row.trans_id_.reset(); // commited row not set
       row.snapshot_version_ = meta_info_.trans_version_.get_val_for_gts();
 

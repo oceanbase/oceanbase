@@ -86,6 +86,7 @@ private:
   int64_t get_compact_task_count() const;
 private:
   ObTableLoadStoreCtx *store_ctx_;
+  ObTableLoadStoreTableCtx *store_table_ctx_;
   const ObTableLoadParam *param_;
   common::ObArenaAllocator allocator_; //需要最后析构
   int64_t finish_task_count_ CACHE_ALIGNED;

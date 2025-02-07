@@ -63,7 +63,7 @@ int ObExprPrior::calc_prior_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operator is NULL", K(ret), K(operator_id), KP(kit));
-  } else if (OB_UNLIKELY(PHY_NESTED_LOOP_CONNECT_BY != kit->op_->get_spec().type_
+  } else if (OB_UNLIKELY(PHY_CONNECT_BY != kit->op_->get_spec().type_
               && PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX != kit->op_->get_spec().type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("is not connect by operator", K(ret), K(operator_id), "spec", kit->op_->get_spec());
@@ -71,7 +71,7 @@ int ObExprPrior::calc_prior_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     LOG_WARN("failed to eval expr", K(ret));
   } else {
     int64_t level = 0;
-    if (PHY_NESTED_LOOP_CONNECT_BY == kit->op_->get_spec().type_) {
+    if (PHY_CONNECT_BY == kit->op_->get_spec().type_) {
       ObNLConnectByOp *cnntby_op = static_cast<ObNLConnectByOp *>(kit->op_);
       level = cnntby_op->connect_by_pump_.get_current_level();
     } else {

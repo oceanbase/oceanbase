@@ -254,7 +254,7 @@ public:
       selector_array_(NULL),
       dup_groupby_exprs_(),
       is_dumped_(nullptr),
-      no_non_distinct_aggr_(false),
+      can_skip_last_group_(false),
       start_calc_hash_idx_(0),
       base_hash_vals_(nullptr),
       has_calc_base_hash_(false),
@@ -602,7 +602,7 @@ private:
   ObSEArray<ObExpr*, 4> dup_groupby_exprs_;
   ObSEArray<ObExpr*, 4> all_groupby_exprs_;
   bool *is_dumped_;
-  bool no_non_distinct_aggr_;
+  bool can_skip_last_group_;
   int64_t start_calc_hash_idx_;
   uint64_t *base_hash_vals_;
   bool has_calc_base_hash_;

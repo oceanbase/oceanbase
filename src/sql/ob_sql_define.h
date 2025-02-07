@@ -39,7 +39,7 @@ const int64_t OB_MIN_PARALLEL_TASK_COUNT = 13; //期望每一个并行度最低�
 const int64_t OB_MAX_PARALLEL_TASK_COUNT = 100; //期望每一个并行度最大持有task数量
 const int64_t OB_MIN_MARCO_COUNT_IN_TASK = 1; //每个task最少负责的宏块个数
 const int64_t OB_INVAILD_PARALLEL_TASK_COUNT = -1;
-const int64_t OB_EXPECTED_TASK_LOAD = 100; //MB, one task will get 100MB data from disk
+const int64_t OB_EXPECTED_TASK_LOAD = 102400; //KB, one task will get 100MB data from disk
 const int64_t OB_GET_MACROS_COUNT_BY_QUERY_RANGE = 1;
 const int64_t OB_GET_BLOCK_RANGE = 2;
 const int64_t OB_BROADCAST_THRESHOLD = 100;
@@ -124,6 +124,8 @@ enum JtColType {
   COL_TYPE_VAL_EXTRACT_XML, // 7
   COL_TYPE_XMLTYPE_XML, // 8
   COL_TYPE_ORDINALITY_XML = 9,
+  COL_TYPE_RB_ITERATE = 10,
+  COL_TYPE_UNNEST = 11,
 };
 
 enum ObNameTypeClass
@@ -326,6 +328,7 @@ enum ExplainType
   EXPLAIN_EXTENDED_NOADDR,
   EXPLAIN_DBLINK_STMT,
   EXPLAIN_HINT_FORMAT,
+  EXPLAIN_PLAN_TABLE
 };
 
 enum DiagnosticsType
@@ -425,6 +428,13 @@ enum DistinctType
 };
 
 enum class ObPDMLOption {
+  NOT_SPECIFIED = -1,
+  ENABLE,
+  DISABLE,
+  MAX_VALUE
+};
+
+enum class ObParallelDASOption {
   NOT_SPECIFIED = -1,
   ENABLE,
   DISABLE,
@@ -674,6 +684,27 @@ inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
   }
 }
 
+static bool is_fixed_length_storage(ObObjType type) {
+  bool is_fixed = true;
+  ObObjTypeClass tc = ob_obj_type_class(type);
+  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
+  if (ObNumberTC == tc
+      || ObExtendTC == tc
+      || ObTextTC == tc
+      || ObEnumSetInnerTC == tc
+      || ObRawTC == tc
+      || ObRowIDTC == tc
+      || ObLobTC == tc
+      || ObJsonTC == tc
+      || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc
+      || ObDecimalIntTC == tc
+      || ObRoaringBitmapTC == tc) {
+    is_fixed = false;
+  }
+  return is_fixed;
+}
+
 static bool is_fixed_length(ObObjType type) {
   bool is_fixed = true;
   ObObjTypeClass tc = ob_obj_type_class(type);
@@ -707,6 +738,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
     case ObIntTC:
     case ObDoubleTC:
     case ObDateTimeTC:
+    case ObMySQLDateTimeTC:
     case ObTimeTC:
     case ObBitTC:
     case ObEnumSetTC:
@@ -715,6 +747,7 @@ static int16_t get_type_fixed_length(ObObjType type) {
       break;
     }
     case ObDateTC:
+    case ObMySQLDateTC:
     case ObFloatTC:
     {
       len = 4;
@@ -739,6 +772,10 @@ static int16_t get_type_fixed_length(ObObjType type) {
   }
   return len;
 }
+
+#define SPM_MODE_DISABLE 0
+#define SPM_MODE_ONLINE_EVOLVE 1
+#define SPM_MODE_BASELINE_FIRST 2
 
 }  // namespace sql
 }  // namespace oceanbase

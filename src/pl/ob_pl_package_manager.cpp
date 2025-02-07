@@ -475,6 +475,7 @@ static const ObSysPackageFile oracle_syspack_file_list[] = {
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
   {"dbms_mview", "dbms_mview.sql", "dbms_mview_body.sql"},
   {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
+  {"dbms_space", "dbms_space.sql", "dbms_space_body.sql"},
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
   {"xmlsequence", "xml_sequence_type.sql", nullptr},
   {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
@@ -492,8 +493,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
   {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
   {"dbms_resource_manager", "dbms_resource_manager_mysql.sql", "dbms_resource_manager_body_mysql.sql"},
-#ifdef OB_BUILD_ORACLE_PL
   {"dbms_xplan", "dbms_xplan_mysql.sql", "dbms_xplan_mysql_body.sql"},
+#ifdef OB_BUILD_ORACLE_PL
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
@@ -504,7 +505,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
   {"dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"},
   {"external_table_alert_log", "external_table_alert_log.sql", nullptr},
-  {"dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"}
+  {"dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"},
+  {"dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"}
 };
 
 // for now! we only have one special system package "__DBMS_UPGRADE"
@@ -1043,9 +1045,9 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                             bool from_proxy)
 {
   int ret = OB_SUCCESS;
-  ObPLPackageState *package_state = NULL;
   bool need_free_new = false;
   bool need_free_old = false;
+  ObPLPackageState *package_state = NULL;
   ObObj old_var_val;
   ObObj new_var_val;
   const ObPLVar *var = NULL;
@@ -1107,19 +1109,26 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
-  OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+  OZ (package_state->set_package_var_val(var_idx, new_var_val, resolve_ctx, !need_deserialize));
   OX (need_free_old = true);
   OX (need_free_new = false);
   OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));
 
   if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
-    // package ref cursor variable, refrence outside, do not destruct it.
+    // package ref cursor variable, refrence outside, do not destruct old var val.
   } else {
     if (OB_FAIL(ret) && need_free_new) {
-      ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_));
+      ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), new_var_val, &(resolve_ctx.session_info_));
     }
     if (need_free_old) {
-      ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_));
+      if (new_var_val.is_null() &&
+          old_var_val.is_pl_extend() &&
+          var->get_type().get_type() != PL_CURSOR_TYPE &&
+          var->get_type().get_type() != PL_REF_CURSOR_TYPE) {
+        // do nothing
+      } else {
+        ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), old_var_val, &(resolve_ctx.session_info_));
+      }
     }
   }
   if (!need_deserialize) {
@@ -1560,6 +1569,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
   } else if (!package_state->check_version(state_version)) {
     OZ (resolve_ctx.session_info_.del_package_state(package_id));
     if (OB_SUCC(ret)) {
+      LOG_INFO("pakcage state expired, reconstruct package state", KPC(package_state), K(state_version));
       package_state->reset(&(resolve_ctx.session_info_));
       package_state->~ObPLPackageState();
       session_allocator.free(package_state);
@@ -1580,17 +1590,21 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       ExecCtxBak exec_ctx_bak;
       sql::ObExecEnv exec_env_bak;
       ObArenaAllocator tmp_allocator;
-      OX (exec_ctx_bak.backup(exec_ctx));
-      OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
+      bool need_destruct_package_state = false;
+      OZ (package_state->init());
       if (OB_SUCC(ret)) {
-        OZ (package.get_exec_env().store(resolve_ctx.session_info_));
         sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
+        need_destruct_package_state = true;
+        OX (exec_ctx_bak.backup(exec_ctx));
+        OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
+        OZ (package.get_exec_env().store(resolve_ctx.session_info_));
         OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
         if (OB_SUCC(ret) && package.get_expr_op_size() > 0)  {
           OZ (exec_ctx.init_expr_op(package.get_expr_op_size()));
         }
         // 要先加到SESSION上然后在初始化, 反之会造成死循环
         OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
+        OX (need_destruct_package_state = false);
         if (OB_SUCC(ret)) {
           // TODO bin.lb: how about the memory?
           //
@@ -1601,6 +1615,8 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         } else if (OB_FAIL(package.instantiate_package_state(resolve_ctx, exec_ctx, *package_state))) {
           if (OB_SUCCESS != (tmp_ret = resolve_ctx.session_info_.del_package_state(package_id))) {
             // 删除失败, 为了避免一个未知的状态, 重新初始化这段内存, 使之是无效状态
+            package_state->reset(&(resolve_ctx.session_info_));
+            package_state->~ObPLPackageState();
             new (package_state)
               ObPLPackageState(package_id, state_version, package.get_serially_reusable());
             LOG_WARN("failed to del package state", K(ret), K(package_id), K(tmp_ret));
@@ -1624,6 +1640,15 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
           LOG_WARN("failed to restore package exec env", K(ret), K(tmp_ret));
           ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
+        if (need_destruct_package_state) {
+          package_state->reset(&(resolve_ctx.session_info_));
+          package_state->~ObPLPackageState();
+          session_allocator.free(package_state);
+          package_state = NULL;
+        }
+      } else {
+        session_allocator.free(package_state);
+        package_state = NULL;
       }
     }
   }
@@ -1695,8 +1720,6 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.session_info_ = &resolve_ctx.session_info_;
       pc_ctx.schema_guard_ = &resolve_ctx.schema_guard_;
       (void)ObSQLUtils::md5(sql,pc_ctx.sql_id_, (int32_t)sizeof(pc_ctx.sql_id_));
-      int64_t sys_schema_version = OB_INVALID_VERSION;
-      int64_t tenant_schema_version = OB_INVALID_VERSION;
       pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_PKG;
       pc_ctx.key_.db_id_ = database_id;
       pc_ctx.key_.key_id_ = package_id;
@@ -1706,15 +1729,6 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       pc_ctx.key_.mode_ = resolve_ctx.session_info_.get_pl_profiler() != nullptr
                           ? ObPLObjectKey::ObjectMode::PROFILE : ObPLObjectKey::ObjectMode::NORMAL;
 
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(tenant_id, tenant_schema_version))
-          || OB_FAIL(resolve_ctx.schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version))) {
-        LOG_WARN("fail to get schema version", K(ret), K(tenant_id));
-      } else {
-        package->set_tenant_schema_version(tenant_schema_version);
-        package->set_sys_schema_version(sys_schema_version);
-        package->get_stat_for_update().name_ = package->get_name();
-      }
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(ObPLCacheMgr::add_pl_cache(resolve_ctx.session_info_.get_plan_cache(), package, pc_ctx))) {
@@ -1857,8 +1871,7 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
     } else if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID, pkg_var_info.package_id_, package_info))) {
       LOG_WARN("failed to get package info", K(ret), K(pkg_var_info), KPC(package_info));
     } else if (OB_ISNULL(package_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL package info", K(ret), K(pkg_var_info), KPC(package_info));
+      // package does not exist, do nothing
     } else if (0 == package_info->get_package_name().compare("DBMS_PROFILER")) {
       if (OB_FAIL(ObDBMSProfiler::set_profiler_by_user_var_deserialize(*static_cast<ObSQLSessionInfo*>(session),
                                                                        pkg_var_info,

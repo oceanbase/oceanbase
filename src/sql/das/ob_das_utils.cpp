@@ -347,6 +347,414 @@ int ObDASUtils::reshape_datum_value(const ObObjMeta &col_type,
   return ret;
 }
 
+static bool fast_check_vector_is_all_null(ObIVector *vector, const int64_t batch_size)
+{
+  bool is_all_null = false;
+  VectorFormat format = vector->get_format();
+  switch (format) {
+    case VEC_FIXED:
+    case VEC_DISCRETE:
+    case VEC_CONTINUOUS:
+      is_all_null = static_cast<ObBitmapNullVectorBase *>(vector)->get_nulls()->is_all_true(batch_size);
+      break;
+    default:
+      break;
+  }
+  return is_all_null;
+}
+
+static int new_discrete_vector(VecValueTypeClass value_tc,
+                               const int64_t max_batch_size,
+                               ObIAllocator &allocator,
+                               ObDiscreteBase *&result_vec)
+{
+  int ret = OB_SUCCESS;
+  result_vec = nullptr;
+  ObIVector *vector = nullptr;
+  switch (value_tc) {
+#define DISCRETE_VECTOR_INIT_SWITCH(value_tc)                           \
+  case value_tc: {                                                      \
+    using VecType = RTVectorType<VEC_DISCRETE, value_tc>;               \
+    static_assert(sizeof(VecType) <= ObIVector::MAX_VECTOR_STRUCT_SIZE, \
+                  "vector size exceeds MAX_VECTOR_STRUCT_SIZE");        \
+    vector = OB_NEWx(VecType, &allocator, nullptr, nullptr, nullptr);   \
+    break;                                                              \
+  }
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_COLLECTION);
+    DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROARINGBITMAP);
+#undef DISCRETE_VECTOR_INIT_SWITCH
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected discrete vector value type class", KR(ret), K(value_tc));
+      break;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(vector)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc vecttor", KR(ret));
+  } else {
+    ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+    const int64_t nulls_size = ObBitVector::memory_size(max_batch_size);
+    const int64_t lens_size = sizeof(int32_t) * max_batch_size;
+    const int64_t ptrs_size = sizeof(char *) * max_batch_size;
+    ObBitVector *nulls = nullptr;
+    int32_t *lens = nullptr;
+    char **ptrs = nullptr;
+    if (OB_ISNULL(nulls = to_bit_vector(allocator.alloc(nulls_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(nulls_size));
+    } else if (OB_ISNULL(lens = static_cast<int32_t *>(allocator.alloc(lens_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(lens_size));
+    } else if (OB_ISNULL(ptrs = static_cast<char **>(allocator.alloc(ptrs_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
+    } else {
+      nulls->reset(max_batch_size);
+      discrete_vec->set_nulls(nulls);
+      discrete_vec->set_lens(lens);
+      discrete_vec->set_ptrs(ptrs);
+      result_vec = discrete_vec;
+    }
+  }
+  return ret;
+}
+
+int ObDASUtils::reshape_vector_value(const ObObjMeta &col_type,
+                                     const ObAccuracy &col_accuracy,
+                                     ObIAllocator &allocator,
+                                     ObIVector *&vector,
+                                     const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vector) || size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(vector), K(size));
+  } else if (fast_check_vector_is_all_null(vector, size)) {
+    // do nothing
+  } else if (col_type.is_binary()) {
+    const int32_t binary_len = col_accuracy.get_length();
+    const char pad_char = '\0';
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_CONTINUOUS:
+      {
+        ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
+        ObDiscreteBase *discrete_vec = nullptr;
+        char *data = continuous_vec->get_data();
+        uint32_t *offsets = continuous_vec->get_offsets();
+        char **ptrs = nullptr;
+        ObLength *lens = nullptr;
+        bool has_value_change = false;
+        VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
+                                                      col_type.get_scale(),
+                                                      col_type.get_stored_precision());
+        if (OB_FAIL(new_discrete_vector(value_tc, size, allocator, discrete_vec))) {
+          LOG_WARN("fail to new discrete vector", KR(ret));
+        } else {
+          ptrs = discrete_vec->get_ptrs();
+          lens = discrete_vec->get_lens();
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          if (continuous_vec->is_null(i)) {
+            discrete_vec->set_null(i);
+          } else {
+            const ObLength len = offsets[i + 1] - offsets[i];
+            char *str = data + offsets[i];
+            if (len < binary_len) {
+              char *dest_str = nullptr;
+              if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+              } else {
+                MEMCPY(dest_str, str, len);
+                MEMSET(dest_str + len, pad_char, binary_len - len);
+                ptrs[i] = dest_str;
+                lens[i] = binary_len;
+                has_value_change = true;
+              }
+            } else {
+              ptrs[i] = str;
+              lens[i] = binary_len;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && has_value_change) {
+          vector = discrete_vec;
+        }
+        break;
+      }
+      case VEC_DISCRETE:
+      {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+        char **ptrs = discrete_vec->get_ptrs();
+        ObLength *lens =discrete_vec->get_lens();
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          if (!discrete_vec->is_null(i) && lens[i] < binary_len) {
+            char *str = ptrs[i];
+            ObLength len = lens[i];
+            char *dest_str = nullptr;
+            if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+            } else {
+              MEMCPY(dest_str, str, len);
+              MEMSET(dest_str + len, pad_char, binary_len - len);
+              ptrs[i] = dest_str;
+              lens[i] = binary_len;
+            }
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObDatum &datum = datums[i];
+          if (!datum.is_null() && datum.len_ < binary_len) {
+            const char *str = datum.ptr_;
+            ObLength len = datum.len_;
+            char *dest_str = nullptr;
+            if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+            } else {
+              MEMCPY(dest_str, str, len);
+              MEMSET(dest_str + len, pad_char, binary_len - len);
+              datum.ptr_ = dest_str;
+              datum.len_ = binary_len;
+            }
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM_CONST:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum &datum = uniform_vec->get_datums()[0];
+        if (!datum.is_null() && datum.len_ < binary_len) {
+          const char *str = datum.ptr_;
+          ObLength len = datum.len_;
+          char *dest_str = nullptr;
+          if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+          } else {
+            MEMCPY(dest_str, str, len);
+            MEMSET(dest_str + len, pad_char, binary_len - len);
+            datum.ptr_ = dest_str;
+            datum.len_ = binary_len;
+          }
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected binary vector format", KR(ret), K(format), K(col_type));
+        break;
+    }
+  } else if (col_type.is_fixed_len_char_type()) {
+    const ObString space_pattern = ObCharsetUtils::get_const_str(col_type.get_collation_type(), ' ');
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_CONTINUOUS:
+      {
+        ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
+        ObDiscreteBase *discrete_vec = nullptr;
+        char *data = continuous_vec->get_data();
+        uint32_t *offsets = continuous_vec->get_offsets();
+        char **ptrs = nullptr;
+        ObLength *lens = nullptr;
+        bool has_value_change = false;
+        VecValueTypeClass value_tc = get_vec_value_tc(col_type.get_type(),
+                                                      col_type.get_scale(),
+                                                      col_type.get_stored_precision());
+        if (OB_FAIL(new_discrete_vector(value_tc, size, allocator, discrete_vec))) {
+          LOG_WARN("fail to new discrete vector", KR(ret));
+        } else {
+          ptrs = discrete_vec->get_ptrs();
+          lens = discrete_vec->get_lens();
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          if (continuous_vec->is_null(i)) {
+            discrete_vec->set_null(i);
+          } else {
+            const ObLength length = offsets[i + 1] - offsets[i];
+            if (lib::is_oracle_mode() && 0 == length) {
+              // Oracle compatibility mode: '' as null
+              LOG_DEBUG("reshape empty string to null", K(i));
+              continuous_vec->set_null(i);
+              discrete_vec->set_null(i);
+            } else {
+              ObLength len = length;
+              char *str = data + offsets[i];
+              for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+                if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+                  break;
+                }
+              }
+              ptrs[i] = str;
+              lens[i] = len;
+              if (len != length) {
+                has_value_change = true;
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret) && has_value_change) {
+          vector = discrete_vec;
+        }
+        break;
+      }
+      case VEC_DISCRETE:
+      {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+        char **ptrs = discrete_vec->get_ptrs();
+        ObLength *lens =discrete_vec->get_lens();
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          if (!discrete_vec->is_null(i)) {
+            ObLength len = lens[i];
+            if (lib::is_oracle_mode() && 0 == len) {
+              // Oracle compatibility mode: '' as null
+              LOG_DEBUG("reshape empty string to null", K(i));
+              discrete_vec->set_null(i);
+            } else {
+              const char *str = ptrs[i];
+              for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+                if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+                  break;
+                }
+              }
+              lens[i] = len;
+            }
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObDatum &datum = datums[i];
+          if (!datum.is_null()) {
+            ObLength len = datum.len_;
+            if (lib::is_oracle_mode() && 0 == len) {
+              // Oracle compatibility mode: '' as null
+              LOG_DEBUG("reshape empty string to null", K(i));
+              datum.set_null();
+            } else {
+              const char *str = datum.ptr_;
+              for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+                if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+                  break;
+                }
+              }
+              datum.len_ = len;
+            }
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM_CONST:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum &datum = uniform_vec->get_datums()[0];
+        if (!datum.is_null()) {
+          ObLength len = datum.len_;
+          if (lib::is_oracle_mode() && 0 == len) {
+            // Oracle compatibility mode: '' as null
+            LOG_DEBUG("reshape empty string to null");
+            datum.set_null();
+          } else {
+            const char *str = datum.ptr_;
+            for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+              if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+                break;
+              }
+            }
+            datum.len_ = len;
+          }
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected fixed len char vector format", KR(ret), K(format), K(col_type));
+        break;
+    }
+  } else if (lib::is_oracle_mode() && col_type.is_character_type()) {
+    // Oracle compatibility mode: '' as null
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_CONTINUOUS:
+      {
+        ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
+        uint32_t *offsets = continuous_vec->get_offsets();
+        for (int64_t i = 0; i < size; ++i) {
+          if (!continuous_vec->is_null(i) && offsets[i + 1] == offsets[i]) {
+            LOG_DEBUG("reshape empty string to null", K(i));
+            continuous_vec->set_null(i);
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE:
+      {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+        ObLength *lens =discrete_vec->get_lens();
+        for (int64_t i = 0; i < size; ++i) {
+          if (!discrete_vec->is_null(i) && 0 == lens[i]) {
+            LOG_DEBUG("reshape empty string to null", K(i));
+            discrete_vec->set_null(i);
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; i < size; ++i) {
+          ObDatum &datum = datums[i];
+          if (!datum.is_null() && 0 == datum.len_) {
+            LOG_DEBUG("reshape empty string to null", K(i));
+            datum.set_null();
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM_CONST:
+      {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        ObDatum &datum = uniform_vec->get_datums()[0];
+        if (!datum.is_null() && 0 == datum.len_) {
+          LOG_DEBUG("reshape empty string to null");
+          datum.set_null();
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected character vector format", KR(ret), K(format), K(col_type));
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObDASUtils::wait_das_retry(int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
@@ -400,7 +808,8 @@ int ObDASUtils::find_child_das_def(const ObDASBaseCtDef *root_ctdef,
   return ret;
 }
 
-int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
+int ObDASUtils::generate_mlog_row(const ObLSID &ls_id,
+                                  const ObTabletID &tablet_id,
                                   const storage::ObDMLBaseParam &dml_param,
                                   blocksstable::ObDatumRow &row,
                                   ObDASOpType op_type,
@@ -420,8 +829,8 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
   } else if (row.count_ < 4) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("each mlog row should at least contain 4 columns", KR(ret), K(row.count_));
-  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
-    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq_for_mlog(tenant_id, ls_id, tablet_id, autoinc_seq))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
   } else {
     // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col |
     int sequence_col = 0;
@@ -455,7 +864,6 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
       row.storage_datums_[dmltype_col].set_string(ObString("I"));
       row.storage_datums_[old_new_col].set_string(ObString("N"));
     }
-    // TODO: if we need to update col_type_ in col_descs with ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI ?@xuanxi
   }
   return ret;
 }

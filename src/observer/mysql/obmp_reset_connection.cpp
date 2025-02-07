@@ -65,13 +65,12 @@ int ObMPResetConnection::process()
     int64_t execution_id = 0;
     int64_t query_timeout = 0;
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
-    ObMaxWaitGuard max_wait_guard(NULL, di);
-    ObTotalWaitGuard total_wait_guard(NULL, di);
+    ObMaxWaitGuard max_wait_guard(nullptr);
+    ObTotalWaitGuard total_wait_guard(nullptr);
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     session->update_last_active_time();
     session->set_query_start_time(ObTimeUtility::current_time());
-    LOG_DEBUG("begin reset connection. ", K(session->get_sessid()), K(session->get_effective_tenant_id()));
+    LOG_TRACE("begin reset connection. ", K(session->get_sessid()), K(session->get_effective_tenant_id()));
     tenant_id = session->get_effective_tenant_id();
     session->set_txn_free_route(pkt.txn_free_route());
     if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {

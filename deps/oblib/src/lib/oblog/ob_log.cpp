@@ -747,7 +747,7 @@ int ObLogger::log_head(const int64_t ts,
                            "|%s|%s|%s|%d|%lu|%ld|%s|%s|%s|%s:%d|",
                            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                            tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, dba_event, errcode,
-                           GET_TENANT_ID(), GETTID(), GETTNAME(), ObCurTraceId::get_trace_id_str(),
+                           GET_TENANT_ID(), GETTID(), GETTNAME_V2(), ObCurTraceId::get_trace_id_str(),
                            function, base_file_name, line);
     } else {
       if (level == OB_LOG_LEVEL_DBA_ERROR
@@ -762,7 +762,7 @@ int ObLogger::log_head(const int64_t ts,
                              "[%04d-%02d-%02d %02d:%02d:%02d.%06ld] "
                              "[%ld][%s][T%lu][%s] ",
                              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
-                             tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
+                             tm.tm_sec, tv.tv_usec, GETTID(), GETTNAME_V2(), GET_TENANT_ID(), ObCurTraceId::get_trace_id_str());
       } else {
         constexpr int cluster_id_buf_len = 8;
         char cluster_id_buf[cluster_id_buf_len] = {'\0'};
@@ -772,7 +772,7 @@ int ObLogger::log_head(const int64_t ts,
                              "%-5s %s%s (%s:%d) [%ld][%s]%s[T%lu][%s] [lt=%ld]%s ",
                              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
                              tm.tm_sec, tv.tv_usec, errstr_[level], mod_name, function,
-                             base_file_name, line, GETTID(), GETTNAME(), is_arb_replica_ ? cluster_id_buf : "",
+                             base_file_name, line, GETTID(), GETTNAME_V2(), is_arb_replica_ ? cluster_id_buf : "",
                              is_arb_replica_ ? GET_ARB_TENANT_ID() : GET_TENANT_ID(), ObCurTraceId::get_trace_id_str(),
                              last_logging_cost_time_us_, errcode_buf);
       }

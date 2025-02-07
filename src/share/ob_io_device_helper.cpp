@@ -23,6 +23,7 @@
 #include "share/ob_force_print_log.h"
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server_struct.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
 
@@ -81,7 +82,7 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
       LOG_WARN("file name too long", K(ret), K_(dir), K(entry->d_name));
     } else {
       ObIODFileStat statbuf;
-      if (OB_FAIL(THE_IO_DEVICE->stat(full_path, statbuf))
+      if (OB_FAIL(LOCAL_DEVICE_INSTANCE.stat(full_path, statbuf))
           && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
         LOG_WARN("fail to stat file", K(full_path), K(statbuf));
       } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
@@ -91,7 +92,7 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
         total_size_ += statbuf.size_;
       } else if (S_ISDIR(statbuf.mode_)) {
         ObGetFileSizeFunctor functor(full_path);
-        if (OB_FAIL(THE_IO_DEVICE->scan_dir(full_path, functor))) {
+        if (OB_FAIL(LOCAL_DEVICE_INSTANCE.scan_dir(full_path, functor))) {
           LOG_WARN("fail to scan dir", K(ret), K(full_path), K(entry->d_name));
         } else {
           total_size_ += functor.get_total_size();
@@ -101,6 +102,27 @@ int ObGetFileSizeFunctor::func(const dirent *entry)
         LOG_WARN("unexpected file type", K(full_path), K(statbuf));
       }
     }
+  }
+  return ret;
+}
+
+/**
+ * --------------------------------ObScanDirOp------------------------------------
+ */
+int ObScanDirOp::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObScanDirOp::set_dir(const char *dir)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(dir == nullptr || strlen(dir) >= common::MAX_PATH_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dir));
+  } else {
+    dir_ = dir;
   }
   return ret;
 }
@@ -131,7 +153,8 @@ int ObSNIODeviceWrapper::get_local_device_from_mgr(share::ObLocalDevice *&local_
 
   common::ObIODevice* device = nullptr;
   common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if(OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mod, device))) {
     LOG_WARN("fail to get local device", K(ret));
   } else if (OB_ISNULL(local_device = static_cast<share::ObLocalDevice*>(device))) {
     ret = OB_ERR_UNEXPECTED;
@@ -173,7 +196,6 @@ int ObSNIODeviceWrapper::init(
     ret = OB_IO_ERROR;
     LOG_ERROR("unknown storage type, not support", K(ret), K(data_dir));
   } else {
-    THE_IO_DEVICE = local_device_;
     iod_opt_array[0].set("data_dir", data_dir);
     iod_opt_array[1].set("sstable_dir", sstable_dir);
     iod_opt_array[2].set("block_size", block_size);
@@ -182,8 +204,8 @@ int ObSNIODeviceWrapper::init(
     iod_opts.opt_cnt_ = MAX_IOD_OPT_CNT;
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(THE_IO_DEVICE)) {
-    if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(local_device_)) {
+    if (OB_FAIL(local_device_->init(iod_opts))) {
       LOG_WARN("fail to init io device", K(ret), K(data_dir), K(sstable_dir), K(block_size),
           K(data_disk_percentage), K(data_disk_size));
     } else {
@@ -203,7 +225,6 @@ int ObSNIODeviceWrapper::init(
 void ObSNIODeviceWrapper::destroy()
 {
   if (is_inited_) {
-    THE_IO_DEVICE = nullptr;
     if (NULL != local_device_) {
       local_device_->destroy();
       common::ObDeviceManager::get_instance().release_device((ObIODevice*&)local_device_);
@@ -338,7 +359,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
   int ret = OB_SUCCESS;
   DIR *open_dir = nullptr;
   struct dirent entry;
-  struct dirent *result;
+  struct dirent *result = nullptr;
 
   if (OB_ISNULL(dir_name)) {
     ret = OB_INVALID_ARGUMENT;
@@ -346,10 +367,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
@@ -369,6 +390,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, int (*func)(const dire
     //close dir
     if (NULL != open_dir) {
       ::closedir(open_dir);
+      open_dir = nullptr;
     }
   }
   return ret;
@@ -386,7 +408,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
   int ret = OB_SUCCESS;
   DIR *open_dir = nullptr;
   struct dirent entry;
-  struct dirent *result;
+  struct dirent *result = nullptr;
 
   if (OB_ISNULL(dir_name)) {
     ret = OB_INVALID_ARGUMENT;
@@ -394,10 +416,10 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
   } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
     if (ENOENT != errno) {
       ret = OB_FILE_NOT_OPENED;
-      SHARE_LOG(WARN, "Fail to open dir, ", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name), K(errno), KERRMSG);
     } else {
       ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name), K(errno), KERRMSG);
     }
   } else {
     while (OB_SUCC(ret) && NULL != open_dir) {
@@ -417,7 +439,89 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
     //close dir
     if (NULL != open_dir) {
       ::closedir(open_dir);
+      open_dir = nullptr;
     }
+  }
+  return ret;
+}
+
+/*
+ * scan_dir_rec is scan directory recursion,
+ * you need to provide file_op and dir_op, dir_op is used to operate directory, file_op is used to operate other files, for example reg file, link file.
+ */
+int ObIODeviceLocalFileOp::scan_dir_rec(const char *dir_name,
+                                        ObScanDirOp &file_op,
+                                        ObScanDirOp &dir_op)
+{
+  int ret = OB_SUCCESS;
+  DIR *open_dir = nullptr;
+  struct dirent entry;
+  struct dirent *result = nullptr;
+  if (OB_ISNULL(dir_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ret), K(dir_name));
+  } else if (OB_ISNULL(open_dir = ::opendir(dir_name))) {
+    if (ENOENT != errno) {
+      ret = OB_FILE_NOT_OPENED;
+      SHARE_LOG(WARN, "fail to open dir", K(ret), K(dir_name));
+    } else {
+      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
+      SHARE_LOG(WARN, "dir does not exist", K(ret), K(dir_name));
+    }
+  } else if (OB_FAIL(file_op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+  } else if (OB_FAIL(dir_op.set_dir(dir_name))) {
+    SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+  } else {
+    char current_file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    while (OB_SUCC(ret) && nullptr != open_dir) {
+      if (0 != ::readdir_r(open_dir, &entry, &result)) {
+        ret = convert_sys_errno();
+        SHARE_LOG(WARN, "read dir error", K(ret), KERRMSG);
+      } else if (nullptr != result
+          && 0 != STRCMP(entry.d_name, ".")
+          && 0 != STRCMP(entry.d_name, "..")) {
+        bool is_dir = false;
+        MEMSET(current_file_path, '\0', OB_MAX_FILE_NAME_LENGTH);
+        int pret = snprintf(current_file_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s", dir_name, entry.d_name);
+        if (pret <= 0 || pret >= OB_MAX_FILE_NAME_LENGTH) {
+          ret = OB_BUF_NOT_ENOUGH;
+          SHARE_LOG(WARN, "snprintf failed", K(ret), K(current_file_path), K(dir_name), K(entry.d_name));
+        } else if (DT_DIR == entry.d_type) {
+          is_dir = true;
+        } else if (DT_UNKNOWN == entry.d_type) {
+          ObIODFileStat statbuf;
+          if (OB_FAIL(ObIODeviceLocalFileOp::stat(current_file_path, statbuf))) {
+            SHARE_LOG(WARN, "fail to stat file", K(ret), K(current_file_path));
+          } else if (S_ISDIR(statbuf.mode_)) {
+            is_dir = true;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (false == is_dir) {
+          if (OB_FAIL(file_op.func(&entry))) {
+            SHARE_LOG(WARN, "fail to operate file entry", K(ret), K(dir_name), K(entry.d_name));
+          }
+        } else if (true == is_dir) {
+          if (OB_FAIL(SMART_CALL(scan_dir_rec(current_file_path, file_op, dir_op)))) {
+            SHARE_LOG(WARN, "scan directory failed", K(ret), K(current_file_path));
+          } else if (OB_FAIL(file_op.set_dir(dir_name))) {
+            SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+          } else if (OB_FAIL(dir_op.set_dir(dir_name))) {
+            SHARE_LOG(WARN, "fail to set dir", K(ret), K(dir_name));
+          } else if (OB_FAIL(dir_op.func(&entry))) {
+            SHARE_LOG(WARN, "fail to operate dir entry", K(ret), K(dir_name), K(entry.d_name));
+          }
+        }
+      } else if (NULL == result) {
+        break; //end file
+      }
+    }
+  }
+  //close dir
+  if (nullptr != open_dir) {
+    ::closedir(open_dir);
+    open_dir = nullptr;
   }
   return ret;
 }
@@ -685,7 +789,7 @@ int ObIODeviceLocalFileOp::pwrite_impl(
         SHARE_LOG(INFO, "pwrite is interrupted before any data is written, just retry", K(errno), KERRMSG);
       } else {
         ret = ObIODeviceLocalFileOp::convert_sys_errno();
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(write_sz), K(write_offset), K(errno), KERRMSG);
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buffer), K(write_sz), K(write_offset), K(errno), KERRMSG);
       }
     } else {
       buffer += sz;
@@ -724,6 +828,7 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
     case EAGAIN:
       ret = OB_EAGAIN;
       break;
+    case EDQUOT:
     case ENOSPC:
       ret = OB_SERVER_OUTOF_DISK_SPACE;
       break;
@@ -735,9 +840,9 @@ int ObIODeviceLocalFileOp::convert_sys_errno(const int error_no)
       break;
   }
   if (use_warn_log) {
-    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(WARN, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   } else {
-    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRMSG);
+    SHARE_LOG(INFO, "convert sys errno", K(ret), K(error_no), KERRNOMSG(error_no));
   }
   return ret;
 }
@@ -768,7 +873,7 @@ int ObIODeviceLocalFileOp::get_block_file_size(
     LOG_WARN("fail to compute block file size", KR(ret), K(sstable_dir), K(reserved_size),
              K(block_size), K(suggest_file_size), K(disk_percentage), K(block_file_size));
   } else if (OB_FAIL(ObIODeviceLocalFileOp::check_disk_space_available(sstable_dir,
-                     block_file_size, reserved_size, old_block_file_size))) {
+                     block_file_size, reserved_size, old_block_file_size, (0 == block_file_size)))) {
     LOG_WARN("fail to check disk space available", KR(ret), K(sstable_dir),
              K(block_file_size), K(reserved_size), K(old_block_file_size));
   }
@@ -818,7 +923,8 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     const char *sstable_dir,
     const int64_t data_disk_size,
     const int64_t reserved_size,
-    const int64_t used_disk_size)
+    const int64_t used_disk_size,
+    const bool need_report_user_error)
 {
   int ret = OB_SUCCESS;
   struct statvfs svfs;
@@ -834,11 +940,16 @@ int ObIODeviceLocalFileOp::check_disk_space_available(
     SHARE_LOG(WARN, "Failed to get disk space ", K(ret), K(sstable_dir));
   } else {
     // check disk space availability for datafile_size, must satisfy datafile_size < used_disk_size + disk_free_space
-    int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
     if (data_disk_size > used_disk_size + free_space) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
-          K(free_space), K(used_disk_size), K(data_disk_size));
+      if (need_report_user_error) {
+        LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+            K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
+      } else {
+        LOG_DBA_WARN(OB_SERVER_OUTOF_DISK_SPACE, "msg", "data file size is too large", K(ret),
+            K(free_space), K(reserved_size), K(used_disk_size), K(data_disk_size));
+      }
     }
   }
   return ret;

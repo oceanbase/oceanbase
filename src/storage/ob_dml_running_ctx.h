@@ -17,6 +17,7 @@
 #include "storage/ob_i_store.h"
 #include "storage/ob_relative_table.h"
 #include "share/scn.h"
+#include "storage/lob/ob_lob_tablet_dml.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,7 @@ public:
   bool is_old_row_valid_for_lob_;
   bool is_need_check_old_row_;
   bool is_udf_;
+  ObLobTabletDmlCtx lob_dml_ctx_;
 
 private:
   share::schema::ObSchemaGetterGuard schema_guard_;

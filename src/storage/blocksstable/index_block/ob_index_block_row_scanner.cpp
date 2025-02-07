@@ -113,7 +113,7 @@ int ObIndexBlockDataTransformer::transform(
     ObMicroBlockData &transformed_data,
     ObIAllocator &allocator,
     char *&allocated_buf,
-    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+    const ObITableReadInfo *table_read_info)
 {
   int ret = OB_SUCCESS;
   ObDatumRow row;
@@ -126,9 +126,9 @@ int ObIndexBlockDataTransformer::transform(
   const int64_t col_cnt = micro_block_header->column_count_;
   const int64_t row_cnt = micro_block_header->row_count_;
   int64_t mem_limit = 0;
-  if (OB_UNLIKELY(nullptr != rowkey_col_descs && col_cnt - 1 > rowkey_col_descs->count())) {
+  if (OB_UNLIKELY(nullptr != table_read_info && col_cnt - 1 > table_read_info->get_rowkey_count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected rowkey count", K(ret), K(col_cnt), KPC(rowkey_col_descs));
+    LOG_WARN("Unexpected rowkey count", K(ret), K(col_cnt), KPC(table_read_info));
   } else if (OB_UNLIKELY(!block_data.is_valid() || !micro_block_header->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(block_data), KPC(micro_block_header));
@@ -138,7 +138,7 @@ int ObIndexBlockDataTransformer::transform(
     LOG_WARN("Fail to init micro block reader", K(ret), K(block_data));
   } else if (OB_FAIL(row.init(allocator, col_cnt))) {
     LOG_WARN("Failed to init datum row", K(ret), K(col_cnt));
-  } else if (OB_FAIL(get_transformed_upper_mem_size(rowkey_col_descs, block_data.get_buf(), mem_limit))) {
+  } else if (OB_FAIL(get_transformed_upper_mem_size(table_read_info, block_data.get_buf(), mem_limit))) {
     LOG_WARN("Failed to get upper bound of transformed block size", K(ret), K(block_data));
     } else if (OB_ISNULL(block_buf = static_cast<char *>(allocator.alloc(mem_limit)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -164,7 +164,7 @@ int ObIndexBlockDataTransformer::transform(
     ObRowkeyVector *rowkey_vector = nullptr;
     if (OB_FAIL(ObRowkeyVector::construct_rowkey_vector(row_cnt,
                                                         col_cnt - 1,
-                                                        rowkey_col_descs,
+                                                        table_read_info,
                                                         block_buf,
                                                         pos,
                                                         mem_limit,
@@ -287,7 +287,7 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
 }
 
 int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
-    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs,
+    const ObITableReadInfo *table_read_info,
     const char *raw_block_data,
     int64_t &mem_limit)
 {
@@ -306,7 +306,7 @@ int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
     mem_limit += micro_header->row_count_ * sizeof(common::ObPointerSwizzleNode);
     if (OB_FAIL(ObRowkeyVector::get_occupied_size(micro_header->row_count_,
                                                   micro_header->column_count_ - 1,
-                                                  rowkey_col_descs,
+                                                  table_read_info,
                                                   rowkey_vector_size))) {
       LOG_WARN("Failed to get occupied size of rowkey vector", K(ret));
     } else {
@@ -1360,7 +1360,7 @@ ObIndexBlockRowScanner::ObIndexBlockRowScanner()
     index_format_(ObIndexFormat::INVALID), parent_row_range_(), is_get_(false), is_reverse_scan_(false),
     is_left_border_(false), is_right_border_(false), is_inited_(false),
     is_normal_cg_(false), is_normal_query_(true), filter_constant_type_(sql::ObBoolMaskType::PROBABILISTIC),
-    iter_param_(), rowkey_col_descs_(nullptr)
+    iter_param_(), table_read_info_(nullptr)
 {}
 
 ObIndexBlockRowScanner::~ObIndexBlockRowScanner()
@@ -1387,7 +1387,7 @@ void ObIndexBlockRowScanner::reuse()
   is_right_border_ = false;
   parent_row_range_.reset();
   filter_constant_type_ = sql::ObBoolMaskType::PROBABILISTIC;
-  rowkey_col_descs_ = nullptr;
+  table_read_info_ = nullptr;
 }
 
 void ObIndexBlockRowScanner::reset()
@@ -1439,7 +1439,7 @@ void ObIndexBlockRowScanner::reset()
   iter_param_.reset();
   allocator_ = nullptr;
   filter_constant_type_ = sql::ObBoolMaskType::PROBABILISTIC;
-  rowkey_col_descs_ = nullptr;
+  table_read_info_ = nullptr;
 }
 
 int ObIndexBlockRowScanner::init(
@@ -1448,7 +1448,7 @@ int ObIndexBlockRowScanner::init(
     const common::ObQueryFlag &query_flag,
     const int64_t nested_offset,
     const bool is_normal_cg,
-    const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+    const ObITableReadInfo *table_read_info)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1464,7 +1464,7 @@ int ObIndexBlockRowScanner::init(
     nested_offset_ = nested_offset;
     is_normal_cg_ = is_normal_cg;
     is_normal_query_ = !query_flag.is_daily_merge() && !query_flag.is_multi_version_minor_merge();
-    rowkey_col_descs_ = rowkey_col_descs;
+    table_read_info_ = table_read_info;
     is_inited_ = true;
   }
   return ret;
@@ -1946,15 +1946,15 @@ int ObIndexBlockRowScanner::get_end_key(ObCommonDatumRowkey &endkey) const
 void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
                                             const ObTablet *tablet,
                                             const ObStorageDatumUtils &datum_utils,
-                                            ObTableAccessContext &access_ctx,
-                                            const ObIArray<share::schema::ObColDesc> *rowkey_col_descs)
+                                            const ObQueryFlag &query_flag,
+                                            const ObITableReadInfo *table_read_info)
 {
   nested_offset_ = sstable.get_macro_offset();
   datum_utils_ = &datum_utils;
   is_normal_cg_ = sstable.is_normal_cg_sstable();
-  is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
-  is_normal_query_ = !access_ctx.query_flag_.is_daily_merge() && !access_ctx.query_flag_.is_multi_version_minor_merge();
-  rowkey_col_descs_ = rowkey_col_descs;
+  is_reverse_scan_ = query_flag.is_reverse_scan();
+  is_normal_query_ = !query_flag.is_daily_merge() && !query_flag.is_multi_version_minor_merge();
+  table_read_info_ = table_read_info;
   iter_param_.sstable_ = &sstable;
   iter_param_.tablet_ = tablet;
   int ret = OB_SUCCESS;
@@ -2003,7 +2003,7 @@ int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
     idx_block_row.nested_offset_ = nested_offset_;
     idx_block_row.agg_row_buf_ = agg_row_buf;
     idx_block_row.agg_buf_size_ = agg_buf_size;
-    idx_block_row.rowkey_col_descs_ = rowkey_col_descs_;
+    idx_block_row.table_read_info_ = table_read_info_;
     if (is_normal_cg_) {
       int64_t row_offset;
       if (OB_FAIL(idx_block_row.endkey_.get_column_int(0, row_offset))) {

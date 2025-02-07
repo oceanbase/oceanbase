@@ -113,14 +113,12 @@ public:
   {
     int64_t pos = 0;
     if (OB_NOT_NULL(rowkey_)) {
-      common::databuff_printf(buf, buf_len, pos, "%s",
-                              common::to_cstring(*rowkey_));
+      common::databuff_printf(buf, buf_len, pos, *rowkey_);
     } else {
       common::databuff_printf(buf, buf_len, pos, "NULL");
     }
     return pos;
   }
-  const char *repr() const { return common::to_cstring(*this); }
 
   template <class Allocator>
   int dup(ObMemtableKey *&new_key, Allocator &allocator) const
@@ -220,7 +218,13 @@ public:
       const common::ObObjMeta &schema_meta = columns.at(i).col_type_;
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
-          && schema_meta.get_type() != value.get_type()) {
+          && schema_meta.get_type() != value.get_type()
+          && !(lib::is_mysql_mode()
+            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) // small integer -> big integer; mysql mode;
+          && !(lib::is_oracle_mode()
+            && ((common::ObNumberType == schema_meta.get_type() && common::ObNumberFloatType == value.get_type())
+              || (common::ObNumberType == value.get_type() && common::ObNumberFloatType == schema_meta.get_type())))) { // number -> float; oracle mode;
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),
@@ -303,7 +307,6 @@ public:
   int checksum(common::ObBatchChecksum &bc) const { return rowkey_->checksum(bc); }
   int64_t to_string(char *buf, const int64_t buf_len) const { return rowkey_->to_string(buf, buf_len); }
   const ObObj *get_ptr() const { return rowkey_->get_obj_ptr(); }
-  const char *repr() const { return rowkey_->repr(); }
 public:
   const common::ObStoreRowkey *rowkey_;
 };

@@ -14,13 +14,13 @@
 #include "ob_array_cast.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_parse.h"
-#include "share/object/ob_obj_cast.h"
+#include "src/share/object/ob_obj_cast_util.h"
 
 namespace oceanbase {
 namespace sql {
 
 int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                           ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -43,7 +43,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
     } else {
       ObObjType dst_obj_type = dst_type->basic_meta_.get_obj_type();
       ObObj res;
-      ObCastCtx cast_ctx(&alloc, NULL, CM_NONE, ObCharset::get_system_collation());
+      ObCastCtx cast_ctx(&alloc, NULL, mode, ObCharset::get_system_collation());
       if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
         LOG_WARN("failed to cast number to double type", K(ret));
       } else {
@@ -58,7 +58,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
 }
 
 int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                               ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                               ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -75,7 +75,7 @@ int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, c
       }
     } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, src_type, i, src_elem))) {
       LOG_WARN("failed to get cast element", K(ret), K(i));
-    } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type))) {
+    } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
       LOG_WARN("failed to cast and add element", K(ret));
     }
   }
@@ -123,7 +123,7 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       break;
     }
     case ObUInt32Type: {
-      ObArrayFixedSize<int32_t> *arr = static_cast<ObArrayFixedSize<int32_t> *>(src);
+      ObArrayFixedSize<uint32_t> *arr = static_cast<ObArrayFixedSize<uint32_t> *>(src);
       src_elem.set_uint32((*arr)[idx]);
       break;
     }
@@ -155,11 +155,13 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
       src_elem.set_varchar((*arr)[idx]);
       break;
     }
+    case ObUDoubleType:
     case ObDoubleType: {
       ObArrayFixedSize<double> *arr = static_cast<ObArrayFixedSize<double> *>(src);
       src_elem.set_double((*arr)[idx]);
       break;
     }
+    case ObUFloatType:
     case ObFloatType: {
       ObArrayFixedSize<float> *arr = static_cast<ObArrayFixedSize<float> *>(src);
       src_elem.set_float((*arr)[idx]);
@@ -174,13 +176,20 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
 }
 
 int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_elem,
-                                       ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type)
+                                       ObIArrayType *dst, const ObCollectionBasicType *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
-  ObCastCtx cast_ctx(&alloc, NULL, CM_NONE, ObCharset::get_system_collation());
+  ObCastCtx cast_ctx(&alloc, NULL, mode, ObCharset::get_system_collation());
   ObObjType dst_obj_type = dst_elem_type->basic_meta_.get_obj_type();
   ObObj res;
-  if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
+  ObAccuracy out_acc = dst_elem_type->basic_meta_.get_accuracy();
+  const ObCollationType cs_type = dst_elem_type->basic_meta_.meta_.get_collation_type();
+  ObObj buf_obj;
+  const ObObj *res_obj = &src_elem;
+  if (dst_obj_type == ObVarcharType &&
+      OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, src_elem, buf_obj, res_obj))) {
+    LOG_WARN("varchar type length is too long", K(ret), K(src_elem.get_string_len()));
+  } else if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
     LOG_WARN("failed to cast number to double type", K(ret));
   } else {
     switch (dst_obj_type) {
@@ -245,6 +254,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         // to do
         break;
       }
+      case ObUFloatType:
       case ObFloatType: {
         ObArrayFixedSize<float> *dst_arr = static_cast<ObArrayFixedSize<float> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_float()))) {
@@ -252,6 +262,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         }
         break;
       }
+      case ObUDoubleType:
       case ObDoubleType: {
         ObArrayFixedSize<double> *dst_arr = static_cast<ObArrayFixedSize<double> *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_double()))) {
@@ -424,8 +435,9 @@ int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_tex
   const char *syntaxerr = NULL;
   uint64_t err_offset = 0;
   ObJsonNode *j_node = NULL;
+  uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
   if (OB_FAIL(
-          ObJsonParser::parse_json_text(&alloc, arr_text.ptr(), arr_text.length(), syntaxerr, &err_offset, j_node))) {
+          ObJsonParser::parse_json_text(&alloc, arr_text.ptr(), arr_text.length(), syntaxerr, &err_offset, j_node, parse_flag))) {
     LOG_WARN("failed to parse array text", K(ret), K(arr_text), KCSTRING(syntaxerr), K(err_offset));
   } else if (j_node->json_type() != ObJsonNodeType::J_ARRAY) {
     ret = OB_INVALID_ARGUMENT;
@@ -443,7 +455,7 @@ int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_tex
 }
 
 int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionBasicType *src_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
@@ -465,10 +477,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
         LOG_WARN("failed to get cast element", K(ret), K(i));
       } else if (FALSE_IT(src_elem.set_collation_type(elem_cs_type))) {
       } else if (FALSE_IT(src_elem.set_collation_level(elem_ncl_type))) {
-      }else if (elem_len_max < src_elem.get_string_len()) {
-        ret = OB_ERR_DATA_TOO_LONG;
-        LOG_WARN("varchar type length is too long", K(ret), K(i), K(elem_len_max), K(src_elem.get_string_len()));
-      } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type))) {
+      } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
         LOG_WARN("failed to cast and add element", K(ret));
       }
     }
@@ -477,7 +486,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
 }
 
 int ObArrayNestedCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionTypeBase *elem_type,
-                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type)
+                            ObIArrayType *&dst, const ObCollectionTypeBase *dst_elem_type, ObCastMode mode)
 {
   int ret = OB_SUCCESS;
   const ObCollectionArrayType *src_type = dynamic_cast<const ObCollectionArrayType *>(elem_type);
@@ -537,7 +546,8 @@ int ObArrayTypeCastFactory::alloc(ObIAllocator &alloc, const ObCollectionTypeBas
     } else {
       arr_cast = OB_NEWx(ObArrayFixedSizeCast, &alloc);
     }
-  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+  } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE
+             || arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
     arr_cast = OB_NEWx(ObArrayNestedCast, &alloc);
   } else {
     // to do

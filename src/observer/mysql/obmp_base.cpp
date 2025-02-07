@@ -168,7 +168,6 @@ int ObMPBase::after_process(int error_code)
 
 void ObMPBase::cleanup()
 {
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 void ObMPBase::disconnect()
@@ -254,6 +253,9 @@ int ObMPBase::load_system_variables(const ObSysVariableSchema &sys_variable_sche
       LOG_WARN("fail to gen sys var in pc str", K(ret));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to gen configs in pc string", K(ret));
+    } else {
+      session.set_enable_mysql_compatible_dates(
+        session.get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
@@ -324,7 +326,7 @@ int ObMPBase::free_session()
       LOG_INFO("free session successfully", K(ctx));
       conn->is_sess_free_ = true;
       if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(conn, is_need_clear)))) {
-        LOG_ERROR("fail to judge need clear", K(ret), "sessid", conn->sessid_, "server_id", GCTX.server_id_);
+        LOG_ERROR("fail to judge need clear", K(ret), "sessid", conn->sessid_);
       } else if (is_need_clear) {
         if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn->sessid_))) {
           LOG_WARN("mark session id unused failed", K(ret), "sessid", conn->sessid_);
@@ -401,11 +403,17 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   // @todo 重构wb逻辑
   if (!async_resp_used) { // 异步回包不重置warning buffer，重置操作在callback中做
     session.reset_warnings_buf();
-    session.set_session_sleep();
+    if (!session.get_is_in_retry()) {
+      session.set_session_sleep();
+      session.reset_cur_sql_id();
+      session.reset_current_plan_id();
+      session.reset_current_plan_hash();
+    }
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
   session.reset_plsql_exec_time();
+  session.reset_plsql_compile_time();
   return ret;
 }
 
@@ -434,14 +442,8 @@ int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
   return ret;
 }
 
-int ObMPBase::setup_user_resource_group(
-    ObSMConnection &conn,
-    const uint64_t tenant_id,
-    sql::ObSQLSessionInfo *session)
+void ObMPBase::set_request_expect_group_id(sql::ObSQLSessionInfo *session)
 {
-  int ret = OB_SUCCESS;
-  uint64_t group_id = 0;
-  uint64_t user_id = session->get_user_id();
   if (OB_INVALID_ID != session->get_expect_group_id()) {
     // Session->expected_group_id_ is set when hit plan cache or resolve a query, and find that
     // expcted group is consistent with current group.
@@ -453,6 +455,19 @@ int ObMPBase::setup_user_resource_group(
     // conn.group_id_ = session->get_expect_group_id();
     // reset to invalid because session.expected_group_id is single_use.
     session->set_expect_group_id(OB_INVALID_ID);
+  }
+}
+
+int ObMPBase::setup_user_resource_group(
+    ObSMConnection &conn,
+    const uint64_t tenant_id,
+    sql::ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  uint64_t group_id = 0;
+  uint64_t user_id = session->get_user_id();
+  if (OB_INVALID_ID != session->get_expect_group_id()) {
+    set_request_expect_group_id(session);
   } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));

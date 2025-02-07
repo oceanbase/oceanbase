@@ -55,6 +55,7 @@ int ObOutlineExecutor::generate_outline_info2(ObExecContext &ctx,
   outline_info.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
   outline_info.set_outline_content(create_outline_stmt->get_hint());
   outline_info.set_sql_id(create_outline_stmt->get_sql_id());
+  outline_info.set_format_sql_id(create_outline_stmt->get_format_sql_id());
 
   if (create_outline_stmt->get_max_concurrent() >= 0) {
     ObMaxConcurrentParam concurrent_param(&ctx.get_allocator());
@@ -90,13 +91,23 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
   bool has_questionmark_in_outline_sql = false;
   ObString outline;
   ObString outline_key;
-  ObString &outline_sql = outline_info.get_sql_text_str();
+  ObString &outline_sql = outline_info.is_format() ?
+            outline_info.get_format_sql_text_str() : outline_info.get_sql_text_str();
   int64_t max_concurrent = ObGlobalHint::UNSET_MAX_CONCURRENT;
   const ObQueryHint *query_hint = NULL;
+  char* buf = NULL;
+  int32_t len = 0;
+  int32_t pos = 0;
   ObMaxConcurrentParam concurrent_param(&ctx.get_allocator());
+  bool has_in_expr = false;
+  int64_t in_expr_pos = 0;
+  buf = (char *)ctx.get_allocator().alloc(outline_sql.length());
   if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ctx", K(ret));
+  } else if (NULL == buf) {
+    SQL_PC_LOG(WARN, "fail to alloc buf", K(outline_sql.length()));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(outline_stmt) || OB_ISNULL(outline_stmt->get_query_ctx())
              || OB_ISNULL(query_hint = &outline_stmt->get_query_ctx()->get_query_hint())) {
     ret = OB_ERR_UNEXPECTED;
@@ -105,14 +116,25 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                                  outline_sql, outline_key,
                                                  concurrent_param.fixed_param_store_,
                                                  FP_PARAMERIZE_AND_FILTER_HINT_MODE,
-                                                 has_questionmark_in_outline_sql))) {
+                                                 has_questionmark_in_outline_sql,
+                                                 outline_info.is_format()))) {
     LOG_WARN("fail to get outline key", "outline_sql", outline_sql, K(ret));
+  } else if (OB_FAIL(ObSqlParameterization::search_in_expr_pos(outline_info.get_format_sql_text_str().ptr(),
+                                                               outline_info.get_format_sql_text_str().length(),
+                                                               in_expr_pos, has_in_expr))) {
+    LOG_WARN("failed to search in expr", K(ret), K(outline_info.get_format_sql_text_str()));
   } else if (FALSE_IT(max_concurrent = query_hint->get_global_hint().max_concurrent_)) {
   } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && query_hint->has_hint_exclude_concurrent())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "sql text should have no ? when there is no concurrent limit");
     LOG_WARN("outline should have no ? when there is no concurrent limit",
              K(outline_sql), K(ret));
+  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT && has_in_expr
+                         && concurrent_param.fixed_param_store_.count() > 0 && outline_info.is_format())) {
+    ret = OB_INVALID_OUTLINE;
+    LOG_USER_ERROR(OB_INVALID_OUTLINE, "format outline with in expr not support concurrent limit, recommend to use normal outline");
+    LOG_WARN("format outline with in expr can not have const param",
+             "outline_format_sql_text", outline_info.get_format_sql_text_str(), K(ret));
   } else if (OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
     LOG_WARN("fail to get outline", K(ret));
   } else {
@@ -134,7 +156,8 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                               target_sql, target_key,
                                               target_param.fixed_param_store_,
                                               FP_PARAMERIZE_AND_FILTER_HINT_MODE,
-                                              has_questionmark_in_target_sql))) {
+                                              has_questionmark_in_target_sql,
+                                              outline_info.is_format()))) {
         LOG_WARN("fail to get outline key", K(target_sql), K(ret));
 
       } else if (target_key != outline_key || has_questionmark_in_target_sql != has_questionmark_in_outline_sql) {
@@ -157,7 +180,8 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                                      target_sql, target_key_with_hint,
                                                      target_param_with_hint.fixed_param_store_,
                                                      FP_MODE,
-                                                     has_questionmark_in_target_sql))) {
+                                                     has_questionmark_in_target_sql,
+                                                     outline_info.is_format()))) {
         LOG_WARN("fail to get outline key", K(target_sql), K(ret));
       } else {
         //replace outline_key with target_key derived from to_clause with index not filtered

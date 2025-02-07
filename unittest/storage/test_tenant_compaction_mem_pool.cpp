@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 /*
  * test_tenant_compaction_mem_pool.cpp
  * Author:
@@ -48,12 +60,14 @@ private:
   const uint64_t tenant_id_;
   ObTenantBase tenant_base_;
   ObTenantCompactionMemPool *mem_pool_;
+  ObTimerService *timer_service_;
 };
 
 TestTenantCompactionMemPool::TestTenantCompactionMemPool()
   : tenant_id_(1),
     tenant_base_(tenant_id_),
-    mem_pool_(nullptr)
+    mem_pool_(nullptr),
+    timer_service_(nullptr)
 {
 }
 
@@ -72,8 +86,11 @@ void TestTenantCompactionMemPool::SetUp()
   int ret = OB_SUCCESS;
 
   mem_pool_ = OB_NEW(ObTenantCompactionMemPool, ObModIds::TEST);
+  timer_service_ = OB_NEW(ObTimerService, ObModIds::TEST, tenant_id_);
+  ASSERT_EQ(OB_SUCCESS, timer_service_->start());
 
   tenant_base_.set(mem_pool_);
+  tenant_base_.set(timer_service_);
   ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(tenant_id_, MTL_ID());
@@ -81,11 +98,18 @@ void TestTenantCompactionMemPool::SetUp()
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_EQ(mem_pool_, MTL(ObTenantCompactionMemPool *));
+  ASSERT_EQ(timer_service_, MTL(ObTimerService *));
 }
 
 void TestTenantCompactionMemPool::TearDown()
 {
   mem_pool_->destroy();
+  if (nullptr != timer_service_) {
+    timer_service_->stop();
+    timer_service_->wait();
+    timer_service_->destroy();
+    ob_delete(timer_service_);
+  }
   ObTenantEnv::set_tenant(nullptr);
 }
 

@@ -16,6 +16,7 @@ namespace oceanbase
 {
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_SKIP_CHECK_MEDIUM_LIST);
 
 int ObMediumListChecker::validate_medium_info_list(
     const ObExtraMediumInfo &extra_info,
@@ -23,7 +24,20 @@ int ObMediumListChecker::validate_medium_info_list(
     const int64_t last_major_snapshot)
 {
   int ret = OB_SUCCESS;
-  if (GCTX.is_shared_storage_mode()) {
+  bool skip_validate = false;
+#ifdef ERRSIM
+  ret = EN_SKIP_CHECK_MEDIUM_LIST ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    ret = OB_SUCCESS;
+    skip_validate = true;
+    FLOG_INFO("EN_SKIP_CHECK_MEDIUM_LIST, skip check medium info list",
+              K(ret), K(last_major_snapshot), K(extra_info), KPC(medium_info_array));
+  }
+#endif
+
+  if (skip_validate) {
+    // do nothing
+  } else if (GCTX.is_shared_storage_mode()) {
 #ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(inner_check_medium_list_for_ss(extra_info, medium_info_array, last_major_snapshot))) {
       LOG_WARN("failed to inner check medium info list for ss", K(ret));

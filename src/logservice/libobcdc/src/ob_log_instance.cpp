@@ -585,6 +585,10 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       LOG_ERROR("dump_config_ fail", KR(ret));
     } else if (OB_FAIL(lib::ThreadPool::set_thread_count(DAEMON_THREAD_COUNT))) {
       LOG_ERROR("set ObLogInstance daemon thread count failed", KR(ret), K(DAEMON_THREAD_COUNT));
+    } else if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init simple thread pool dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
     } else if (OB_FAIL(trans_task_pool_alloc_.init(
         TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
@@ -774,6 +778,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       : TCONF.tb_black_list.str();
 
   const bool enable_direct_load_inc = (1 == TCONF.enable_direct_load_inc);
+  const bool is_mock_fail_on_init = (TCONF.test_mode_on = 1 && TCONF.test_mode_init_fail != 0);
 
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
@@ -850,6 +855,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     // init self addr
     } else if (OB_FAIL(init_self_addr_())) {
       LOG_ERROR("init self addr error", KR(ret));
+    } else if (OB_FAIL(global_poc_server.start_net_client(TCONF.io_thread_num))) {
+      LOG_ERROR("start net client failed", KR(ret));
     }
   }
 
@@ -1050,6 +1057,9 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     LOG_ERROR("start_tenant_service_ failed", KR(ret));
   }
 
+  if (is_mock_fail_on_init) {
+    ret = OB_ERR_UNEXPECTED;
+  }
   if (OB_SUCC(ret)) {
     LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
         K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
@@ -1405,6 +1415,7 @@ void ObLogInstance::destroy_components_()
   if (is_data_dict_refresh_mode(refresh_mode_)) {
     ObLogMetaDataService::get_instance().destroy();
   }
+  global_poc_server.destroy();
 
   LOG_INFO("destroy all components end");
 }
@@ -1460,6 +1471,12 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
     ObKVGlobalCache::get_instance().destroy();
     ObMemoryDump::get_instance().destroy();
     ObClockGenerator::destroy();
+    if (OB_LIKELY(!ObTimerService::get_instance().is_stopped())) {
+      ObTimerService::get_instance().stop();
+      ObTimerService::get_instance().wait();
+    }
+    ObTimerService::get_instance().destroy();
+    ObSimpleThreadPoolDynamicMgr::get_instance().destroy();
 
     is_assign_log_dir_valid_ = false;
     MEMSET(assign_log_dir_, 0, sizeof(assign_log_dir_));
@@ -1564,6 +1581,10 @@ void ObLogInstance::do_stop_(const char *stop_reason)
     resource_collector_->stop();
     mysql_proxy_.stop();
     tenant_sql_proxy_.stop();
+    ObTimerService::get_instance().stop();
+    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObSimpleThreadPoolDynamicMgr::get_instance().wait();
 
     // set global error code
     global_errno_ = (global_errno_ == OB_SUCCESS ? OB_IN_STOP_STATE : global_errno_);

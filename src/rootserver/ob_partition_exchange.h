@@ -316,9 +316,9 @@ protected:
                                        AlterTableSchema &alter_table_schema);
   int add_table_to_tablet_ids_map(const uint64_t table_id, const ObTabletID &tablet_id);
   int add_table_to_tablet_ids_map(const uint64_t table_id, const ObIArray<ObTabletID> &inc_tablet_ids);
-  int get_and_check_aux_tablet_id(const ObPartition *data_part,
-                                  const ObSubPartition *data_subpart,
+  int get_and_check_aux_tablet_id(const ObTableSchema &data_table_schema,
                                   const ObTableSchema &aux_table_schema,
+                                  const ObTabletID &data_tablet_id,
                                   const bool is_oracle_mode,
                                   const bool is_subpart,
                                   ObTabletID &aux_tablet_id);

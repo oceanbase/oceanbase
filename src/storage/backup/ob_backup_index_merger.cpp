@@ -172,7 +172,9 @@ ObIBackupMultiLevelIndexBuilder::ObIBackupMultiLevelIndexBuilder()
       allocator_(),
       buffer_writer_(ObModIds::BACKUP),
       compressor_type_()
-{}
+{
+  allocator_.set_attr(lib::ObMemAttr(MTL_ID(), ObModIds::BACKUP));
+}
 
 ObIBackupMultiLevelIndexBuilder::~ObIBackupMultiLevelIndexBuilder()
 {
@@ -236,7 +238,9 @@ int ObIBackupMultiLevelIndexBuilder::build_and_flush_index_tree_()
   while (OB_SUCC(ret) && OB_NOT_NULL(cur_node)) {
     next_node = NULL;
     bool need_build_next_level = false;
-    if (OB_FAIL(alloc_new_buffer_node_(
+    if (OB_FAIL(cur_node->seal_node())) {
+      LOG_WARN("failed to seal node", K(ret));
+    } else if (OB_FAIL(alloc_new_buffer_node_(
                    cur_node->get_tenant_id(), cur_node->get_block_type(), cur_node->get_node_level() + 1, next_node))) {
       LOG_WARN("failed to alloc new buffer node", K(ret), K(*cur_node));
     } else if (OB_FAIL(build_next_level_index_(*cur_node, *next_node))) {
@@ -1739,6 +1743,7 @@ ObBackupUnorderdMacroBlockIndexMerger::ObBackupUnorderdMacroBlockIndexMerger()
 
 ObBackupUnorderdMacroBlockIndexMerger::~ObBackupUnorderdMacroBlockIndexMerger()
 {
+  external_sort_.clean_up();
 }
 
 int ObBackupUnorderdMacroBlockIndexMerger::init(
@@ -1926,6 +1931,10 @@ int ObBackupUnorderdMacroBlockIndexMerger::alloc_merge_iter_(const bool tenant_l
       LOG_WARN("failed to init macro block index iterator", K(ret), K(merge_param), K(ls_id), K(turn_id));
     } else {
       iter = tmp_iter;
+      tmp_iter = NULL;
+    }
+    if (OB_NOT_NULL(tmp_iter)) {
+      ObLSBackupFactory::free(tmp_iter);
     }
   }
   return ret;
@@ -1989,7 +1998,11 @@ int ObBackupUnorderdMacroBlockIndexMerger::prepare_prev_backup_set_index_iter_(
     LOG_WARN("failed to init backup macro range index iterator", K(ret), K(merge_param), K(prev_backup_set_desc), K(prev_tenant_index_retry_id));
   } else {
     iter = tmp_iter;
+    tmp_iter = NULL;
     LOG_INFO("prepare prev backup set index iter", K(prev_backup_set_desc), K(merge_param));
+  }
+  if(OB_NOT_NULL(tmp_iter)){
+    ObLSBackupFactory::free(tmp_iter);
   }
   return ret;
 }

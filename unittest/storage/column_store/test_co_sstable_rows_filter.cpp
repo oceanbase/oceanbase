@@ -289,6 +289,7 @@ void TestCOSSTableRowsFilter::init_single_white_filter()
   ASSERT_FALSE(nullptr == filter_);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_single_black_filter()
@@ -300,6 +301,7 @@ void TestCOSSTableRowsFilter::init_single_black_filter()
   ASSERT_FALSE(nullptr == filter_);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_filter(bool is_common)
@@ -322,6 +324,7 @@ void TestCOSSTableRowsFilter::init_multi_white_filter(bool is_common)
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_black_filter(bool is_common)
@@ -351,6 +354,7 @@ void TestCOSSTableRowsFilter::init_multi_black_filter(bool is_common)
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_one()
@@ -383,6 +387,7 @@ void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_one()
   filter_->set_childs(2, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_two()
@@ -434,6 +439,7 @@ void TestCOSSTableRowsFilter::init_multi_white_and_black_filter_case_two()
   filter_->set_childs(3, childs);
   co_filter_.filter_ = filter_;
   co_filter_.allocator_ = &allocator_;
+  co_filter_.access_ctx_ = &context_;
 }
 
 void TestCOSSTableRowsFilter::reset_filter()

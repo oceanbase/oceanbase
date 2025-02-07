@@ -38,8 +38,6 @@ public:
 
   static int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                            double &cost,
-                           double &filter_selectivity,
-                           common::ObIArray<ObExprSelPair> &all_predicate_sel,
                            const ObOptimizerContext &opt_ctx);
 
   static int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,

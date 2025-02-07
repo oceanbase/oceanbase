@@ -118,7 +118,9 @@ private:
            || vec_tc == VEC_TC_DEC_INT32
            || vec_tc == VEC_TC_YEAR
            || vec_tc == VEC_TC_INTERVAL_YM
-           || vec_tc == VEC_TC_DEC_INT64;
+           || vec_tc == VEC_TC_DEC_INT64
+           || vec_tc == VEC_TC_MYSQL_DATE
+           || vec_tc == VEC_TC_MYSQL_DATETIME;
   }
 };
 
@@ -367,8 +369,6 @@ using fixed_cmp_initer = FixedExprCmpFuncIniter<
   VecTCCmpCalc<static_cast<VecValueTypeClass>(X), static_cast<VecValueTypeClass>(Y)>::defined_
   && is_fixed_length_vec(static_cast<VecValueTypeClass>(X))
   && is_fixed_length_vec(static_cast<VecValueTypeClass>(Y))>;
-
-static int g_init_fixed_eval_vector_cmp_funcs = Ob2DArrayConstIniter<MAX_VEC_TC, MAX_VEC_TC, fixed_cmp_initer>::init();
 
 } // end common
 } // end oceanbase

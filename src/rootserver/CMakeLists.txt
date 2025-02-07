@@ -21,6 +21,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp
   backup/ob_backup_table_list_mgr.cpp
+  backup/ob_backup_param_operator.cpp
 )
 
 ob_set_subtarget(ob_rootserver common
@@ -101,6 +102,7 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
+  ob_split_partition_helper.cpp
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
@@ -131,6 +133,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_fts_index_build_task.cpp
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
+  ddl_task/ob_partition_split_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
   ddl_task/ob_ddl_tablet_scheduler.cpp
   ddl_task/ob_rebuild_index_task.cpp
@@ -143,6 +146,9 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_create_view_helper.cpp
   parallel_ddl/ob_index_name_checker.cpp
   parallel_ddl/ob_tablet_balance_allocator.cpp
+  parallel_ddl/ob_set_comment_helper.cpp
+  parallel_ddl/ob_create_index_helper.cpp
+  parallel_ddl/ob_update_index_status_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze
@@ -197,6 +203,12 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_refresh_stats_maintenance_task.cpp
   mview/ob_mview_timer_task.cpp
   mview/ob_mview_dependency_service.cpp
+  mview/ob_mview_push_refresh_scn_task.cpp
+  mview/ob_mview_push_snapshot_task.cpp
+  mview/ob_replica_safe_check_task.cpp
+  mview/ob_collect_mv_merge_info_task.cpp
+  mview/ob_mview_clean_snapshot_task.cpp
+  mview/ob_mview_update_cache_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver direct_load

@@ -1,5 +1,5 @@
 execute_process(
-  COMMAND bash gen_parser.sh
+  COMMAND env NEED_PARSER_CACHE=${NEED_PARSER_CACHE} bash gen_parser.sh
   RESULT_VARIABLE RET
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/pl/parser
   OUTPUT_FILE _gen_pl_parser.output
@@ -82,7 +82,9 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_monitor.cpp
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
+  sys_package/ob_dbms_xplan.cpp
   sys_package/ob_dbms_user_define_rule.cpp
+  sys_package/ob_dbms_space.cpp
   sys_package/ob_dbms_mview_mysql.cpp
   sys_package/ob_dbms_mview_stats_mysql.cpp
   sys_package/ob_dbms_workload_repository.cpp

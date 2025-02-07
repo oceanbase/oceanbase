@@ -178,12 +178,12 @@ int ObTempTableInsertVecOp::add_rows_to_temp_table(
     LOG_WARN("failed to init chunk row store", K(ret));
   } else if (OB_FAIL(process_dump(*interm_res_info))) {
     LOG_WARN("failed to process dump", K(ret));
-  } else if (OB_FAIL(interm_res_info->col_store_->add_batch(
+  } else if (OB_FAIL(interm_res_info->get_column_store()->add_batch(
                  MY_SPEC.get_child()->output_, eval_ctx_, *brs, read_rows))) {
     LOG_WARN("failed to add rows to chunk row store.", K(ret), KPC(brs));
   } else if (!MY_SPEC.is_distributed_) {
     //do nothing
-  } else if (interm_res_info->col_store_->get_row_cnt() <
+  } else if (interm_res_info->get_column_store()->get_row_cnt() <
              TEMP_TABLE_VEC_PAGE_SIZE) {
     //do nothing
   } else {
@@ -208,10 +208,10 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
                                             MY_INPUT.qc_id_,
                                             MY_INPUT.dfo_id_,
                                             MY_INPUT.sqc_id_),
-                                          true))) {
+                                          ObDTLIntermResultInfo::StoreType::COLUMN))) {
       LOG_WARN("failed to create row store.", K(ret));
     } else if (FALSE_IT(interm_res_info = result_info_guard.result_info_)) {
-    } else if (OB_FAIL(interm_res_info->col_store_->init(MY_SPEC.get_child()->output_,
+    } else if (OB_FAIL(interm_res_info->get_column_store()->init(MY_SPEC.get_child()->output_,
                                                  MY_SPEC.max_batch_size_,
                                                  mem_attr,
                                                  0 /*mem_limit*/,
@@ -222,9 +222,9 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
     } else if (OB_FAIL(all_interm_res_info_.push_back(interm_res_info))) {
       LOG_WARN("failed to push back row store", K(ret));
     } else {
-      interm_res_info->col_store_->set_callback(&sql_mem_processor_);
-      interm_res_info->col_store_->set_dir_id(sql_mem_processor_.get_dir_id());
-      interm_res_info->col_store_->set_io_event_observer(&io_event_observer_);
+      interm_res_info->get_column_store()->set_callback(&sql_mem_processor_);
+      interm_res_info->get_column_store()->set_dir_id(sql_mem_processor_.get_dir_id());
+      interm_res_info->get_column_store()->set_io_event_observer(&io_event_observer_);
 
       // inc ref count because refered by all_interm_res_info_. decrease when remove from all_interm_res_info_.
       dtl::ObDTLIntermResultManager::inc_interm_result_ref_count(interm_res_info);
@@ -266,7 +266,7 @@ int ObTempTableInsertVecOp::insert_interm_result_info()
     } else if (MY_SPEC.is_distributed_ &&
               OB_FAIL(prepare_interm_result_id_for_distribute(interm_result_id))) {
       LOG_WARN("failed to prepare interm result id", K(ret));
-    } else if (OB_FAIL(cur_interm_res_info->col_store_->finish_add_row())) {
+    } else if (OB_FAIL(cur_interm_res_info->get_column_store()->finish_add_row())) {
       LOG_WARN("failed to finish add row", K(ret));
     } else {
       dtl_int_key.channel_id_ = interm_result_id;
@@ -282,7 +282,7 @@ int ObTempTableInsertVecOp::insert_interm_result_info()
         LOG_WARN("failed to push back key", K(ret));
         MTL(dtl::ObDTLIntermResultManager *)->erase_interm_result_info(dtl_int_key);
       } else {
-        cur_interm_res_info->col_store_->reset_callback();
+        cur_interm_res_info->get_column_store()->reset_callback();
         ObPxSqcHandler *handler = ctx_.get_sqc_handler();
         if (MY_SPEC.is_distributed_ && OB_NOT_NULL(handler) &&
             handler->get_phy_plan().is_enable_px_fast_reclaim()) {
@@ -367,7 +367,7 @@ int ObTempTableInsertVecOp::process_dump(dtl::ObDTLIntermResultInfo &interm_res_
   // and any future data writes would require a dump. However, this approach would require memory scaling.
   if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
       &mem_context_->get_malloc_allocator(),
-      [&](int64_t cur_cnt){ return interm_res_info.col_store_->get_row_cnt_in_memory() > cur_cnt; },
+      [&](int64_t cur_cnt){ return interm_res_info.get_column_store()->get_row_cnt_in_memory() > cur_cnt; },
       updated))) {
     LOG_WARN("failed to update max available memory size periodically", K(ret));
   } else if (need_dump() && GCONF.is_sql_operator_dump_enabled()
@@ -384,7 +384,7 @@ int ObTempTableInsertVecOp::process_dump(dtl::ObDTLIntermResultInfo &interm_res_
     for (int64_t i = 0; OB_SUCC(ret) && i < all_interm_res_info_.count(); ++i) {
       // The last block of the last chunk may still need to insert data and should not be dumped.
       bool dump_last_block = i < all_interm_res_info_.count() - 1;
-      if (OB_FAIL(all_interm_res_info_.at(i)->col_store_->dump(dump_last_block))) {
+      if (OB_FAIL(all_interm_res_info_.at(i)->get_column_store()->dump(dump_last_block))) {
         LOG_WARN("failed to dump row store", K(ret));
       } else {
         dump_end_time = oceanbase::common::ObTimeUtility::current_time();

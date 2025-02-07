@@ -26,36 +26,10 @@
 #include <orc/Reader.hh>
 #include <orc/Int128.hh>
 #include <orc/Common.hh>
+#include "sql/engine/basic/ob_arrow_basic.h"
 
 namespace oceanbase {
 namespace sql {
-  class ObOrcMemPool : public orc::MemoryPool {
-    public:
-      void init(uint64_t tenant_id) {
-        mem_attr_ = ObMemAttr(tenant_id, "OrcMemPool");
-      }
-
-      virtual char* malloc(uint64_t size) override {
-        int ret = OB_SUCCESS;
-        void *buf = ob_malloc_align(64, size, mem_attr_);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(size), K(lbt()));
-          throw std::bad_alloc();
-        }
-        return (char*)buf;
-      }
-
-      virtual void free(char* p) override {
-        if (OB_ISNULL(p)) {
-          throw std::bad_exception();
-        }
-        ob_free_align(p);
-      }
-
-    private:
-      common::ObMemAttr mem_attr_;
-  };
 
   class ObOrcFileAccess : public orc::InputStream {
     public:
@@ -79,7 +53,7 @@ namespace sql {
         if (ret != OB_SUCCESS) {
           throw std::bad_exception();
         }
-        LOG_TRACE("read file access", K(file_name_), K(bytesRead));
+        SERVER_LOG(TRACE, "read file access", K(file_name_), K(bytesRead));
       }
 
       const std::string& getName() const override {
@@ -106,42 +80,30 @@ namespace sql {
     TO_STRING_KV(K(offset), K(length), K(num_rows), K(first_row_id));
   };
 
-  class ObOrcTableRowIterator : public ObExternalTableRowIterator {
+  class ObOrcIteratorState : public ObExternalIteratorState {
   public:
-    struct StateValues {
-      StateValues() :
-        file_idx_(0),
-        part_id_(0),
-        cur_file_id_(0),
-        cur_file_url_(),
-        cur_stripe_idx_(0),
-        end_stripe_idx_(-1),
-        cur_stripe_read_row_count_(0),
-        cur_stripe_row_count_(0),
-        batch_size_(128),
-        part_list_val_() {}
-      void reuse() {
-        file_idx_ = 0;
-        part_id_ = 0;
-        cur_file_id_ = 0;
-        cur_stripe_idx_ = 0;
-        end_stripe_idx_ = -1;
-        cur_stripe_read_row_count_ = 0;
-        cur_stripe_row_count_ = 0;
-        cur_file_url_.reset();
-        part_list_val_.reset();
-      }
-      int64_t file_idx_;
-      int64_t part_id_;
-      int64_t cur_file_id_;
-      ObString cur_file_url_;
-      int64_t cur_stripe_idx_;
-      int64_t end_stripe_idx_;
-      int64_t cur_stripe_read_row_count_;
-      int64_t cur_stripe_row_count_;
-      int64_t batch_size_;
-      ObNewRow part_list_val_;
-    };
+    ObOrcIteratorState() :
+      cur_stripe_idx_(0),
+      end_stripe_idx_(-1),
+      cur_stripe_read_row_count_(0),
+      cur_stripe_row_count_(0) {}
+
+    virtual void reuse() override
+    {
+      ObExternalIteratorState::reuse();
+      cur_stripe_idx_ = 0;
+      end_stripe_idx_ = -1;
+      cur_stripe_read_row_count_ = 0;
+      cur_stripe_row_count_ = 0;
+    }
+    DECLARE_VIRTUAL_TO_STRING;
+    int64_t cur_stripe_idx_;
+    int64_t end_stripe_idx_;
+    int64_t cur_stripe_read_row_count_;
+    int64_t cur_stripe_row_count_;
+  };
+
+  class ObOrcTableRowIterator : public ObExternalTableRowIterator {
   public:
   ObOrcTableRowIterator() : file_column_exprs_(allocator_), file_meta_column_exprs_(allocator_), bit_vector_cache_(NULL) {}
   virtual ~ObOrcTableRowIterator() {
@@ -157,7 +119,6 @@ namespace sql {
 
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
-
   virtual void reset() override;
 private:
   // load vec data from orc file to expr mem
@@ -167,19 +128,22 @@ private:
                std::unique_ptr<orc::ColumnVectorBatch> &batch,
                const int64_t batch_size,
                const ObIArray<int> &idxs,
-               int64_t &row_count):
+               int64_t &row_count,
+               const orc::Type *col_type):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       batch_(batch),
       batch_size_(batch_size),
       idxs_(idxs),
-      row_count_(row_count)
+      row_count_(row_count),
+      col_type_(col_type)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
     static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
                                           const orc::Type &type);
     int load_data_for_col(LOAD_FUNC &func);
     int load_string_col();
+    int load_year_vec();
     int load_int32_vec();
     int load_int64_vec();
     int load_timestamp_vec();
@@ -189,7 +153,7 @@ private:
     int load_dec128_vec();
     int load_dec64_vec();
 
-    bool is_orc_read_utc();
+    bool is_orc_read_utc(const orc::Type *type);
     bool is_ob_type_store_utc(const ObDatumMeta &meta);
 
     int64_t calc_tz_adjust_us();
@@ -199,6 +163,7 @@ private:
     const int64_t batch_size_;
     const ObIArray<int> &idxs_;
     int64_t &row_count_;
+    const orc::Type *col_type_;
   };
   private:
     int next_file();
@@ -208,12 +173,13 @@ private:
     int get_data_column_batch_idxs(const orc::Type *type, const int col_id, ObIArray<int> &idxs);
   private:
 
-    StateValues state_;
+    ObOrcIteratorState state_;
     lib::ObMemAttr mem_attr_;
     ObArenaAllocator allocator_;
     ObOrcMemPool orc_alloc_;
     std::unique_ptr<orc::Reader> reader_;
     std::unique_ptr<orc::RowReader> row_reader_;
+    std::unique_ptr<orc::ColumnVectorBatch> orc_batch_;
     common::ObArrayWrap<StripeInformation> stripes_;
     ObExternalDataAccessDriver data_access_driver_;
     common::ObArrayWrap<int> column_indexs_; //for getting statistics, may useless now.

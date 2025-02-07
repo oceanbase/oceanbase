@@ -34,6 +34,8 @@
 #include <netinet/tcp.h>
 #include "rpc/obrpc/ob_listener.h"
 #include "common/ob_clock_generator.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
@@ -503,6 +505,7 @@ public:
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return sess->on_disconnect();
   }
+  void* get_sql_session_info() { return sql_session_info_; }
   void set_sql_session_info(void* sess) { sql_session_info_ = sess; }
   void reset_sql_session_info() { ATOMIC_STORE(&sql_session_info_, NULL); }
   bool sql_session_info_is_null() { return NULL == ATOMIC_LOAD(&sql_session_info_); }
@@ -574,6 +577,19 @@ int get_fd_from_sess(void *sess)
     fd = sock->get_fd();
   }
   return fd;
+}
+
+void* get_sql_sess_from_sess(void *sess)
+{
+  ObSqlSock *sock = nullptr;
+  void* sql_sess = nullptr;
+  if (OB_NOT_NULL(sess)) {
+    sock = sess2sock(sess);
+  }
+  if (OB_NOT_NULL(sock) && !sock->sql_session_info_is_null()) {
+    sql_sess = sock->get_sql_session_info();
+  }
+  return sql_sess;
 }
 
 int ObSqlSock::set_ssl_enabled()
@@ -928,7 +944,12 @@ private:
   void handle_epoll_event() {
     const int maxevents = 512;
     struct epoll_event events[maxevents];
-    int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
+    int cnt = 0;
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
+    }
+
     for(int i = 0; i < cnt; i++) {
       uint64_t num64 = events[i].data.u64;
       if (is_wrapped_fd(num64)) {
@@ -1236,6 +1257,7 @@ void ObSqlNio::destroy()
 void ObSqlNio::run(int64_t idx)
 {
   if (NULL != impl_) {
+    common::ObBackGroundSessionGuard backgroud_session_guard(GET_TENANT_ID(), THIS_WORKER.get_group_id());
     lib::set_thread_name("sql_nio", idx);
     // SET_GROUP_ID(OBCG_SQL_NIO);
     while(!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {

@@ -25,6 +25,7 @@
 #include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
 #include "observer/table_load/resource/ob_table_load_resource_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
+#include "observer/table_load/ob_table_load_partition_location.h"
 
 namespace oceanbase
 {
@@ -44,11 +45,13 @@ class ObTableLoadCoordinator
   static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
   static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
   static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
+  static const int64_t MIN_THREAD_COUNT = 2;
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
   static int init_ctx(ObTableLoadTableCtx *ctx,
                       const common::ObIArray<uint64_t> &column_ids,
+                      const common::ObIArray<ObTabletID> &tablet_ids,
                       ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
@@ -65,6 +68,23 @@ public:
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
+  int check_need_sort_for_lob_or_index(bool &need_sort) const;
+  int calc_session_count(const int64_t total_session_count,
+                         const int64_t max_session_count,
+                         const table::ObTableLoadArray<observer::ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array,
+                         ObArray<int64_t> &partitions,
+                         ObDirectLoadResourceApplyArg &apply_arg,
+                         int64_t &coord_session_count,
+                         int64_t &min_session_count,
+                         int64_t &write_session_count);
+  int cal_memory_size(const bool need_check_need_sort,
+                      const int64_t store_server_count,
+                      const int64_t write_session_count,
+                      const int64_t memory_limit,
+                      const ObArray<int64_t> &partitions,
+                      ObDirectLoadResourceApplyArg &apply_arg,
+                      bool &main_need_sort,
+                      bool &task_need_sort);
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
@@ -75,6 +95,10 @@ private:
   int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics,
                      table::ObTableLoadDmlStat &dml_stats);
   int heart_beat_peer();
+private:
+  int init_empty_tablets();
+  class InitEmptyTabletTaskProcessor;
+  class InitEmptyTabletTaskCallback;
 private:
   int add_check_begin_result_task();
   int check_peers_begin_result(bool &is_finish);

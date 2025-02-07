@@ -36,6 +36,8 @@
 #include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "share/schema/ob_schema_struct.h"
+
 
 namespace oceanbase
 {
@@ -52,9 +54,6 @@ static const int8_t DAYS_PER_MON[2][12 + 1] = {
   {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
   {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 };
-
-#define IS_LEAP_YEAR(y) (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0))
-
 
 const char *ObExprTRDateFormat::FORMATS_TEXT[FORMAT_MAX_TYPE] =
 {
@@ -863,7 +862,7 @@ int ObExprOperator::aggregate_charsets_for_string_result(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -881,7 +880,7 @@ int ObExprOperator::aggregate_charsets_for_string_result(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -899,7 +898,7 @@ int ObExprOperator::aggregate_charsets_for_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -918,7 +917,7 @@ int ObExprOperator::aggregate_charsets_for_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type.get_calc_meta(), types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type.get_calc_meta(), types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -937,7 +936,7 @@ int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -956,7 +955,7 @@ int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
     LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
   } else {
-    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx);
   }
   return ret;
 }
@@ -966,9 +965,9 @@ int ObExprOperator::aggregate_charsets(
   const ObObjMeta *types,
   int64_t param_num,
   uint32_t flags,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  return aggregate_collations(type, types, param_num, flags, conn_coll_type);
+  return aggregate_collations(type, types, param_num, flags, type_ctx.get_coll_type());
 }
 
 int ObExprOperator::aggregate_charsets(
@@ -976,7 +975,7 @@ int ObExprOperator::aggregate_charsets(
   const ObExprResType *types,
   int64_t param_num,
   uint32_t flags,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(types),
@@ -988,20 +987,30 @@ int ObExprOperator::aggregate_charsets(
     for (int i = 0; OB_SUCC(ret) && i < param_num; ++i) {
       coll.reset();
       // issue:49962420 The xml type calls get_collation_type() to return the result of binary, here is set to utf8
+      coll.set_collation_level(types[i].get_collation_level());
       if (type.is_string_type() && types[i].is_xml_sql_type()) {
         coll.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
+      } else if (types[i].is_enum_set_with_subschema()) {
+        ObObjMeta obj_meta;
+        if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(types[i], type_ctx.get_session(),
+                                                               obj_meta))) {
+          LOG_WARN("fail to extract enum set cs type", K(ret));
+        } else {
+          coll.set_collation(obj_meta);
+        }
       } else {
         coll.set_collation_type(types[i].get_collation_type());
       }
-      coll.set_collation_level(types[i].get_collation_level());
-      ret = coll_types.push_back(coll);
+      if (OB_SUCC(ret)) {
+        ret = coll_types.push_back(coll);
+      }
     } // end for
 
     OZ (aggregate_charsets(type,
                            &coll_types.at(0),
                            param_num,
                            flags,
-                           conn_coll_type));
+                           type_ctx));
   }
   return ret;
 }
@@ -1271,9 +1280,9 @@ int ObExprOperator::aggregate_result_type_for_case(
       if (OB_FAIL(aggregate_numeric_accuracy_for_merge(type, types, param_num, is_oracle_mode))) {
         LOG_WARN("fail to aggregate numeric accuracy", K(ret));
       }
-    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num,
-        is_oracle_mode, type_ctx, need_merge_type, skip_null,
-        is_called_in_sql))) {
+    // the collation of case_expr has been restored
+    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num, is_oracle_mode,
+                          type_ctx, need_merge_type, skip_null, is_called_in_sql))) {
       LOG_WARN("fail to aggregate result type", K(ret));
     } else if (ObFloatType == type.get_type() && !is_oracle_mode) {
       type.set_type(ObDoubleType);
@@ -1307,6 +1316,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
     const ObLengthSemantics default_length_semantics = ((OB_NOT_NULL(type_ctx.get_session())) ?
                                                        type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
 
+    bool has_new_enum_set_type = types[0].is_enum_set_with_subschema();
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
       if (OB_FAIL(ObExprResultTypeUtil::get_merge_result_type(res_type,
                                                               res_type,
@@ -1325,6 +1335,8 @@ int ObExprOperator::aggregate_result_type_for_merge(
             types[i].get_precision() == types[i-1].get_precision() &&
             types[i].get_scale() == types[i-1].get_scale();
         }
+      } else if (types[i].is_enum_set_with_subschema()) {
+        has_new_enum_set_type = true;
       }
     }
     if (OB_SUCC(ret)) {
@@ -1343,8 +1355,32 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_temporal_type(res_type) || ob_is_otimestamp_type(res_type)) {
         ret = aggregate_temporal_accuracy_for_merge(type, types, param_num);
       } else if (ob_is_string_or_lob_type(res_type)) {
-        if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, type_ctx))) {
-        } else if (OB_FAIL(aggregate_max_length_for_string_result(type, types, param_num,
+        const ObExprResType *new_types = types;
+        const ObSQLSessionInfo *session_info = type_ctx.get_session();
+        ObSEArray<ObExprResType, 2> restored_types;
+        if (has_new_enum_set_type && session_info != NULL) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+            if (OB_FAIL(restored_types.push_back(types[i]))) {
+              LOG_WARN("fail to push back types", K(ret));
+            } else if (types[i].is_enum_set_with_subschema()) {
+              ObObjMeta obj_meta;
+              if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(types[i], session_info,
+                                                                     obj_meta))) {
+                LOG_WARN("fail to extract enum set cs type", K(ret));
+              } else {
+                restored_types[i].set_collation(obj_meta);
+                restored_types[i].reset_enum_set_meta_state();
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            new_types = &restored_types.at(0);
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(aggregate_charsets_for_string_result(type, new_types, param_num,
+                           type_ctx))) {
+        } else if (OB_FAIL(aggregate_max_length_for_string_result(type, new_types, param_num,
             is_oracle_mode, default_length_semantics, need_merge_type, skip_null,
             is_called_in_sql))) {
         } else {/*do nothing*/}
@@ -1368,7 +1404,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
           LOG_WARN("aggregate_user_defined_sql_type fail", K(ret));
         }
       } else if (ob_is_collection_sql_type(res_type)) {
-        if (OB_FAIL(aggregate_collection_sql_type(type, types, param_num))) {
+        if (OB_FAIL(aggregate_collection_sql_type(type_ctx, type, types, param_num))) {
           LOG_WARN("aggregate_collection_sql_type fail", K(ret));
         }
       }
@@ -1718,6 +1754,7 @@ int ObExprOperator::aggregate_user_defined_sql_type(
 }
 
 int ObExprOperator::aggregate_collection_sql_type(
+    common::ObExprTypeCtx &type_ctx,
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num)
@@ -1727,12 +1764,23 @@ int ObExprOperator::aggregate_collection_sql_type(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
   } else {
-    bool found = false;
-    for (int64_t i = 0; ! found && i < param_num && OB_SUCC(ret); ++i) {
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+    ObExecContext *exec_ctx = session->get_cur_exec_ctx();
+    bool first = true;
+    for (int64_t i = 0; i < param_num && OB_SUCC(ret); ++i) {
       if (ob_is_collection_sql_type(types[i].get_type())) {
-        found = true;
-        // choose the first collection subschema id now
-        type.set_subschema_id(types[i].get_subschema_id());
+        if (first) {
+          // choose the first collection subschema id now
+          type.set_subschema_id(types[i].get_subschema_id());
+          first = false;
+        } else {
+          ObExprResType coll_calc_type;
+          if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type, types[i], coll_calc_type))) {
+            LOG_WARN("failed to check array compatibilty", K(ret));
+          } else {
+            type.set_subschema_id(coll_calc_type.get_subschema_id());
+          }
+        }
       }
     }
   }
@@ -1768,38 +1816,72 @@ int ObExprDFMConvertCtx::parse_format(const ObString &format_str,
 ObExprFindIntCachedValue::~ObExprFindIntCachedValue() {
 }
 
-ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
+ObObjType ObExprOperator::enumset_calc_types_[2 /*use_subschema*/][ObMaxTC] =
 {
-  ObUInt64Type,/*ObNullTC*/
-  ObUInt64Type,/*ObIntTC*/
-  ObUInt64Type,/*ObUIntTC*/
-  ObUInt64Type,/*ObFloatTC*/
-  ObUInt64Type,/*ObDoubleTC*/
-  ObUInt64Type,/*ObNumberTC*/
-  ObVarcharType,/*ObDateTimeTC*/
-  ObVarcharType,/*ObDateTC*/
-  ObVarcharType,/*ObTimeTC*/
-  ObUInt64Type,/*ObYearTC*/
-  ObVarcharType,/*ObStringTC*/
-  ObMaxType,/*ObExtendTC*/
-  ObMaxType,/*ObUnknownTC*/
-  ObVarcharType,/*ObTextTC*/
-  ObUInt64Type,/*ObBitTC*/
-  ObVarcharType,/*ObEnumSetTC*/
-  ObVarcharType,/*ObEnumSetInnerTC*/
-  ObVarcharType, /*ObOTimestampTC*/
-  ObNullType, /*ObRawTC*/
-  ObVarcharType, /*ObInternalTC*/
-  ObVarcharType, /*ObRowIDTC*/
-  ObMaxType, /*ObLobTC*/
-  ObVarcharType, /*ObJsonTC*/
-  ObVarcharType, /*ObGeometryTC*/
-  ObNullType, /*UDT*/
-  ObUInt64Type, /*ObDecimalIntTC*/
-  ObNullType, /*COLLECTION*/
-  ObVarcharType, /*ObMySQLDateTC*/
-  ObVarcharType, /*ObMySQLDateTimeTC*/
-  ObVarcharType, /*ObRoaringBitmapTC*/
+  {
+    ObUInt64Type,/*ObNullTC*/
+    ObUInt64Type,/*ObIntTC*/
+    ObUInt64Type,/*ObUIntTC*/
+    ObUInt64Type,/*ObFloatTC*/
+    ObUInt64Type,/*ObDoubleTC*/
+    ObUInt64Type,/*ObNumberTC*/
+    ObVarcharType,/*ObDateTimeTC*/
+    ObVarcharType,/*ObDateTC*/
+    ObVarcharType,/*ObTimeTC*/
+    ObUInt64Type,/*ObYearTC*/
+    ObVarcharType,/*ObStringTC*/
+    ObMaxType,/*ObExtendTC*/
+    ObMaxType,/*ObUnknownTC*/
+    ObVarcharType,/*ObTextTC*/
+    ObUInt64Type,/*ObBitTC*/
+    ObVarcharType,/*ObEnumSetTC*/
+    ObVarcharType,/*ObEnumSetInnerTC*/
+    ObVarcharType, /*ObOTimestampTC*/
+    ObNullType, /*ObRawTC*/
+    ObVarcharType, /*ObInternalTC*/
+    ObVarcharType, /*ObRowIDTC*/
+    ObMaxType, /*ObLobTC*/
+    ObVarcharType, /*ObJsonTC*/
+    ObVarcharType, /*ObGeometryTC*/
+    ObNullType, /*UDT*/
+    ObUInt64Type, /*ObDecimalIntTC*/
+    ObNullType, /*COLLECTION*/
+    ObVarcharType, /*ObMySQLDateTC*/
+    ObVarcharType, /*ObMySQLDateTimeTC*/
+    ObVarcharType, /*ObRoaringBitmapTC*/
+  },
+  {
+    ObUInt64Type,/*ObNullTC*/
+    ObUInt64Type,/*ObIntTC*/
+    ObUInt64Type,/*ObUIntTC*/
+    ObUInt64Type,/*ObFloatTC*/
+    ObUInt64Type,/*ObDoubleTC*/
+    ObUInt64Type,/*ObNumberTC*/
+    ObDateTimeType,/*ObDateTimeTC*/
+    ObDateType,/*ObDateTC*/
+    ObTimeType,/*ObTimeTC*/
+    ObUInt64Type,/*ObYearTC*/
+    ObVarcharType,/*ObStringTC*/
+    ObMaxType,/*ObExtendTC*/
+    ObMaxType,/*ObUnknownTC*/
+    ObVarcharType,/*ObTextTC*/
+    ObUInt64Type,/*ObBitTC*/
+    ObVarcharType,/*ObEnumSetTC*/
+    ObVarcharType,/*ObEnumSetInnerTC*/
+    ObVarcharType, /*ObOTimestampTC*/
+    ObNullType, /*ObRawTC*/
+    ObVarcharType, /*ObInternalTC*/
+    ObVarcharType, /*ObRowIDTC*/
+    ObMaxType, /*ObLobTC*/
+    ObJsonType, /*ObJsonTC*/
+    ObVarcharType, /*ObGeometryTC*/
+    ObNullType, /*UDT*/
+    ObUInt64Type, /*ObDecimalIntTC*/
+    ObNullType, /*COLLECTION*/
+    ObMySQLDateType, /*ObMySQLDateTC*/
+    ObMySQLDateTimeType, /*ObMySQLDateTimeTC*/
+    ObVarcharType, /*ObRoaringBitmapTC*/
+  },
 };
 ////////////////////////////////////////////////////////////////
 
@@ -2181,43 +2263,30 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
 /*
  * Note that, the original motivation of this function is that,
  *
- * Provided that we have a = b and b = c in which a , b and c
- * are of metainfo meta1, meta2, meta3, respectively
+ * Provided that we have a = b and b = c, can we deduce that a = c holds actually?
  *
- * So, can we deduce that a = c holds actually?
+ * The return value of result is true represents equal comparison a = b is transitive, which means
+ * for any a = b and b = c, if both of them are transitive, then we can always deduce a = c
  *
- * this func tells you this via result when and only when the ret is OB_SUCCESS
+ * For example, we have the table definition like this
+ * create table t1(c1 int, c2 tinyint, c3 int unsigned, c4 enum('a', 'b'), c5 enum('c', 'd'))
+ * Then there is no need to add any implicit cast in c1 = c2, c1 = c3, c1 = c4, c1 = c5.
+ * c1 = c2 and c1 = c3 is equal transitive, then we can deduce c2 = c3.
+ * For comparison between enum types, they need cast to varchar implicitly, so we define comparison
+ * between enum and int type class is not transitive.
+ * Then we can not deduce c4 = c5 via c1 = c4 and c1 = c5, because they are not equal transitive.
  */
-
-int ObRelationalExprOperator::is_equivalent(const ObObjMeta &meta1,
-                                            const ObObjMeta &meta2,
-                                            const ObObjMeta &meta3,
-                                            bool &result)
+int ObRelationalExprOperator::is_equal_transitive(const common::ObObjMeta &meta1,
+                                                  const common::ObObjMeta &meta2,
+                                                  bool &result)
 {
   int ret = OB_SUCCESS;
   result = false;
-  ObObjMeta equal_meta12;
-  ObObjMeta equal_meta23;
-  ObObjMeta equal_meta13;
-  if (OB_FAIL(get_equal_meta(equal_meta12, meta1, meta2))) {
+  ObObjMeta equal_meta;
+  if (OB_FAIL(get_equal_meta(equal_meta, meta1, meta2))) {
     LOG_WARN("get equal meta failed", K(ret), K(meta1), K(meta2));
-  } else if (OB_FAIL(get_equal_meta(equal_meta13, meta1, meta3))) {
-    LOG_WARN("get equal meta failed", K(ret), K(meta1), K(meta3));
-  } else if (OB_FAIL(get_equal_meta(equal_meta23, meta2, meta3))) {
-    LOG_WARN("get equal meta failed", K(ret), K(meta2), K(meta3));
-  } else if (OB_UNLIKELY(equal_meta12.get_type() == ObMaxType
-                      || equal_meta13.get_type() == ObMaxType /* no need to check ObNullType here*/
-                      || equal_meta23.get_type() == ObMaxType)) {
-    /*result = false;*/
-  } else if (equal_meta12.get_type() == equal_meta13.get_type()
-          && equal_meta13.get_type() == equal_meta23.get_type()) {
-    if (OB_UNLIKELY(ob_is_string_or_lob_type(equal_meta12.get_type()))) {
-      //all are string type
-      result = equal_meta12.get_collation_type() == equal_meta13.get_collation_type()
-               && equal_meta13.get_collation_type() == equal_meta23.get_collation_type();
-    } else {
-      result = true;
-    }
+  } else {
+    result = equal_meta.get_type() != ObMaxType;
   }
   return ret;
 }
@@ -2234,8 +2303,11 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
                                                               meta2.get_type()))) {
     LOG_WARN("get equal type failed", K(ret), K(meta1), K(meta2));
   } else if (ob_is_string_or_lob_type(type)) {
-    ObObjMeta coll_types[2] = {meta1, meta2};
-    ret = aggregate_charsets_for_comparison(meta, coll_types, 2, type_ctx);
+    if (meta1.get_collation_type() != meta2.get_collation_type()) {
+      type = ObMaxType;
+    } else {
+      meta.set_collation_type(meta1.get_collation_type());
+    }
   }
   if (OB_SUCC(ret)) {
     meta.set_type(type);
@@ -2311,7 +2383,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
              && !(type_ == T_FUN_SYS_NULLIF)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
              && (type1.is_json() || type2.is_json())
@@ -2398,6 +2470,9 @@ int ObExprOperator::calc_cmp_type3(ObExprResType &type,
     || type3.is_blob() || type3.is_blob_locator())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
+  } else if (type1.is_roaringbitmap() || type2.is_roaringbitmap() || type3.is_roaringbitmap()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type3), K(type_),K(ret));
   } else if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, type2.get_type(), cmp_type))) {
     if (OB_UNLIKELY(ObMaxType == cmp_type)) {
       ret = OB_INVALID_ARGUMENT; // not compatible input
@@ -2549,6 +2624,34 @@ int ObExprOperator::add_local_var_to_expr(ObSysVarClassType var_type,
     }
   }
   return ret;
+}
+
+bool ObExprOperator::is_enum_set_with_subschema_arg(const int64_t arg_idx) const
+{
+  bool bret = false;
+  const ObRawExpr *arg_expr = NULL;
+  if (arg_idx >= 0 && OB_NOT_NULL(raw_expr_) && arg_idx < raw_expr_->get_param_count()
+        && OB_NOT_NULL(arg_expr = raw_expr_->get_param_expr(arg_idx))
+        && arg_expr->is_enum_set_with_subschema()) {
+    bret = true;
+  }
+  return bret;
+}
+
+ObObjType ObExprOperator::get_enumset_calc_type(const ObObjType expected_type,
+                                                const int64_t arg_idx) const
+{
+  ObObjType calc_type = ObMaxType;
+  if (is_enum_set_with_subschema_arg(arg_idx)) {
+    calc_type = enumset_calc_types_[1 /*use subschema*/][OBJ_TYPE_TO_CLASS[expected_type]];
+    // set calc type to dst type direct, otherwise multiple casts may occur.
+    if (ob_is_string_type(expected_type)) {
+      calc_type = expected_type;
+    }
+  } else {
+    calc_type = enumset_calc_types_[0 /*for compatibility*/][OBJ_TYPE_TO_CLASS[expected_type]];
+  }
+  return calc_type;
 }
 
 OB_SERIALIZE_MEMBER(ObIterExprOperator, expr_id_, expr_type_);
@@ -3313,6 +3416,233 @@ int ObRelationalExprOperator::eval_pl_udt_compare(const ObExpr &expr,
   }
   return ret;
 }
+
+int ObRelationalExprOperator::eval_min_max_compare(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  int is_set_null = false;
+  ObDatum *l_datum = NULL;
+  ObDatum *r_datum = NULL;
+  OZ(expr.eval_param_value(ctx, l_datum, r_datum));
+  if (OB_SUCC(ret)) {
+    if (l_datum->is_outrow() || l_datum->is_ext() ||
+        r_datum->is_outrow() || r_datum->is_ext()) {
+      LOG_DEBUG("is min max comparison");
+      if (l_datum->is_null() || r_datum->is_null()) {
+        is_set_null = true;
+        expr_datum.set_null();
+      } else if (OB_FAIL(get_min_max_cmp_ret(l_datum, r_datum, cmp_ret))) {
+        LOG_WARN("fail to get min max cmp ret");
+      } else {
+        ObCmpOp cmp_op = get_cmp_op(expr.type_);
+        if (is_set_null) {
+          if (CO_NE == cmp_op) {
+            expr_datum.set_int(true);
+          } else if (CO_EQ == cmp_op) {
+            expr_datum.set_int(false);
+          } else {
+            expr_datum.set_null();
+          }
+        } else {
+          expr_datum.set_int(is_expected_cmp_ret(cmp_op, cmp_ret));
+        }
+      }
+      LOG_DEBUG("current compare object(ObDatum) min max status",
+          K(l_datum->is_outrow()),
+          K(l_datum->is_ext()),
+          K(r_datum->is_outrow()),
+          K(r_datum->is_ext()));
+    } else {
+      // normal process
+      LOG_DEBUG("is normal comparison");
+      if (OB_ISNULL(expr.inner_functions_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null inner_eval_func in min max compare", K(ret));
+      } else if (OB_ISNULL(expr.inner_functions_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null pointer", K(ret));
+      } else if (OB_FAIL(((ObExpr::EvalFunc)expr.inner_functions_[0])(expr, ctx, expr_datum))) {
+        LOG_WARN("fail to eval func", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRelationalExprOperator::eval_batch_min_max_compare(
+    const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+
+  ObDatum *results = expr.locate_batch_datums(ctx);
+  const ObExpr &l_expr = *expr.args_[0];
+  const ObExpr &r_expr = *expr.args_[1];
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool need_handle_ext = false;
+
+  for (int64_t i = 0; i < batch_size; ++i) {
+    const ObDatum &l_datum = l_expr.is_batch_result() ?
+      l_expr.locate_batch_datums(ctx)[i] :  l_expr.locate_expr_datum(ctx, 0);
+    const ObDatum &r_datum = r_expr.is_batch_result() ?
+      r_expr.locate_batch_datums(ctx)[i] :  r_expr.locate_expr_datum(ctx, 0);
+    if (skip.at(i) || eval_flags.at(i)) {
+      continue;
+    } else if (l_datum.is_outrow() || l_datum.is_ext() ||
+               r_datum.is_outrow() || r_datum.is_ext()) {
+      need_handle_ext = true;
+      break;
+    }
+  }
+  if (need_handle_ext) {  // min max process
+    LOG_DEBUG("is min max comparison");
+    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+      int cmp_ret = 0;
+      const ObDatum &l_datum = l_expr.is_batch_result() ?
+        l_expr.locate_batch_datums(ctx)[i] :  l_expr.locate_expr_datum(ctx, 0);
+      const ObDatum &r_datum = r_expr.is_batch_result() ?
+        r_expr.locate_batch_datums(ctx)[i] :  r_expr.locate_expr_datum(ctx, 0);
+
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      } else if (l_datum.is_outrow() || l_datum.is_ext() ||
+                 r_datum.is_outrow() || r_datum.is_ext() ) {
+        if (l_datum.is_null() || r_datum.is_null()) {
+          results[i].set_null();
+          eval_flags.set(i);
+        } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
+          LOG_WARN("fail to get min max cmp ret");
+        } else {
+          results[i].set_int(is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
+          eval_flags.set(i);
+        }
+        LOG_DEBUG("current compare object(ObDatum) min max status",
+          K(l_datum.is_outrow()),
+          K(l_datum.is_ext()),
+          K(r_datum.is_outrow()),
+          K(r_datum.is_ext()));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect compare, it should be at lease one datum is ext", K(ret));
+      }
+    }
+  } else {
+    LOG_DEBUG("is normal comparison");
+    if (OB_ISNULL(expr.inner_functions_)) {  // normal process
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null inner_eval_func in min max compare", K(ret));
+    } else if (OB_ISNULL(expr.inner_functions_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pointer", K(ret));
+    } else if (OB_FAIL(((ObExpr::EvalBatchFunc)expr.inner_functions_[1])(expr, ctx, skip, batch_size))) {
+      LOG_WARN("fail to eval func", K(ret));
+    }
+  }
+  return ret;
+}
+
+/*
+  通过get_payload的方式可以获取obdatum的数据，但不能获取obdatum的is_ext的信息
+  这里从vec_uniform_const的向量里获取了is_ext属性，从get_payload里获取了obdatum数据。
+*/
+int ObRelationalExprOperator::eval_vector_min_max_compare(
+    const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObIVector *res_vec = expr.get_vector(ctx);
+  ObIVector *l_vec = nullptr;
+  ObIVector *r_vec = nullptr;
+
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval_vector", K(ret));
+  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval_vector", K(ret));
+  } else if (FALSE_IT(l_vec = expr.args_[0]->get_vector(ctx))) {
+  } else if (FALSE_IT(r_vec = expr.args_[1]->get_vector(ctx))) {
+  } else if (OB_ISNULL(l_vec) || OB_ISNULL(r_vec)) {
+   ret = OB_ERR_UNEXPECTED;
+   LOG_WARN("fail to eval vector min max compare", KP(l_vec), K(r_vec));
+  } else {
+    bool has_vec_uniform_const_type =
+      VEC_UNIFORM_CONST == l_vec->get_format() || VEC_UNIFORM_CONST == r_vec->get_format();
+
+    if (has_vec_uniform_const_type) {
+      ObUniformBase *uniform_l_vec = VEC_UNIFORM_CONST == l_vec->get_format() ?
+        static_cast<ObUniformBase *>(l_vec) : nullptr;
+      ObUniformBase *uniform_r_vec = VEC_UNIFORM_CONST == r_vec->get_format() ?
+        static_cast<ObUniformBase *>(r_vec) : nullptr;
+      const ObDatum *l_datums = nullptr == uniform_l_vec ? nullptr : uniform_l_vec->get_datums();
+      const ObDatum *r_datums = nullptr == uniform_r_vec ? nullptr : uniform_r_vec->get_datums();
+      bool need_handle_ext = false;
+      // find ext
+      if (nullptr != l_datums) {
+        need_handle_ext = l_datums[0].is_outrow() || l_datums[0].is_ext() ? true : false;
+      } else if (!need_handle_ext && nullptr != r_datums) {
+        need_handle_ext = r_datums[0].is_outrow() || r_datums[0].is_ext() ? true : false;
+      }
+      if (need_handle_ext) {
+        LOG_DEBUG("is min max comparison");
+        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
+          int cmp_ret = 0;
+          const char *l_payload = NULL;
+          const char *r_payload = NULL;
+          ObLength l_len = 0;
+          ObLength r_len = 0;
+          // 1. datum from payload, to get is_null.
+          l_vec->get_payload(i, l_payload, l_len);
+          ObDatum l_tmp_datum(l_payload, l_len, l_vec->is_null(i));
+          r_vec->get_payload(i, r_payload, r_len);
+          ObDatum r_tmp_datum(r_payload, r_len, r_vec->is_null(i));
+          // 2. datum from payload, to get is_outrow or is_ext.
+          const ObDatum &l_datum =
+            VEC_UNIFORM_CONST == l_vec->get_format() ? l_datums[0] : l_tmp_datum;
+          const ObDatum &r_datum =
+            VEC_UNIFORM_CONST == r_vec->get_format() ? r_datums[0] : r_tmp_datum;
+          if (skip.at(i) || eval_flags.at(i)) {
+            continue;
+          } else if (l_datum.is_outrow() || l_datum.is_ext() ||
+                    r_datum.is_outrow() || r_datum.is_ext() ) {
+            if (l_datum.is_null() || r_datum.is_null()) {
+              res_vec->set_null(i);
+              eval_flags.set(i);
+            } else if (OB_FAIL(get_min_max_cmp_ret(&l_datum, &r_datum, cmp_ret))) {
+              LOG_WARN("fail to get min max cmp ret");
+            } else {
+              res_vec->set_int(i, is_expected_cmp_ret(get_cmp_op(expr.type_), cmp_ret));
+              eval_flags.set(i);
+            }
+            LOG_DEBUG("current compare object(ObDatum) min max status",
+              K(l_datum.is_outrow()), K(l_datum.is_ext()),
+              K(r_datum.is_outrow()), K(r_datum.is_ext()));
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect compare, it should be at lease one datum is ext", K(ret));
+          }
+        }
+      } else {
+        LOG_DEBUG("is normal comparison");
+        if (OB_ISNULL(expr.inner_functions_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null inner_eval_func in min max compare", K(ret));
+        } else if (OB_ISNULL(expr.inner_functions_[2])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null pointer", K(ret));
+        } else if (OB_FAIL(((ObExpr::EvalVectorFunc)expr.inner_functions_[2])(expr, ctx, skip, bound))) {
+          LOG_WARN("fail to eval func", K(ret));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected format, auto split filter should has one VEC_UNIFORM_CONST type",
+        K(ret), K(l_vec->get_format()), K(r_vec->get_format()));
+    }
+  }
+  return ret;
+}
+
 
 OB_SERIALIZE_MEMBER((ObSubQueryRelationalExpr, ObExprOperator),
                     subquery_key_,
@@ -4746,6 +5076,26 @@ void ObStringExprOperator::calc_temporal_format_result_length(ObExprResType &typ
     type.set_length(default_text_length);
   }
 }
+int ObStringExprOperator::extract_enum_set_collation_for_args(const ObExprResType &text,
+                                                              const ObExprResType &pattern,
+                                                              ObExprTypeCtx &type_ctx,
+                                                              ObObjMeta *real_types)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && text.is_enum_set_with_subschema()) {
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(text, type_ctx.get_session(),
+                                                            real_types[0]))) {
+      LOG_WARN("fail to extract enum set collation", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && pattern.is_enum_set_with_subschema()) {
+    if (OB_FAIL(ObRawExprUtils::extract_enum_set_collation(pattern, type_ctx.get_session(),
+                                                            real_types[1]))) {
+      LOG_WARN("fail to extract enum set collation", K(ret));
+    }
+  }
+  return ret;
+}
 
 ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const
 {
@@ -5225,16 +5575,15 @@ int ObBitwiseExprOperator::calc_result2_oracle(const ObExpr &expr, ObEvalCtx &ct
 }
 
 // for static typing engine
-int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx,
-                                          const ObRawExpr &raw_expr,
-                                          ObExpr &rt_expr, const BitOperator op)
+int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                           ObExpr &rt_expr, const BitOperator op)
 {
   int ret = OB_SUCCESS;
   UNUSED(raw_expr);
   // bit count, bit neg: 1 == arg_cnt_
   // bit and/or/xor/left shift/right shift: 2 == arg_cnt_
-  if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(expr_cg_ctx.allocator_) ||
-      OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
+  if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(expr_cg_ctx.allocator_)
+      || OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("args_ is NULL or arg_cnt_ is invalid", K(ret), K(rt_expr));
   } else {
@@ -5245,12 +5594,449 @@ int ObBitwiseExprOperator::cg_bitwise_expr(ObExprCGCtx &expr_cg_ctx,
       } else {
         rt_expr.eval_func_ = ObBitwiseExprOperator::calc_result2_mysql;
       }
+
+      uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+
+      if (ob_version >= CLUSTER_VERSION_4_3_5_0) {
+        // Since the oracle supports the bitwise AND operation only, and the representation of
+        // oracle is ObNumber, where mysql is uint_64. Therefore, we implements this function in two
+        // parts.
+
+        if (lib::is_oracle_mode()) {
+          rt_expr.eval_vector_func_ = calc_bitwise_result2_oracle_vector;
+        } else {
+          rt_expr.eval_vector_func_ = calc_bitwise_result2_mysql_vector;
+        }
+      }
     } else {
       // must be set in its cg_expr method
       // bit_neg和bit_count有自己的计算函数
       rt_expr.eval_func_ = NULL;
     }
   }
+  return ret;
+}
+
+int ObBitwiseExprOperator::calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+
+  const BitOperator op = static_cast<const BitOperator>(expr.extra_);
+  ObCastMode cast_mode = CM_NONE;
+
+  // Oracle supports bitwise and operation only
+  if (OB_UNLIKELY(op != BIT_AND)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "bit op in oracle mode except bitand");
+    LOG_WARN("unsupported bit operator", K(ret), K(op), K(BIT_AND));
+  } else {
+    ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
+    if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("failed to eval vector result", K(ret), K(0));
+    } else {
+      tmp_skip.deep_copy(skip, bound.start(), bound.end());
+      VectorFormat left_format = expr.args_[0]->get_format(ctx);
+      ObIVector *param_vec = expr.args_[0]->get_vector(ctx);
+      if (left_format == VEC_DISCRETE || left_format == VEC_CONTINUOUS
+          || left_format == VEC_FIXED) {
+        ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
+        if (cur_vec.has_null()) {
+          tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
+        }
+      } else if (left_format == VEC_UNIFORM) {
+        ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
+        for (int i = bound.start(); i < bound.end(); i++) {
+          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
+            tmp_skip.set(i);
+            skip_flag = true;
+          }
+        }
+      } else if (left_format == VEC_UNIFORM_CONST) {
+        ObUniformFormat<true> &cur_vec = *static_cast<ObUniformFormat<true> *>(param_vec);
+        for (int i = bound.start(); i < bound.end(); i++) {
+          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
+            tmp_skip.set(i);
+            skip_flag = true;
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "invalid param format", K(ret), K(left_format));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, ctx.exec_ctx_.get_my_session(),
+                                                           cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
+        LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  const BitOperator op = static_cast<const BitOperator>(expr.extra_);
+  ObCastMode cast_mode = CM_NONE;
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSolidifiedVarsGetter helper(expr, ctx, session);
+  ObSQLMode sql_mode = 0;
+
+  if (OB_UNLIKELY(op < 0 || op >= BIT_MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(op));
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else {
+    ObSQLUtils::get_default_cast_mode(false, 0, session->get_stmt_type(), session->is_ignore_stmt(),
+                                      sql_mode, cast_mode);
+    ObBitVector &tmp_skip = expr.get_pvt_skip(ctx);
+    bool skip_flag = false;
+    if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("failed to eval vector result", K(ret), K(0));
+    } else {
+      tmp_skip.deep_copy(skip, bound.start(), bound.end());
+      VectorFormat left_format = expr.args_[0]->get_format(ctx);
+      ObIVector *param_vec = expr.args_[0]->get_vector(ctx);
+      if (left_format == VEC_DISCRETE || left_format == VEC_CONTINUOUS
+          || left_format == VEC_FIXED) {
+        ObBitmapNullVectorBase &cur_vec = *static_cast<ObBitmapNullVectorBase *>(param_vec);
+        if (cur_vec.has_null()) {
+          tmp_skip.bit_or(*cur_vec.get_nulls(), bound);
+          skip_flag = true;
+        }
+      } else if (left_format == VEC_UNIFORM) {
+        ObUniformFormat<false> &cur_vec = *static_cast<ObUniformFormat<false> *>(param_vec);
+        for (int i = bound.start(); i < bound.end(); i++) {
+          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
+            tmp_skip.set(i);
+            skip_flag = true;
+          }
+        }
+      } else if (left_format == VEC_UNIFORM_CONST) {
+        ObUniformFormat<true> &cur_vec = *static_cast<ObUniformFormat<true> *>(param_vec);
+        for (int i = bound.start(); i < bound.end(); i++) {
+          if (!tmp_skip.at(i) && cur_vec.is_null(i)) {
+            tmp_skip.set(i);
+            skip_flag = true;
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "invalid param format", K(ret), K(left_format));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!skip_flag && OB_FAIL(expr.args_[1]->eval_vector(ctx, tmp_skip, bound))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (skip_flag
+                 && OB_FAIL(expr.args_[1]->eval_vector(
+                      ctx, tmp_skip,
+                      EvalBound(bound.batch_size(), bound.start(), bound.end(), false)))) {
+        LOG_WARN("failed to eval vector result", K(ret), K(1));
+      } else if (OB_FAIL(dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode))) {
+        LOG_WARN("failed to dispatch eval vector and", K(ret), K(expr), K(ctx), K(bound));
+      }
+    }
+  }
+  return ret;
+}
+
+using Discrete = ObDiscreteFormat;
+using Uniform = ObUniformFormat<false>;
+
+// Current VEC_MAX_FORMAT = 6, which can be welled handled by 4 bits where 2 ^ 4 = 16
+#define CALC_FORMAT(res, l, r) ((int32_t)l + (((int32_t)r) << 4) + (((int32_t)res) << 8))
+
+#define BITWISE_FORMAT_DISPATCH_BRANCH(RES, LEFT, RIGH)                                            \
+  case CALC_FORMAT(RES::FORMAT, LEFT::FORMAT, RIGH::FORMAT): {                                     \
+    ret = inner_calc_vector<RES, LEFT, RIGH>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);                 \
+    break;                                                                                         \
+  }
+
+#define INNER_FIXED_CALC(left_type, right_type)                                                    \
+  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>,           \
+                          ObFixedLengthFormat<right_type>>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define RIGHT_FIXED_DISCRETE_CALC(left_type)                                                       \
+  ret =                                                                                            \
+    inner_calc_vector<ObFixedLengthFormat<uint64_t>, Discrete, ObFixedLengthFormat<left_type>>(    \
+      VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define RIGHT_FIXED_UNIFORM_CALC(left_type)                                                        \
+  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, Uniform, ObFixedLengthFormat<left_type>>( \
+    VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define LEFT_FIXED_DISCRETE_CALC(left_type)                                                        \
+  ret =                                                                                            \
+    inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Discrete>(    \
+      VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+#define LEFT_FIXED_UNIFORM_CALC(left_type)                                                         \
+  ret = inner_calc_vector<ObFixedLengthFormat<uint64_t>, ObFixedLengthFormat<left_type>, Uniform>( \
+    VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+
+void ObBitwiseExprOperator::convert_tc_size(VecValueTypeClass vec_tc, int &len)
+{
+  switch (vec_tc) {
+  case (VEC_TC_INTEGER): {
+    len = sizeof(int64_t);
+    break;
+  }
+  case (VEC_TC_DEC_INT32): {
+    len = sizeof(int32_t);
+    break;
+  }
+  case (VEC_TC_DEC_INT64): {
+    len = sizeof(int64_t);
+    break;
+  }
+  case (VEC_TC_DEC_INT128): {
+    len = sizeof(int128_t);
+    break;
+  }
+  case (VEC_TC_DEC_INT256): {
+    len = sizeof(int256_t);
+    break;
+  }
+  case (VEC_TC_DEC_INT512): {
+    len = sizeof(int512_t);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
+}
+
+int ObBitwiseExprOperator::dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  VectorFormat res_format = expr.get_format(ctx);
+  VectorFormat left_format = expr.args_[0]->get_format(ctx);
+  VectorFormat right_format = expr.args_[1]->get_format(ctx);
+
+  const int64_t cond = CALC_FORMAT(res_format, left_format, right_format);
+
+  if (lib::is_oracle_mode()) {
+    // Oracle expression type is ObNumber, which has a high probability with the Vector format as
+    // Discrete. Similar reason to mysql, uint64_t will be handled by Fixed.
+    switch (cond) {
+      BITWISE_FORMAT_DISPATCH_BRANCH(Discrete, Discrete, Discrete);
+      BITWISE_FORMAT_DISPATCH_BRANCH(Discrete, Discrete, Uniform);
+
+      BITWISE_FORMAT_DISPATCH_BRANCH(Discrete, Uniform, Discrete);
+      BITWISE_FORMAT_DISPATCH_BRANCH(Discrete, Uniform, Uniform);
+    default: {
+      ret =
+        inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+      break;
+    }
+    }
+  } else {
+    const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+    const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+
+    VecValueTypeClass left_tc =
+      get_vec_value_tc(left_meta.type_, left_meta.scale_, left_meta.precision_);
+    VecValueTypeClass right_tc =
+      get_vec_value_tc(right_meta.type_, right_meta.scale_, right_meta.precision_);
+
+    int l_len = 0;
+    int r_len = 0;
+
+    convert_tc_size(left_tc, l_len);
+    convert_tc_size(right_tc, r_len);
+
+    if (res_format != VEC_FIXED) {
+      ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
+                                                                        cast_mode);
+    } else if (left_format != VEC_FIXED && right_format != VEC_FIXED) {
+      switch (cond) {
+        BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Discrete, Discrete);
+        BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Discrete, Uniform);
+
+        BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Uniform, Discrete);
+        BITWISE_FORMAT_DISPATCH_BRANCH(ObFixedLengthFormat<uint64_t>, Uniform, Uniform);
+      default: {
+        ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST,
+                                                                          cast_mode);
+        break;
+      }
+      }
+    } else {
+      if (left_format != VEC_FIXED) {
+        switch (left_format) {
+        case (VEC_DISCRETE): {
+          DISPATCH_WIDTH_TASK(r_len, RIGHT_FIXED_DISCRETE_CALC);
+          break;
+        }
+        case (VEC_UNIFORM): {
+          DISPATCH_WIDTH_TASK(r_len, RIGHT_FIXED_UNIFORM_CALC);
+          break;
+        }
+        default: {
+          ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(
+            VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+          break;
+        }
+        }
+      } else if (right_format != VEC_FIXED) {
+        switch (right_format) {
+        case (VEC_DISCRETE): {
+          DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_DISCRETE_CALC);
+          break;
+        }
+        case (VEC_UNIFORM): {
+          DISPATCH_WIDTH_TASK(l_len, LEFT_FIXED_UNIFORM_CALC);
+          break;
+        }
+        default: {
+          ret = inner_calc_vector<ObVectorBase, ObVectorBase, ObVectorBase>(
+            VECTOR_EVAL_FUNC_ARG_LIST, cast_mode);
+          break;
+        }
+        }
+      } else {
+        DISPATCH_INOUT_WIDTH_TASK(l_len, r_len, INNER_FIXED_CALC);
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename RES_VEC, typename L_VEC, typename R_VEC>
+int ObBitwiseExprOperator::inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+  const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+
+  void *get_int_func0 = NULL;
+  void *get_int_func1 = NULL;
+
+  // Different LOG_WARN message for oracle and mysql
+  if (OB_FAIL(choose_get_int_func(left_meta, get_int_func0))) {
+    LOG_WARN("choose_get_int_func failed", K(ret), K(left_meta));
+  } else if (OB_FAIL(choose_get_int_func(right_meta, get_int_func1))) {
+    LOG_WARN("choose_get_int_func failed", K(ret), K(right_meta));
+  } else {
+    L_VEC *l_vec = static_cast<L_VEC *>(expr.args_[0]->get_vector(ctx));
+    R_VEC *r_vec = static_cast<R_VEC *>(expr.args_[1]->get_vector(ctx));
+    RES_VEC *res_vec = static_cast<RES_VEC *>(expr.get_vector(ctx));
+
+    // Divide the Oracle and Mysql version in this point for calculation.
+    // Oracle process ObNumber and using int64_t as a meta variable.
+    // Mysql using uint64_t.
+    if (lib::is_oracle_mode()) {
+      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i += 1) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        }
+
+        if (l_vec->is_null(i) || r_vec->is_null(i)) {
+          res_vec->set_null(i);
+          eval_flags.set(i);
+        } else {
+          ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
+          ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
+
+          const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+          const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+
+          int64_t left = 0;
+          int64_t right = 0;
+
+          if (OB_FAIL((reinterpret_cast<ObBitwiseExprOperator::GetIntFunc>(get_int_func0)(
+                left_meta, left_datum, false, left, cast_mode)))) {
+            LOG_WARN("get int64 failed", K(ret), K(left_datum));
+          } else if (OB_FAIL((reinterpret_cast<ObBitwiseExprOperator::GetIntFunc>(get_int_func1)(
+                       right_meta, right_datum, false, right, cast_mode)))) {
+            LOG_WARN("get int64 failed", K(ret), K(right_datum));
+          } else {
+            int64_t res = left & right;
+            ObNumStackOnceAlloc tmp_alloc;
+            ObNumber tmp;
+            if (OB_FAIL(tmp.from(res, tmp_alloc))) {
+              LOG_WARN("get ObNumber from int64 failed", K(ret), K(res));
+            } else {
+              res_vec->set_number(i, tmp);
+              eval_flags.set(i);
+            }
+          }
+        }
+      }
+    } else {
+      const ObBitwiseExprOperator::BitOperator op =
+        static_cast<const ObBitwiseExprOperator::BitOperator>(expr.extra_);
+      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i += 1) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        }
+
+        if (l_vec->is_null(i) || r_vec->is_null(i)) {
+          res_vec->set_null(i);
+          eval_flags.set(i);
+        } else {
+          ObDatum left_datum = ObDatum(l_vec->get_payload(i), l_vec->get_length(i), false);
+          ObDatum right_datum = ObDatum(r_vec->get_payload(i), r_vec->get_length(i), false);
+
+          const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+          const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+
+          uint64_t left = 0;
+          uint64_t right = 0;
+
+          if (OB_FAIL((reinterpret_cast<ObBitwiseExprOperator::GetUIntFunc>(get_int_func0)(
+                left_meta, left_datum, true, left, cast_mode)))) {
+            LOG_WARN("get uint64 failed", K(ret), K(left_datum));
+          } else if (OB_FAIL((reinterpret_cast<ObBitwiseExprOperator::GetUIntFunc>(get_int_func1)(
+                       right_meta, right_datum, true, right, cast_mode)))) {
+            LOG_WARN("get uint64 failed", K(ret), K(right_datum));
+          } else {
+            // bit_neg and bit_count will be handled by theirs function
+
+            uint64_t res = 0;
+
+            switch (op) {
+            case ObBitwiseExprOperator::BIT_AND: res = left & right; break;
+            case ObBitwiseExprOperator::BIT_OR: res = left | right; break;
+            case ObBitwiseExprOperator::BIT_XOR: res = left ^ right; break;
+            case ObBitwiseExprOperator::BIT_LEFT_SHIFT:
+              res = right < sizeof(uint64_t) * 8 ? left << right : 0;
+              break;
+            case ObBitwiseExprOperator::BIT_RIGHT_SHIFT:
+              res = right < sizeof(uint64_t) * 8 ? left >> right : 0;
+              break;
+            default: break;
+            }
+
+            res_vec->set_uint(i, res);
+            eval_flags.set(i);
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -5664,18 +6450,16 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    ObObjType dest_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_calc_type()]];
-    if (OB_UNLIKELY(ObMaxType == dest_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(WARN, "invalid type", K(type), K(ret));
-    } else if (ObVarcharType == dest_type) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
-        if (ob_is_enumset_tc(types_stack[i].get_type())) {
-          types_stack[i].set_calc_type(dest_type);
-        }
-      }
-    } else {/*do nothing*/}
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+    if (ob_is_enumset_tc(types_stack[i].get_type())) {
+      ObObjType dest_type = get_enumset_calc_type(type.get_calc_type(), i);
+      if (OB_UNLIKELY(ObMaxType == dest_type)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(WARN, "invalid type", K(type), K(ret));
+      } else if (ob_is_string_type(dest_type)) {
+        types_stack[i].set_calc_type(dest_type);
+      } else {/*do nothing*/}
+    }
   }
   return ret;
 }
@@ -6293,18 +7077,20 @@ int ObExprTRDateFormat::get_format_id_by_format_string(const ObString &fmt, int6
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt)
+int ObExprTRDateFormat::trunc_new_obtime(ObTime &ob_time, const ObString &fmt,
+                                         bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   int64_t fmt_id = SYYYY;
 
   OZ (get_format_id_by_format_string(fmt, fmt_id));
-  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id));
+  OZ (trunc_new_obtime_by_fmt_id(ob_time, fmt_id, is_mysql_compat_dates));
   LOG_DEBUG("check value", K(ob_time), K(fmt_id), K(fmt));
   return ret;
 }
 
-int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id)
+int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_id,
+                                                   bool is_mysql_compat_dates)
 {
   int ret = OB_SUCCESS;
   switch (fmt_id) {
@@ -6322,6 +7108,8 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case Y: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1);
+      ob_time.parts_[DT_MON] = 1;
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -6330,7 +7118,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       int32_t quarter = (ob_time.parts_[DT_MON] + 2) / MONS_PER_QUAR;
       ob_time.parts_[DT_MON] = (quarter - 1) * MONS_PER_QUAR + 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case MONTH:
@@ -6342,6 +7132,7 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
     case RM: {
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1);
+      ob_time.parts_[DT_MDAY] = 1;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -6350,6 +7141,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_YDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case IW: {
@@ -6357,12 +7151,16 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY] - 1) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case W: {
       //xx-01 is the first day
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_MDAY] - 1) % DAYS_PER_WEEK;
+      ob_time.parts_[DT_MDAY] -= offset;
       ob_time.parts_[DT_DATE] -= offset;
       break;
     }
@@ -6383,6 +7181,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       set_time_part_to_zero(ob_time);
       int32_t offset = (ob_time.parts_[DT_WDAY]) % DAYS_PER_WEEK;
       ob_time.parts_[DT_DATE] -= offset;
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     case HH:
@@ -6407,7 +7208,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       ob_time.parts_[DT_YEAR] = ob_time.parts_[DT_YEAR] / YEARS_PER_CENTURY * YEARS_PER_CENTURY + 1;
       ob_time.parts_[DT_MON] = 1;
       ob_time.parts_[DT_MDAY] = 1;
-      ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      if (!is_mysql_compat_dates) {
+        ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
+      }
       break;
     }
     case IYYY:
@@ -6418,6 +7221,9 @@ int ObExprTRDateFormat::trunc_new_obtime_by_fmt_id(ObTime &ob_time, int64_t fmt_
       //not used heavily. so, do not care too much about performance !
       set_time_part_to_zero(ob_time);
       ObTimeConverter::get_first_day_of_isoyear(ob_time);
+      if (is_mysql_compat_dates) {
+        ret = ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time);
+      }
       break;
     }
     default: {
@@ -6666,12 +7472,13 @@ int ObRelationalExprOperator::cg_expr(ObExprCGCtx &op_cg_ctx,
   } else if (row_dim > 0) {
     ret = cg_row_cmp_expr(row_dim, *op_cg_ctx.allocator_, raw_expr, input_types_,rt_expr);
   } else {
-    ret = cg_datum_cmp_expr(raw_expr, input_types_, rt_expr);
+    ret = cg_datum_cmp_expr(*op_cg_ctx.allocator_, raw_expr, input_types_, rt_expr);
   }
   return ret;
 }
 
-int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
+int ObRelationalExprOperator::cg_datum_cmp_expr(ObIAllocator &allocator,
+                                               const ObRawExpr &raw_expr,
                                                const ObExprOperatorInputTypeArray &input_types,
                                                ObExpr &rt_expr)
 {
@@ -6730,6 +7537,28 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);
     CK(NULL != rt_expr.eval_vector_func_);
+
+    if (OB_SUCC(ret)) {
+      if (raw_expr.has_flag(IS_AUTO_PART_EXPR)) {
+        LOG_DEBUG("set min or max compare func", K(cmp_op));
+        void **inner_func_buf = NULL;
+        const int64_t inner_func_count = 3;
+        if (OB_ISNULL(inner_func_buf = (void **)allocator.alloc(sizeof(void *) * inner_func_count))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory for auto part expr inner function buf", K(ret));
+        } else {
+          rt_expr.inner_functions_ = inner_func_buf;
+          rt_expr.inner_func_cnt_ = inner_func_count;
+          rt_expr.inner_functions_[0] = (void*)rt_expr.eval_func_;
+          rt_expr.inner_functions_[1] = (void*)rt_expr.eval_batch_func_;
+          rt_expr.inner_functions_[2] = (void*)rt_expr.eval_vector_func_;
+          // new
+          rt_expr.eval_func_ = &eval_min_max_compare;
+          rt_expr.eval_batch_func_ = &eval_batch_min_max_compare;
+          rt_expr.eval_vector_func_ = &eval_vector_min_max_compare;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -6814,7 +7643,12 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension,
         }
       } // for end
       if (OB_SUCC(ret)) {
-        rt_expr.eval_func_ = &row_eval;
+        if (raw_expr.has_flag(IS_AUTO_PART_EXPR)) {
+          rt_expr.eval_func_ = &min_max_row_eval;
+          LOG_DEBUG("set min or max compare func", K(cmp_op));
+        } else {
+          rt_expr.eval_func_ = &row_eval;
+        }
       }
     }
   }
@@ -6919,6 +7753,154 @@ int ObRelationalExprOperator::row_cmp(
     } else {
       expr_datum.set_int(
           is_expected_cmp_ret(cmp_op, first_nonequal_cmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObRelationalExprOperator::min_max_row_eval(
+    const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_
+                  || NULL == expr.args_
+                  || expr.inner_func_cnt_ <= 0
+                  || expr.args_[0]->arg_cnt_ != expr.inner_func_cnt_
+                  || NULL == expr.args_[0]->args_
+                  || NULL == expr.args_[1]->args_
+                  || NULL == expr.inner_functions_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    ObExpr *left_row = expr.args_[0];
+    ObExpr *right_row = NULL;
+    if (1 == expr.args_[1]->arg_cnt_ && T_OP_ROW == expr.args_[1]->args_[0]->type_) {
+      if (expr.args_[1]->args_[0]->arg_cnt_ != expr.inner_func_cnt_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected arg cnt", K(ret), K(expr.inner_func_cnt_),
+                                       K(expr.args_[1]->args_[0]->arg_cnt_));
+      } else {
+        right_row = expr.args_[1]->args_[0];
+      }
+    } else if (OB_UNLIKELY(expr.inner_func_cnt_ != expr.args_[1]->arg_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg cnt", K(ret), K(expr.inner_func_cnt_), K(expr.args_[1]->arg_cnt_));
+    } else {
+      right_row = expr.args_[1];
+    }
+    ret = min_max_row_cmp(expr, expr_datum, left_row->args_, ctx, right_row->args_, ctx);
+  }
+  return ret;
+}
+
+int ObRelationalExprOperator::min_max_row_cmp(
+    const ObExpr &expr, ObDatum &expr_datum,
+    ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx)
+{
+  // performance critical, do not check pointer validity.
+  int ret = OB_SUCCESS;
+  ObDatum *left = NULL;
+  ObDatum *right = NULL;
+
+  bool cnt_row_null = false;
+  int first_nonequal_cmp_ret = 0;
+  int i = 0;
+  // locate first non-equal pair
+  for (; OB_SUCC(ret) && i < expr.inner_func_cnt_; i++) {
+    if (OB_FAIL(l_row[i]->eval(l_ctx, left))) {
+      if (OB_FAIL(try_get_inner_row_cmp_ret<true>(ret, first_nonequal_cmp_ret))) {
+        LOG_WARN("failed to eval left in row cmp", K(ret));
+      } else {
+        --i;
+        break;
+      }
+    } else if (left->is_null()) {
+      cnt_row_null = true;
+    } else if (OB_FAIL(r_row[i]->eval(r_ctx, right))) {
+      if (OB_FAIL(try_get_inner_row_cmp_ret<false>(ret, first_nonequal_cmp_ret))) {
+        LOG_WARN("failed to eval right in row cmp", K(ret));
+      } else {
+        --i;
+        break;
+      }
+    } else if (right->is_null()) {
+      cnt_row_null = true;
+    } else if (left->is_ext() || left->is_outrow() || right->is_ext() || right->is_outrow()) {
+      // is_outrow : min
+      // is_ext : max
+      if (OB_FAIL(get_min_max_cmp_ret(left, right, first_nonequal_cmp_ret))) {
+        LOG_WARN("fail to get min max cmp ret");
+      }
+    } else if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[i])(*left, *right, first_nonequal_cmp_ret))) {
+      LOG_WARN("failed to cmp", K(ret));
+    } else {
+      LOG_DEBUG("min max row cmp",
+        K(ret), K(left->is_ext()), K(left->is_outrow()), K(right->is_ext()), K(right->is_outrow()));
+    }
+    if (OB_SUCC(ret)) {
+      if (0 != first_nonequal_cmp_ret) {
+        break;
+      }
+    }
+  }  // for end
+  ObCmpOp cmp_op = get_cmp_op(expr.type_);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (i == expr.inner_func_cnt_) {
+    if (cnt_row_null) {
+      expr_datum.set_null();
+    } else {
+      expr_datum.set_int(is_expected_cmp_ret(cmp_op, 0));
+    }
+  } else {
+    if (cnt_row_null) {
+      if (CO_NE == cmp_op) {
+        expr_datum.set_int(true);
+      } else if (CO_EQ == cmp_op) {
+        expr_datum.set_int(false);
+      } else {
+        expr_datum.set_null();
+      }
+    } else {
+      expr_datum.set_int(
+          is_expected_cmp_ret(cmp_op, first_nonequal_cmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObRelationalExprOperator::get_min_max_cmp_ret(
+    const ObDatum *left, const ObDatum *right, int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(left), KP(right));
+  } else {
+    bool is_left_min_or_max = left->is_ext() || left->is_outrow();
+    bool is_right_min_or_max = right->is_ext() || right->is_outrow();
+    if (is_left_min_or_max && !is_right_min_or_max) {    // left is ext, right is not ext
+      if (left->is_ext()) { // left is max
+        cmp_ret = 1;
+      } else if (left->is_outrow()) { // left is min
+        cmp_ret = -1;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected cmp result", KPC(left), KPC(right));
+      }
+    } else if (!is_left_min_or_max && is_right_min_or_max) {  // left is not ext,  right is ext
+      if (right->is_ext()) {  // right is max
+        cmp_ret = -1;
+      } else if (right->is_outrow()) {  // right is min
+        cmp_ret = 1;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected cmp result", KPC(left), KPC(right));
+      }
+    } else {   // left and right is all ext
+      // 在filter表达式过滤的场景里不可能出现left和right同时为is_ext的场景
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected expr datum compare", K(ret), KPC(left), KPC(right));
     }
   }
   return ret;

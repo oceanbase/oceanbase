@@ -300,6 +300,7 @@ private:
   blocksstable::ObSelfBufferWriter buffer_writer_;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
   ObBackupLinkedBlockItemWriter *linked_writer_;
+  bool is_major_compaction_mview_dep_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMetaBackupReader);
 };
 

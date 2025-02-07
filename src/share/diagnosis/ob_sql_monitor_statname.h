@@ -37,7 +37,11 @@ SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_BIT_SET, sql_monitor_statname::INT, "filter
 
 // PDML
 SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_TIME, sql_monitor_statname::INT, "clock time cost write storage", "total time cost writing data to storage by pdml op")
-SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_COUNT, sql_monitor_statname::INT, "times write to storage", "total times writing data to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_GET_ROW_COUNT_FROM_CHILD_OP, sql_monitor_statname::INT, "clock time cost write storage", "total time cost writing data to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_WRITE_DAS_BUFF_ROW_COUNT, sql_monitor_statname::INT, "row_count write to das buff", "total row count writing data to das buff by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_SKIP_ROW_COUNT, sql_monitor_statname::INT, "the count of skip write", "total row count which is not needed to write to storage by pdml op")
+SQL_MONITOR_STATNAME_DEF(PDML_STORAGE_RETURN_ROW_COUNT, sql_monitor_statname::INT, "row_count storage return", "total write row count storage return to pdml op")
+
 // reshuffle
 SQL_MONITOR_STATNAME_DEF(EXCHANGE_DROP_ROW_COUNT, sql_monitor_statname::INT, "drop row count", "total row dropped by exchange out op for unmatched partition")
 // MONITORING DUMP
@@ -61,8 +65,9 @@ SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_ROW_COUNT, sql_monitor_statname::INT, "s
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, sql_monitor_statname::INT, "sstable insert cg_row count", "sstable insert cg row count")
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, sql_monitor_statname::CAPACITY, "total io bytes read from disk", "total io bytes read from storage")
-SQL_MONITOR_STATNAME_DEF(TOTAL_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by storage", "total bytes processed by storage, including memtable")
-SQL_MONITOR_STATNAME_DEF(TOTAL_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by storage", "total rows processed by storage, including memtable")
+SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by ssstore", "total bytes processed by ssstore")
+SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by ssstore", "total rows processed by ssstore")
+SQL_MONITOR_STATNAME_DEF(MEMSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by memstore", "total rows processed by memstore")
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, sql_monitor_statname::INVALID, "monitor end", "monitor stat name end")

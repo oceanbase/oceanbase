@@ -106,12 +106,14 @@ public:
 private:
   static const char MANIFEST_FILE_NAME[];
   static const char HEAD_SECTION[];
-  static const char DEVICE_SECTION[];
+  static const char DEVICE_BEGIN_SECTION[];
+  static const char DEVICE_END_SECTION[];
   enum SectionType
   {
     SECTION_TYPE_INVLAID,
     SECTION_TYPE_HEAD,
-    SECTION_TYPE_DEVICE
+    SECTION_TYPE_DEVICE_BEGIN,
+    SECTION_TYPE_DEVICE_END
   };
 
   static const int64_t MANIFEST_VERSION;
@@ -130,7 +132,7 @@ private:
   int parse_file_(FILE *fp, common::ObIArray<ObDeviceConfig> &config_arr, HeadSection &head);
   int parse_section_type_(const char *buf, SectionType &type);
   int parse_head_section_(const char *buf, HeadSection &head);
-  int parse_device_section_(char *buf, ObDeviceConfig &device_config);
+  int parse_device_section_(const char *buf, ObDeviceConfig &device_config);
   int write_head_(FILE *fp, const HeadSection &head) const;
   // sort device configs according to used_for_, path_ and endpoint_
   int sort_device_configs_(common::ObIArray<ObDeviceConfig> &config_arr) const;
@@ -141,6 +143,7 @@ private:
                                HeadSection &head) const;
   int validate_config_checksum_(const common::ObIArray<ObDeviceConfig> &config_arr,
                                 const HeadSection &head) const;
+  int print_file_line_(FILE *fp, const char *fmt, ...) const;
 
 private:
   bool is_inited_;

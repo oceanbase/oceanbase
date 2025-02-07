@@ -2096,7 +2096,7 @@ error_exit:
     EASY_CONNECTION_DESTROY(c, "on_writable");
 }
 
-extern const char* trace_id_to_str_c(const uint64_t *uval);
+extern const char* trace_id_to_str_c(const uint64_t *uval, char *buf, int64_t buf_len);
 /**
  * 对timeout的处理message
  */
@@ -2111,10 +2111,12 @@ static void easy_connection_on_timeout_session(struct ev_loop *loop, ev_timer *w
 
     EASY_TIME_GUARD();
     if ((now != (int)ev_now(loop)) && (s->error == 0)) {
+        char buf[72] = {'\0'};
         easy_info_log("Session has timed out, session(%p), time(%fs), packet_id(%" PRIu64 "),"
                 " pcode(%d), trace_id(%s), conn(%s).",
                 s, ev_now(loop) - s->now, s->packet_id,
-                s->r.pcode, trace_id_to_str_c(&s->r.trace_id[0]), easy_connection_str(c));
+                s->r.pcode, trace_id_to_str_c(&s->r.trace_id[0], buf, sizeof(buf)),
+                easy_connection_str(c));
         now = (int)ev_now(loop);
     }
 
@@ -2168,11 +2170,12 @@ int easy_connection_dump_request(easy_connection_t *conn, easy_request_t *r, dou
     }
 
     if (r->protocol == EASY_REQQUEST_TYPE_RPC) {
+        char buf[72] = {'\0'};
         easy_warn_log("easy_reqeust hold by upper-layer for too much time. "
                 "req(%p), timeout_warn_count(%lu), protocol(RPC), pcode(%d), time(%lf), packet_id(%lu), "
                 "trace_id(%s), trace_point(%d), bt(%s).",
                 r, r->timeout_warn_count, r->pcode, hold_time, r->packet_id,
-                trace_id_to_str_c(&r->trace_id[0]), r->trace_point, r->trace_bt);
+                trace_id_to_str_c(&r->trace_id[0], buf, sizeof(buf)), r->trace_point, r->trace_bt);
     } else if (r->protocol == EASY_REQQUEST_TYPE_SQL) {
         easy_warn_log("easy_reqeust hold by upper-layer for too much time. "
                 "req(%p), timeout_warn_count(%lu), protocol(SQL), time(%lf), session_id(%ld), "

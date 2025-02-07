@@ -54,7 +54,7 @@ void ObPushDownTopNFilter::destroy()
   topn_filter_ctx_ = nullptr;
 }
 
-inline int ObPushDownTopNFilter::init(const ObSortVecOpContext &ctx,
+int ObPushDownTopNFilter::init(const ObSortVecOpContext &ctx,
                                       lib::MemoryContext &mem_context)
 {
   return init(ctx.is_fetch_with_ties_, ctx.pd_topn_filter_info_, ctx.tenant_id_, ctx.sk_collations_,
@@ -104,6 +104,16 @@ int ObPushDownTopNFilter::init(bool is_fetch_with_ties,
   } else {
     pd_topn_filter_msg_ = pd_topn_filter_msg;
     enabled_ = true;
+  }
+
+  if (OB_FAIL(ret)) {
+    if (pd_topn_filter_msg != nullptr) {
+      (void)pd_topn_filter_msg->destroy();
+      mem_context_->get_malloc_allocator().free(pd_topn_filter_msg);
+      pd_topn_filter_msg = nullptr;
+      pd_topn_filter_msg_ = nullptr;
+      enabled_ = false;
+    }
   }
 
   LOG_TRACE("[TopN Filter] init topn filter msg");

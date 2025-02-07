@@ -39,6 +39,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "storage/ob_storage_schema_util.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
@@ -156,7 +157,7 @@ int ObDDLTableMergeDag::prepare_incremental_direct_load_ddl_kvs(ObTablet &tablet
   ObDDLKV *ddl_kv = nullptr;
   ObTableHandleV2 selected_ddl_kv_handle;
   ddl_kvs_handle.reset();
-  if (OB_FAIL(tablet.get_all_memtables(memtable_handles))) {
+  if (OB_FAIL(tablet.get_all_memtables_from_memtable_mgr(memtable_handles))) {
     LOG_WARN("fail to get all memtable", K(ret), K(tablet));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
@@ -230,7 +231,7 @@ int ObDDLTableMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_para
                                   ddl_param_.ls_id_.id(),
                                   static_cast<int64_t>(ddl_param_.tablet_id_.id()),
                                   static_cast<int64_t>(ddl_param_.rec_scn_.get_val_for_inner_table_field()),
-                                  "is_commit", to_cstring(ddl_param_.is_commit_)))) {
+                                  "is_commit", ddl_param_.is_commit_))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
@@ -790,6 +791,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
+                                 tablet.get_transfer_seq(),
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -807,6 +809,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                     snapshot_version,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
+                                    tablet.get_transfer_seq(),
                                     end_scn))) {
     // use storage schema to init ObDataStoreDesc
     // all cols' default checksum will assigned to 0
@@ -859,7 +862,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
     } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0).block_meta_->get_meta_val().column_count_)) {
     } else if (meta_array.count() > 0 && OB_FAIL(data_desc.get_col_desc().mock_valid_col_default_checksum_array(macro_block_column_count))) {
-      LOG_WARN("mock valid column default checksum failed", K(ret), "firt_macro_block_meta", to_cstring(meta_array.at(0)), K(ddl_param));
+      LOG_WARN("mock valid column default checksum failed", K(ret), "firt_macro_block_meta", meta_array.at(0), K(ddl_param));
     } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(),
                                                    ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::ENABLE : ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
@@ -918,7 +921,6 @@ int ObTabletDDLUtil::create_ddl_sstable(
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
     } else {
-      param.uncommitted_tx_id_ = ddl_param.trans_id_.get_id();
       if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable<ObSSTable>(param, allocator, sstable_handle))) {
         LOG_WARN("create sstable failed", K(ret), K(param));
       }
@@ -979,10 +981,10 @@ int ObTabletDDLUtil::update_ddl_table_store(
         table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
         if (ddl_param.table_key_.is_ddl_dump_sstable()) {
           // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.
-          table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.table_type_;
+          table_store_param.ddl_info_.ddl_replay_status_ = tablet.get_tablet_meta().ddl_replay_status_;
         } else {
-          // data is complete, make ddl table type to major sstable instead of ddl dump sstable (mark ddl finished).
-          table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.is_co_sstable() ? ObITable::COLUMN_ORIENTED_SSTABLE : ObITable::MAJOR_SSTABLE;
+          // data is complete, mark ddl replay status finished
+          table_store_param.ddl_info_.ddl_replay_status_ = ddl_param.table_key_.is_co_sstable() ? CS_REPLICA_REPLAY_COLUMN_FINISH : CS_REPLICA_REPLAY_ROW_STORE_FINISH;
         }
       } else { // incremental direct load
         table_store_param.compaction_info_.clog_checkpoint_scn_ = sstable->get_end_scn();
@@ -1241,7 +1243,7 @@ int get_sorted_meta_array(
             } else if (is_exist) {
               // skip
               FLOG_INFO("append meta tree skip", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(data_macro_meta.end_key_));
+                  "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", data_macro_meta.end_key_);
             } else if (OB_FAIL(macro_handle.set_block_id(data_macro_meta.get_macro_id()))) {
               LOG_WARN("hold macro block failed", K(ret));
             } else if (OB_FAIL(data_macro_meta.deep_copy(copied_meta, allocator))) {
@@ -1251,13 +1253,14 @@ int get_sorted_meta_array(
               copied_meta->~ObDataMacroBlockMeta();
             } else {
               FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_),
+                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", copied_meta->end_key_,
                   "end_row_offset", end_row_offset);
             }
           }
         }
+        ObCStringHelper helper;
         LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
-            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_), "end_row_offset", end_row_offset);
+            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": helper.convert(copied_meta->end_key_), "end_row_offset", end_row_offset);
       }
     }
   }

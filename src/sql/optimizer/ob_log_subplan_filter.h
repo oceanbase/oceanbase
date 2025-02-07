@@ -83,6 +83,7 @@ public:
   bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
   bool is_my_exec_expr(const ObRawExpr *expr);
   bool is_my_onetime_expr(const ObRawExpr *expr);
+  inline bool is_in_random_shuffle_senario() { return dist_algo_ == DistAlgo::DIST_RANDOM_ALL || dist_algo_ == DistAlgo::DIST_HASH_ALL; }
 
   int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
@@ -95,17 +96,14 @@ public:
   int allocate_granule_post(AllocGIContext &ctx);
   virtual int compute_one_row_info() override;
   virtual int compute_sharding_info() override;
-  inline DistAlgo get_distributed_algo() { return dist_algo_; }
+  inline DistAlgo get_distributed_algo() const { return dist_algo_; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { dist_algo_ = set_dist_algo; }
 
   int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
   common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
 
-  inline bool enable_das_group_rescan() { return enable_das_group_rescan_; }
+  inline bool enable_das_group_rescan() const { return enable_das_group_rescan_; }
   inline void set_enable_das_group_rescan(bool flag) { enable_das_group_rescan_ = flag; }
-  int check_and_set_das_group_rescan();
-  int check_if_match_das_group_rescan(ObLogicalOperator *root, bool &group_rescan);
-  int set_use_das_batch(ObLogicalOperator* root);
 
   int allocate_startup_expr_post() override;
 
@@ -136,12 +134,19 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
   virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
+  int compute_spf_batch_rescan();
+  int compute_spf_batch_rescan(bool &can_batch);
+  int compute_spf_batch_rescan_compat(bool &can_batch);
+  int check_right_is_local_scan(int64_t &local_scan_type) const;
+  int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
+  bool is_px_batch_rescan_enabled();
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+
 protected:
   DistAlgo dist_algo_;
   common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;

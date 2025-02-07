@@ -1111,8 +1111,9 @@ int ObRedoTransportOption::append_redo_transport_options_change(
   if (redo_transport_options_str.empty()) {
   } else {
     SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], format_str) {
+      ObCStringHelper helper;
       if (OB_FAIL(ObConfigLogArchiveOptionsItem::format_option_str(
-              to_cstring(redo_transport_options_str),
+              helper.convert(redo_transport_options_str),
               redo_transport_options_str.length(),
               format_str,
               OB_MAX_CONFIG_VALUE_LEN))) {

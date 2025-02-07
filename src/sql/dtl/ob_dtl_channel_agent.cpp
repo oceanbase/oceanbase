@@ -33,6 +33,7 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
       } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
+        vector_fixed_msg_writer_.set_size_per_buffer(size_per_buffer_);
         msg_writer_ = &vector_fixed_msg_writer_;
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
         vector_row_msg_writer_.set_row_meta(meta_);
@@ -161,10 +162,19 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(DTL.get_rpc_proxy()
+        if (send_by_tenant_
+            && OB_FAIL(DTL.get_rpc_proxy()
                        .to(server_addr_)
+                       .group_id(share::OBCG_DTL)
+                       .by(tenant_id_)
                        .timeout(timeout_us)
                        .ap_send_bc_message(args, &cb))) {
+          LOG_WARN("failed to seed message", K(ret));
+        } else if (!send_by_tenant_
+                   && OB_FAIL(DTL.get_rpc_proxy()
+                                 .to(server_addr_)
+                                 .timeout(timeout_us)
+                                 .ap_send_bc_message(args, &cb))) {
           LOG_WARN("failed to seed message", K(ret));
         } else {
           // all rpc channel in this service has send this msg. this buffer will be release in agent.
@@ -248,7 +258,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl &dfc,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("no momery", K(ret));
         } else {
-          bc_service = new(buf) ObDtlBcastService();
+          bc_service = new(buf) ObDtlBcastService(tenant_id, data_ch->send_by_tenant());
           bc_service->bcast_ch_count_++;
           bc_service->active_chs_count_++;
           bc_service->server_addr_ = data_ch->peer_;

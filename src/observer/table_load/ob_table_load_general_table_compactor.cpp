@@ -22,6 +22,7 @@
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "storage/direct_load/ob_direct_load_external_table_compactor.h"
 #include "storage/direct_load/ob_direct_load_sstable_compactor.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 
 namespace oceanbase
 {
@@ -206,6 +207,7 @@ int ObTableLoadGeneralTableCompactor::CompactorTaskIter::get_next_compactor_task
 
 ObTableLoadGeneralTableCompactor::ObTableLoadGeneralTableCompactor()
   : store_ctx_(nullptr),
+    store_table_ctx_(nullptr),
     param_(nullptr),
     allocator_("TLD_GeneralTC"),
     running_thread_count_(0),
@@ -225,6 +227,7 @@ void ObTableLoadGeneralTableCompactor::reset()
 {
   abort_unless(compacting_list_.is_empty());
   store_ctx_ = nullptr;
+  store_table_ctx_ = nullptr;
   param_ = nullptr;
   for (int64_t i = 0; i < all_compactor_array_.count(); ++i) {
     ObIDirectLoadTabletTableCompactor *compactor = all_compactor_array_.at(i);
@@ -242,6 +245,7 @@ int ObTableLoadGeneralTableCompactor::inner_init()
 {
   int ret = OB_SUCCESS;
   store_ctx_ = compact_ctx_->store_ctx_;
+  store_table_ctx_ = compact_ctx_->store_table_ctx_;
   param_ = &store_ctx_->ctx_->param_;
   return ret;
 }
@@ -362,10 +366,10 @@ int ObTableLoadGeneralTableCompactor::create_tablet_table_compactor(
 {
   int ret = OB_SUCCESS;
   table_compactor = nullptr;
-  if (store_ctx_->ctx_->schema_.is_heap_table_) {
+  if (store_table_ctx_->schema_->is_heap_table_) {
     ObDirectLoadExternalTableCompactParam compact_param;
     compact_param.tablet_id_ = tablet_id;
-    compact_param.table_data_desc_ = store_ctx_->table_data_desc_;
+    compact_param.table_data_desc_ = store_table_ctx_->table_data_desc_;
     ObDirectLoadExternalTableCompactor *external_table_compactor = nullptr;
     if (OB_ISNULL(external_table_compactor =
                     OB_NEWx(ObDirectLoadExternalTableCompactor, (&allocator_)))) {
@@ -375,11 +379,11 @@ int ObTableLoadGeneralTableCompactor::create_tablet_table_compactor(
       LOG_WARN("fail to init external table compactor", KR(ret));
     }
     table_compactor = external_table_compactor;
-  } else if (!param_->need_sort_) {
+  } else if (!store_table_ctx_->need_sort_) {
     ObDirectLoadSSTableCompactParam compact_param;
     compact_param.tablet_id_ = tablet_id;
-    compact_param.table_data_desc_ = store_ctx_->table_data_desc_;
-    compact_param.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
+    compact_param.table_data_desc_ = store_table_ctx_->table_data_desc_;
+    compact_param.datum_utils_ = &(store_table_ctx_->schema_->datum_utils_);
     ObDirectLoadSSTableCompactor *sstable_compactor = nullptr;
     if (OB_ISNULL(sstable_compactor = OB_NEWx(ObDirectLoadSSTableCompactor, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -525,6 +529,8 @@ int ObTableLoadGeneralTableCompactor::build_result()
       LOG_WARN("fail to get table from table compactor", KR(ret), KPC(table_compactor));
     } else if (OB_FAIL(result.add_table(table))) {
       LOG_WARN("fail to add table", KR(ret));
+    } else {
+      LOG_INFO("finish compact", K(i), K(table->get_tablet_id()), K(table->get_row_count()));
     }
     if (OB_FAIL(ret)) {
       if (nullptr != table) {

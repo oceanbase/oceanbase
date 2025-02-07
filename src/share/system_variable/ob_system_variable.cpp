@@ -57,6 +57,9 @@ char ObSpecialSysVarValues::version_[ObSpecialSysVarValues::VERSION_MAX_LEN];
 char ObSpecialSysVarValues::system_time_zone_str_[ObSpecialSysVarValues::SYSTEM_TIME_ZONE_MAX_LEN];
 char ObSpecialSysVarValues::default_coll_int_str_[ObSpecialSysVarValues::COLL_INT_STR_MAX_LEN];
 char ObSpecialSysVarValues::server_uuid_[ObSpecialSysVarValues::SERVER_UUID_MAX_LEN];
+char ObSpecialSysVarValues::server_pid_file_str_[MAX_PATH_SIZE];
+char ObSpecialSysVarValues::server_port_int_str_[ObSpecialSysVarValues::SERVER_PORT_INT_STR_MAX_LEN];
+char ObSpecialSysVarValues::server_socket_file_str_[MAX_PATH_SIZE];
 
 ObSpecialSysVarValues::ObSpecialSysVarValues()
 {
@@ -886,7 +889,7 @@ int ObTypeLibSysVar::do_check_and_convert(ObExecContext &ctx,
         ret = OB_ERR_WRONG_VALUE_FOR_VAR;
         int log_ret = OB_SUCCESS;
         if (OB_SUCCESS != (log_ret = log_err_wrong_value_for_var(ret, in_val))) {
-          LOG_ERROR("fail to log error", K(ret), K(log_ret), K(in_val));
+          LOG_WARN("fail to log error", K(ret), K(log_ret), K(in_val));
         }
       } else {
         LOG_WARN("fail to find type", K(ret), K(str_val), K(in_val));
@@ -1881,7 +1884,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
   UNUSED(ctx);
   int ret = OB_SUCCESS;
   ObString cs_name;
-  if (true == set_var.is_set_default_) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (true == set_var.is_set_default_) {
     // do nothing
   } else if (true == in_val.is_null()) {
     // do nothing
@@ -1899,6 +1906,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("charset is valid, but it has no default collation", K(ret),
                   K(cs_name), K(cs_type));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(static_cast<ObCharsetType>(cs_type),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(coll_type),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val.set_int(static_cast<int64_t>(coll_type));
       }
@@ -1917,12 +1930,36 @@ int ObSysVarOnCheckFuncs::check_and_convert_charset(ObExecContext &ctx,
           ObString cs_name_str(val_buf);
           LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, cs_name_str.length(), cs_name_str.ptr());
         }
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(int64_val)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(int64_val),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val = in_val;
       }
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
+    }
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CLIENT)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_CONNECTION)
+        || 0 == set_var.var_name_.case_compare(OB_SV_CHARACTER_SET_RESULTS)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
     }
   }
   return ret;
@@ -1958,7 +1995,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
   UNUSED(sys_var);
   UNUSED(ctx);
   int ret = OB_SUCCESS;
-  if (true == set_var.is_set_default_) {
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (true == set_var.is_set_default_) {
     // do nothing
   } else if (true == in_val.is_null()) {
     ret = OB_ERR_WRONG_VALUE_FOR_VAR;
@@ -1972,6 +2013,12 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
       if (CS_TYPE_INVALID == (coll_type = ObCharset::collation_type(coll_name))) {
         ret = OB_ERR_UNKNOWN_COLLATION;
         LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name.length(), coll_name.ptr());
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_type)),
+                                                                       session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(coll_type),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val.set_int(static_cast<int64_t>(coll_type));
       }
@@ -1990,12 +2037,35 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
           ObString coll_name_str(val_buf);
           LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name_str.length(), coll_name_str.ptr());
         }
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(int64_val)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(static_cast<ObCollationType>(int64_val),
+                                                                          session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check collation data version valid", K(ret));
       } else {
         out_val = in_val;
       }
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid type", K(ret), K(in_val));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == set_var.var_name_.case_compare(OB_SV_COLLATION_CONNECTION)) {
+        ObCollationType cstype = static_cast<ObCollationType>(out_val.get_int());
+        if (!ObCharset::is_valid_collation(cstype)) {
+          ret = OB_ERR_UNKNOWN_CHARSET;
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, in_val.get_string().length(), in_val.get_string().ptr());
+        } else if(ObCharset::get_charset(cstype)->mbminlen > 1) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+                      set_var.var_name_.length(),
+                      set_var.var_name_.ptr(),
+                      in_val.get_string().length(),
+                      in_val.get_string().ptr());
+        }
+      }
     }
   }
   return ret;
@@ -2107,10 +2177,11 @@ int ObSysVarOnCheckFuncs::check_and_convert_tx_isolation(ObExecContext &ctx,
                    in_val.get_string().length(), in_val.get_string().ptr());
     LOG_WARN("invalid tx_isolation value", K(ret));
   } else if (ObTransIsolation::READ_UNCOMMITTED == isolation) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "Isolation level READ-UNCOMMITTED");
-    LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(in_val));
+    if (lib::is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "isolation level READ-UNCOMMITTED");
+      LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(in_val));
+    }
   } else {
     if (OB_FAIL(ob_write_obj(ctx.get_allocator(), in_val, out_val))) {
       LOG_WARN("deep copy out_val obj failed", K(ret));
@@ -2799,6 +2870,8 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
   const ObString &var_val = val.get_string();
   ObTxIsolationLevel isolation = transaction::tx_isolation_from_str(var_val);
   bool for_next_trans = (set_var.set_scope_ == ObSetVar::SET_SCOPE_NEXT_TRANS);
+
+  LOG_INFO("update tx_isolation", K(var_name), K(var_val), K(for_next_trans), K(isolation));
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session info", K(ret));
@@ -2808,10 +2881,14 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
                    var_name.length(), var_name.ptr(), var_val.length(), var_val.ptr());
     LOG_WARN("isolation level is invalid", K(ret), K(var_val), K(var_name));
   } else if (ObTxIsolationLevel::RU == isolation) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "Isolation level READ-UNCOMMITTED");
-    LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(var_val), K(var_name));
+    // only supports RU syntax, the actual behavior is RC
+    if (lib::is_mysql_mode()) {
+      isolation = ObTxIsolationLevel::RC;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "isolation level READ-UNCOMMITTED");
+      LOG_WARN("isolation level read-uncommitted not supported", K(ret), K(var_val), K(var_name));
+    }
   } else if (for_next_trans && FALSE_IT(session->set_tx_isolation(isolation))) {
     // nothing.
   } else if (lib::is_oracle_mode()) {
@@ -3275,6 +3352,59 @@ int ObCharsetSysVarPair::get_collation_var_by_charset_var(const ObString &cs_var
   return ret;
 }
 
+int ObPreProcessSysVars::init_config_sys_vars()
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+ // OB_SV_SERVER_PID_FILE
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    char cur_work_path[MAX_PATH_SIZE];
+    if (OB_ISNULL(getcwd(cur_work_path, MAX_PATH_SIZE))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get work path failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_pid_file_str_,
+                                MAX_PATH_SIZE,
+                                pos,
+                                "%s/%s",
+                                cur_work_path,
+                                "run/observer.pid"))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+
+ // OB_SV_SERVER_PORT
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    int64_t mysql_port = GCONF.mysql_port;
+    if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_port_int_str_,
+                                ObSpecialSysVarValues::SERVER_PORT_INT_STR_MAX_LEN,
+                                pos,
+                                "%ld",
+                                mysql_port))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+
+ // OB_SV_SERVER_SOCKET_FILE
+  if (OB_SUCC(ret)) {
+    pos = 0;
+    char cur_work_path[MAX_PATH_SIZE];
+    if (OB_ISNULL(getcwd(cur_work_path, MAX_PATH_SIZE))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get work path failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::server_socket_file_str_,
+                                MAX_PATH_SIZE,
+                                pos,
+                                "%s/%s",
+                                cur_work_path,
+                                "run/sql.sock"))) {
+      LOG_ERROR("fail to print system_pid_file to buff", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPreProcessSysVars::change_initial_value()
 {
   int ret = OB_SUCCESS;
@@ -3379,19 +3509,52 @@ int ObPreProcessSysVars::change_initial_value()
                                                ObSpecialSysVarValues::server_uuid_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_SERVER_UUID),
              K(ObSpecialSysVarValues::server_uuid_));
+  // OB_SV_PID_FILE
+  } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_PID_FILE,
+                                               ObSpecialSysVarValues::server_pid_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PID_FILE),
+             K(ObSpecialSysVarValues::server_pid_file_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_PID_FILE,
+                                               ObSpecialSysVarValues::server_pid_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PID_FILE),
+             K(ObSpecialSysVarValues::server_pid_file_str_));
+  // OB_SV_PORT
+  } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_PORT,
+                                               ObSpecialSysVarValues::server_port_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PORT),
+             K(ObSpecialSysVarValues::server_port_int_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_PORT,
+                                               ObSpecialSysVarValues::server_port_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_PORT),
+             K(ObSpecialSysVarValues::server_port_int_str_));
+  // OB_SV_SOCKET
+  } else
+   if (OB_FAIL(ObSysVariables::set_value(OB_SV_SOCKET,
+                                               ObSpecialSysVarValues::server_socket_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SOCKET),
+             K(ObSpecialSysVarValues::server_socket_file_str_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_SOCKET,
+                                               ObSpecialSysVarValues::server_socket_file_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SOCKET),
+             K(ObSpecialSysVarValues::server_socket_file_str_));
   } else {
      LOG_INFO("succ to change_initial_value",
              "version_comment", ObSpecialSysVarValues::version_comment_,
              "system_time_zone_str", ObSpecialSysVarValues::system_time_zone_str_,
              "default_coll_int_str", ObSpecialSysVarValues::default_coll_int_str_,
-             "server_uuid", ObSpecialSysVarValues::server_uuid_);
+             "server_uuid", ObSpecialSysVarValues::server_uuid_,
+             "pid_file_str", ObSpecialSysVarValues::server_pid_file_str_,
+             "port", ObSpecialSysVarValues::server_port_int_str_,
+             "socket_file_str", ObSpecialSysVarValues::server_socket_file_str_);
   }
   return ret;
 }
 int ObPreProcessSysVars::init_sys_var()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObPreProcessSysVars::change_initial_value())) {
+  if (OB_FAIL(ObPreProcessSysVars::init_config_sys_vars())) {
+    LOG_ERROR("fail to initial config sys var", K(ret));
+  } else if (OB_FAIL(ObPreProcessSysVars::change_initial_value())) {
     LOG_ERROR("fail to change initial value", K(ret));
   } else if (OB_FAIL(ObSysVariables::init_default_values())) {
     LOG_ERROR("fail to init default values", K(ret));

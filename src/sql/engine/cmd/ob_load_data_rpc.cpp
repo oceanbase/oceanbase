@@ -143,12 +143,7 @@ int ObRpcLoadDataShuffleTaskExecuteP::process()
     } else if (OB_ISNULL(handle)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("handle is null", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard_))) {
-      //Confirmed with the load data owner that the inability to calculate the correct tablet_id here will not affect the execution,
-      //so we use the latest schema version to obtain the guard
-      LOG_WARN("get tenant schema guard failed", KR(ret));
-    } else  {
-      handle->exec_ctx.get_sql_ctx()->schema_guard_ = &schema_guard_;
+    } else {
       if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
         ret = OB_TIMEOUT;
         LOG_WARN("LOAD DATA shuffle task timeout", K(ret), K(task));

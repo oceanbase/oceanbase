@@ -1,3 +1,6 @@
+// owner: muwei.ym
+// owner group: storage_ha
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -237,6 +240,7 @@ void TestSSTableMeta::TearDown()
 
 void TestSSTableMeta::prepare_create_sstable_param()
 {
+  param_.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param_.table_key_.tablet_id_ = tablet_id_;
@@ -264,10 +268,17 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
+  param_.tx_data_recycle_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;
   param_.master_key_id_ = 0;
+  param_.recycle_version_ = 0;
+  param_.root_macro_seq_ = 0;
+  param_.row_count_ = 0;
+  param_.sstable_logic_seq_ = 0;
+  param_.nested_offset_ = 0;
+  param_.nested_size_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -278,6 +289,8 @@ public:
   virtual ~TestMigrationSSTableParam() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
 private:
   storage::ObStorageSchema storage_schema_;
   ObSSTableMeta sstable_meta_;
@@ -316,6 +329,18 @@ void TestMigrationSSTableParam::TearDown()
   sstable_meta_.reset();
   storage_schema_.reset();
   TestSSTableMeta::TearDown();
+}
+
+void TestMigrationSSTableParam::SetUpTestCase()
+{
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+}
+
+void TestMigrationSSTableParam::TearDownTestCase()
+{
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 TEST_F(TestMigrationSSTableParam, test_check_sstable_meta)

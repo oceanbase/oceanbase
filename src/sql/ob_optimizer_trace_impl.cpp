@@ -32,6 +32,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
+#include "sql/optimizer/ob_access_path_estimation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -314,16 +315,7 @@ int ObOptimizerTraceImpl::append_lower(const char* msg)
 
 int ObOptimizerTraceImpl::append_ptr(const void *ptr)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "ptr:%p", ptr);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("ptr:%p", ptr);
 }
 
 int ObOptimizerTraceImpl::append()
@@ -361,58 +353,22 @@ int ObOptimizerTraceImpl::append(const common::ObString &msg)
 
 int ObOptimizerTraceImpl::append(const int64_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%ld", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%ld", value);
 }
 
 int ObOptimizerTraceImpl::append(const uint64_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%lu", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%lu", value);
 }
 
 int ObOptimizerTraceImpl::append(const uint32_t &value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%u", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%u", value);
 }
 
 int ObOptimizerTraceImpl::append(const double & value)
 {
-  int ret = OB_SUCCESS;
-  char buf[32] = {0};
-  int64_t buf_len = 32;
-  buf_len = snprintf(buf, buf_len, "%f", value);
-  if (buf_len > 0) {
-    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
-      LOG_WARN("failed to append value", K(ret));
-    }
-  }
-  return ret;
+  return append_format<32>("%f", value);
 }
 
 int ObOptimizerTraceImpl::append(const ObObj& value)
@@ -530,10 +486,6 @@ int ObOptimizerTraceImpl::append(const OptSystemStat& stat)
 int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t buf_len = 1024 * 1024;
-  ObExplainDisplayOpt option;
-  option.with_tree_line_ = true;
   const ObLogPlan *target_plan = log_plan;
   if (OB_NOT_NULL(target_plan) &&
       target_plan->get_stmt()->is_explain_stmt()) {
@@ -541,15 +493,45 @@ int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
     target_plan = op->get_explain_plan();
   }
   if (OB_NOT_NULL(target_plan)) {
+    ObExplainDisplayOpt option;
+    option.with_tree_line_ = true;
     ObSqlPlan sql_plan(target_plan->get_allocator());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogPlan*>(target_plan),
+    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogicalOperator*>(target_plan->get_plan_root()),
                                         EXPLAIN_EXTENDED,
                                         option,
                                         plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     }
     OPT_TRACE_TITLE("Query Plan");
+    for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
+      if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append(plan_strs.at(i)))) {
+        LOG_WARN("failed to append plan", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObLogicalOperator *plan_top)
+{
+  int ret = OB_SUCCESS;
+  ObExplainDisplayOpt option;
+  option.with_tree_line_ = true;
+  if (OB_NOT_NULL(plan_top) && OB_NOT_NULL(plan_top->get_plan())) {
+    ObSqlPlan sql_plan(plan_top->get_plan()->get_allocator());
+    ObSEArray<common::ObString, 64> plan_strs;
+    if (OB_FAIL(sql_plan.print_sql_plan(const_cast<ObLogicalOperator*>(plan_top),
+                                        EXPLAIN_PLAN_TABLE,
+                                        option,
+                                        plan_strs))) {
+      LOG_WARN("failed to store sql plan", K(ret));
+    }
+    OPT_TRACE_TITLE("Query Plan");
+    new_line();
+    append_ptr(plan_top);
     for (int64_t i = 0; OB_SUCC(ret) && i < plan_strs.count(); ++i) {
       if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
@@ -681,8 +663,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
       new_line();
       append("tables:", join_path->right_path_->parent_);
       new_line();
-      new_line();
       append_ptr(join_path->right_path_);
+      new_line();
       append("cost:", join_path->right_path_->cost_, ",card:", join_path->right_path_->parent_->get_output_rows(),
             ",width:", join_path->right_path_->parent_->get_output_row_size());
       new_line();
@@ -742,7 +724,7 @@ int ObOptimizerTraceImpl::append(const ObShardingInfo *info)
   } else {
     new_line();
     append("location type:", info->get_location_type());
-    append(", partion count:", info->get_part_cnt());
+    append(", partition count:", info->get_part_cnt());
   }
   return ret;
 }
@@ -863,9 +845,6 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     case ObSkylineDim::INDEX_BACK: {
       const ObIndexBackDim &index_dim = static_cast<const ObIndexBackDim &>(dim);
       append("[index back dim] need index back:", index_dim.need_index_back_);
-      append(", has interesting order:", index_dim.has_interesting_order_);
-      append(", can extract range:", index_dim.can_extract_range_);
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(index_dim.filter_column_ids_, index_dim.filter_column_cnt_));
       break;
     }
     case ObSkylineDim::INTERESTING_ORDER: {
@@ -886,6 +865,121 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     default: {
       append("unknown dim");
       break;
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObNewRange &range)
+{
+  int ret = OB_SUCCESS;
+  char buf[1024] = {0};
+  int64_t length = 1024;
+  length = range.to_plain_string(buf, length);
+  ret = log_handle_.append(buf, length);
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObOptTabletLoc& tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append("(partition id:", tablet_loc.get_partition_id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (tablet_loc.get_first_level_part_id() >= 0 &&
+             OB_FAIL(append(", first level partition id:", tablet_loc.get_first_level_part_id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(", tablet id:"))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(tablet_loc.get_tablet_id().id()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(append(")"))) {
+    LOG_WARN("failed to append", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObCandiTabletLoc& candi_tablet_loc)
+{
+  return append(candi_tablet_loc.get_partition_location());
+}
+
+int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<obrpc::ObEstPartArgElement> &params = task.arg_.index_params_;
+  const ObIArray<obrpc::ObEstPartResElement> &res = task.res_.index_param_res_;
+  int64_t cnt = MIN(params.count(), res.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i ++) {
+    const ObIArray<ObEstRowCountRecord> &est_records = res.at(i).est_records_;
+    if (i != 0 && OB_FAIL(new_line())) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append("( index", params.at(i).index_id_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(", tablet", params.at(i).tablet_id_.id()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (ObSimpleBatch::T_SCAN == params.at(i).batch_.type_ &&
+               NULL != params.at(i).batch_.range_ &&
+               OB_FAIL(append(", range", *params.at(i).batch_.range_))) {
+      LOG_WARN("failed to append");
+    } else if (OB_FAIL(append(") logical rows:", res.at(i).logical_row_count_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(", physical rows:", res.at(i).physical_row_count_))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!res.at(i).reliable_ && OB_FAIL(append(" [NOT RELIABLE]"))) {
+      LOG_WARN("failed to append", K(ret));
+    }
+    increase_section();
+    for (int64_t j = 0; OB_SUCC(ret) && j < est_records.count(); j ++) {
+      const ObEstRowCountRecord &record = est_records.at(j);
+      if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append("table type:", record.table_type_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", version:", record.version_range_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", logical rows:", record.logical_row_count_))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(append(", physical rows:", record.physical_row_count_))) {
+        LOG_WARN("failed to append", K(ret));
+      }
+    }
+    decrease_section();
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObTabletID& id)
+{
+  return append(id.id());
+}
+
+int ObOptimizerTraceImpl::append(const ObVersionRange& version_range)
+{
+  return append_format<128>("%ld-%ld-%ld",
+                            version_range.base_version_,
+                            version_range.multi_version_start_,
+                            version_range.snapshot_version_);
+}
+
+template <>
+int ObOptimizerTraceImpl::append<ObDSResultItem>(const ObIArrayWrap<ObDSResultItem>& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i)))) {
+    } else if (OB_FAIL(new_line())) {
+    }
+  }
+  return ret;
+}
+
+template <>
+int ObOptimizerTraceImpl::append<ColumnItem>(const ObIArrayWrap<ColumnItem>& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i).column_name_))) {
+    } else if (i > 0 && OB_FAIL(new_line())) {
     }
   }
   return ret;
@@ -994,6 +1088,8 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(append("rows:",
                                 table_meta->get_rows(),
+                                "base rows:",
+                                table_meta->get_base_rows(),
                                 "statis type:",
                                 table_meta->use_default_stat() ? "DEFAULT" : "OPTIMIZER",
                                 "version:",
@@ -1002,6 +1098,10 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
       } else if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(append("used partitions:", table_meta->get_all_used_parts()))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("normal stat partitions:", table_meta->get_stat_parts()))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("histogram stat partitions:", table_meta->get_hist_parts()))) {
         LOG_WARN("failed to append msg", K(ret));
       } else if (OB_FAIL(new_line())) {
         LOG_WARN("failed to append msg", K(ret));
@@ -1019,6 +1119,10 @@ int ObOptimizerTraceImpl::trace_static(const ObDMLStmt *stmt, OptTableMetas &tab
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(append("NDV:", col_meta->get_ndv()))) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(new_line())) {
+          LOG_WARN("failed to append msg", K(ret));
+        } else if (OB_FAIL(append("BASE NDV:", col_meta->get_base_ndv()))) {
           LOG_WARN("failed to append msg", K(ret));
         } else if (OB_FAIL(new_line())) {
           LOG_WARN("failed to append msg", K(ret));

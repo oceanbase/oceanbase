@@ -231,7 +231,7 @@ int ObTableLockDetectFuncList::get_active_server_session_list_(const int64_t &cl
       } else if (!is_online) {
         all_alive = false;
         break;
-      } else if (!server_addr.set_ip_addr(to_cstring(svr_ip), svr_port)) {
+      } else if (!server_addr.set_ip_addr(svr_ip, svr_port)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("set svr_addr failed", K(svr_ip), K(svr_port));
       } else if (OB_FAIL(server_session_list.push_back(ObTuple<ObAddr, int64_t>(server_addr, session_id)))) {
@@ -254,14 +254,15 @@ int ObTableLockDetectFuncList::check_server_is_online_(const ObString &svr_ip, c
         databuff_printf(where_cond,
                         512,
                         "WHERE (svr_ip, svr_port) IN (SELECT u.svr_ip, u.svr_port FROM %s.%s AS u JOIN %s.%s AS r on "
-                        "r.resource_pool_id = u.resource_pool_id WHERE tenant_id = %ld) and svr_ip = '%s' and svr_port "
+                        "r.resource_pool_id = u.resource_pool_id WHERE tenant_id = %ld) and svr_ip = '%.*s' and svr_port "
                         "= %ld and status = 'active'",
                         OB_SYS_DATABASE_NAME,
                         OB_ALL_UNIT_TNAME,
                         OB_SYS_DATABASE_NAME,
                         OB_ALL_RESOURCE_POOL_TNAME,
                         MTL_ID(),
-                        to_cstring(svr_ip),
+                        svr_ip.length(),
+                        svr_ip.ptr(),
                         svr_port))) {
     LOG_WARN("generate where condition for select sql failed", K(svr_ip), K(svr_port));
   } else if (OB_FAIL(databuff_printf(

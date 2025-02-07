@@ -110,7 +110,7 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID 
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_append_row_time_us);
     row_.tablet_id_ = tablet_id;
     if (OB_FAIL(row_.external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                               param_.table_data_desc_.rowkey_column_num_, seq_no))) {
+                                               param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
       LOG_WARN("fail to from datums", KR(ret));
     } else if (OB_FAIL(external_writer_.write_item(row_))) {
       LOG_WARN("fail to write item", KR(ret));

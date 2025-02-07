@@ -17,8 +17,7 @@
 #include "lib/hash/ob_link_hashmap.h"           // ObLinkHashMap
 #include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "share/ob_ls_id.h"   // ObLSID
-#include "share/backup/ob_archive_struct.h"    // ObArchiveRoundState
-#include "share/backup/ob_archive_struct.h"        // ObLSArchivePersistInfo
+#include "share/backup/ob_archive_struct.h"    // ObArchiveRoundState ObLSArchivePersistInfo
 #include "share/backup/ob_archive_persist_helper.h"
 #include "ob_archive_define.h"                      // ArchiveKey
 

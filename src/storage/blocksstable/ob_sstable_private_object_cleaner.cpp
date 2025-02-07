@@ -101,9 +101,7 @@ void ObSSTablePrivateObjectCleaner::clean()
     if (new_macro_block_ids_.count() == 0) {
       // do nothing.
     } else if (OB_FAIL(MTL(ObTenantFileManager*)->delete_files(new_macro_block_ids_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("fail to clean in sstable private object cleaner", K(ret),
-                KP(this), K(new_macro_block_ids_.count()), K(common::lbt()));
+      LOG_WARN("fail to clean in sstable private object cleaner", K(ret), KP(this), K(new_macro_block_ids_.count()));
     }
   }
 #endif

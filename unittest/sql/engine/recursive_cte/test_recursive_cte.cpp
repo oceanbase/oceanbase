@@ -51,12 +51,14 @@ public:
 			while(j < _count && (OB_SUCCESS == (ret = op.get_next_row(_ctx, result_row)))) {
 				j++;
 				const ObNewRow *except_row = NULL;
-				//printf("row=%s\n", to_cstring(*result_row));
+        //ObCStringHelper helper;
+				//printf("row=%s\n", helper.convert(*result_row));
 				ASSERT_EQ(OB_SUCCESS, _result_table.get_next_row(_ctx, except_row));
-				//printf("except_row=%s\n", to_cstring(*except_row));
+				//printf("except_row=%s\n", helper.convert(*except_row));
 				ASSERT_TRUE(except_row->count_ == result_row->count_);
 				/*for (int64_t i = start_idx; i < end_idx; ++i) {
-					printf("index=%ld, cell=%s, respect_cell=%s\n", i, to_cstring(result_row->cells_[i]), to_cstring(except_row->cells_[i]));
+          helper.reset();
+					printf("index=%ld, cell=%s, respect_cell=%s\n", i, helper.convert(result_row->cells_[i]), helper.convert(except_row->cells_[i]));
 					ASSERT_TRUE(0 == except_row->cells_[i].compare(result_row->cells_[i], collation));
 				}*/
 				result_row = NULL;

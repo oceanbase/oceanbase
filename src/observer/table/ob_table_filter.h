@@ -48,6 +48,7 @@ public:
                          const common::ObNewRow &row,
                          hfilter::CompareOperator compare_op,
                          int &cmp_ret) override;
+  OB_INLINE const common::ObString& get_column_name() const { return column_name_; }
   VIRTUAL_TO_STRING_KV("comprable", "ObTableComparator");
 private:
   ObString column_name_;
@@ -68,6 +69,8 @@ public:
   virtual int filter_row(const ObIArray<ObString> &select_columns,
                          const common::ObNewRow &row,
                          bool &filtered) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "ObTableCompareFilter",
                "cmp_op", hfilter::FilterBase::compare_operator_to_string(cmp_op_),
                "comparator", comparator_);
@@ -88,6 +91,7 @@ public:
   virtual int filter_row(const ObIArray<ObString> &select_columns,
                          const common::ObNewRow &row,
                          bool &filtered) override;
+  virtual const char *filter_name() const override { return "ObTableFilterListAnd"; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableFilterListAnd);
@@ -104,6 +108,7 @@ public:
   virtual int filter_row(const ObIArray<ObString> &select_columns,
                          const common::ObNewRow &row,
                          bool &filtered) override;
+  virtual const char *filter_name() const override { return "ObTableFilterListOr"; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableFilterListOr);
@@ -131,20 +136,29 @@ class ObTableQueryResultIterator
 public:
   ObTableQueryResultIterator(const ObTableQuery *query = nullptr)
       : query_(query),
-        is_query_async_(false)
+        is_query_async_(false),
+        filter_(nullptr)
   {
   }
   virtual ~ObTableQueryResultIterator() {}
   virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
+  virtual int get_next_result(table::ObTableQueryIterableResult *&one_result) = 0;
   virtual bool has_more_result() const = 0;
-  virtual void set_one_result(ObTableQueryResult *result){ UNUSED(result); }
+  virtual void set_one_result(ObTableQueryResult *result) { UNUSED(result); }
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) = 0;
   virtual ObTableQueryResult *get_one_result() { return nullptr; }
   virtual void set_query(const ObTableQuery *query) { query_ = query; };
   virtual void set_query_async() { is_query_async_ = true; }
+  virtual void set_filter(hfilter::Filter *filter) { filter_ = filter; }
+  virtual hfilter::Filter *get_filter() const { return filter_; }
+
+  TO_STRING_KV(KP_(query),
+              K_(is_query_async),
+              KP_(filter));
 protected:
   const ObTableQuery *query_;
   bool is_query_async_;
+  hfilter::Filter *filter_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryResultIterator);
 };
@@ -170,6 +184,7 @@ public:
   }
   virtual ~ObNormalTableQueryResultIterator() {}
   virtual int get_next_result(table::ObTableQueryResult *&one_result) override;
+
   virtual bool has_more_result() const override;
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
   {
@@ -184,6 +199,8 @@ public:
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
   inline void set_limit(int32_t limit) { limit_ = limit; }
   inline void set_offset(int32_t offset) { offset_ = offset; }
+private:
+  virtual int get_next_result(ObTableQueryIterableResult *& one_result) override { return OB_NOT_SUPPORTED; }
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
@@ -208,7 +225,6 @@ public:
       one_result_(&one_result),
       scan_result_(NULL),
       last_row_(NULL),
-      tfilter_(NULL),
       batch_size_(query.get_batch()),
       max_result_size_(std::min(query.get_max_result_size(),
                         static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
@@ -235,12 +251,12 @@ public:
   int init_full_column_name(const ObIArray<ObString>& col_arr);
 private:
   int check_limit_param();
+  virtual int get_next_result(ObTableQueryIterableResult *&next_result) override { return OB_NOT_SUPPORTED; }
 private:
   table::ObTableQueryResult *one_result_;
   table::ObTableApiScanRowIterator *scan_result_;
   common::ObNewRow *last_row_;
   ObTableFilterParser filter_parser_;
-  hfilter::Filter *tfilter_;
   int32_t batch_size_;
   int64_t max_result_size_;
   bool is_first_result_;

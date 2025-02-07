@@ -118,6 +118,9 @@ OB_INLINE int ObContinuousFormat::from_rows(const sql::RowMeta &row_meta,
   int ret = OB_SUCCESS;
   // TODO shengle may can opt by prefect and has_null specialize
   for (int64_t i = 0; i < size; i++) {
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     if (stored_rows[i]->is_null(col_idx)) {
       set_null(i);
     } else {
@@ -138,6 +141,9 @@ OB_INLINE int ObContinuousFormat::from_rows(const sql::RowMeta &row_meta,
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < size; i++) {
+    if (nullptr == stored_rows[i]) {
+      continue;
+    }
     int64_t row_idx = selector[i];
     if (stored_rows[i]->is_null(col_idx)) {
       set_null(row_idx);

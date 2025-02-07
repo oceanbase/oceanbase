@@ -1,3 +1,6 @@
+// owner: handora.qc
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -135,7 +138,9 @@ int ObStorageTableGuard::refresh_and_protect_memtable_for_write(ObRelativeTable 
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
-        relative_table.allow_not_ready()))) {
+        relative_table.allow_not_ready(),
+        true/*need_split_src_table*/,
+        false/*need_split_dst_table*/))) {
       TRANS_LOG(WARN, "fail to get", K(store_ctx_.mvcc_acc_ctx_.tx_id_), K(ret));
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard

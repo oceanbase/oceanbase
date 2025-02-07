@@ -46,6 +46,7 @@ namespace storage
 class ObLsmtTransNode;
 class ObFreezer;
 class ObExtInfoCallback;
+class ObExtInfoLogHeader;
 }
 
 using namespace transaction::tablelock;
@@ -176,10 +177,11 @@ public:
   int register_ext_info_commit_cb(
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
-      transaction::ObTxDesc *tx_desc,
-      transaction::ObTxSEQ &parent_seq_no,
-      blocksstable::ObStorageDatum &index_data,
-      ObObjType &type,
+      const transaction::ObTxSEQ &seq_no_st,
+      const int64_t seq_no_cnt,
+      const ObString &index_data,
+      const ObObjType index_data_type,
+      const storage::ObExtInfoLogHeader &header,
       ObObj &ext_info_data);
 public:
   virtual void reset()
@@ -202,19 +204,18 @@ public:
         "alloc_type=%d "
         "ctx_descriptor=%u "
         "min_table_version=%ld "
-        "max_table_version=%ld "
-        "trans_version=%s "
-        "commit_version=%s "
-        "lock_wait_start_ts=%ld "
-        "replay_compact_version=%s}",
+        "max_table_version=%ld trans_version=",
         alloc_type_,
         ctx_descriptor_,
         min_table_version_,
-        max_table_version_,
-        to_cstring(trans_version_),
-        to_cstring(commit_version_),
-        lock_wait_start_ts_,
-        to_cstring(replay_compact_version_));
+        max_table_version_);
+    common::databuff_printf(buf, buf_len, pos, trans_version_);
+    common::databuff_printf(buf, buf_len, pos, " commit_version=");
+    common::databuff_printf(buf, buf_len, pos, commit_version_);
+    common::databuff_printf(buf, buf_len, pos, " lock_wait_start_ts=%ld replay_compact_version=",
+        lock_wait_start_ts_);
+    common::databuff_printf(buf, buf_len, pos, replay_compact_version_);
+    common::databuff_printf(buf, buf_len, pos, "}");
     return pos;
   }
 public:

@@ -18,7 +18,7 @@ cd ${TOP_DIR}
 ./build.sh clean
 ./build.sh                  \
     rpm                     \
-    -DOB_BUILD_CDC=ON       \
+    -DBUILD_CDC_ONLY=ON     \
     -DOB_RELEASEID=$RELEASE \
     -DBUILD_NUMBER=$RELEASE \
     ${OB_DISABLE_LSE_OPTION}\

@@ -122,6 +122,7 @@ public:
   virtual int64_t get_schema_rowkey_count() const = 0;
   virtual int64_t get_rowkey_count() const = 0;
   virtual int64_t get_group_idx_col_index() const = 0;
+  virtual int64_t get_mview_old_new_col_index() const = 0;
   virtual int64_t get_max_col_index() const = 0;
   virtual int64_t get_trans_col_index() const = 0;
   virtual const common::ObIArray<ObColDesc> &get_columns_desc() const = 0;
@@ -147,7 +148,8 @@ public:
       is_oracle_mode_(false),
       allocator_(nullptr),
       schema_column_count_(0),
-      compat_version_(READ_INFO_VERSION_V2),
+      compat_version_(READ_INFO_VERSION_V3),
+      is_cs_replica_compat_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
@@ -182,6 +184,10 @@ public:
   { return memtable_cols_index_; }
   OB_INLINE virtual const blocksstable::ObStorageDatumUtils &get_datum_utils() const override { return datum_utils_; }
   OB_INLINE virtual int64_t get_group_idx_col_index() const override
+  {
+    return OB_INVALID_INDEX;
+  }
+  OB_INLINE virtual int64_t get_mview_old_new_col_index() const override
   {
     return OB_INVALID_INDEX;
   }
@@ -225,6 +231,7 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise all column group");
     return false;
   }
+  OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
                                 const ObColDesc &desc,
@@ -232,15 +239,20 @@ public:
   void init_basic_info(const int64_t schema_column_count,
                        const int64_t schema_rowkey_cnt,
                        const bool is_oracle_mode,
-                       const bool is_cg_sstable);
+                       const bool is_cg_sstable,
+                       const bool is_cs_replica_compat);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
   int init_compat_version();
 protected:
-  const int64_t READ_INFO_VERSION_V0 = 0;
-  const int64_t READ_INFO_VERSION_V1 = 1;
-  const int64_t READ_INFO_VERSION_V2 = 2;
+  static const int64_t READ_INFO_VERSION_V0 = 0;
+  static const int64_t READ_INFO_VERSION_V1 = 1;
+  static const int64_t READ_INFO_VERSION_V2 = 2;
+  static const int64_t READ_INFO_VERSION_V3 = 3;
+  static const int32_t READ_INFO_ONE_BIT = 1;
+  static const int32_t READ_INFO_RESERVED_BITS = 15;
+
   bool is_inited_;
   bool is_oracle_mode_;
   ObIAllocator *allocator_;
@@ -250,7 +262,8 @@ protected:
     struct {
       uint32_t schema_column_count_;
       uint16_t compat_version_;
-      uint16_t reserved_;
+      uint16_t is_cs_replica_compat_ : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t reserved_             : READ_INFO_RESERVED_BITS;
     };
   };
   int64_t schema_rowkey_cnt_;
@@ -307,6 +320,8 @@ public:
   { return trans_col_index_; }
   OB_INLINE int64_t get_group_idx_col_index() const
   { return group_idx_col_index_; }
+  OB_INLINE int64_t get_mview_old_new_col_index() const
+  { return mview_old_new_col_index_; }
   OB_INLINE int64_t get_seq_read_column_count() const
   { return seq_read_column_count_; }
   virtual const common::ObIArray<ObColumnParam *> *get_columns() const
@@ -364,6 +379,7 @@ private:
   // distinguish schema changed by schema column count
   int64_t trans_col_index_;
   int64_t group_idx_col_index_;
+  int64_t mview_old_new_col_index_;
   // the count of common prefix between request columns and store columns
   int64_t seq_read_column_count_;
   int64_t max_col_index_;
@@ -387,7 +403,8 @@ public:
       const bool is_oracle_mode,
       const common::ObIArray<ObColDesc> &rowkey_col_descs,
       const bool is_cg_sstable = false,
-      const bool use_default_compat_version = false);
+      const bool use_default_compat_version = false,
+      const bool is_cs_replica_compat = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
@@ -466,6 +483,10 @@ public:
   {
     return OB_INVALID_INDEX;
   }
+  OB_INLINE virtual int64_t get_mview_old_new_col_index() const override
+  {
+    return OB_INVALID_INDEX;
+  }
   virtual int64_t get_max_col_index() const
   {
     OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise max col index");
@@ -522,6 +543,10 @@ public:
   virtual int64_t get_schema_rowkey_count() const override { return rowkey_read_info_.get_schema_rowkey_count(); }
   virtual int64_t get_rowkey_count() const override { return rowkey_read_info_.get_rowkey_count(); }
   virtual int64_t get_group_idx_col_index() const override
+  {
+    return OB_INVALID_INDEX;
+  }
+  OB_INLINE virtual int64_t get_mview_old_new_col_index() const override
   {
     return OB_INVALID_INDEX;
   }

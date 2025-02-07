@@ -30,6 +30,7 @@
 #include "slog_tool/ob_admin_slog_executor.h"
 #include "io_bench/ob_admin_io_adapter_bench.h"
 #include "io_device/ob_admin_test_io_device_executor.h"
+#include "object_storage_driver_quality/ob_admin_object_storage_driver_quality.h"
 #include "lib/utility/ob_print_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "tools/ob_admin/shared_storage_tool/ob_admin_shared_storage_tool_executor.h"
@@ -76,10 +77,17 @@ int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
     int64_t ob_admin_log_dir_len = 0;
     bool is_directory = false;
     if (NULL == ob_admin_log_dir) {
-      fprintf(stderr, "\nThe OB_ADMIN_LOG_DIR environment variable not found, we will not generate ob_admin.log\n"
-                      "If log files are required, please notice that log files should not be outputted to\n"
-                      "OceanBase's clog directory.(for example, export OB_ADMIN_LOG_DIR=/tmp)\n");
-      ret = OB_ENTRY_NOT_EXIST;
+      // to improve the readability of the ob_admin results, the default path of log is set to /dev/null.
+      // and prompts the user to set the path manually when logging is required.
+      if (OB_FAIL(databuff_printf(log_file_name, log_file_name_len, "/dev/null"))) {
+        fprintf(stderr, "\nUnexpected error, databuff_printf failed\n");
+      } else if (OB_FAIL(databuff_printf(log_file_rs_name, log_file_rs_name_len, "/dev/null"))) {
+        fprintf(stderr, "\nUnexpected error, databuff_printf failed\n");
+      } else {
+        fprintf(stderr, "\033[1;33m[NOTICE]\033[m If specific log is required, you need to set the environment variable OB_ADMIN_LOG_DIR.\n"
+                        "         for example: export OB_ADMIN_LOG_DIR=~/.ob_admin_log\n"
+                        "         please notice that log files should not be outputted to OceanBase's clog directory.\n");
+      }
     } else if (FALSE_IT(ob_admin_log_dir_len = strlen(ob_admin_log_dir))) {
     } else if (OB_FAIL(FileDirectoryUtils::is_directory(ob_admin_log_dir, is_directory))) {
       fprintf(stderr, "\nCheck is_directory failed, we will not generate ob_admin.log(errno:%d)\n", ret);
@@ -155,6 +163,8 @@ int main(int argc, char *argv[])
       executor = new ObAdminIOAdapterBenchmarkExecutor();
     } else if (0 == strcmp("test_io_device", argv[1])) {
       executor = new ObAdminTestIODeviceExecutor();
+    } else if (0 == strcmp("io_driver_quality", argv[1])) {
+      executor = new ObAdminObjectStorageDriverQualityExecutor();
     } else if (0 == strncmp("-h", argv[1], 2) || 0 == strncmp("-S", argv[1], 2)) {
       executor = new ObAdminServerExecutor();
     } else {

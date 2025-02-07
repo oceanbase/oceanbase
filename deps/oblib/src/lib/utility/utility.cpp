@@ -14,6 +14,7 @@
 
 #include "dirent.h"
 #include <dlfcn.h>
+#include <gnu/libc-version.h>
 #include "lib/utility/utility.h"
 #include "lib/ob_define.h"
 #include "util/easy_inet.h"
@@ -26,6 +27,7 @@
 #include "common/object/ob_object.h"
 #include "lib/net/ob_addr.h"
 #include "lib/json/ob_yson.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -365,24 +367,26 @@ const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip)
   return buffer;
 }
 
-const char *time2str(const int64_t time_us, const char *format)
+const char *time2str(const int64_t time_us, char *buf, const int64_t buf_len, const char *format)
 {
-  // FIXME: To Be Removed
-  static const int32_t BUFFER_SIZE = 256;
-  thread_local char buffer[4 * BUFFER_SIZE];
-  RLOCAL(uint64_t, i);
-  uint64_t cur = i++ % 4;
-  buffer[cur * BUFFER_SIZE] = '\0';
-  struct tm time_struct;
-  int64_t time_s = time_us / 1000000;
-  int64_t cur_second_time_us = time_us % 1000000;
-  if (NULL != localtime_r(&time_s, &time_struct)) {
-    int64_t pos = strftime(&buffer[cur * BUFFER_SIZE], BUFFER_SIZE, format, &time_struct);
-    if (pos < BUFFER_SIZE) {
-      IGNORE_RETURN snprintf(&buffer[cur * BUFFER_SIZE + pos], BUFFER_SIZE - pos, ".%ld %ld", cur_second_time_us, time_us);
+  if (nullptr != buf && buf_len > 0) {
+    struct tm time_struct;
+    int64_t time_s = time_us / 1000000;
+    int64_t cur_second_time_us = time_us % 1000000;
+    if (nullptr != localtime_r(&time_s, &time_struct)) {
+      int64_t pos = strftime(buf, buf_len, format, &time_struct);
+      // since libc 4.4.4, strftime returns 0 if failed
+      if (pos > 0) {
+        // 25 = 1(.) + 6(cur_second_time_u) + 1(' ') + 16(time_us) + 1('\0')
+        if (pos <= buf_len - 25) {
+          IGNORE_RETURN snprintf(buf + pos, buf_len - pos, ".%ld %ld", cur_second_time_us, time_us);
+        }
+      } else {
+        buf[0] = '\0';
+      }
     }
   }
-  return &buffer[cur * BUFFER_SIZE];
+  return buf;
 }
 
 void print_rowkey(FILE *fd, ObString &rowkey)
@@ -599,7 +603,7 @@ int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst)
     if (size > 0) {
       if (NULL == (buf = static_cast<char *>(allocator.alloc(size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("Fail to allocate memory, ", K(size), K(ret));
+        LOG_WARN("Fail to allocate memory, ", K(size), K(ret));
       } else if (OB_FAIL(dst.deep_copy(src, buf, size, pos))){
         LOG_WARN("Fail to deep copy obj, ", K(ret));
       } else { }//do nothing
@@ -1989,6 +1993,24 @@ int64_t parse_config_capacity(const char *str, bool &valid, bool check_unit /* =
     }
   }
   return value;
+}
+
+void get_glibc_version(int &major, int &minor)
+{
+  major = 0;
+  minor = 0;
+  const char *glibc_version = gnu_get_libc_version();
+  if (NULL != glibc_version) {
+    sscanf(glibc_version, "%d.%d", &major, &minor);
+  }
+}
+
+bool glibc_prereq(int major, int minor)
+{
+  int cur_major = 0;
+  int cur_minor = 0;
+  get_glibc_version(cur_major, cur_minor);
+  return (cur_major > major) || (cur_major == major && cur_minor >= minor);
 }
 
 } // end namespace common

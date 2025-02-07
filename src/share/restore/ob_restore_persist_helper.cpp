@@ -744,7 +744,7 @@ int ObRestorePersistHelper::get_restore_process(
   return ret;
 }
 
-int ObRestorePersistHelper::update_restore_process(
+int ObRestorePersistHelper::update_restore_progress_by_tablet_cnt(
     common::ObISQLClient &proxy,
     const ObRestoreJobPersistKey &key,
     const int64_t total_tablet_cnt,
@@ -766,6 +766,30 @@ int ObRestorePersistHelper::update_restore_process(
   }
   return ret;
 }
+
+int ObRestorePersistHelper::update_restore_progress_by_bytes(
+    common::ObISQLClient &proxy,
+    const ObRestoreJobPersistKey &key,
+    const int64_t total_bytes,
+    const int64_t finish_bytes) const
+{
+  int ret = OB_SUCCESS;
+  ObInnerTableOperator table_op;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(table_op.init(OB_ALL_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init restore progress table", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("total_bytes=%ld, finish_bytes=%ld", total_bytes, finish_bytes))) {
+    LOG_WARN("fail to assign sql", K(ret));
+  } else if (OB_FAIL(table_op.update_column(proxy, key, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to update restore progress", K(ret), K(key));
+  }
+  return ret;
+}
+
 
   //__all_restore_job_history
 int ObRestorePersistHelper::insert_restore_job_history(
@@ -1381,5 +1405,85 @@ int ObRestorePersistHelper::get_backup_dest_list_from_restore_info(
       }
     }
   }
+  return ret;
+}
+
+int ObRestorePersistHelper::set_ls_total_bytes(
+    common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+    const int64_t total_bytes) const
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObInnerTableOperator ls_restore_progress_table_operator;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init ls restore progress table", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.update_int_column(proxy, ls_key, OB_STR_TOTAL_BYTES, total_bytes, affected_rows))) {
+    LOG_WARN("failed to set ls total tablet cnt", K(ret), K(ls_key));
+  }
+
+  return ret;
+}
+
+int ObRestorePersistHelper::get_ls_total_bytes(
+    common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+    int64_t &total_bytes) const
+{
+  int ret = OB_SUCCESS;
+  ObInnerTableOperator ls_restore_progress_table_operator;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init ls restore progress table", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.get_int_column(proxy, false /*need lock*/, ls_key, OB_STR_TOTAL_BYTES, total_bytes))) {
+    LOG_WARN("failed to get ls tablet cnt", K(ret), K(ls_key));
+  }
+
+  return ret;
+}
+
+int ObRestorePersistHelper::set_ls_finish_bytes(
+    common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
+    const int64_t finish_bytes) const
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObInnerTableOperator ls_restore_progress_table_operator;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init ls restore progress table", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.update_int_column(proxy, ls_key, OB_STR_FINISH_BYTES, finish_bytes, affected_rows))) {
+    LOG_WARN("failed to set ls finish tablet cnt", K(ret), K(ls_key));
+  }
+
+  return ret;
+}
+
+int ObRestorePersistHelper::increase_ls_finish_bytes_by(
+    common::ObISQLClient &proxy,
+    const ObLSRestoreJobPersistKey &ls_key,
+    const int64_t finish_bytes) const
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObInnerTableOperator ls_restore_progress_table_operator;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRestorePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
+    LOG_WARN("failed to init ls restore progress table", K(ret));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.increase_column_by(proxy, ls_key, OB_STR_FINISH_BYTES, finish_bytes, affected_rows))) {
+    LOG_WARN("failed to increase finish bytes in ls restore progress table", K(ret), K(ls_key), K(finish_bytes));
+  }
+
   return ret;
 }

@@ -92,6 +92,8 @@ int ObRecoverRestoreTableTask::init(const ObDDLTaskRecord &task_record)
 int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
+  int64_t new_fetched_snapshot = 0;
+  int64_t persisted_snapshot = 0;
   ObRootService *root_service = GCTX.root_service_;
   ObDDLTaskStatus new_status = ObDDLTaskStatus::OBTAIN_SNAPSHOT;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -101,24 +103,30 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (snapshot_version_ > 0) {
-    // do nothing, already hold snapshot.
-  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, snapshot_version_))) {
+    new_status = next_task_status; // to switch to the next status.
+  } else if (OB_FAIL(ObDDLUtil::calc_snapshot_with_gts(new_fetched_snapshot,
+                                                       dst_tenant_id_,
+                                                       task_id_,
+                                                       0/*trans_end_snapshot*/,
+                                                       0/*index_snapshot_version_diff*/))) {
     // fetch snapshot.
     LOG_WARN("calc snapshot with gts failed", K(ret), K(dst_tenant_id_));
-  } else if (snapshot_version_ <= 0) {
+  } else if (new_fetched_snapshot <= 0) {
     // the snapshot version obtained here must be valid.
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("snapshot version is invalid", K(ret), K(snapshot_version_));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(root_service->get_sql_proxy(),
+    LOG_WARN("snapshot version is invalid", K(ret), K(new_fetched_snapshot));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version_if_not_exist(root_service->get_sql_proxy(),
                                                                       dst_tenant_id_,
                                                                       task_id_,
-                                                                      snapshot_version_))) {
-    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(snapshot_version_));
+                                                                      new_fetched_snapshot,
+                                                                      persisted_snapshot))) {
+    LOG_WARN("update snapshot version failed", K(ret), K(dst_tenant_id_), K(task_id_), K(persisted_snapshot));
   }
 
   if (OB_FAIL(ret)) {
     snapshot_version_ = 0; // reset snapshot if failed.
-  } else {
+  } else if (snapshot_version_ <= 0) {
+    snapshot_version_ = persisted_snapshot > 0 ? persisted_snapshot : new_fetched_snapshot;
     new_status = next_task_status;
   }
   if (new_status == next_task_status || OB_FAIL(ret)) {
@@ -131,6 +139,7 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
 
 // update sstable complement status for all leaders
 int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                 const ObAddr &addr,
                                                                  const int64_t snapshot_version,
                                                                  const int64_t execution_id,
                                                                  const int ret_code,
@@ -147,10 +156,12 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id,
-                                                                ret_code,
-                                                                addition_info.row_scanned_,
-                                                                addition_info.row_inserted_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            addr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.physical_row_count_))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
   return ret;

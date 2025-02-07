@@ -474,6 +474,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
           CK (OB_NOT_NULL(params_.sql_proxy_));
           CK (OB_NOT_NULL(session_info_));
+          OX (pl_type.set_enum_set_ctx(&call_proc_info->get_enum_set_ctx()));
           OZ (pl::ObPLDataType::transform_from_iparam(param_info,
                                                       *(schema_checker_->get_schema_mgr()),
                                                       *(session_info_),
@@ -584,6 +585,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       OX (call_proc_info->get_stat_for_update().type_ = pl::ObPLCacheObjectType::CALL_STMT_TYPE);
       OX (call_proc_info->get_stat_for_update().compile_time_ = compile_end - compile_start);
       OX (call_proc_info->get_stat_for_update().raw_sql_ = params_.cur_sql_);
+      OX (session_info_->add_plsql_compile_time(compile_end - compile_start));
       OZ (add_call_proc_info(call_proc_info));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_dependency_table().count(); ++i) {

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_schema_utils.h"
-
 #include "lib/oblog/ob_log.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
@@ -26,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "share/ob_fts_index_builder_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -143,9 +143,9 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
       } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
         column.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
       } else if (T_FUN_SYS_JSON_QUERY == root_expr_type) {
-        if (strstr(col_def.ptr(), "multivalue)")) {
+        if (ObMulValueIndexBuilderUtil::is_multivalue_array_column(col_def)) {
           column.add_column_flag(MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG);
-        } else {
+        } else if (ObMulValueIndexBuilderUtil::is_multivalue_index_column(col_def)) {
           column.add_column_flag(MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG);
         }
       } else {
@@ -803,7 +803,6 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
       if (OB_ISNULL(rowkey_cg)) {
         ObColumnGroupSchema new_rowkey_cg;
         ObArray<uint64_t> rowkey_ids;
-        uint64_t rowkey_cg_id =  table_schema.get_max_used_column_group_id() + 1;
         ObTableSchema::const_column_iterator iter_begin = table_schema.column_begin();
         ObTableSchema::const_column_iterator iter_end = table_schema.column_end();
         for (; OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
@@ -817,7 +816,14 @@ int ObSchemaUtils::alter_rowkey_column_group(share::schema::ObTableSchema &table
             }
           }
         }
-
+        int tmp_ret = OB_SUCCESS;
+        uint64_t rowkey_cg_id = ROWKEY_COLUMN_GROUP_ID;
+#ifdef ERRSIM
+        tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+        if (OB_TMP_FAIL(tmp_ret)) {
+          rowkey_cg_id = table_schema.get_max_used_column_group_id() + 1;
+        }
+#endif
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObSchemaUtils::build_column_group(
                                table_schema, table_schema.get_tenant_id(),ObColumnGroupType::ROWKEY_COLUMN_GROUP,
@@ -956,7 +962,8 @@ int ObSchemaUtils::alter_default_column_group(share::schema::ObTableSchema &new_
         /*default cg check, used when only support all/each column group*/
         if (OB_SUCC(ret) && default_cg->get_column_id_count() != 0 && default_cg->get_column_id_count() != col_ids.count()) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default column group have invalid column id count", K(ret), KPC(default_cg));
+          LOG_WARN("default column group have invalid column id count", KR(ret), K(col_ids),
+                   K(default_cg->get_column_ids()), KPC(default_cg));
         }
       }
     }
@@ -988,7 +995,14 @@ int ObSchemaUtils::build_add_each_column_group(const share::schema::ObTableSchem
       for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
         column_group_schema.reset();
         ObColumnSchemaV2 *column = (*iter_begin);
-        uint64_t cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
+        int tmp_ret = OB_SUCCESS;
+        uint64_t cg_id = dst_table_schema.get_next_single_column_group_id();
+#ifdef ERRSIM
+        tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+        if (OB_TMP_FAIL(tmp_ret)) {
+          cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
+        }
+#endif
         if (OB_ISNULL(column)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column schema should not be null", K(ret));
@@ -1074,14 +1088,12 @@ int ObSchemaUtils::build_all_column_group(
         LOG_WARN("fail to push back value", K(ret));
       }
     }
-
     if (OB_FAIL(ret)) {
     } else {
       const ObString cg_name = OB_ALL_COLUMN_GROUP_NAME;
       if (column_ids.count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("number of available columns should not be zeror", K(ret));
-
       } else if (OB_FAIL(build_column_group(table_schema, tenant_id,
                                             ObColumnGroupType::ALL_COLUMN_GROUP, cg_name,
                                             column_ids, column_group_id, column_group_schema))) {
@@ -1324,12 +1336,20 @@ int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schem
   }
   return ret;
 }
+
 const char* DDLType[]
 {
   "TRUNCATE_TABLE",
   "SET_COMMENT",
   "CREATE_INDEX",
-  "CREATE_VIEW"
+  "CREATE_VIEW",
+  "DROP_TABLE"
+};
+
+const char* NOT_SUPPORT_DDLType[]
+{
+  "CREATE_VIEW",
+  "DROP_TABLE"
 };
 
 int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)
@@ -1449,14 +1469,25 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
 {
   int ret = OB_SUCCESS;
   int ddl_type_size = ARRAYSIZEOF(DDLType);
-  for (int i = 0; OB_SUCC(ret) && i < (ddl_type_size - 1); ++i) {
-    if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
+  int not_support_ddl_size = ARRAYSIZEOF(NOT_SUPPORT_DDLType);
+  config_value.reset();
+  for (int i = 0; OB_SUCC(ret) && i < ddl_type_size; ++i) {
+    ObString tmp_str = DDLType[i];
+    bool not_support = false;
+    for (int j = 0; OB_SUCC(ret) && j < not_support_ddl_size; ++j) {
+      if (tmp_str.case_compare(NOT_SUPPORT_DDLType[j]) == 0) {
+        not_support = true;
+        break;
+      }
+    }
+    if (not_support) {
+      continue;
+    } else if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
       LOG_WARN("fail to append fmt", KR(ret), K(i));
     }
   }
-  if ((ddl_type_size > 0)
-      && FAILEDx(config_value.append_fmt("%s:ON", DDLType[ddl_type_size - 1]))) {
-    LOG_WARN("fail to append fmt", KR(ret), K(ddl_type_size));
+  if (config_value.is_valid()) {
+    config_value.set_length(config_value.length()-2);
   }
   return ret;
 }

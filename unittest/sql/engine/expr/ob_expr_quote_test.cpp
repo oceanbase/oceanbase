@@ -90,7 +90,8 @@ void ObExprQuoteTest::TearDown() {}
  ref.set_##ref_type(ref_value); \
  ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);      \
  int err = str_op_object.func(r, t1, expr_ctx); \
- _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+ ObCStringHelper helper; \
+ _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
  EXPECT_TRUE(OB_SUCCESS == err); \
  ASSERT_TRUE(ref.get_type() == r.get_type()); \
  if (ref.get_type() != ObNullType) \

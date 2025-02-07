@@ -65,8 +65,8 @@ int ObPxAdmission::get_parallel_session_target(ObSQLSessionInfo &session,
 //
 //   推论：一个需要**过量**线程的请求，只会在系统空闲下来之后才会被调度
 int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
-                             int64_t wait_time_us, int64_t session_target,
-                             ObHashMap<ObAddr, int64_t> &worker_map,
+                             int64_t wait_time_us, int64_t minimal_px_worker_count,
+                             int64_t &session_target, ObHashMap<ObAddr, int64_t> &worker_map,
                              int64_t req_cnt, int64_t &admit_cnt)
 {
   int ret = OB_SUCCESS;
@@ -95,11 +95,16 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
         // fake one retry record, not really a query retry
         session.get_retry_info_for_update().set_last_query_retry_err(OB_ERR_INSUFFICIENT_PX_WORKER);
       }
-      need_retry = true;
+      // parallel server target may changed
+      if (OB_FAIL(get_parallel_session_target(session, minimal_px_worker_count, session_target))) {
+        LOG_WARN("fail get session target", K(ret));
+      } else {
+        need_retry = true;
+      }
     } else {
       need_retry = false;
     }
-  } while (need_retry);
+  } while (need_retry && OB_SUCC(ret));
   return ret;
 }
 
@@ -147,13 +152,16 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       } else if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("fail check query status", K(ret));
       } else if (OB_FAIL(ObPxAdmission::admit(session, exec_ctx,
-                                              wait_time_us, session_target,
+                                              wait_time_us, minimal_px_worker_count, session_target,
                                               acl_px_worker_map, req_worker_count, admit_worker_count))) {
         LOG_WARN("fail do px admission",
                 K(ret), K(wait_time_us), K(session_target));
       } else if (admit_worker_count <= 0) {
         plan.inc_delayed_px_querys();
         ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, plan.get_px_dop());
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, req_worker_count);
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, admit_worker_count);
         LOG_INFO("This query is out of px worker resources and needs to be delayed; "
                 "disconnection is unnecessary.",
                 K(admit_worker_count),
@@ -175,6 +183,18 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
         }
         LOG_TRACE("PX admission set the plan worker count", K(req_worker_count), K(minimal_px_worker_count), K(admit_worker_count));
       }
+    }
+  }
+  if (stmt::T_EXPLAIN != stmt_type && plan.get_das_dop() > 0) {
+    int64_t minimal_px_worker_count = plan.get_minimal_worker_count();
+    int64_t parallel_servers_target = INT64_MAX;
+    if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(session.get_effective_tenant_id(),
+                                                             parallel_servers_target))) {
+      LOG_WARN("get parallel_servers_target failed", K(ret));
+    } else {
+      int64_t real_das_dop = std::min(parallel_servers_target, plan.get_das_dop());
+      exec_ctx.get_das_ctx().set_real_das_dop(real_das_dop);
+      LOG_TRACE("real das dop", K(real_das_dop), K(plan.get_das_dop()), K(parallel_servers_target));
     }
   }
   return ret;

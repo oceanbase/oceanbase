@@ -639,7 +639,8 @@ TEST_F(ObExprArithmaticTest, arithmatic_test)
       }
       if (!is_succ) {
         ++failed_count;
-        of_output<<line<<std::endl<<"# calculated:"<<to_cstring(res_calc_obj)<<std::endl;
+        ObCStringHelper helper;
+        of_output<<line<<std::endl<<"# calculated:"<<helper.convert(res_calc_obj)<<std::endl;
       }
     }
   }

@@ -36,7 +36,7 @@ public:
   ~ObExecFeedbackNode() {}
   TO_STRING_KV(K_(op_id), K_(output_row_count), K_(op_open_time),
                K_(op_close_time), K_(op_first_row_time), K_(op_last_row_time),
-               K_(db_time), K_(block_time));
+               K_(db_time), K_(block_time), K_(pdml_op_write_rows));
 public:
   int64_t op_id_;
   int64_t output_row_count_;

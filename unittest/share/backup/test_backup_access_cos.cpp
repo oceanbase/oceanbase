@@ -130,7 +130,7 @@ TEST_F(TestBackupIOAdapterAccessCos, test_basic_rw)
     ASSERT_EQ(5, read_size);
 
     offset = strlen(write_content);
-    ASSERT_EQ(OB_COS_ERROR,
+    ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR,
         adapter.read_part_file(uri, &cos_base, read_buf, sizeof(read_buf), offset, read_size,
                                ObStorageIdMod::get_default_id_mod()));
 

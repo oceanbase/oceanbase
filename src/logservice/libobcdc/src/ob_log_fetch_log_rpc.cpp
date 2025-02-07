@@ -66,14 +66,15 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
     const share::ObLSID &ls_id,
     const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
     const common::ObAddr &svr,
-    const int64_t timeout)
+    const int64_t timeout,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
 
   reset();
 
   // build request
-  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array))) {
+  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array, progress))) {
     LOG_ERROR("build request fail", KR(ret), K(tenant_id), K(ls_id));
   }
   // Send asynchronous fetch log RPC
@@ -103,7 +104,8 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
 int FetchLogSRpc::build_request_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array)
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -111,6 +113,7 @@ int FetchLogSRpc::build_request_(
   // Set request parameters
   req_.set_ls_id(ls_id);
   req_.set_client_pid(static_cast<uint64_t>(getpid()));
+  req_.set_progress(progress);
 
   ARRAY_FOREACH_N(miss_log_array, idx, count) {
     const ObCdcLSFetchMissLogReq::MissLogParam &miss_log_param = miss_log_array.at(idx);
@@ -198,8 +201,9 @@ void FetchLogSRpc::RpcCB::on_timeout()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   rcode.rcode_ = OB_TIMEOUT;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {
@@ -216,9 +220,10 @@ void FetchLogSRpc::RpcCB::on_invalid()
 
   // 遇到无效的包，decode失败
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {
@@ -889,8 +894,9 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     // Use the trace id of the request
     ObLogTraceIdGuard guard(rpc_req.get_trace_id());
 
+    ObCStringHelper helper;
     _LOG_DEBUG("launch async fetch log rpc by %s, request=%s",
-        launch_by_cb ? "callback" : "fetch stream", to_cstring(rpc_req));
+        launch_by_cb ? "callback" : "fetch stream", helper.convert(rpc_req));
 
     // The default setting is flyin before sending an asynchronous request
     // The reason for not setting it up after sending is that there is a concurrency problem after successful sending,
@@ -1138,8 +1144,9 @@ void FetchLogARpc::RpcCB::on_timeout()
   const common::ObAddr &svr = RpcCBBase::dst_;
 
   rcode.rcode_ = OB_TIMEOUT;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {
@@ -1156,9 +1163,10 @@ void FetchLogARpc::RpcCB::on_invalid()
 
   // Invalid package encountered, decode failed
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
+  ObCStringHelper helper;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
       "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
+      helper.convert(svr));
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {

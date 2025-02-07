@@ -239,8 +239,9 @@ int TransCtx::prepare(
         // The partition transaction is not serviced and the transaction context is discarded
         need_discard = true;
         state_ = TRANS_CTX_STATE_DISCARDED;
-        _TCTX_ISTAT("[DISCARD] TRANS_ID=%s PART=%s TRANS_CTX=%p", to_cstring(trans_id),
-            to_cstring(part_trans_task.get_tls_id()), this);
+        ObCStringHelper helper;
+        _TCTX_ISTAT("[DISCARD] TRANS_ID=%s PART=%s TRANS_CTX=%p", helper.convert(trans_id),
+            helper.convert(part_trans_task.get_tls_id()), this);
         // reset return value
         ret = OB_SUCCESS;
       } else if (OB_IN_STOP_STATE != ret) {
@@ -274,9 +275,10 @@ int TransCtx::add_participant(
   } else if (state_ >= TRANS_CTX_STATE_PARTICIPANT_READY) {
     // Participants have been added, no later arrivals will be served
     is_part_trans_served = false;
+    ObCStringHelper helper;
     _TCTX_DSTAT("[PART_NOT_SERVE] [DELAY_COMING] TRANS_ID=%s PART=%s "
         "LOG_LSN=%ld LOG_TSTAMP=%ld TRNAS_CTX_STATE=%s",
-        to_cstring(trans_id), to_cstring(part_trans_task.get_tls_id()),
+        helper.convert(trans_id), helper.convert(part_trans_task.get_tls_id()),
         part_trans_task.get_commit_log_lsn().val_, part_trans_task.get_commit_ts(),
         print_state());
   }
@@ -520,8 +522,9 @@ int TransCtx::add_ready_participant_(
             switch_state_(TRANS_CTX_STATE_PARTICIPANT_READY);
           }
 
+        ObCStringHelper helper;
         _TCTX_DSTAT("[ADD_PART] TRANS_ID=%s READY_PARTS=%ld/%ld READY=%d",
-            to_cstring(trans_id_.get_id()), ready_participant_count_,
+            helper.convert(trans_id_.get_id()), ready_participant_count_,
             participant_count_, is_all_participants_ready);
         }
       }
@@ -585,8 +588,10 @@ int TransCtx::inc_ls_trans_count_on_serving_(
         stop_flag);
 
     if (OB_SUCC(ret)) {
+      ObCStringHelper helper;
       _TCTX_DSTAT("[INC_TRANS_COUNT] IS_SERVING=%d TRANS_ID=%s PART=%s LOG_LSN=%s",
-          is_serving, to_cstring(trans_id.get_id()), to_cstring(tls_id), to_cstring(commit_log_lsn));
+          is_serving, helper.convert(trans_id.get_id()),
+          helper.convert(tls_id), helper.convert(commit_log_lsn));
     }
   }
 
@@ -616,9 +621,10 @@ int TransCtx::sequence(const int64_t seq, const int64_t schema_version)
       task = task->next_task();
     }
 
+    ObCStringHelper helper;
     _TCTX_DSTAT("[SEQUENCE] COMMIT_VERSION=%ld TRANS_ID=%s SEQ=%ld SCHEMA_VERSION=%ld",
         trx_sort_elem_.get_trans_commit_version(),
-        to_cstring(trans_id_.get_id()),
+        helper.convert(trans_id_.get_id()),
         seq_, schema_version);
   }
 
@@ -673,8 +679,9 @@ int TransCtx::commit()
       LOG_ERROR("state not match which is not DATA_READY", "state", print_state(), K(is_ddl_trans));
       ret = OB_STATE_NOT_MATCH;
     } else {
+      ObCStringHelper helper;
       _TCTX_DSTAT("[COMMIT] TRANS_ID=%s/%ld PARTICIPANTS=%ld SEQ=%ld ",
-          to_cstring(trans_id_.get_id()), trx_sort_elem_.get_trans_commit_version(),
+          helper.convert(trans_id_.get_id()), trx_sort_elem_.get_trans_commit_version(),
           ready_participant_count_, seq_);
 
       switch_state_(TRANS_CTX_STATE_COMMITTED);
@@ -722,8 +729,9 @@ int TransCtx::revert_participants()
         K(revertable_participant_count_), K(ready_participant_count_));
     ret = OB_STATE_NOT_MATCH;
   } else {
+    ObCStringHelper helper;
     _TCTX_DSTAT("[REVERT_PARTICIPANTS] TRANS_ID=%s PARTICIPANTS=%ld SEQ=%ld",
-        to_cstring(trans_id_.get_id()), participant_count_, seq_);
+        helper.convert(trans_id_.get_id()), participant_count_, seq_);
 
     // wait redo dispatched cause dispatch_redo and sort&commit br is async steps and dispatched
     // sorted state may early than dispatched state.

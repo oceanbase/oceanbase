@@ -272,21 +272,12 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       type.set_result_flag(NOT_NULL_FLAG | NOT_NULL_WRITE_FLAG);
     }
 
-    bool enumset_to_varchar = false;
-    //here will wrap type_to_str if necessary
-    if (OB_SUCC(ret) && ob_is_enumset_tc(types[4].get_type())) {
-      ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[types[0].get_type()]];
-      if (OB_UNLIKELY(ObMaxType == calc_type)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "invalid type of parameter ", K(types[4]), K(types), K(ret));
-      } else if (ObVarcharType == calc_type) {
-        enumset_to_varchar = true;
-        types[4].set_calc_type(calc_type);
-        types[4].set_calc_collation_type(coll_type);
-        types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
-        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
-      }
+    bool wrap_to_str = false;
+    if (OB_SUCC(ret) && OB_FAIL(calc_enum_set_result_type(type, types, coll_type, type_ctx,
+                                                          wrap_to_str))) {
+      LOG_WARN("fail to calc enum set result type", K(ret));
     }
+
     // for table modify in oracle mode, we ignore charset convert failed
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_CHARSET_CONVERT_IGNORE_ERR);
@@ -298,7 +289,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       LOG_WARN("failed to check valid implicit convert", K(ret));
     }
 
-    if (OB_SUCC(ret) && !enumset_to_varchar) {
+    if (OB_SUCC(ret) && !wrap_to_str) {
       //cast type when type not same.
       const ObObjTypeClass value_tc = ob_obj_type_class(types[4].get_type());
       const ObObjTypeClass type_tc = ob_obj_type_class(types[0].get_type());
@@ -325,7 +316,70 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         }
       }
     }
-    LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(enumset_to_varchar));
+    LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(wrap_to_str));
+  }
+  return ret;
+}
+
+int ObExprColumnConv::calc_enum_set_result_type(ObExprResType &type,
+                                                ObExprResType *types,
+                                                ObCollationType coll_type,
+                                                ObExprTypeCtx &type_ctx,
+                                                bool &wrap_to_str) const
+{
+  int ret = OB_SUCCESS;
+  // here will wrap type_to_str if necessary
+  // for enum set type with subschema, it can directly execute any type of cast,
+  // so there is no need to wrap type_to_str.
+  if (ob_is_enumset_tc(types[4].get_type())) {
+    ObObjType calc_type = get_enumset_calc_type(types[0].get_type(), 4);
+    // When the types are inconsistent or it doesn't support enum/set type with subschema,
+    // new cast expression is required.
+    const bool support_enum_set_type_subschema = is_enum_set_with_subschema_arg(4);
+    bool need_add_cast = type.get_type() != types[4].get_type() || !support_enum_set_type_subschema;
+    // keep old behavior use session collation
+    coll_type = support_enum_set_type_subschema ? types[1].get_collation_type() : coll_type;
+    if (OB_UNLIKELY(ObMaxType == calc_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "invalid type of parameter ", K(types[4]), K(types), K(ret));
+    } else if (ob_is_string_type(calc_type) && need_add_cast) {
+      wrap_to_str = true;
+    } else if (!need_add_cast && ob_is_enum_or_set_type(type.get_type())) {
+      wrap_to_str = true; // set wrap to str to true first
+      // the src and dst types are the same, and both are enum/set. we need to check the
+      // subschema id of the expr result type.
+      const ObRawExpr *conv_expr = get_raw_expr();
+      const ObRawExpr *enumset_expr = NULL;
+      const ObEnumSetMeta *src_meta = NULL;
+      const ObExecContext *exec_ctx = NULL;
+      if (OB_ISNULL(conv_expr) || OB_ISNULL(enumset_expr = conv_expr->get_param_expr(4))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("raw expr or child expr is null", K(ret), KP(conv_expr));
+      } else if (OB_ISNULL(exec_ctx = type_ctx.get_session()->get_cur_exec_ctx())) {
+      } else if (OB_UNLIKELY(!enumset_expr->is_enum_set_with_subschema())) {
+        // skip check enum/set expr with old behavior
+      } else if (OB_UNLIKELY(conv_expr->get_enum_set_values().empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("str values for enum set expr is empty", K(ret));
+      } else if (OB_FAIL(exec_ctx->get_enumset_meta_by_subschema_id(
+                          enumset_expr->get_subschema_id(), src_meta))) {
+        LOG_WARN("failed to meta from exec_ctx", K(ret), K(enumset_expr->get_subschema_id()));
+      } else if (OB_ISNULL(src_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("src meta is unexpected", K(ret), KP(src_meta));
+      } else if (src_meta->is_same(src_meta->get_obj_meta(), conv_expr->get_enum_set_values())) {
+        // set wrap to str to false, it will be checked in `ObRawExprWrapEnumSet`
+        wrap_to_str = false;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (wrap_to_str) {
+        types[4].set_calc_type(calc_type);
+        types[4].set_calc_collation_type(coll_type);
+        types[4].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra());
+      }
+    }
   }
   return ret;
 }
@@ -363,8 +417,9 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
       rt_expr.eval_func_ = column_convert;
       if (rt_expr.args_[4]->is_batch_result()
           && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)
-          && !is_lob_storage(rt_expr.datum_meta_.type_)
           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
+        if (!is_lob_storage(rt_expr.datum_meta_.type_)
+            || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0)
         rt_expr.eval_batch_func_ = column_convert_batch;
       }
     }
@@ -454,7 +509,7 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
   } else {
     const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
     const uint64_t cast_mode = enumset_info->cast_mode_;
-    bool is_strict = CM_IS_STRICT_MODE(cast_mode);
+    bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
     ObObjType out_type = expr.datum_meta_.type_;
     ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObDatum *val = NULL;
@@ -607,7 +662,10 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
   const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
   const uint64_t cast_mode = enumset_info->cast_mode_;
-  bool is_strict = CM_IS_STRICT_MODE(cast_mode);
+  bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
+  ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
+  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).evaluated_
+                        && !expr.args_[4]->get_eval_info(ctx).projected_;
   if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("failed to eval batch vals", K(ret));
   } else {
@@ -615,6 +673,8 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
     ObDatum *results = expr.locate_batch_datums(ctx);
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     bool is_string_type = ob_is_string_type(out_type);
+    bool is_int_tc = ob_is_int_uint_tc(out_type);
+    bool is_decimal_int_tc = ob_is_decimal_int_tc(out_type);
     ObAccuracy accuracy;
     accuracy.set_length(expr.max_length_);
     accuracy.set_scale(expr.datum_meta_.scale_);
@@ -625,31 +685,138 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
     }
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_size(batch_size);
-    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
-      if (skip.at(i) || eval_flags.at(i)) {
-        continue;
+    if (!is_lob_storage(out_type)) {
+      if (is_string_type
+          && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::STRING_TC>(expr, ctx, skip, batch_size,
+                                                                             is_strict, max_accuracy_len, cast_mode,
+                                                                             eval_flags, vals, results,
+                                                                             batch_info_guard))) {
+        LOG_WARN("failed to convert batch", K(ret));
+      } else if (is_int_tc
+                 && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::INT_TC>(expr, ctx, skip, batch_size,
+                                                                                 is_strict, max_accuracy_len, cast_mode,
+                                                                                 eval_flags, vals, results,
+                                                                                 batch_info_guard))) {
+        LOG_WARN("failed to convert batch", K(ret));
+      } else if (is_decimal_int_tc
+                 && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::DECIMAL_INT_TC>(expr, ctx, skip, batch_size,
+                                                                                         is_strict, max_accuracy_len, cast_mode,
+                                                                                         eval_flags, vals, results,
+                                                                                         batch_info_guard))) {
+        LOG_WARN("failed to convert batch", K(ret));
+      } else if (OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::OTHER_TC>(expr, ctx, skip, batch_size,
+                                                                   is_strict, max_accuracy_len, cast_mode,
+                                                                   eval_flags, vals, results,
+                                                                   batch_info_guard))) {
+        LOG_WARN("failed to convert batch", K(ret));
       }
-      if (vals[i].is_null()) {
-        results[i].set_null();
-      } else {
-        batch_info_guard.set_batch_idx(i);
-        if (is_string_type) {
-          ObString str = vals[i].get_string();
-          if (OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
-            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+    } else if (expr.args_[4]->obj_meta_.is_user_defined_sql_type()) {
+      ret = OB_ERR_INVALID_XML_DATATYPE;
+      LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, ob_obj_type_str(out_type), "ANYDATA");
+      LOG_WARN("convert xmltype to character type is not supported in PL",
+                K(ret), K(expr.args_[4]->obj_meta_), K(out_type));
+    } else {
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx); // temp alloc only used for lob types
+      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+      ObObjType in_type = expr.args_[4]->obj_meta_.get_type();
+      ObCollationType in_cs_type = expr.args_[4]->obj_meta_.get_collation_type();
+      bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+      bool has_lob_header_for_check = has_lob_header;
+      bool can_use_raw_str = T_FUN_SYS_CAST == expr.args_[4]->type_
+                             && param_not_eval
+                             && ob_is_string_tc(expr.args_[4]->args_[0]->datum_meta_.type_)
+                             && !ob_is_geometry(out_type);
+      for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        }
+        if (vals[i].is_null()) {
+          results[i].set_null();
+        } else {
+          batch_info_guard.set_batch_idx(i);
+          ObString raw_str = vals[i].get_string();
+          ObLobLocatorV2 input_lob(raw_str.ptr(), raw_str.length(), has_lob_header);
+          bool is_delta = input_lob.is_valid() && input_lob.is_delta_temp_lob();
+          if (is_delta) { // delta lob
+            if (!(ob_is_text_tc(in_type) || ob_is_json(in_type))) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("delta lob can not convert to non-text type", K(ret), K(out_type));
+            } else {
+              results[i].set_string(raw_str);
+            }
           } else {
-            vals[i].set_string(str);
+            ObDatum datum_for_check = vals[i];
+            ObString str;
+            ObTextStringIter striter(in_type, in_cs_type, vals[i].get_string(), has_lob_header);
+            if (can_use_raw_str) {
+              str = expr.args_[4]->args_[0]->locate_expr_datum(ctx).get_string();
+              if (str.length() >= max_accuracy_len) {
+                can_use_raw_str = false;
+              }
+            }
+            if (!can_use_raw_str) {
+              if (OB_FAIL(striter.init(0, ctx.exec_ctx_.get_my_session(), &temp_allocator))) {
+                LOG_WARN("fail to init string iter", K(ret), K(is_strict), K(expr));
+              } else if (OB_FAIL(striter.get_full_data(str))) {
+                LOG_WARN("fail to get full data from string iter", K(ret), K(is_strict), K(expr));
+              } else if (ob_is_geometry(out_type)) {
+                ObGeoType geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+                if (OB_FAIL(ObGeoTypeUtil::check_geo_type(geo_type, str))) {
+                  LOG_WARN("fail to check geo type", K(ret), K(str), K(geo_type), K(expr));
+                  ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+                  LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+                }
+              }
+            }
+           if (OB_FAIL(ret)) {
+           }  else if (!check_is_ascii(str)
+                        && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+              LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+            }
+            if (OB_SUCC(ret)) {
+              has_lob_header_for_check = false; // datum_for_check must have no lob header
+              datum_for_check.set_string(str);
+            }
+            int warning = OB_SUCCESS;
+            const int64_t str_len_byte = static_cast<int64_t>(datum_for_check.len_);
+            bool need_check_length = true;
+            if (OB_FAIL(ret)) {
+            } else if (max_accuracy_len > 0 && str.length() < max_accuracy_len) {
+              need_check_length = false;
+              results[i].set_datum(datum_for_check);
+            } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, has_lob_header_for_check, results[i],
+                                                                  cast_mode, datum_for_check))) {
+              LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr), K(datum_for_check));
+            }
+            if (OB_SUCC(ret)) {
+              // in type is the same with out type, if length changed, build a new lob
+              ObLobLocatorV2 loc(raw_str, has_lob_header);
+              int64_t old_data_byte_len = 0;
+              if (need_check_length && raw_str.length() > 0) {
+                if (OB_FAIL(loc.get_lob_data_byte_len(old_data_byte_len))) {
+                  LOG_WARN("Lob: failed to get data byte len", K(ret));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                int64_t new_data_byte_len = results[i].get_string().length();
+                if (!need_check_length || new_data_byte_len == old_data_byte_len) {
+                  results[i].set_string(raw_str);
+                } else {
+                  ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &results[i]);
+                  if (OB_FAIL(str_result.init(new_data_byte_len))) {
+                    LOG_WARN("Lob: init lob result failed", K(ret));
+                  } else if (OB_FAIL(str_result.append(results[i].get_string().ptr(), new_data_byte_len))) {
+                    LOG_WARN("Lob: append lob result failed", K(ret));
+                  } else {
+                    str_result.set_result();
+                  }
+                }
+              }
+            }
           }
         }
-        bool no_need_check_length = is_string_type && max_accuracy_len > 0 && vals[i].len_ < max_accuracy_len;
-        if (OB_FAIL(ret)) {
-        } else if (no_need_check_length) {
-          results[i].set_datum(vals[i]);
-        } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, false, results[i], cast_mode, vals[i]))) {
-          LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
-        }
+        eval_flags.set(i);
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -724,6 +891,80 @@ int ObExprColumnConv::ObExprColumnConvCtx::setup_eval_expr(ObIAllocator &allocat
     expr_.args_ = args_;
     MEMCPY(args_, expr.args_, mem_size);
     args_[0] = args_[4];
+  }
+  return ret;
+}
+
+bool ObExprColumnConv::check_is_ascii(ObString &str)
+{
+  bool is_ascii = true;
+  for (int64_t i = 0; is_ascii && i < str.length(); ++i) {
+    is_ascii &= (static_cast<unsigned char> (str[i]) <= 127);
+  }
+  return is_ascii;
+}
+
+template <ObExprColumnConv::PARAM_TC TC>
+int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
+                                                  ObEvalCtx &ctx,
+                                                  const ObBitVector &skip,
+                                                  const int64_t batch_size,
+                                                  const bool is_strict,
+                                                  const ObLength max_accuracy_len,
+                                                  const uint64_t cast_mode,
+                                                  ObBitVector &eval_flags,
+                                                  ObDatum *vals,
+                                                  ObDatum *results,
+                                                  ObEvalCtx::BatchInfoScopeGuard &batch_info_guard)
+{
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  int32_t int_bytes = 0;
+  const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
+  common::ObPrecision precision = expr.datum_meta_.precision_;
+  decint_cmp_fp cmp_fp;
+  if (TC == PARAM_TC::DECIMAL_INT_TC) {
+    min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
+    max_decint = wide::ObDecimalIntConstValue::get_max_value(precision);
+    int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+    cmp_fp =
+      wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(int_bytes, int_bytes);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+    if (skip.at(i) || eval_flags.at(i)) {
+      continue;
+    }
+    if (vals[i].is_null()) {
+      results[i].set_null();
+    } else {
+      batch_info_guard.set_batch_idx(i);
+      if (TC == PARAM_TC::STRING_TC) {
+        ObString str = vals[i].get_string();
+        if (!check_is_ascii(str)
+            && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+          LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+        } else {
+          vals[i].set_string(str);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (TC == PARAM_TC::INT_TC
+                 || (TC == PARAM_TC::STRING_TC
+                     && max_accuracy_len > 0
+                     && vals[i].len_ < max_accuracy_len)) {
+        results[i].set_datum(vals[i]);
+      } else if (TC == PARAM_TC::DECIMAL_INT_TC
+                 && cmp_fp(vals[i].get_decimal_int(), min_decint) >= 0
+                 && cmp_fp(vals[i].get_decimal_int(), max_decint) <= 0) {
+        results[i].set_datum(vals[i]);
+      } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx,
+                                                             false, results[i],
+                                                             cast_mode, vals[i]))) {
+        LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
+      }
+    }
+    eval_flags.set(i);
   }
   return ret;
 }

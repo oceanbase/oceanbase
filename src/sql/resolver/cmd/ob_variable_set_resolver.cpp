@@ -232,6 +232,12 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
               ret = OB_ERR_INVALID_GROUP_FUNC_USE;
               LOG_WARN("invalid scope for agg function", K(ret));
+            } else if (OB_NOT_NULL(var_node.value_expr_)
+                      && var_node.value_expr_->get_result_type().get_type() == ObCollectionSQLType) {
+              // set 系统变量 = array type isn't supported
+             ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("Variable value type is not supported", K(ret), K(set_node->children_[1]->type_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
             } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
               LOG_WARN("Add set entry failed", K(ret));
             }

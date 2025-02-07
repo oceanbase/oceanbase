@@ -2018,7 +2018,7 @@ int ObSortOpImpl::sort_inmem_data()
           prev = &rows_->at(i);
         }
         if (OB_FAIL(ret)) {
-        } else if (pd_topn_filter_.enabled()
+        } else if (pd_topn_filter_.need_update()
                    && OB_FAIL(pd_topn_filter_.update_filter_data(*imms_heap_->top()))) {
           LOG_WARN("failed to update filter data", K(ret));
         }
@@ -2415,7 +2415,7 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
       store_row = new_row;
       LOG_DEBUG("in memory topn sort check add row", KPC(new_row));
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && topn_heap_->heap_.count() == topn_cnt_) {
       // the first time reach heap capacity, set_need_update to update topn filter data;
       if (pd_topn_filter_.enabled()) {
         pd_topn_filter_.set_need_update(true);
@@ -3352,6 +3352,11 @@ int ObPrefixSortImpl::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
     }
   }
   return ret;
+}
+
+void ObPrefixSortImpl::reuse()
+{
+  ObSortOpImpl::reuse();
 }
 
 /*********************************** end ObPrefixSortImpl *****************************/

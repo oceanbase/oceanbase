@@ -788,6 +788,7 @@ void ObTenantSnapshotService::run1()
     {
       ObThreadCondGuard guard(cond_);
       const uint64_t idle_time = calculate_idle_time_();
+      ObBKGDSessInActiveGuard inactive_guard;
       cond_.wait(idle_time);
     }
   }

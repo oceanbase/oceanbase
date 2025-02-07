@@ -106,7 +106,7 @@ int ObBackupFileWriteCtx::write_buffer_(const char *buf, const int64_t len, cons
 
 bool ObBackupFileWriteCtx::check_can_flush_(const bool is_last_part) const
 {
-  return is_last_part || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
+  return (is_last_part && data_buffer_.length() > 0) || data_buffer_.length() >= OB_MAX_BACKUP_MEM_BUF_LEN;
 }
 
 int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
@@ -134,7 +134,7 @@ int ObBackupFileWriteCtx::flush_buffer_(const bool is_last_part)
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_BACKUP_TRIGGER_BANDWIDTH_THROTTLE", K(ret));
         // in case of errsim, that the bytes be larger to trigger bandwidth throttle
-        bytes = write_size * 10;
+        bytes = write_size * 100;
         ret = OB_SUCCESS;
       }
     }

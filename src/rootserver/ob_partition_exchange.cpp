@@ -54,6 +54,8 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
   const ObTableSchema *base_table_schema = NULL;
   const ObTableSchema *inc_table_schema = NULL;
   bool is_oracle_mode = false;
+  bool base_table_has_instant_column = false;
+  bool inc_table_has_instant_column = false;
   if (OB_UNLIKELY(!ddl_service_.is_inited())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", K(ret));
@@ -72,6 +74,15 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
     LOG_WARN("table not found", K(ret), K(arg));
   } else if (OB_FAIL(base_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check_if_oracle_compat_mode failed", K(ret), K(is_oracle_mode));
+  } else if (OB_FAIL(base_table_schema->has_add_column_instant(base_table_has_instant_column))) {
+    LOG_WARN("fail to check base table has add column instant", KR(ret), K(tenant_id), K(arg.base_table_id_));
+  } else if (OB_FAIL(inc_table_schema->has_add_column_instant(inc_table_has_instant_column))) {
+    LOG_WARN("fail to check inc table has add column instant", KR(ret), K(tenant_id), K(arg.inc_table_id_));
+  } else if (base_table_has_instant_column || inc_table_has_instant_column) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("base or inc table has add column instant, not supported to exchange partition", KR(ret),
+              K(base_table_has_instant_column), K(inc_table_has_instant_column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Non matching attribute 'INSTANT COLUMN(s)' between partition and table");
   } else if (OB_FAIL(check_partition_exchange_conditions_(arg, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard))) {
     LOG_WARN("fail to check partition exchange conditions", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
   } else if (OB_FAIL(inner_init(*base_table_schema, *inc_table_schema, arg.exchange_partition_level_, is_oracle_mode, schema_guard))) {
@@ -1385,30 +1396,19 @@ int ObPartitionExchange::exchange_auxiliary_table_partitions(const uint64_t tena
         for (int64_t i = 0; OB_SUCC(ret) && (i < data_tablet_ids.count()); ++i) {
           const ObTabletID &data_tablet_id = data_tablet_ids.at(i);
           const ObTabletID &inc_data_tablet_id = inc_data_tablet_ids.at(i);
-          const ObPartition *base_data_part = nullptr;
-          const ObPartition *inc_data_part = nullptr;
-          const ObSubPartition *base_data_subpart = nullptr;
-          const ObSubPartition *inc_data_subpart = nullptr;
           ObTabletID tablet_id;
           ObTabletID inc_tablet_id;
 
-          if (OB_FAIL(get_part_by_tablet_id(base_data_table_schema, data_tablet_id, base_data_part, base_data_subpart, is_subpartition))) {
-            LOG_WARN("failed to get part by tablet id", KR(ret), K(base_data_table_schema), K(data_tablet_id));
-          } else if (is_inc_table_partitioned
-              && OB_FAIL(get_part_by_tablet_id(inc_data_table_schema, inc_data_tablet_id, inc_data_part, inc_data_subpart, is_subpartition))) {
-            LOG_WARN("failed to get part by tablet id", KR(ret), K(inc_data_table_schema), K(inc_data_tablet_id));
-          } else if (OB_FAIL(get_and_check_aux_tablet_id(base_data_part, base_data_subpart, *base_table_schema, is_oracle_mode, is_subpartition, tablet_id))) {
-            LOG_WARN("failed to get and check aux tablet id",
-                KR(ret), K(is_oracle_mode), KPC(base_data_part), KPC(base_table_schema));
+          if (OB_FAIL(get_and_check_aux_tablet_id(base_data_table_schema, *base_table_schema, data_tablet_id, is_oracle_mode, is_subpartition, tablet_id))) {
+            LOG_WARN("failed to get and check aux tablet id", KR(ret), K(is_oracle_mode),
+                K(data_tablet_id), K(base_data_table_schema), KPC(base_table_schema));
           } else if (is_inc_table_partitioned) {
-            if (OB_FAIL(get_and_check_aux_tablet_id(inc_data_part, inc_data_subpart, *inc_table_schema, is_oracle_mode, is_subpartition, inc_tablet_id))) {
-              LOG_WARN("failed to get and check aux tablet id",
-                  KR(ret), K(is_oracle_mode), KPC(inc_data_part), KPC(inc_table_schema));
+            if (OB_FAIL(get_and_check_aux_tablet_id(inc_data_table_schema, *inc_table_schema, inc_data_tablet_id, is_oracle_mode, is_subpartition, inc_tablet_id))) {
+              LOG_WARN("failed to get and check aux tablet id", KR(ret), K(is_oracle_mode),
+                  K(inc_data_tablet_id), K(inc_data_table_schema), KPC(inc_table_schema));
             }
           } else {
             inc_tablet_id = inc_table_schema->get_tablet_id();
-            LOG_INFO("partition_exchange exchange_auxiliary_table_partition_", K(tablet_id), K(inc_tablet_id),
-                K(tablet_id.is_valid()), K(inc_tablet_id.is_valid()));
           }
 
           if (OB_SUCC(ret)) {
@@ -2949,31 +2949,35 @@ int ObPartitionExchange::add_table_to_tablet_ids_map(
 }
 
 int ObPartitionExchange::get_and_check_aux_tablet_id(
-    const ObPartition *data_part,
-    const ObSubPartition *data_subpart,
+    const ObTableSchema &data_table_schema,
     const ObTableSchema &aux_table_schema,
+    const ObTabletID &data_tablet_id,
     const bool is_oracle_mode,
     const bool is_subpart,
     ObTabletID &aux_tablet_id)
 {
   int ret = OB_SUCCESS;
+  const ObPartition *data_part = nullptr;
   const ObPartition *part = nullptr;
+  const ObSubPartition *data_subpart = nullptr;
   const ObSubPartition *subpart = nullptr;
-  if (!aux_table_schema.is_aux_table()) {
+  if (OB_UNLIKELY(!aux_table_schema.is_aux_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table type", KR(ret), K(aux_table_schema.is_aux_table()));
-  } else if (OB_ISNULL(data_part) || !data_part->is_valid()) {
+  } else if (OB_UNLIKELY(!data_tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid data partition", KR(ret), KP(data_part));
-  } else if (is_subpart && (OB_ISNULL(data_subpart) || !data_subpart->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid data sub partition", KR(ret), KP(data_subpart));
+    LOG_WARN("invalid data tablet id", KR(ret), K(data_tablet_id));
+  } else if (OB_FAIL(get_part_by_tablet_id(data_table_schema, data_tablet_id, data_part, data_subpart, is_subpart))) {
+    LOG_WARN("failed to get part by tablet id", KR(ret), K(data_tablet_id), K(is_subpart), K(data_table_schema));
   } else {
     bool is_matched = false;
-    const int64_t data_part_idx = data_part->get_part_idx();
+    int64_t data_part_idx = OB_INVALID_INDEX;
+    int64_t data_subpart_idx = OB_INVALID_INDEX;
     const schema::ObPartitionOption &pt_part_option = aux_table_schema.get_part_option();
     schema::ObPartitionFuncType pt_part_func_type = pt_part_option.get_part_func_type();
-    if (OB_FAIL(aux_table_schema.get_partition_by_partition_index(data_part_idx, CHECK_PARTITION_MODE_NORMAL, part))) {
+    if (OB_FAIL(data_table_schema.get_part_idx_by_tablet(data_tablet_id, data_part_idx, data_subpart_idx))) {
+      LOG_WARN("failed to get part idx by tablet", KR(ret), K(data_tablet_id));
+    } else if (OB_FAIL(aux_table_schema.get_partition_by_partition_index(data_part_idx, CHECK_PARTITION_MODE_NORMAL, part))) {
       LOG_WARN("failed to get partition by partition index", KR(ret), K(data_part_idx), K(aux_table_schema));
     } else if (OB_ISNULL(part)) {
       ret = OB_PARTITION_NOT_EXIST;
@@ -2985,7 +2989,6 @@ int ObPartitionExchange::get_and_check_aux_tablet_id(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("part with the same offset not equal, maybe not the right index", KR(ret), K(data_part), KPC(part));
     } else if (is_subpart) {
-      const int64_t data_subpart_idx = data_subpart->get_sub_part_idx();
       const schema::ObPartitionOption &pt_subpart_option = aux_table_schema.get_sub_part_option();
       schema::ObPartitionFuncType pt_subpart_func_type = pt_subpart_option.get_sub_part_func_type();
       is_matched = false;

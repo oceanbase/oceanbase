@@ -109,7 +109,7 @@ int ObLogHbaseUtil::filter_hbase_mode_table_(const ObTableSchema &table_schema,
   return ret;
 }
 
-int ObLogHbaseUtil::filter_hbase_mode_table_(const ObDictTableMeta &table_meta,
+int ObLogHbaseUtil::filter_hbase_mode_table_(const datadict::ObDictTableMeta &table_meta,
     bool &is_hbase_mode_table)
 {
   int ret = OB_SUCCESS;
@@ -132,7 +132,7 @@ int ObLogHbaseUtil::filter_hbase_mode_table_(const ObDictTableMeta &table_meta,
     LOG_WARN("col_metas is nullptr", KR(ret), K(col_metas), K(table_meta));
   } else {
     for (int idx = 0; OB_SUCC(ret) && idx < column_count; idx++) {
-      const ObDictColumnMeta *col_meta = col_metas + idx;
+      const datadict::ObDictColumnMeta *col_meta = col_metas + idx;
       if (OB_ISNULL(col_meta)) {
         ret = OB_INVALID_DATA;
         LOG_WARN("unexpected invalid ObDictColumnMeta", KR(ret), K(col_meta), K(table_meta));

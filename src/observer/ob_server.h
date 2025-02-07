@@ -83,6 +83,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"
 #endif
+#include "share/ob_device_credential_task.h"
 
 namespace oceanbase
 {
@@ -110,7 +111,7 @@ namespace observer
 class ObServer
 {
 public:
-  static const int64_t DEFAULT_ETHERNET_SPEED = 10000 / 8 * 1024 * 1024; // change from default 125m/s  1000Mbit to 1250MBps 10000Mbit
+  static const int64_t DEFAULT_ETHERNET_SPEED = 10000 / 8 * 1024 * 1024; // change from default 1250m/s  10000Mbit to 1250MBps 10000Mbit
   static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 60L; // 1min
   static const uint64_t DEFAULT_CPU_FREQUENCY = 2500 * 1000; // 2500 * 1000 khz
   static ObServer &get_instance();
@@ -477,6 +478,7 @@ private:
   ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
+  ObDeviceCredentialTask device_credential_task_;
 
   // for locality
   ObLocalityManager locality_manager_;

@@ -98,7 +98,7 @@ public:
   ~ObDTLMemProfileInfo() {}
 
   // The local channel and the rpc channel may modify the interm results concurrently,
-  // and these interme results may be linked to the same profile.
+  // and these interm results may be linked to the same profile.
   // Therefore, access to the profile needs to be protected by locks
   // to prevent concurrent modification issues.
   void alloc(int64_t size)
@@ -171,19 +171,29 @@ struct ObDTLIntermResultInfo
 {
   friend class ObDTLIntermResultManager;
   ObDTLIntermResultInfo()
-      : datum_store_(NULL), col_store_(NULL), ret_(common::OB_SUCCESS),
+      : datum_store_(NULL), block_store_(NULL), ret_(common::OB_SUCCESS),
       is_read_(false), is_eof_(false), ref_count_(0),
       trace_id_(), dump_time_(0), dump_cost_(0), unregister_dm_info_(),
-      use_rich_format_(false), mem_profile_key_()
+      store_type_(StoreType::INVALID), mem_profile_key_()
   {}
   ~ObDTLIntermResultInfo() {}
-  bool is_store_valid() const { return use_rich_format_ ? NULL != col_store_ : NULL != datum_store_; }
 
-  void reset() { datum_store_ = NULL; col_store_ = NULL; is_read_ = false; ret_ = common::OB_SUCCESS; }
+  enum class StoreType {
+    INVALID,
+    DATUM, // interm_res
+    ROW, // interm_res
+    COLUMN // temp_table
+  };
+
+  bool is_store_valid() const { return is_rich_format() ? NULL != block_store_ : NULL != datum_store_; }
+  void reset() { datum_store_ = NULL; block_store_ = NULL; is_read_ = false; ret_ = common::OB_SUCCESS; }
   void set_eof(bool flag) { is_eof_ = flag; }
-  void set_use_rich_format(bool use_rich_format) { use_rich_format_= use_rich_format; }
   int64_t get_ref_count() { return ATOMIC_LOAD(&ref_count_); }
-  uint64_t get_tenant_id() const { return use_rich_format_ ? col_store_->get_tenant_id() : datum_store_->get_tenant_id(); }
+  uint64_t get_tenant_id() const { return is_rich_format() ? block_store_->get_tenant_id() : datum_store_->get_tenant_id(); }
+  sql::ObTempRowStore *get_row_store() { return static_cast<sql::ObTempRowStore *>(block_store_); }
+  sql::ObTempColumnStore *get_column_store() { return static_cast<sql::ObTempColumnStore *>(block_store_); }
+  bool is_rich_format() const { return store_type_ != ObDTLIntermResultInfo::StoreType::INVALID &&
+                                       store_type_ != ObDTLIntermResultInfo::StoreType::DATUM; }
 private:
   void inc_ref_count() { ATOMIC_INC(&ref_count_); }
   int64_t dec_ref_count() { return ATOMIC_SAF(&ref_count_, 1); }
@@ -195,12 +205,12 @@ public:
     K_(ref_count),
     K_(dump_cost),
     K_(monitor_info),
-    K_(use_rich_format),
+    K_(store_type),
     K_(mem_profile_key)
   );
 
   sql::ObChunkDatumStore *datum_store_;
-  sql::ObTempColumnStore *col_store_;
+  sql::ObTempBlockStore *block_store_;
   int ret_;
   bool is_read_;
   bool is_eof_;
@@ -210,7 +220,7 @@ public:
   int64_t dump_cost_;
   common::ObUnregisterDmInfo unregister_dm_info_;
   ObDTLIntermResultMonitorInfo monitor_info_;
-  bool use_rich_format_;
+  StoreType store_type_;
   ObDTLMemProfileKey mem_profile_key_;
 };
 
@@ -229,20 +239,21 @@ private:
   ObDTLIntermResultManager *interm_res_manager_;
 };
 
-// helper macro to dispatch action to datum_store_ / col_store_
+// helper macro to dispatch action to datum_store_ / block_store_
 #define DTL_IR_STORE_DO(ir, act, ...) \
-    ((ir).use_rich_format_ ? ((ir).col_store_->act(__VA_ARGS__)) : ((ir).datum_store_->act(__VA_ARGS__)))
+    ((ir).is_rich_format() ? ((ir).block_store_->act(__VA_ARGS__)) : \
+      ((ir).datum_store_->act(__VA_ARGS__)))
 
 #define DTL_IR_STORE_DO_APPEND_BLOCK(ir, buf, size, need_swizzling) \
-    ((ir).use_rich_format_ ? ((ir).col_store_->append_block(buf, size)) :  \
+    ((ir).is_rich_format() ? ((ir).block_store_->append_block(buf, size)) :  \
     ((ir).datum_store_->append_block(buf, size, need_swizzling)))
 
 #define DTL_IR_STORE_DO_APPEND_BLOCK_PAYLOAD(ir, payload, size, rows, need_swizzling) \
-    ((ir).use_rich_format_ ? ((ir).col_store_->append_block_payload(payload, size, rows)) :  \
+    ((ir).is_rich_format() ? ((ir).block_store_->append_block_payload(payload, size, rows)) :  \
     ((ir).datum_store_->append_block_payload(payload, size, rows, need_swizzling)))
 
 #define DTL_IR_STORE_DO_DUMP(ir, reuse, all_dump) \
-    ((ir).use_rich_format_ ? ((ir).col_store_->dump(all_dump)) :  \
+    ((ir).is_rich_format() ? ((ir).block_store_->dump(all_dump)) :  \
     ((ir).datum_store_->dump(reuse, all_dump)))
 
 class ObDTLIntermResultGC
@@ -302,6 +313,28 @@ public:
   ObDTLIntermResultInfoGuard &result_info_guard_;
   ObDTLIntermResultManager *interm_res_manager_;
   int ret_;
+};
+
+class ObAtomicGetIntermMemProfileCall
+{
+public:
+  explicit ObAtomicGetIntermMemProfileCall() :
+      ret_(OB_SUCCESS), mem_profile_info_(nullptr) {}
+  ~ObAtomicGetIntermMemProfileCall() = default;
+  void operator() (common::hash::HashMapPair<ObDTLMemProfileKey,
+      ObDTLMemProfileInfo *> &entry);
+public:
+  int ret_;
+  ObDTLMemProfileInfo *mem_profile_info_;
+};
+
+class MemProfileEraseIfRef0
+{
+public:
+  MemProfileEraseIfRef0() {};
+  ~MemProfileEraseIfRef0() {};
+  bool operator() (common::hash::HashMapPair<ObDTLMemProfileKey,
+      ObDTLMemProfileInfo *> &entry);
 };
 
 class ObAtomicAppendBlockCall
@@ -379,7 +412,8 @@ public:
                                   bool append_whole_block);
   int get_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo &result_info);
   int create_interm_result_info(ObMemAttr &attr, ObDTLIntermResultInfoGuard &result_info_guard,
-                                const ObDTLIntermResultMonitorInfo &monitor_info, bool use_rich_format = false);
+                    const ObDTLIntermResultMonitorInfo &monitor_info,
+                    ObDTLIntermResultInfo::StoreType store_type);
   int erase_interm_result_info(const ObDTLIntermResultKey &key, bool need_unregister_check_item_from_dm=true);
   int insert_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo *&result_info);
   // 以下两个接口会持有bucket读锁.
@@ -405,6 +439,8 @@ public:
   static void mtl_stop(ObDTLIntermResultManager *&dtl_interm_result_manager);
   static void mtl_wait(ObDTLIntermResultManager *&dtl_interm_result_manager);
   ObDTLIntermResultGCTask &get_gc_task() { return gc_task_; }
+  static int init_result_info_store(ObDTLIntermResultInfoGuard &result_info_guard,
+                                  ObDtlLinkedBuffer &buffer);
 
   ObDTLIntermResultManager();
   ~ObDTLIntermResultManager();

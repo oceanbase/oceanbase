@@ -18,7 +18,7 @@ if sys.version_info.major == 3:
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
-  old_version = '4.0.0.0'
+  old_version = '4.2.5.1'
 
 class PasswordMaskingFormatter(logging.Formatter):
   def format(self, record):
@@ -429,7 +429,7 @@ def check_cluster_status(query_cur):
     fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
-# 5. 检查是否有异常租户(creating，延迟删除，恢复中)
+# 5. 检查是否有异常租户(creating，延迟删除，恢复中，租户unit有残留)
 def check_tenant_status(query_cur):
 
   # check tenant schema
@@ -459,6 +459,16 @@ def check_tenant_status(query_cur):
     fail_list.append('has locked tenant, should unlock')
   else:
     logging.info('check tenant lock status success')
+
+  # check all deleted tenant's unit is freed
+  (desc, results) = query_cur.exec_query("select count(*) from oceanbase.gv$ob_units a, oceanbase.__all_tenant_history b where b.is_deleted = 1 and a.tenant_id = b.tenant_id")
+  if len(results) != 1 or len(results[0]) != 1:
+    fail_list.append('results len not match')
+  elif 0 != results[0][0]:
+    fail_list.append('has deleted tenant with unit not freed')
+  else:
+    logging.info('check deleted tenant unit gc success')
+
 
 # 6. 检查无恢复任务
 def check_restore_job_exist(query_cur):
@@ -886,6 +896,14 @@ def is_x86_arch():
     bret=True
   return bret
 
+# 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
+def check_direct_load_job_exist(cur, query_cur):
+  sql = """select count(1) from __all_virtual_load_data_stat"""
+  (desc, results) = query_cur.exec_query(sql)
+  if 0 != results[0][0]:
+    fail_list.append("There are direct load task in progress")
+  logging.info('check direct load task execut status success')
+
 # 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 # 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
 def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
@@ -997,6 +1015,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_disk_space_for_mds_sstable_compat(query_cur)
       check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
       # all check func should execute before check_fail_list
+      check_direct_load_job_exist(cur, query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:

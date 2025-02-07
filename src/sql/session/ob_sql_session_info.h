@@ -626,6 +626,7 @@ public:
       int init(uint64_t tenant_id)
       {
         int ret = OB_SUCCESS;
+        DISABLE_SQL_MEMLEAK_GUARD;
         if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_,
             lib::ContextParam().set_mem_attr(tenant_id, ObModIds::OB_PL)))) {
           SQL_ENG_LOG(WARN, "create memory entity failed");
@@ -647,7 +648,6 @@ public:
       int close_all(sql::ObSQLSessionInfo &session)
       {
         int ret = OB_SUCCESS;
-        ObSessionStatEstGuard guard(session.get_effective_tenant_id(), session.get_sessid());
         while (pl_cursor_map_.size() > 0) { // ignore error, just log, try to close all cursor in this loop.
           int ret = OB_SUCCESS;
           CursorMap::iterator iter = pl_cursor_map_.begin();
@@ -719,13 +719,18 @@ public:
                                  data_version_(0),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
+                                 enable_insertup_replace_gts_opt_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
                                  _query_record_size_limit_(65536),
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
+                                 enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  sql_plan_management_mode_(0),
+                                 enable_enhanced_cursor_validation_(false),
+                                 enable_enum_set_subschema_(false),
+                                 _ob_sqlstat_enable_(true),
                                  session_(session)
     {
     }
@@ -743,6 +748,7 @@ public:
     uint64_t get_data_version() const { return ATOMIC_LOAD(&data_version_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
+    bool enable_insertup_replace_gts_opt() const { return ATOMIC_LOAD(&enable_insertup_replace_gts_opt_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
@@ -751,6 +757,10 @@ public:
     bool get_enable_column_store() const { return enable_column_store_; }
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
+    bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
+    bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
+    bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
+    bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -768,14 +778,19 @@ public:
     uint64_t data_version_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
+    bool enable_insertup_replace_gts_opt_;
     int64_t range_optimizer_max_mem_size_;
     int64_t _query_record_size_limit_;
     bool enable_column_store_;
     bool enable_decimal_int_type_;
+    bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
     int64_t sql_plan_management_mode_;
+    bool enable_enhanced_cursor_validation_;
+    bool enable_enum_set_subschema_;
+    bool _ob_sqlstat_enable_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1052,6 +1067,8 @@ public:
 
   void reset_plsql_exec_time() { plsql_exec_time_ = 0; }
   void add_plsql_exec_time(int64_t plsql_exec_time) { plsql_exec_time_ += plsql_exec_time; }
+  void reset_plsql_compile_time() { plsql_compile_time_ = 0; }
+  void add_plsql_compile_time(int64_t plsql_compile_time) { plsql_compile_time_ += plsql_compile_time; }
 
   CursorCache &get_cursor_cache() { return pl_cursor_cache_; }
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
@@ -1132,6 +1149,7 @@ public:
     }
   }
   ObAuditRecordData &get_raw_audit_record() { return audit_record_; }
+  const ObAuditRecordData &get_raw_audit_record() const { return audit_record_; }
   //在最最终需要push record到audit buffer中时使用该方法，
   //该方法会将一些session中能够拿到的并且重试过程中不会变化的
   //字段初始化
@@ -1177,7 +1195,6 @@ public:
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;
   int add_changed_package_info(ObExecContext &exec_ctx);
-  int shrink_package_info();
 
   // 当前 session 上发生的 sequence.nextval 读取 sequence 值，
   // 都会由 ObSequence 算子将读取结果保存在当前 session 上
@@ -1229,7 +1246,7 @@ public:
   }
 
   int set_client_id(const common::ObString &client_identifier);
-
+  virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   bool has_sess_info_modified() const;
   int set_module_name(const common::ObString &mod);
   int set_action_name(const common::ObString &act);
@@ -1305,10 +1322,14 @@ public:
   bool is_qualify_filter_enabled() const;
   int is_enable_range_extraction_for_not_in(bool &enabled) const;
   bool is_var_assign_use_das_enabled() const;
+  bool is_nlj_spf_use_rich_format_enabled() const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_spf_mlj_group_rescan_enabled() const;
+  bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
   int get_spm_mode(int64_t &spm_mode);
+  bool is_enable_new_query_range() const;
+  bool is_sqlstat_enabled();
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
@@ -1399,6 +1420,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_udr();
   }
+  bool enable_insertup_replace_gts_opt()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
+  }
   int64_t get_range_optimizer_max_mem_size()
   {
     cached_tenant_config_info_.refresh();
@@ -1408,6 +1434,15 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
+  }
+  bool is_enable_mysql_compatible_dates()
+  {
+    return enable_mysql_compatible_dates();
+  }
+  bool get_enable_mysql_compatible_dates_from_config()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_mysql_compatible_dates();
   }
   bool is_enable_column_store()
   {
@@ -1438,6 +1473,21 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_audit_log_query_sql();
+  }
+  bool enable_enhanced_cursor_validation()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_enhanced_cursor_validation();
+  }
+  bool is_enable_enum_set_with_subschema()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_enum_set_subschema();
+  }
+  bool get_tenant_ob_sqlstat_enable()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_ob_sqlstat_enable();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
@@ -1483,6 +1533,7 @@ public:
   void set_is_lock_session(bool v) { is_lock_session_ = v; }
   bool is_lock_session() const { return is_lock_session_; }
   int64_t get_plsql_exec_time();
+  int64_t get_plsql_compile_time() { return plsql_compile_time_; }
   void update_pure_sql_exec_time(int64_t elapsed_time);
   const ObServiceNameString& get_service_name() const { return service_name_; }
   bool get_failover_mode() const { return failover_mode_; }
@@ -1491,6 +1542,10 @@ public:
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
+  int64_t get_tx_id_with_thread_data_lock() {
+    ObSQLSessionInfo::LockGuard guard(get_thread_data_lock());
+    return tx_desc_ != NULL ? tx_desc_->get_tx_id().get_id() : transaction::ObTransID().get_id();
+  }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -1606,6 +1661,7 @@ private:
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
   int64_t plsql_exec_time_;
+  int64_t plsql_compile_time_;
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
@@ -1726,6 +1782,8 @@ public:
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
   bool is_pl_prepare_stage() const;
+  inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
+  int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
   dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
@@ -1763,6 +1821,7 @@ private:
   bool failover_mode_;
   ObServiceNameString service_name_;
   common::ObString audit_filter_name_;
+  ObExecutingSqlStatRecord executing_sql_stat_record_;
 };
 
 

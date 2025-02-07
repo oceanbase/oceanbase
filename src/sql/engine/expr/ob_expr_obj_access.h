@@ -79,16 +79,22 @@ public:
     int get_attr_func(int64_t param_cnt,
                       int64_t* params,
                       int64_t *element_val,
-                      ObEvalCtx &ctx) const;
+                      ObEvalCtx &ctx,
+                      int64_t *allocator_addr,
+                      ObSQLSessionInfo *session_info) const;
     int get_record_attr(const pl::ObObjAccessIdx &current_access,
                         uint64_t udt_id,
                         bool for_write,
                         void *&current_value,
-                        ObEvalCtx &ctx) const;
+                        ObEvalCtx &ctx,
+                        void *&current_allocator) const;
     int get_collection_attr(int64_t* params,
                             const pl::ObObjAccessIdx &current_access,
                             bool for_write,
-                            void *&current_value) const;
+                            bool is_assoc_array,
+                            void *&current_value,
+                            void *&current_allocator,
+                            ObSQLSessionInfo *session_info) const;
 
 
     int calc(ObObj &result,

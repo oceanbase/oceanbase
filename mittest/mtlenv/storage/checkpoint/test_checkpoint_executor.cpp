@@ -1,3 +1,6 @@
+// owner: gengli.wzy
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -284,7 +287,11 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   ASSERT_EQ(tmp, ls2->get_ls_meta().get_clog_checkpoint_scn());
 
   tmp.val_ = 12;
-  ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->advance_checkpoint_by_flush(tmp));
+  ASSERT_EQ(OB_SUCCESS, checkpoint_executor2->advance_checkpoint_by_flush(
+              tmp,
+              INT64_MAX,
+              false,
+              ObFreezeSourceFlag::TEST_MODE));
   ASSERT_EQ(OB_SUCCESS, ls2->get_data_checkpoint()->flush(share::SCN::max_scn(), false));
   usleep(60L * 1000L);  // 60ms
   checkpoint_executor2->offline();

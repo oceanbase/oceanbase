@@ -22,6 +22,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIJsonBase;
+}
 namespace storage
 {
 
@@ -93,6 +97,28 @@ public:
       int64_t &doc_length,
       ObFTWordMap &words) const;
   const ObFTParser &get_parser_name() const { return parser_name_; }
+  /**
+   * Make json document for fulltext search
+   *
+   * @param[in] words, word lists after segment
+   * @param[in] doc_length, length of document by word count
+   * @param[out] json_root, json document
+   */
+  int make_detail_json(
+      const ObFTWordMap &words,
+      const int64_t doc_length,
+      common::ObIJsonBase *&json_root);
+
+  /**
+   * Make json document for fulltext search
+   *
+   * @param[in] words, word lists after segment
+   * @param[out] json_root, json document
+   */
+  int make_token_array_json(
+      const ObFTWordMap &words,
+      common::ObIJsonBase *&json_root);
+
   void reset();
 
   TO_STRING_KV(K_(plugin_param), KP_(allocator), KP_(parser_desc), K_(is_inited));
@@ -118,6 +144,8 @@ private:
   bool is_inited_;
 
 private:
+  static constexpr const char *ENTRY_NAME_DOC_LEN = "doc_len";
+  static constexpr const char *ENTRY_NAME_TOKENS = "tokens";
   DISALLOW_COPY_AND_ASSIGN(ObFTParseHelper);
 };
 

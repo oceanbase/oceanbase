@@ -42,8 +42,8 @@ public:
   static int calc(const int64_t unit_value, common::ObTime &ot, const int64_t ts,
                   const common::ObTimeConvertCtx &cvrt_ctx, int64_t interval,
                   int64_t &delta);
+  static int calc_timestamp_add_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
-  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy

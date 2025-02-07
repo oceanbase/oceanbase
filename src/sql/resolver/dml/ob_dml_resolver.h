@@ -90,7 +90,6 @@ class ObDMLResolver : public ObStmtResolver
   public:
     ObCteResolverCtx():
       left_select_stmt_(NULL),
-      left_select_stmt_parse_node_(NULL),
       opt_col_alias_parse_node_(NULL),
       is_with_clause_resolver_(false),
       current_cte_table_name_(""),
@@ -119,17 +118,15 @@ class ObDMLResolver : public ObStmtResolver
     inline void reset_subquery_level() { cte_resolve_level_ = 0; }
     inline bool is_recursive() const { return is_recursive_cte_; }
     inline void set_left_select_stmt(ObSelectStmt* left_stmt) { left_select_stmt_ = left_stmt; }
-    inline void set_left_parse_node(const ParseNode* node) { left_select_stmt_parse_node_ = node; }
     inline void set_set_all(bool all) { is_set_all_ = all; }
     inline bool invalid_recursive_union() { return  (nullptr != left_select_stmt_ && !is_set_all_); }
     inline bool more_than_two_branch() { return cte_branch_count_ >= 2; }
     inline void reset_branch_count() { cte_branch_count_ = 0; }
     inline void set_recursive_left_branch() { is_set_left_resolver_ = true; cte_branch_count_ ++; }
-    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, const ParseNode* node, bool all) {
+    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, bool all) {
       is_set_left_resolver_ = false;
       cte_branch_count_ ++;
       left_select_stmt_ = left_stmt;
-      left_select_stmt_parse_node_ = node;
       is_set_all_ = all;
     }
     inline void set_has_param_list(bool has) { has_cte_param_list_ = has; }
@@ -138,7 +135,6 @@ class ObDMLResolver : public ObStmtResolver
     inline bool check_has_recursive_word() const { return has_recursive_word_; }
     int assign(ObCteResolverCtx &cte_ctx) {
       left_select_stmt_ = cte_ctx.left_select_stmt_;
-      left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
       opt_col_alias_parse_node_ = cte_ctx.opt_col_alias_parse_node_;
       is_with_clause_resolver_ = cte_ctx.is_with_clause_resolver_;
       current_cte_table_name_ = cte_ctx.current_cte_table_name_;
@@ -162,7 +158,6 @@ class ObDMLResolver : public ObStmtResolver
                  K_(has_recursive_word));
   private:
     ObSelectStmt* left_select_stmt_;
-    const ParseNode* left_select_stmt_parse_node_;
     const ParseNode* opt_col_alias_parse_node_;
     bool is_with_clause_resolver_;
     ObString current_cte_table_name_;
@@ -209,6 +204,14 @@ public:
                                   TableItem *&table_item);
   int resolve_json_table_item(const ParseNode &table_node,
                               TableItem *&table_item);
+  int resolve_rb_iterate_item(const ParseNode &table_node,
+                              TableItem *&table_item);
+  int resolve_unnest_item(const ParseNode &table_node, TableItem *&table_item);
+  int create_rb_iterate_table_item(TableItem *&table_item, ObString alias_name = NULL);
+  int create_unnest_table_item(TableItem *&table_item, ObItemType item_type, ObString table_name);
+  int rb_iterate_table_add_column(TableItem *&table_item, ColumnItem *&col_item, int64_t col_id = 1);
+  int unnest_table_add_column(TableItem *&table_item, ColumnItem *&col_item, ObString col_name);
+
   int resolve_xml_namespaces(const ParseNode *namespace_node, ObJsonTableDef*& table_def);
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);
@@ -894,6 +897,7 @@ private:
   int check_stmt_order_by(const ObSelectStmt *stmt);
 
   int resolve_ora_rowscn_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
+  int resolve_old_new_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_rowid_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_pseudo_column(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int check_keystore_status();
@@ -942,6 +946,8 @@ private:
                          ObOptHint *&opt_hint);
   int resolve_index_hint(const TableItem &table, // resolved mysql mode index hint after table
                          const ParseNode &index_hint_node);
+  int resolve_union_merge_hint(const ParseNode &hint_node,
+                               ObOptHint *&opt_hint);
   int resolve_table_parallel_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_order_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_hint(const ParseNode &join_node, ObIArray<ObHint*> &join_hints);
@@ -1028,10 +1034,6 @@ private:
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);
-  int check_fulltext_search_simple_filter(ObRawExpr *expr,
-                                          ObRawExpr *match_expr,
-                                          bool &is_simple_filter,
-                                          ObIArray<ObExprConstraint> &constraints);
   int build_and_check_true_expr(ObRawExpr *const_expr,
                                 ObItemType compare_op,
                                 bool &is_true,
@@ -1065,6 +1067,9 @@ protected:
       const TableItem &table_item,
       TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
+  int check_doc_id_need_column_ref_expr(
+      ObDMLStmt &stmt,
+      bool &need_column_ref_expr);
   int check_vec_vid_need_column_ref_expr(
       ObDMLStmt &stmt,
       bool &need_column_ref_expr);

@@ -26,6 +26,7 @@
 #include "share/aggregate/agg_ctx.h"
 #include "share/aggregate/aggr_extra.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -70,6 +71,7 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUN_JSON_OBJECTAGG:
   case T_FUN_ORA_JSON_OBJECTAGG:
   case T_FUN_ORA_XMLAGG:
+  case T_FUNC_SYS_ARRAY_AGG:
   case T_FUN_HYBRID_HIST:
   case T_FUN_TOP_FRE_HIST:
   case T_FUN_AGG_UDF: {
@@ -239,7 +241,7 @@ public:
 #define INNER_ADD(vec_tc)                                                                          \
   case (vec_tc): {                                                                                 \
     ret = inner_add_for_multi_groups<ObFixedLengthFormat<RTCType<vec_tc>>>(                        \
-      agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr->get_vector(eval_ctx));       \
+      agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);                             \
   } break
 
     int ret = OB_SUCCESS;
@@ -247,7 +249,6 @@ public:
     ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
     VectorFormat fmt = VEC_INVALID;
     ObExpr *param_expr = nullptr;
-    ObIVector *param_vec = nullptr;
     Derived *derived_this = static_cast<Derived *>(this);
 #ifndef NDEBUG
     int64_t mock_skip_data = 0;
@@ -271,29 +272,27 @@ public:
           SQL_LOG(WARN, "inner add one row failed", K(ret));
         }
       }
-    } else if (OB_FAIL(get_nested_expr_vec(agg_ctx, param_expr, param_vec))) {
-      SQL_LOG(WARN, "get nested expr vec failed", K(ret));
     } else {
       VecValueTypeClass vec_tc = param_expr->get_vec_value_tc();
       switch(fmt) {
       case common::VEC_UNIFORM: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<false>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, false>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_UNIFORM_CONST: {
-        ret = inner_add_for_multi_groups<ObUniformFormat<true>>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+        ret = inner_add_for_multi_groups<uniform_fmt<Derived::IN_TC, true>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_DISCRETE: {
-        ret = inner_add_for_multi_groups<ObDiscreteFormat>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+        ret = inner_add_for_multi_groups<discrete_fmt<Derived::IN_TC>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_CONTINUOUS: {
-        ret = inner_add_for_multi_groups<ObContinuousFormat>(
-          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_vec);
+        ret = inner_add_for_multi_groups<continuous_fmt<Derived::IN_TC>>(
+          agg_ctx, agg_rows, row_sel, batch_size, agg_col_id, param_expr);
         break;
       }
       case common::VEC_FIXED: {
@@ -319,7 +318,8 @@ public:
   int collect_batch_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                                   const int32_t cur_group_id, const int32_t output_start_idx,
                                   const int32_t expect_batch_size, int32_t &output_size,
-                                  const ObBitVector *skip = nullptr) override
+                                  const ObBitVector *skip = nullptr,
+                                  const bool init_vector = true) override
   {
     int ret = OB_SUCCESS;
     OB_ASSERT(agg_col_id < agg_ctx.aggr_infos_.count());
@@ -332,7 +332,7 @@ public:
       SQL_LOG(DEBUG, "no need to collect", K(ret), K(agg_ctx.agg_rows_.count()), K(cur_group_id));
     } else {
       output_size = 0;
-      if (OB_FAIL(agg_expr.init_vector_for_write(
+      if (init_vector && OB_FAIL(agg_expr.init_vector_for_write(
             agg_ctx.eval_ctx_, agg_expr.get_default_res_format(), expect_batch_size))) {
         SQL_LOG(WARN, "init vector for write failed", K(ret));
       } else {
@@ -441,24 +441,44 @@ protected:
   template <typename ColumnFmt>
   int inner_add_for_multi_groups(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows, RowSelector &row_sel,
                                  const int64_t batch_size, const int32_t agg_col_id,
-                                 ObIVector *ivec)
+                                 ObExpr *param_expr)
   {
     int ret = OB_SUCCESS;
+    ObIVector *ivec = param_expr->get_vector(agg_ctx.eval_ctx_);
     ColumnFmt *param_vec = static_cast<ColumnFmt *>(ivec);
+    VectorFormat fmt = ivec->get_format();
+    ObArenaAllocator tmp_allocator;
     bool is_null = false;
     const char *payload = nullptr;
     int32_t len = 0;
     Derived *derived_this = static_cast<Derived *>(this);
     for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
       int64_t batch_idx = row_sel.index(i);
-      param_vec->get_payload(batch_idx, is_null, payload, len);
+      if (param_expr->is_nested_expr() && !is_uniform_format(ivec->get_format())) {
+        payload = nullptr;
+        if (OB_FAIL(ObArrayExprUtils::get_collection_payload(tmp_allocator, agg_ctx.eval_ctx_, *param_expr, batch_idx, payload, len))) {
+          SQL_LOG(WARN, "get nested collection payload failed", K(ret));
+        } else {
+          is_null = (payload == nullptr);
+        }
+      } else {
+        param_vec->get_payload(batch_idx, is_null, payload, len);
+      }
       char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
-      if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(derived_this->add_one_row(agg_ctx, batch_idx, batch_size, is_null, payload, len,
                                             agg_col_id, agg_cell))) {
         SQL_LOG(WARN, "inner add one row failed", K(ret));
       }
     }
     return ret;
+  }
+  template <>
+  int inner_add_for_multi_groups<ObVectorBase>(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
+                                               RowSelector &row_sel, const int64_t batch_size,
+                                               const int32_t agg_col_id, ObExpr *param_expr)
+  {
+    return OB_NOT_IMPLEMENT;
   }
   template <typename ColumnFmt>
   int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,
@@ -481,8 +501,8 @@ protected:
       if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            if (OB_FAIL(
-                  derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
+            if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, i, agg_col_id,
+                                                     agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -492,8 +512,8 @@ protected:
           }
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
-                                                 calc_info))) {
+            if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                  derived, agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -501,8 +521,8 @@ protected:
       } else if (!row_sel.is_empty()) {
         if (all_not_null) {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_row(agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell,
-                                        tmp_res, calc_info))) {
+            if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, row_sel.index(i),
+                                                     agg_col_id, agg_cell, tmp_res, calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -512,8 +532,9 @@ protected:
           }
         } else {
           for (int i = 0; OB_SUCC(ret) && i < row_sel.size(); i++) {
-            if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, row_sel.index(i), agg_col_id,
-                                                 agg_cell, tmp_res, calc_info))) {
+            if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                  derived, agg_ctx, *columns, row_sel.index(i), agg_col_id, agg_cell, tmp_res,
+                  calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -522,8 +543,9 @@ protected:
         if (all_not_null) {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_row(agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
-                                               calc_info))) {
+            } else if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, i,
+                                                            agg_col_id, agg_cell, tmp_res,
+                                                            calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -534,8 +556,9 @@ protected:
         } else {
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
-            } else if (OB_FAIL(derived.add_nullable_row(agg_ctx, *columns, i, agg_col_id, agg_cell,
-                                                        tmp_res, calc_info))) {
+            } else if (OB_FAIL(AddNullableRow<Derived>::do_op(
+                         derived, agg_ctx, *columns, i, agg_col_id, agg_cell, tmp_res,
+                         calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
@@ -606,7 +629,8 @@ protected:
       guard.set_batch_idx(start_output_idx + i);
       agg_cell = nullptr;
       agg_cell_len = 0;
-      agg_ctx.get_agg_payload(agg_col_id, start_gid + i, agg_cell, agg_cell_len);
+      const char* agg_row = agg_ctx.agg_rows_.at(start_gid + i);
+      agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
       if (helper::has_extra_info(aggr_info)) {
         VecExtraResult *&extra = agg_ctx.get_extra(agg_col_id, agg_cell);
         if (!extra->is_evaluated()
@@ -615,6 +639,7 @@ protected:
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row))) {
       } else if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
                    agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
         SQL_LOG(WARN, "collect group result failed", K(ret));
@@ -662,10 +687,6 @@ protected:
         } else {
           const char *agg_row = static_cast<const char *>(row->get_extra_payload(row_meta));
           agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
-          agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
-          SQL_LOG(DEBUG, "collect group results", K(agg_col_id), K(output_start_idx), K(i), K(batch_size),
-                  K(row_start_idx), K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
-                  K(agg_cell_len), K(agg_cell), K(row_meta), KP(row), KP(agg_expr), KPC(agg_expr));
           if (helper::has_extra_info(aggr_info)) {
             VecExtraResult *&extra = agg_ctx.get_extra(agg_col_id, agg_cell);
             if (!extra->is_evaluated()
@@ -674,9 +695,17 @@ protected:
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
-                       agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
-            SQL_LOG(WARN, "collect group result failed", K(ret));
+          } else {
+            agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
+            SQL_LOG(DEBUG, "collect group results", K(agg_col_id), K(output_start_idx), K(i),
+                    K(batch_size), K(row_start_idx),
+                    K(agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type()), KP(agg_cell),
+                    K(agg_cell_len), K(agg_cell), K(row_meta), KP(row), KP(agg_expr),
+                    KPC(agg_expr));
+            if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
+                  agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
+              SQL_LOG(WARN, "collect group result failed", K(ret));
+            }
           }
         }
       }
@@ -836,6 +865,8 @@ public:
         || !rollup_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "distinct set is NULL", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else {
@@ -883,6 +914,8 @@ public:
     if (OB_ISNULL(ad_result) || !ad_result->is_inited()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "invalid null extra", K(ret));
+    } else if (OB_FAIL(ad_result->init_vector_default(ctx, ctx.max_batch_size_))) {
+      SQL_LOG(WARN, "failed to init vector default", K(ret));
     } else if (OB_FAIL(ad_result->brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else if (agg_ctx.has_rollup_ && group_id > 0) {
@@ -939,23 +972,6 @@ public:
       SQL_LOG(WARN, "collect group result failed", K(ret));
     }
     return ret;
-  }
-  template <typename ColumnFmt>
-  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
-                     const int32_t agg_col_id, char *aggr_cell, void *tmp_res, int64_t &calc_info)
-  {
-    UNUSEDx(agg_ctx, columns, row_num, agg_col_id, aggr_cell, tmp_res, calc_info);
-    SQL_LOG(DEBUG, "add_row do nothing");
-    return OB_SUCCESS;
-  }
-  template <typename ColumnFmt>
-  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
-                              const int32_t agg_col_id, char *agg_cell, void *tmp_res,
-                              int64_t &calc_info)
-  {
-    UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
-    SQL_LOG(DEBUG, "add_nullable_row do nothing");
-    return OB_SUCCESS;
   }
 
   inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,

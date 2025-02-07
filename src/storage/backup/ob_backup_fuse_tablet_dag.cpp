@@ -133,13 +133,16 @@ int ObBackupTabletFuseDagNet::fill_comment(char *buf, const int64_t buf_len) con
   int ret = OB_SUCCESS;
   const int64_t MAX_TRACE_ID_LENGTH = 64;
   char task_id_str[MAX_TRACE_ID_LENGTH] = { 0 };
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group fuse dag net do not init ", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObBackupTabletFuseDagNet: ls_id = %s, backup_set_id = %s, turn_id = %s, retry_id = %s",
-      to_cstring(ctx_->param_.ls_id_), to_cstring(ctx_->param_.backup_set_desc_.backup_set_id_),
-      to_cstring(ctx_->param_.turn_id_), to_cstring(ctx_->param_.retry_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+      "ObBackupTabletFuseDagNet:",
+      ", ls_id = ", ctx_->param_.ls_id_,
+      ", backup_set_id = ", ctx_->param_.backup_set_desc_.backup_set_id_,
+      ", turn_id = ", ctx_->param_.turn_id_,
+      ", retry_id = ", ctx_->param_.retry_id_))) {
     LOG_WARN("failed to databuff printf", K(ret), "param", ctx_->param_);
   }
   return ret;
@@ -148,12 +151,13 @@ int ObBackupTabletFuseDagNet::fill_comment(char *buf, const int64_t buf_len) con
 int ObBackupTabletFuseDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group fuse dag net do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObBackupTabletFuseDagNet: ls_id = %s, backup_set_id = %s",
-      to_cstring(ctx_->param_.ls_id_), to_cstring(ctx_->param_.backup_set_desc_.backup_set_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+      "ObBackupTabletFuseDagNet: ls_id = ", ctx_->param_.ls_id_,
+      ", backup_set_id = ", ctx_->param_.backup_set_desc_.backup_set_id_))) {
     LOG_WARN("failed to databuff printf", K(ret), "param", ctx_->param_);
   }
   return ret;
@@ -319,15 +323,16 @@ int ObInitialBackupTabletGroupFuseDag::fill_dag_key(char *buf, const int64_t buf
   int ret = OB_SUCCESS;
   ObBackupTabletGroupFuseCtx *ctx = NULL;
 
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group fuse dag do not init", K(ret));
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group fuse ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObInitialBackupTabletGroupFuseDag: ls_id = %s, backup_set_id = %s",
-      to_cstring(ctx_->param_.ls_id_), to_cstring(ctx_->param_.backup_set_desc_.backup_set_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+      "ObInitialBackupTabletGroupFuseDag: ls_id = ", ctx_->param_.ls_id_,
+      ", backup_set_id = ", ctx_->param_.backup_set_desc_.backup_set_id_))) {
     LOG_WARN("failed to databuff printf", K(ret), "param", ctx_->param_);
   }
   return ret;
@@ -370,15 +375,16 @@ int ObStartBackupTabletGroupFuseDag::fill_dag_key(char *buf, const int64_t buf_l
   int ret = OB_SUCCESS;
   ObBackupTabletGroupFuseCtx *ctx = NULL;
 
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group fuse dag do not init", K(ret));
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group fuse ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObStartBackupTabletGroupFuseDag: ls_id = %s, backup_set_id = %s",
-      to_cstring(ctx_->param_.ls_id_), to_cstring(ctx_->param_.backup_set_desc_.backup_set_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+      "ObStartBackupTabletGroupFuseDag: ls_id = ", ctx_->param_.ls_id_,
+      ", backup_set_id = ", ctx_->param_.backup_set_desc_.backup_set_id_))) {
     LOG_WARN("failed to databuff printf", K(ret), "param", ctx_->param_);
   }
   return ret;
@@ -444,15 +450,16 @@ int ObFinishBackupTabletGroupFuseDag::fill_dag_key(char *buf, const int64_t buf_
   int ret = OB_SUCCESS;
   ObBackupTabletGroupFuseCtx *ctx = NULL;
 
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group fuse dag do not init", K(ret));
   } else if (OB_ISNULL(ctx = get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet group fuse ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-      "ObFinishBackupTabletGroupFuseDag: ls_id = %s, backup_set_id = %s",
-      to_cstring(ctx_->param_.ls_id_), to_cstring(ctx_->param_.backup_set_desc_.backup_set_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+      "ObFinishBackupTabletGroupFuseDag: ls_id = ", ctx_->param_.ls_id_,
+      ", backup_set_id = ", ctx_->param_.backup_set_desc_.backup_set_id_))) {
     LOG_WARN("failed to databuff printf", K(ret), "param", ctx_->param_);
   }
   return ret;
@@ -569,14 +576,14 @@ int64_t ObBackupTabletFuseDag::hash() const
 int ObBackupTabletFuseDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet fuse dag do not init", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObBackupTabletFuseDag: ls_id = %s, backup_set_id = %s, tablet_id = %s",
-       to_cstring(fuse_ctx_.param_.ls_id_),
-       to_cstring(fuse_ctx_.param_.backup_set_desc_.backup_set_id_),
-       to_cstring(fuse_ctx_.fuse_item_.tablet_id_)))) {
+  } else if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+       "ObBackupTabletFuseDag: ls_id = ", fuse_ctx_.param_.ls_id_,
+       ", backup_set_id = ", fuse_ctx_.param_.backup_set_desc_.backup_set_id_,
+       ", tablet_id = ", fuse_ctx_.fuse_item_.tablet_id_))) {
     LOG_WARN("failed to fill comment", K(ret), K(fuse_ctx_));
   }
   return ret;

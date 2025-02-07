@@ -104,14 +104,18 @@ protected:
   int64_t ref_num_;
 };
 
-class ObQSync : public ObQSyncImpl
+template<int64_t MAX_REF_CNT>
+class ObQSyncWrapper : public ObQSyncImpl
 {
 public:
-  enum { MAX_REF_CNT = 256 };
-  ObQSync() : ObQSyncImpl(local_ref_array_, MAX_REF_CNT) {}
-  virtual ~ObQSync() {}
+  ObQSyncWrapper() : ObQSyncImpl(local_ref_array_, MAX_REF_CNT) {}
+  virtual ~ObQSyncWrapper() {}
 private:
   Ref local_ref_array_[MAX_REF_CNT];
+};
+
+class ObQSync : public ObQSyncWrapper<256>
+{
 };
 
 struct QSyncCriticalGuard

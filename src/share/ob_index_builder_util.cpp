@@ -141,7 +141,7 @@ int ObIndexBuilderUtil::add_column(
       if (column.is_spatial_generated_column()) {
         column.set_geo_col_id(data_column->get_geo_col_id());
       }
-      if (column.is_fulltext_column()) {
+      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index())) {
         ObObj default_value;
         column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         if (column.is_word_segment_column()) {
@@ -761,15 +761,11 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
       LOG_WARN("failed to adjust vec index args", K(ret));
     }
   } else if (is_fts_index(arg.index_type_)) {
-    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
-      LOG_WARN("fail to check fts index allowed", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("failed to adjust fts args", K(ret));
     }
   } else if (is_multivalue_index(arg.index_type_)) {
-    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
-      LOG_WARN("fail to check multivalue index allowed", K(ret));
-    } else if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, gen_columns))) {
+    if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, allocator, gen_columns, true))) {
       LOG_WARN("failed to adjust multivalue args", K(ret));
     }
   } else if (OB_FAIL(adjust_ordinary_index_column_args(arg, data_schema, allocator, gen_columns))) {
@@ -818,7 +814,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
       ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR);
       ObRawExprFactory expr_factory(allocator);
       SMART_VAR(sql::ObSQLSessionInfo, session) {
-        SMART_VAR(sql::ObExecContext, exec_ctx, allocator) {
+        SMART_VARS_2((sql::ObExecContext, exec_ctx, allocator), (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
           uint64_t tenant_id = data_schema.get_tenant_id();
           const ObTenantSchema *tenant_schema = NULL;
           ObSchemaGetterGuard guard;
@@ -827,6 +823,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
           LinkExecCtxGuard link_guard(session, exec_ctx);
           exec_ctx.set_my_session(&session);
           exec_ctx.set_is_ps_prepare_stage(false);
+          exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
           if (OB_FAIL(session.init(0 /*default session id*/,
                                   0 /*default proxy id*/,
                                   &allocator))) {
@@ -861,9 +858,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
                                                         ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
                                                         NULL))) {
             LOG_WARN("build generated column expr failed", K(ret));
-          } else if (!expr->is_deterministic()) {
-            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-            LOG_WARN("only pure functions can be indexed", K(ret));
           } else if (!expr->is_column_ref_expr()) {
             //real index expr, so generate hidden generated column in data table schema
             if (lib::Worker::CompatMode::MYSQL == compat_mode) {
@@ -873,6 +867,9 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
               } else if (ob_is_json_tc(expr->get_result_type().get_type())) {
                 ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
                 LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));
+              } else if (ob_is_collection_sql_type(expr->get_result_type().get_type())) {
+                ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                LOG_WARN("Cannot create a functional index on an expression that returns a ARRAY.",K(ret));
               } else if (ob_is_text_tc(expr->get_result_type().get_type()) || ob_is_lob_tc(expr->get_result_type().get_type())) {
                 ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
                 LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
@@ -923,6 +920,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
             LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
           }
+          exec_ctx.set_physical_plan_ctx(NULL);
         }
       }
     }

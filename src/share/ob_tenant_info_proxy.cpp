@@ -428,6 +428,7 @@ int ObAllTenantInfoProxy::load_pure_tenant_info_(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_LOAD_PURE_TENANT_INFO);
     ObSqlString sql;
     uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
@@ -483,7 +484,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
     } else {
       const int64_t MAX_GAP = tenant_config->_standby_max_replay_gap_time * 1000;
       SCN new_readable_scn_plus_gap = SCN::plus(new_readable_scn, MAX_GAP);
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+      if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
         const int64_t REAL_GAP = new_replayable_scn.get_val_for_gts() - new_readable_scn.get_val_for_gts();
         const bool IS_MAX_GAP_REACHED = REAL_GAP > MAX_GAP ? true : false;
         LOG_INFO("tenant scn gap info", K(IS_MAX_GAP_REACHED), K(REAL_GAP), K(MAX_GAP), K(new_sync_scn),
@@ -625,8 +626,14 @@ int ObAllTenantInfoProxy::update_tenant_max_ls_id(
   } else if (DEFAULT_MAX_LS_ID == all_tenant_info.get_max_ls_id().id() && !for_upgrade) {
     //while max_ls_id is zero, can not update tenant max ls id, except upgrade
   } else if (max_ls_id.id() <= all_tenant_info.get_max_ls_id().id()) {
-    //nothing, ls create maybe concurrency
-    //upgrade maybe reentry, so max_ls_id maybe already setted
+    if (for_upgrade) {
+      //upgrade maybe reentry, so max_ls_id maybe already setted
+    } else {
+      //在日志流个数2->3的时候，1001分裂出1003，1002分裂出1004，在实际创建的时候
+      //这两个任务是并发的，实际上是没有办法保证1003一定先于1004创建出来
+      //所以在更新max_ls_id可能会有回退的问题，不报错处理
+      LOG_WARN("max ls id is used, no need to set", KR(ret), K(all_tenant_info), K(max_ls_id));
+    }
   } else if (OB_FAIL(sql.assign_fmt(
           "update %s set max_ls_id = %ld "
           "where tenant_id = %lu and max_ls_id < %ld",

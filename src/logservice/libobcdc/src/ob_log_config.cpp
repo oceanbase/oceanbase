@@ -426,7 +426,9 @@ int ObLogConfig::load_from_buffer_(char *config_str,
         } else {
           (*pp_item)->set_value(value);
           (*pp_item)->set_version(version);
-          _LOG_INFO("load config succ, %s=%s", name, value);
+          if (need_print_config(name)) {
+            _LOG_INFO("load config succ, %s=%s", name, value);
+          }
         }
       }
 

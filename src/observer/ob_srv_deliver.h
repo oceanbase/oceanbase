@@ -116,6 +116,7 @@ private:
   int deliver_rpc_request(rpc::ObRequest &req);
 
   int deliver_mysql_request(rpc::ObRequest &req);
+  int acquire_diagnostic_info_object(int64_t tenant_id, int64_t group_id, int64_t session_id, ObDiagnosticInfo *&di);
 
 private:
   bool is_inited_;

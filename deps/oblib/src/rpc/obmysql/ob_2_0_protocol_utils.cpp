@@ -22,6 +22,7 @@
 #include "rpc/obmysql/ob_2_0_protocol_struct.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 
@@ -97,7 +98,6 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
     } else {
       ObEasyBuffer easy_buffer(*param.ez_buf_);
 
-      //SET_OB_LOG_TRACE_MODE();    // prevent printing log
       int32_t old_len = param.seri_size_;
       ret = param.pkt_->encode(easy_buffer.last(), easy_buffer.write_avail_size(), param.seri_size_);
       if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
@@ -107,7 +107,6 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
       //     || ((IS_LOG_ENABLED(INFO) && (OB_LOG_NEED_TO_PRINT(DEBUG))))) {
       //  PRINT_OB_LOG_TRACE_BUF(INFO);
       //}
-      //CANCLE_OB_LOG_TRACE_MODE();
 
       if (OB_SUCC(ret)) {
         easy_buffer.write(param.seri_size_);
@@ -210,7 +209,7 @@ inline int ObProto20Utils::do_proto20_packet_encode(ObProtoEncodeParam &param)
       }
     }
     LOG_DEBUG("proto20 encode", "current next step",
-              get_proto20_encode_step_name(proto20_context.next_step_));
+              get_proto20_encode_step_name(proto20_context.next_step_), K(need_break), K(param.need_flush_));
   }
 
   if (OB_SUCC(ret)) {
@@ -497,6 +496,11 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("impossible", "read_avail", easy_buffer.read_avail_size(),
                   "header len", proto20_context.header_len_, K(ret));
+      } else if (param.is_composed_ok_pkt_) {
+        // 遇到了err+ok，但是ok包过大且已经写入了err包的内容，这里不可以变为FILL_TAILER_STEP状态，
+        // 否则err和ok就不算在一个包里面了
+        param.need_flush_ = true; // break, alloc more memory
+        need_break = true;
       } else {
         // there must be enough space for tailer
         proto20_context.next_step_ = FILL_TAILER_STEP;
@@ -542,10 +546,18 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   ObEasyBuffer easy_buffer(*param.ez_buf_);
   ObProto20Context &proto20_context = *param.proto20_context_;
 
-  uint32_t compress_len = static_cast<uint32_t>(easy_buffer.read_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE);
-  uint8_t compress_seq = proto20_context.comp_seq_;
-  ++proto20_context.comp_seq_;
+  uint32_t compress_len = 0;
+  uint8_t compress_seq = 0;
   uint32_t uncompress_len = 0;
+
+  if (param.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()) {
+    // do nothing
+  } else {
+    compress_len = static_cast<uint32_t>(easy_buffer.read_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE);
+    compress_seq = proto20_context.comp_seq_;
+    ++proto20_context.comp_seq_;
+  }
+
   int16_t magic_num = OB20_PROTOCOL_MAGIC_NUM;
   uint16_t version = OB20_PROTOCOL_VERSION_VALUE;
   uint32_t connid = param.conn_id_;
@@ -571,11 +583,14 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   } else if (OB_UNLIKELY(compress_len > OB_MYSQL_MAX_PAYLOAD_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid compress_len", K(compress_len), K(OB_MYSQL_MAX_PAYLOAD_LENGTH), K(ret));
-  } else if (OB_FAIL(ObMySQLUtil::store_int3(start, proto20_context.header_len_, compress_len, pos))) {
+  } else if (!param.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()
+      && OB_FAIL(ObMySQLUtil::store_int3(start, proto20_context.header_len_, compress_len, pos))) {
     LOG_ERROR("fail to store int3", K(ret));
-  } else if (OB_FAIL(ObMySQLUtil::store_int1(start, proto20_context.header_len_, compress_seq, pos))) {
+  } else if (!param.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()
+      && OB_FAIL(ObMySQLUtil::store_int1(start, proto20_context.header_len_, compress_seq, pos))) {
     LOG_ERROR("fail to store int1", K(ret));
-  } else if (OB_FAIL(ObMySQLUtil::store_int3(start, proto20_context.header_len_, uncompress_len, pos))) {
+  } else if (!param.conn_->proxy_cap_flags_.is_ob_protocol_v2_compress()
+      && OB_FAIL(ObMySQLUtil::store_int3(start, proto20_context.header_len_, uncompress_len, pos))) {
     LOG_ERROR("fail to store int3", K(ret));
   } else if (OB_FAIL(ObMySQLUtil::store_int2(start, proto20_context.header_len_, magic_num, pos))) {
     LOG_ERROR("fail to store int2", K(ret));

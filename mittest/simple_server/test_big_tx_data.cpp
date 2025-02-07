@@ -1,3 +1,6 @@
+// owner: xuwang.txw
+// owner group: transaction
+
 /**
  * Copyright (c) 2023 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.

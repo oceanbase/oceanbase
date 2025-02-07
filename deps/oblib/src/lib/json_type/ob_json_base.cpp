@@ -23,6 +23,7 @@
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 #include "lib/charset/ob_charset.h" // for strntod
 #include "common/ob_smart_var.h" // for SMART_VAR
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -113,6 +114,8 @@ bool ObIJsonBase::is_json_date(ObJsonNodeType json_type) const
   switch (json_type) {
     case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_TIMESTAMP:
     case ObJsonNodeType::J_ORACLEDATE:
     case ObJsonNodeType::J_OTIMESTAMP:
@@ -1030,9 +1033,11 @@ int ObIJsonBase::find_type_method(ObIAllocator* allocator, ObSeekParentInfo &par
       break;
     }
     case ObJsonNodeType::J_STRING:
-    case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_TIME:
+    case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_TIMESTAMP:
     case ObJsonNodeType::J_OPAQUE:
     case ObJsonNodeType::J_OBINARY:  // binary string
@@ -1199,9 +1204,11 @@ int ObIJsonBase::find_boolean_method(ObIAllocator* allocator, ObSeekParentInfo &
       break;
     }
     case ObJsonNodeType::J_STRING:
-    case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_TIME:
+    case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_TIMESTAMP:
     case ObJsonNodeType::J_OPAQUE:
     case ObJsonNodeType::J_OBINARY:  // binary string
@@ -1689,7 +1696,7 @@ int ObIJsonBase::find_string_method(ObIAllocator* allocator, ObSeekParentInfo &p
     }
   } else if (!str_only) {
     ObJsonBuffer j_buf(allocator);
-    if (OB_FAIL(print(j_buf, true, false, 0))) {
+    if (OB_FAIL(print(j_buf, true, 0, false, 0))) {
       trans_fail = true;
     } else {
       ObJsonString* tmp_ans = static_cast<ObJsonString*> (allocator->alloc(sizeof(ObJsonString)));
@@ -1773,7 +1780,7 @@ int ObIJsonBase::find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &pa
       src = ObString(get_data_length(), get_data());
     } else if (type != ObJsonNodeType::J_NULL) {
       ObJsonBuffer j_buf(allocator);
-      if (OB_FAIL(print(j_buf, true, false, 0))) {
+      if (OB_FAIL(print(j_buf, true, 0, false, 0))) {
         trans_fail = true;
       } else {
         src = ObString(j_buf.length(), j_buf.ptr());
@@ -2128,6 +2135,44 @@ int ObIJsonBase::trans_to_date_timestamp(ObIAllocator* allocator,
   return ret;
 }
 
+// 日期类型和字符串类型本身没有差别
+// 直接将该字符串解析成json_tree会存储为字符串，需要自定义目标类型
+int ObIJsonBase::trans_to_mdate(ObIAllocator* allocator,
+                                        ObString str,
+                                        ObIJsonBase* &origin) const
+{
+  INIT_SUCC(ret);
+  ObIJsonBase *jb_ptr = NULL;
+  ObMySQLDate date;
+  ObTime ob_time;
+  ObDateSqlMode date_sql_mode;
+  if (OB_FAIL(origin->to_mdate(date, date_sql_mode))) {
+    LOG_WARN("fail to cast node to date", K(ret));
+  } else {
+    if (OB_FAIL(ObTimeConverter::mdate_to_ob_time(date, ob_time))) {
+      LOG_WARN("fail to cast int to ob_time", K(ret));
+    } else {
+      ObJsonDatetime* tmp_ans = static_cast<ObJsonDatetime*> (allocator->alloc(sizeof(ObJsonDatetime)));
+      if (OB_ISNULL(tmp_ans)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at ObJsonDate", K(ret));
+      } else {
+        tmp_ans = new (tmp_ans) ObJsonDatetime(ObJsonNodeType::J_MYSQL_DATE, ob_time);
+        jb_ptr = tmp_ans;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    origin = jb_ptr;
+  } else {
+    int old_ret = ret;
+    allocator->free(jb_ptr);
+    ret = old_ret;
+  }
+  return ret;
+}
+
 int ObIJsonBase::trans_to_boolean(ObIAllocator* allocator, ObString str, ObIJsonBase* &origin) const
 {
   INIT_SUCC(ret);
@@ -2216,6 +2261,9 @@ int ObIJsonBase::trans_json_node(ObIAllocator* allocator, ObIJsonBase* &scalar, 
             || right_type == ObJsonNodeType::J_OTIMESTAMP
             || right_type == ObJsonNodeType::J_OTIMESTAMPTZ) {
       ret = trans_to_date_timestamp(allocator, str, scalar, false);
+    } else if (right_type == ObJsonNodeType::J_MYSQL_DATE
+            || right_type == ObJsonNodeType::J_MYSQL_DATETIME) {
+      ret = trans_to_mdate(allocator, str, scalar);
     } else if (right_type == ObJsonNodeType::J_BOOLEAN) {
       // when scalar is string, path_res is boolean, case compare
       if (str.case_compare("true") == 0 || str.case_compare("false") == 0) {
@@ -2244,6 +2292,9 @@ int ObIJsonBase::trans_json_node(ObIAllocator* allocator, ObIJsonBase* &scalar, 
             || left_type == ObJsonNodeType::J_OTIMESTAMP
             || left_type == ObJsonNodeType::J_OTIMESTAMPTZ) {
       ret = trans_to_date_timestamp(allocator, str, path_res, false);
+    } else if (left_type == ObJsonNodeType::J_MYSQL_DATE
+            || left_type == ObJsonNodeType::J_MYSQL_DATETIME) {
+      ret = trans_to_mdate(allocator, str, path_res);
     } else if (left_type == ObJsonNodeType::J_BOOLEAN) {
       ret = trans_to_boolean(allocator, str, path_res);
     } else if (left_type != ObJsonNodeType::J_ARRAY && left_type != ObJsonNodeType::J_OBJECT) {
@@ -3200,7 +3251,7 @@ int ObIJsonBase::get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &
         right_str = ObString(var->get_data_length(), var->get_data());
       } else {
         ObJsonBuffer j_buf(allocator);
-        if (OB_FAIL(var->print(j_buf, true, false, 0))) {
+        if (OB_FAIL(var->print(j_buf, true, 0, false, 0))) {
           LOG_WARN("fail to get string of sql_var.", K(ret));
         } else {
           right_str = ObString(j_buf.length(), j_buf.ptr());
@@ -3566,7 +3617,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
         jb_ptr = &j_bin;
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
           LOG_WARN("fail to get array element", K(ret), K(depth), K(i));
-        } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) {
+        } else if (OB_FAIL(jb_ptr->print(j_buf, true, 0, is_pretty, depth))) {
           LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
         }
       }
@@ -3631,7 +3682,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           jb_ptr = &j_bin;
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("fail to get object value", K(ret), K(i), K(is_pretty), K(depth));
-          } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) { // value
+          } else if (OB_FAIL(jb_ptr->print(j_buf, true, 0, is_pretty, depth))) { // value
             LOG_WARN("fail to print json value to string", K(ret), K(i), K(is_pretty), K(depth));
           }
         }
@@ -3823,7 +3874,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
     // base64::typeXX:<binary data>
     if (OB_FAIL(base64_buf.append("base64:type"))) {
       LOG_WARN("fail to append \" base64:type \"", K(ret), K(depth));
-    } else if (OB_FAIL(base64_buf.append(field_buf, field_len))) {
+    } else if (OB_FAIL(base64_buf.append(field_buf, field_len, 0))) {
       LOG_WARN("fail to append field type", K(ret), K(depth), K(f_type));
     } else if (OB_FAIL(base64_buf.append(":"))) {
       LOG_WARN("fail to append \":\"", K(ret), K(depth));
@@ -3847,7 +3898,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
                                                        base64_buf.length()))) {
             LOG_WARN("fail to add double quote", K(ret), K(depth), K(f_type), K(base64_buf));
           }
-        } else if (OB_FAIL(j_buf.append(base64_buf.ptr(), base64_buf.length()))) {
+        } else if (OB_FAIL(j_buf.append(base64_buf.ptr(), base64_buf.length(), 0))) {
           LOG_WARN("fail to append base64_buf", K(ret), K(depth), K(f_type), K(base64_buf));
         }
       }
@@ -3858,142 +3909,143 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
   return ret;
 }
 
-int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint64_t depth) const
+int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len, bool is_pretty, uint64_t depth) const
 {
   INIT_SUCC(ret);
   ObJsonNodeType j_type = json_type();
-
-  // consistent with mysql 5.7
-  // in mysql 8.0, varstring is handled as json string, obvarchartype is considered as varstring.
-  switch (j_type) {
-    case ObJsonNodeType::J_DATE:
-    case ObJsonNodeType::J_TIME:
-    case ObJsonNodeType::J_DATETIME:
-    case ObJsonNodeType::J_TIMESTAMP:
-    case ObJsonNodeType::J_ORACLEDATE:
-    case ObJsonNodeType::J_ODATE:
-    case ObJsonNodeType::J_OTIMESTAMP:
-    case ObJsonNodeType::J_OTIMESTAMPTZ: {
-      if (OB_FAIL(print_jtime(j_buf, is_quoted))) {
-        LOG_WARN("fail to change jtime to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_ARRAY: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_array(j_buf, depth, is_pretty))) {
-        LOG_WARN("fail to change jarray to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OBJECT: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_object(j_buf, depth, is_pretty))) {
-        LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_BOOLEAN: {
-      if (get_boolean() ? OB_FAIL(j_buf.append("true", sizeof("true") - 1)) :
-                          OB_FAIL(j_buf.append("false", sizeof("false") - 1))) {
-        LOG_WARN("fail to append boolean", K(ret), K(get_boolean()), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_DECIMAL:
-    case ObJsonNodeType::J_ODECIMAL: {
-      if (OB_FAIL(print_decimal(j_buf))) {
-        LOG_WARN("fail to print decimal to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_DOUBLE:
-    case ObJsonNodeType::J_ODOUBLE: {
-      if (OB_FAIL(print_double(j_buf))) {
-        LOG_WARN("fail to print double to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OFLOAT: {
-      if (OB_FAIL(print_float(j_buf))) {
-        LOG_WARN("fail to print float to string", K(ret), K(depth), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_NULL: {
-      if (!(this)->is_real_json_null(this) && OB_FAIL(j_buf.append("", 0))) {
-        LOG_WARN("fail to append NULL upper string to buffer", K(ret), K(j_type));
-      } else if ((this)->is_real_json_null(this) && OB_FAIL(j_buf.append("null", sizeof("null") - 1))) {
-        LOG_WARN("fail to append null string to buffer", K(ret), K(j_type));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_OPAQUE: {
-      if (OB_FAIL(print_opaque(j_buf, depth, is_quoted))) {
-        LOG_WARN("fail to print opaque to string", K(ret), K(depth), K(j_type), K(is_quoted));
-      }
-      break;
-    }
-
-    case ObJsonNodeType::J_STRING:
-    case ObJsonNodeType::J_OBINARY:
-    case ObJsonNodeType::J_OOID:
-    case ObJsonNodeType::J_ORAWHEX:
-    case ObJsonNodeType::J_ORAWID:
-    case ObJsonNodeType::J_ODAYSECOND:
-    case ObJsonNodeType::J_OYEARMONTH: {
-      uint64_t data_len = get_data_length();
-      const char *data = get_data();
-      if (is_quoted && data_len == 0) {
-        if (OB_FAIL(j_buf.append("\"\"", 2))) {
-          LOG_WARN("fail to append empty string", K(ret), K(j_type), K(is_quoted));
+  if (reserve_len > 0 && OB_FAIL(j_buf.reserve(reserve_len * 1.2))) {
+    LOG_WARN("failed to reserve j_str", K(ret), K(reserve_len));
+  } else {
+    // consistent with mysql 5.7
+    // in mysql 8.0, varstring is handled as json string, obvarchartype is considered as varstring.
+    switch (j_type) {
+      case ObJsonNodeType::J_DATE:
+      case ObJsonNodeType::J_TIME:
+      case ObJsonNodeType::J_DATETIME:
+      case ObJsonNodeType::J_TIMESTAMP:
+      case ObJsonNodeType::J_MYSQL_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATE:
+      case ObJsonNodeType::J_ORACLEDATE:
+      case ObJsonNodeType::J_ODATE:
+      case ObJsonNodeType::J_OTIMESTAMP:
+      case ObJsonNodeType::J_OTIMESTAMPTZ: {
+        if (OB_FAIL(print_jtime(j_buf, is_quoted))) {
+          LOG_WARN("fail to change jtime to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
         }
-      } else if (OB_ISNULL(data) && data_len != 0) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("data is null", K(ret), K(data_len));
-      } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len))) {
-        // if data is null, data_len is 0, it is an empty string
-        LOG_WARN("fail to append string", K(ret), K(j_type), K(is_quoted));
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_INT:
-    case ObJsonNodeType::J_OINT: {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_signed(get_int(), tmp_buf);
-      if (OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append json int to buffer", K(ret), K(get_int()), K(len), K(j_type));
+      case ObJsonNodeType::J_ARRAY: {
+        ++depth;
+        if (OB_FAIL(SMART_CALL(print_array(j_buf, depth, is_pretty)))) {
+          LOG_WARN("fail to change jarray to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
+        }
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_UINT:
-    case ObJsonNodeType::J_OLONG:  {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_unsigned(get_uint(), tmp_buf);
-      if (OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append json uint to buffer", K(ret), K(get_uint()), K(len), K(j_type));
+      case ObJsonNodeType::J_OBJECT: {
+        ++depth;
+        if (OB_FAIL(SMART_CALL(print_object(j_buf, depth, is_pretty)))) {
+          LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
+        }
+        break;
       }
-      break;
-    }
 
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("undefined json node type", K(ret), K(j_type));
-      break;
+      case ObJsonNodeType::J_BOOLEAN: {
+        if (get_boolean() ? OB_FAIL(j_buf.append("true", sizeof("true") - 1, 0)) :
+                            OB_FAIL(j_buf.append("false", sizeof("false") - 1, 0))) {
+          LOG_WARN("fail to append boolean", K(ret), K(get_boolean()), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_DECIMAL:
+      case ObJsonNodeType::J_ODECIMAL: {
+        if (OB_FAIL(print_decimal(j_buf))) {
+          LOG_WARN("fail to print decimal to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_DOUBLE:
+      case ObJsonNodeType::J_ODOUBLE: {
+        if (OB_FAIL(print_double(j_buf))) {
+          LOG_WARN("fail to print double to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_OFLOAT: {
+        if (OB_FAIL(print_float(j_buf))) {
+          LOG_WARN("fail to print float to string", K(ret), K(depth), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_NULL: {
+        if (!(this)->is_real_json_null(this) && OB_FAIL(j_buf.append("", 0, 0))) {
+          LOG_WARN("fail to append NULL upper string to buffer", K(ret), K(j_type));
+        } else if ((this)->is_real_json_null(this) && OB_FAIL(j_buf.append("null", sizeof("null") - 1, 0))) {
+          LOG_WARN("fail to append null string to buffer", K(ret), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_OPAQUE: {
+        if (OB_FAIL(print_opaque(j_buf, depth, is_quoted))) {
+          LOG_WARN("fail to print opaque to string", K(ret), K(depth), K(j_type), K(is_quoted));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_STRING:
+      case ObJsonNodeType::J_OBINARY:
+      case ObJsonNodeType::J_OOID:
+      case ObJsonNodeType::J_ORAWHEX:
+      case ObJsonNodeType::J_ORAWID:
+      case ObJsonNodeType::J_ODAYSECOND:
+      case ObJsonNodeType::J_OYEARMONTH: {
+        uint64_t data_len = get_data_length();
+        const char *data = get_data();
+        if (is_quoted && data_len == 0) {
+          if (OB_FAIL(j_buf.append("\"\"", 2, 0))) {
+            LOG_WARN("fail to append empty string", K(ret), K(j_type), K(is_quoted));
+          }
+        } else if (OB_ISNULL(data) && data_len != 0) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("data is null", K(ret), K(data_len));
+        } else if (OB_FAIL(ObJsonBaseUtil::append_string(j_buf, is_quoted, data, data_len))) {
+          // if data is null, data_len is 0, it is an empty string
+          LOG_WARN("fail to append string", K(ret), K(j_type), K(is_quoted));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_INT:
+      case ObJsonNodeType::J_OINT: {
+        char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
+        int64_t len = ObFastFormatInt::format_signed(get_int(), tmp_buf);
+        if (OB_FAIL(j_buf.append(tmp_buf, len, 0))) {
+          LOG_WARN("fail to append json int to buffer", K(ret), K(get_int()), K(len), K(j_type));
+        }
+        break;
+      }
+
+      case ObJsonNodeType::J_UINT:
+      case ObJsonNodeType::J_OLONG:  {
+        char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
+        int64_t len = ObFastFormatInt::format_unsigned(get_uint(), tmp_buf);
+        if (OB_FAIL(j_buf.append(tmp_buf, len, 0))) {
+          LOG_WARN("fail to append json uint to buffer", K(ret), K(get_uint()), K(len), K(j_type));
+        }
+        break;
+      }
+
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("undefined json node type", K(ret), K(j_type));
+        break;
+      }
     }
   }
 
@@ -4044,7 +4096,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
           hash_value.calc_string(key);
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("failed to get sub obj.", K(ret), K(i), K(key));
-          } else if (jb_ptr->calc_json_hash_value(hash_value.get_hash_value(), hash_func, obj_res)) {
+          } else if (OB_FAIL(jb_ptr->calc_json_hash_value(hash_value.get_hash_value(), hash_func, obj_res))) {
             LOG_WARN("fail to calc json hash value", K(ret), K(i), K(count), K(j_type));
           } else {
             hash_value.calc_uint64(obj_res);
@@ -4103,6 +4155,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
     }
 
     case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_ORACLEDATE: {
       if (OB_FAIL(hash_value.calc_time(DT_TYPE_DATETIME, this))) {
         LOG_WARN("fail to calc json datetime hash", K(ret));
@@ -4123,6 +4176,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
       break;
     }
     case ObJsonNodeType::J_DATE:
+    case ObJsonNodeType::J_MYSQL_DATE:
     case ObJsonNodeType::J_OTIMESTAMP:
     case ObJsonNodeType::J_OTIMESTAMPTZ: {
       if (OB_FAIL(hash_value.calc_time(DT_TYPE_DATE, this))) {
@@ -4612,39 +4666,41 @@ static constexpr int JSON_TYPE_NUM = static_cast<int>(ObJsonNodeType::J_MAX_TYPE
 // 1 means this_type has a higher priority
 // -1 means this_type has a lower priority
 static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
-  /*                     0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30 */
-  /* 0  NULL */         {0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 1  DECIMAL */      {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 2  INT */          {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 3  UINT */         {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 5  STRING */       {1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
-  /* 6  OBJECT */       {1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 7  ARRAY */        {1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 8  BOOLEAN */      {1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 9  DATE */         {1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 10  TIME */        {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 11  DATETIME */    {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 12  TIMESTAMP */   {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,  2},
-  /* 13  OPAQUE */      {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 14  empty */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /*                     0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29   30   31  32*/
+  /* 0  NULL */         {0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 1  DECIMAL */      {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 2  INT */          {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 3  UINT */         {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 4  DOUBLE */       {1,  0,  0,  0,  0, -1, -1, -1, -1, -1, -1, -1, -1, -1,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 5  STRING */       {1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 6  OBJECT */       {1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 7  ARRAY */        {1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 8  BOOLEAN */      {1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 9  DATE */         {1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  -1,  -1,  2},
+  /* 10  TIME */        {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   1,  -1,  2},
+  /* 11  DATETIME */    {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   1,  -1,  2},
+  /* 12  TIMESTAMP */   {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,   1,   0,  2},
+  /* 13  OPAQUE */      {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   1,   1,  2},
+  /* 14  empty */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
   /*  ORACLE MODE */
-  /* 15  OFLOAT */      {2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 16  ODOUBLE */     {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 17  ODECIMAL */    {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 18  OINT */        {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 19  OLONG */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 20  OBINARY */     {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
-  /* 21  OOID */        {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
-  /* 22  ORAWHEX */     {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
-  /* 23  ORAWID */      {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
-  /* 24  ORACLEDATE*/   {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
-  /* 25  ODATE */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
-  /* 26  OTIMESTAMP */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
-  /* 27  TIMESTAMPTZ*/  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
-  /* 28  ODAYSECOND */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2},
-  /* 29  OYEARMONTH */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2},
-  /* 30  MAX_OTYPE */   {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 15  OFLOAT */      {2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 16  ODOUBLE */     {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 17  ODECIMAL */    {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 18  OINT */        {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 19  OLONG */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 20  OBINARY */     {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 21  OOID */        {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 22  ORAWHEX */     {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 23  ORAWID */      {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,   2,   2,  2},
+  /* 24  ORACLEDATE*/   {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,   2,   2,  2},
+  /* 25  ODATE */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,   2,   2,  2},
+  /* 26  OTIMESTAMP */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,   2,   2,  2},
+  /* 27  TIMESTAMPTZ*/  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,   2,   2,  2},
+  /* 28  ODAYSECOND */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,   2,   2,  2},
+  /* 29  OYEARMONTH */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,   2,   2,  2},
+  /* 30  MDATE */       {1,  1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   0,   1,  2},
+  /* 31  MDATETIME */   {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   1,   0,  2},
+  /* 32  MAX_OTYPE */   {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,   2,   2,  2},
 };
 
 int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
@@ -4748,7 +4804,8 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
           break;
         }
 
-        case ObJsonNodeType::J_DATETIME: {
+        case ObJsonNodeType::J_DATETIME:
+        case ObJsonNodeType::J_MYSQL_DATETIME: {
           if (OB_FAIL(compare_datetime(DT_TYPE_DATETIME, other, res))) {
             LOG_WARN("fail to compare json datetime", K(ret));
           }
@@ -4773,6 +4830,7 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
         }
 
         case ObJsonNodeType::J_DATE:
+        case ObJsonNodeType::J_MYSQL_DATE:
         case ObJsonNodeType::J_ORACLEDATE: {
           if (OB_FAIL(compare_datetime(DT_TYPE_DATE, other, res))) {
             LOG_WARN("fail to compare json date", K(ret));
@@ -4812,26 +4870,6 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res, bool is_path) const
   return ret;
 }
 
-
-uint32_t ObIJsonBase::depth()
-{
-  INIT_SUCC(ret);
-  uint32_t depth = 0;
-
-  if (is_bin()) {
-    ObArenaAllocator allocator;
-    ObIJsonBase *j_tree = NULL;
-    if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, this, ObJsonInType::JSON_TREE, j_tree))) {
-      LOG_WARN("fail to transform to tree", K(ret));
-    } else {
-      depth = j_tree->depth();
-    }
-  } else {
-    depth = static_cast<ObJsonNode *>(this)->depth();
-  }
-
-  return depth;
-}
 
 int ObIJsonBase::get_location(ObJsonBuffer &path)
 {
@@ -5466,6 +5504,34 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
         }
         break;
       }
+      case ObJsonNodeType::J_MYSQL_DATETIME:
+      case ObJsonNodeType::J_MYSQL_DATE: {
+        // json_element_t::to_Number use
+        ObTime val ;
+        ObDTMode dt_mode = DT_TYPE_DATE;
+        ObDateSqlMode date_sql_mode;
+        date_sql_mode.allow_invalid_dates_ = false;
+        date_sql_mode.no_zero_date_ = false;
+        int64_t ival = 0;
+        if (OB_FAIL(get_obtime(val))) {
+          LOG_WARN("fail to get json obtime_a", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::validate_datetime(val, date_sql_mode))) {
+          ret = OB_SUCCESS;
+          ival = ObTimeConverter::ZERO_DATETIME;
+        }
+        if (OB_SUCC(ret)) {
+          ObTimeConvertCtx cvrt_ctx(nullptr, false);
+          if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(val, cvrt_ctx, ival))) {
+            LOG_WARN("fail to datetime from ob time", K(ret), K(val));
+          } else {
+            ival /= (1000 * 1000);
+            if (OB_FAIL(num.from(static_cast<int64_t>(ival), *allocator))) {
+              LOG_WARN("fail to number from int64", K(ret), K(ival));
+            }
+          }
+        }
+        break;
+      }
 
       default: {
         ret = OB_ERR_UNEXPECTED;
@@ -5495,8 +5561,22 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
   switch (json_type()) {
     case ObJsonNodeType::J_INT:
     case ObJsonNodeType::J_OINT: {
-      // for oracle json json_element_t::to_Date()
-      datetime = (1000 * 1000) *  get_int();
+      if (lib::is_oracle_mode()) {
+        // for oracle json json_element_t::to_Date()
+        datetime = (1000 * 1000) *  get_int();
+      } else {
+        if (get_int() < 0) {
+          ret = OB_INVALID_DATE_FORMAT;
+          LOG_WARN("fail to get json obtime", K(ret), K(get_int()));
+        } else {
+          ObDateSqlMode date_sql_mode;
+          date_sql_mode.allow_invalid_dates_ = false;
+          date_sql_mode.no_zero_date_ = false;
+          if (OB_FAIL(ObTimeConverter::int_to_datetime(get_int(), 0, cvrt_ctx, datetime, date_sql_mode))) {
+            LOG_WARN("fail to convert int to obtime", K(ret), K(get_int()));
+          }
+        }
+      }
       break;
     }
 
@@ -5524,6 +5604,25 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
         LOG_WARN("fail to get json obtime", K(ret));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(t, cvrt_ctx, datetime))) {
         LOG_WARN("fail to case ObTime to datetime", K(ret), K(t));
+      }
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      ObTime t;
+      ObDateSqlMode date_sql_mode;
+      date_sql_mode.allow_invalid_dates_ = false;
+      date_sql_mode.no_zero_date_ = false;
+      if (OB_FAIL(get_obtime(t))) {
+        LOG_WARN("fail to get json obtime", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::validate_datetime(t, date_sql_mode))) {
+        ret = OB_SUCCESS;
+        datetime = ObTimeConverter::ZERO_DATETIME;
+      } else {
+        t.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(t);
+        if(OB_FAIL(ObTimeConverter::ob_time_to_datetime(t, cvrt_ctx, datetime))) {
+          LOG_WARN("fail to case ObTime to datetime", K(ret), K(t));
+        }
       }
       break;
     }
@@ -5581,6 +5680,106 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
 
   if (OB_SUCC(ret)) {
     value = datetime;
+  }
+
+  return ret;
+}
+
+int ObIJsonBase::to_mdatetime(ObMySQLDateTime &value, ObTimeConvertCtx *cvrt_ctx_t) const
+{
+  INIT_SUCC(ret);
+  int64_t datetime = 0;
+  ObMySQLDateTime mdatetime = 0;
+  ObTimeConvertCtx cvrt_ctx(NULL, false);
+  switch (json_type()) {
+    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_OINT: {
+      // for oracle json json_element_t::to_Date()
+      int64_t datetime = (1000 * 1000) *  get_int();
+      if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime))) {
+        LOG_WARN("fail to cast datetime to mdatetime", K(ret), K(datetime));
+      }
+      break;
+    }
+
+    case ObJsonNodeType::J_DECIMAL:
+    case ObJsonNodeType::J_ODECIMAL: {
+      number::ObNumber num_val = get_decimal_data();
+      uint64_t val = 0;
+      if (OB_FAIL(ObJsonBaseUtil::number_to_uint(num_val, val))) {
+        LOG_WARN("fail to cast number to uint", K(ret), K(num_val));
+      } else {
+        datetime = (1000 * 1000) *  val;
+        if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime))) {
+          LOG_WARN("fail to cast datetime to mdatetime", K(ret), K(datetime));
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_DATETIME:
+    case ObJsonNodeType::J_DATE:
+    case ObJsonNodeType::J_MYSQL_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      ObTime t;
+      if (OB_FAIL(get_obtime(t))) {
+        LOG_WARN("fail to get json obtime", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::validate_datetime(t, cvrt_ctx_t->date_sql_mode_))) {
+        LOG_WARN("value is invalid or out of range", K(ret), K(t), K(cvrt_ctx_t->date_sql_mode_));
+        mdatetime = ObTimeConverter::MYSQL_ZERO_DATETIME;
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(t, mdatetime))) {
+        LOG_WARN("fail to case ObTime to datetime", K(ret), K(t));
+      }
+      break;
+    }
+
+    case ObJsonNodeType::J_UINT:
+    case ObJsonNodeType::J_OLONG: {
+      ObArenaAllocator tmp_allocator;
+      ObJsonBuffer str_data(&tmp_allocator);
+      if (OB_FAIL(print(str_data, false))) {
+        LOG_WARN("fail to print string date", K(ret));
+      } else if (OB_ISNULL(str_data.ptr())) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("data is null", K(ret));
+      } else {
+        ObString str = str_data.string();
+        if (OB_FAIL(ObTimeConverter::str_to_mdatetime(str, cvrt_ctx, mdatetime, NULL,
+                                                      cvrt_ctx_t->date_sql_mode_))) {
+          LOG_WARN("fail to cast string to datetime", K(ret), K(str));
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_STRING: {
+      uint64_t length = get_data_length();
+      const char *data = get_data();
+      if (OB_ISNULL(data)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("data is null", K(ret));
+      } else {
+        ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
+        if (OB_FAIL(ObTimeConverter::str_to_mdatetime(str, cvrt_ctx, mdatetime, NULL,
+                                                      cvrt_ctx_t->date_sql_mode_))) {
+          LOG_WARN("fail to cast string to datetime", K(ret), K(str));
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_ARRAY:
+    case ObJsonNodeType::J_OBJECT: {
+      ret = OB_OPERATE_OVERFLOW;
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast json type to datetime", K(ret), K(json_type()));
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    value = mdatetime;
   }
 
   return ret;
@@ -5701,6 +5900,22 @@ int ObIJsonBase::to_date(int32_t &value) const
       }
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      ObTime t;
+      ObDateSqlMode date_sql_mode;
+      date_sql_mode.allow_invalid_dates_ = false;
+      date_sql_mode.no_zero_date_ = false;
+      if (OB_FAIL(get_obtime(t))) {
+        LOG_WARN("fail to get json obtime", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::validate_datetime(t, date_sql_mode))) {
+        ret = OB_SUCCESS;
+        date = ObTimeConverter::ZERO_DATE;
+      } else {
+        date = ObTimeConverter::ob_time_to_date(t);
+      }
+      break;
+    }
 
     case ObJsonNodeType::J_STRING: {
       uint64_t length = get_data_length();
@@ -5746,18 +5961,92 @@ int ObIJsonBase::to_date(int32_t &value) const
   return ret;
 }
 
+int ObIJsonBase::to_mdate(ObMySQLDate &value, ObDateSqlMode date_sql_mode) const
+{
+  INIT_SUCC(ret);
+  ObMySQLDate date;
+  switch (json_type()) {
+    case ObJsonNodeType::J_MYSQL_DATETIME:
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      ObTime t;
+      if (OB_FAIL(get_obtime(t))) {
+        LOG_WARN("fail to get json obtime", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::validate_datetime(t, date_sql_mode))) {
+        LOG_WARN("datetime is invalid or out of range", K(ret), K(t), K(date_sql_mode));
+        date = ObTimeConverter::MYSQL_ZERO_DATE;
+        ret = OB_SUCCESS;
+      } else {
+        date = ObTimeConverter::ob_time_to_mdate(t);
+      }
+      break;
+    }
+
+    case ObJsonNodeType::J_STRING: {
+      uint64_t length = get_data_length();
+      const char *data = get_data();
+      if (OB_ISNULL(data)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("data is null", K(ret));
+      } else {
+        ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
+        if (OB_FAIL(ObTimeConverter::str_to_mdate(str, date, date_sql_mode))) {
+          LOG_WARN("fail to cast string to date", K(ret), K(str));
+        }
+      }
+      break;
+    }
+    case ObJsonNodeType::J_ARRAY:
+    case ObJsonNodeType::J_OBJECT: {
+      ret = OB_OPERATE_OVERFLOW;
+      break;
+    }
+    case ObJsonNodeType::J_INT: {
+      int64_t in_val = get_int();
+      ObTime ob_time;
+      if (in_val == 0) {
+        value = ObTimeConverter::MYSQL_ZERO_DATE;
+      } else if (OB_FAIL(ObTimeConverter::int_to_ob_time_with_date(in_val, ob_time, date_sql_mode))) {
+        LOG_WARN("failed to convert integer to date", K(ret));
+      } else {
+        value = ObTimeConverter::ob_time_to_mdate(ob_time);
+      }
+      break;
+    }
+
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast json type to date", K(ret), K(json_type()));
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    value = date;
+  }
+
+  return ret;
+}
+
 int ObIJsonBase::to_time(int64_t &value) const
 {
   INIT_SUCC(ret);
   int64_t time;
 
   switch (json_type()) {
+    case ObJsonNodeType::J_INT:
+    case ObJsonNodeType::J_UINT: {
+      int64_t in_val = get_int();
+      if (OB_FAIL(ObTimeConverter::int_to_time(in_val, value))) {
+        LOG_WARN("int_to_date failed", K(ret), K(in_val), K(json_type()));
+      }
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       ObTime t;
       if (OB_FAIL(get_obtime(t))) {
         LOG_WARN("fail to get json obtime", K(ret));
       } else {
-        time = ObTimeConverter::ob_time_to_time(t);
+        value = ObTimeConverter::ob_time_to_time(t);
       }
       break;
     }
@@ -5772,6 +6061,8 @@ int ObIJsonBase::to_time(int64_t &value) const
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
         if (OB_FAIL(ObTimeConverter::str_to_time(str, time))) {
           LOG_WARN("fail to cast string to time", K(ret), K(str));
+        } else {
+          value = time;
         }
       }
       break;
@@ -5788,10 +6079,6 @@ int ObIJsonBase::to_time(int64_t &value) const
     }
   }
 
-  if (OB_SUCC(ret)) {
-    value = time;
-  }
-
   return ret;
 }
 
@@ -5806,11 +6093,21 @@ int ObIJsonBase::to_bit(uint64_t &value) const
     case ObJsonNodeType::J_DATETIME: {
       dt_mode = DT_TYPE_DATETIME; // set dt_node and pass through
     }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      if (dt_mode == 0) {
+        dt_mode = DT_TYPE_MYSQL_DATETIME; // set dt_node and pass through
+      }
+    }
 
     case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_ORACLEDATE: {
       if (dt_mode == 0) {
         dt_mode = DT_TYPE_DATE; // set dt_node and pass through
+      }
+    }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      if (dt_mode == 0) {
+        dt_mode = DT_TYPE_MYSQL_DATE; // set dt_node and pass through
       }
     }
 
@@ -5953,14 +6250,16 @@ int ObIJsonBase::to_bit(uint64_t &value) const
 
 int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const ObString &buf,
                                      ObJsonInType in_type, ObJsonInType expect_type,
-                                     ObIJsonBase *&out, uint32_t parse_flag)
+                                     ObIJsonBase *&out, uint32_t parse_flag,
+                                     uint32_t max_depth_config)
 {
-  return get_json_base(allocator, buf.ptr(), buf.length(), in_type, expect_type, out, parse_flag);
+  return get_json_base(allocator, buf.ptr(), buf.length(), in_type, expect_type, out, parse_flag, max_depth_config);
 }
 
 int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, uint64_t length,
                                      ObJsonInType in_type, ObJsonInType expect_type,
-                                     ObIJsonBase *&out, uint32_t parse_flag)
+                                     ObIJsonBase *&out, uint32_t parse_flag,
+                                     uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   void *buf = NULL;
@@ -5991,7 +6290,7 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
     LOG_WARN("param expect_type is invalid", K(ret), K(expect_type));
   } else if (in_type == ObJsonInType::JSON_TREE) {
     ObJsonNode *j_tree = NULL;
-    if (OB_FAIL(ObJsonParser::get_tree(t_allocator, ptr, length, j_tree, parse_flag))) {
+    if (OB_FAIL(ObJsonParser::get_tree(t_allocator, ptr, length, j_tree, parse_flag, max_depth_config))) {
       LOG_WARN("fail to get json tree", K(ret), K(length), K(in_type), K(expect_type));
     } else if (expect_type == ObJsonInType::JSON_TREE) {
       out = j_tree;
@@ -6156,6 +6455,8 @@ bool ObJsonBaseUtil::is_time_type(ObJsonNodeType j_type)
 {
   bool bool_ret = (j_type == ObJsonNodeType::J_DATETIME
                   || j_type == ObJsonNodeType::J_DATE
+                  || j_type == ObJsonNodeType::J_MYSQL_DATE
+                  || j_type == ObJsonNodeType::J_MYSQL_DATETIME
                   || j_type == ObJsonNodeType::J_TIME
                   || j_type == ObJsonNodeType::J_TIMESTAMP
                   || j_type == ObJsonNodeType::J_ORACLEDATE
@@ -6173,12 +6474,20 @@ ObObjType ObJsonBaseUtil::get_time_type(ObJsonNodeType json_type)
       type = ObDateType;
       break;
     }
+    case  ObJsonNodeType::J_MYSQL_DATE: {
+      type = ObMySQLDateType;
+      break;
+    }
     case ObJsonNodeType::J_TIME: {
       type = ObTimeType;
       break;
     }
     case ObJsonNodeType::J_DATETIME: {
       type = ObDateTimeType;
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      type = ObMySQLDateTimeType;
       break;
     }
     case ObJsonNodeType::J_TIMESTAMP: {
@@ -6217,9 +6526,17 @@ int ObJsonBaseUtil::get_dt_mode_by_json_type(ObJsonNodeType j_type, ObDTMode &dt
       dt_mode = DT_TYPE_DATETIME;
       break;
     }
+    case ObJsonNodeType::J_MYSQL_DATETIME: {
+      dt_mode = DT_TYPE_MYSQL_DATETIME;
+      break;
+    }
 
     case ObJsonNodeType::J_DATE: {
       dt_mode = DT_TYPE_DATE;
+      break;
+    }
+    case ObJsonNodeType::J_MYSQL_DATE: {
+      dt_mode = DT_TYPE_MYSQL_DATE;
       break;
     }
 
@@ -6279,18 +6596,16 @@ int ObJsonBaseUtil::append_newline_and_indent(ObJsonBuffer &j_buf, uint64_t leve
 {
   // Append newline and two spaces per indentation level.
   INIT_SUCC(ret);
+  uint64_t reserve_size = level << 1;
 
-  if (level > ObJsonParser::JSON_DOCUMENT_MAX_DEPTH) {
-    ret = OB_ERR_JSON_OUT_OF_DEPTH;
-    LOG_WARN("indent level is too deep", K(ret), K(level));
-  } else if (OB_FAIL(j_buf.append("\n"))) {
+  if (OB_FAIL(j_buf.append("\n"))) {
     LOG_WARN("fail to append newline to buffer", K(ret), K(level));
-  } else if (OB_FAIL(j_buf.reserve(level * 2))) {
+  } else if (OB_FAIL(j_buf.reserve(reserve_size))) {
     LOG_WARN("fail to reserve memory for buffer", K(ret), K(level));
   } else {
-    char str[level * 2];
-    MEMSET(str, ' ', level * 2);
-    if (OB_FAIL(j_buf.append(str, level * 2))) {
+    char str[reserve_size];
+    MEMSET(str, ' ', reserve_size);
+    if (OB_FAIL(j_buf.append(str, reserve_size, 0))) {
       LOG_WARN("fail to append space to buffer", K(ret), K(level));
     }
   }
@@ -6344,7 +6659,7 @@ int ObJsonBaseUtil::escape_character(char c, ObJsonBuffer &j_buf)
       case '"':
       case '\\': {
         char str[1] = {c};
-        if (OB_FAIL(j_buf.append(str, 1))) {
+        if (OB_FAIL(j_buf.append(str, 1, 0))) {
           LOG_WARN("fail to append c to j_buf", K(ret), K(c));
         }
         break;
@@ -6356,11 +6671,11 @@ int ObJsonBaseUtil::escape_character(char c, ObJsonBuffer &j_buf)
         static char _dig_vec_lower[] = "0123456789abcdefghijklmnopqrstuvwxyz";
         char high[1] = {_dig_vec_lower[(c & 0xf0) >> 4]};
         char low[1] = {_dig_vec_lower[(c & 0x0f)]};
-        if (OB_FAIL(j_buf.append("u00", 3))) {
+        if (OB_FAIL(j_buf.append("u00", 3, 0))) {
           LOG_WARN("fail to append \"u00\" to j_buf", K(ret));
-        } else if (OB_FAIL(j_buf.append(high, 1))) {
+        } else if (OB_FAIL(j_buf.append(high, 1, 0))) {
           LOG_WARN("fail to append four high bits to j_buf", K(ret));
-        } else if (OB_FAIL(j_buf.append(low, 1))) {
+        } else if (OB_FAIL(j_buf.append(low, 1, 0))) {
           LOG_WARN("fail to append four low bits to j_buf", K(ret));
         }
         break;
@@ -6401,7 +6716,7 @@ int ObJsonBaseUtil::add_double_quote(ObJsonBuffer &j_buf, const char *cptr, uint
 
       // Most characters do not need to be escaped.
       // Append the characters that do not need to be escaped
-      if (OB_FAIL(j_buf.append(cptr, next_special - cptr))) {
+      if (OB_FAIL(j_buf.append(cptr, next_special - cptr, 0))) {
         LOG_WARN("fail to append common segments to j_buf", K(ret), K(length),
                                                            K(next_special - cptr));
         break;
@@ -6437,7 +6752,7 @@ int ObJsonBaseUtil::append_string(ObJsonBuffer &j_buf, bool is_quoted,
       LOG_WARN("fail to add double quote", K(ret), K(length));
     }
   } else {
-    if (OB_FAIL(j_buf.append(data, length))) {
+    if (OB_FAIL(j_buf.append(data, length, 0))) {
       LOG_WARN("fail to append data", K(ret), K(length));
     }
   }

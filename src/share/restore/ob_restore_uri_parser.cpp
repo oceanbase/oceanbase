@@ -155,7 +155,7 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_primary_zone(
   int ret = OB_SUCCESS;
   if (OB_ISNULL(val)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (STRLEN(val) >= common::MAX_ZONE_LENGTH) {
+  } else if (STRLEN(val) >= common::MAX_ZONE_LIST_LENGTH) {
     ret = OB_SIZE_OVERFLOW;
   } else if (OB_FAIL(job.set_primary_zone(ObString(val)))) {
     LOG_WARN("failed to set primary zone", KR(ret), K(val));

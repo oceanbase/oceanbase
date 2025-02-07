@@ -71,7 +71,8 @@ TEST_F(TestNLJTest2, serialize_rescan_params)
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, join.serialize(buf, 1024, pos));
   ASSERT_EQ(pos, join.get_serialize_size());
-  const char* join_str = S(join);
+  ObCStringHelper helper;
+  const char* join_str = helper.convert(join);
   // deserialize
   int64_t data_len = pos;
   pos = 0;
@@ -81,7 +82,7 @@ TEST_F(TestNLJTest2, serialize_rescan_params)
   ASSERT_EQ(OB_SUCCESS, join2.deserialize(buf, data_len, pos));
   ASSERT_EQ(data_len, pos);
   COMMON_LOG(INFO, "join2", K(join2));
-  const char* join2_str = S(join2);
+  const char* join2_str = helper.convert(join2);
   ASSERT_STREQ(join_str, join2_str);
 }
 

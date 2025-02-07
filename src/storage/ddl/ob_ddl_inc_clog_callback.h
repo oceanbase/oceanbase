@@ -44,14 +44,15 @@ class ObDDLIncStartClogCb : public ObDDLIncClogCb
 public:
   ObDDLIncStartClogCb();
   virtual ~ObDDLIncStartClogCb() = default;
-  int init(const ObDDLIncLogBasic &log_basic);
+  int init(const share::ObLSID &ls_id, const ObDDLIncLogBasic &log_basic);
   virtual int on_success() override;
   virtual int on_failure() override;
   virtual void try_release() override;
   share::SCN get_scn() const { return scn_; }
-  TO_STRING_KV(K(is_inited_), K(log_basic_));
+  TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
 private:
   bool is_inited_;
+  share::ObLSID ls_id_;
   ObDDLIncLogBasic log_basic_;
   share::SCN scn_;
 };
@@ -88,7 +89,7 @@ public:
   virtual int on_failure() override;
   virtual void try_release() override;
   share::SCN get_scn() const { return scn_; }
-  TO_STRING_KV(K(is_inited_), K(log_basic_));
+  TO_STRING_KV(K(is_inited_), K(ls_id_), K(log_basic_), K(scn_));
 private:
   bool is_inited_;
   share::ObLSID ls_id_;

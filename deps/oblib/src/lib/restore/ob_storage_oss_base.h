@@ -31,6 +31,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "ob_i_storage.h"
 #include "common/storage/ob_device_common.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase
 {
@@ -63,19 +64,45 @@ int init_oss_env();
 void fin_oss_env();
 
 int ob_oss_str_assign(aos_string_t &dst, const int64_t len, const char *src);
-class ObStorageOssStaticVar
+
+class ObStorageOSSRetryStrategy : public ObStorageIORetryStrategy<aos_status_t *>
 {
 public:
-  ObStorageOssStaticVar();
-  virtual ~ObStorageOssStaticVar();
-  static ObStorageOssStaticVar &get_instance();
-  int set_oss_compress_name(const char *name);
-  common::ObCompressor *get_oss_compressor();
-  common::ObCompressorType get_compressor_type();
+  ObStorageOSSRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us());
+  virtual ~ObStorageOSSRetryStrategy();
+
+  int set_retry_headers(apr_pool_t *p, apr_table_t *&headers);
+  int set_retry_buffer(aos_list_t *write_content_buffer);
+  // When batch deleting, the names of successfully deleted objects will be added to the deleted_object_list,
+  // so they need to be reset during retries.
+  // Only used for errsim cases.
+  int set_retry_deleted_object_list(aos_list_t *deleted_object_list);
+  // When listing, the names of successfully listed objects will be added to the params,
+  // so they need to be reset during retries.
+  // Only used for errsim cases.
+  int set_retry_list_object_params(oss_list_object_params_t *params);
+
+  virtual void log_error(
+      const RetType &outcome, const int64_t attempted_retries) const override;
+
+protected:
+  virtual bool should_retry_impl_(
+      const RetType &outcome, const int64_t attempted_retries) const override;
+
+  int reinitialize_headers_() const;
+  int reinitialize_buffer_() const;
 
 private:
-  common::ObCompressor *compressor_;
-  common::ObCompressorType compress_type_;
+  // When the OSS SDK sends a request, it modifies the header information,
+  // which results in the header containing additional fields during retries
+  aos_table_t *origin_headers_;
+  aos_table_t **ref_headers_;
+  // In the write phase, the OSS SDK will remove nodes from the aos list,
+  // so an array is used to record the initial list entries
+  ObSEArray<void *, 1> origin_list_entries_;
+  aos_list_t *ref_buffer_;
+  aos_list_t *deleted_object_list_;
+  oss_list_object_params_t *params_;
 };
 
 struct FrozenInfo
@@ -102,9 +129,10 @@ public:
   ObOssAccount();
   virtual ~ObOssAccount();
   int parse_oss_arg(const common::ObString &storage_info);
-  static int set_oss_field(const char *info, char *field, const int64_t length);
   void reset_account();
   int set_delete_mode(const char *parameter);
+  TO_STRING_KV(K_(oss_domain), K_(delete_mode), K_(oss_id), KP_(oss_key), K_(is_inited), K_(sts_token));
+
   char oss_domain_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];
   char oss_key_[MAX_OSS_KEY_LENGTH];
@@ -114,8 +142,7 @@ public:
   common::ObArenaAllocator allocator_;
   ObStorageDeleteMode delete_mode_;
   bool is_inited_;
-
-  TO_STRING_KV(K_(is_inited), K_(delete_mode), K_(oss_domain), K_(oss_id));
+  ObSTSToken sts_token_;
 };
 
 class ObStorageOssBase
@@ -134,6 +161,8 @@ public:
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
+
+  int check_endpoint_validaty() const;
 
   aos_pool_t *aos_pool_;
   oss_request_options_t *oss_option_;

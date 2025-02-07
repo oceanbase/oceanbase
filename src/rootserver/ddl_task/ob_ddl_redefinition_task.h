@@ -130,7 +130,7 @@ public:
   explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
     ObDDLTask(task_type), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
-    dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
+    dependent_task_result_map_(), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
     check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), replica_builder_(),
@@ -140,6 +140,7 @@ public:
   virtual int process() = 0;
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
+      const ObAddr &addr,
       const int64_t snapshot_version,
       const int64_t execution_id,
       const int ret_code,
@@ -148,11 +149,10 @@ public:
       const uint64_t child_task_key,
       const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
-  virtual int cleanup_impl() override;
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,
       K(wait_trans_ctx_), K(sync_tablet_autoinc_seq_ctx_), K(build_replica_request_time_),
-      K(complete_sstable_job_ret_code_), K(snapshot_held_), K(has_synced_autoincrement_),
+      K(complete_sstable_job_ret_code_), K(has_synced_autoincrement_),
       K(has_synced_stats_info_), K(update_autoinc_job_ret_code_), K(update_autoinc_job_time_),
       K(check_table_empty_job_ret_code_), K(check_table_empty_job_time_));
 protected:
@@ -174,6 +174,8 @@ protected:
   virtual int check_and_cancel_complement_data_dag(bool &all_complement_dag_exit); // wait dag exit before unlock table.
   virtual int fail();
   virtual int success();
+  int hold_snapshot(const int64_t snapshot_version);
+  int release_snapshot(const int64_t snapshot_version);
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();
@@ -258,7 +260,18 @@ protected:
   int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
+
+  int generate_rebuild_index_arg_list(const int64_t tenant_id,
+                                      const int64_t table_id,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      obrpc::ObAlterTableArg &alter_table_arg);
   int64_t get_build_replica_request_time();
+private:
+  int add_table_tablets_for_snapshot_(const uint64_t table_id, ObSchemaGetterGuard &schema_guard,
+                                      common::ObIArray<common::ObTabletID> &tablet_ids);
+  int prepare_tablets_for_major_refresh_mv_(common::ObIArray<common::ObTabletID> &tablet_ids);
+
+  virtual int cleanup_impl() override;
 protected:
   static const int64_t MAP_BUCKET_NUM = 1024;
   struct DependTaskStatus final
@@ -282,7 +295,6 @@ protected:
   int64_t complete_sstable_job_ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
   common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
-  bool snapshot_held_;
   bool has_synced_autoincrement_;
   bool has_synced_stats_info_;
   int64_t update_autoinc_job_ret_code_;
@@ -291,7 +303,7 @@ protected:
   int64_t check_table_empty_job_time_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
-  ObDDLSingleReplicaExecutor replica_builder_;
+  ObDDLReplicaBuildExecutor replica_builder_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for dag complement data ddl only.
   int64_t check_dag_exit_retry_cnt_;
 };

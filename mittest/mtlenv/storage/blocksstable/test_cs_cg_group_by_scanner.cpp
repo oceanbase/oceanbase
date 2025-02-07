@@ -654,8 +654,8 @@ TEST_F(TestCSCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
   ASSERT_EQ(500, group_size);
 
   ObCGBitmap bitmap(allocator_);
-  bitmap.init(group_size);
-  bitmap.reuse(0);
+  bitmap.init(group_size, false);
+  bitmap.reuse(0, false);
   for (int64_t i = 0; i < group_size; i++) {
     if (i  % 5 == 0 || i % 5 == 2 || i % 5 == 4) {
       bitmap.set(i);

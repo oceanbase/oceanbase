@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "log_define.h"                                // block_id_t ...
+#include "share/io/ob_io_struct.h"                     // ObIOInfo
 
 // This block contains the key class for writing a log into stable storage
 // device.
@@ -25,6 +26,7 @@ namespace oceanbase
 namespace palf
 {
 class LogWriteBuf;
+class LogIOAdapter;
 // Only this class need to determine the storage system whether is OFS
 //
 class LogDIOAlignedBuf {
@@ -87,10 +89,10 @@ public:
   LogBlockHandler();
   ~LogBlockHandler();
 
-  int init(const int dir_fd,
-           const int64_t log_block_size,
+  int init(const int64_t log_block_size,
            const int64_t align_size,
-           const int64_t align_buf_size);
+           const int64_t align_buf_size,
+           LogIOAdapter *io_adapter);
 
   void destroy();
 
@@ -128,7 +130,14 @@ public:
   int writev(const offset_t offset,
              const LogWriteBuf &write_buf);
 
-  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(dir_fd), K_(io_fd));
+  // @brief get start time of the last ob_pwrite
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const;
+
+  TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(io_fd));
 private:
   // if timeout, retry until open block return an explicit error code
   // @brief block_path, the block path to be opened
@@ -149,7 +158,7 @@ private:
       const int64_t buf_len);
   int inner_writev_once_(const offset_t offset,
       const LogWriteBuf &write_buf);
-  int inner_write_impl_(const int fd, const char *buf, const int64_t count, const int64_t offset);
+  int inner_write_impl_(const ObIOFd &io_fd, const char *buf, const int64_t count, const int64_t offset);
 private:
   static constexpr int64_t RETRY_INTERVAL = 10 * 1000;
   LogDIOAlignedBuf dio_aligned_buf_;
@@ -159,8 +168,15 @@ private:
   int64_t ob_pwrite_used_ts_;
   int64_t count_;
   int64_t trace_time_;
-  int dir_fd_;
-  int io_fd_;
+  ObIOFd io_fd_;
+  LogIOAdapter *io_adapter_;
+  // === IO Failure Detection ===
+  int64_t last_pwrite_start_time_us_;
+  int64_t last_pwrite_size_;
+  int64_t accum_write_size_;
+  int64_t accum_write_rt_;
+  int64_t accum_write_count_;
+  // === IO Failure Detection ===
   bool is_inited_;
 };
 } // end of logservice

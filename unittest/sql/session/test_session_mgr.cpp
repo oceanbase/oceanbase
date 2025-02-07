@@ -123,7 +123,6 @@ TEST_F(DISABLED_TestSessionMgr, test_performace)
   gettimeofday(&get_end, NULL);
   gettimeofday(&stat_beg, NULL);
   for (uint32_t i = 1; i < SESSION_COUNT; ++i) {
-    ObSessionStatEstGuard guard(1, static_cast<uint32_t>(i));
     EVENT_DEC(ACTIVE_SESSIONS);
   }
   gettimeofday(&stat_end, NULL);

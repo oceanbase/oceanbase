@@ -46,6 +46,17 @@ public:
   virtual ~TestRootBlockInfo() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
+  static void SetUpTestCase()
+  {
+    int ret = ObTimerService::get_instance().start();
+    ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 private:
   void prepare_tablet_read_info();
   void prepare_block_root();
@@ -211,6 +222,7 @@ void TestSSTableMacroInfo::TearDown()
 
 void TestSSTableMacroInfo::prepare_create_sstable_param()
 {
+  param_.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param_.table_key_.tablet_id_ = tablet_id_;
@@ -238,10 +250,17 @@ void TestSSTableMacroInfo::prepare_create_sstable_param()
   param_.occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
+  param_.tx_data_recycle_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;
   param_.master_key_id_ = 0;
+  param_.recycle_version_ = 0;
+  param_.root_macro_seq_ = 0;
+  param_.row_count_ = 0;
+  param_.sstable_logic_seq_ = 0;
+  param_.nested_offset_ = 0;
+  param_.nested_size_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -322,6 +341,7 @@ void TestSSTableMeta::construct_sstable(
 
 void TestSSTableMeta::prepare_create_sstable_param()
 {
+  param_.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param_.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param_.table_key_.tablet_id_ = tablet_id_;
@@ -349,10 +369,17 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
+  param_.tx_data_recycle_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param_.encrypt_id_ = 0;
   param_.master_key_id_ = 0;
+  param_.recycle_version_ = 0;
+  param_.root_macro_seq_ = 0;
+  param_.row_count_ = 0;
+  param_.sstable_logic_seq_ = 0;
+  param_.nested_offset_ = 0;
+  param_.nested_size_ = 0;
   ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param_.column_cnt_, param_.column_checksums_));
 }
 
@@ -546,6 +573,7 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
   ObSharedObjectsWriteCtx linked_block_write_ctx;
   ObSArray<ObSharedObjectsWriteCtx> total_ctxs;
   ASSERT_EQ(OB_SUCCESS, sstable_macro_info.persist_block_ids(tablet_id,
+                                                              0, // tablet_transfer_seq
                                                               0, // snapshot_version
                                                               allocator_,
                                                               &link_write_info,
@@ -622,6 +650,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -638,6 +667,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -669,6 +699,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, tmp_sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -707,6 +738,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -723,6 +755,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -754,6 +787,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(OB_SUCCESS, tmp_sstable.persist_linked_block_if_need(
                                   allocator_,
                                   tablet_id,
+                                  0, // tablet_transfer_seq
                                   snapshot_version,
                                   nullptr,
                                   macro_start_seq,
@@ -969,6 +1003,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObTabletCreateSSTableParam src_sstable_param;
+  src_sstable_param.set_init_value_for_column_store_();
   src_sstable_param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   src_sstable_param.table_key_.tablet_id_ = tablet_id_;
   src_sstable_param.table_key_.version_range_.base_version_ = ObVersionRange::MIN_VERSION;
@@ -994,11 +1029,18 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   src_sstable_param.occupy_size_ = 0;
   src_sstable_param.ddl_scn_.set_min();
   src_sstable_param.filled_tx_scn_.set_min();
+  src_sstable_param.tx_data_recycle_scn_.set_min();
   src_sstable_param.original_size_ = 0;
   src_sstable_param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   src_sstable_param.encrypt_id_ = 1234;
   src_sstable_param.master_key_id_ = 5678;
   src_sstable_param.table_shared_flag_.set_shared_sstable();
+  src_sstable_param.recycle_version_ = 0;
+  src_sstable_param.root_macro_seq_ = 0;
+  src_sstable_param.row_count_ = 0;
+  src_sstable_param.sstable_logic_seq_ = 0;
+  src_sstable_param.nested_offset_ = 0;
+  src_sstable_param.nested_size_ = 0;
   ret = src_sstable_param.column_checksums_.push_back(2022);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1014,7 +1056,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   }
 
   ObTabletCreateSSTableParam dest_sstable_param;
-  ret = ObLSTabletService::build_create_sstable_param_for_migration(mig_param, dest_sstable_param);
+  ret = dest_sstable_param.init_for_ha(mig_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);

@@ -46,9 +46,9 @@ int ObPrimaryZoneUtil::init(
              "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -85,9 +85,9 @@ int ObPrimaryZoneUtil::init(
              "zone list count", zone_list.count(), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -117,9 +117,9 @@ int ObPrimaryZoneUtil::init()
     LOG_WARN("invalid argument", K(ret), K(primary_zone_), KP(zone_region_list_));
   } else {
     int64_t len = strlen(primary_zone_.ptr());
-    if (common::MAX_ZONE_LENGTH < len) {
+    if (common::MAX_ZONE_LIST_LENGTH < len) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_length", MAX_ZONE_LENGTH);
+      LOG_WARN("primary_zone length overflowed", KR(ret), K(len), "max_zone_list_length", MAX_ZONE_LIST_LENGTH);
     } else {
       MEMCPY(primary_zone_str_, primary_zone_.ptr(), len);
       primary_zone_str_[len] = '\0';
@@ -640,7 +640,7 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
   share::schema::ObSchemaGetterGuard guard;
   ObArray<share::schema::ObZoneRegion> zone_region_list;
   common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> zone_list;
-  ObZone primary_zone_str;
+  SMART_VAR(ObPriZone, primary_zone_str) {
   if (OB_UNLIKELY(!tenant_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant schema is invalid", KR(ret), K(tenant_schema));
@@ -661,6 +661,7 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
                  primary_zone_str))) {
     LOG_WARN("fail to generate integrated primary zone str", K(ret));
   }
+  } // end smart var
   return ret;
 }
 
@@ -723,7 +724,7 @@ int ObPrimaryZoneUtil::get_tenant_zone_priority(
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<share::schema::ObZoneScore, DEFAULT_ZONE_COUNT> zone_score_array;
-  ObZone primary_zone_str;
+  SMART_VAR(ObPriZone, primary_zone_str) {
   ObArenaAllocator allocator("PrimaryZone");
   ObPrimaryZone primary_zone_schema(allocator);
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
@@ -738,6 +739,7 @@ int ObPrimaryZoneUtil::get_tenant_zone_priority(
   } else if (OB_FAIL(zone_priority.assign(primary_zone_str.str()))) {
     LOG_WARN("failed to assign zone priority", KR(ret), K(primary_zone_str));
   }
+  } // end smart var
   return ret;
 
 }
@@ -746,7 +748,7 @@ int ObPrimaryZoneUtil::convert_random_primary_zone_into_integrated(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();
@@ -776,11 +778,11 @@ int ObPrimaryZoneUtil::convert_random_primary_zone_into_integrated(
 
 int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
     const common::ObIArray<share::schema::ObZoneScore> &zone_score_array,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
-  char zone_str[MAX_ZONE_LENGTH];
-  MEMSET(zone_str, 0, MAX_ZONE_LENGTH);
+  SMART_VAR(char[MAX_ZONE_LIST_LENGTH], zone_str) {
+  MEMSET(zone_str, 0, MAX_ZONE_LIST_LENGTH);
   if (zone_score_array.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "array num", zone_score_array.count());
@@ -793,10 +795,10 @@ int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
       const ObZoneScore &cur_zone_score = zone_score_array.at(i);
       const bool same_p = (cur_zone_score.score_ == prev_zone_score);
       separator_token = (same_p ? "," : ";");
-      if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LENGTH, pos,
+      if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LIST_LENGTH, pos,
               "%s", (!start_format ? "" : separator_token)))) {
         LOG_WARN("fail to format separator", K(ret));
-      } else if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LENGTH, pos, "%.*s",
+      } else if (OB_FAIL(databuff_printf(zone_str, MAX_ZONE_LIST_LENGTH, pos, "%.*s",
               static_cast<int32_t>(cur_zone_score.zone_.length()),
               cur_zone_score.zone_.ptr()))) {
         LOG_WARN("fail to format zone", K(ret));
@@ -811,6 +813,7 @@ int ObPrimaryZoneUtil::do_generate_integrated_primary_zone_str(
       }
     }
   }
+  } // end smart var
   return ret;
 }
 
@@ -819,7 +822,7 @@ int ObPrimaryZoneUtil::convert_normal_primary_zone_into_integrated(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();
@@ -860,7 +863,7 @@ int ObPrimaryZoneUtil::generate_integrated_primary_zone_str(
     const common::ObIArray<common::ObZone> &zone_list,
     const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
     common::ObIArray<share::schema::ObZoneScore> &zone_score_list,
-    common::ObZone &primary_zone_str)
+    common::ObPriZone &primary_zone_str)
 {
   int ret = OB_SUCCESS;
   primary_zone_str.reset();

@@ -14,15 +14,28 @@
 #define SRC_SQL_ENGINE_BASIC_OB_SELECT_INTO_OP_H_
 
 #include "sql/engine/ob_operator.h"
+#include "sql/engine/basic/ob_arrow_basic.h"
 #include "lib/file/ob_file.h"
-#include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_backup_io_adapter.h"
+#include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_tunnel.h>
 #include <odps/odps_api.h>
 #endif
+
+#ifdef OB_BUILD_JNI_ODPS
+#include "sql/engine/connector/ob_jni_writer.h"
+#include <arrow/api.h>
+#include "sql/engine/basic/ob_arrow_basic.h"
+#endif
+
+#include <parquet/api/writer.h>
+#include "sql/engine/basic/ob_select_into_basic.h"
+#include "sql/engine/basic/ob_external_file_writer.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
 
 namespace oceanbase
 {
@@ -72,14 +85,15 @@ public:
       is_single_(true),
       max_file_size_(DEFAULT_MAX_FILE_SIZE),
       escaped_cht_(),
+      cs_type_(CS_TYPE_INVALID),
       parallel_(1),
       file_partition_expr_(NULL),
       buffer_size_(DEFAULT_BUFFER_SIZE),
       is_overwrite_(false),
       external_properties_(alloc),
-      external_partition_(alloc)
+      external_partition_(alloc),
+      alias_names_(alloc)
   {
-    cs_type_ = ObCharset::get_system_collation();
   }
 
   ObItemType into_type_;
@@ -101,47 +115,30 @@ public:
   bool is_overwrite_;
   ObExternalFileFormat::StringData external_properties_;
   ObExternalFileFormat::StringData external_partition_;
+  ObExternalFileFormat::StringList alias_names_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
-};
-
-struct ObStorageAppender
-{
-	ObStorageAppender();
-  virtual ~ObStorageAppender();
-  void reset();
-
-	int open(const share::ObBackupStorageInfo *storage_info,
-      const common::ObString &uri, const common::ObStorageAccessType &access_type);
-	int append(const char *buf, const int64_t size, int64_t &write_size);
-	int close();
-
-	bool is_opened_;
-	int64_t offset_;
-	ObIOFd fd_;
-	ObIODevice *device_handle_;
-  ObStorageAccessType access_type_;
 };
 
 class ObSelectIntoOp : public ObOperator
 {
 public:
-  enum class IntoFileLocation {
-    SERVER_DISK,
-    REMOTE_OSS,
-  };
   ObSelectIntoOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
       top_limit_cnt_(INT64_MAX),
       is_first_(true),
+      field_str_(),
+      line_str_(),
+      cs_type_(CS_TYPE_INVALID),
       basic_url_(),
       file_location_(IntoFileLocation::SERVER_DISK),
       write_offset_(0),
       data_writer_(NULL),
       char_enclose_(0),
-      char_escape_(0),
+      char_escape_('\\'),
       has_enclose_(false),
-      has_escape_(false),
+      is_optional_(false),
+      has_escape_(true),
       has_lob_(false),
       has_json_(false),
       print_params_(),
@@ -152,16 +149,26 @@ public:
       shared_buf_(NULL),
       shared_buf_len_(0),
       use_shared_buf_(false),
+      has_compress_(false),
       partition_map_(),
       curr_partition_num_(0),
       external_properties_(),
       format_type_(ObExternalFileFormat::FormatType::CSV_FORMAT),
+      is_odps_cpp_table_(false),
+      is_odps_java_table_(false),
 #ifdef OB_BUILD_CPP_ODPS
       upload_(NULL),
       record_writer_(NULL),
 #endif
+#ifdef OB_BUILD_JNI_ODPS
+      uploader_(),
+      arrow_schema_(nullptr),
+#endif
       block_id_(0),
-      need_commit_(true)
+      need_commit_(true),
+      arrow_alloc_(),
+      parquet_writer_schema_(nullptr),
+      orc_schema_(nullptr)
   {
   }
 
@@ -169,6 +176,7 @@ public:
   struct ObEscapePrinter
   {
     ObEscapePrinter():
+      enclose_(), escape_(), zero_(), field_terminator_(), line_terminator_(), convert_replacer_(),
       need_enclose_(false), do_encode_(false), do_escape_(false), print_hex_(false),
       ignore_convert_failed_(false) {}
     int operator() (const ObString &src_str, const ob_wc_t &unicode_value) {
@@ -220,70 +228,6 @@ public:
     int64_t buf_len_;
     int64_t pos_;
   };
-  class ObIOBufferWriter
-  {
-  public:
-    ObIOBufferWriter():
-      buf_(NULL),
-      buf_len_(0),
-      curr_pos_(0),
-      last_line_pos_(0),
-      curr_line_len_(0),
-      write_bytes_(0),
-      is_file_opened_(false),
-      file_appender_(),
-      storage_appender_(),
-      fd_(),
-      split_file_id_(0),
-      url_()
-    {}
-    ~ObIOBufferWriter() {
-      file_appender_.~ObFileAppender();
-      storage_appender_.reset();
-    }
-    void init(char *buf, int64_t buf_len) {
-      buf_ = buf;
-      buf_len_ = buf_len;
-    }
-    template<typename flush_func>
-    int flush(flush_func flush_data) {
-      int ret = common::OB_SUCCESS;
-      if (last_line_pos_ > 0 && OB_NOT_NULL(buf_)) {
-        if (OB_FAIL(flush_data(buf_, last_line_pos_, this))) {
-        } else {
-          MEMCPY(buf_, buf_ + last_line_pos_, curr_pos_ - last_line_pos_);
-          curr_pos_ = curr_pos_ - last_line_pos_;
-          last_line_pos_ = 0;
-        }
-      }
-      return ret;
-    }
-    char *get_buf() { return buf_; }
-    int64_t get_buf_len() { return buf_len_; }
-    int64_t get_curr_pos() { return curr_pos_; }
-    int64_t get_last_line_pos() { return last_line_pos_; }
-    int64_t get_curr_line_len() {return curr_line_len_; }
-    int64_t get_write_bytes() { return write_bytes_; }
-    void set_curr_pos(int64_t curr_pos) { curr_pos_ = curr_pos; }
-    void update_last_line_pos() { last_line_pos_ = curr_pos_; }
-    void reset_curr_line_len() { curr_line_len_ = 0; }
-    void increase_curr_line_len() { curr_line_len_ += (curr_pos_ - last_line_pos_); }
-    void set_write_bytes(int64_t write_bytes) { write_bytes_ = write_bytes; }
-  private:
-    char *buf_;
-    int64_t buf_len_;
-    int64_t curr_pos_;
-    int64_t last_line_pos_;
-    int64_t curr_line_len_;
-    int64_t write_bytes_;
-  public:
-    bool is_file_opened_;
-    ObFileAppender file_appender_;
-    ObStorageAppender storage_appender_;
-    ObIOFd fd_;
-    int64_t split_file_id_;
-    ObString url_;
-  };
 
   virtual int inner_open() override;
   virtual int inner_close() override;
@@ -293,7 +237,9 @@ public:
   virtual void destroy() override;
 
 private:
+  int init_env_common();
   int init_csv_env();
+  void set_csv_format_options();
 #ifdef OB_BUILD_CPP_ODPS
   int init_odps_tunnel();
   int into_odps();
@@ -303,22 +249,52 @@ private:
                                   const ObDatum &datum,
                                   const ObDatumMeta &datum_meta,
                                   const ObObjMeta &obj_meta,
-                                  uint32_t col_idx);
+                                  uint32_t col_idx,
+                                  const ObDateSqlMode date_sql_mode);
   int set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRecord &table_record,
                                    const ObDatum &datum,
                                    const ObDatumMeta &datum_meta,
                                    const ObObjMeta &obj_meta,
                                    uint32_t col_idx);
 #endif
+#ifdef OB_BUILD_JNI_ODPS
+  int init_odps_jni_tunnel();
+  int into_odps_jni();
+  int into_odps_jni_batch(const ObBatchRows &brs);
+  int odps_jni_commit_upload();
+
+  int create_odps_schema();
+
+  int into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::OdpsType odps_type, arrow::Field &arrow_field,
+      ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
+      const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc);
+
+  int set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
+                                                JniWriter::OdpsType odps_type,
+                                                const ObDatum &datum,
+                                                const ObDatumMeta &datum_meta,
+                                                const ObObjMeta &obj_meta,
+                                                arrow::Field &arrow_field,
+                                                uint32_t col_idx);
+
+  int set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
+                                                 JniWriter::OdpsType odps_type,
+                                                 const ObDatum &datum,
+                                                 const ObDatumMeta &datum_meta,
+                                                 const ObObjMeta &obj_meta,
+                                                 arrow::Field &arrow_field,
+                                                 uint32_t col_idx);
+#endif
+
   int decimal_or_number_to_int64(const ObDatum &datum, const ObDatumMeta &datum_meta, int64_t &res);
   int decimal_to_string(const ObDatum &datum,
                         const ObDatumMeta &datum_meta,
                         std::string &res,
                         ObIAllocator &allocator);
   int get_row_str(const int64_t buf_len, bool is_first_row, char *buf, int64_t &pos);
-  int into_dumpfile(ObIOBufferWriter *data_writer);
-  int into_outfile(ObIOBufferWriter *data_writer);
-  int into_outfile_batch(const ObBatchRows &brs, ObIOBufferWriter *data_writer);
+  int into_dumpfile(ObExternalFileWriter *data_writer);
+  int into_outfile(ObExternalFileWriter *data_writer);
+  int into_outfile_batch_csv(const ObBatchRows &brs, ObExternalFileWriter *data_writer);
   int extract_fisrt_wchar_from_varhcar(const ObObj &obj, int32_t &wchar);
   int print_wchar_to_buf(char *buf,
                          const int64_t buf_len,
@@ -326,91 +302,143 @@ private:
                          int32_t wchar,
                          ObString &str,
                          ObCollationType coll_type);
-  int print_field(const ObObj &obj, ObIOBufferWriter &data_writer);
+  int print_field(const ObObj &obj, ObCsvFileWriter &data_writer);
   int print_lob_field(const ObObj &obj,
                       const ObExpr &expr,
                       const ObDatum &datum,
-                      ObIOBufferWriter &data_writer);
-  int get_buf(char* &buf, int64_t &buf_len, int64_t &pos, ObIOBufferWriter &data_writer);
-  int flush_buf(ObIOBufferWriter &data_writer);
-  int use_shared_buf(ObIOBufferWriter &data_writer, char* &buf, int64_t &buf_len, int64_t &pos);
-  template<typename flush_func>
-  int flush_shared_buf(ObIOBufferWriter &data_writer, flush_func flush_data, bool continue_use_shared_buf = false) {
-    int ret = common::OB_SUCCESS;
-    if (data_writer.get_curr_pos() > 0 && use_shared_buf_) {
-      if (OB_FAIL(flush_data(shared_buf_, data_writer.get_curr_pos(), &data_writer))) {
-      } else {
-        if (has_lob_) {
-          data_writer.increase_curr_line_len();
-        }
-        data_writer.set_curr_pos(0);
-        data_writer.update_last_line_pos();
-        use_shared_buf_ = continue_use_shared_buf;
-      }
-    }
-    return ret;
-  }
+                      ObCsvFileWriter &data_writer);
+  int get_buf(char* &buf, int64_t &buf_len, int64_t &pos, ObCsvFileWriter &data_writer);
+  int use_shared_buf(ObCsvFileWriter &data_writer, char* &buf, int64_t &buf_len, int64_t &pos);
   int resize_buf(char* &buf,
                  int64_t &buf_len,
                  int64_t &pos,
                  int64_t curr_pos,
                  bool is_json = false);
-  int resize_or_flush_shared_buf(ObIOBufferWriter &data_writer,
+  int resize_or_flush_shared_buf(ObCsvFileWriter &data_writer,
                                  char* &buf,
                                  int64_t &buf_len,
                                  int64_t &pos);
-  int check_buf_sufficient(ObIOBufferWriter &data_writer,
+  int check_buf_sufficient(ObCsvFileWriter &data_writer,
                            char* &buf,
                            int64_t &buf_len,
                            int64_t &pos,
                            int64_t str_len);
-  int write_obj_to_file(const ObObj &obj, ObIOBufferWriter &data_writer, bool need_escape = false);
-  int print_str_or_json_with_escape(const ObObj &obj, ObIOBufferWriter &data_writer);
-  int print_normal_obj_without_escape(const ObObj &obj, ObIOBufferWriter &data_writer);
+  int write_obj_to_file(const ObObj &obj, ObCsvFileWriter &data_writer, bool need_escape = false);
+  int print_str_or_json_with_escape(const ObObj &obj, ObCsvFileWriter &data_writer);
+  int print_normal_obj_without_escape(const ObObj &obj, ObCsvFileWriter &data_writer);
   int print_json_to_json_buf(const ObObj &obj,
                              char* &buf,
                              int64_t &buf_len,
                              int64_t &pos,
-                             ObIOBufferWriter &data_writer);
-  int write_single_char_to_file(const char *wchar, ObIOBufferWriter &data_writer);
+                             ObCsvFileWriter &data_writer);
+  int write_single_char_to_file(const char *wchar, ObCsvFileWriter &data_writer);
   int write_lob_to_file(const ObObj &obj,
                         const ObExpr &expr,
                         const ObDatum &datum,
-                        ObIOBufferWriter &data_writer);
+                        ObCsvFileWriter &data_writer);
   int into_varlist();
-  int open_file(ObIOBufferWriter &data_writer);
-  int calc_next_file_path(ObIOBufferWriter &data_writer);
+  int calc_next_file_path(ObExternalFileWriter &data_writer);
   int calc_first_file_path(ObString &path);
-  int calc_file_path_with_partition(ObString partition, ObIOBufferWriter &data_writer);
-  int try_split_file(ObIOBufferWriter &data_writer);
-  int split_file(ObIOBufferWriter &data_writer);
-  void close_file(ObIOBufferWriter &data_writer);
-  std::function<int(const char *, int64_t, ObIOBufferWriter *)> get_flush_function();
+  int calc_file_path_with_partition(ObString partition, ObExternalFileWriter &data_writer);
+  int check_csv_file_size(ObCsvFileWriter &data_writer);
+  int split_file(ObExternalFileWriter &data_writer);
   int prepare_escape_printer();
   int check_has_lob_or_json();
+  int calc_url_and_set_access_info();
   int create_shared_buffer_for_data_writer();
-  int create_the_only_data_writer(ObIOBufferWriter *&data_writer);
+  int create_the_only_data_writer(ObExternalFileWriter *&data_writer);
+  int new_data_writer(ObExternalFileWriter *&data_writer);
   int check_secure_file_path(ObString file_name);
-  int get_data_writer_for_partition(ObDatum *partition_datum, ObIOBufferWriter *&data_writer);
+  int get_data_writer_for_partition(const ObString &partition_str, ObExternalFileWriter *&data_writer);
   char *get_json_buf() { return json_buf_; }
   int64_t get_json_buf_len() { return json_buf_len_; }
   char *get_shared_buf() { return shared_buf_; }
   int64_t get_shared_buf_len() { return shared_buf_len_; }
 
+  // methods for handling parquet
+  int init_parquet_env();
+  int get_parquet_logical_type(
+      std::shared_ptr<const parquet::LogicalType> &logical_type,
+      const ObObjType &obj_type, const int32_t precision, const int32_t scale);
+  int get_parquet_physical_type(parquet::Type::type &physical_type, const ObObjType &obj_type);
+  int calc_parquet_decimal_length(int precision);
+  int setup_parquet_schema();
+  int into_outfile_batch_parquet(const ObBatchRows &brs_, ObExternalFileWriter *data_writer);
+  int check_parquet_file_size(ObParquetFileWriter &data_writer);
+  int build_parquet_column_vector(parquet::RowGroupWriter* rg_writer,
+                                  int col_idx,
+                                  const ObBatchRows &brs,
+                                  const ObDatumMeta &datum_meta,
+                                  const ObObjMeta &obj_meta,
+                                  const common::ObIVector* expr_vector,
+                                  int64_t &estimated_bytes);
+  int build_parquet_cell(parquet::RowGroupWriter* rg_writer,
+                         const ObDatumMeta &datum_meta,
+                         const ObObjMeta &obj_meta,
+                         const common::ObIVector* expr_vector,
+                         int64_t col_idx,
+                         int64_t row_idx,
+                         int64_t row_offset,
+                         int64_t &value_offset,
+                         int16_t* definition_levels,
+                         ObIAllocator &allocator,
+                         void* value_batch,
+                         const ObDateSqlMode date_sql_mode);
+  int calc_parquet_decimal_array(const common::ObIVector* expr_vector,
+                                 int row_idx,
+                                 const ObDatumMeta &datum_meta,
+                                 int parquet_decimal_length,
+                                 uint8_t* parquet_flba_ptr);
+  int calc_byte_array(const common::ObIVector* expr_vector,
+                      int row_idx,
+                      const ObDatumMeta &datum_meta,
+                      const ObObjMeta &obj_meta,
+                      ObIAllocator &allocator,
+                      char* &buf,
+                      uint32_t &res_len);
+  int oracle_timestamp_to_int96(const common::ObIVector* expr_vector,
+                                int64_t row_idx,
+                                const ObDatumMeta &datum_meta,
+                                parquet::Int96 &res);
+  int init_orc_env();
+  int setup_orc_schema();
+  int orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_length, std::unique_ptr<orc::Type>& orc_type);
+  int create_orc_schema(std::unique_ptr<orc::Type> &schema);
+  int into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFileWriter *data_writer);
+  int build_orc_cell(const ObDatumMeta &datum_meta,
+                     const ObObjMeta &obj_meta,
+                     const common::ObIVector* expr_vector,
+                     int64_t col_idx,
+                     int64_t row_idx,
+                     int64_t row_offset,
+                     orc::ColumnVectorBatch* col_vector_batch,
+                     ObIAllocator &allocator,
+                     const ObDateSqlMode date_sql_mode);
+  int check_orc_file_size(ObOrcFileWriter &data_writer);
+  int get_data_from_expr_vector(const common::ObIVector* expr_vector,
+                                int row_idx,
+                                ObObjType type,
+                                int64_t &value,
+                                const ObDateSqlMode date_sql_mode);
+  bool file_need_split(int64_t file_size);
+  int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
+  static bool day_number_checker(int32_t days);
 private:
   int64_t top_limit_cnt_;
   bool is_first_;
   ObObj field_str_;
   ObObj line_str_;
   ObObj file_name_;
+  common::ObCollationType cs_type_;
   ObString basic_url_; // url without partition expr
   share::ObBackupStorageInfo access_info_;
   IntoFileLocation file_location_;
   int64_t write_offset_;
-  ObIOBufferWriter* data_writer_;
+  ObExternalFileWriter* data_writer_;
   char char_enclose_;
   char char_escape_;
   bool has_enclose_;
+  bool is_optional_;
   bool has_escape_;
   bool has_lob_;
   bool has_json_;
@@ -422,21 +450,36 @@ private:
   char *shared_buf_;
   int64_t shared_buf_len_;
   bool use_shared_buf_;
-  typedef common::hash::ObHashMap<common::ObString, ObIOBufferWriter*, hash::NoPthreadDefendMode> ObPartitionWriterMap;
+  bool has_compress_;
+  typedef common::hash::ObHashMap<common::ObString, ObExternalFileWriter*, hash::NoPthreadDefendMode> ObPartitionWriterMap;
   ObPartitionWriterMap partition_map_;
   int curr_partition_num_;
   ObExternalFileFormat external_properties_;
   ObExternalFileFormat::FormatType format_type_;
+  bool is_odps_cpp_table_;
+  bool is_odps_java_table_;
 #ifdef OB_BUILD_CPP_ODPS
   apsara::odps::sdk::IUploadPtr upload_;
   apsara::odps::sdk::IRecordWriterPtr record_writer_;
 #endif
+#ifdef OB_BUILD_JNI_ODPS
+  ObOdpsJniUploaderMgr::OdpsUploader uploader_;
+  std::shared_ptr<arrow::Schema> arrow_schema_;
+#endif
   uint32_t block_id_;
   bool need_commit_;
+  // Handle parquet variables
+  ObArrowMemPool arrow_alloc_;
+  std::shared_ptr<parquet::schema::GroupNode> parquet_writer_schema_;
   static const int64_t SHARED_BUFFER_SIZE = 2LL * 1024 * 1024;
   static const int64_t MAX_OSS_FILE_SIZE = 5LL * 1024 * 1024 * 1024;
   static const int32_t ODPS_DATE_MIN_VAL = -719162; // '0001-1-1'
+
+  orc::WriterOptions options_;
+  ObOrcMemPool orc_alloc_;
+  std::unique_ptr<orc::Type> orc_schema_;
 };
+
 
 }
 }

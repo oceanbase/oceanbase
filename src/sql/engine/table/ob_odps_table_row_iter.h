@@ -20,6 +20,8 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/ob_errno.h"
 #include "lib/hash/ob_hashmap.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
+#include "lib/lock/ob_thread_cond.h"
 
 namespace oceanbase {
 namespace sql {
@@ -37,6 +39,7 @@ public:
       step_(0),
       count_(0),
       is_from_gi_pump_(false),
+      cur_line_number_(0),
       download_handle_(NULL),
       record_reader_handle_(NULL) {}
     int reuse();
@@ -46,7 +49,7 @@ public:
                  K(step_),
                  K(count_),
                  K(is_from_gi_pump_),
-                 K(ObString(part_spec_.c_str())),
+                 K(cur_line_number_),
                  K(ObString(download_id_.c_str())));
     int64_t task_idx_;
     int64_t part_id_;
@@ -54,34 +57,26 @@ public:
     int64_t step_;
     int64_t count_;
     bool is_from_gi_pump_;
+    int64_t cur_line_number_;
     apsara::odps::sdk::IDownloadPtr download_handle_;
     apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
-    std::string part_spec_;
     std::string download_id_;
     ObNewRow part_list_val_;
   };
   struct OdpsPartition {
     OdpsPartition() :
       name_(""),
-      download_handle_(NULL),
-      download_id_(""),
       record_count_(-1)
     {
     }
     OdpsPartition(const std::string &name) :
       name_(name),
-      download_handle_(NULL),
-      download_id_(""),
       record_count_(-1)
     {
     }
     OdpsPartition(const std::string &name,
-                  apsara::odps::sdk::IDownloadPtr download_handle,
-                  const std::string download_id,
                   int64_t &record_count) :
       name_(name),
-      download_handle_(download_handle),
-      download_id_(download_id),
       record_count_(record_count)
     {
     }
@@ -91,8 +86,6 @@ public:
     int reset();
     TO_STRING_KV(K(ObString(name_.c_str())), K(record_count_));
     std::string name_;
-    apsara::odps::sdk::IDownloadPtr download_handle_;
-    std::string download_id_;
     int64_t record_count_;
   };
 
@@ -151,8 +144,8 @@ public:
     return common::OB_ERR_UNEXPECTED;
   }
   virtual void reset() override;
-  int init_tunnel(const sql::ObODPSGeneralFormat &odps_format);
-  int create_downloader(ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader);
+  int init_tunnel(const sql::ObODPSGeneralFormat &odps_format, bool need_decrypt = true);
+  int create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader);
   int pull_partition_info();
   inline ObIArray<OdpsPartition>& get_partition_info() { return partition_list_; }
   inline bool is_part_table() { return is_part_table_; }
@@ -165,7 +158,7 @@ public:
                                 const int32_t ob_type_precision,
                                 const int32_t ob_type_scale);
 private:
-  int inner_get_next_row();
+  int inner_get_next_row(bool &need_retry);
   int prepare_expr();
   int pull_column();
   int next_task();
@@ -186,6 +179,9 @@ private:
     }
     return is_valid;
   }
+  int fill_partition_list_data(ObExpr &expr, int64_t returned_row_cnt);
+  int retry_read_task();
+  int calc_exprs_for_rowid(const int64_t read_count);
 private:
   ObODPSGeneralFormat odps_format_;
   apsara::odps::sdk::Account account_;
@@ -196,6 +192,7 @@ private:
   ObSEArray<OdpsPartition, 8> partition_list_;
   ObSEArray<OdpsColumn, 8> column_list_;
   ObSEArray<int64_t, 8> target_column_id_list_;
+  std::vector<std::string> column_names_;
   StateValues state_;
   bool is_part_table_;
   int64_t total_count_;
@@ -212,10 +209,12 @@ private:
 class ObOdpsPartitionDownloaderMgr
 {
 public:
+  typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> OdpsMgrMap;
   struct OdpsPartitionDownloader {
     OdpsPartitionDownloader() :
       odps_driver_(),
-      odps_partition_downloader_(NULL)
+      odps_partition_downloader_(NULL),
+      downloader_init_status_(0)
     {}
     ~OdpsPartitionDownloader() {
       reset();
@@ -223,13 +222,28 @@ public:
     int reset();
     ObODPSTableRowIterator odps_driver_;
     apsara::odps::sdk::IDownloadPtr odps_partition_downloader_;
+    common::ObThreadCond tunnel_ready_cond_;
+    int downloader_init_status_; // 0 is uninitialized, 1 is successfully initialized, -1 is failed to initialize
   };
   class DeleteDownloaderFunc
   {
+  private:
+    enum ErrType
+    {
+      SUCCESS = 0,
+      ALLOC_IS_NULL,
+      DOWNLOADER_IS_NULL
+    };
+    ObIAllocator *downloader_alloc_;
+    ErrType err_;
   public:
-    DeleteDownloaderFunc() {}
+    explicit DeleteDownloaderFunc(ObIAllocator *downloader_alloc) :
+                              downloader_alloc_(downloader_alloc),
+                              err_(ErrType::SUCCESS) {}
     virtual ~DeleteDownloaderFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, int64_t> &kv);
+    OB_INLINE bool err_occurred() { return err_ != ErrType::SUCCESS; }
+    OB_INLINE int get_err() { return static_cast<int>(err_); }
   };
   struct OdpsUploader {
     OdpsUploader() : upload_(NULL), record_writer_(NULL) {}
@@ -241,12 +255,20 @@ public:
     apsara::odps::sdk::IRecordWriterPtr record_writer_;
   };
   ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true), ref_(0), need_commit_(true) {}
-  int init_downloader(common::ObArray<share::ObExternalFileInfo> &external_table_files,
-                      const ObString &properties);
+  int init_downloader(int64_t bucket_size);
+  OB_INLINE OdpsMgrMap &get_odps_map() { return odps_mgr_map_; }
+  OB_INLINE ObIAllocator &get_allocator() { return fifo_alloc_; }
   int init_uploader(const ObString &properties,
                     const ObString &external_partition,
                     bool is_overwrite,
                     int64_t parallel);
+  static int fetch_row_count(uint64_t tenant_id,
+                             const ObIArray<ObExternalFileInfo> &external_table_files,
+                             const ObString &properties,
+                             bool &use_partition_gi);
+  static int fetch_row_count(const ObString part_spec,
+                             const ObString &properties,
+                             int64_t &row_count);
   static int create_upload_session(const sql::ObODPSGeneralFormat &odps_format,
                                    const ObString &external_partition,
                                    bool is_overwrite,
@@ -273,7 +295,8 @@ public:
 private:
   bool inited_;
   bool is_download_;
-  common::hash::ObHashMap<int64_t, int64_t> odps_mgr_map_;
+  OdpsMgrMap odps_mgr_map_;
+  common::ObConcurrentFIFOAllocator fifo_alloc_;
   common::ObArenaAllocator arena_alloc_;
   int64_t ref_;
   bool need_commit_;

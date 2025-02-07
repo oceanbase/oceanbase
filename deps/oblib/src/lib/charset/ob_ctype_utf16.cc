@@ -997,7 +997,8 @@ ob_like_range_generic(const ObCharsetInfo *cs,
                       char escape_char, char w_one, char w_many,
                       size_t res_length,
                       char *min_str,char *max_str,
-                      size_t *min_length,size_t *max_length)
+                      size_t *min_length,size_t *max_length,
+                      size_t *prefix_length)
 {
   const char *min_org = min_str;
   const char *max_org = max_str;
@@ -1058,6 +1059,7 @@ ob_like_range_generic(const ObCharsetInfo *cs,
         continue;
       }
     } else if ((ob_wc_t) w_many == wc) {
+      *prefix_length = (size_t) (min_str - min_org);
       *min_length= ((cs->state & OB_CS_BINSORT) ? (size_t) (min_str - min_org) : res_length);
       *max_length= res_length;
       goto PAD_MIN_MAX;
@@ -1111,6 +1113,7 @@ ob_like_range_generic(const ObCharsetInfo *cs,
   }
 
 PAD_SET_LEN:
+  *prefix_length = (size_t) (min_str - min_org);
   *min_length= (size_t) (min_str - min_org);
   *max_length= (size_t) (max_str - max_org);
 
@@ -1124,6 +1127,25 @@ PAD_MIN_MAX:
     memset(max_end - res_length_diff, 0, res_length_diff);
   }
   return FALSE;
+}
+
+
+const unsigned char *skip_trailing_space_utf16(const struct ObCharsetInfo *  __attribute__((unused)), const unsigned char *ptr,size_t len)
+{
+  const unsigned char *end= ptr + len;
+  while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
+    end-=2;
+
+  return (end);
+}
+
+const unsigned char *skip_trailing_space_utf16le(const struct ObCharsetInfo *  __attribute__((unused)), const unsigned char *ptr,size_t len)
+{
+  const unsigned char *end= ptr + len;
+  while (end - 1 > ptr && end[-2] == 0x20 && end[-1] == 0x00)
+    end-=2;
+
+  return (end);
 }
 
 ObCharsetHandler ob_charset_utf16_handler=
@@ -1148,7 +1170,8 @@ ObCharsetHandler ob_charset_utf16_handler=
   ob_strntoull_mb2_or_mb4,
   ob_strntod_mb2_or_mb4,
   ob_strntoull10rnd_mb2_or_mb4,
-  ob_scan_mb2
+  ob_scan_mb2,
+  skip_trailing_space_utf16
 };
 
 static ObCollationHandler ob_collation_utf16_bin_handler =
@@ -1211,7 +1234,7 @@ ObCharsetInfo ob_charset_utf16_bin=
   4,                   
   1,
   0,                   
-  0xFFFF,              
+  0x10FFFF,
   ' ',                 
   0,                   
   1,                   
@@ -1247,12 +1270,180 @@ ObCharsetInfo ob_charset_utf16_general_ci=
   4,                   
   1,
   0,                   
-  0xFFFF,              
+  0x10FFFF,
   ' ',                 
   0,                   
   1,                   
   1,                   
   &ob_charset_utf16_handler,
   &ob_collation_utf16_general_ci_handler,
+  PAD_SPACE
+};
+
+/*
+  D800..DB7F - Non-provate surrogate high (896 pages)
+  DB80..DBFF - Private surrogate high     (128 pages)
+  DC00..DFFF - Surrogate low              (1024 codes in a page)
+*/
+#define OB_UTF16_SURROGATE_HIGH_FIRST 0xD800
+#define OB_UTF16_SURROGATE_LOW_FIRST 0xDC00
+#define OB_UTF16_SURROGATE_LOW_LAST 0xDFFF
+
+static size_t ob_lengthsp_utf16le(const ObCharsetInfo *cs __attribute__((unused)),
+                                  const char *ptr, size_t length)
+{
+  const char *end = ptr + length;
+  while (end > ptr + 1 && uint2korr(end - 2) == 0x20) end -= 2;
+  return (size_t)(end - ptr);
+}
+
+static int
+ob_utf16le_uni(const ObCharsetInfo *cs __attribute__((unused)),
+             ob_wc_t *pwc, const unsigned char *str, const unsigned char *end)
+{
+  ob_wc_t lo;
+
+  if (str + 2 > end) return OB_CS_TOOSMALL2;
+
+  if ((*pwc = uint2korr(str)) < OB_UTF16_SURROGATE_HIGH_FIRST ||
+      (*pwc > OB_UTF16_SURROGATE_LOW_LAST))
+    return 2; /* [0000-D7FF,E000-FFFF] */
+
+  if (*pwc >= OB_UTF16_SURROGATE_LOW_FIRST)
+    return OB_CS_ILSEQ; /* [DC00-DFFF] Low surrogate part without high part */
+
+  if (str + 4 > end) return OB_CS_TOOSMALL4;
+
+  str += 2;
+
+  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST ||
+      lo > OB_UTF16_SURROGATE_LOW_LAST)
+    return OB_CS_ILSEQ; /* Expected low surrogate part, got something else */
+
+  *pwc = 0x10000 + (((*pwc & 0x3FF) << 10) | (lo & 0x3FF));
+  return 4;
+}
+
+static int ob_uni_utf16le(const ObCharsetInfo *cs __attribute__((unused)),
+                          ob_wc_t wc, unsigned char *str, unsigned char *end)
+{
+  if (wc < OB_UTF16_SURROGATE_HIGH_FIRST ||
+      (wc > OB_UTF16_SURROGATE_LOW_LAST && wc <= 0xFFFF)) {
+    if (str + 2 > end) return OB_CS_TOOSMALL2;
+    int2store(str, (uint16)wc);
+    return 2; /* [0000-D7FF, E000-FFFF] */
+  }
+
+  if (wc < 0xFFFF || wc > 0x10FFFF)
+    return OB_CS_ILUNI; /* [D800-DFFF,10FFFF+] */
+
+  if (str + 4 > end) return OB_CS_TOOSMALL4;
+
+  wc -= 0x10000;
+  int2store(str, (0xD800 | ((wc >> 10) & 0x3FF)));
+  str += 2;
+  int2store(str, (0xDC00 | (wc & 0x3FF)));
+  return 4; /* [010000-10FFFF] */
+}
+
+ObCharsetHandler ob_charset_utf16le_handler=
+{
+  NULL,
+  ob_ismbchar_utf16,
+  ob_mbcharlen_utf16,
+  ob_numchars_utf16,
+  ob_charpos_utf16,
+  ob_max_bytes_charpos_mb,
+  ob_well_formed_len_utf16,
+  ob_lengthsp_utf16le,
+  ob_utf16le_uni, /* mb_wc        */
+  ob_uni_utf16le, /* wc_mb        */
+  ob_mb_ctype_mb,
+  ob_caseup_utf16,
+  ob_casedn_utf16,
+  ob_fill_mb2,
+  ob_strntol_mb2_or_mb4,
+  ob_strntoul_mb2_or_mb4,
+  ob_strntoll_mb2_or_mb4,
+  ob_strntoull_mb2_or_mb4,
+  ob_strntod_mb2_or_mb4,
+  ob_strntoull10rnd_mb2_or_mb4,
+  ob_scan_mb2,
+  skip_trailing_space_utf16le
+};
+
+ObCharsetInfo ob_charset_utf16le_general_ci=
+{
+  56,
+  0,
+  0,
+  OB_CS_COMPILED|OB_CS_PRIMARY|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII,
+  OB_UTF16LE,
+  OB_UTF16LE_GENERAL_CI,
+  "UTF-16LE Unicode",
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  &ob_unicase_default,
+  NULL,
+  NULL,
+  1,
+  1,
+  1,
+  2,
+  4,
+  1,      /* mbmaxlenlen */
+  0,
+  0x10FFFF,
+  ' ',
+  0,
+  1,
+  1,
+  &ob_charset_utf16le_handler,
+  &ob_collation_utf16_general_ci_handler,
+  PAD_SPACE
+};
+
+ObCharsetInfo ob_charset_utf16le_bin=
+{
+  62,
+  0,
+  0,
+  OB_CS_COMPILED|OB_CS_BINSORT|OB_CS_STRNXFRM|OB_CS_UNICODE|OB_CS_NONASCII,
+  OB_UTF16LE,
+  OB_UTF16LE_BIN,
+  "UTF-16LE Unicode",
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  &ob_unicase_default,
+  NULL,
+  NULL,
+  1,
+  1,
+  1,
+  2,
+  4,
+  1,      /* mbmaxlenlen */
+  0,
+  0xFFFF,
+  ' ',
+  0,
+  1,
+  1,
+  &ob_charset_utf16le_handler,
+  &ob_collation_utf16_bin_handler,
   PAD_SPACE
 };

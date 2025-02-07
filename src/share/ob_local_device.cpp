@@ -19,6 +19,8 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_resource_limit.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/slog/ob_storage_logger_manager.h"
+#include "lib/ash/ob_active_session_guard.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 using namespace oceanbase::common;
@@ -170,6 +172,7 @@ int ObLocalDevice::init(const common::ObIODOpts &opts)
       }
     }
   }
+  SHARE_LOG(INFO, "init local device", K(ret), KP(this), K(lbt()));
 
   if (OB_SUCC(ret)) {
     is_inited_ = true;
@@ -803,11 +806,11 @@ int ObLocalDevice::pwrite(
     if (fd.is_block_file()) {
       const int64_t block_file_offset = get_block_file_offset(fd, offset);
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(block_fd_, buf, size, block_file_offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), K(size), K(block_file_offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(block_fd_), KP(buf), K(size), K(block_file_offset));
       }
     } else if (fd.is_normal_file()) {
       if (OB_FAIL(ObIODeviceLocalFileOp::pwrite_impl(fd.second_id_, buf, size, offset, write_size))) {
-        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), K(size), K(offset));
+        SHARE_LOG(WARN, "failed to pwrite", K(ret), K(fd), KP(buf), K(size), K(offset));
       }
     }
 
@@ -1146,6 +1149,7 @@ int ObLocalDevice::io_getevents(
     int sys_ret = 0;
     {
       oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+      common::ObBKGDSessInActiveGuard inactive_guard;
       while ((sys_ret = ::io_getevents(
           local_io_context->io_context_,
           min_nr,
@@ -1273,7 +1277,9 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
   return block_file_max_size;
 }
 
-int ObLocalDevice::check_space_full(const int64_t required_size) const
+int ObLocalDevice::check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full) const
 {
   int ret = OB_SUCCESS;
   int64_t used_percent = 0;
@@ -1289,7 +1295,7 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
     if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {
       ret = OB_SERVER_OUTOF_DISK_SPACE;
-      if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
+      if (alarm_if_space_full && REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
         LOG_DBA_ERROR_V2(OB_SHARE_OUTOF_DISK_SPACE, OB_SERVER_OUTOF_DISK_SPACE,
                          "disk is almost full. resuired size is ", required_size,
                          " and used percent is ", used_percent, "%. ",
@@ -1369,7 +1375,7 @@ int ObLocalDevice::resize_block_file(const int64_t new_size)
   } else if (0 == delta_size) {
     SHARE_LOG(INFO, "The file size is not changed, ", K(new_size), K(block_file_size_));
   } else if (0 != (sys_ret = ::fallocate(block_fd_, 0, block_file_size_, delta_size))) {
-    ret = ObIODeviceLocalFileOp::convert_sys_errno();;
+    ret = ObIODeviceLocalFileOp::convert_sys_errno();
     SHARE_LOG(WARN, "fail to expand file size", K(ret), K(sys_ret), K(block_file_size_),
         K(delta_size), K(errno), KERRMSG);
   } else if (OB_ISNULL(new_free_block_array

@@ -65,7 +65,9 @@ ObTransService::ObTransService()
 #ifdef ENABLE_DEBUG_LOG
       defensive_check_mgr_(NULL),
 #endif
-      tx_desc_mgr_(*this)
+      tx_desc_mgr_(*this),
+      tx_debug_seq_(0),
+      read_only_checker_()
 {
   check_env_();
 }
@@ -165,6 +167,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
   } else if (OB_FAIL(tablet_to_ls_cache_.init(tenant_id, &tx_ctx_mgr_))) {
     TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
+  } else if (OB_FAIL(read_only_checker_.init(tenant_id))) {
+    TRANS_LOG(WARN, "read only checker init failed", K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;

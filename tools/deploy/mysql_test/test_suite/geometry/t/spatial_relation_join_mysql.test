@@ -32,7 +32,7 @@
 
   select st_astext(tgnoindex1.g1),st_astext(tgnoindex2.g2) from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
 
-  explain extended_noaddr select * from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
+  explain basic select * from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
   --enable_result_log
   --replace_regex /Plan signature: [0-9]*/Plan signature/
 
@@ -59,7 +59,7 @@
 
   select st_astext(tgeom1.g1),st_astext(tgeom2.g2) from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
 
-  explain extended_noaddr select * from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
+  explain basic select * from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
   --replace_regex /Plan signature: [0-9]*/Plan signature/
 
 
@@ -85,7 +85,7 @@
 
   select st_astext(ptgeom1.g1),st_astext(ptgeom2.g2) from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2) order by c1,c2;
 
-  explain extended_noaddr select * from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2);
+  explain basic select * from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2);
   --replace_regex /Plan signature: [0-9]*/Plan signature/
 
   drop table tgnoindex1, tgnoindex2, tgeom1, tgeom2, ptgeom1, ptgeom2;

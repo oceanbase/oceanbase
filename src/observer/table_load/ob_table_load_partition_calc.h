@@ -34,7 +34,9 @@ class ObTableLoadPartitionCalc
 {
 public:
   ObTableLoadPartitionCalc();
-  int init(const ObTableLoadParam &param, sql::ObSQLSessionInfo *session_info);
+  int init(const ObTableLoadParam &param,
+           sql::ObSQLSessionInfo *session_info,
+           const ObIArray<ObTabletID> &tablet_ids);
   int get_part_key(const table::ObTableLoadObjRow &row, common::ObNewRow &part_key) const;
   int cast_part_key(common::ObNewRow &part_key, common::ObIAllocator &allocator) const;
   int get_partition_by_row(common::ObIArray<common::ObNewRow> &part_rows,
@@ -70,6 +72,7 @@ private:
   sql::ObExecContext exec_ctx_;
   sql::ObTableLocation table_location_;
   ObSchemaGetterGuard schema_guard_;
+  common::hash::ObHashSet<ObTabletID> tablet_ids_set_; // only for load_level == PARTITION
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadPartitionCalc);
 };

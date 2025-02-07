@@ -115,27 +115,30 @@ int ObExprObjectConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 
-int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
+int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id, ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObExecContext &exec_ctx = ctx.exec_ctx_;
-  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
   pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
   ObSchemaGetterGuard *schema_guard_ptr = NULL;
   ObSchemaGetterGuard schema_guard;
-  // if called by check_default_value in ddl resolver, no sql ctx, get guard from session cache
-  if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
-      LOG_WARN("fail to get schema guard", K(ret));
+  ObArenaAllocator tmp_alloc;
+  CK (OB_NOT_NULL(alloc));
+  if (OB_SUCC(ret)) {
+    // if called by check_default_value in ddl resolver, no sql ctx, get guard from session cache
+    if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(ret));
+      } else {
+        schema_guard_ptr = &schema_guard;
+      }
     } else {
-      schema_guard_ptr = &schema_guard;
+      schema_guard_ptr = exec_ctx.get_sql_ctx()->schema_guard_;
     }
-  } else {
-    schema_guard_ptr = exec_ctx.get_sql_ctx()->schema_guard_;
   }
   if (OB_SUCC(ret)) {
-    pl::ObPLResolveCtx resolve_ctx(alloc,
+    pl::ObPLResolveCtx resolve_ctx(tmp_alloc,
                                   *session,
                                   *(schema_guard_ptr),
                                   package_guard,
@@ -152,12 +155,11 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
       ObObj new_composite;
       int64_t ptr = 0;
       int64_t init_size = OB_INVALID_SIZE;
-      ObArenaAllocator tmp_alloc;
       const pl::ObUserDefinedType *user_type = NULL;
       CK (OB_NOT_NULL(ns));
       OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
       CK (OB_NOT_NULL(user_type));
-      OZ (user_type->newx(alloc, ns, ptr));
+      OZ (user_type->newx(*alloc, ns, ptr));
       OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
       OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
       OX (result = new_composite);
@@ -200,9 +202,11 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
     new(record)pl::ObPLRecord(info->udt_id_, expr.arg_cnt_);
+    OZ (record->init_data(ctx.exec_ctx_.get_allocator(), false));
+    CK (OB_NOT_NULL(record->get_allocator()));
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (objs[i].is_null() && info->elem_types_.at(i).is_ext()) {
-        OZ (newx(ctx, record->get_element()[i], info->elem_types_.at(i).get_udt_id()));
+        OZ (newx(ctx, record->get_element()[i], info->elem_types_.at(i).get_udt_id(), record->get_allocator()));
         if (OB_SUCC(ret)) {
           // use _is_null to distinguish the following two situations:
           // SDO_GEOMETRY(2003, 4000, SDO_POINT_TYPE(NULL,NULL,NULL), NULL, NULL)
@@ -212,26 +216,48 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
           child_null_record->set_null();
         }
       } else {
+        if (OB_SUCC(ret) &&
+            (ObCharType == info->elem_types_.at(i).get_type() || ObNCharType == info->elem_types_.at(i).get_type())) {
+          OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                    info->elem_types_.at(i).get_type(),
+                                                    info->elem_types_.at(i).get_accuracy(),
+                                                    &ctx.exec_ctx_.get_allocator(),
+                                                    &(objs[i])));
+        }
         // param ObObj may have different accuracy with the argument, need conversion
+        ObObj tmp;
         OZ (ObSPIService::spi_convert(*session,
                                       ctx.exec_ctx_.get_allocator(),
                                       objs[i],
                                       info->elem_types_.at(i),
-                                      record->get_element()[i],
+                                      tmp,
                                       false));
-      }
-      if (OB_SUCC(ret) &&
-          (ObCharType == info->elem_types_.at(i).get_type() || ObNCharType == info->elem_types_.at(i).get_type())) {
-        OZ (ObSPIService::spi_pad_char_or_varchar(session,
-                                                  info->elem_types_.at(i).get_type(),
-                                                  info->elem_types_.at(i).get_accuracy(),
-                                                  &ctx.exec_ctx_.get_allocator(),
-                                                  &(record->get_element()[i])));
+        if (OB_FAIL(ret)) {
+        } else if (tmp.is_ext()) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*record->get_allocator(),
+                                                    tmp,
+                                                    record->get_element()[i]));
+        } else {
+          OZ (deep_copy_obj(*record->get_allocator(), tmp, record->get_element()[i]));
+        }
       }
     }
     result.set_extend(reinterpret_cast<int64_t>(record),
                       pl::PL_RECORD_TYPE, pl::ObRecordType::get_init_size(expr.arg_cnt_));
     OZ(res.from_obj(result, expr.obj_datum_map_));
+    if (OB_NOT_NULL(record->get_allocator())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
+        tmp_ret = ctx.exec_ctx_.init_pl_ctx();
+      }
+      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+        tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
   return ret;
 }

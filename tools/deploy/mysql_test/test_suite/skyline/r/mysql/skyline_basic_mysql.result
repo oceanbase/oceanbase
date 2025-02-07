@@ -217,20 +217,21 @@ Outputs & filters:
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(b),c from t1 where a > 100;
 Query Plan
-==========================================================
-|ID|OPERATOR         |NAME         |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE DISTINCT   |             |1       |3           |
-|1 |└─TABLE FULL SCAN|t1(idx_b_c_a)|1       |3           |
-==========================================================
+===========================================================
+|ID|OPERATOR          |NAME         |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |HASH DISTINCT     |             |1       |3           |
+|1 |└─TABLE RANGE SCAN|t1(idx_a_b_c)|1       |3           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter(nil), rowset=16
       distinct([t1.b], [t1.c])
-  1 - output([t1.b], [t1.c]), filter([t1.a > 100]), rowset=16
-      access([t1.a], [t1.b], [t1.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+  1 - output([t1.b], [t1.c]), filter(nil), rowset=16
+      access([t1.b], [t1.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a], [t1.b], [t1.c], [t1.pk1]), range(100,MAX,MAX,MAX ; MAX,MAX,MAX,MAX), 
+      range_cond([t1.a > 100])
 explain select distinct(c),b from t1;
 Query Plan
 ========================================================
@@ -249,23 +250,24 @@ Outputs & filters:
       range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select distinct(c),b, d from t1 where b > 200 limit 100;
 Query Plan
-============================================================
-|ID|OPERATOR           |NAME         |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------
-|0 |LIMIT              |             |1       |5           |
-|1 |└─HASH DISTINCT    |             |1       |5           |
-|2 |  └─TABLE FULL SCAN|t1(idx_c_a_b)|1       |5           |
-============================================================
+===========================================================
+|ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |LIMIT               |           |1       |8           |
+|1 |└─HASH DISTINCT     |           |1       |8           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |7           |
+===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c], [t1.b], [t1.d]), filter(nil), rowset=16
       limit(100), offset(nil)
   1 - output([t1.c], [t1.b], [t1.d]), filter(nil), rowset=16
       distinct([t1.c], [t1.b], [t1.d])
-  2 - output([t1.b], [t1.c], [t1.d]), filter([t1.b > 200]), rowset=16
+  2 - output([t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.pk1], [t1.b], [t1.c], [t1.d]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.pk1]), range(200,MAX,MAX ; MAX,MAX,MAX), 
+      range_cond([t1.b > 200])
 explain select b from t1 order by b;
 Query Plan
 ====================================================
@@ -624,8 +626,8 @@ Outputs & filters:
   0 - output([t1.a], [t1.b], [t1.c]), filter([t1.a > 0], [t1.a < 100]), rowset=16
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,100,MAX,MAX ; 100,MAX,100,MIN), 
-      range_cond([t1.b = 100], [t1.c > 100], [t1.c > 0])
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,100,MAX,MAX ; 100,MAX,MAX,MAX), 
+      range_cond([t1.b = 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c = 200;
 Query Plan
 =========================================================
@@ -1237,8 +1239,8 @@ Query Plan
 ==============================================================
 |ID|OPERATOR             |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |HASH GROUP BY        |             |0       |3           |
-|1 |└─NESTED-LOOP JOIN   |             |0       |3           |
+|0 |MERGE GROUP BY       |             |1       |3           |
+|1 |└─NESTED-LOOP JOIN   |             |1       |3           |
 |2 |  ├─TABLE FULL SCAN  |t1(idx_b_c_a)|1       |3           |
 |3 |  └─MATERIAL         |             |1       |3           |
 |4 |    └─TABLE FULL SCAN|t2           |1       |3           |
@@ -1246,8 +1248,8 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      group([t1.c], [t1.b]), agg_func(nil)
-  1 - output([t1.c], [t1.b], [t1.a]), filter(nil), rowset=16
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       conds([t1.b != t2.x]), nl_params_(nil), use_batch=false
   2 - output([t1.b], [t1.a], [t1.c]), filter(nil), rowset=16
       access([t1.b], [t1.a], [t1.c]), partitions(p0)
@@ -1498,68 +1500,83 @@ Outputs & filters:
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 explain select distinct a,b,c from t3 where d > any (select pk2 from t2);
 Query Plan
-=========================================================================
-|ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------
-|0 |MERGE DISTINCT                  |             |1       |21          |
-|1 |└─NESTED-LOOP SEMI JOIN         |             |1       |21          |
-|2 |  ├─TABLE FULL SCAN             |t3(idx_a_b_c)|1       |3           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|t2           |1       |18          |
-=========================================================================
+=============================================================
+|ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |MERGE DISTINCT      |             |1       |19          |
+|1 |└─NESTED-LOOP JOIN  |             |1       |19          |
+|2 |  ├─TABLE FULL SCAN |t3(idx_a_b_c)|1       |3           |
+|3 |  └─TABLE RANGE SCAN|t2           |1       |16          |
+=============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=16
       distinct([t3.a], [t3.b], [t3.c])
   1 - output([t3.a], [t3.b], [t3.c]), filter(nil), rowset=16
-      conds(nil), nl_params_([t3.d(:0)]), use_batch=false
+      conds(nil), nl_params_([t3.d(:0)]), use_batch=true
   2 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), rowset=16
       access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t3.a], [t3.b], [t3.c], [t3.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
   3 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.pk2]), range(MIN ; MAX), 
       range_cond([:0 > t2.pk2])
 explain select a, b, c from t1 where b = 100 and c < 100 and c > 100 order by c desc limit 0, 100;
 Query Plan
-================================================================
-|ID|OPERATOR       |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_b_c_a,Reverse)|0       |3           |
-================================================================
+=================================================================
+|ID|OPERATOR        |NAME                 |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(idx_b_c_a,Reverse)|0       |3           |
+=================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.c < 100], [t1.c > 100], [t1.b = 100]), rowset=16
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false
+      limit(100), offset(0), is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false, 
+      range_cond([t1.b = 100], [t1.c < 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
 Query Plan
-================================================================
-|ID|OPERATOR       |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_c_a_b,Reverse)|1       |3           |
-================================================================
+=============================================================
+|ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |LIMIT               |             |1       |5           |
+|1 |└─TOP-N SORT        |             |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c_a)|1       |5           |
+=============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 100 OR t1.b = 200 AND t1.c = 300]), rowset=16
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      sort_keys([t1.c, DESC]), topn(100 + 0)
+  2 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), (200,300,MIN,MIN ; 200,300,MAX,MAX), 
+      range_cond([t1.b = 100 OR t1.b = 200 AND t1.c = 300])
 explain select a, b, c from t1 where (b = 200 and c = 300) or (b = 100) order by c desc limit 0, 100;
 Query Plan
-================================================================
-|ID|OPERATOR       |NAME                 |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_c_a_b,Reverse)|1       |3           |
-================================================================
+=============================================================
+|ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |LIMIT               |             |1       |5           |
+|1 |└─TOP-N SORT        |             |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c_a)|1       |5           |
+=============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 200 AND t1.c = 300 OR t1.b = 100]), rowset=16
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      sort_keys([t1.c, DESC]), topn(100 + 0)
+  2 - output([t1.b], [t1.c], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c], [t1.a], [t1.b], [t1.pk1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(100,MIN,MIN,MIN ; 100,MAX,MAX,MAX), (200,300,MIN,MIN ; 200,300,MAX,MAX), 
+      range_cond([t1.b = 200 AND t1.c = 300 OR t1.b = 100])
 explain select a1, a2, b, min(c), max(c) from t4 group by a1, a2, b;
 Query Plan
 =========================================================
@@ -3279,7 +3296,7 @@ Query Plan
 ============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3299,7 +3316,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2], [t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3320,7 +3337,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3342,7 +3359,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3363,7 +3380,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3386,7 +3403,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3410,7 +3427,7 @@ Query Plan
 =======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, DESC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3432,7 +3449,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3453,7 +3470,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3473,7 +3490,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3496,7 +3513,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3520,7 +3537,7 @@ Query Plan
 ================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3542,7 +3559,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3565,7 +3582,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c4, ASC])
   1 - output([t9.c4], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
@@ -3588,7 +3605,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3613,7 +3630,7 @@ Query Plan
 =================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
       sort_keys([t9.c4, ASC])
   1 - output([t9.c4], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3640,7 +3657,7 @@ Query Plan
 ===============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c2], [t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED 
@@ -3666,7 +3683,7 @@ Query Plan
 ===================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c1, ASC])
   1 - output([t9.c1], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c3]), order_by([t9.c2, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT 
@@ -3695,7 +3712,7 @@ Query Plan
 ===================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(t9.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t9.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=16
       sort_keys([t9.c3, ASC], [t9.c2, ASC], [t9.c5, ASC]), prefix_pos(1)
   1 - output([t9.c3], [t9.c2], [t9.c5], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=16
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
@@ -3756,17 +3773,22 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1;
@@ -3807,31 +3829,37 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t10 |0       |3           |
-===============================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1]), rowset=16
-      access([t10.c3], [t10.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([t10.pk]), range(MIN ; MAX)always true
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -3845,7 +3873,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t10"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -3861,11 +3889,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2;
@@ -3910,11 +3943,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2;
@@ -3958,11 +3996,16 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1 order by c2;
@@ -4003,35 +4046,38 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1]
       unstable_index_name:[t10]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1 order by c3;
 Query Plan
-=================================================
-|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |SORT             |    |0       |3           |
-|1 |└─TABLE FULL SCAN|t10 |0       |3           |
-=================================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=16
-      sort_keys([t10.c3, ASC])
-  1 - output([t10.c3]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1]), rowset=16
-      access([t10.c3], [t10.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([t10.pk]), range(MIN ; MAX)always true
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -4045,7 +4091,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t10"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4061,11 +4107,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2 order by c1;
@@ -4113,11 +4164,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i2, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c2;
@@ -4165,11 +4221,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c3;
@@ -4217,11 +4278,16 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 2
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0;
@@ -4262,15 +4328,19 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where c1 < 0 and c1 > 0;
@@ -4311,15 +4381,19 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1;
@@ -4360,16 +4434,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by pk;
@@ -4410,16 +4489,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c1;
@@ -4463,15 +4547,20 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c2;
@@ -4513,34 +4602,39 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
   Expr Constraints:
       cast(1, INT(11, 0)) = 1 result is TRUE
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t11 |0       |3           |
-================================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t11.c1 = 1]), rowset=16
-      access([t11.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t11.pk]), range(MAX ; MIN)always false, 
-      range_cond([t11.pk < 0], [t11.pk > 0])
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -4554,7 +4648,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "t11i1")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4565,30 +4659,36 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by pk;
 Query Plan
-=====================================================
-|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |TABLE FULL SCAN|t11(t11i1)|0       |3           |
-=====================================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1]), rowset=16
-      access([t11.pk], [t11.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -4618,27 +4718,32 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t11 |0       |3           |
-================================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t11.c1 = 1]), rowset=16
-      access([t11.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t11.pk]), range(MAX ; MIN)always false, 
-      range_cond([t11.pk < 0], [t11.pk > 0])
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -4652,7 +4757,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1")
+      INDEX(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1" "t11i1")
       REPLACE_CONST(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
@@ -4664,15 +4769,20 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
   Expr Constraints:
@@ -4718,16 +4828,21 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0;
@@ -4768,24 +4883,28 @@ Optimization Info:
       physical_range_rows:1
       logical_range_rows:1
       index_back_rows:0
-      output_rows:1
+      output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0]), rowset=16
@@ -4821,20 +4940,23 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 0
+      :1 => 0
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([1]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
@@ -4870,20 +4992,25 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 1
+      :1 => 0
+      :2 => 0
+      :3 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0 and c3 = 1;
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t12 |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t12 |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
@@ -4919,11 +5046,15 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 0
+      :1 => 0
+      :2 => 1
   Note:
       Degree of Parallelisim is 1 because of table property
 set @@recyclebin = 'off';

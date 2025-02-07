@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX  SQL_ENG
+#define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_from_unix_time.h"
 #include "lib/allocator/ob_allocator.h"
@@ -29,7 +29,7 @@ namespace sql
 
 ObExprFromUnixTime::ObExprFromUnixTime(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_UNIX_TIME,
-                         N_FROM_UNIX_TIME, ONE_OR_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                         N_FROM_UNIX_TIME, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -50,7 +50,11 @@ int ObExprFromUnixTime::calc_result_typeN(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument!", K(ret), K(params), K(params_count));
   } else if (1 == params_count) {
-    type.set_datetime();
+    if (type_ctx.enable_mysql_compatible_dates()) {
+      type.set_mysql_datetime();
+    } else {
+      type.set_datetime();
+    }
     ret = set_scale_for_single_param(type, params[0]);
 
     ObObjType param_calc_type = calc_one_param_type(params);
@@ -118,7 +122,8 @@ int ObExprFromUnixTime::cg_expr(ObExprCGCtx &op_cg_ctx,
 ObObjType ObExprFromUnixTime::calc_one_param_type(ObExprResType *params) const
 {
   ObObjType calc_param_type = params[0].get_type();
-  if (calc_param_type >= ObDateTimeType && calc_param_type <= ObYearType) {
+  if ((calc_param_type >= ObDateTimeType && calc_param_type <= ObYearType) ||
+        ob_is_mysql_compact_dates_type(calc_param_type)) {
     // do nothing
   } else {
     calc_param_type = ObNumberType;
@@ -177,15 +182,26 @@ int ObExprFromUnixTime::eval_one_param_fromtime(const ObExpr &expr,
       }
     } else if (usec_val < 0) {
       expr_datum.set_null();
-    } else if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(
-                                          usec_val,
-                                          tz_info,
-                                          usec_val))) {
-      LOG_WARN("failed to convert timestamp to datetime", K(ret));
-    } else if (OB_UNLIKELY(ObTimeConverter::is_valid_datetime(usec_val))) {
-      expr_datum.set_datetime(usec_val);
+    } else if (ObMySQLDateTimeType == expr.datum_meta_.type_) {
+      ObMySQLDateTime res_datetime = 0;
+      if (OB_FAIL(ObTimeConverter::timestamp_to_mdatetime(usec_val, tz_info, res_datetime))) {
+        LOG_WARN("failed to convert timestamp to mdatetime", K(ret));
+      } else if (OB_UNLIKELY(ObTimeConverter::is_valid_mdatetime(res_datetime))) {
+        expr_datum.set_mysql_datetime(res_datetime);
+      } else {
+        expr_datum.set_null();
+      }
     } else {
-      expr_datum.set_null();
+      if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(
+                                            usec_val,
+                                            tz_info,
+                                            usec_val))) {
+        LOG_WARN("failed to convert timestamp to datetime", K(ret));
+      } else if (OB_UNLIKELY(ObTimeConverter::is_valid_datetime(usec_val))) {
+        expr_datum.set_datetime(usec_val);
+      } else {
+        expr_datum.set_null();
+      }
     }
   }
   return ret;

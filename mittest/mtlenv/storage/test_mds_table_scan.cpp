@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -758,7 +761,7 @@ TEST_F(TestMdsTableScan, multi_version_row)
   ASSERT_EQ(ObTabletStatus::TRANSFER_OUT, data.tablet_status_);
   ASSERT_EQ(ObTabletMdsUserDataType::START_TRANSFER_OUT, data.data_type_);
   ASSERT_EQ(transfer_out_commit_scn, data.transfer_scn_);
-  ASSERT_EQ(300, data.transfer_out_commit_version_);
+  ASSERT_EQ(300, data.start_transfer_commit_version_);
 
   kv.reset();
   ret = iter.get_next_mds_kv(allocator_, kv);
@@ -1047,7 +1050,7 @@ TEST_F(TestMdsTableScan, test_minor_scan)
   ASSERT_EQ(ObTabletStatus::TRANSFER_OUT, data.tablet_status_);
   ASSERT_EQ(ObTabletMdsUserDataType::START_TRANSFER_OUT, data.data_type_);
   ASSERT_EQ(transfer_out_commit_scn, data.transfer_scn_);
-  ASSERT_EQ(300, data.transfer_out_commit_version_);
+  ASSERT_EQ(300, data.start_transfer_commit_version_);
 
   kv.reset();
   ret = iter.get_next_mds_kv(allocator_, kv);

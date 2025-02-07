@@ -52,6 +52,8 @@ public:
     OPERATION_TYPE_UNLOCK_ALONE_TABLET = 18,
     OPERATION_TYPE_LOCK_OBJS = 19,
     OPERATION_TYPE_UNLOCK_OBJS = 20,
+    OPERATION_TYPE_REPLACE_LOCK = 21,
+    OPERATION_TYPE_REPLACE_LOCKS = 22,
     OPERATION_TYPE_MAX = 100
   };
 
@@ -191,6 +193,10 @@ class ObInnerSQLTransmitResult
 {
   OB_UNIS_VERSION(1);
 public:
+  ObInnerSQLTransmitResult(const char *label, uint64_t tenant_id)
+      : res_code_(), conn_id_(OB_INVALID_ID), affected_rows_(-1),
+        stmt_type_(sql::stmt::T_NONE), scanner_(label, NULL, INNER_SQL_DEFAULT_SERIALIZE_SIZE, tenant_id),
+        field_columns_(), allocator_("InnerSQL", tenant_id) {}
   ObInnerSQLTransmitResult() :
     res_code_(), conn_id_(OB_INVALID_ID), affected_rows_(-1),
     stmt_type_(sql::stmt::T_NONE), scanner_(), field_columns_(), allocator_("InnerSQL") {};
@@ -250,6 +256,7 @@ private:
   common::ObScanner scanner_;
   common::ObSArray<common::ObField> field_columns_;
   common::ObArenaAllocator allocator_;
+  static constexpr int64_t INNER_SQL_DEFAULT_SERIALIZE_SIZE = 8 * 1024 * 1024;
 };
 
 class ObInnerSQLRpcProxy : public obrpc::ObRpcProxy
@@ -265,8 +272,8 @@ class ObInnerSqlRpcStreamHandle
 {
 public:
   typedef obrpc::ObInnerSQLRpcProxy::SSHandle<obrpc::OB_INNER_SQL_SYNC_TRANSMIT> InnerSQLSSHandle;
-  explicit ObInnerSqlRpcStreamHandle()
-    : result_()
+  explicit ObInnerSqlRpcStreamHandle(const char *label, uint64_t tenant_id)
+    : result_(label, tenant_id)
   {
     (void)reset_and_init_scanner();
   }

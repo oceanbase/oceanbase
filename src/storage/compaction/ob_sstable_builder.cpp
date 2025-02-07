@@ -42,7 +42,6 @@ int ObSSTableRebuildMicroBlockIter::prefetch()
       read_info.size_ = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
       read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       read_info.macro_block_id_ = macro_id_array_.at(prefetch_idx_);
@@ -292,7 +291,7 @@ int ObSSTableRebuilder::build_res_with_rewrite_macros(
   } else if (OB_FAIL(index_builder.close_with_macro_seq(
     res, macro_start_seq, OB_DEFAULT_MACRO_BLOCK_SIZE/*nested_size*/, 0/*nested_offset*/, pre_warm_param))) {
     STORAGE_LOG(WARN, "fail to close", K(ret), K(index_builder));
-  } else {
+  } else if (!is_local_exec_mode(merge_param.get_exec_mode())) {
     STORAGE_LOG(INFO, "success to close index builder", KR(ret), K(macro_start_seq), K(input_macro_seq));
   }
   return ret;

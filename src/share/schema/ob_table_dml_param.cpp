@@ -52,7 +52,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_id_col_id_(OB_INVALID_ID),
     vec_index_param_(),
     vec_dim_(0),
-    vec_vector_col_id_(OB_INVALID_ID)
+    vec_vector_col_id_(OB_INVALID_ID),
+    mv_mode_()
 {
 }
 
@@ -90,6 +91,7 @@ void ObTableSchemaParam::reset()
   vec_index_param_.reset();
   vec_dim_ = 0;
   vec_vector_col_id_ = OB_INVALID_ID;
+  mv_mode_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -210,6 +212,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
       LOG_WARN("fail to copy materialized view log name", KR(ret), K(tmp_name));
     }
+  }
+  if (OB_SUCC(ret) && FALSE_IT(mv_mode_.mode_ = schema->get_mv_mode())) {
   }
 
   if (OB_SUCC(ret) && OB_FAIL(schema->get_column_ids(all_column_ids, false))) {

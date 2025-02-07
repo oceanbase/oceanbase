@@ -245,7 +245,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
     }
   } else if (ctdef.table_param_.get_data_table().is_mlog_table()
       && !ctdef.is_access_mlog_as_master_table_) {
-    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_UPDATE);
+    ObDASMLogDMLIterator mlog_iter(ls_id, tablet_id, dml_param_, &iter, DAS_OP_TABLE_UPDATE);
     if (OB_FAIL(as->insert_rows(ls_id,
                                 tablet_id,
                                 *tx_desc_,
@@ -308,7 +308,6 @@ int ObDASUpdateOp::open_op()
       LOG_WARN("update row to partition storage failed", K(ret));
     }
   } else {
-    upd_rtdef_->affected_rows_ += affected_rows;
     affected_rows_ = affected_rows;
   }
   return ret;
@@ -317,6 +316,26 @@ int ObDASUpdateOp::open_op()
 int ObDASUpdateOp::release_op()
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObDASUpdateOp::assign_task_result(ObIDASTaskOp *other)
+{
+  int ret = OB_SUCCESS;
+  if (other->get_type() != get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), KPC(other));
+  } else {
+    ObDASUpdateOp *upd_op = static_cast<ObDASUpdateOp *>(other);
+    affected_rows_ = upd_op->get_affected_rows();
+  }
+  return ret;
+}
+
+int ObDASUpdateOp::record_task_result_to_rtdef()
+{
+  int ret = OB_SUCCESS;
+  upd_rtdef_->affected_rows_ += affected_rows_;
   return ret;
 }
 
@@ -329,7 +348,7 @@ int ObDASUpdateOp::decode_task_result(ObIDASTaskResult *task_result)
 #endif
   if (OB_SUCC(ret)) {
     ObDASUpdateResult *del_result = static_cast<ObDASUpdateResult*>(task_result);
-    upd_rtdef_->affected_rows_ += del_result->get_affected_rows();
+    affected_rows_ = del_result->get_affected_rows();
   }
   return ret;
 }
@@ -362,29 +381,25 @@ int ObDASUpdateOp::init_task_info(uint32_t row_extend_size)
 int ObDASUpdateOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
 {
   int ret = OB_SUCCESS;
-  if (remote_info != nullptr) {
+  if (OB_FAIL(ObIDASTaskOp::swizzling_remote_task(remote_info))) {
+    LOG_WARN("fail to swizzling remote task", K(ret));
+  } else if (remote_info != nullptr) {
     //DAS update is executed remotely
     trans_desc_ = remote_info->trans_desc_;
-    snapshot_ = &remote_info->snapshot_;
   }
   return ret;
 }
 
 int ObDASUpdateOp::write_row(const ExprFixedArray &row,
                              ObEvalCtx &eval_ctx,
-                             ObChunkDatumStore::StoredRow *&stored_row,
-                             bool &buffer_full)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  bool added = false;
-  buffer_full = false;
   if (!write_buffer_.is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer not inited", K(ret));
-  } else if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
-    LOG_WARN("try add row to datum store failed", K(ret), K(row), K(write_buffer_));
-  } else if (!added) {
-    buffer_full = true;
+  } else if (OB_FAIL(write_buffer_.add_row(row, &eval_ctx, stored_row, true))) {
+    LOG_WARN("add row to write buffer failed", K(ret), K(row), K(write_buffer_));
   }
   return ret;
 }

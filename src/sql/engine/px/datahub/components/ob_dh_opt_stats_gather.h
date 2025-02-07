@@ -84,7 +84,7 @@ class ObOptStatsGatherWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObOptStatsGatherWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObOptStatsGatherPieceMsg, ObOptStatsGatherWholeMsg>;
 public:
   ObOptStatsGatherWholeMsg() : ready_state_(0) {};
   ~ObOptStatsGatherWholeMsg() = default;

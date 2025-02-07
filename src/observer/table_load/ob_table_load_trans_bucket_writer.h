@@ -69,6 +69,7 @@ private:
                       ObTableLoadBucket *&load_bucket);
   int write_load_bucket(SessionContext &session_ctx, ObTableLoadBucket *load_bucket);
 private:
+  static const int64_t WRITE_ROW_SIZE = 2LL * 1024 * 1024;
   ObTableLoadTransCtx *const trans_ctx_;
   ObTableLoadCoordinatorCtx *const coordinator_ctx_;
   const ObTableLoadParam &param_;

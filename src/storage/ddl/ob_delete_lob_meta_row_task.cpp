@@ -406,18 +406,19 @@ int ObDeleteLobMetaRowTask::process()
     ObTableScanParam scan_param;
     transaction::ObTxDesc *tx_desc = nullptr;
     transaction::ObTransService *txs = MTL(transaction::ObTransService*);
-    ObNewRowIterator *scan_iter =  nullptr;
+    ObNewRowIterator *scan_iter = nullptr;
     ObAccessService *tsc_service = MTL(ObAccessService *);
     blocksstable::ObDatumRow *datum_row = nullptr;
     ObTableScanIterator *table_scan_iter = nullptr;
     storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
     ObIDag *tmp_dag = get_dag();
+    const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
     if (OB_ISNULL(txs) || OB_ISNULL(tsc_service) || OB_ISNULL(lob_mngr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("should not be null", K(ret), KP(txs), KP(tsc_service), KP(lob_mngr));
-    } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, true/*is_for_read*/, INT64_MAX, tx_desc))) {
+    } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, true/*is_for_read*/, timeout_us, tx_desc))) {
       LOG_WARN("fail to get tx_desc", K(ret));
-    } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, param_->ls_id_, INT64_MAX, scan_param.snapshot_))) {
+    } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, param_->ls_id_, timeout_us, scan_param.snapshot_))) {
       LOG_WARN("fail to get snapshot", K(ret));
     } else if (OB_FAIL(init_scan_param(scan_param))) {
       LOG_WARN("fail to init scan_param", K(ret));
@@ -445,7 +446,7 @@ int ObDeleteLobMetaRowTask::process()
                                                                       param_->tablet_id_,
                                                                       collation_type_,
                                                                       datum_row->storage_datums_[0],
-                                                                      INT64_MAX,
+                                                                      timeout_us,
                                                                       true))) {
           LOG_WARN("failed to delete lob column", K(ret));
         }
@@ -459,6 +460,13 @@ int ObDeleteLobMetaRowTask::process()
       if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
         LOG_WARN("fail to end read trans", K(ret));
         ret = end_trans_ret;
+      }
+    }
+
+    // revert_scan_iter if it is not null, even though ret != OB_SUCCESS
+    if (nullptr != scan_iter && nullptr != tsc_service) {
+      if (OB_SUCCESS != tsc_service->revert_scan_iter(scan_iter)) {
+        LOG_WARN("fail to revert scan iter", K(ret));
       }
     }
 

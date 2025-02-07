@@ -318,6 +318,9 @@ public:
   static int datetime_cell_str(char *buf, const int64_t len,
                                int64_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
                                const ObTimeZoneInfo *tz_info, int16_t scale);
+  static int mdatetime_cell_str(char *buf, const int64_t len,
+                                const ObMySQLDateTime &val, MYSQL_PROTOCOL_TYPE type, int64_t &pos,
+                                const ObTimeZoneInfo *tz_info, int16_t scale);
 
   /**
    * 序列化一个obstring型的cell到buf + pos的位置。
@@ -362,6 +365,8 @@ public:
    */
   static int date_cell_str(char *buf, const int64_t len,
                            int32_t val, MYSQL_PROTOCOL_TYPE type, int64_t &pos);
+  static int mdate_cell_str(char *buf, const int64_t len,
+                            ObMySQLDate val, MYSQL_PROTOCOL_TYPE type, int64_t &pos);
   /**
    * 序列化一个time型的cell到buf + pos的位置。
    * (ObTimeType)
@@ -438,6 +443,9 @@ public:
   static int geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
   static int roaringbitmap_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
   static inline int16_t float_length(const int16_t scale);
+
+private:
+  static int ob_time_cell_str(const ObTime &ob_time, char *buf, const int64_t len, int64_t &pos);
 
 public:
   static const uint64_t NULL_;

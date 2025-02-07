@@ -41,9 +41,9 @@ int ObBackupTmpFile::open(const uint64_t tenant_id)
   if (is_opened_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup tmp file init twice", K(ret));
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->alloc_dir(file_dir_))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), file_dir_))) {
     LOG_WARN("failed to alloc dir", K(ret));
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->open(file_fd_, file_dir_))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(MTL_ID(), file_fd_, file_dir_))) {
     LOG_WARN("failed to open tmp file", K(ret), K(file_dir_));
   } else {
     tenant_id_ = tenant_id;
@@ -64,11 +64,23 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     LOG_WARN("backup tmp file init twice", K(ret));
   } else if (OB_FAIL(get_io_info_(buf, size, timeout_ms, io_info))) {
     LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->write(io_info))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(MTL_ID(), io_info))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
   } else {
     file_size_ += size;
     LOG_DEBUG("backup tmp file write", K(buf), K(size));
+  }
+  return ret;
+}
+
+int ObBackupTmpFile::seal()
+{
+  int ret = OB_SUCCESS;
+  if (!is_opened_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tmp file init twice", K(ret));
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.seal(MTL_ID(), file_fd_))) {
+    LOG_WARN("failed to seal tmp file", KR(ret));
   }
   return ret;
 }
@@ -79,7 +91,7 @@ int ObBackupTmpFile::close()
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tmp file do not init", K(ret));
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->remove(file_fd_))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(MTL_ID(), file_fd_))) {
     LOG_WARN("failed to remove tmp file fd", K(ret), K(file_fd_));
   } else {
     is_opened_ = false;
@@ -94,7 +106,7 @@ int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, const int
   io_info.reset();
   io_info.fd_ = file_fd_;
   io_info.dir_id_ = file_dir_;
-  io_info.io_desc_.set_wait_event(2);
+  io_info.io_desc_.set_wait_event(common::ObWaitEventIds::BACKUP_TMP_FILE_WAIT);
   io_info.buf_ = const_cast<char *>(buf);
   io_info.size_ = size;
   io_info.io_timeout_ms_ = timeout_ms;
@@ -143,6 +155,15 @@ int ObBackupIndexBufferNode::init(
     read_count_ = 0;
     write_count_ = 0;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackupIndexBufferNode::seal_node()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tmp_file_.seal())) {
+    LOG_WARN("failed to seal tmp file", K(ret));
   }
   return ret;
 }

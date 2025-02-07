@@ -54,13 +54,14 @@ public:
   virtual int64_t get_serialize_param_size() const override;
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) override { return OB_SUCCESS; }
   int update_drop_lob_meta_row_job_status(const common::ObTabletID &tablet_id,
+                                        const ObAddr &addr,
                                         const int64_t snapshot_version,
                                         const int64_t execution_id,
                                         const int ret_code,
                                         const ObDDLTaskInfo &addition_info);
 
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_vid), K_(vid_rowkey), K_(domain_index), K_(vec_index_id),
-                      K_(vec_index_snapshot_data), K(wait_trans_ctx_), K(snapshot_held_));
+                      K_(vec_index_snapshot_data), K(wait_trans_ctx_));
 private:
   static const int64_t OB_DROP_VEC_INDEX_TASK_VERSION = 1;
   int deep_copy_index_arg(common::ObIAllocator &allocator,
@@ -70,7 +71,7 @@ private:
   int prepare(const share::ObDDLTaskStatus &status);
   int check_and_wait_finish(const share::ObDDLTaskStatus &status);
   int release_snapshot(const int64_t snapshot_version);
-  int wait_trans_end(const ObDDLTaskStatus next_task_status);
+  int wait_trans_end(const share::ObDDLTaskStatus next_task_status);
   int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
   int drop_aux_index_table(const share::ObDDLTaskStatus &status);
   int drop_lob_meta_row(const share::ObDDLTaskStatus next_task_status);
@@ -100,7 +101,12 @@ private:
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
   virtual int cleanup_impl() override;
-
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::DROP_AUX_INDEX_TABLE;
+  }
 private:
   ObRootService *root_service_;
   ObVecIndexDDLChildTaskInfo rowkey_vid_;
@@ -109,14 +115,13 @@ private:
   ObVecIndexDDLChildTaskInfo vec_index_id_;
   ObVecIndexDDLChildTaskInfo vec_index_snapshot_data_;
   obrpc::ObDropIndexArg drop_index_arg_;
-  ObDDLSingleReplicaExecutor replica_builder_;
+  ObDDLReplicaBuildExecutor replica_builder_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for delete lob meta row data ddl only.
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   int64_t delte_lob_meta_request_time_;
   int64_t delte_lob_meta_job_ret_code_;
   int64_t check_dag_exit_retry_cnt_;
   bool del_lob_meta_row_task_submitted_;
-  bool snapshot_held_;
 };
 
 } // end namespace rootserver

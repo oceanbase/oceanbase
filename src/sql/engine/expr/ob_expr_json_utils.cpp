@@ -275,6 +275,42 @@ int ObJsonUtil::datetime_scale_check(const ObAccuracy &accuracy,
   return ret;
 }
 
+int ObJsonUtil::mdatetime_scale_check(const ObAccuracy &accuracy,
+                                     ObMySQLDateTime &value,
+                                     bool strict)
+{
+  INIT_SUCC(ret);
+  ObScale scale = accuracy.get_scale();
+
+  if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
+    ret = OB_ERR_TOO_BIG_PRECISION;
+    LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST",
+        static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+    // first check zero
+    if (strict &&
+        (value == ObTimeConverter::MYSQL_ZERO_DATE ||
+        value == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_WARN("Zero datetime is invalid in json_value.", K(value));
+    } else {
+      ObMySQLDateTime temp_value = value;
+      ObTimeConverter::round_mdatetime(scale, temp_value);
+      if (strict && temp_value != value) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("Invalid input value.", K(value), K(scale));
+      } else if (ObTimeConverter::is_valid_mdatetime(temp_value)) {
+        value = temp_value;
+      } else {
+        ret = OB_ERR_NULL_VALUE; // set null for res
+        LOG_DEBUG("Invalid datetime val, return set_null", K(temp_value));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObJsonUtil::get_accuracy(const ObExpr &expr,
                              ObEvalCtx &ctx,
                              ObAccuracy &accuracy,
@@ -825,7 +861,7 @@ int cast_to_string(common::ObIAllocator *allocator,
     LOG_WARN("allocator is null", K(ret));
   } else {
     ObJsonBuffer j_buf(allocator);
-    if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, cast_param.is_pretty_))) {
+    if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, 0, cast_param.is_pretty_))) {
       is_type_mismatch = 1;
       LOG_WARN("fail to_string as json", K(ret));
     } else {
@@ -1151,6 +1187,84 @@ int cast_to_date(common::ObIAllocator *allocator,
     res.set_date(val);
   }
 
+  return ret;
+}
+
+int cast_to_mdate(common::ObIAllocator *allocator,
+                 ObEvalCtx &ctx,
+                 ObIJsonBase *j_base,
+                 common::ObAccuracy &accuracy,
+                 ObJsonCastParam &cast_param,
+                 ObDatum &res,
+                 uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  UNUSED(allocator);
+  UNUSED(cast_param);
+  UNUSED(ctx);
+  UNUSED(accuracy);
+  GET_SESSION()
+  {
+    ObMySQLDate val;
+    ObDateSqlMode date_sql_mode;
+    ObSQLMode sql_mode = session->get_sql_mode();
+    date_sql_mode.allow_invalid_dates_ = is_allow_invalid_dates(sql_mode);
+    date_sql_mode.no_zero_date_ = is_no_zero_date(sql_mode);
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
+    if (OB_ISNULL(j_base)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("json base is null", K(ret));
+    } else if (j_base->json_type() == ObJsonNodeType::J_NULL) {
+      res.set_null();
+    } else if (CAST_FAIL(j_base->to_mdate(val, date_sql_mode))) {
+      is_type_mismatch = 1;
+      LOG_WARN("wrapper to date failed.", K(ret), K(*j_base));
+      ret = OB_OPERATE_OVERFLOW;
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DATE", "json_value");
+    } else if (!cast_param.is_only_check_) {
+      res.set_mysql_date(val);
+    }
+  }
+  return ret;
+}
+
+
+int cast_to_mdatetime(common::ObIAllocator *allocator,
+                     ObEvalCtx &ctx,
+                     ObIJsonBase *j_base,
+                     common::ObAccuracy &accuracy,
+                     ObJsonCastParam &cast_param,
+                     ObDatum &res,
+                     uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  UNUSED(cast_param);
+  ObString json_string;
+  ObMySQLDateTime val;
+  GET_SESSION()
+  {
+    oceanbase::common::ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
+    ObSQLMode sql_mode = session->get_sql_mode();
+    cvrt_ctx.date_sql_mode_.allow_invalid_dates_ = is_allow_invalid_dates(sql_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_date_ = is_no_zero_date(sql_mode);
+    cvrt_ctx.date_sql_mode_.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
+    if (OB_ISNULL(j_base)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("json base is null", K(ret));
+    } else {
+      if (CAST_FAIL(j_base->to_mdatetime(val, &cvrt_ctx))) {
+        LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+      } else if (CAST_FAIL(ObJsonUtil::mdatetime_scale_check(accuracy, val))) {
+        LOG_WARN("datetime_scale_check failed.", K(ret));
+      }
+    }
+  }
+  if (cast_param.is_only_check_) {
+  } else if (ret == OB_ERR_NULL_VALUE) {
+    res.set_null();
+  } else if (OB_SUCC(ret)) {
+    res.set_mysql_datetime(val);
+  }
   return ret;
 }
 
@@ -1744,6 +1858,12 @@ ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
   cast_not_expected,
   // ObDecimalIntTC = 25, // decimal int class
   cast_to_decimalint,
+  // ObCollectionSQLTC = 26, // collection type class in SQL
+  cast_not_expected,
+  // ObMySQLDateTC  = 27,    // datetime, timestamp.
+  cast_to_mdate,
+  // ObMySQLDateTimeTC = 28, // mysql date time type class
+  cast_to_mdatetime,
 };
 
 #undef CAST_FAIL
@@ -1753,7 +1873,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
                               ObEvalCtx &ctx,
                               bool &is_null_result,
                               ObJsonParamCacheCtx *&param_ctx,
-                              common::ObIAllocator &temp_allocator,
+                              MultimodeAlloctor &temp_allocator,
                               bool &is_cover_by_error)
 {
   INIT_SUCC(ret);
@@ -1768,7 +1888,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
       && OB_NOT_NULL(path_cache)) {
   } else {
     type = expr->datum_meta_.type_;
-    if (OB_FAIL(expr->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(expr, ctx, json_datum))) {
       is_cover_by_error = false;
       LOG_WARN("eval json arg failed", K(ret));
     } else if (type == ObNullType || json_datum->is_null()) {
@@ -1812,7 +1932,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
 
 int ObJsonUtil::get_json_doc(ObExpr *expr,
                              ObEvalCtx &ctx,
-                             common::ObIAllocator &allocator,
+                             MultimodeAlloctor &allocator,
                              ObIJsonBase*& j_base,
                              bool &is_null, bool & is_cover_by_error,
                              bool relax)
@@ -1824,7 +1944,7 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
 
   bool is_oracle = lib::is_oracle_mode();
 
-  if (OB_UNLIKELY(OB_FAIL(expr->eval(ctx, json_datum)))) {
+  if (OB_FAIL(allocator.eval_arg(expr, ctx, json_datum))) {
     is_cover_by_error = false;
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType || json_datum->is_null()) {
@@ -1839,6 +1959,7 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr, ctx, allocator, j_str, is_null))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (is_null) {
+    } else if (OB_FALSE_IT(allocator.add_baseline_size(j_str.length()))) {
     } else {
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
       ObJsonInType expect_type = j_in_type;
@@ -1847,7 +1968,8 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
+                                                  expect_type, j_base, parse_flag,
+                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;

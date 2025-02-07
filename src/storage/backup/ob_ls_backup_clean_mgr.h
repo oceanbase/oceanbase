@@ -136,6 +136,8 @@ protected:
   int delete_sys_data_(const share::ObBackupPath &path);
   int delete_major_data_(const share::ObBackupPath &path);
   int delete_minor_data_(const share::ObBackupPath &path);
+  int delete_fused_meta_data_(const share::ObBackupPath &path);
+  int delete_user_data_(const share::ObBackupPath &path);
   int delete_meta_info_(const share::ObBackupPath &path);
   int delete_log_stream_dir_(const share::ObBackupPath &ls_path);
 protected:

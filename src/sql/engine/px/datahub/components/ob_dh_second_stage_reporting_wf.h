@@ -62,7 +62,7 @@ class ObReportingWFWholeMsg : public ObReportingWFWholeMsgBase
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObReportingWFWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObReportingWFPieceMsg, ObReportingWFWholeMsg>;
   ObReportingWFWholeMsg() : pby_hash_value_array_() {}
   ~ObReportingWFWholeMsg() = default;
   int assign(const ObReportingWFWholeMsg &other);

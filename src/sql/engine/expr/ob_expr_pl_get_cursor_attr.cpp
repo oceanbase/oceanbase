@@ -211,11 +211,15 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
     if (info->pl_cursor_info_.is_explicit_cursor()) {
       CK (ObExtendType == datum_meta.type_);
       OX (datum->to_obj(obj, obj_meta));
-      if (OB_SUCC(ret)
-          && obj.get_meta().get_extend_type() != pl::PL_CURSOR_TYPE
-          && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
-        ret = OB_ERR_CURSOR_ATTR_APPLY;
-        LOG_WARN("cursor attribute may not applied to non-cursor", K(ret), K(obj.get_meta()));
+      if (OB_SUCC(ret)) {
+        if (obj.is_null()) {
+          // do nothing, null cursor is legal...
+        } else if (!obj.is_ext()
+                    || (obj.get_meta().get_extend_type() != pl::PL_CURSOR_TYPE
+                        && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE)) {
+          ret = OB_ERR_CURSOR_ATTR_APPLY;
+          LOG_WARN("cursor attribute may not applied to non-cursor", K(ret), K(obj.get_meta()));
+        }
       }
       OX (cursor = reinterpret_cast<const pl::ObPLCursorInfo*>(obj.get_ext()));
     } else {
@@ -268,7 +272,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
           int64_t rowcount = 0;
           bool isnull = false;
@@ -306,7 +310,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
       case pl::ObPLGetCursorAttrInfo::PL_CURSOR_BULK_ROWCOUNT: {
         if (OB_ISNULL(cursor)) {
           ret = OB_ERR_INVALID_CURSOR;
-          LOG_WARN("cursor is null", K(ret));;
+          LOG_WARN("cursor is null", K(ret));
         } else {
           int64_t index = datum->get_int();
           int64_t rowcount = 0;

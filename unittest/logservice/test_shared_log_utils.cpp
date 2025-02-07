@@ -134,7 +134,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       tenant_id, ObLSID(ls_id), oldest_block_id));
     EXPECT_EQ(start_block_id, oldest_block_id);
 
-    // OB_ALLOCATE_MEMORY_FAILED AND OB_OSS_ERROR
+    // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
 
     CLOG_LOG(INFO, "begin case1 not exist");
     // OB_ENTRY_NOT_EXIST
@@ -205,7 +205,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       EXPECT_EQ(newest_block_id, end_block_id);
     }
 
-    // OB_ALLOCATE_MEMORY_FAILED AND OB_OSS_ERROR
+    // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
 
     CLOG_LOG(INFO, "begin case2 not exist");
 
@@ -250,7 +250,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       tenant_id, ls_id, start_block_id, block_min_scn));
     EXPECT_EQ(block_min_scn, scns[0]);
 
-    // OB_ALLOCATE_MEMORY_FAILED AND OB_OSS_ERROR
+    // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
 
     CLOG_LOG(INFO, "begin case4 entry not exist");
     // OB_ENTRY_NOT_EXIST
@@ -331,7 +331,7 @@ TEST_F(TestLogEXTUtils, basic_interface)
       tenant_id, ls_id, oldest_block_id));
     EXPECT_EQ(oldest_block_id, start_block_id);
 
-    // OB_ALLOCATE_MEMORY_FAILED AND OB_OSS_ERROR
+    // OB_ALLOCATE_MEMORY_FAILED AND OB_OBJECT_STORAGE_IO_ERROR
 
     // 删除不存在文件
     uint64_t not_exist_tenant_id = 500;

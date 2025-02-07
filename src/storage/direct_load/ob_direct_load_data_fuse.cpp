@@ -228,8 +228,14 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       if (OB_FAIL(rows_merger_.pop())) {
         LOG_WARN("fail to pop item", KR(ret));
       } else if (item->iter_idx_ == LOAD_IDX) {
-        if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(*datum_row))) {
-          LOG_WARN("fail to handle insert row", KR(ret), KPC(datum_row));
+        if (datum_row->row_flag_.is_delete()) {
+          if (OB_FAIL(param_.dml_row_handler_->handle_delete_row(param_.tablet_id_, *datum_row))) {
+            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+          }
+        } else {
+          if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(param_.tablet_id_, *datum_row))) {
+            LOG_WARN("fail to handle insert row", KR(ret), KP(datum_row));
+          }
         }
       }
     }
@@ -253,7 +259,7 @@ int ObDirectLoadDataFuse::inner_get_next_row(const ObDatumRow *&datum_row)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(*old_row, *new_row, datum_row))) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_update_row(param_.tablet_id_, *old_row, *new_row, datum_row))) {
         LOG_WARN("fail to handle update row", KR(ret), KPC(old_row), KPC(new_row));
       }
     }
@@ -292,7 +298,7 @@ ObDirectLoadSSTableDataFuse::ObDirectLoadSSTableDataFuse()
 ObDirectLoadSSTableDataFuse::~ObDirectLoadSSTableDataFuse()
 {
   if (nullptr != origin_iter_) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }
@@ -328,6 +334,10 @@ int ObDirectLoadSSTableDataFuse::init(const ObDirectLoadDataFuseParam &param,
       if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
+        row_flag_.uncontain_hidden_pk_ = false;
+        row_flag_.has_multi_version_cols_ = false;
+        // row_flag_.has_delete_row_ = ?;
+        column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
     }
@@ -360,7 +370,7 @@ ObDirectLoadMultipleSSTableDataFuse::ObDirectLoadMultipleSSTableDataFuse()
 ObDirectLoadMultipleSSTableDataFuse::~ObDirectLoadMultipleSSTableDataFuse()
 {
   if (nullptr != origin_iter_) {
-    origin_iter_->~ObIStoreRowIterator();
+    origin_iter_->~ObDirectLoadIStoreRowIterator();
     allocator_.free(origin_iter_);
     origin_iter_ = nullptr;
   }
@@ -399,6 +409,10 @@ int ObDirectLoadMultipleSSTableDataFuse::init(
       if (OB_FAIL(data_fuse_.init(param, origin_iter_, &scan_merge_))) {
         LOG_WARN("fail to init data fuse", KR(ret));
       } else {
+        row_flag_.uncontain_hidden_pk_ = false;
+        row_flag_.has_multi_version_cols_ = false;
+        // row_flag_.has_delete_row_ = ?;
+        column_count_ = param.table_data_desc_.column_count_;
         is_inited_ = true;
       }
     }

@@ -16,16 +16,32 @@
 #include "rootserver/mview/ob_mlog_maintenance_task.h"
 #include "rootserver/mview/ob_mview_maintenance_task.h"
 #include "rootserver/mview/ob_mview_refresh_stats_maintenance_task.h"
+#include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
+#include "rootserver/mview/ob_mview_push_snapshot_task.h"
+#include "rootserver/mview/ob_collect_mv_merge_info_task.h"
+#include "rootserver/mview/ob_mview_clean_snapshot_task.h"
 #include "share/scn.h"
+#include "rootserver/mview/ob_replica_safe_check_task.h"
+#include "rootserver/mview/ob_mview_update_cache_task.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+
 class ObMViewMaintenanceService : public logservice::ObIReplaySubHandler,
                                   public logservice::ObICheckpointSubHandler,
                                   public logservice::ObIRoleChangeSubHandler
 {
+public:
+  static const int64_t CacheValidInterval = 30 * 1000 * 1000; //30s
+  struct MViewRefreshInfo
+  {
+    uint64_t refresh_scn_;
+    MViewRefreshInfo() : refresh_scn_(0)
+    {};
+  };
+  typedef hash::ObHashMap<uint64_t, MViewRefreshInfo> MViewRefreshInfoCache;
 public:
   ObMViewMaintenanceService();
   virtual ~ObMViewMaintenanceService();
@@ -64,15 +80,44 @@ public:
   int switch_to_follower_gracefully() override final;
   int resume_leader() override final;
 
+  int get_mview_refresh_info(const ObIArray<uint64_t> &src_mview_ids,
+                             ObMySQLProxy *sql_proxy,
+                             const share::SCN &read_snapshot,
+                             ObIArray<uint64_t> &mview_ids,
+                             ObIArray<uint64_t> &mview_refresh_scns);
+  int get_mview_last_refresh_info(const ObIArray<uint64_t> &src_mview_ids,
+                                  ObMySQLProxy *sql_proxy,
+                                  const uint64_t tenant_id,
+                                  const share::SCN &scn,
+                                  ObIArray<uint64_t> &mview_ids,
+                                  ObIArray<uint64_t> &last_refresh_scns,
+                                  ObIArray<uint64_t> &mview_refresh_modes);
+  int update_mview_refresh_info_cache(const ObIArray<uint64_t> &mview_ids,
+                                      const ObIArray<uint64_t> &mview_refresh_scns,
+                                      const ObIArray<uint64_t> &mview_refresh_modes);
+  int fetch_mv_refresh_scns(const ObIArray<uint64_t> &src_mview_ids,
+                            const share::SCN &read_snapshot,
+                            ObIArray<uint64_t> &mview_ids,
+                            ObIArray<uint64_t> &mview_refresh_scns,
+                            bool &hit_cache);
 private:
   int inner_switch_to_leader();
   int inner_switch_to_follower();
+  void sys_ls_task_stop_();
 
 private:
+  bool is_inited_;
   ObMLogMaintenanceTask mlog_maintenance_task_;
   ObMViewMaintenanceTask mview_maintenance_task_;
   ObMViewRefreshStatsMaintenanceTask mvref_stats_maintenance_task_;
-  bool is_inited_;
+  ObMViewPushRefreshScnTask mview_push_refresh_scn_task_;
+  ObMViewPushSnapshotTask mview_push_snapshot_task_;
+  ObReplicaSafeCheckTask replica_safe_check_task_;
+  ObCollectMvMergeInfoTask collect_mv_merge_info_task_;
+  ObMViewCleanSnapshotTask mview_clean_snapshot_task_;
+  ObMviewUpdateCacheTask mview_update_cache_task_;
+  MViewRefreshInfoCache mview_refresh_info_cache_;
+  int64_t mview_refresh_info_timestamp_;
 };
 
 } // namespace rootserver

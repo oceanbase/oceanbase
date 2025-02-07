@@ -64,7 +64,11 @@ public:
      equal_cond_infos_(alloc),
      merge_directions_(alloc),
      left_child_fetcher_all_exprs_(alloc),
-     right_child_fetcher_all_exprs_(alloc)
+     right_child_fetcher_all_exprs_(alloc),
+     left_child_fetcher_equal_keys_(alloc),
+     right_child_fetcher_equal_keys_(alloc),
+     left_child_fetcher_equal_keys_idx_(alloc),
+     right_child_fetcher_equal_keys_idx_(alloc)
   {}
 
   virtual ~ObMergeJoinVecSpec() {};
@@ -78,6 +82,20 @@ public:
       if (OB_FAIL((add_merge_direction(merge_directions.at(i))))) {
         SQL_ENG_LOG(WARN, "failed to add merge direction", K(ret), K(i));
       }
+    }
+    return ret;
+  }
+  int init_equal_keys(const int equal_conds_count)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(left_child_fetcher_equal_keys_.init(equal_conds_count))) {
+      LOG_WARN("init left_child_fetcher_equal_keys_ failed", K(ret));
+    } else if (OB_FAIL(right_child_fetcher_equal_keys_.init(equal_conds_count))) {
+      LOG_WARN("init right_child_fetcher_equal_keys_ failed", K(ret));
+    } else if (OB_FAIL(left_child_fetcher_equal_keys_idx_.init(equal_conds_count))) {
+      LOG_WARN("init left_child_fetcher_equal_keys_idx_ failed", K(ret));
+    } else if (OB_FAIL(right_child_fetcher_equal_keys_idx_.init(equal_conds_count))) {
+      LOG_WARN("init right_child_fetcher_equal_keys_idx_ failed", K(ret));
     }
     return ret;
   }
@@ -96,117 +114,338 @@ public:
   common::ObFixedArray<int64_t, common::ObIAllocator> merge_directions_;
   ExprFixedArray left_child_fetcher_all_exprs_;
   ExprFixedArray right_child_fetcher_all_exprs_;
+  ExprFixedArray left_child_fetcher_equal_keys_;
+  ExprFixedArray right_child_fetcher_equal_keys_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> left_child_fetcher_equal_keys_idx_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> right_child_fetcher_equal_keys_idx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinVecSpec);
 };
 struct RowGroup
 {
-  RowGroup() : start_(-1), end_(-1), cur_(-1) {}
-  RowGroup(int64_t start, int64_t end) : start_(start), end_(end), cur_(start) {}
-  inline int64_t count() const { return end_ - start_; }
-  inline bool has_next() const { return cur_ < end_; }
-  inline bool iter_end() const { return cur_ >= end_; }
+  RowGroup() : start_(-1), end_(-1), cur_(-1), calced_size_(0) {}
+  RowGroup(int64_t start, int64_t end) : start_(start), end_(end), cur_(start), calced_size_(0) {}
+  inline void copy(RowGroup *other)
+  {
+    start_ = other->start_;
+    end_ = other->end_;
+    cur_ = start_;
+    calced_size_ = 0;
+  }
+  inline int64_t count() { return end_ - start_; }
+  inline bool iter_end() const { return (cur_ >= end_); }
   inline bool is_empty() const { return end_ == start_ && start_ == -1; }
   inline void rescan() { cur_ = start_; }
   inline void reset() { start_ = end_ = cur_ = -1; }
+  inline bool all_calced() { return calced_size_ == end_ - start_; }
   int64_t start_;
   int64_t end_;
   int64_t cur_;
-  TO_STRING_KV(K(start_), K(end_), K(cur_));
-};
-
-struct ObJoinTracker
-{
-  ObJoinTracker():
-  left_row_id_array_(nullptr),
-  right_row_id_array_(nullptr),
-  last_left_row_id_(-2),
-  group_boundary_row_id_array_(nullptr),
-  group_boundary_row_id_array_idx_(0),
-  cur_group_boundary_row_id_(-2),
-  cur_group_idx_(-1),
-  last_left_row_matched_(false),
-  right_match_all_output_group_idx_(-1),
-  row_id_array_size_(0)
-  {}
-
-  inline void start_trace()
-  {
-    group_boundary_row_id_array_idx_ = 0;
-    cur_group_boundary_row_id_ = group_boundary_row_id_array_[group_boundary_row_id_array_idx_];
-  }
-
-  inline bool reach_cur_group_end(int64_t row_id)
-  {
-    bool is_crossing = false;
-    if (row_id >= 0) {
-      is_crossing = row_id >= cur_group_boundary_row_id_;
-    } else {
-      is_crossing = (row_id == -1 || last_left_row_id_ == -1) && last_left_row_id_ != row_id;
-    }
-    if (is_crossing) {
-      cur_group_boundary_row_id_ = group_boundary_row_id_array_[++group_boundary_row_id_array_idx_];
-    }
-    return is_crossing;
-  }
-
-  inline int set_group_end_row_id(int64_t row_id)
-  {
-    int ret = OB_SUCCESS;
-    if (group_boundary_row_id_array_idx_ < 0 || group_boundary_row_id_array_idx_ > row_id_array_size_) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      group_boundary_row_id_array_[group_boundary_row_id_array_idx_++] = row_id;
-    }
-    return ret;
-  }
-
-  inline void clean_row_id_arrays()
-  {
-    if (OB_NOT_NULL(left_row_id_array_)) {
-      MEMSET(left_row_id_array_, 0, sizeof(int64_t) * row_id_array_size_);
-    }
-    if (OB_NOT_NULL(right_row_id_array_)) {
-      MEMSET(right_row_id_array_, 0, sizeof(int64_t) * row_id_array_size_);
-    }
-    if (OB_NOT_NULL(group_boundary_row_id_array_)) {
-      MEMSET(group_boundary_row_id_array_, 0, sizeof(int64_t) * (row_id_array_size_ + 1));
-    }
-  }
-
-  inline void reset()
-  {
-    group_boundary_row_id_array_idx_ = 0;
-    cur_group_boundary_row_id_ = -2;
-    cur_group_idx_ = -1;
-    last_left_row_matched_ = false;
-    last_left_row_id_ = -2;
-    right_match_all_output_group_idx_ = -1;
-    clean_row_id_arrays();
-  }
-
-  int64_t *left_row_id_array_;
-  int64_t *right_row_id_array_;
-  int64_t last_left_row_id_;
-  int64_t *group_boundary_row_id_array_;
-  int64_t group_boundary_row_id_array_idx_;
-  int64_t cur_group_boundary_row_id_;
-  int64_t cur_group_idx_;
-  bool last_left_row_matched_;
-  int64_t right_match_all_output_group_idx_;
-  int64_t row_id_array_size_;
-  TO_STRING_KV(K(left_row_id_array_), K(right_row_id_array_), K(group_boundary_row_id_array_),
-  K(last_left_row_id_), K(group_boundary_row_id_array_idx_), K(cur_group_boundary_row_id_),
-  K(cur_group_idx_), K(last_left_row_matched_), K(right_match_all_output_group_idx_),
-  K(row_id_array_size_));
+  int64_t calced_size_;
+  TO_STRING_KV(K(start_), K(end_), K(cur_), K(calced_size_));
 };
 
 class ObMergeJoinVecOp: public ObJoinVecOp
 {
-private:
+public:
   typedef std::pair<RowGroup, RowGroup> GroupPair;
-  typedef std::pair<int64_t, int64_t> RowsPair;
+  typedef std::pair<int64_t, int64_t> RowPair;
+  class ObMergeJoinCursor;
+  struct ObJoinTracker
+  {
+    ObJoinTracker(ObMergeJoinVecOp &mj_op,
+                  const ObJoinType join_type,
+                  const bool is_right_drive,
+                  ObMergeJoinCursor *left_match_cursor,
+                  ObMergeJoinCursor *right_match_cursor)
+        : join_type_(join_type),
+          is_right_drive_(is_right_drive),
+          allocator_(mj_op.allocator_),
+          group_pairs_(mj_op.group_pairs_),
+          output_cache_(mj_op.output_cache_),
+          left_match_cursor_(left_match_cursor),
+          right_match_cursor_(right_match_cursor),
+          cur_left_group_(nullptr),
+          cur_right_group_(nullptr),
+          cur_group_idx_(-1) {}
+    virtual ~ObJoinTracker()
+    {
+      left_match_cursor_ = nullptr;
+      right_match_cursor_ = nullptr;
+      cur_left_group_ = nullptr;
+      cur_right_group_ = nullptr;
+      allocator_ = nullptr;
+      cur_group_idx_ = -1;
+    }
+    virtual int fill_match_pair(int64_t max_pair_cnt, ObBatchRows &brs) = 0;
+    virtual int match_proc(ObBatchRows &brs) = 0;
+    inline int next_group_pair()
+    {
+      int ret = OB_SUCCESS;
+      if (++cur_group_idx_ < group_pairs_.count()) {
+        cur_left_group_ = is_right_drive_ ? &group_pairs_.at(cur_group_idx_).second
+                                          : &group_pairs_.at(cur_group_idx_).first;
+        cur_right_group_ = is_right_drive_
+                              ? &group_pairs_.at(cur_group_idx_).first
+                              : &group_pairs_.at(cur_group_idx_).second;
+      } else {
+        ret = OB_ITER_END;
+      }
+      return ret;
+    }
+    virtual void reuse() = 0;
+
+  protected:
+    const ObJoinType join_type_;
+    const bool is_right_drive_;
+    ObIAllocator *allocator_;
+    ObSEArray<GroupPair, 256> &group_pairs_;
+    ObSEArray<RowPair, 256> &output_cache_;
+    ObMergeJoinCursor *left_match_cursor_;
+    ObMergeJoinCursor *right_match_cursor_;
+    RowGroup *cur_left_group_;
+    RowGroup *cur_right_group_;
+    int64_t cur_group_idx_;
+  };
+  struct ObCommonJoinTracker : public ObJoinTracker
+  {
+    ObCommonJoinTracker(ObMergeJoinVecOp &mj_op, const ObJoinType join_type,
+                        const bool need_trace, const bool is_right_drive,
+                        ObMergeJoinCursor *left_match_cursor,
+                        ObMergeJoinCursor *right_match_cursor)
+        : ObJoinTracker(mj_op, join_type, is_right_drive, left_match_cursor,
+                        right_match_cursor),
+          need_trace_(need_trace), left_row_id_array_(nullptr),
+          right_row_id_array_(nullptr), last_left_row_id_(-2),
+          group_boundary_row_id_array_(nullptr),
+          group_boundary_row_id_array_idx_(0), cur_group_boundary_row_id_(-2),
+          trace_group_idx_(-1), last_left_row_matched_(false),
+          right_match_all_output_group_idx_(-1), row_id_array_size_(0),
+          rj_match_vec_(nullptr), rj_match_vec_size_(0) {}
+
+    ~ObCommonJoinTracker()
+    {
+      reuse();
+      if (nullptr != rj_match_vec_) {
+        allocator_->free(rj_match_vec_);
+        rj_match_vec_ = nullptr;
+      }
+      if (OB_NOT_NULL(left_row_id_array_)) {
+        allocator_->free(left_row_id_array_);
+        left_row_id_array_ = nullptr;
+      }
+      if (OB_NOT_NULL(right_row_id_array_)) {
+        allocator_->free(right_row_id_array_);
+        right_row_id_array_ = nullptr;
+      }
+      if (OB_NOT_NULL(group_boundary_row_id_array_)) {
+        allocator_->free(group_boundary_row_id_array_);
+        group_boundary_row_id_array_ = nullptr;
+      }
+    }
+    int init(int64_t max_batch_size);
+    inline void start_trace()
+    {
+      group_boundary_row_id_array_idx_ = 0;
+      cur_group_boundary_row_id_ = group_boundary_row_id_array_[group_boundary_row_id_array_idx_];
+    }
+    int fill_match_pair(int64_t max_pair_cnt, ObBatchRows &brs) override final;
+    int match_proc(ObBatchRows &brs) override final;
+    int init_match_flags();
+    int expand_match_flags_if_necessary(const int64_t size);
+    inline bool reach_cur_group_end(int64_t row_id)
+    {
+      bool is_crossing = false;
+      if (row_id >= 0) {
+        is_crossing = row_id >= cur_group_boundary_row_id_;
+      } else {
+        is_crossing = (row_id == -1 || last_left_row_id_ == -1) && last_left_row_id_ != row_id;
+      }
+      if (is_crossing) {
+        cur_group_boundary_row_id_ = group_boundary_row_id_array_[++group_boundary_row_id_array_idx_];
+      }
+      return is_crossing;
+    }
+
+    inline int set_group_end_row_id(int64_t row_id)
+    {
+      int ret = OB_SUCCESS;
+      if (group_boundary_row_id_array_idx_ < 0 ||
+          group_boundary_row_id_array_idx_ > row_id_array_size_) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        group_boundary_row_id_array_[group_boundary_row_id_array_idx_++] = row_id;
+      }
+      return ret;
+    }
+
+    inline void clean_row_id_arrays()
+    {
+      if (OB_NOT_NULL(left_row_id_array_)) {
+        MEMSET(left_row_id_array_, 0, sizeof(int64_t) * row_id_array_size_);
+      }
+      if (OB_NOT_NULL(right_row_id_array_)) {
+        MEMSET(right_row_id_array_, 0, sizeof(int64_t) * row_id_array_size_);
+      }
+      if (OB_NOT_NULL(group_boundary_row_id_array_)) {
+        MEMSET(group_boundary_row_id_array_, 0, sizeof(int64_t) * (row_id_array_size_ + 1));
+      }
+    }
+    inline bool all_groups_consumed() { return cur_group_idx_ >= group_pairs_.count(); }
+    inline void reuse() override final
+    {
+      group_boundary_row_id_array_idx_ = 0;
+      cur_group_boundary_row_id_ = -2;
+      cur_group_idx_ = -1;
+      trace_group_idx_ = -1;
+      last_left_row_matched_ = false;
+      last_left_row_id_ = -2;
+      right_match_all_output_group_idx_ = -1;
+      clean_row_id_arrays();
+    }
+    const bool need_trace_;
+    int64_t *left_row_id_array_;
+    int64_t *right_row_id_array_;
+    int64_t last_left_row_id_;
+    int64_t *group_boundary_row_id_array_;
+    int64_t group_boundary_row_id_array_idx_;
+    int64_t cur_group_boundary_row_id_;
+    int64_t trace_group_idx_;
+    bool last_left_row_matched_;
+    int64_t right_match_all_output_group_idx_;
+    int64_t row_id_array_size_;
+    ObBitVector *rj_match_vec_; // bitmap to check whether it is matched during full outer join
+    int64_t rj_match_vec_size_;
+    TO_STRING_KV(K(join_type_), K(is_right_drive_), K(need_trace_),
+                 K(left_row_id_array_), K(right_row_id_array_),
+                 K(group_boundary_row_id_array_), K(last_left_row_id_),
+                 K(group_boundary_row_id_array_idx_),
+                 K(cur_group_boundary_row_id_), K(cur_group_idx_),
+                 K(last_left_row_matched_),
+                 K(right_match_all_output_group_idx_), K(row_id_array_size_));
+  };
+
+  struct ObSemiAntiJoinTracker : public ObJoinTracker
+  {
+    struct SemiAntiMatchPair
+    {
+      SemiAntiMatchPair()
+          : is_semi_join_(false), left_row_matched_(false), left_row_id_(-2),
+            right_group_(), cur_left_group_(nullptr), tracker_(nullptr) {}
+      void init(bool is_semi_join, ObSemiAntiJoinTracker *tracker)
+      {
+        is_semi_join_ = is_semi_join;
+        tracker_ = tracker;
+        reuse();
+      }
+      void match() { left_row_matched_ = true; }
+      int next_left_row(int64_t vec_idx);
+      int next_row_pair(bool need_trace, int64_t vec_idx, bool &calc_skip, bool &iter_end);
+      int get_next_group_pair();
+      void reuse()
+      {
+        left_row_matched_ = false;
+        left_row_id_ = -2;
+        right_group_.reset();
+        cur_left_group_ = nullptr;
+      }
+      bool is_semi_join_;
+      bool left_row_matched_;
+      int64_t left_row_id_;
+      RowGroup right_group_;
+      RowGroup *cur_left_group_;
+      ObSemiAntiJoinTracker *tracker_;
+    };
+    struct RowidReverseCompartor
+    {
+      bool operator()(const int64_t &lhs, const int64_t &rhs) const
+      { return lhs > rhs; }
+    };
+    ObSemiAntiJoinTracker(ObMergeJoinVecOp &mj_op, ObJoinType join_type,
+                          bool is_right_drive,
+                          ObMergeJoinCursor *left_match_cursor,
+                          ObMergeJoinCursor *right_match_cursor)
+        : ObJoinTracker(mj_op, join_type, is_right_drive, left_match_cursor,
+                        right_match_cursor),
+          semi_anti_match_pair_array_(nullptr),
+          semi_anti_match_pair_ptr_array_(nullptr), intermediate_cache_(),
+          output_group_idx_(0), match_pair_cnt_(0), match_pair_array_size_(0) {}
+    ~ObSemiAntiJoinTracker()
+    {
+      reuse();
+      if (OB_NOT_NULL(semi_anti_match_pair_array_)) {
+        allocator_->free(semi_anti_match_pair_array_);
+        semi_anti_match_pair_array_ = nullptr;
+      }
+      if (OB_NOT_NULL(semi_anti_match_pair_ptr_array_)) {
+        allocator_->free(semi_anti_match_pair_ptr_array_);
+        semi_anti_match_pair_ptr_array_ = nullptr;
+      }
+    }
+    int init(int64_t tenant_id, int64_t max_batch_size);
+    int fill_match_pair(int64_t max_pair_cnt, ObBatchRows &brs) override final;
+    int match_proc(ObBatchRows &brs) override final;
+    inline int get_cur_group(int64_t &group_idx, RowGroup *&left, RowGroup *&right)
+    {
+      int ret = OB_SUCCESS;
+      if (cur_group_idx_ < group_pairs_.count()) {
+        group_idx = cur_group_idx_;
+        left = is_right_drive_ ? &group_pairs_.at(group_idx).second
+                               : &group_pairs_.at(group_idx).first;
+        right = is_right_drive_ ? &group_pairs_.at(group_idx).first
+                                : &group_pairs_.at(group_idx).second;
+      } else {
+        ret = OB_ITER_END;
+      }
+      return ret;
+    }
+    inline int get_group(int64_t group_idx, RowGroup *&left, RowGroup *&right)
+    {
+      int ret = OB_SUCCESS;
+      left = is_right_drive_ ? &group_pairs_.at(group_idx).second
+                             : &group_pairs_.at(group_idx).first;
+      right = is_right_drive_ ? &group_pairs_.at(group_idx).first
+                              : &group_pairs_.at(group_idx).second;
+      return ret;
+    }
+    inline int reorder_output_rows();
+    inline void reuse() override final
+    {
+      match_pair_cnt_ = match_pair_array_size_;
+      cur_group_idx_ = -1;
+      output_group_idx_ = 0;
+      if (OB_NOT_NULL(semi_anti_match_pair_array_)) {
+        for (int i = 0; i < match_pair_array_size_; ++i) {
+          semi_anti_match_pair_array_[i].reuse();
+        }
+      }
+      if (OB_NOT_NULL(semi_anti_match_pair_ptr_array_)) {
+        MEMSET(semi_anti_match_pair_ptr_array_, NULL,
+               sizeof(SemiAntiMatchPair *) * match_pair_array_size_);
+      }
+      if (OB_NOT_NULL(semi_anti_match_pair_array_)) {
+        for (int64_t i = 0; i < match_pair_array_size_; ++i) {
+          semi_anti_match_pair_ptr_array_[i] = &semi_anti_match_pair_array_[i];
+        }
+      }
+      intermediate_cache_.reuse();
+    }
+    SemiAntiMatchPair *semi_anti_match_pair_array_;
+    SemiAntiMatchPair **semi_anti_match_pair_ptr_array_;
+    ObSEArray<int64_t, 256> intermediate_cache_; // for semi join or anti join, to reorder output
+    int64_t output_group_idx_;
+    int64_t match_pair_cnt_;
+    int64_t match_pair_array_size_;
+    TO_STRING_KV(K(is_right_drive_), K(cur_left_group_), K(cur_right_group_),
+                 K(join_type_),
+                 KP(semi_anti_match_pair_array_),
+                 KP(semi_anti_match_pair_ptr_array_),
+                 K(cur_group_idx_), K(group_pairs_),
+                 K(output_cache_),
+                 K(match_pair_cnt_),
+                 K(match_pair_array_size_));
+  };
   enum JoinState {
     JOIN_END = 0,
     JOIN_BEGIN,
@@ -248,17 +487,22 @@ private:
         allocator_(allocator),
         mem_bound_raito_(0.0),
         equal_key_idx_(allocator),
+        equal_key_exprs_arry_ptr_(nullptr),
+        equal_key_idx_arry_ptr_(nullptr),
         col_equal_group_boundary_(nullptr)
     {}
     ~ObMergeJoinCursor() { destroy(); }
     int init(bool is_left, const uint64_t tenant_id, ObOperator *child,
              const ExprFixedArray *all_exprs,
+             const ExprFixedArray *equal_keys,
+             const common::ObFixedArray<int64_t, common::ObIAllocator> *key_idx,
              const EqualCondInfoArray &equal_cond_infos,
              ObIOEventObserver &io_event_observer, double mem_bound_raito);
-    int init_row_store(const uint64_t tenant_id, ObIOEventObserver &io_event_observer);
     int init_equal_key_exprs(bool is_left, const EqualCondInfoArray &equal_cond_infos);
-    int init_stored_batch_rows();
-    int init_col_equal_group_boundary(const EqualCondInfoArray &equal_cond_infos);
+    inline int init_row_store(const uint64_t tenant_id, ObIOEventObserver &io_event_observer);
+    inline int init_stored_batch_rows();
+    inline int init_store_rows_array();
+    inline int init_col_equal_group_boundary();
     int compare(const ObMergeJoinVecOp::ObMergeJoinCursor &other,
                 const common::ObIArray<int64_t> &merge_directions, int &cmp) const;
     inline void row_store_finish_add() { row_store_.finish_add_row(false); }
@@ -266,7 +510,8 @@ private:
     int restore_cur_batch();
     int eval_all_exprs();
     inline bool is_small_group_empty() { return small_row_group_.is_empty(); }
-    RowGroup get_small_group() {
+    RowGroup get_small_group()
+    {
       return RowGroup(small_row_group_.start_, small_row_group_.end_);
     }
     template<bool need_store_equal_group>
@@ -286,16 +531,17 @@ private:
     int store_one_row(int64_t batch_idx, ObCompactRow *&stored_row);
     int store_rows_of_cur_batch(int64_t &stored_row_cnt);
     const RowMeta &get_row_meta() { return row_store_.get_row_meta(); }
-    int start_match();
     inline int init_ouput_vectors(int64_t max_vec_size);
-    int get_matching_rows_and_store_ptr(int64_t start_id, int64_t end_id,
-                                        int64_t row_ptr_idx,
-                                        int64_t *row_id_array,
-                                        int64_t row_id_array_size);
+    int flat_group(int64_t start_id, int64_t cnt,
+                   int64_t row_ptr_idx,
+                   int64_t *row_id_array);
     int duplicate_store_row_ptr(int64_t stored_row_id, int64_t ptr_idx,
-                                int64_t dup_cnt, int64_t *row_id_array,
-                                int64_t row_id_array_size);
-    int fill_null_row_ptr(int64_t ptr_idx, int64_t cnt, int64_t *row_id_array);
+                                int64_t dup_cnt, int64_t *row_id_array);
+    void flat_group_with_null_as_placeholder(int64_t ptr_idx, int64_t cnt,
+                                             int64_t *row_id_array,
+                                             int64_t start_row_id,
+                                             ObBatchRows &brs);
+    void fill_null_row_ptr(int64_t ptr_idx, int64_t cnt, int64_t *row_id_array);
     int fill_vec_with_stored_rows(int64_t size);
     int get_next_batch_from_source();
     int update_store_mem_bound();
@@ -329,7 +575,8 @@ private:
     void destroy()
     {
       reuse();
-      equal_key_idx_.~ObFixedArray();
+      equal_key_idx_arry_ptr_ = nullptr;
+      equal_key_exprs_arry_ptr_ = nullptr;
       if (OB_NOT_NULL(store_brs_.skip_)) {
         allocator_->free(store_brs_.skip_);
         store_brs_.skip_ = nullptr;
@@ -347,7 +594,8 @@ private:
         mocked_null_row_ = nullptr;
       }
       allocator_ = nullptr;
-      equal_key_exprs_.reset();
+      equal_key_idx_.~ObFixedArray();
+      equal_key_exprs_.~ObFixedArray();
       row_store_.reset();
     }
     TO_STRING_KV(K(cur_batch_idx_), K(cur_brs_), K(reach_end_), K(saved_), K(restored_));
@@ -378,10 +626,11 @@ private:
     ObIAllocator *allocator_;
     double mem_bound_raito_;
     common::ObFixedArray<int64_t, common::ObIAllocator> equal_key_idx_;
+    const ExprFixedArray *equal_key_exprs_arry_ptr_;
+    const common::ObFixedArray<int64_t, common::ObIAllocator> *equal_key_idx_arry_ptr_;
     int64_t *col_equal_group_boundary_;
   };
 
-public:
   ObMergeJoinVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObMergeJoinVecOp() { destroy(); }
   virtual int inner_switch_iterator() override;
@@ -394,23 +643,22 @@ public:
     int ret = OB_SUCCESS;
     right_match_cursor_ = nullptr;
     left_match_cursor_ = nullptr;
-    is_right_drive_ = false;
     reset();
-    if (nullptr != rj_match_vec_) {
-      allocator_->free(rj_match_vec_);
-      rj_match_vec_ = nullptr;
-    }
-    if (OB_NOT_NULL(tracker_.left_row_id_array_)) {
-      allocator_->free(tracker_.left_row_id_array_);
-      tracker_.left_row_id_array_ = nullptr;
-    }
-    if (OB_NOT_NULL(tracker_.right_row_id_array_)) {
-      allocator_->free(tracker_.right_row_id_array_);
-      tracker_.right_row_id_array_ = nullptr;
-    }
-    if (OB_NOT_NULL(tracker_.group_boundary_row_id_array_)) {
-      allocator_->free(tracker_.group_boundary_row_id_array_);
-      tracker_.group_boundary_row_id_array_ = nullptr;
+    if (OB_NOT_NULL(tracker_)) {
+      tracker_->reuse();
+      if (MY_SPEC.join_type_ >= LEFT_SEMI_JOIN &&
+          MY_SPEC.join_type_ <= RIGHT_ANTI_JOIN &&
+          MY_SPEC.other_join_conds_.count() > 0) {
+        ObSemiAntiJoinTracker *tracker = static_cast<ObSemiAntiJoinTracker *>(tracker_);
+        tracker->reuse();
+        tracker->~ObSemiAntiJoinTracker();
+      } else {
+        ObCommonJoinTracker *tracker = static_cast<ObCommonJoinTracker *>(tracker_);
+        tracker->reuse();
+        tracker->~ObCommonJoinTracker();
+      }
+      allocator_->free(tracker_);
+      tracker_ = nullptr;
     }
     left_cursor_.~ObMergeJoinCursor();
     right_cursor_.~ObMergeJoinCursor();
@@ -423,19 +671,18 @@ public:
   void reset()
   {
     join_state_ = JOIN_BEGIN;
-    group_idx_ = -1;
     group_pairs_.reset();
     output_cache_.reset();
     left_cursor_.reuse();
     right_cursor_.reuse();
-    tracker_.reset();
-    cur_right_group_ = nullptr;
-    cur_left_group_ = nullptr;
+    if (OB_NOT_NULL(tracker_)) {
+      tracker_->reuse();
+    }
     iter_end_ = false;
     max_output_cnt_ = 0;
     output_cache_idx_ = 0;
-    rj_match_vec_size_ = 0;
   }
+
   virtual void destroy() override
   {
     inner_close();
@@ -457,7 +704,9 @@ private:
   }
   inline bool has_enough_match_rows()
   {
-    return (left_cursor_.stored_match_row_cnt_ + right_cursor_.stored_match_row_cnt_ ) * 0.5 >= max_output_cnt_;
+    return (left_cursor_.stored_match_row_cnt_ +
+            right_cursor_.stored_match_row_cnt_) *
+               0.1 >= max_output_cnt_;
   }
   void set_row_store_it_age(ObTempBlockStore::IterationAge *age)
   {
@@ -475,31 +724,21 @@ private:
   int join_both();
   inline int init_output_vector(int64_t size);
   int output_cached_rows();
-  int output_group_pairs();
   int output_one_side_until_end(ObMergeJoinCursor &cursor, ObMergeJoinCursor &blank_cursor);
-  int expand_match_flags_if_necessary(const int64_t size);
   int process_dump() { return OB_SUCCESS; };
   int calc_other_cond_and_output_directly(bool &can_output);
-  template<ObJoinType join_type>
   int calc_other_cond_and_cache_rows();
-  template<bool need_trace>
-  int fill_vec_for_calc_other_conds(int64_t &row_cnt, ObBatchRows &brs);
+  int flat_group_pair_and_project_onto_vec(ObBatchRows &brs);
   int match_process(bool &can_output);
-  inline void assign_row_group_to_left_right(int64_t group_idx);
 
 private:
   JoinState join_state_;
   lib::MemoryContext mem_context_;
   ObIAllocator *allocator_;
-  ObBitVector *rj_match_vec_; // bitmap to check whether it is matched during full outer join
-  int64_t rj_match_vec_size_;
-  RowGroup *cur_right_group_;
-  RowGroup *cur_left_group_;
   ObMergeJoinCursor *right_match_cursor_;
   ObMergeJoinCursor *left_match_cursor_;
   ObSEArray<GroupPair, 256> group_pairs_;
-  int64_t group_idx_;
-  ObSEArray<RowsPair, 256> output_cache_;
+  ObSEArray<RowPair, 256> output_cache_;
   int64_t output_row_num_;
   ObMergeJoinCursor left_cursor_;
   ObMergeJoinCursor right_cursor_;
@@ -508,8 +747,7 @@ private:
   bool iter_end_;
   int64_t max_output_cnt_;
   int64_t output_cache_idx_;
-  ObJoinTracker tracker_;
-  bool is_right_drive_;
+  ObJoinTracker *tracker_;
   ObTempBlockStore::IterationAge rows_it_age_;
 
 private:

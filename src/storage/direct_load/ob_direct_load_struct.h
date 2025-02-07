@@ -35,6 +35,9 @@ struct ObDirectLoadMode
 
   static bool is_type_valid(const Type type);
   static bool is_insert_overwrite(const Type type) { return INSERT_OVERWRITE == type; }
+  static bool is_load_data(const Type type) { return LOAD_DATA == type; }
+  static bool is_insert_into(const Type type) { return INSERT_INTO == type; }
+  static bool is_table_load(const Type type) { return TABLE_LOAD == type; }
 };
 
 struct ObDirectLoadMethod
@@ -66,6 +69,7 @@ struct ObDirectLoadInsertMode
   static bool is_type_valid(const Type type);
   static bool is_valid_for_full_method(const Type type) { return NORMAL == type || OVERWRITE == type; }
   static bool is_valid_for_incremental_method(const Type type) { return NORMAL == type || INC_REPLACE == type; }
+  static bool is_overwrite_mode(const Type type) { return OVERWRITE == type; }
 };
 
 struct ObDirectLoadLevel

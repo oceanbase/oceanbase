@@ -272,24 +272,46 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
 
   for (int i = 0; i < memtable_info_count && size > 0; ++i) {
     if (memtables_info_[i].is_valid()) {
-      // tablet_id
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[0], to_cstring(memtables_info_[i].tablet_id_.id()), size);
-      // start_scn
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[1], to_cstring(memtables_info_[i].start_scn_), size);
-      // end_scn
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[2], to_cstring(memtables_info_[i].end_scn_), size);
-      // write_ref_cnt
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], to_cstring(memtables_info_[i].write_ref_cnt_), size);
-      // unsubmitted_cnt
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], to_cstring(memtables_info_[i].unsubmitted_cnt_), size);
-      // current_right_boundary
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], to_cstring(memtables_info_[i].current_right_boundary_), size);
-      // end of the memtable_info
-      if (size >= 2) {
-        strcat(memtables_info_string_, "; ");
-        size = size - 2;
-      } else if (size < 0) {
-        SERVER_LOG(WARN, "size is invalid", K(size), K(memtable_info_count), K(memtables_info_string_));
+      ObCStringHelper helper;
+      const char *tablet_id_str = nullptr;
+      const char *start_scn_str = nullptr;
+      const char *end_scn_str = nullptr;
+      const char *write_ref_cnt_str = nullptr;
+      const char *unsubmitted_cnt_str = nullptr;
+      const char *unsynced_cnt_str = nullptr;
+      const char *current_right_boundary_str = nullptr;
+      if (OB_FAIL(helper.convert(memtables_info_[i].tablet_id_.id(), tablet_id_str))) {
+         SERVER_LOG(WARN, "fail to conver tablet_id", "tablet_id", memtables_info_[i].tablet_id_.id(), K(ret));
+      } else if (OB_FAIL(helper.convert(memtables_info_[i].start_scn_, start_scn_str))) {
+        SERVER_LOG(WARN, "fail to conver start_scnd", "start_scn", memtables_info_[i].start_scn_, K(ret));
+      } else if (OB_FAIL(helper.convert(memtables_info_[i].end_scn_, end_scn_str))) {
+        SERVER_LOG(WARN, "fail to conver end_scn", "end_scn", memtables_info_[i].end_scn_, K(ret));
+      } else if (OB_FAIL(helper.convert(memtables_info_[i].write_ref_cnt_, write_ref_cnt_str))) {
+        SERVER_LOG(WARN, "fail to conver write_ref_cnt", "write_ref_cnt", memtables_info_[i].write_ref_cnt_, K(ret));
+      } else if (OB_FAIL(helper.convert(memtables_info_[i].unsubmitted_cnt_, unsubmitted_cnt_str))) {
+        SERVER_LOG(WARN, "fail to conver unsubmitted_cnt", "unsubmitted_cnt", memtables_info_[i].unsubmitted_cnt_, K(ret));
+      } else if (OB_FAIL(helper.convert(memtables_info_[i].current_right_boundary_, current_right_boundary_str))) {
+        SERVER_LOG(WARN, "fail to conver current_right_boundary", "current_right_boundary", memtables_info_[i].current_right_boundary_, K(ret));
+      } else {
+        // tablet_id
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[0], tablet_id_str, size);
+        // start_scn
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[1], start_scn_str, size);
+        // end_scn
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[2], end_scn_str, size);
+        // write_ref_cnt
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], write_ref_cnt_str, size);
+        // unsubmitted_cnt
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], unsubmitted_cnt_str, size);
+        // current_right_boundary
+        append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], current_right_boundary_str, size);
+        // end of the memtable_info
+        if (size >= 2) {
+          strcat(memtables_info_string_, "; ");
+          size = size - 2;
+        } else if (size < 0) {
+          SERVER_LOG(WARN, "size is invalid", K(size), K(memtable_info_count), K(memtables_info_string_));
+        }
       }
     }
   }

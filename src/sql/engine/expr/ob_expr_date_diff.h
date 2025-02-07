@@ -34,6 +34,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_date_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int eval_date_diff_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateDiff);
@@ -51,8 +52,17 @@ inline int ObExprDateDiff::calc_result_type2(ObExprResType &type,
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   type.set_scale(common::DEFAULT_SCALE_FOR_INTEGER);
   //set calc type
-  left.set_calc_type(common::ObDateType);
-  right.set_calc_type(common::ObDateType);
+  // `DateDiff` is more friendly for `ObDateType` calculation rather than `ObMySQLDateType`,
+  // so only when `ObMySQLDateType` input exists, we casting both sides to `ObMySQLDateType`
+  // calculation.
+  if (ob_is_mysql_compact_dates_type(left.get_type()) ||
+        ob_is_mysql_compact_dates_type(right.get_type())) {
+    left.set_calc_type(common::ObMySQLDateType);
+    right.set_calc_type(common::ObMySQLDateType);
+  } else {
+    left.set_calc_type(common::ObDateType);
+    right.set_calc_type(common::ObDateType);
+  }
   return common::OB_SUCCESS;
 }
 

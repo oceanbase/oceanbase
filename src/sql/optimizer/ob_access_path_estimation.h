@@ -29,11 +29,63 @@ struct ObBatchEstTasks
   obrpc::ObEstPartArg arg_;
   obrpc::ObEstPartRes res_;
   ObArray<AccessPath *> paths_;
+  ObArray<int64_t> range_idx_;
 
   bool check_result_reliable() const;
 
-  TO_STRING_KV(K_(addr));
+  TO_STRING_KV(K_(addr), K_(arg), K_(res));
 };
+
+struct EstResultHelper
+{
+  struct EstResult {
+    EstResult():
+      logical_row_count_(0),
+      physical_row_count_(0),
+      est_partition_count_(0),
+      valid_partition_count_(0) {}
+
+    double logical_row_count_;
+    double physical_row_count_;
+    int64_t est_partition_count_;
+    int64_t valid_partition_count_;
+
+    TO_STRING_KV(K_(logical_row_count),
+                 K_(physical_row_count),
+                 K_(est_partition_count),
+                 K_(valid_partition_count));
+  };
+
+  EstResultHelper():
+    path_(NULL),
+    different_parts_(false),
+    est_scan_range_count_(0),
+    total_scan_range_count_(0) {}
+
+  int assign(const EstResultHelper &other) {
+    path_ = other.path_;
+    result_ = other.result_;
+    different_parts_ = other.different_parts_;
+    est_scan_range_count_ = other.est_scan_range_count_;
+    total_scan_range_count_ = other.total_scan_range_count_;
+    return range_result_.assign(other.range_result_);
+  }
+
+  AccessPath *path_;
+  EstResult result_;
+  ObSEArray<EstResult, 4> range_result_;
+  bool different_parts_;
+  int64_t est_scan_range_count_;
+  int64_t total_scan_range_count_;
+
+  DISABLE_COPY_ASSIGN(EstResultHelper);
+
+  TO_STRING_KV(KPC_(path), K_(different_parts),
+               K_(est_scan_range_count), K_(total_scan_range_count),
+               K_(result), K_(range_result));
+};
+
+class RangePartitionHelper;
 
 class ObAccessPathEstimation
 {
@@ -58,7 +110,13 @@ public:
                                           uint64_t table_id,
                                           uint64_t ref_table_id,
                                           bool &can_use);
+  static int storage_estimate_range_rowcount(ObOptimizerContext &ctx,
+                                             const ObCandiTabletLocIArray &part_loc_infos,
+                                             bool estimate_whole_range,
+                                             const ObRangesArray *ranges,
+                                             ObTableMetaInfo &meta);
 private:
+  static const int STORAGE_EST_SAMPLE_SEED = 1;
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
                                      common::ObIArray<AccessPath *> &paths,
                                      const bool is_inner_path,
@@ -133,6 +191,53 @@ private:
   static int process_storage_estimation(ObOptimizerContext &ctx,
                                         ObIArray<AccessPath *> &paths,
                                         bool &is_success);
+  static int get_storage_estimation_task(ObOptimizerContext &ctx,
+                                         ObIAllocator &arena,
+                                         const ObCandiTabletLoc &partition,
+                                         const ObTableMetaInfo &table_meta,
+                                         ObIArray<ObAddr> &prefer_addrs,
+                                         ObIArray<ObBatchEstTasks *> &tasks,
+                                         EstimatedPartition &best_index_part,
+                                         ObBatchEstTasks *&task);
+
+  static int add_storage_estimation_task(ObOptimizerContext &ctx,
+                                         ObIAllocator &arena,
+                                         ObIArray<ObAddr> &prefer_addrs,
+                                         AccessPath &ap,
+                                         ObIArray<ObBatchEstTasks *> &tasks,
+                                         const int64_t partition_limit,
+                                         const int64_t range_limit,
+                                         const ObCandiTabletLocIArray &index_partitions,
+                                         EstResultHelper &result_helper);
+
+  static int add_storage_estimation_task_by_ranges(ObOptimizerContext &ctx,
+                                                   ObIAllocator &arena,
+                                                   ObExecContext &exec_ctx,
+                                                   RangePartitionHelper &calc_range_partition_helper,
+                                                   ObIArray<ObAddr> &prefer_addrs,
+                                                   AccessPath &ap,
+                                                   ObIArray<ObBatchEstTasks *> &tasks,
+                                                   const int64_t partition_limit,
+                                                   const int64_t range_limit,
+                                                   const ObCandiTabletLocIArray &ori_partitions,
+                                                   const ObCandiTabletLocIArray &index_partitions,
+                                                   EstResultHelper &result_helper);
+
+  static int process_storage_estimation_result(ObIArray<ObBatchEstTasks *> &tasks,
+                                               ObIArray<EstResultHelper> &result_helpers,
+                                               bool &is_reliable);
+
+  static int get_result_helper(ObIArray<EstResultHelper> &result_helpers,
+                               AccessPath *path,
+                               int64_t &idx);
+
+  static int choose_storage_estimation_partitions(const int64_t partition_limit,
+                                                  const ObCandiTabletLocIArray &partitions,
+                                                  ObCandiTabletLocIArray &chosen_partitions);
+  static int choose_storage_estimation_ranges(const int64_t range_limit,
+                                              const ObRangesArray &ranges,
+                                              bool is_geo_index,
+                                              ObIArray<common::ObNewRange> &scan_ranges);
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
@@ -170,7 +275,9 @@ private:
                             ObIAllocator &allocator,
                             ObBatchEstTasks *task,
                             const EstimatedPartition &part,
-                            AccessPath *ap);
+                            AccessPath &ap,
+                            const ObIArray<common::ObNewRange> &chosen_scan_ranges,
+                            int64_t range_idx = -1);
 
   static int construct_scan_range_batch(ObIAllocator &allocator,
                                         const ObIArray<ObNewRange> &scan_ranges,
@@ -183,7 +290,9 @@ private:
   static bool is_multi_geo_range(const ObNewRange &range);
 
   static int estimate_prefix_range_rowcount(
-      const obrpc::ObEstPartResElement &result,
+      const double res_logical_row_count,
+      const double res_physical_row_count,
+      bool new_range_with_exec_param,
       ObCostTableScanInfo &est_cost_info);
 
   static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info);
@@ -191,12 +300,12 @@ private:
   static int get_key_ranges(ObOptimizerContext &ctx,
                             ObIAllocator &allocator,
                             const ObTabletID &tablet_id,
-                            AccessPath *ap,
+                            AccessPath &ap,
                             ObIArray<common::ObNewRange> &new_ranges);
 
   static int convert_agent_vt_key_ranges(ObOptimizerContext &ctx,
                                          ObIAllocator &allocator,
-                                         AccessPath *ap,
+                                         AccessPath &ap,
                                          ObIArray<common::ObNewRange> &new_ranges);
 
   static int gen_agent_vt_table_convert_info(const uint64_t vt_table_id,
@@ -251,6 +360,65 @@ private:
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
                              common::ObIArray<AccessPath *> &normal_paths,
                              common::ObIArray<AccessPath *> &geo_paths);
+};
+
+class RangePartitionHelper
+{
+public:
+  int init(uint64_t table_id,
+           uint64_t ref_table_id,
+           const ObDMLStmt *stmt,
+           const ObTablePartitionInfo &table_partition_info,
+           const ObIArray<ColumnItem> &range_columns);
+
+  int get_scan_range_partitions(ObExecContext &exec_ctx,
+                                const ObNewRange &scan_range,
+                                ObIArray<ObTabletID> &tablet_ids);
+
+  bool get_all_partition_is_valid() { return all_partition_is_valid_; }
+
+public:
+  static int get_range_projector(uint64_t table_id,
+                                 uint64_t ref_table_id,
+                                 const ObDMLStmt *stmt,
+                                 const ObIArray<ColumnItem> &range_columns,
+                                 const share::schema::ObPartitionLevel part_level,
+                                 ObIArray<int64_t> &part_projector,
+                                 ObIArray<int64_t> &sub_part_projector,
+                                 ObIArray<int64_t> &gen_projector,
+                                 ObIArray<int64_t> &sub_gen_projector);
+
+  static int extract_column_projector(const ObIArray<ObRawExpr *> &range_exprs,
+                                      const ObIArray<ColumnItem> &need_columns,
+                                      ObIArray<int64_t> &projector);
+
+  static int get_scan_range_partitions(ObExecContext &exec_ctx,
+                                       const ObNewRange &scan_range,
+                                       const ObIArray<int64_t> &part_projector,
+                                       const ObIArray<int64_t> &gen_projector,
+                                       const ObTableLocation &table_location,
+                                       ObIArray<ObTabletID> &tablet_ids,
+                                       ObIArray<ObObjectID> &partition_ids,
+                                       const ObIArray<ObObjectID> *level_one_part_ids = NULL);
+
+  static int construct_partition_range(ObArenaAllocator &allocator,
+                                       const ObNewRange &scan_range,
+                                       ObNewRange &part_range,
+                                       const ObIArray<int64_t> &part_projector,
+                                       bool &is_valid_range);
+
+
+public:
+  uint64_t ref_table_id_;
+  share::schema::ObPartitionLevel part_level_;
+  const ObTablePartitionInfo *table_partition_info_;
+  ObSEArray<int64_t, 4> part_projector_;
+  ObSEArray<int64_t, 4> sub_part_projector_;
+  ObSEArray<int64_t, 4> gen_projector_;
+  ObSEArray<int64_t, 4> sub_gen_projector_;
+  ObSEArray<ObTabletID, 32> used_tablet_ids_;
+  ObSEArray<ObObjectID, 32> used_level_one_part_ids_;
+  bool all_partition_is_valid_;
 };
 
 }

@@ -16,7 +16,7 @@ ob_add_new_object_target(obcdc_tailf_objects_static obcdc_tailf_object_list)
 target_link_libraries(obcdc_tailf_objects_static PRIVATE obcdc_static)
 target_link_libraries(obcdc_tailf_static PRIVATE obcdc_tailf_objects_static)
 
-if (OB_BUILD_CDC)
+if (BUILD_CDC_ONLY)
   # execute build_cdc_demo to check dlopen and compile
   if (NOT OB_STATIC_LINK_LGPL_DEPS)
     add_custom_command(TARGET obcdc_tailf POST_BUILD

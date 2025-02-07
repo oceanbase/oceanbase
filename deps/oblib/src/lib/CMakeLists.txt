@@ -10,10 +10,12 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_touches.cpp
   geo/ob_geo_func_equals.cpp
   geo/ob_geo_func_intersects.cpp
-  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_symdifference1.cpp
+  geo/ob_geo_func_symdifference2.cpp
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_crosses.cpp
   geo/ob_geo_func_overlaps.cpp
+  stat/ob_diagnostic_info_util.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -35,7 +37,16 @@ ob_set_subtarget(oblib_lib charset
   charset/uca900_zh2_tbls.cc
   charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
+  charset/ob_ctype_sjis.cc
+  charset/ob_ctype_big5.cc
+  charset/ob_ctype_hkscs.cc
+  charset/ob_ctype_extra.cc
 )
+
+ob_set_subtarget(oblib_lib sched
+  tc/ob_tc_wrapper.cpp
+)
+
 
 ob_set_subtarget(oblib_lib common
   ob_abort.cpp
@@ -89,6 +100,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_sdo_geo_func_to_wkb.cpp
   geo/ob_wkb_to_sdo_geo_visitor.cpp
   geo/ob_wkb_to_json_visitor.cpp
+  geo/ob_wkb_to_json_bin_visitor.cpp
   geo/ob_wkb_byte_order_visitor.cpp
   geo/ob_geo_3d.cpp
   geo/ob_sdo_geo_object.cpp
@@ -105,6 +117,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_simplify_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
   geo/ob_geo_func_dissolve_polygon.cpp
+  geo/ob_geo_close_ring_visitor.cpp
   geo/ob_geo_cache.cpp
   geo/ob_geo_vertex_collect_visitor.cpp
   geo/ob_geo_segment_collect_visitor.cpp
@@ -202,6 +215,10 @@ ob_set_subtarget(oblib_lib common_mixed
   stat/ob_session_stat.cpp
   stat/ob_stat_template.cpp
   statistic_event/ob_stat_event.cpp
+  stat/ob_diagnostic_info.cpp
+  stat/ob_diagnostic_info_summary.cpp
+  stat/ob_diagnostic_info_container.cpp
+  stat/ob_diagnostic_info_guard.cpp
   string/ob_hex_utils_base.cpp
   string/ob_sql_string.cpp
   string/ob_string.cpp
@@ -209,6 +226,7 @@ ob_set_subtarget(oblib_lib common_mixed
   string/ob_string_buffer.cpp
   task/ob_timer.cpp
   task/ob_timer_monitor.cpp
+  task/ob_timer_service.cpp
   thread_local/ob_tsi_utils.cpp
   thread_local/thread_buffer.cpp
   time/Time.cpp
@@ -228,6 +246,7 @@ ob_set_subtarget(oblib_lib common_mixed
   udt/ob_udt_type.cpp
   udt/ob_collection_type.cpp
   udt/ob_array_type.cpp
+  udt/ob_array_utils.cpp
   xml/ob_mul_mode_reader.cpp
   xml/ob_xml.cpp
   xml/ob_xml_parser.cpp
@@ -243,6 +262,7 @@ ob_set_subtarget(oblib_lib common_mixed
   xml/ob_binary_aggregate.cpp
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
+  enumset/ob_enum_set_meta.cpp
 )
 
 ob_set_subtarget(oblib_lib lock
@@ -332,6 +352,7 @@ ob_set_subtarget(oblib_lib utility
 
 ob_set_subtarget(oblib_lib ash
   ash/ob_active_session_guard.cpp
+  ash/ob_ash_bkgd_sess_inactive_guard.cpp
 )
 
 ob_set_subtarget(oblib_lib ssl
@@ -374,6 +395,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_latch_v2.cpp
   resource/achunk_mgr.cpp
   resource/ob_resource_mgr.cpp
+  resource/ob_resource_limiter.cpp
   allocator/ob_allocator_v2.cpp
   allocator/ob_block_alloc_mgr.cpp
   allocator/ob_concurrent_fifo_allocator.cpp
@@ -393,12 +415,22 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
 
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
 target_link_libraries(ob_malloc_object oblib_base_base_base)
+if (ENABLE_SANITY)
+  if (${ARCHITECTURE} STREQUAL "x86_64" OR ${ARCHITECTURE} STREQUAL "aarch64")
+    target_link_libraries(ob_malloc_object ${DEVTOOLS_DIR}/lib64/libsanity.a)
+  endif()
+endif()
 add_library(ob_malloc STATIC)
 target_link_libraries(ob_malloc ob_malloc_object)
 
 add_library(malloc_hook STATIC
-  alloc/malloc_hook.cpp
-  alloc/malloc_hook.h)
+    alloc/malloc_hook.cpp
+    alloc/malloc_hook.h
+    alloc/malloc_hook_extended.cpp)
+if (BUILD_CDC_ONLY)
+  set_target_properties(malloc_hook PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
 target_link_libraries(malloc_hook oblib_base)
 
 if(OB_BUILD_CLOSE_MODULES)
@@ -409,12 +441,16 @@ if(OB_BUILD_CLOSE_MODULES)
   )
 endif()
 
+if(CPP_STANDARD_20)
+  target_compile_options(oblib_lib PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
 target_link_libraries(oblib_lib
   PUBLIC ob_malloc compress restore
   ${DEP_DIR}/lib/libxml2.a
   ${DEP_DIR}/lib/liblzma.a
 )
 
+if (NOT BUILD_CDC_ONLY)
 # vsag vector library
 target_link_directories(
   oblib_lib PUBLIC ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
@@ -431,7 +467,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     libdiskann.a
     libopenblas.a
     libgfortran_static.a
-    libquadmath.a
+    libquadmath_static.a
     libgomp_static.a
     libroaring.a
   )
@@ -451,3 +487,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
 else()
     message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
+
+endif()
+
+# ATTENTION: add this cpp file as library only if compiled target doesn't need diagnose. like unittest or cdc.
+add_library(mock_di stat/mock_diagnostic_info.cpp)
+target_include_directories(mock_di PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/deps/oblib/src)

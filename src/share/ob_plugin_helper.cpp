@@ -107,6 +107,23 @@ int ObPluginName::set_name(const char *name)
   return ret;
 }
 
+// Some input has no '\0',
+int ObPluginName::set_name(const ObString &name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(name.empty() || (name.length() >= OB_PLUGIN_NAME_LENGTH))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Parser name invalid", K(ret), K(name));
+  } else {
+    ObString::obstr_size_t i = 0;
+    for (; (i < name.length()) && ('\0' != name[i]); ++i) {
+      name_[i] = tolower(name[i]);
+    }
+    name_[i] = '\0';
+  }
+  return ret;
+}
+
 ObPluginSoHandler::ObPluginSoHandler()
   : so_handler_(nullptr),
     has_opened_(false)

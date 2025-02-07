@@ -386,6 +386,7 @@ public:
     SET_COMMENT = 1,
     CREATE_INDEX = 2,
     CREATE_VIEW = 3,
+    DROP_TABLE = 4,
     MAX_TYPE // can not > 32
   };
 

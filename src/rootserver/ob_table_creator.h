@@ -17,6 +17,7 @@
 #include "share/tablet/ob_tablet_info.h" // ObTabletTablePair
 
 #include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -38,6 +39,7 @@ public:
                   trans_(trans),
                   ls_id_array_(),
                   inited_(false) {}
+
   virtual ~ObTableCreator();
   int init(const bool need_tablet_cnt_check);
   int execute();
@@ -50,7 +52,8 @@ public:
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const common::ObIArray<share::ObLSID> &ls_id_array,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const bool ignore_cs_replica = false);
 
   // create tablets for local aux tables(include local_index/aux_lob_table), which are belong to a data table.
   //
@@ -84,7 +87,8 @@ private:
       const share::schema::ObTableSchema *data_table_schema,
       const common::ObIArray<share::ObLSID> &ls_id_array,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const bool ignore_cs_replica = false);
   int generate_create_tablet_arg_(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const ObTableSchema &data_table_schema,
@@ -95,7 +99,8 @@ private:
       const int64_t subpart_idx,
       const bool is_create_bind_hidden_tablets,
       const uint64_t tenant_data_version,
-      const common::ObIArray<bool> &need_create_empty_majors);
+      const common::ObIArray<bool> &need_create_empty_majors,
+      const ObGlobalCSReplicaMgr &cs_replica_mgr);
   int get_tablet_list_str_(
       const share::schema::ObTableSchema &table_schema,
       ObSqlString &tablet_list);

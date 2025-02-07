@@ -15,6 +15,9 @@
 
 #include "ob_ddl_sql_service.h"
 #include "lib/number/ob_number_v2.h"
+#include "share/ob_rpc_struct.h"
+
+using namespace oceanbase::common::number;
 
 namespace oceanbase
 {
@@ -45,6 +48,7 @@ public:
                                common::ObISQLClient *sql_client,
                                bool alter_start_with,
                                bool need_clean_cache,
+                               bool need_write_back,
                                const common::ObString *ddl_stmt_str = NULL);
   virtual int delete_sequence(const uint64_t tenant_id,
                               const uint64_t database_id,
@@ -64,8 +68,10 @@ public:
                               common::ObISQLClient &sql_client,
                               ObIAllocator &allocator,
                               common::number::ObNumber &next_value);
-  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id);
 private:
+  int clean_and_write_back_cache(common::ObISQLClient *sql_client,
+                                 const ObSequenceSchema &sequence_schema, bool &need_write_back,
+                                 ObIAllocator &allocator);
   int add_sequence(common::ObISQLClient &sql_client, const ObSequenceSchema &sequence_schema,
                    const bool only_history, const uint64_t *old_sequence_id);
   int add_sequence_to_value_table(const uint64_t tenant_id,
@@ -74,6 +80,13 @@ private:
                                   const uint64_t new_sequence_id,
                                   common::ObISQLClient &sql_client,
                                   ObIAllocator &allocator);
+  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id, ObNumber &inner_next_value,
+                           obrpc::ObSeqCleanCacheRes &cache_res, ObIAllocator &allocator);
+
+  int get_lastest_local_cache(ObFixedArray<SequenceCacheNode, common::ObIAllocator> &prefetch_nodes,
+                             const SequenceCacheNode &target_cache_node, const ObNumber &inner_next_value,
+                             obrpc::ObSeqCleanCacheRes &cache_res, ObIAllocator &allocator);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSequenceSqlService);
 };

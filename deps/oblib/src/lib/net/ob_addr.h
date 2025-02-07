@@ -243,7 +243,7 @@ inline int ObAddr::compare_refactored(const ObAddr &rv) const
   if (0 == ipcmp) {
     ipcmp = port_ - rv.port_;
   }
-  return 0 == ipcmp ? 0 : (ipcmp > 0 ? 1 : -1);;
+  return 0 == ipcmp ? 0 : (ipcmp > 0 ? 1 : -1);
 }
 
 // forward compatible

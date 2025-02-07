@@ -158,6 +158,9 @@ public:
   static const char *replica_type_to_string(const ObReplicaType type);
   static ObReplicaType string_to_replica_type(const char *str);
   static ObReplicaType string_to_replica_type(const ObString &str);
+  static inline uint64_t compute_server_index(uint64_t server_id) {
+    return server_id % (MAX_SERVER_COUNT + 1);
+  }
 private:
   static int check_compat_data_version_(
     const uint64_t required_data_version,

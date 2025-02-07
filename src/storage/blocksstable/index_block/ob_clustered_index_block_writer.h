@@ -53,7 +53,8 @@ public:
            const blocksstable::ObMacroSeqParam &macro_seq_param,
            const share::ObPreWarmerParam &pre_warm_param,
            ObIndexTreeRootCtx *root_ctx,
-           common::ObIAllocator &task_allocator);
+           common::ObIAllocator &task_allocator,
+           ObIMacroBlockFlushCallback *ddl_callback);
   // Build clustered index row and append to clustered index micro writer.
   int append_row(const ObIndexBlockRowDesc &row_desc);
   // Build clustered index micro block and append to clustered index macro writer.

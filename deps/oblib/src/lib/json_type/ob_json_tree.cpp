@@ -279,7 +279,7 @@ int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonB
     }
     
     if (OB_SUCC(ret)) {
-      if (this_arr->consume(allocator, other_arr)) {
+      if (OB_FAIL(this_arr->consume(allocator, other_arr))) {
         LOG_WARN("fail to consume array", K(ret), K(*this_arr), K(*other_arr));
       } else {
         result = this_arr;
@@ -1141,8 +1141,12 @@ ObJsonDatetime::ObJsonDatetime(const ObTime &time, ObObjType field_type)
   json_type_ = ObJsonNodeType::J_ERROR;
   if (field_type == ObDateType) {
     json_type_ = lib::is_mysql_mode() ? ObJsonNodeType::J_DATE : ObJsonNodeType::J_ORACLEDATE;
+  } else if (field_type == ObMySQLDateType) {
+    json_type_ = ObJsonNodeType::J_MYSQL_DATE;
   } else if (field_type == ObDateTimeType) {
     json_type_ = ObJsonNodeType::J_DATETIME;
+  } else if (field_type == ObMySQLDateTimeType) {
+    json_type_ = ObJsonNodeType::J_MYSQL_DATETIME;
   } else if (field_type == ObTimestampType) {
     json_type_ = lib::is_mysql_mode() ? ObJsonNodeType::J_TIMESTAMP : ObJsonNodeType::J_OTIMESTAMP;
   } else if (field_type == ObTimestampTZType) {

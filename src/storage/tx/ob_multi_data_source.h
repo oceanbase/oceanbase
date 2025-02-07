@@ -120,7 +120,10 @@ private:
 class ObMulSourceTxDataDump
 {
 public:
-   static const char* dump_buf(ObTxDataSourceType source_type, const char * buf,const int64_t len);
+   static const char* dump_buf(ObTxDataSourceType source_type,
+                               const char * buf,
+                               const int64_t len,
+                               ObCStringHelper &helper);
 private:
 
 

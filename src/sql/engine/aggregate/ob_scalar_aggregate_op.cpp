@@ -27,9 +27,10 @@ OB_SERIALIZE_MEMBER((ObScalarAggregateSpec, ObGroupBySpec), enable_hash_base_dis
 int ObScalarAggregateOp::inner_open()
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   if (OB_FAIL(ObGroupByOp::inner_open())) {
     LOG_WARN("failed to inner_open", K(ret));
-  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id, dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
@@ -40,7 +41,7 @@ int ObScalarAggregateOp::inner_open()
     LOG_WARN("failed to init one group",  K(ret));
   } else {
     bool need_dir_id = aggr_processor_.processor_need_alloc_dir_id();
-    if (need_dir_id && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    if (need_dir_id && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(tenant_id, dir_id_))) {
       LOG_WARN("failed to alloc dir id", K(ret));
     } else if (need_dir_id && FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
     } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {

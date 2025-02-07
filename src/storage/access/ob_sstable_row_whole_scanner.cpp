@@ -117,9 +117,22 @@ int ObSSTableRowWholeScanner::init_micro_scanner(const ObDatumRange *range)
   } else {
     const bool is_whole_macro_scan = access_ctx_->query_flag_.is_whole_macro_scan();
     const bool is_multi_version_minor_merge = access_ctx_->query_flag_.is_multi_version_minor_merge();
+    const bool is_bare_row_scan = access_ctx_->query_flag_.is_bare_row_scan();
     if (OB_UNLIKELY(!is_whole_macro_scan)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected query flag without whole macro scan", K(ret), KPC(access_ctx_));
+    } else if (is_bare_row_scan) {
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroBlockRowDirectScanner)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc mem for micro block scanner failed", K(ret));
+      } else {
+        micro_scanner_ = new(buf) ObMicroBlockRowDirectScanner(allocator_);
+        if (nullptr != range) {
+          query_range_ = *range;
+        } else {
+          query_range_.set_whole_range();
+        }
+      }
     } else if (nullptr != range && is_multi_version_minor_merge && sstable_->is_multi_version_minor_sstable()) {
       if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultiVersionMicroBlockMinorMergeRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -281,7 +294,6 @@ int ObSSTableRowWholeScanner::open(
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       read_info.buf_ = io_buf_[0].data();
       read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
@@ -434,7 +446,6 @@ int ObSSTableRowWholeScanner::prefetch()
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_mode(ObIOMode::READ);
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       read_info.buf_ = io_buf_[io_index].data();
       read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);

@@ -378,13 +378,14 @@ public:
   // generate meta tenant memory by unit memory
   static int64_t gen_meta_tenant_memory(const int64_t unit_memory)
   {
-    const int64_t MIN_MEMORY = (unit_memory >= UNIT_SAFE_MIN_MEMORY) ?
-                               META_TENANT_SAFE_MIN_MEMORY :
-                               META_TENANT_MIN_MEMORY;
-
-    const int64_t meta_memory_by_percent = unit_memory * META_TENANT_MEMORY_PERCENTAGE / 100;
-
-    return max(meta_memory_by_percent, MIN_MEMORY);
+    int64_t meta_tenant_memory = 0;
+    if (unit_memory < UNIT_SAFE_MIN_MEMORY) {
+      meta_tenant_memory = META_TENANT_MIN_MEMORY;
+    } else {
+      const int64_t meta_memory_by_percent = unit_memory * META_TENANT_MEMORY_PERCENTAGE / 100;
+      meta_tenant_memory = max(meta_memory_by_percent, META_TENANT_SAFE_MIN_MEMORY);
+    }
+    return meta_tenant_memory;
   }
   // generate meta tenant log disk by unit log disk
   static int64_t gen_meta_tenant_log_disk_size(const int64_t unit_log_disk)

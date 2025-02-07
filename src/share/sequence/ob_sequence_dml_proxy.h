@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/lock/ob_mutex.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ namespace share
 {
 class ObSequenceOption;
 struct SequenceCacheNode;
+struct ObSequenceCacheItem;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -58,17 +60,21 @@ public:
    */
   int next_batch(const uint64_t tenant_id,
                  const uint64_t sequence_id,
+                 const int64_t schema_version,
                  const share::ObSequenceOption &option,
-                 SequenceCacheNode &cache_range);
+                 SequenceCacheNode &cache_range,
+                 ObSequenceCacheItem &old_cache);
   int prefetch_next_batch(
       const uint64_t tenant_id,
       const uint64_t sequence_id,
+      const int64_t schema_version,
       const share::ObSequenceOption &option,
-      SequenceCacheNode &cache_range);
+      SequenceCacheNode &cache_range,
+      ObSequenceCacheItem &old_cache);
 private:
   /* functions */
   int set_pre_op_timeout(common::ObTimeoutCtx &ctx);
-  int init_sequence_value_table(
+  static int init_sequence_value_table(
       common::ObMySQLTransaction &trans,
       common::ObSQLClientRetryWeak &sql_client_retry_weak,
       common::ObIAllocator &allocator,

@@ -65,6 +65,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObGetFileSizeFunctor);
 };
 
+class ObScanDirOp : public common::ObBaseDirEntryOperator
+{
+public:
+  ObScanDirOp(const char *dir = nullptr)
+   : dir_(dir) {}
+  virtual ~ObScanDirOp() = default;
+  virtual int func(const dirent *entry) override;
+  int set_dir(const char *dir);
+  const char *get_dir() const { return dir_; }
+  TO_STRING_KV(K_(dir));
+private:
+  const char *dir_;
+  DISALLOW_COPY_AND_ASSIGN(ObScanDirOp);
+};
+
 /*this class seems like the adapter for local/ofs device*/
 class ObSNIODeviceWrapper final
 {
@@ -147,6 +162,7 @@ public:
   static int seal_file(const common::ObIOFd &fd);
   static int scan_dir(const char *dir_name, int (*func)(const dirent *entry));
   static int scan_dir(const char *dir_name, common::ObBaseDirEntryOperator &op);
+  static int scan_dir_rec(const char *dir_name, ObScanDirOp &reg_op, ObScanDirOp &dir_op);
   static int is_tagging(const char *pathname, bool &is_tagging);
   static int fsync(const common::ObIOFd &fd);
   static int fdatasync(const common::ObIOFd &fd);
@@ -204,7 +220,8 @@ public:
   static int check_disk_space_available(const char *sstable_dir,
                                         const int64_t data_disk_size,
                                         const int64_t reserved_size,
-                                        const int64_t used_disk_size);
+                                        const int64_t used_disk_size,
+                                        const bool need_report_user_error);
 
   static int open_block_file(const char *store_dir,
                              const char *sstable_dir,

@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "deps/oblib/unittest/lib/unittest_diagnostic_info_util.h"
 #include "lib/trace/ob_trace_event.h"
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
@@ -164,5 +165,6 @@ int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
+  oceanbase::lib::ObUnitTestEnableDiagnoseGuard enable_guard;
   return RUN_ALL_TESTS();
 }

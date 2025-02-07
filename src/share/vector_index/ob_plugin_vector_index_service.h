@@ -68,12 +68,10 @@ public:
 };
 
 // Manage all vector index adapter in a ls
-typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexAdaptor*> VectorIndexAdaptorMap;
-typedef common::hash::ObHashMap<common::ObTabletID, ObPluginVectorIndexTaskCtx*> VectorIndexMemSyncMap;
 class ObPluginVectorIndexMgr
 {
 public:
-  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context)
+  ObPluginVectorIndexMgr(lib::MemoryContext &memory_context, uint64_t tenant_id)
     : is_inited_(false),
       need_check_(false),
       ls_id_(),
@@ -81,13 +79,10 @@ public:
       partial_index_adpt_map_(),
       adapter_map_rwlock_(),
       ls_tablet_task_ctx_(),
-      tenant_id_(0),
+      tenant_id_(tenant_id),
       interval_factor_(0),
       vector_index_service_(nullptr),
-      processing_first_mem_sync_(true),
-      first_mem_sync_map_(),
-      second_mem_sync_map_(),
-      task_allocator_(ObMemAttr(MTL_ID(), "VecIdxTask")),
+      mem_sync_info_(tenant_id),
       memory_context_(memory_context),
       all_vsag_use_mem_(nullptr)
   {}
@@ -148,19 +143,14 @@ public:
   int check_need_mem_data_sync_task(bool &need_sync);
   int erase_complete_adapter(ObTabletID tablet_id);
   int erase_partial_adapter(ObTabletID tablet_id);
-
-  VectorIndexMemSyncMap &get_processing_map() { return processing_first_mem_sync_ ? first_mem_sync_map_ : second_mem_sync_map_; }
-  VectorIndexMemSyncMap &get_waiting_map() { return processing_first_mem_sync_ ? second_mem_sync_map_ : first_mem_sync_map_; }
-  void switch_processing_map() { processing_first_mem_sync_ = !processing_first_mem_sync_; }
-
-  ObIAllocator &get_task_allocator() { return task_allocator_; }
-
-  // debug interface
+  ObVectorIndexMemSyncInfo &get_mem_sync_info() { return mem_sync_info_; }
+  // for debug
   void dump_all_inst();
   // for virtual table
   int get_snapshot_tablet_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
 
   TO_STRING_KV(K_(is_inited), K_(need_check), K_(ls_id), K_(ls_tablet_task_ctx));
+
 private:
   // non-thread save inner functions
   int get_adapter_inst_(ObTabletID tablet_id, ObPluginVectorIndexAdaptor *&index_inst);
@@ -175,7 +165,6 @@ private:
                                      ObString *vec_index_param,
                                      int64_t dim,
                                      ObIAllocator &allocator);
-
 private:
   static const int64_t DEFAULT_ADAPTER_HASH_SIZE = 1000;
   static const int64_t DEFAULT_CANDIDATE_ADAPTER_HASH_SIZE = 1000;
@@ -195,13 +184,7 @@ private:
   uint32_t interval_factor_; // used to expand real execute interval
   ObPluginVectorIndexService *vector_index_service_;
   int64_t local_schema_version_; // detect schema change
-
-
-  // pingpong map for follower receive memdata sync task from log
-  bool processing_first_mem_sync_;
-  VectorIndexMemSyncMap first_mem_sync_map_;
-  VectorIndexMemSyncMap second_mem_sync_map_;
-  ObArenaAllocator task_allocator_;
+  ObVectorIndexMemSyncInfo mem_sync_info_; // handle follower memdata sync
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
 };
@@ -294,13 +277,13 @@ public:
                             ObString *vec_index_param = nullptr,
                             int64_t dim = 0);
 
-  // debug interface
+  // for debug
   int dump_all_inst();
-   // for virtual table
+  // for virtual table
   int get_snapshot_ids(ObIArray<obrpc::ObLSTabletPair> &complete_tablet_ids,  ObIArray<obrpc::ObLSTabletPair> &partial_tablet_ids);
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
-              K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
+               K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
   static const int64_t VEC_INDEX_LOAD_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s

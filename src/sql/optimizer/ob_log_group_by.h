@@ -77,6 +77,17 @@ struct ObRollupAdaptiveInfo
   int assign(const ObRollupAdaptiveInfo &info);
 };
 
+struct ObHashRollupInfo
+{
+  ObIArray<ObRawExpr *> *expand_exprs_;
+  ObIArray<ObRawExpr *> *gby_exprs_;
+  ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> *dup_expr_pairs_;
+  ObRawExpr *rollup_grouping_id_;
+
+  int assign(const ObHashRollupInfo &info);
+  bool valid() const { return rollup_grouping_id_ != nullptr; }
+};
+
 class ObLogGroupBy : public ObLogicalOperator
 {
 public:
@@ -86,8 +97,6 @@ public:
         rollup_exprs_(),
         aggr_exprs_(),
         algo_(AGGREGATE_UNINITIALIZED),
-        distinct_card_(0.0),
-        distinct_per_dop_(0.0),
         from_pivot_(false),
         is_push_down_(false),
         is_partition_gi_(false),
@@ -100,7 +109,8 @@ public:
         has_push_down_(false),
         use_part_sort_(false),
         dist_method_(T_INVALID),
-        is_pushdown_scalar_aggr_(false)
+        is_pushdown_scalar_aggr_(false),
+        hash_rollup_info_()
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -155,7 +165,6 @@ public:
   int inner_est_cost(const int64_t parallel,
                      double child_card,
                      double &child_ndv,
-                     double &per_dop_ndv,
                      double &op_cost);
   int get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
@@ -167,8 +176,6 @@ public:
   virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
-  double get_distinct_card() const { return distinct_card_; }
-  void set_distinct_card(const double distinct_card) { distinct_card_ = distinct_card; }
   bool from_pivot() const { return from_pivot_; }
   void set_from_pivot(const bool value) { from_pivot_ = value; }
   int get_group_rollup_exprs(common::ObIArray<ObRawExpr *> &group_rollup_exprs) const;
@@ -219,13 +226,15 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
-  void set_group_by_outline_info(bool is_basic,
-                                 bool is_partition_wise,
+  void set_group_by_outline_info(DistAlgo algo,
                                  bool use_hash_aggr,
                                  bool has_push_down,
                                  bool use_part_sort = false)
   {
-    dist_method_ = is_basic ? T_DISTRIBUTE_BASIC : (is_partition_wise ? T_DISTRIBUTE_NONE : T_DISTRIBUTE_HASH);
+    dist_method_ = DistAlgo::DIST_BASIC_METHOD == algo ? T_DISTRIBUTE_BASIC :
+                  (DistAlgo::DIST_PARTITION_WISE == algo ? T_DISTRIBUTE_NONE :
+                  (DistAlgo::DIST_HASH_HASH == algo ? T_DISTRIBUTE_HASH : T_DISTRIBUTE_LOCAL));
+
     use_hash_aggr_ = use_hash_aggr;
     has_push_down_ = has_push_down;
     use_part_sort_ = use_part_sort;
@@ -241,9 +250,16 @@ public:
   void set_pushdown_scalar_aggr() { is_pushdown_scalar_aggr_ = true; }
   bool is_pushdown_scalar_aggr() { return is_pushdown_scalar_aggr_; }
 
-  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
+  VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo),
       K_(is_push_down));
   virtual int get_card_without_filter(double &card) override;
+
+  int set_hash_rollup_info(const ObHashRollupInfo &info) { return hash_rollup_info_.assign(info); }
+  const ObHashRollupInfo *get_hash_rollup_info() const
+  {
+    return hash_rollup_info_.valid() ? &hash_rollup_info_ : nullptr;
+  }
+
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
@@ -253,14 +269,12 @@ private:
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
+  virtual int compute_op_parallel_and_server_info() override;
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> aggr_exprs_;
   AggregateAlgo algo_;
-  // used for the execution engine to set hash bucket size
-  double distinct_card_;
-  double distinct_per_dop_;
   bool from_pivot_;
   bool is_push_down_;
   bool is_partition_gi_;
@@ -277,6 +291,7 @@ private:
   bool use_part_sort_;
   ObItemType dist_method_;
   bool is_pushdown_scalar_aggr_;
+  ObHashRollupInfo hash_rollup_info_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

@@ -76,14 +76,12 @@ public:
                                     bool need_set_ps_out = false,
                                     bool ps_cursor_execute = false,
                                     sql::ObResultSet *result = NULL);
-  int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result);
-  int convert_string_value_charset(common::ObObj& value, 
-                                   common::ObCharsetType charset_type, 
-                                   common::ObIAllocator &allocator);
+  int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
+  int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
+  int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
+
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet &result);
   int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result);
-  int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result);
-  int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result);
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
                                              bool is_use_lob_locator, 
                                              common::ObIAllocator *allocator);

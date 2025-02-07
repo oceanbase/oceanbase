@@ -116,6 +116,7 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   req.set_client_id(client_id_);
+  req.set_client_type(obrpc::ObCdcClientType::CLIENT_TYPE_CDC);
   if (1 == TCONF.test_mode_force_fetch_archive) {
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }
@@ -179,8 +180,6 @@ int ObLogRpc::init(const int64_t io_thread_num)
     LOG_ERROR("invalid argument", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(init_client_id_())) {
     LOG_ERROR("init client identity failed", KR(ret));
-  } else if (OB_FAIL(global_poc_server.start_net_client(opt.rpc_io_cnt_))) {
-    LOG_ERROR("start net client failed", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(net_client_.init(opt))) {
     LOG_ERROR("init net client fail", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(reload_rpc_client_auth_method())) {
@@ -198,7 +197,6 @@ int ObLogRpc::init(const int64_t io_thread_num)
 void ObLogRpc::destroy()
 {
   is_inited_ = false;
-  global_poc_server.destroy();
   net_client_.destroy();
   last_ssl_info_hash_ = UINT64_MAX;
   ssl_key_expired_time_ = 0;
@@ -265,6 +263,9 @@ int ObLogRpc::reload_ssl_config()
       } else if (last_ssl_info_hash_ == new_hash_value) {
         LOG_INFO("no need reload_ssl_config", K(new_hash_value));
       } else {
+#ifdef OB_BUILD_TDE_SECURITY
+        share::ObSSLClient client;
+#endif
         bool use_bkmi = false;
         bool use_sm = false;
         const char *ca_cert = NULL;
@@ -289,8 +290,6 @@ int ObLogRpc::reload_ssl_config()
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("only support local file mode", K(ret));
 #else
-          share::ObSSLClient client;
-
           if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
             OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
           } else if (OB_FAIL(client.check_param_valid())) {

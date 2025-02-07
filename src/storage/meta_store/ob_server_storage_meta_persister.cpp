@@ -68,7 +68,7 @@ int ObServerStorageMetaPersister::prepare_create_tenant(const ObTenantMeta &meta
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_prepare_create_tenant_(meta, epoch))) {
+    if (OB_FAIL(ss_prepare_create_tenant_(meta, epoch))) {
       LOG_WARN("fail to prepare create tenant", K(ret), K(meta));
     }
 #endif
@@ -89,7 +89,7 @@ int ObServerStorageMetaPersister::commit_create_tenant(
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_commit_create_tenant_(tenant_id, epoch))) {
+    if (OB_FAIL(ss_commit_create_tenant_(tenant_id, epoch))) {
       LOG_WARN("fail to commit create tenant", K(ret), K(tenant_id), K(epoch));
     }
 #endif
@@ -109,7 +109,7 @@ int ObServerStorageMetaPersister::abort_create_tenant(const uint64_t tenant_id, 
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_abort_create_tenant_(tenant_id, epoch))) {
+    if (OB_FAIL(ss_abort_create_tenant_(tenant_id, epoch))) {
       LOG_WARN("fail to abort create tenant", K(ret), K(tenant_id), K(epoch));
     }
 #endif
@@ -129,7 +129,7 @@ int ObServerStorageMetaPersister::prepare_delete_tenant(const uint64_t tenant_id
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_prepare_delete_tenant_(tenant_id, epoch))) {
+    if (OB_FAIL(ss_prepare_delete_tenant_(tenant_id, epoch))) {
       LOG_WARN("fail to prepare delete tenant", K(ret), K(tenant_id), K(epoch));
     }
 #endif
@@ -149,7 +149,7 @@ int ObServerStorageMetaPersister::commit_delete_tenant(const uint64_t tenant_id,
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_commit_delete_tenant_(tenant_id, epoch))) {
+    if (OB_FAIL(ss_commit_delete_tenant_(tenant_id, epoch))) {
       LOG_WARN("fail to commit delete tenant", K(ret), K(tenant_id), K(epoch));
     }
 #endif
@@ -194,7 +194,7 @@ int ObServerStorageMetaPersister::update_tenant_unit(
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(s2_write_unit_config_(tenant_epoch, unit))) {
+    if (OB_FAIL(ss_write_unit_config_(tenant_epoch, unit))) {
       LOG_WARN("fail to wirte unit config", K(ret), K(unit));
     }
 #endif
@@ -364,7 +364,7 @@ int ObServerStorageMetaPersister::write_update_tenant_unit_slog_(const ObUnitInf
 
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObServerStorageMetaPersister::s2_prepare_create_tenant_(
+int ObServerStorageMetaPersister::ss_prepare_create_tenant_(
     const ObTenantMeta &meta, int64_t &epoch)
 {
   int ret = OB_SUCCESS;
@@ -373,7 +373,7 @@ int ObServerStorageMetaPersister::s2_prepare_create_tenant_(
     LOG_WARN("fail to create tenant item", K(ret), K(tenant_id));
   } else if (OB_FAIL(OB_FAIL(ss_write_tenant_super_block_(epoch, meta.super_block_)))) {
     LOG_WARN("fail to write tenant super block", K(ret), K(epoch), K(meta));
-  } else if (OB_FAIL(s2_write_unit_config_(epoch, meta.unit_))) {
+  } else if (OB_FAIL(ss_write_unit_config_(epoch, meta.unit_))) {
     LOG_WARN("fail to write unit config", K(ret), K(epoch), K(meta));
   }
   return ret;
@@ -394,7 +394,7 @@ int ObServerStorageMetaPersister::ss_write_tenant_super_block_(
   return ret;
 }
 
-int ObServerStorageMetaPersister::s2_write_unit_config_(
+int ObServerStorageMetaPersister::ss_write_unit_config_(
   const int64_t tenant_epoch,
   const share::ObUnitInfoGetter::ObTenantConfig &unit_config)
 {
@@ -409,7 +409,7 @@ int ObServerStorageMetaPersister::s2_write_unit_config_(
   return ret;
 }
 
-int ObServerStorageMetaPersister::s2_commit_create_tenant_(
+int ObServerStorageMetaPersister::ss_commit_create_tenant_(
     const uint64_t tenant_id, const int64_t epoch)
 {
   int ret = OB_SUCCESS;
@@ -420,7 +420,7 @@ int ObServerStorageMetaPersister::s2_commit_create_tenant_(
   return ret;
 }
 
-int ObServerStorageMetaPersister::s2_abort_create_tenant_(const uint64_t tenant_id, const int64_t epoch)
+int ObServerStorageMetaPersister::ss_abort_create_tenant_(const uint64_t tenant_id, const int64_t epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block_tenant_item(
@@ -430,7 +430,7 @@ int ObServerStorageMetaPersister::s2_abort_create_tenant_(const uint64_t tenant_
   return ret;
 }
 
-int ObServerStorageMetaPersister::s2_prepare_delete_tenant_(const uint64_t tenant_id, const int64_t epoch)
+int ObServerStorageMetaPersister::ss_prepare_delete_tenant_(const uint64_t tenant_id, const int64_t epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block_tenant_item(
@@ -440,7 +440,7 @@ int ObServerStorageMetaPersister::s2_prepare_delete_tenant_(const uint64_t tenan
   return ret;
 }
 
-int ObServerStorageMetaPersister::s2_commit_delete_tenant_(const uint64_t tenant_id, const int64_t epoch)
+int ObServerStorageMetaPersister::ss_commit_delete_tenant_(const uint64_t tenant_id, const int64_t epoch)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_STORAGE_OBJECT_MGR.update_super_block_tenant_item(

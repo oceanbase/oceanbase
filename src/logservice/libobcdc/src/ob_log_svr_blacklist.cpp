@@ -222,8 +222,9 @@ int ObLogSvrBlacklist::build_svr_patterns_(char *svrs_buf,
         } else if (OB_FAIL(exceptional_svrs.push_back(svr))) {
           LOG_ERROR("exceptional_svrs push_back svr fail", KR(ret), K(svr));
         } else {
+          ObCStringHelper helper;
           _LOG_INFO("[%sSERVER_BLACKLIST] [ADD] [SVR=%s] [SVR_CNT=%ld]",
-              is_sql_server_ ? "SQL_": "", to_cstring(svr), exceptional_svrs.count());
+              is_sql_server_ ? "SQL_": "", helper.convert(svr), exceptional_svrs.count());
         }
       }
     } // while

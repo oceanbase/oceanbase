@@ -157,7 +157,8 @@ return (DATA_BLOCK_META_VAL_VERSION == version_ || DATA_BLOCK_META_VAL_VERSION_V
     && row_store_type_ < ObRowStoreType::MAX_ROW_STORE
     && logic_id_.is_valid()
     && macro_id_.is_valid()
-    && (0 == agg_row_len_ || nullptr != agg_row_buf_)
+    && agg_row_len_ >= 0
+    && ((0 == agg_row_len_ && nullptr == agg_row_buf_) || (0 < agg_row_len_ && nullptr != agg_row_buf_))
     && (ddl_end_row_offset_ == -1 || (version_ >= DATA_BLOCK_META_VAL_VERSION_V2 && ddl_end_row_offset_ >= 0));
 }
 
@@ -353,7 +354,9 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
                   is_last_row_last_flag_,
                   agg_row_len_);
       if (OB_SUCC(ret)) {
-        if (agg_row_len_ > 0) {
+        if (agg_row_len_ == 0) {
+          agg_row_buf_ = nullptr;
+        } else if (agg_row_len_ > 0) {
           agg_row_buf_ = buf + pos;
           pos += agg_row_len_;
         }

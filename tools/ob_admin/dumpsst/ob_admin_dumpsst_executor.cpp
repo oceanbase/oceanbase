@@ -296,7 +296,8 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
 
 void ObAdminDumpsstExecutor::print_super_block()
 {
-  fprintf(stdout, "SuperBlock: %s\n", to_cstring(OB_STORAGE_OBJECT_MGR.get_server_super_block()));
+  ObCStringHelper helper;
+  fprintf(stdout, "SuperBlock: %s\n", helper.convert(OB_STORAGE_OBJECT_MGR.get_server_super_block()));
 }
 
 void ObAdminDumpsstExecutor::print_macro_block()
@@ -340,13 +341,13 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
       const int64_t offset = 0;
       const int64_t size = OB_DEFAULT_MACRO_BLOCK_SIZE;
       macro_buf = read_info.buf_;
-      if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+      if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
         STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-      } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, buf_size))) {
+      } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, buf_size))) {
         STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
       }
       if (fd.is_valid()) {
-        (void) THE_IO_DEVICE->close(fd);
+        (void) LOCAL_DEVICE_INSTANCE.close(fd);
       }
     } else {
       if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
@@ -407,20 +408,21 @@ void ObAdminDumpsstExecutor::dump_tablet_meta(const ObDumpMacroBlockContext &mac
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
     } else if (FALSE_IT(disk_addr.set_block_addr(tablet_meta_obj_id, 0/*offset*/, size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
     } else if (FALSE_IT(tablet.set_tablet_addr(disk_addr))) {
     } else if (OB_FAIL(tablet.deserialize_for_replay(arena_allocator, macro_buf, size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize tablet", K(ret), KP(macro_buf), K(size));
     } else {
-      fprintf(stdout, "TabletMeta: %s\n", to_cstring(tablet));
+      ObCStringHelper helper;
+      fprintf(stdout, "TabletMeta: %s\n", helper.convert(tablet));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   if (OB_FAIL(ret)) {
@@ -451,20 +453,21 @@ void ObAdminDumpsstExecutor::dump_table_store(const ObDumpMacroBlockContext &mac
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
     } else if (OB_FAIL(header.deserialize(macro_buf, OB_DEFAULT_MACRO_BLOCK_SIZE, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize header", K(ret));
     } else if (OB_FAIL(table_store.deserialize(arena_allocator, tablet, macro_buf, read_size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize tablet table store", K(ret));
     } else {
-      fprintf(stdout, "TableStore: %s\n", to_cstring(table_store));
+      ObCStringHelper helper;
+      fprintf(stdout, "TableStore: %s\n", helper.convert(table_store));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   if (OB_FAIL(ret)) {
@@ -494,20 +497,21 @@ void ObAdminDumpsstExecutor::dump_storage_schema(const ObDumpMacroBlockContext &
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
     } else if (OB_FAIL(header.deserialize(macro_buf, OB_DEFAULT_MACRO_BLOCK_SIZE, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize header", K(ret), K(read_size), K(pos), K(macro_block_context));
     } else if (OB_FAIL(storage_schema.deserialize(arena_allocator, macro_buf, read_size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize storage schema", K(ret), K(read_size), K(pos), K(macro_block_context));
     } else {
-      fprintf(stdout, "StorageSchema: %s\n", to_cstring(storage_schema));
+      ObCStringHelper helper;
+      fprintf(stdout, "StorageSchema: %s\n", helper.convert(storage_schema));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   if (OB_FAIL(ret)) {
@@ -535,16 +539,16 @@ int ObAdminDumpsstExecutor::do_dump_prewarm_index(
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(ERROR, "failed to alloc macro read info buffer", KR(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(path, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(path, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "fail to open file", KR(ret), K(path));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "fail to read file", KR(ret), K(fd), K(offset), K(size), KP(macro_buf));
     } else if (OB_FAIL(index.deserialize(macro_buf, read_size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize prewarm index", KR(ret), K(read_size), K(pos), KP(macro_buf));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   return ret;
@@ -560,7 +564,8 @@ void ObAdminDumpsstExecutor::dump_prewarm_index(const ObDumpMacroBlockContext &m
   } else if (OB_FAIL(do_dump_prewarm_index(macro_block_context.object_file_path_, index))) {
     STORAGE_LOG(ERROR, "fail to parse prewarm_index", KR(ret), K_(macro_block_context.object_file_path));
   } else {
-    fprintf(stdout, "ObHotTabletInfoIndex: %s\n", to_cstring(index));
+    ObCStringHelper helper;
+    fprintf(stdout, "ObHotTabletInfoIndex: %s\n", helper.convert(index));
   }
 
   if (OB_FAIL(ret)) {
@@ -578,10 +583,11 @@ void ObAdminDumpsstExecutor::dump_prewarm_data(const ObDumpMacroBlockContext &ma
     STORAGE_LOG(ERROR, "file path is null", KR(ret), K_(macro_block_context.object_file_path), K_(macro_block_context.prewarm_index));
   } else if (OB_FAIL(do_dump_prewarm_index(macro_block_context.prewarm_index_, index))) {
     STORAGE_LOG(ERROR, "fail to parse prewarm_index", KR(ret), K_(macro_block_context.object_file_path));
-  } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
     STORAGE_LOG(ERROR, "fail to open file", KR(ret), K_(macro_block_context.object_file_path));
   } else {
-    fprintf(stdout, "ObHotTabletInfoIndex: %s\n\n", to_cstring(index));
+    ObCStringHelper helper;
+    fprintf(stdout, "ObHotTabletInfoIndex: %s\n\n", helper.convert(index));
     const int64_t cnt = index.sizes_.count();
     int64_t cur_offset = 0;
     for (int64_t i = 0; (i < cnt) && OB_SUCC(ret); ++i) {
@@ -594,7 +600,7 @@ void ObAdminDumpsstExecutor::dump_prewarm_data(const ObDumpMacroBlockContext &ma
       if (OB_ISNULL(buf = static_cast<char *>(io_allocator_.alloc(size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(ERROR, "fail to alloc memory", KR(ret), K(size));
-      } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, cur_offset, size, buf, read_size))) {
+      } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, cur_offset, size, buf, read_size))) {
         STORAGE_LOG(ERROR, "fail to read data", KR(ret), K(fd), K(cur_offset), K(size), KP(buf));
       } else if (OB_UNLIKELY(size != read_size)) {
         ret = OB_ERR_UNEXPECTED;
@@ -602,13 +608,14 @@ void ObAdminDumpsstExecutor::dump_prewarm_data(const ObDumpMacroBlockContext &ma
       } else if (OB_FAIL(hot_tablet_info.deserialize(buf, size, pos))) {
         STORAGE_LOG(ERROR, "fail to serialize", KR(ret), K(size), K(pos));
       } else {
-        fprintf(stdout, "i=%ld\n ObHotTabletInfo=%s\n", i, to_cstring(hot_tablet_info));
+        ObCStringHelper helper;
+        fprintf(stdout, "i=%ld\n ObHotTabletInfo=%s\n", i, helper.convert(hot_tablet_info));
       }
       cur_offset += size;
     }
   }
   if (fd.is_valid()) {
-    (void)THE_IO_DEVICE->close(fd);
+    (void)LOCAL_DEVICE_INSTANCE.close(fd);
   }
   if (OB_FAIL(ret)) {
     fprintf(stderr, "fail to dump_prewarm_data, ret=%s\n", ob_error_name(ret));
@@ -634,18 +641,19 @@ void ObAdminDumpsstExecutor::dump_is_deleted_obj(const ObDumpMacroBlockContext &
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
     } else if (OB_FAIL(is_deleted_obj.deserialize(macro_buf, read_size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize is_deleted_obj", K(ret), K(read_size), K(pos), K(macro_block_context));
     } else {
-      fprintf(stdout, "ObIsDeletedObj: %s\n", to_cstring(is_deleted_obj));
+      ObCStringHelper helper;
+      fprintf(stdout, "ObIsDeletedObj: %s\n", helper.convert(is_deleted_obj));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   if (OB_FAIL(ret)) {
@@ -672,18 +680,19 @@ void ObAdminDumpsstExecutor::dump_meta_list(const ObDumpMacroBlockContext &macro
     if (OB_ISNULL(macro_buf = reinterpret_cast<char*>(io_allocator_.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(size));
-    } else if (OB_FAIL(THE_IO_DEVICE->open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.open(macro_block_context.object_file_path_, O_RDONLY, 0, fd))) {
       STORAGE_LOG(ERROR, "open file failed", K(macro_block_context));
-    } else if (OB_FAIL(THE_IO_DEVICE->pread(fd, offset, size, macro_buf, read_size))) {
+    } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.pread(fd, offset, size, macro_buf, read_size))) {
       STORAGE_LOG(ERROR, "read block failed", K(macro_block_context));
     } else if (OB_FAIL(meta_info.deserialize(macro_buf, read_size, pos))) {
       STORAGE_LOG(ERROR, "fail to deserialize GCTabletMetaInfoList", K(ret), K(read_size), K(pos), K(macro_block_context));
     } else {
-      fprintf(stdout, "ObGCTabletMetaInfoList: %s\n", to_cstring(meta_info));
+      ObCStringHelper helper;
+      fprintf(stdout, "ObGCTabletMetaInfoList: %s\n", helper.convert(meta_info));
     }
 
     if (fd.is_valid()) {
-      (void) THE_IO_DEVICE->close(fd);
+      (void) LOCAL_DEVICE_INSTANCE.close(fd);
     }
   }
   if (OB_FAIL(ret)) {

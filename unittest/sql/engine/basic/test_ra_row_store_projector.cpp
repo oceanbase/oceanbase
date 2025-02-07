@@ -24,7 +24,7 @@ using namespace common;
 TEST(RARowStore, keep_projector)
 {
   ObRARowStore rs(NULL, true);
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SYS_TENANT_ID));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -80,7 +80,7 @@ TEST(RARowStore, alloc_project_fail)
 {
   ObEmptyAlloc alloc;
   ObRARowStore rs(&alloc, true);
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SYS_TENANT_ID));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;

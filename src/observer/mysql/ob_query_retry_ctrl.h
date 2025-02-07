@@ -261,6 +261,16 @@ public:
             || isolation == transaction::ObTxIsolationLevel::SERIAL);
   }
   static int get_das_retry_func(int err, sql::ObDASRetryCtrl::retry_func &retry_func);
+
+  // processors for ASH and wait event
+  static bool can_start_retry_wait_event(const ObQueryRetryType& retry_type);
+  static void start_schema_error_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
+  static void start_location_error_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
+  static void start_rowlock_retry_wait_event(sql::ObSQLSessionInfo &session);
+  static void start_px_worker_insufficient_retry_wait_event(sql::ObSQLSessionInfo &session, const sql::ObSqlCtx& sql_ctx);
+  static void start_gts_not_ready_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
+  static void start_replica_not_readable_retry_wait_event(sql::ObSQLSessionInfo &session);
+  static void start_other_retry_wait_event(sql::ObSQLSessionInfo &session, const int error_code);
 public:
   // schema类型的错误最多在本线程重试5次。
   // 5是拍脑袋决定的，之后还要看统计数据的反馈再修改。TODO qianfu.zpf
@@ -274,19 +284,20 @@ public:
   // 1ms，重试write dml等待时间
   static const uint32_t WAIT_RETRY_WRITE_DML_US = 1 * 1000;
 
-private:
+public:
   /* functions */
   typedef void (*retry_func)(ObRetryParam &);
 
   // find err code processor in map_
-  int get_func(int err, bool is_inner, retry_func &func);
+  static int get_func(int err, bool is_inner, retry_func &func);
+  static void empty_proc(ObRetryParam &v);
 
+private:
   // default processor hook
   static void before_func(ObRetryParam &v);
   static void after_func(ObRetryParam &v);
 
   // various processors for error codes
-  static void empty_proc(ObRetryParam &v);
   static void px_thread_not_enough_proc(ObRetryParam &v);
   static void trx_set_violation_proc(ObRetryParam &v);
   static void trx_can_not_serialize_proc(ObRetryParam &v);

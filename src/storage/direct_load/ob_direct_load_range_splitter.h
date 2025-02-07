@@ -33,17 +33,13 @@ class ObDirectLoadMultipleSSTable;
 class ObDirectLoadRangeSplitUtils
 {
 public:
-  static int construct_rowkey_iter(ObDirectLoadSSTable *sstable, common::ObIAllocator &allocator,
-                                   ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
   static int construct_rowkey_iter(blocksstable::ObSSTable *sstable,
                                    const blocksstable::ObDatumRange &scan_range,
                                    const storage::ObITableReadInfo &index_read_info,
                                    common::ObIAllocator &allocator,
                                    ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
   static int construct_rowkey_iter(ObDirectLoadMultipleSSTable *sstable,
-                                   const common::ObTabletID &tablet_id,
                                    const ObDirectLoadTableDataDesc &table_data_desc,
-                                   const blocksstable::ObStorageDatumUtils *datum_utils,
                                    common::ObIAllocator &allocator,
                                    ObIDirectLoadDatumRowkeyIterator *&rowkey_iter);
   static int construct_multiple_rowkey_iter(ObDirectLoadMultipleSSTable *sstable,
@@ -88,29 +84,8 @@ class ObDirectLoadMergeRangeSplitter
 public:
   ObDirectLoadMergeRangeSplitter();
   ~ObDirectLoadMergeRangeSplitter();
-  int init(ObDirectLoadOriginTable *origin_table,
-           const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
-           const blocksstable::ObStorageDatumUtils *datum_utils,
-           const common::ObIArray<share::schema::ObColDesc> &col_descs);
-  int split_range(common::ObIArray<blocksstable::ObDatumRange> &range_array,
-                  int64_t max_range_count, common::ObIAllocator &allocator);
-private:
-  int construct_sstable_rowkey_iters(const common::ObIArray<ObDirectLoadSSTable *> &sstable_array);
-private:
-  common::ObArenaAllocator allocator_;
-  blocksstable::ObDatumRange scan_range_;
-  ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
-  int64_t total_block_count_;
-  ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
-  bool is_inited_;
-};
-
-class ObDirectLoadMultipleMergeTabletRangeSplitter
-{
-public:
-  ObDirectLoadMultipleMergeTabletRangeSplitter();
-  ~ObDirectLoadMultipleMergeTabletRangeSplitter();
-  int init(const common::ObTabletID &tablet_id, ObDirectLoadOriginTable *origin_table,
+  int init(const common::ObTabletID &tablet_id,
+           ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
            const ObDirectLoadTableDataDesc &table_data_desc,
            const blocksstable::ObStorageDatumUtils *datum_utils,
@@ -122,16 +97,12 @@ private:
     const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
     const ObDirectLoadTableDataDesc &table_data_desc,
     const blocksstable::ObStorageDatumUtils *datum_utils);
-  int get_sstable_index_block_count(ObDirectLoadMultipleSSTable *sstable,
-                                    const ObDirectLoadTableDataDesc &table_data_desc,
-                                    const blocksstable::ObStorageDatumUtils *datum_utils,
-                                    int64_t &block_count);
 private:
   common::ObArenaAllocator allocator_;
   common::ObTabletID tablet_id_;
   blocksstable::ObDatumRange scan_range_;
   ObArray<ObIDirectLoadDatumRowkeyIterator *> rowkey_iters_;
-  int64_t total_block_count_;
+  int64_t total_rowkey_count_;
   ObDirectLoadRowkeyMergeRangeSplitter rowkey_merge_splitter_;
   bool is_inited_;
 };

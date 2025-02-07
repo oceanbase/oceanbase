@@ -36,7 +36,7 @@ void ObParamInfo::reset()
   scale_ = 0;
   type_ = common::ObNullType;
   ext_real_type_ = common::ObNullType;
-  is_oracle_empty_string_ = false;
+  is_oracle_null_value_ = false;
   col_type_ = common::CS_TYPE_INVALID;
   precision_ = PRECISION_UNKNOWN_YET;
 }
@@ -46,7 +46,7 @@ OB_SERIALIZE_MEMBER(ObParamInfo,
                     scale_,
                     type_,
                     ext_real_type_,
-                    is_oracle_empty_string_,
+                    is_oracle_null_value_,  // FARM COMPAT WHITELIST
                     col_type_,
                     precision_);
 
@@ -79,8 +79,8 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
     param_info.flag_ = params.at(i).get_param_flag();
     param_info.type_ = params.at(i).get_param_meta().get_type();
     param_info.col_type_ = params.at(i).get_collation_type();
-    if (ObSQLUtils::is_oracle_empty_string(params.at(i))) {
-      param_info.is_oracle_empty_string_ = true;
+    if (ObSQLUtils::is_oracle_null_with_normal_type(params.at(i))) {
+      param_info.is_oracle_null_value_ = true;
     }
     if (params.at(i).get_param_meta().get_type() != params.at(i).get_type()) {
       LOG_TRACE("differ in set_params_info",
@@ -88,16 +88,17 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
                 K(params.at(i).get_type()),
                 K(common::lbt()));
     }
-    if (params.at(i).is_ext()) {
+    if (params.at(i).is_ext_sql_array()) {
       ObDataType data_type;
       if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
         LOG_WARN("fail to get ext obj data type", K(ret));
       } else {
         param_info.ext_real_type_ = data_type.get_obj_type();
         param_info.scale_ = data_type.get_scale();
+        param_info.precision_ = data_type.get_precision();
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
-    } else if (params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
+    } else if (params.at(i).get_param_meta().is_ext() || params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
       param_info.scale_ = 0;
       uint64_t udt_id = params.at(i).get_accuracy().get_accuracy();
       *(reinterpret_cast<uint32 *>(&param_info.ext_real_type_)) = (udt_id >> 32) & UINT_MAX32;
@@ -176,11 +177,8 @@ int ObPlanCacheObject::check_pre_calc_cons(const bool is_ignore_stmt,
     is_match = false;
     ret = OB_SUCCESS;
   } else {
-    ObObjParam obj_param;
     for (int64_t i = 0; OB_SUCC(ret) && is_match && i < datum_params.count(); ++i) {
-      if (OB_FAIL(datum_params.at(i).to_objparam(obj_param, &exec_ctx.get_allocator()))) {
-        LOG_WARN("failed to obj param", K(ret));
-      } else if (OB_FAIL(pre_calc_con.check_is_match(obj_param, is_match))) {
+      if (OB_FAIL(pre_calc_con.check_is_match(datum_params.at(i), exec_ctx, is_match))) {
         LOG_WARN("failed to check is match", K(ret));
       } // else end
     } // for end

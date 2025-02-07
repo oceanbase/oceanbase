@@ -99,7 +99,7 @@ struct ObLobDataGetCtx
   const common::ObLobData *get_new_lob_data() { return new_lob_data_; }
   const common::ObLobData *get_old_lob_data() { return old_lob_data_; }
   int get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx) const;
-  ObLobId get_lob_id() const;
+  int get_lob_id(const bool is_new_col, ObLobId &lob_id) const;
   int get_data_length(const bool is_new_col, uint64_t &data_length) const;
   common::ObString **get_fragment_cb_array(const bool is_new_col)
   {

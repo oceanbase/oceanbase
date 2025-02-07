@@ -18,6 +18,7 @@ pthread_t ob_pthread_get_pth(void *ptr);
 void ob_set_thread_name(const char* type);
 int64_t ob_update_loop_ts();
 void ob_usleep(const useconds_t v);
+void ob_idle_usleep(const useconds_t v);
 /**
  * start
  */
@@ -242,7 +243,9 @@ static void *easy_baseth_pool_monitor_func(void *args)
 
     while(tp->stoped == 0) {
         ob_update_loop_ts();
-        ob_usleep(us);
+        {
+            ob_idle_usleep(us);
+        }
         ev_tstamp now = ev_time();
         easy_thread_pool_for_each(th, tp, 0) {
             ev_tstamp last = th->lastrun;

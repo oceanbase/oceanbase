@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
+#include "observer/ob_sql_client_decorator.h"
 
 #define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
                                               "job_name, " \
@@ -67,6 +68,7 @@ const char *windows_name[DAY_OF_WEEK] = {"MONDAY_WINDOW",
 const char *opt_stats_history_manager = "OPT_STATS_HISTORY_MANAGER";
 const char *async_gather_stats_job_proc = "ASYNC_GATHER_STATS_JOB_PROC";
 const int64_t OPT_STATS_HISTORY_MANAGER_JOB_ID = 8;
+const char *spm_stats_manager = "SPM_STATS_MANAGER";
 
 int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const ObSysVariableSchema &sys_variable,
                                                                         const uint64_t tenant_id,
@@ -180,6 +182,26 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
         }
       }
 
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, job_id++,
+                                               offset_sec, exec_env, tmp_sql))) {
+        LOG_WARN("failed to get stats history manager job sql", K(ret));
+      } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+        LOG_WARN("failed to append sql", K(ret));
+      } else {
+         ++ expected_affected_rows;
+         tmp_sql.reset();
+        if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, 0,
+                                          offset_sec, exec_env, tmp_sql))) {
+          LOG_WARN("failed to get stats history manager job sql", K(ret));
+        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+          LOG_WARN("failed to append sql", K(ret));
+        } else {
+          ++ expected_affected_rows;
+          tmp_sql.reset();
+        }
+      }
+
       //set dummy guard job
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(get_dummy_guard_job_sql(tenant_id, job_id, tmp_sql))) {
@@ -231,7 +253,7 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_m
   OZ (dml.add_time_column("start_date", start_usec));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=WEEKLY; INTERVAL=1"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to auto gather table stats"))));
@@ -276,7 +298,7 @@ int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_sql(const bool i
   OZ (dml.add_raw_time_column("start_date", current));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to stats history manager"))));
@@ -321,7 +343,7 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_sql(const bool is_o
   OZ (dml.add_raw_time_column("start_date", current));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString(dbms_scheduler::DEFAULT_JOB_CLASS))));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to async gather stats"))));
@@ -360,6 +382,70 @@ int ObDbmsStatsMaintenanceWindow::get_dummy_guard_job_sql(const uint64_t tenant_
                                "NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL"))) {
       LOG_WARN("failed to append", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_sql(const bool is_oracle_mode,
+                                                        const uint64_t tenant_id,
+                                                        const int64_t job_id,
+                                                        const int64_t offset_sec,
+                                                        const ObString &exec_env,
+                                                        ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+
+  ObTime ob_time;
+  int64_t current_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(current_time <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(current_time));
+  } else if (OB_FAIL(ObTimeConverter::usec_to_ob_time(current_time + offset_sec * 1000000, ob_time))) {
+    LOG_WARN("failed to usec to ob time", K(ret), K(current_time));
+  } else {
+    // handle spm stats at 1:00 every day
+    int64_t default_start_hour = 1;
+    int64_t total_hour_with_trunc = current_time / USEC_OF_HOUR;
+    int64_t current_hour = ob_time.parts_[DT_HOUR];
+    int64_t offset_hour = 1 * HOUR_OF_DAY + default_start_hour - current_hour;
+    int64_t start_usec = (total_hour_with_trunc + offset_hour) * USEC_OF_HOUR;
+    LOG_INFO("succeed to get spm job info", K(ob_time), K(start_usec), K(offset_hour), K(current_time),
+                                               K(total_hour_with_trunc), K(current_hour),
+                                               K(default_start_hour));
+    int64_t interval_ts = DEFAULT_DAY_INTERVAL_USEC;
+    int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
+    share::ObDMLSqlSplicer dml;
+    OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+    OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(spm_stats_manager))));
+    OZ (dml.add_pk_column("job", job_id));
+    OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
+    OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
+    OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
+    OZ (dml.add_time_column("next_date", start_usec));
+    OZ (dml.add_column("total", 0));
+    OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
+    OZ (dml.add_column("flag", 0));
+    OZ (dml.add_column("what", ObHexEscapeSqlStr("DBMS_SPM.HANDLE_SPM_STATS_JOB_PROC()")));
+    OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
+    OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
+    OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
+    OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
+    OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
+    OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
+    OZ (dml.add_column("job_action", ObHexEscapeSqlStr("DBMS_SPM.HANDLE_SPM_STATS_JOB_PROC()")));
+    OZ (dml.add_column("number_of_argument", 0));
+    OZ (dml.add_raw_time_column("start_date", start_usec));
+    OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=DAYLY; INTERVAL=1"))));
+    OZ (dml.add_raw_time_column("end_date", end_date));
+    OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+    OZ (dml.add_column("enabled", true));
+    OZ (dml.add_column("auto_drop", false));
+    OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to handle spm stats"))));
+    OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
+    OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
+    OZ (dml.add_column("interval_ts", interval_ts));
+    OZ (dml.add_column("max_run_duration", 10 * 60)); // 10 min
+    OZ (dml.splice_values(raw_sql));
   }
   return ret;
 }
@@ -653,17 +739,17 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
   bool is_join_exists = false;
   //bug:
   ObArenaAllocator allocator("AsyncStatsJob");
-  if (OB_FAIL(check_async_gather_job_exists(sql_proxy, tenant_id, is_join_exists))) {
+  if (OB_FAIL(check_job_exists(sql_proxy, tenant_id, async_gather_stats_job_proc, is_join_exists))) {
     LOG_WARN("failed to check async gather job exists", K(ret));
   } else if (is_join_exists) {
     //do nothing
-  } else if (OB_FAIL(get_async_gather_stats_job_id_and_exec_env(sql_proxy, allocator, tenant_id, job_id, exec_env))) {
+  } else if (OB_FAIL(get_next_job_id_and_exec_env(sql_proxy, allocator, tenant_id, job_id, exec_env))) {
     LOG_WARN("failed to get async gather stats job id and exec env", K(ret));
   } else if (OB_UNLIKELY(job_id > dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET ||
                          exec_env.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(job_id), K(exec_env));
-  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+  } else if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
     LOG_WARN("failed to get tenant compat mode", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
                                                     tenant_id, job_id, exec_env, values_list))) {
@@ -684,11 +770,11 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
-                                                                             ObIAllocator &allocator,
-                                                                             const uint64_t tenant_id,
-                                                                             int64_t &job_id,
-                                                                             ObString &exec_env)
+int ObDbmsStatsMaintenanceWindow::get_next_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                                               ObIAllocator &allocator,
+                                                               const uint64_t tenant_id,
+                                                               int64_t &job_id,
+                                                               ObString &exec_env)
 {
   int ret = OB_SUCCESS;
   ObSqlString select_sql;
@@ -748,14 +834,15 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(com
         }
       }
     }
-    LOG_INFO("succeed to get async gather stats job id and exec env", K(ret), K(select_sql), K(job_id), K(exec_env));
+    LOG_INFO("succeed to get next job id and exec env", K(ret), K(select_sql), K(job_id), K(exec_env));
   }
   return ret;
 }
 
-int ObDbmsStatsMaintenanceWindow::check_async_gather_job_exists(common::ObMySQLProxy *sql_proxy,
-                                                                const uint64_t tenant_id,
-                                                                bool &is_join_exists)
+int ObDbmsStatsMaintenanceWindow::check_job_exists(common::ObMySQLProxy *sql_proxy,
+                                                   const uint64_t tenant_id,
+                                                   const char* job_name,
+                                                   bool &is_join_exists)
 {
   int ret = OB_SUCCESS;
   is_join_exists = false;
@@ -764,7 +851,7 @@ int ObDbmsStatsMaintenanceWindow::check_async_gather_job_exists(common::ObMySQLP
   if (OB_FAIL(select_sql.append_fmt("SELECT count(*) FROM %s WHERE tenant_id = %ld and job_name = '%s';",
                                     share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
                                     share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                    async_gather_stats_job_proc))) {
+                                    job_name))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
@@ -801,7 +888,52 @@ int ObDbmsStatsMaintenanceWindow::check_async_gather_job_exists(common::ObMySQLP
         }
       }
     }
-    LOG_INFO("succeed to check async gather job exists", K(ret), K(select_sql), K(is_join_exists), K(row_count));
+    LOG_INFO("succeed to check job exists", K(ret), K(select_sql), K(is_join_exists), K(row_count));
+  }
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::get_spm_stats_upgrade_jobs_sql(common::ObMySQLProxy *sql_proxy,
+                                                                 const ObSysVariableSchema &sys_variable,
+                                                                 const uint64_t tenant_id,
+                                                                 const bool is_oracle_mode,
+                                                                 ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_PROC_ENV_LENGTH];
+  ObSqlString tmp_sql;
+  int64_t pos = 0;
+  int32_t offset_sec = 0;
+  int64_t job_id = 0;
+  ObString tmp_exec_env;
+  ObArenaAllocator allocator("SpmSchedularJob");
+  if (OB_FAIL(get_next_job_id_and_exec_env(sql_proxy, allocator, tenant_id, job_id, tmp_exec_env))) {
+    LOG_WARN("failed to get async gather stats job id and exec env", K(ret));
+  } else if (OB_UNLIKELY(job_id > dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET ||
+                         tmp_exec_env.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(job_id), K(tmp_exec_env));
+  } else if (OB_FAIL(raw_sql.assign_fmt("INSERT INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES ",
+              share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else if (OB_FAIL(sql::ObExecEnv::gen_exec_env(sys_variable, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+    LOG_WARN("failed to gen exec env", K(ret));
+  } else if (OB_FAIL(get_time_zone_offset(sys_variable, tenant_id, offset_sec))) {
+    LOG_WARN("failed to get time zone offset", K(ret));
+  } else {
+    ObString exec_env(pos, buf);
+    if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, job_id,
+                                      offset_sec, exec_env, tmp_sql))) {
+      LOG_WARN("failed to get stats history manager job sql", K(ret));
+    } else if (OB_FAIL(raw_sql.append_fmt(" (%s)", tmp_sql.ptr()))) {
+      LOG_WARN("failed to append sql", K(ret));
+    } else if (OB_FALSE_IT(tmp_sql.reset())) {
+    } else if (OB_FAIL(get_spm_stats_job_sql(is_oracle_mode, tenant_id, 0,
+                                             offset_sec, exec_env, tmp_sql))) {
+      LOG_WARN("failed to get stats history manager job sql", K(ret));
+    } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+      LOG_WARN("failed to append sql", K(ret));
+    }
   }
   return ret;
 }

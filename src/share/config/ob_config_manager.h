@@ -22,6 +22,11 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+  class ObTenantConfigMgr;
+}
+
 namespace common
 {
 class ObMySQLProxy;
@@ -29,6 +34,7 @@ class ObMySQLProxy;
 class ObConfigManager
 {
   friend class UpdateTask;
+  friend class oceanbase::omt::ObTenantConfigMgr;
 public:
   static const int64_t DEFAULT_VERSION = 1;
 
@@ -85,6 +91,10 @@ private:
   private:
     DISALLOW_COPY_AND_ASSIGN(UpdateTask);
   };
+
+private:
+  // whitout lock, only used inner
+  int dump2file_unsafe(const char *path = NULL) const;
 
 private:
   bool inited_;

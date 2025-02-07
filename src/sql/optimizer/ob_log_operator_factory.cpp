@@ -53,6 +53,7 @@
 #include "ob_log_link_dml.h"
 #include "ob_log_optimizer_stats_gathering.h"
 #include "ob_log_values_table_access.h"
+#include "ob_log_expand.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::log_op_def;
@@ -364,6 +365,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogValuesTableAccess(plan);
     } else { /* do nothing */ }
+    break;
+  }
+  case LOG_EXPAND: {
+    ptr = allocator_.alloc(sizeof(ObLogExpand));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogExpand(plan);
+    }
     break;
   }
   default: {

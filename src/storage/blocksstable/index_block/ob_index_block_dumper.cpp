@@ -253,7 +253,6 @@ int ObBaseIndexBlockDumper::append_row(const ObDatumRow &row)
       STORAGE_LOG(WARN, "Fail to copy last key", K(ret), K(rowkey));
     } else {
       row_count_++;
-      FLOG_INFO("Index Block Dumper save last key", K(last_rowkey_), K(row));
     }
   }
   return ret;
@@ -870,7 +869,9 @@ int ObIndexBlockLoader::get_next_disk_row(ObDatumRow &row)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(curr_block_row_idx_ >= curr_block_row_cnt_)) {
     if (OB_FAIL(get_next_disk_micro_block_data(cur_micro_block_))) {
-      STORAGE_LOG(WARN, "Fail to get next row", K(ret));
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "Fail to get next row", K(ret));
+      }
     } else if (OB_FAIL(open_micro_block(cur_micro_block_))) {
       STORAGE_LOG(WARN, "Fail to init micro reader", K(ret));
     }

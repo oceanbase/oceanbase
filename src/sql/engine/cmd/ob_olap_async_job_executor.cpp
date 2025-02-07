@@ -57,7 +57,11 @@ int ObOLAPAsyncCancelJobExecutor::execute(ObExecContext &ctx, ObOLAPAsyncCancelJ
   } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info))) {
     LOG_WARN("check user priv failed", KR(ret), K(tenant_id), K(job_info));
   } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::stop_dbms_sched_job(*GCTX.sql_proxy_, job_info, true /* delete after stop */))) {
-    LOG_WARN("failed to stop dbms scheduler job", KR(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {//当前job_不在运行不需要报错
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to stop dbms scheduler job", KR(ret));
+    }
   }
   return ret;
 }

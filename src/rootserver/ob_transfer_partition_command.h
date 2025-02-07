@@ -29,12 +29,14 @@ namespace rootserver
 struct ObTransferPartitionArg
 {
 public:
-  enum ObTransferPartitionType {
+  enum ObTransferPartitionType {// FARM COMPAT WHITELIST
     INVALID_TYPE = -1,
     TRANSFER_PARTITION_TO_LS = 0,
     CANCEL_TRANSFER_PARTITION,
     CANCEL_TRANSFER_PARTITION_ALL,
     CANCEL_BALANCE_JOB,
+    SUSPEND_BALANCE_JOB,
+    RESUME_BALANCE_JOB,
     MAX_TYPE
   };
   ObTransferPartitionArg() : type_(INVALID_TYPE), target_tenant_id_(OB_INVALID_TENANT_ID),

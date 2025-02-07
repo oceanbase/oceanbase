@@ -117,6 +117,20 @@ public:
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
   int check_ls_need_online(bool &need_online) const;
+  int set_transfer_meta_info(
+      const int64_t ls_epoch,
+      const share::SCN &replay_scn,
+      const share::ObLSID &src_ls,
+      const share::SCN &src_scn,
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const uint64_t data_version);
+  int get_transfer_meta_info(ObLSTransferMetaInfo &trasfer_meta_info) const;
+  int cleanup_transfer_meta_info(const int64_t ls_epoch, const share::SCN &replay_scn);
+  ObMajorMVMergeInfo get_major_mv_merge_info() const;
+  int set_major_mv_merge_scn(const int64_t ls_epoch, const SCN &major_mv_merge_scn);
+  int set_major_mv_merge_scn_safe_calc(const int64_t ls_epoch, const SCN &major_mv_merge_scn_safe_calc);
+  int set_major_mv_merge_scn_publish(const int64_t ls_epoch, const SCN &major_mv_merge_scn_publish);
   ObLSStoreFormat get_store_format() const;
 
   int init(
@@ -125,6 +139,7 @@ public:
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
       const share::SCN &create_scn,
+      const ObMajorMVMergeInfo &major_mv_merge_info,
       const ObLSStoreFormat &store_format);
 
   ObReplicaType get_replica_type() const

@@ -340,9 +340,6 @@ public:
 
   const RowMeta &get_row_meta() const { return row_meta_; }
   inline int64_t get_max_batch_size() const { return max_batch_size_; }
-  inline int64_t get_row_cnt() const { return block_id_cnt_; }
-  inline int64_t get_row_cnt_on_disk() const { return dumped_block_id_cnt_; }
-  inline int64_t get_row_cnt_in_memory() const { return get_row_cnt() - get_row_cnt_on_disk(); }
   const lib::ObMemAttr &get_mem_attr() const { return mem_attr_; }
 
   INHERIT_TO_STRING_KV("ObTempBlockStore", ObTempBlockStore,

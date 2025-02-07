@@ -152,6 +152,7 @@ int ObExprUserEnv::cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr, ObExpr &
 int ObExprUserEnv::calc_user_env_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
@@ -259,7 +260,7 @@ int ObExprUserEnv::eval_instance(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  uint64_t instance_id = GCTX.server_id_;
+  uint64_t instance_id = GCTX.get_server_id();
   number::ObNumber res_nmb;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();

@@ -34,9 +34,10 @@ public:
   ObLinkedMacroBlockWriter(const ObLinkedMacroBlockWriter &) = delete;
   ObLinkedMacroBlockWriter &operator=(const ObLinkedMacroBlockWriter &) = delete;
 
-  int init(const uint64_t talbet_id);
+  int init();
   int init_for_object(
     const uint64_t tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     const int64_t start_macro_seq);
   int write_block(
@@ -59,6 +60,7 @@ private:
   blocksstable::ObStorageObjectHandle handle_;
   blocksstable::MacroBlockId entry_block_id_;
   uint64_t tablet_id_;
+  int64_t tablet_transfer_seq_;
   int64_t snapshot_version_;
   int64_t cur_macro_seq_;
 };
@@ -70,13 +72,15 @@ public:
   ~ObLinkedMacroBlockItemWriter() = default;
   ObLinkedMacroBlockItemWriter(const ObLinkedMacroBlockItemWriter &) = delete;
   ObLinkedMacroBlockItemWriter &operator=(const ObLinkedMacroBlockItemWriter &) = delete;
-
-  int init(const bool need_disk_addr, const ObMemAttr &mem_attr, const uint64_t tablet_id = 0);
+  // used for writing macro_info both in shared_nothing and shared_storage
   int init_for_object(
     const uint64_t tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     const int64_t start_macro_seq,
     blocksstable::ObIMacroBlockFlushCallback *write_callback = nullptr);
+  // only used for ckpt_slog in shared_nothing
+  int init(const bool need_disk_addr, const ObMemAttr &mem_attr);
   int write_item(const char *item_buf, const int64_t item_buf_len, int64_t *item_idx = nullptr);
   int close();
   inline bool is_closed() const { return is_closed_; };

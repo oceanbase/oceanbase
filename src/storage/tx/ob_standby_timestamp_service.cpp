@@ -149,7 +149,7 @@ void ObStandbyTimestampService::run1()
     int64_t end_tstamp = ObTimeUtility::current_time();
     int64_t wait_interval = GCONF.weak_read_version_refresh_interval - (end_tstamp - begin_tstamp);
     if (wait_interval > 0) {
-      ob_usleep(wait_interval);
+      ob_usleep(wait_interval, true/*is_idle_sleep*/);
     }
   }
   TRANS_LOG(INFO, "ObStandbyTimestampService thread end", K_(tenant_id));

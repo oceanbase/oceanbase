@@ -114,7 +114,6 @@ public:
   bool with_rows() const
   { return ObStmt::is_select_stmt(stmt_type_) || is_returning() || need_drive_dml_query_; }
   int copy_common_info(ObPhysicalPlan &src);
-  int extract_query_range(ObExecContext &ctx) const;
   //user var
   bool is_contains_assignment() const {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}
@@ -143,8 +142,19 @@ public:
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
   void set_evolution(bool v) { stat_.is_evolution_ = v; }
   bool get_evolution() const { return stat_.is_evolution_; }
-  inline bool check_if_is_expired(const int64_t first_exec_row_count,
-                                  const int64_t current_row_count) const;
+  inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
+                                        const int64_t current_row_count) const;
+  void update_plan_expired_info(const ObAuditRecordData &record,
+                                const bool is_first,
+                                const ObIArray<ObTableRowCount> *table_row_count_list);
+  void fill_row_count_info(const bool is_first,
+                           const int64_t access_table_num,
+                           ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
+  bool check_if_is_expired(const int64_t elapsed_time,
+                           const int64_t access_table_num,
+                           const ObTableRowCount *table_row_count_first_exec,
+                           const ObIArray<ObTableRowCount> &table_row_count_list);
 
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,
@@ -386,7 +396,8 @@ public:
   }
   inline double get_online_sample_percent() const { return online_sample_percent_; }
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
-
+  int64_t get_das_dop() { return das_dop_; }
+  void set_das_dop(int64_t v) { das_dop_ = v; }
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -455,11 +466,20 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline void set_is_inner_sql(bool v) { is_inner_sql_ = v; }
+  inline void set_is_batch_params_execute(bool v) { is_batch_params_execute_ = v; }
   inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
-            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_));
+            && (stmt::T_REPLACE != stmt_type_ || is_insert_select_)
+            // TODO:@yibo inner sql 先不用SPM? pl里面的执行的SQL也是inner sql,
+            && !is_inner_sql_
+            && !is_batch_params_execute_
+            // TODO:@yibo batch multi stmt relay get_plan to init some structure. But spm may not enter
+            // get_plan. Now we disable spm when batch multi stmt exists.
+            && !is_remote_plan()
+            && is_dep_base_table());
   }
   inline bool is_plain_select() const
   {
@@ -516,7 +536,9 @@ public:
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
   inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
   int set_feedback_info(ObExecContext &ctx);
-
+  int check_pdml_affected_rows(ObExecContext &ctx);
+  int print_this_plan_info(ObExecContext &ctx);
+  int get_all_spec_op(ObIArray<const ObOpSpec *> &simple_op_infos, const ObOpSpec &root_op_spec);
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
   ObSubSchemaCtx &get_subschema_ctx_for_update() { return subschema_ctx_; }
@@ -532,6 +554,10 @@ public:
     direct_load_need_sort_ = direct_load_need_sort;
   }
   bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
+  inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
+  inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
+  void set_is_use_auto_dop(bool use_auto_dop)  { stat_.is_use_auto_dop_ = use_auto_dop; }
+  bool get_is_use_auto_dop() const { return stat_.is_use_auto_dop_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -590,6 +616,7 @@ private:
   bool require_local_execution_; // not need serialize
   bool use_px_;
   int64_t px_dop_;
+  PXParallelRule px_parallel_rule_;
   uint32_t next_phy_operator_id_; //share val
   uint32_t next_expr_operator_id_; //share val
   // for regexp expression's compilation
@@ -656,6 +683,7 @@ public:
   //the DML statement needs to be executed through get_next_row
   bool need_drive_dml_query_;
   ExprFixedArray var_init_exprs_;
+  sql::ObExecutedSqlStatRecord sql_stat_record_value_;
 private:
   bool is_returning_; //是否设置了returning
 
@@ -710,7 +738,10 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  int64_t das_dop_;
   bool disable_auto_memory_mgr_;
+  bool is_inner_sql_;
+  bool is_batch_params_execute_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 public:
@@ -730,6 +761,10 @@ private:
   // to decide whether it read uncommitted data
   common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
   bool direct_load_need_sort_;
+  bool insertup_can_do_gts_opt_;
+  ObPxNodePolicy px_node_policy_;
+  common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
+  int64_t px_node_count_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

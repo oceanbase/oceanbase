@@ -46,6 +46,14 @@ private:
                                      bool &final_result,
                                      bool &have_uncommited_row,
                                      bool &need_update_fuse_cache);
+  int get_normal_table_scan_row(const int64_t read_snapshot_version,
+                                const int64_t multi_version_start,
+                                const bool enable_fuse_row_cache,
+                                bool &have_uncommited_row,
+                                bool &need_update_fuse_cache);
+  int get_mview_table_scan_row(const bool enable_fuse_row_cache,
+                               bool &have_uncommited_row,
+                               bool &need_update_fuse_cache);
 private:
   static const int64_t SINGLE_GET_FUSE_ROW_CACHE_PUT_COUNT_THRESHOLD = 50;
   const blocksstable::ObDatumRowkey *rowkey_;

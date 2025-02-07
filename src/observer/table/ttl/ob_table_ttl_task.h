@@ -20,7 +20,7 @@
 #include "share/table/ob_table.h"
 #include "observer/table/ob_table_cache.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
-
+#include "observer/table/ob_table_schema_cache.h"
 namespace oceanbase
 {
 namespace table
@@ -81,23 +81,35 @@ class ObTableTTLDeleteTask : public share::ObITask
 public:
   ObTableTTLDeleteTask();
   ~ObTableTTLDeleteTask();
-  int init(table::ObTenantTabletTTLMgr *ttl_tablet_mgr,
-          const table::ObTTLTaskParam &ttl_para,
-          table::ObTTLTaskInfo &ttl_info);
-  int init_tb_ctx(const table::ObITableEntity &entity, table::ObTableCtx &ctx);
-  int init_scan_tb_ctx(table::ObTableCtx &tb_ctx, table::ObTableApiCacheGuard &cache_guard);
-  int execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_row_iter,
+  virtual int init(table::ObTabletTTLScheduler *ttl_tablet_mgr,
+                   const table::ObTTLTaskParam &ttl_para,
+                   table::ObTTLTaskInfo &ttl_info);
+  virtual int process() override;
+protected:
+  virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges);
+
+  int init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                  const table::ObITableEntity &entity,
+                  table::ObTableCtx &ctx);
+  int init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
+                       table::ObTableCtx &tb_ctx,
+                       table::ObTableApiCacheGuard &cache_guard);
+  int execute_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                         ObTableTTLDeleteRowIterator &ttl_row_iter,
                          table::ObTableTTLOperationResult &result,
                          transaction::ObTxDesc *trans_desc,
                          transaction::ObTxReadSnapshot &snapshot);
-  int process_ttl_delete(const table::ObITableEntity &new_entity,
+  int process_ttl_delete(ObKvSchemaCacheGuard &schema_cache_guard,
+                         const table::ObITableEntity &new_entity,
                          int64_t &affected_rows,
                          transaction::ObTxDesc *trans_desc,
                          transaction::ObTxReadSnapshot &snapshot);
   common::ObIAllocator &get_allocator() { return allocator_; }
   int init_credential(const table::ObTTLTaskParam &ttl_param);
+  int init_sess_info();
+  int init_schema_info(int64_t tenant_id, uint64_t table_id);
+  int init_kv_schema_guard(ObKvSchemaCacheGuard &schema_cache_guard);
 
-  virtual int process() override;
   common::ObTabletID get_tablet_id() const
   {
     return info_.get_tablet_id();
@@ -114,19 +126,40 @@ private:
   int process_one();
 
 private:
+  common::ObArenaAllocator rowkey_allocator_;
   bool is_inited_;
   table::ObTTLTaskParam param_;
   table::ObTTLTaskInfo info_;
+  table::ObTableApiCredential credential_;
+  ObTableApiSessGuard sess_guard_;
+  share::schema::ObSchemaGetterGuard schema_guard_;
+  const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
   common::ObArenaAllocator allocator_;
   common::ObRowkey rowkey_;
-  table::ObTenantTabletTTLMgr *ttl_tablet_mgr_;
+  table::ObTabletTTLScheduler *ttl_tablet_scheduler_;
   share::ObLSID ls_id_;
   ObTableEntity delete_entity_;
-  table::ObTableApiCredential credential_;
   uint64_t hbase_cur_version_;
-  common::ObArenaAllocator rowkey_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDeleteTask);
 };
+
+// TTL delete task using hbase rowkey
+class ObTableHRowKeyTTLDelTask : public ObTableTTLDeleteTask
+{
+public:
+  ObTableHRowKeyTTLDelTask();
+  ~ObTableHRowKeyTTLDelTask();
+  virtual int init(ObTabletTTLScheduler *ttl_tablet_scheduler,
+                   const table::ObTTLHRowkeyTaskParam &ttl_para,
+                   table::ObTTLTaskInfo &ttl_info);
+private:
+  virtual int get_scan_range(ObIArray<ObNewRange> &ranges);
+
+private:
+  common::ObArenaAllocator hrowkey_alloc_;
+  ObSEArray<ObString, 4> rowkeys_;
+};
+
 class ObTableTTLDag final: public share::ObIDag
 {
 public:

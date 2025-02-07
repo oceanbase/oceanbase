@@ -82,7 +82,7 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     has_string_out_row_ = index_row_header->has_string_out_row_;
     has_lob_out_row_ = !index_row_header->all_lob_in_row_;
     row_offset_ = idx_row_parser.get_row_offset();
-    is_serialized_agg_row_ = true;
+    is_serialized_agg_row_ = false;
 
     const char *agg_row_buf = nullptr;
     int64_t agg_buf_size = 0;
@@ -99,6 +99,7 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
       STORAGE_LOG(WARN, "Fail to get aggregate", K(ret));
     } else {
       serialized_agg_row_buf_ = agg_row_buf;
+      is_serialized_agg_row_ = true;
     }
   }
   return ret;
@@ -323,8 +324,7 @@ int ObIndexBlockRowBuilder::calc_data_size(
           size += agg_header->length_;
         }
       } else {
-        // agg_writer.get_data_size() is larger than or equal to real serialized size
-        size += agg_writer.get_data_size();
+        size += agg_writer.get_serialize_data_size();
       }
     }
   } else {

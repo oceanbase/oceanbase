@@ -120,7 +120,6 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
                                  ObIAllocator *allocator = nullptr)
 {
   int ret = OB_SUCCESS;
-  int64_t query_timeout = 0;
   int64_t timeout_ts = 0;
   storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
 
@@ -136,23 +135,19 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   } else if (lob_iter_ctx->locator_.is_delta_temp_lob()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: is delta lob", K(ret), K(lob_iter_ctx->locator_));
+  // worker timeout_ts is not guaranteed to be always valid
+  // so take the greater value of both
   } else if (OB_ISNULL(lob_iter_ctx->session_)) {
-    query_timeout = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
-  } else if (OB_FAIL(lob_iter_ctx->session_->get_query_timeout(query_timeout))) {
-    COMMON_LOG(WARN, "Lob: get_query_timeout failed.", K(ret), K(*lob_iter_ctx));
-  }
-
-  if (OB_SUCC(ret)) {
-    timeout_ts = (lob_iter_ctx->session_ == NULL)
-                    ? query_timeout
-                    : (lob_iter_ctx->session_->get_query_start_time() + query_timeout);
+    timeout_ts = OB_MAX(ObTimeUtility::current_time() + 60 * USECS_PER_SEC, THIS_WORKER.get_timeout_ts());
+  } else {
+    timeout_ts = OB_MAX(lob_iter_ctx->session_->get_query_timeout_ts(), THIS_WORKER.get_timeout_ts());
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(lob_mngr->build_lob_param(param, *allocator, cs_type,
                   0, UINT64_MAX, timeout_ts, lob_iter_ctx->locator_))) {
     LOG_WARN("build_lob_param fail", K(ret), K(*lob_iter_ctx));
-  } else if (! param.snapshot_.core_.tx_id_.is_valid()) {
+  } else if (! param.snapshot_.tx_id().is_valid()) {
     // if tx_id is valid, means read may be in a tx
     // lob can not set read_latest flag
     // so reuse lob aux table iterator only if tx_id is invalid
@@ -1113,7 +1108,7 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       ObMemLobExternFlags extern_flags(has_extern);
       res_len += sizeof(ObLobCommon);
       if (has_extern) {
-        buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
+        buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), 0, false);
       } else {
         buff_len_ = res_len; // for mysql mode temp lob, we can mock it as disk inrow lob
       }
@@ -1133,7 +1128,7 @@ int ObTextStringResult::calc_inrow_templob_len(uint32 inrow_data_len, int64_t &t
     bool has_extern = lib::is_oracle_mode();
     ObMemLobExternFlags extern_flags(has_extern);
     inrow_data_len += sizeof(ObLobCommon);
-    templob_len = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, inrow_data_len, false);
+    templob_len = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, inrow_data_len, 0, false);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len));
@@ -1144,7 +1139,7 @@ int ObTextStringResult::calc_inrow_templob_len(uint32 inrow_data_len, int64_t &t
 int64_t ObTextStringResult::calc_inrow_templob_locator_len()
 {
   ObMemLobExternFlags extern_flags(lib::is_oracle_mode());
-  return static_cast<int64_t>(ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, 0, false));
+  return static_cast<int64_t>(ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, 0, 0, false));
 }
 
 int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, char *buf, int64_t buf_len)
@@ -1154,7 +1149,7 @@ int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, 
   if (OB_ISNULL(buf) || (buf_len == 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Lob: try to fill inrow templob header with empty buffer",
-             K(ret), K(inrow_data_len), K(buf), K(buf_len));
+             K(ret), K(inrow_data_len), KP(buf), K(buf_len));
   } else if (inrow_data_len <= OB_MAX_LONGTEXT_LENGTH - MAX_TMP_LOB_HEADER_LEN) {
     ObLobLocatorV2 locator(buf, static_cast<uint32_t>(buf_len), true);
     // temp lob in oracle mode not need extern neither, for it does not have rowkey
@@ -1169,14 +1164,15 @@ int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, 
                              &lob_common,
                              static_cast<uint32_t>(inrow_data_len + sizeof(ObLobCommon)),
                              0,
+                             0,
                              false))) {
-      LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+      LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
     } else if (OB_FAIL((locator.set_payload_data(&lob_common, empty_str)))) {
-      LOG_WARN("Lob: set temp lob locator payload failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+      LOG_WARN("Lob: set temp lob locator payload failed", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
     }
   } else { // oversized
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len), K(buf), K(buf_len));
+    LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len), KP(buf), K(buf_len));
   }
   return ret;
 }
@@ -1205,6 +1201,7 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
                              rowkey_str,
                              &lob_common,
                              static_cast<uint32_t>(res_len + sizeof(ObLobCommon)),
+                             0,
                              0,
                              false))) {
       LOG_WARN("Lob: fill temp lob locator failed", K(type_), K(ret));

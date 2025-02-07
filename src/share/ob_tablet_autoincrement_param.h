@@ -182,7 +182,7 @@ public:
   {
     return memtable::MultiSourceDataUnitType::TABLET_SEQ;
   }
-  int get_autoinc_seq_value(uint64_t &autoinc_seq);
+  int get_autoinc_seq_value(uint64_t &autoinc_seq) const;
   int set_autoinc_seq_value(
     common::ObArenaAllocator &allocator,
     const uint64_t autoinc_seq);

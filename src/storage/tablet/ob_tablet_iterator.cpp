@@ -80,35 +80,6 @@ int ObLSTabletIterator::get_next_tablet(ObTabletHandle &handle)
   return ret;
 }
 
-// only for write_checkpoint
-int ObLSTabletIterator::get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(ls_tablet_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls tablet service is nullptr", K(ret), KP(ls_tablet_service_));
-  } else {
-    key.ls_id_ = ls_tablet_service_->ls_->get_ls_id();
-    do {
-      if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
-        ret = OB_ITER_END;
-      } else {
-        key.tablet_id_ = tablet_ids_.at(idx_);
-
-        if (OB_FAIL(ls_tablet_service_->get_tablet_addr(key, addr))
-            && OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("fail to get tablet address", K(ret), K(idx_), K(key));
-        } else {
-          ++idx_;
-        }
-      }
-    } while (OB_ENTRY_NOT_EXIST == ret);
-  }
-
-  return ret;
-}
-
 int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
@@ -187,7 +158,7 @@ int ObHALSTabletIDIterator::sort_tablet_ids_if_need()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get next tablet id before sort", K(ret), K_(idx));
   } else {
-    std::sort(tablet_ids_.begin(), tablet_ids_.end());
+    lib::ob_sort(tablet_ids_.begin(), tablet_ids_.end());
     LOG_INFO("sort tablet ids if need");
   }
   return ret;
@@ -327,6 +298,46 @@ int ObLSTabletFastIter::get_next_tablet(ObTabletHandle &handle)
   return ret;
 }
 
+ObLSTabletAddrIterator::ObLSTabletAddrIterator()
+  : ls_tablet_service_(nullptr),
+    tablet_ids_(),
+    idx_(0)
+{
+}
+
+ObLSTabletAddrIterator::~ObLSTabletAddrIterator()
+{
+  reset();
+}
+
+// for write_checkpoint in SN and active_tablet_arr in SS
+int ObLSTabletAddrIterator::get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ls_tablet_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls tablet service is nullptr", K(ret), KP(ls_tablet_service_));
+  } else {
+    key.ls_id_ = ls_tablet_service_->ls_->get_ls_id();
+    do {
+      if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
+        ret = OB_ITER_END;
+      } else {
+        key.tablet_id_ = tablet_ids_.at(idx_);
+
+        if (OB_FAIL(ls_tablet_service_->get_tablet_addr(key, addr))
+            && OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get tablet address", K(ret), K(idx_), K(key));
+        } else {
+          ++idx_;
+        }
+      }
+    } while (OB_ENTRY_NOT_EXIST == ret);
+  }
+
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

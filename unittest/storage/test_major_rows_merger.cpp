@@ -30,6 +30,20 @@ using namespace share::schema;
 using namespace blocksstable;
 using namespace compaction;
 using namespace unittest;
+namespace compaction
+{
+int ObBasicTabletMergeCtx::cal_major_merge_param(
+  const bool force_full_merge,
+  ObProgressiveMergeMgr &progressive_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(static_param_.cal_major_merge_param(force_full_merge,
+                                                  progressive_mgr))) {
+    LOG_WARN("failed to calc major param", KR(ret), K_(static_param));
+  }
+  return ret;
+}
+} // namespace compaction
 namespace storage
 {
 namespace mds

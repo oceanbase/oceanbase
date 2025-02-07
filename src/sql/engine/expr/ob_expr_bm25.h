@@ -49,6 +49,7 @@ public:
       ObExpr &rt_expr) const override;
 
   static int eval_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t size);
 public:
   static constexpr int TOKEN_DOC_CNT_PARAM_IDX = 0;
   static constexpr int TOTAL_DOC_CNT_PARAM_IDX = 1;

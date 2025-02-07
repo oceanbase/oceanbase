@@ -39,7 +39,7 @@ class ObMacroBlockWriter;
 class ObStorageObjectHandle final
 {
   // for call set_macro_block_id
-  friend class ObObjectManager; // in ObObjectManager::s2_set_object_id
+  friend class ObObjectManager; // in ObObjectManager::ss_get_object_id
   friend class ObBlockManager; // in ObBlockManager::alloc_object
   friend class storage::ObBloomFilterBuildTask; // in construct_func
   friend class blocksstable::ObMacroBlockWriter; // int ObMacroBlockWriter::alloc_block_from_device

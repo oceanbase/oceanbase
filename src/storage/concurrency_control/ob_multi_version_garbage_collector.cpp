@@ -629,12 +629,12 @@ share::SCN ObMultiVersionGarbageCollector::get_reserved_snapshot_for_active_txn(
   if (!tenant_config->_mvcc_gc_using_min_txn_snapshot) {
     return share::SCN::max_scn();
   } else if (refresh_error_too_long_) {
-    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(1_s)) {
       MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with long not updated", KPC(this));
     }
     return share::SCN::max_scn();
   } else if (gc_is_disabled_) {
-    if (REACH_TENANT_TIME_INTERVAL(1_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(1_s)) {
       MVCC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get reserved snapshot for active txn with gc is disabled", KPC(this));
     }
     return share::SCN::max_scn();

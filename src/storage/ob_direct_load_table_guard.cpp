@@ -242,7 +242,11 @@ void ObDirectLoadTableGuard::async_freeze_()
     STORAGE_LOG(ERROR, "ls should not be null", K(ret), KPC(this));
   } else {
     const bool is_sync = false;
-    (void)ls->tablet_freeze(tablet_id_, is_sync);
+    (void)ls->tablet_freeze(tablet_id_,
+                            is_sync,
+                            0, /*timeout, useless for async one*/
+                            false, /*need_rewrite_meta*/
+                            ObFreezeSourceFlag::DIRECT_INC_FREEZE);
   }
 }
 

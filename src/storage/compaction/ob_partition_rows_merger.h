@@ -184,9 +184,10 @@ public:
   OB_INLINE bool is_iter_end() const { return merge_iters_.empty() || (nullptr != rows_merger_ && rows_merger_->empty() && consume_iter_idxs_.empty()); }
   TO_STRING_KV(K_(is_inited), K_(merge_iters), K_(consume_iter_idxs), KPC(rows_merger_))
 protected:
-  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) = 0;
+  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table) = 0;
 private:
   int init_merge_iters(const ObMergeParameter &merge_param);
+  int init_mv_merge_iters(const ObMergeParameter &merge_param);
   int prepare_rows_merger();
   int build_rows_merger();
 
@@ -210,7 +211,7 @@ public:
   {}
   virtual ~ObPartitionMajorMergeHelper() { reset(); }
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) override;
+  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table) override;
 };
 
 class ObPartitionMinorMergeHelper : public ObPartitionMergeHelper
@@ -226,7 +227,7 @@ public:
       const ObMergeType &merge_type,
       storage::ObTransNodeDMLStat &tnode_stat) const;
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const bool is_base_iter, const bool is_small_sstable, const ObITable *table) override;
+  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table) override;
 };
 
 } //namespace compaction

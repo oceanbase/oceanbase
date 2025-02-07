@@ -293,6 +293,13 @@ int ObHashSetVecOp::convert_vector(const common::ObIArray<ObExpr*> &src_exprs,
           OZ(to->init_vector(eval_ctx_, VEC_UNIFORM, child_brs->size_));
         } else {
           to_vec_header = from_vec_header;
+          if (from->is_nested_expr()) {
+            if (OB_FAIL(to->assign_nested_vector(*from, eval_ctx_))) {
+              LOG_WARN("assign nested vector failed", K(ret));
+            } else if (OB_FAIL(to->nested_cast_to_uniform(child_brs->size_, eval_ctx_, child_brs->skip_))) {
+              LOG_WARN("failed to cast nested expr to uniform", K(ret));
+            }
+          }
         }
         // init eval info
         if (OB_SUCC(ret)) {

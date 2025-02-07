@@ -38,21 +38,25 @@ class ObTableLoadTableCtx : public common::ObDLinkBase<ObTableLoadTableCtx>
 public:
   ObTableLoadTableCtx();
   ~ObTableLoadTableCtx();
-  int init(const ObTableLoadParam &param, const ObTableLoadDDLParam &ddl_param, sql::ObSQLSessionInfo *session_info, sql::ObExecContext *ctx);
+  int init(const ObTableLoadParam &param,
+           const ObTableLoadDDLParam &ddl_param,
+           sql::ObSQLSessionInfo *session_info,
+           const common::ObString &exec_ctx_serialized_str,
+           sql::ObExecContext *exec_ctx = nullptr);
   void stop();
   void destroy();
   bool is_valid() const { return is_inited_; }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
+  void set_is_in_map(bool is_in_map) { is_in_map_ = is_in_map; }
+  bool is_in_map() const { return is_in_map_; }
   bool is_assigned_resource() const { return is_assigned_resource_; }
   void set_assigned_resource() { is_assigned_resource_ = true; }
   void reset_assigned_resource() { is_assigned_resource_ = false; }
   bool is_assigned_memory() const { return is_assigned_memory_; }
   void set_assigned_memory() { is_assigned_memory_ = true; }
   void reset_assigned_memory() { is_assigned_memory_ = false; }
-  bool is_dirty() const { return is_dirty_; }
-  void set_dirty() { is_dirty_ = true; }
   bool is_mark_delete() const { return mark_delete_; }
   void mark_delete() { mark_delete_ = true; }
   bool is_stopped() const;
@@ -60,13 +64,14 @@ public:
                KP_(coordinator_ctx),
                KP_(store_ctx),
                "ref_count", get_ref_count(),
+               K_(is_in_map),
                K_(is_assigned_resource),
                K_(is_assigned_memory),
                K_(mark_delete),
-               K_(is_dirty),
                K_(is_inited));
 public:
   int init_coordinator_ctx(const common::ObIArray<uint64_t> &column_ids,
+                           const common::ObIArray<ObTabletID> &tablet_ids,
                            ObTableLoadExecCtx *exec_ctx);
   int init_store_ctx(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
@@ -79,17 +84,17 @@ public:
 private:
   int register_job_stat();
   void unregister_job_stat();
-  int new_exec_ctx();
+  int new_exec_ctx(const common::ObString &exec_ctx_serialized_str);
 public:
   ObTableLoadParam param_;
   ObTableLoadDDLParam ddl_param_;
-  ObTableLoadSchema schema_;
+  ObTableLoadSchema schema_; // origin table load schema
   ObTableLoadCoordinatorCtx *coordinator_ctx_; // 只在控制节点构造
   ObTableLoadStoreCtx *store_ctx_; // 只在数据节点构造
   sql::ObLoadDataGID gid_;
   sql::ObLoadDataStat *job_stat_;
   sql::ObSQLSessionInfo *session_info_;
-  sql::ObDesExecContext *exec_ctx_;
+  sql::ObExecContext *exec_ctx_;
   sql::ObFreeSessionCtx free_session_ctx_;
 private:
   // 只在初始化的时候使用, 线程不安全
@@ -97,11 +102,12 @@ private:
   ObTableLoadObjectAllocator<ObTableLoadTask> task_allocator_; // 多线程安全
   ObTableLoadObjectAllocator<ObTableLoadTransCtx> trans_ctx_allocator_; // 多线程安全
   int64_t ref_count_ CACHE_ALIGNED;
+  volatile bool is_in_map_;
   bool is_assigned_resource_;
   bool is_assigned_memory_;
   bool mark_delete_;
-  volatile bool is_dirty_;
   bool is_inited_;
+  sql::ObDesExecContext *des_exec_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadTableCtx);
 };
 

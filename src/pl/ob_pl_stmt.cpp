@@ -216,8 +216,9 @@ int ObPLLabelTable::add_label(const common::ObString &name,
 {
   int ret = OB_SUCCESS;
   if (count_ < 0 || count_ >= FUNC_MAX_LABELS) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("Invalid condition count in condition table", K(get_count()), K(FUNC_MAX_LABELS), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "label count greater than 1024");
   } else {
     labels_[count_].label_ = name;
     labels_[count_].type_ = type;
@@ -772,7 +773,10 @@ int ObPLRoutineTable::make_routine_ast(ObIAllocator &allocator,
           CK (OB_NOT_NULL(ret_param->get_type().get_data_type()));
           if (OB_SUCC(ret)
               && ob_is_enum_or_set_type(ret_param->get_type().get_data_type()->get_obj_type())) {
-            OZ (routine_ast->set_ret_type_info(ret_param->get_type().get_type_info()));
+            common::ObIArray<common::ObString>* type_info = NULL;
+            OZ (ret_param->get_type().get_type_info(type_info));
+            CK (OB_NOT_NULL(type_info));
+            OZ (routine_ast->set_ret_type_info(*type_info, &routine_ast->get_enum_set_ctx()));
           }
         }
       }
@@ -786,10 +790,12 @@ int ObPLRoutineTable::make_routine_ast(ObIAllocator &allocator,
           ret = OB_ERR_SP_UNDECLARED_TYPE;
           LOG_WARN("undeclare type", K(ret), KPC(param));
         }
+        common::ObIArray<common::ObString>* type_info = NULL;
+        OZ (param->get_type().get_type_info(type_info));
         OZ (routine_ast->add_argument(param->get_name(),
                                       param->get_type(),
                                       NULL,
-                                      &(param->get_type().get_type_info()),
+                                      type_info,
                                       param->is_in_param(),
                                       param->is_self_param()));
       }
@@ -1457,7 +1463,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     uint64_t &parent_id,
                                     int64_t &var_idx,
                                     const ObString &synonym_name,
-                                    const uint64_t cur_db_id) const
+                                    const uint64_t cur_db_id,
+                                    const pl::ObPLDependencyTable *&dep_table) const
 {
   int ret = OB_SUCCESS;
   uint64_t object_id = OB_INVALID_ID;
@@ -1505,12 +1512,15 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
           }
         }
       } else {
+        OZ (add_dependency_obj(schema::ObSchemaType::UDT_SCHEMA, object_id, DEPENDENCY_TYPE, true, dep_table));
         type = UDT_NS;
       }
     } else {
+      OZ (add_dependency_obj(schema::ObSchemaType::PACKAGE_SCHEMA, object_id, DEPENDENCY_PACKAGE, true, dep_table));
       type = PKG_NS;
     }
   } else {
+    OZ (add_dependency_obj(schema::ObSchemaType::TABLE_SCHEMA, object_id, DEPENDENCY_TABLE, true, dep_table));
     type = TABLE_NS;
   }
   if (OB_FAIL(ret)) {
@@ -1519,6 +1529,32 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   } else {
     var_idx = static_cast<int64_t>(object_id);
     parent_id = object_db_id;
+  }
+  return ret;
+}
+int ObPLExternalNS::add_dependency_obj(const ObSchemaType schema_type,
+                                      const uint64_t schema_id,
+                                      const ObDependencyTableType table_type,
+                                      bool is_db_expilicit,
+                                      const pl::ObPLDependencyTable *&dep_table) const
+{
+  int ret = OB_SUCCESS;
+  int64_t schema_version = OB_INVALID_VERSION;
+  if (OB_INVALID_ID == schema_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema id", K(ret), K(schema_id));
+  } else if (OB_FAIL(resolve_ctx_.schema_guard_.get_schema_version(schema_type,
+                                              resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                              schema_id,
+                                              schema_version))) {
+    LOG_WARN("get schema version failed", K(resolve_ctx_.session_info_.get_effective_tenant_id()),
+                                            K(schema_id), K(ret));
+  } else if (OB_NOT_NULL(dep_table)) {
+    ObSchemaObjVersion ver(schema_id, schema_version, table_type);
+    ver.is_db_explicit_ = is_db_expilicit;
+    if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(*dep_table, ver))) {
+      LOG_WARN("add dependency object failed", K(schema_id), K(ret));
+    }
   }
   return ret;
 }
@@ -1699,11 +1735,13 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         }
         const ObRoutineInfo *routine_info = NULL;
         OZ (schema_guard.get_standalone_procedure_info(tenant_id, db_id, name, routine_info));
-        if (NULL == routine_info) {
+        if (NULL == routine_info && !ObPLResolver::is_unrecoverable_error(ret)) {
           ret = OB_SUCCESS;
           OZ (schema_guard.get_standalone_function_info(tenant_id, db_id, name, routine_info));
         }
-        if (NULL == routine_info) {
+        if (ObPLResolver::is_unrecoverable_error(ret)) {
+          // do nothing
+        } else if (NULL == routine_info) {
           ret = OB_SUCCESS;
           type = ObPLExternalNS::INVALID_VAR;
         } else {
@@ -1733,7 +1771,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             schema_checker, synonym_checker,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
           if (exist) {
-            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id));
+            const ObPLDependencyTable *dep_table = get_dependency_table();
+            OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name, db_id, dep_table));
             if (synonym_checker.has_synonym() && OB_NOT_NULL(get_dependency_table())) {
               OZ (ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
                                                                 &resolve_ctx_.session_info_,
@@ -3591,7 +3630,11 @@ int ObPLBlockNS::expand_data_type_once(const ObUserDefinedType *user_type,
       }
     } else {
       ObDataType ext_type;
-      ext_type.set_obj_type(ObExtendType);
+      ObObjMeta meta;
+      meta.set_type(ObExtendType);
+      meta.set_extend_type(member->get_type());
+      ext_type.set_meta_type(meta);
+      ext_type.set_udt_id(member->get_user_type_id());
       OZ (types.push_back(ext_type), i);
       if (OB_NOT_NULL(not_null_flags)) {
         OZ (not_null_flags->push_back(false));
@@ -3939,7 +3982,11 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
           ObDataType ext_type;
           ObDataType type;
           ObPLIntegerRange range;
-          ext_type.set_obj_type(ObExtendType);
+          ObObjMeta meta;
+          meta.set_type(ObExtendType);
+          meta.set_extend_type(final_type.get_type());
+          ext_type.set_meta_type(meta);
+          ext_type.set_udt_id(final_type.get_user_type_id());
           OZ (data_type_.push_back(ext_type));
           OZ (not_null_flags_.push_back(false));
           OZ (pl_integer_ranges_.push_back(range.range_));
@@ -4241,10 +4288,121 @@ int ObPLStmt::set_label_idx(int64_t idx)
   return ret;
 }
 
+int ObPLFetchStmt::replace_questionmark_variable_type(ObPLFunctionAST &func,
+                                                      ObPLStmtBlock *&current_block,
+                                                      common::ObIAllocator* allocator,
+                                                      int64_t questionmark_idx, // index in symbol table
+                                                      int32_t into_nums,        // into node nums
+                                                      int64_t cur_idx) const
+{
+  int ret = OB_SUCCESS;
+  const ObRecordType *return_type = NULL;
+  const ObUserDefinedType *cursor_user_type = NULL;
+  const ObPLVar *var = NULL;
+  const ObPLVar *cursor_var = NULL;
+  ObPLDataType cursor_type;
+  ObPLDataType question_mark_type;
+  bool need_build_record = false;
+  int64_t cursor_idx = get_index();
+  CK (OB_NOT_NULL(current_block->get_symbol_table()));
+  //get cursor var and cursor type
+  CK (OB_NOT_NULL(cursor_var = current_block->get_symbol_table()->get_symbol(cursor_idx)));
+  OX (cursor_type = cursor_var->get_type());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(current_block->get_namespace().get_user_type(cursor_type.get_user_type_id(),
+                                                            cursor_user_type, allocator))) {
+    LOG_WARN("failed to get user type", K(cursor_type), K(ret));
+  } else if (OB_ISNULL(cursor_user_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get cursor type", K(cursor_type), K(ret));
+  } else if (!cursor_user_type->is_record_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor must return record type", K(*cursor_user_type), K(ret));
+  }
+  CK (OB_NOT_NULL(return_type = static_cast<const ObRecordType*>(cursor_user_type)));
+  OX (need_build_record = return_type->get_record_member_count() > 1 && into_nums == 1);
+
+   // get question mark var
+  CK (OB_NOT_NULL(var = current_block->get_symbol_table()->get_symbol(questionmark_idx)));
+  OX (question_mark_type = var->get_type());
+  if (OB_FAIL(ret) || !question_mark_type.is_obj_type()) {
+  } else if (question_mark_type.get_data_type()->get_obj_type() != ObNullType) {
+    if (question_mark_type.get_data_type()->get_obj_type() != ObExtendType) {
+      ret = OB_ERR_MIX_SINGLE_MULTI;
+      LOG_WARN("PLS-00497: cannot mix between single row and multi-row (BULK) in INTO list",
+                K(ret), K(question_mark_type));
+    } else if (return_type->get_record_member_count() == into_nums || need_build_record) {
+      // orig type must be valid collection
+      const ObUserDefinedType *left_type = NULL;
+      const ObCollectionType *left_coll_type = NULL;
+      bool is_type_match = false;
+      OZ (current_block->get_namespace().get_pl_data_type_by_id(
+          question_mark_type.get_data_type()->get_udt_id(), left_type));
+      CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
+      if (OB_FAIL(ret)) {
+      } else if (return_type->get_record_member_count() == into_nums) {
+        // use original type and will check compatibility later
+        OX (is_type_match = true);
+        OX (const_cast<ObPLVar*>(var)->set_type(*left_coll_type));
+      } else if (need_build_record) {
+      // orig type must be valid type record, otherwise mismatch
+        if (left_coll_type->get_element_type().is_type_record()) {
+          const ObUserDefinedType *into_user_type = NULL;
+          OZ (current_block->get_namespace().get_user_type(
+            left_coll_type->get_element_type().get_user_type_id(), into_user_type));
+          if (OB_SUCC(ret) && OB_NOT_NULL(into_user_type) && into_user_type->is_record_type()) {
+            OX (is_type_match = true);
+            OX (const_cast<ObPLVar*>(var)->set_type(*left_coll_type));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !is_type_match) {
+        ret = OB_ERR_TYPE_MISMATCH_IN_FETCH;
+        LOG_WARN("type not compatible!", K(ret));
+      }
+    } else if (return_type->get_record_member_count() != into_nums) {
+      ret = OB_ERR_WRONG_FETCH_INTO_NUM;
+      LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
+    }
+  } else if (ObNullType == question_mark_type.get_data_type()->get_obj_type()) {
+    // need mock a nested table type
+#ifdef OB_BUILD_ORACLE_PL
+    pl::ObNestedTableType *nested_type = NULL;
+    if (OB_ISNULL(nested_type =
+        reinterpret_cast<pl::ObNestedTableType*>(allocator->alloc(sizeof(pl::ObNestedTableType))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for ObNestedTableType", K(ret));
+    } else if (FALSE_IT(new(nested_type)pl::ObNestedTableType())) {
+    } else if (return_type->get_record_member_count() == into_nums) {
+      // return_nums match into_nums
+      CK (OB_NOT_NULL(return_type->get_record_member_type(cur_idx)));
+      OX (nested_type->set_element_type(*return_type->get_record_member_type(cur_idx)));
+    } else if (need_build_record) {
+      // cursor return type is record
+      OX (nested_type->set_element_type(*return_type));
+    } else if (return_type->get_record_member_count() != into_nums) {
+      ret = OB_ERR_WRONG_FETCH_INTO_NUM;
+      LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
+    }
+    OX (nested_type->set_user_type_id(
+          func.get_user_type_table().generate_user_type_id(OB_PL_MOCK_ANONYMOUS_ID)));
+    OZ (func.get_user_type_table().add_type(nested_type));
+    OZ (func.get_user_type_table().add_external_type(nested_type));
+    OX (const_cast<ObPLVar*>(var)->set_type(*nested_type));
+#endif
+  }
+  return ret;
+}
+
 ObPLCompileUnitAST::~ObPLCompileUnitAST()
 {
   if (NULL != body_) {
     body_->~ObPLStmtBlock();
+  }
+  for (int64_t i = 0; i < continue_handler_desc_bodys_.count(); ++i) {
+    if (NULL != continue_handler_desc_bodys_.at(i)) {
+      continue_handler_desc_bodys_.at(i)->~ObPLStmtBlock();
+    }
   }
 }
 
@@ -4588,7 +4746,8 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(type_info) && OB_FAIL(copy.set_type_info(type_info))) {
+    copy.set_enum_set_ctx(&get_enum_set_ctx());
+    if (OB_NOT_NULL(type_info) && type_info->count() != 0 && OB_FAIL(copy.set_type_info(*type_info))) {
       LOG_WARN("fail to set type info", K(ret));
     } else if (OB_NOT_NULL(expr)
                && OB_FAIL(get_exprs().push_back(const_cast<ObRawExpr*>(expr)))) {

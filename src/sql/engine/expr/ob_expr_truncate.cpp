@@ -133,7 +133,9 @@ int ObExprTruncate::calc_result_type2(ObExprResType &type,
               type.set_precision(PRECISION_UNKNOWN_YET);
               type.set_scale(SCALE_UNKNOWN_YET);
             }
-          } else { /* do nothing */}
+          } else {// result precision set to type1's precision for integer
+            type.set_precision(type1.get_precision());
+          }
         } else if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD ||
             ret == OB_ERR_DATA_TRUNCATED){
           type.set_scale(0);

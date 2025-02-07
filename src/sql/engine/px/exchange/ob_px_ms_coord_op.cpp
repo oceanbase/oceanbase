@@ -136,7 +136,7 @@ int ObPxMSCoordOp::inner_open()
   } else if (OB_FAIL(setup_loop_proc())) {
     LOG_WARN("fail setup loop proc", K(ret));
   } else {
-    if (1 == px_dop_) {
+    if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);
@@ -390,7 +390,7 @@ int ObPxMSCoordOp::inner_get_next_row()
     } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         // if no data, then unblock blocked data channel, if not, dtl maybe hang

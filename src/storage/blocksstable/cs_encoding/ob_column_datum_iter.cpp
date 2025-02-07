@@ -40,7 +40,7 @@ int ObDictDatumIter::get_next(const ObDatum *&datum)
   if (OB_UNLIKELY(iter_ == ht_.end())) {
     ret = OB_ITER_END;
   } else {
-    datum = iter_->header_->datum_;
+    datum = &iter_->datum_;
     iter_++;
   }
 

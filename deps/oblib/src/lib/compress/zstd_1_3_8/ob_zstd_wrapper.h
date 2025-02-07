@@ -51,6 +51,7 @@ public:
 
   // for stream
   static int create_cctx(OB_ZSTD_customMem &ob_zstd_mem, void *&ctx);
+  static void reset_cctx(void *&ctx, int reset_directive);
   static void free_cctx(void *&ctx);
   static int compress_block(void *ctx, const char *src, const size_t src_size,
       char *dest, const size_t dest_capacity, size_t &compressed_size);
@@ -65,6 +66,9 @@ public:
   static void free_stream_dctx(void *&ctx);
   static int decompress_stream(void *ctx, const char *src, const size_t src_size, size_t &consumed_size,
                                   char *dest, const size_t dest_capacity, size_t &decompressed_size);
+  static int compress_stream(void *ctx, const char *src, const size_t src_size, size_t &consumed_size,
+                                  char *dest, const size_t dest_capacity, size_t &compressed_size,
+                                  bool is_file_end, bool &compress_ended);
 };
 
 #undef OB_PUBLIC_API

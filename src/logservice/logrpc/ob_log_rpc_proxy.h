@@ -43,6 +43,9 @@ public:
 #endif
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_S(PR5 log_probe_rs, OB_LOG_PROBE_RS, (logservice::LogProbeRsReq), logservice::LogProbeRsResp);
+#endif
   RPC_S(PR3 get_ls_ckpt, OB_LOG_GET_LS_CKPT,
       (logservice::LogGetCkptReq), logservice::LogGetCkptResp);
   RPC_AP(PR3 sync_base_lsn, OB_LOG_SYNC_BASE_LSN_REQ,

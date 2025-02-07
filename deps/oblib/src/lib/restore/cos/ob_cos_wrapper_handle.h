@@ -35,17 +35,10 @@ public:
   void *alloc(size_t size);
   void free(void *addr);
   void reuse();
+  void reset();
 private:
   ObArenaAllocator allocator_;
 };
-
-// Create a temporary cos_handle object,
-// utilizing the 'allocator' to allocate the necessary memory.
-int create_cos_handle(
-    ObCosMemAllocator &allocator,
-    const qcloud_cos::ObCosAccount &cos_account,
-    const bool check_md5,
-    qcloud_cos::ObCosWrapper::Handle *&handle);
 
 class ObCosWrapperHandle
 {
@@ -55,6 +48,12 @@ public:
 
   int init(const common::ObObjectStorageInfo *storage_info);
   void reset();
+  // Create a temporary cos_handle object,
+  // utilizing the 'allocator' to allocate the necessary memory.
+  int create_cos_handle(
+    ObCosMemAllocator &allocator,
+    const bool check_md5,
+    qcloud_cos::ObCosWrapper::Handle *&handle);
   int create_cos_handle(const bool check_md5);
   void destroy_cos_handle();
   qcloud_cos::ObCosWrapper::Handle *get_ptr() { return handle_; }
@@ -86,6 +85,7 @@ private:
   bool is_inited_;
   qcloud_cos::ObCosWrapper::Handle *handle_;
   qcloud_cos::ObCosAccount cos_account_;
+  ObSTSToken sts_token_;
   ObCosMemAllocator allocator_;
   ObString bucket_name_;
   ObString object_name_;

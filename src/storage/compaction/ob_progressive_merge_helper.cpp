@@ -14,12 +14,16 @@
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
+#include "observer/ob_server_event_history_table_operator.h"
+
 namespace oceanbase
 {
 using namespace blocksstable;
 using namespace common;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_CO_MERGE_REUSE_MICRO);
+
 ObProgressiveMergeMgr::ObProgressiveMergeMgr()
   : progressive_merge_round_(0),
     progressive_merge_num_(0),
@@ -86,18 +90,24 @@ int ObProgressiveMergeMgr::init(
 }
 
 int64_t ObProgressiveMergeMgr::get_result_progressive_merge_step(
-  const ObTabletID &tablet_id,
-  const int64_t column_group_idx) const // parameters are used for print log
+    const ObTabletID &tablet_id,
+    const int64_t column_group_idx) const // parameters are used for print log
 {
   int64_t result_step = MIN(progressive_merge_num_, progressive_merge_step_ + 1);
-  if (data_version_ >= DATA_VERSION_4_3_3_0
-    && finish_cur_round_
-    && result_step < progressive_merge_num_) {
+
+  if (data_version_ >= DATA_VERSION_4_3_3_0 && finish_cur_round_ && result_step < progressive_merge_num_) {
     if (0 == column_group_idx) { // only print once
       FLOG_INFO("finish cur progressive_merge_round", K(tablet_id), K(result_step), K_(progressive_merge_round),
         K_(progressive_merge_step), K_(progressive_merge_num));
     }
-    result_step = progressive_merge_num_;
+    result_step = progressive_merge_num_; // this result will be used to update pregressive merge step on sstable meta
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "progressive_merge_finish",
+                          "tablet_id", tablet_id.id(),
+                          "progressive_merge_round", progressive_merge_round_,
+                          "progressive_merge_step", result_step,
+                          "progressive_merge_num", progressive_merge_num_);
+#endif
   }
   return result_step;
 }
@@ -137,18 +147,19 @@ int ObProgressiveMergeHelper::init(
   } else if (FALSE_IT(reset())) {
   } else if (static_param.is_full_merge_) {
     full_merge_ = check_macro_need_merge_ = true;
+  } else if (merge_param.is_mv_merge()) {
+    STORAGE_LOG(INFO, "mv merge, not init progressive merge", K(ret));
   } else {
     mgr_ = mgr; // init mgr first
     int64_t rewrite_macro_cnt = 0, reduce_macro_cnt = 0, rewrite_block_cnt_for_progressive = 0;
 
-    const int64_t compare_progressive_merge_round = get_compare_progressive_round();
     if (OB_FAIL(collect_macro_info(sstable, merge_param, rewrite_macro_cnt, reduce_macro_cnt, rewrite_block_cnt_for_progressive))) {
       LOG_WARN("Fail to scan secondary meta", K(ret), K(merge_param));
     } else if (need_calc_progressive_merge()) {
       if (rewrite_block_cnt_for_progressive > 0) {
         need_rewrite_block_cnt_ = MAX(rewrite_block_cnt_for_progressive /
             (mgr->get_progressive_merge_num() - mgr->get_progressive_merge_step()), 1L);
-        LOG_INFO("There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
+        FLOG_INFO("There are some macro block need rewrite", "tablet_id", static_param.get_tablet_id(),
             K(rewrite_block_cnt_for_progressive), K(need_rewrite_block_cnt_), KPC(mgr), K(table_idx_));
       } else {
         need_rewrite_block_cnt_ = 0;
@@ -162,7 +173,7 @@ int ObProgressiveMergeHelper::init(
           && sstable.is_normal_cg_sstable() && rewrite_macro_cnt < CG_TABLE_CHECK_REWRITE_CNT_) {
         check_macro_need_merge_ = true;
       }
-      LOG_INFO("finish macro block need merge check", K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
+      FLOG_INFO("finish macro block need merge check", "tablet_id", static_param.get_tablet_id(), K(check_macro_need_merge_), K(rewrite_macro_cnt), K(reduce_macro_cnt), K(table_idx_));
     }
   }
 
@@ -273,15 +284,20 @@ int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro
         rewrite_block_cnt_++;
       }
     }
-    if (block_op.is_none()) {
-      if (!check_macro_need_merge_) {
-      } else if (macro_desc.macro_meta_->val_.data_zsize_ < REWRITE_MACRO_SIZE_THRESHOLD) {
-        // before 432 we need rewrite this macro block
-        if (data_version_ < DATA_VERSION_4_3_2_0) {
-          block_op.set_rewrite();
-        } else {
-          block_op.set_reorg();
-        }
+    if (block_op.is_none() && check_macro_need_merge_) {
+      bool need_set_block_op = macro_desc.macro_meta_->val_.data_zsize_ < REWRITE_MACRO_SIZE_THRESHOLD;
+#ifdef ERRSIM
+      if (OB_UNLIKELY(EN_CO_MERGE_REUSE_MICRO)) {
+        ret = OB_SUCCESS;
+        need_set_block_op = true;
+        FLOG_INFO("ERRSIM EN_CO_MERGE_REUSE_MICRO", KR(ret), K(need_set_block_op));
+      }
+#endif
+      if (!need_set_block_op) {
+      } else if (data_version_ < DATA_VERSION_4_3_2_0) {
+        block_op.set_rewrite();
+      } else {
+        block_op.set_reorg();
       }
     }
   }

@@ -19,21 +19,25 @@ struct ObTabletSchedulePair
 public:
   ObTabletSchedulePair()
     : tablet_id_(),
-      schedule_merge_scn_(0)
+      schedule_merge_scn_(0),
+      co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE)
   { }
   ObTabletSchedulePair(
       const common::ObTabletID &tablet_id,
-      const int64_t schedule_merge_scn)
+      const int64_t schedule_merge_scn,
+      const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type)
     : tablet_id_(tablet_id),
-      schedule_merge_scn_(schedule_merge_scn)
+      schedule_merge_scn_(schedule_merge_scn),
+      co_major_merge_type_(co_major_merge_type)
   { }
   bool is_valid() const { return tablet_id_.is_valid() && schedule_merge_scn_ > 0; }
   bool need_force_freeze() const { return schedule_merge_scn_ > 0; }
-  void reset() { tablet_id_.reset(); schedule_merge_scn_ = 0; }
-  TO_STRING_KV(K_(tablet_id), K_(schedule_merge_scn));
+  void reset() { tablet_id_.reset(); schedule_merge_scn_ = 0; co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE; }
+  TO_STRING_KV(K_(tablet_id), K_(schedule_merge_scn), K_(co_major_merge_type));
 public:
   common::ObTabletID tablet_id_;
   int64_t schedule_merge_scn_;
+  ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
 };
 
 struct ObBatchFreezeTabletsParam : public ObBatchExecParam<ObTabletSchedulePair>
@@ -57,6 +61,9 @@ public:
     : ObBatchExecDag(share::ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS)
   {}
   virtual ~ObBatchFreezeTabletsDag() = default;
+  virtual int inner_init();
+public:
+  static constexpr int64_t MAX_CONCURRENT_FREEZE_TASK_CNT = 2;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchFreezeTabletsDag);
 };

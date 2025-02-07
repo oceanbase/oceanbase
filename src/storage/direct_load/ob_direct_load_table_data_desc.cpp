@@ -29,6 +29,7 @@ ObDirectLoadTableDataDesc::ObDirectLoadTableDataDesc()
     extra_buf_size_(0),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     is_heap_table_(false),
+    is_shared_storage_(false),
     mem_chunk_size_(0),
     max_mem_chunk_count_(0),
     merge_count_per_round_(0),
@@ -52,6 +53,7 @@ void ObDirectLoadTableDataDesc::reset()
   extra_buf_size_ = 0;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   is_heap_table_ = false;
+  is_shared_storage_ = false;
   mem_chunk_size_ = 0;
   max_mem_chunk_count_ = 0;
   merge_count_per_round_ = 0;

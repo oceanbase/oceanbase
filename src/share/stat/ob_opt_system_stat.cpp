@@ -17,6 +17,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "src/storage/blocksstable/ob_object_manager.h"
 #include "src/share/io/ob_io_manager.h"
+#include "observer/ob_server_struct.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -90,7 +91,6 @@ int OptSystemIoBenchmark::run_benchmark(ObIAllocator &allocator, const uint64_t 
   io_info.size_ = load_size;
   io_info.buf_ = nullptr;
   io_info.flag_.set_mode(ObIOMode::READ);
-  io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.flag_.set_sys_module_id(ObIOModule::CALIBRATION_IO);
   io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   io_info.flag_.set_unlimited(true);

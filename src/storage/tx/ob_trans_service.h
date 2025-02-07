@@ -47,6 +47,7 @@
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
 #include "ob_tablet_to_ls_cache.h"
+#include "src/storage/tx_storage/ob_tx_leak_checker.h"
 
 #define MAX_REDO_SYNC_TASK_COUNT 10
 
@@ -195,6 +196,9 @@ public:
   int push(void *task);
   virtual void handle(void *task) override;
 public:
+  ObReadOnlyTxChecker &get_read_tx_checker() { return read_only_checker_; }
+  int64_t get_unique_seq()
+  { return ATOMIC_AAF(&tx_debug_seq_, 1); }
   int check_trans_partition_leader_unsafe(const share::ObLSID &ls_id, bool &is_leader);
   int get_weak_read_snapshot(const uint64_t tenant_id, share::SCN &snapshot_version);
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
@@ -354,6 +358,10 @@ private:
   int64_t rollback_sp_msg_sequence_;
   // for rollback-savepoint msg resp callback to find tx_desc
   share::ObLightHashMap<ObCommonID, ObRollbackSPMsgGuard, ObRollbackSPMsgGuardAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> rollback_sp_msg_mgr_;
+
+  // tenant level atomic inc seq, just for debug
+  int64_t tx_debug_seq_;
+  ObReadOnlyTxChecker read_only_checker_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };

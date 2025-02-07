@@ -39,7 +39,8 @@ public:
      compat_mode_(lib::Worker::CompatMode::INVALID),
      is_create_bind_hidden_tablets_(false),
      tenant_data_version_(0),
-     need_create_empty_majors_() {}
+     need_create_empty_majors_(),
+     has_cs_replica_(false) {}
   virtual ~ObTabletCreatorArg() {}
   bool is_valid() const;
   void reset();
@@ -51,7 +52,9 @@ public:
            const lib::Worker::CompatMode &mode,
            const bool is_create_bind_hidden_tablets,
            const uint64_t tenant_data_version,
-           const ObIArray<bool> &need_create_empty_majors);
+           const ObIArray<bool> &need_create_empty_majors,
+           const ObIArray<int64_t> &create_commit_versions,
+           const bool has_cs_replica);
 
   DECLARE_TO_STRING;
   common::ObArray<common::ObTabletID> tablet_ids_;
@@ -62,6 +65,8 @@ public:
   bool is_create_bind_hidden_tablets_;
   uint64_t tenant_data_version_;
   common::ObArray<bool> need_create_empty_majors_;
+  common::ObArray<int64_t> create_commit_versions_;
+  bool has_cs_replica_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletCreatorArg);
 };
@@ -72,6 +77,7 @@ public:
   ObBatchCreateTabletHelper()
     : batch_arg_(),
       table_schemas_map_(),
+      auto_part_size_arr_(),
       result_(common::OB_NOT_MASTER),
       next_(NULL)
   {}
@@ -89,12 +95,15 @@ public:
   {
     batch_arg_.reset();
     table_schemas_map_.clear();
+    auto_part_size_arr_.reset();
     result_ = common::OB_NOT_MASTER;
   }
   DECLARE_TO_STRING;
   obrpc::ObBatchCreateTabletArg batch_arg_;
   //table_id : index of table_schems_ in arg
   common::hash::ObHashMap<int64_t, int64_t> table_schemas_map_;
+  // if non-empty, auto_part_size_arr_[i] = auto_part_size of batch_arg_.table_schemas_[i]
+  ObArray<int64_t> auto_part_size_arr_;
   //the result of create tablet
   int result_;
   ObBatchCreateTabletHelper *next_;
@@ -125,11 +134,16 @@ const static int64_t BATCH_ARG_SIZE = 1024 * 1024;  // 1M
                   trans_(trans),
                   need_check_tablet_cnt_(false),
                   inited_(false) {}
+
   virtual ~ObTabletCreator();
   int init(const bool need_check_tablet_cnt);
   int execute();
   bool need_retry(int ret);
   int add_create_tablet_arg(const ObTabletCreatorArg &arg);
+  int modify_batch_args(const storage::ObTabletMdsUserDataType &create_type,
+                        const share::SCN &clog_checkpoint_scn,
+                        const share::SCN &mds_checkpoint_scn,
+                        const bool clear_auto_part_size);
   void reset();
 private:
   int find_leader_of_ls(const share::ObLSID &id, ObAddr &addr);

@@ -74,6 +74,26 @@ int ObLocationAdapter::get_leader(const int64_t id, common::ObAddr &leader)
   return ret;
 }
 
+int ObLocationAdapter::get_leader(const uint64_t tenant_id,
+                                  const int64_t id,
+                                  const bool force_renew,
+                                  common::ObAddr &leader)
+{
+  int ret = OB_SUCCESS;
+  int64_t cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
+  ObLSID ls_id(id);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "location adapter is not inited", K(ret));
+  } else if (OB_FAIL(location_service_->get_leader(cluster_id, tenant_id,
+                                                   ls_id, force_renew, leader))) {
+    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      CLOG_LOG(WARN, "location_service get_leader failed", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
+    }
+  }
+  return ret;
+}
+
 int ObLocationAdapter::nonblock_get_leader(int64_t id,
                                            common::ObAddr &leader)
 {
@@ -129,6 +149,13 @@ int ObLocationAdapter::nonblock_renew_leader(const uint64_t tenant_id, int64_t i
     // do nothing
   }
   return ret;
+}
+
+bool ObLocationAdapter::is_location_service_renew_error(const int err) const
+{
+  return err == OB_LS_LOCATION_NOT_EXIST
+      || err == OB_LS_LOCATION_LEADER_NOT_EXIST
+      || err == OB_GET_LOCATION_TIME_OUT;
 }
 }
 }

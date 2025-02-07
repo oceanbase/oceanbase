@@ -59,6 +59,7 @@ public:
 
   inline lib::MemoryContext &get_dbms_entity() { return entity_; }
   inline const lib::MemoryContext get_dbms_entity() const { return entity_; }
+  ObIAllocator &get_area_allocator() { return entity_->get_arena_allocator(); }
   inline common::ObString &get_ps_sql() { return ps_sql_; }
   inline void set_ps_sql(ObString sql) { ps_sql_ = sql; }
   common::ObString &get_sql_stmt() { return sql_stmt_; }
@@ -337,7 +338,7 @@ private:
   static int get_cursor(sql::ObExecContext &exec_ctx,
                         ParamStore &params,
                         ObDbmsCursorInfo *&cursor);
-  static bool check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor);
+  static int check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool &flag);
 
   enum DescribeType {
     DESCRIBE = 0,
@@ -348,7 +349,8 @@ private:
   static int do_describe(sql::ObExecContext &exec_ctx, ParamStore &params, DescribeType type);
   static int do_parse(sql::ObExecContext &exec_ctx,
                       ObDbmsCursorInfo *cursor,
-                      common::ObString &sql_stmt);
+                      common::ObString &sql_stmt,
+                      ObCollationType coll_type);
   static int parse_6p(sql::ObExecContext &exec_ctx,
                    ParamStore &params,
                    common::ObObj &result);

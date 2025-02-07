@@ -1,0 +1,10 @@
+###########################虚拟表列兼容检测白名单###########################
+# 格式：table_name 数据库名.表名 table_id 表ID                             #
+# 正则表达式：^table_name ([^.]+)[.]([^ ]+) table_id ([0-9]+)$           #
+# 样例：table_name oceanbase.__all_virtual_memstore_info table_id 11024 #
+########################################################################
+table_name oceanbase.__all_virtual_tablet_sstable_macro_info table_id 11056
+table_name oceanbase.__all_virtual_memstore_info table_id 11024
+table_name mysql.user table_id 12009
+table_name mysql.db table_id 12010
+table_name mysql.proc table_id 12030

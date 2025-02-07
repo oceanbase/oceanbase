@@ -13,13 +13,14 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_page_cache_controller.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
 {
 namespace tmp_file
 {
 
-int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
+int ObTmpFilePageCacheController::init()
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -37,7 +38,7 @@ int ObTmpFilePageCacheController::init(ObSNTenantTmpFileManager &file_mgr)
     STORAGE_LOG(WARN, "fail to init write buffer pool", KR(ret));
   } else if (OB_FAIL(flush_tg_.init())) {
     STORAGE_LOG(WARN, "fail to init flush thread", KR(ret));
-  } else if (OB_FAIL(swap_tg_.init(file_mgr))) {
+  } else if (OB_FAIL(swap_tg_.init())) {
     STORAGE_LOG(WARN, "fail to init swap thread", KR(ret));
   } else {
     flush_all_data_ = false;
@@ -51,6 +52,8 @@ int ObTmpFilePageCacheController::start()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     STORAGE_LOG(WARN, "tmp file page cache controller is not inited");
+  } else if (OB_FAIL(flush_tg_.start())) {
+    STORAGE_LOG(WARN, "fail to start swap thread", KR(ret));
   } else if (OB_FAIL(swap_tg_.start())) {
     STORAGE_LOG(WARN, "fail to start swap thread", KR(ret));
   }
@@ -65,6 +68,7 @@ void ObTmpFilePageCacheController::stop()
   } else {
     // stop background threads should follow the order 'swap' -> 'flush' because 'swap' holds ref to 'flush'
     swap_tg_.stop();
+    flush_tg_.stop();
   }
 }
 
@@ -75,6 +79,7 @@ void ObTmpFilePageCacheController::wait()
     STORAGE_LOG(WARN, "tmp file page cache controller is not inited");
   } else {
     swap_tg_.wait();
+    flush_tg_.wait();
   }
 }
 
@@ -122,16 +127,40 @@ int ObTmpFilePageCacheController::free_swap_job_(ObTmpFileSwapJob *swap_job)
   return ret;
 }
 
+// refresh tmp file disk usage limit from tenant config with timeout 10ms
+void ObTmpFilePageCacheController::refresh_disk_usage_limit()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tmp file page cache controller is not inited", KR(ret));
+  } else {
+    omt::ObTenantConfigGuard config(TENANT_CONF_TIL(MTL_ID(), ACCESS_TENANT_CONFIG_TIMEOUT_US));
+    if (!config.is_valid()) {
+      // do nothing
+    } else {
+      const int64_t max_disk_usage = config->temporary_file_max_disk_size;
+      int64_t disk_limit = max_disk_usage > 0 ? max_disk_usage : 0;
+      ATOMIC_SET(&disk_usage_limit_, disk_limit);
+    }
+  }
+}
+
 int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size, int64_t timeout_ms)
 {
   int ret = OB_SUCCESS;
 
   int64_t mem_limit = write_buffer_pool_.get_memory_limit();
-  expect_swap_size = min(expect_swap_size, static_cast<int64_t>(0.2 * mem_limit));
+  int64_t min_swap_size =
+      max(ObTmpFileGlobal::PAGE_SIZE, min(expect_swap_size, static_cast<int64_t>(0.2 * mem_limit)));
+  expect_swap_size = upper_align(min_swap_size, ObTmpFileGlobal::PAGE_SIZE);
 
   void *task_buf = nullptr;
   ObTmpFileSwapJob *swap_job = nullptr;
-  if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileSwapJob)))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tmp file page cache controller is not inited", KR(ret));
+  } else if (OB_ISNULL(task_buf = task_allocator_.alloc(sizeof(ObTmpFileSwapJob)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory for swap job", KR(ret));
   } else if (FALSE_IT(swap_job = new (task_buf) ObTmpFileSwapJob())) {
@@ -142,13 +171,14 @@ int ObTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_size,
   } else {
     swap_tg_.notify_doing_swap();
     if (OB_FAIL(swap_job->wait_swap_complete())) {
-      STORAGE_LOG(WARN, "fail to wait for swap job complete timeout", KR(ret));
+      STORAGE_LOG(WARN, "fail to wait for swap job complete", KR(ret));
     }
   }
 
   if (OB_NOT_NULL(swap_job)) {
     if (OB_SUCCESS != swap_job->get_ret_code()) {
       ret = swap_job->get_ret_code();
+      STORAGE_LOG(WARN, "swap job complete with error code", KR(ret));
     }
     // reset swap job to set is_finished to false in case of failure to push into queue:
     // otherwise job is not finished, but it will not be executed, so it will never become finished.

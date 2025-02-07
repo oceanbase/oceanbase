@@ -27,6 +27,7 @@ using namespace share;
 using namespace storage;
 
 ERRSIM_POINT_DEF(CHECK_CAN_REBUILD);
+ERRSIM_POINT_DEF(EN_MANUAL_REBUILD);
 
 ObLSRebuildCtx::ObLSRebuildCtx()
   : ls_id_(),
@@ -429,6 +430,10 @@ void ObRebuildService::run1()
     if (!SERVER_STORAGE_META_SERVICE.is_started()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
+#ifdef ERRSIM
+    } else if (OB_FAIL(errsim_manual_rebuild_())) {
+      LOG_WARN("[ERRSIM] fail to manual rebuild", K(ret));
+#endif
     } else if (OB_FAIL(build_rebuild_ctx_map_())) {
       LOG_WARN("failed to build rebuild ctx map", K(ret));
     } else if (OB_FAIL(build_ls_rebuild_info_())) {
@@ -447,6 +452,7 @@ void ObRebuildService::run1()
       if (OB_SERVER_IS_INIT == ret || fast_sleep_cnt_ > 0) {
         wait_time_ms = WAIT_SERVER_IN_SERVICE_TIME_MS;
       }
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
       fast_sleep_cnt_ = 0;
     }
@@ -740,9 +746,45 @@ int ObRebuildService::check_can_rebuild_(
           "ls_id", ls->get_ls_id(), K(role));
     }
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_SUCCESS != EN_MANUAL_REBUILD) {
+    can_rebuild = true;
+    LOG_INFO("[ERRSIM] force rebuild", K(rebuild_ctx), K(can_rebuild));
+  }
+#endif
   return ret;
 }
 
+#ifdef ERRSIM
+int ObRebuildService::errsim_manual_rebuild_() {
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != EN_MANUAL_REBUILD && GCONF.errsim_rebuild_ls_id != 0) {
+    const int64_t errsim_rebuild_ls_id = GCONF.errsim_rebuild_ls_id;
+    const ObLSID errsim_ls_id(errsim_rebuild_ls_id);
+    const ObString &errsim_rebuild_addr = GCONF.errsim_rebuild_addr.str();
+    common::ObAddr addr;
+    const ObAddr &my_addr = GCONF.self_addr_;
+
+    // trigger follower rebuild
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (!errsim_rebuild_addr.empty() && OB_FAIL(addr.parse_from_string(errsim_rebuild_addr))) {
+      LOG_WARN("failed to parse from string to addr", K(ret), K(errsim_rebuild_addr));
+    } else if (my_addr == addr) {
+      if (OB_FAIL(add_rebuild_ls(errsim_ls_id, rebuild_type))) {
+        LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(errsim_ls_id), K(rebuild_type));
+      } else {
+        LOG_INFO("fake EN_MANUAL_REBUILD", K(errsim_ls_id), K(rebuild_type));
+        SERVER_EVENT_SYNC_ADD("storage_ha", "mannual_rebuild",
+                        "ls_id", errsim_ls_id.id());
+      }
+    } else {
+      LOG_INFO("[ERRSIM] not my addr, won't trigger rebuild", K(my_addr), K(addr));
+    }
+  }
+  return ret;
+}
+#endif
 
 ObLSRebuildMgr::ObLSRebuildMgr()
   : is_inited_(false),
@@ -1079,7 +1121,8 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
-    ObReplicaType replica_type;
+    ObLSReplica ls_replica;
+    ObLSID ls_id;
   #ifdef ERRSIM
       if (OB_SUCC(ret)) {
         ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
@@ -1089,10 +1132,16 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       }
   #endif
     if (OB_FAIL(ret)) {
-    } else if (FALSE_IT(replica_type = ls->is_cs_replica() ? REPLICA_TYPE_COLUMNSTORE : REPLICA_TYPE_FULL)) {
+    } else if (FALSE_IT(ls_id = ls->get_ls_id())) {
+    } else if (OB_ISNULL(GCTX.ob_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ob service should not be NULL", K(ret));
+    } else if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(tenant_id, ls_id, ls_replica))) {
+      LOG_WARN("failed to fill ls replica", K(ret), K(tenant_id), K(ls_id));
     } else {
       DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
+      ObReplicaType replica_type = ls_replica.get_replica_type();
       task_id.init(GCONF.self_addr_);
       ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp,
                                          replica_type);
@@ -1102,10 +1151,11 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;
       arg.dst_ = dst_replica_member;
-      arg.ls_id_ = ls->get_ls_id();
+      arg.ls_id_ = ls_id;
       arg.priority_ = ObMigrationOpPriority::PRIO_MID;
       arg.src_ = src_replica_member;
       arg.type_ = ObMigrationOpType::REBUILD_LS_OP;
+      arg.prioritize_same_zone_src_ = false;
 
       if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(rebuild_ctx_.task_id_, arg))) {
         LOG_WARN("failed to add ls migration task", K(ret), K(arg), KPC(ls));

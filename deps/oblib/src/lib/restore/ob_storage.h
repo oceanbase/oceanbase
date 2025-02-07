@@ -43,7 +43,7 @@ int validate_uri_type(const common::ObString &uri);
 int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
-
+bool is_object_storage_type(const ObStorageType &type);
 
 class ObExternalIOCounter final
 {
@@ -352,6 +352,8 @@ private:
   int read_seal_meta_if_needed(const common::ObString &uri, ObStorageObjectMeta &obj_meta);
 
   int del_appendable_file(const common::ObString &uri);
+
+  int head_object_meta_(const ObString &uri, ObStorageObjectMetaBase &obj_meta);
 
   ObStorageFileUtil file_util_;
   ObStorageOssUtil oss_util_;

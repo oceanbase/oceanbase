@@ -46,8 +46,7 @@ public:
                                          const ObStmtScope &scope,
                                          const bool is_root_condition,
                                          const bool is_need_print,
-                                         const bool is_prepare_protocol,
-                                         const bool is_in_pl,
+                                         const bool is_in_pl_prepare,
                                          const ObSQLSessionInfo *session_info,
                                          const ParamStore *param_store,
                                          const ObStmt *stmt,
@@ -60,6 +59,7 @@ private:
                                        const int64_t column_cnt,
                                        const int64_t row_cnt,
                                        const bool is_question_mark,
+                                       const bool is_prepare_stmt,
                                        const ParamStore *param_store,
                                        ObSQLSessionInfo *session_info,
                                        ObIAllocator *allocator,
@@ -95,6 +95,7 @@ private:
                                       const int64_t row_cnt,
                                       ObSQLSessionInfo *session_info,
                                       ObIAllocator *allocator,
+                                      const bool is_prepare_stage,
                                       ObValuesTableDef &table_def);
 private:
   ObDMLResolver *cur_resolver_;

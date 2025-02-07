@@ -101,19 +101,16 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  share::ObLSID ls_id;
   if (OB_ISNULL(replay_status)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(type_), K(ret), K(replay_status));
   } else if (OB_FAIL(seek_log_iterator(id, base_lsn, iterator_))) {
     CLOG_LOG(WARN, "seek iterator failed", KR(ret), K(type_), K(id), K(base_lsn));
-  } else if (OB_FAIL(iterator_.set_io_context(palf::LogIOContext(MTL_ID(), ls_id.id(), palf::LogIOUser::REPLAY)))) {
+  } else if (OB_FAIL(iterator_.set_io_context(palf::LogIOContext(MTL_ID(), id.id(), palf::LogIOUser::REPLAY)))) {
     CLOG_LOG(WARN, "iterator set_io_context failed", KR(ret), K(id));
   } else if (OB_UNLIKELY(!base_scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "base_scn is invalid", K(type_), K(base_lsn), K(base_scn), KR(ret));
-  } else if (OB_FAIL(replay_status->get_ls_id(ls_id))) {
-    CLOG_LOG(WARN, "get ls_id failed", K(ret), K(type_));
   } else {
     replay_status_ = replay_status;
     next_to_submit_lsn_ = base_lsn;

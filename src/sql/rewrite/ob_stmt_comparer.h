@@ -338,11 +338,9 @@ public:
    * 如果两张表相同且没有partition hint，则相等
    * 如果两张表都是generated_table只比较引用的子查询是否相同
    */
-  static int compare_basic_table_item (const ObDMLStmt *first,
-                                      const TableItem *first_table,
-                                      const ObDMLStmt *second,
-                                      const TableItem *second_table,
-                                      QueryRelation &relation);
+  static int compare_basic_table_item (const TableItem *first_table,
+                                       const TableItem *second_table,
+                                       QueryRelation &relation);
 
   /**
    * @brief compare_joined_table_item

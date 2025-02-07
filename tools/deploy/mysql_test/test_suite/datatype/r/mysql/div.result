@@ -198595,9 +198595,9 @@ Query Plan
 |0 |SCALAR GROUP BY              |                        |1       |6           |
 |1 |└─PX COORDINATOR             |                        |1       |6           |
 |2 |  └─EXCHANGE OUT DISTR       |:EX10000                |1       |6           |
-|3 |    └─MERGE GROUP BY         |                        |1       |6           |
-|4 |      └─PX PARTITION ITERATOR|                        |12      |5           |
-|5 |        └─TABLE FULL SCAN    |table1000_key_pk_parts_2|12      |5           |
+|3 |    └─MERGE GROUP BY         |                        |1       |5           |
+|4 |      └─PX PARTITION ITERATOR|                        |2       |5           |
+|5 |        └─TABLE FULL SCAN    |table1000_key_pk_parts_2|2       |5           |
 =================================================================================
 Outputs & filters:
 -------------------------------------
@@ -198610,7 +198610,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
   4 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       force partition granule
-  5 - output([T_FUN_COUNT(*)]), filter([table1000_key_pk_parts_2.col_double > cast(Floor(cast(-360448000, DECIMAL(20, 0)) / cast(1458241536, DECIMAL(20,
+  5 - output([T_FUN_COUNT(*)]), filter([table1000_key_pk_parts_2.col_double > cast(Floor(cast(-360448000, DECIMAL_INT(44, 28)) / cast(1458241536, DECIMAL_INT(16,
        0))), DOUBLE(-1, -1))]), rowset=16
       access([table1000_key_pk_parts_2.col_double]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 

@@ -17,6 +17,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/scn.h"
 #include "lib/container/ob_array_serialization.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -101,7 +102,7 @@ public:
     return pos;
   }
 private:
-  static const int64_t MAX_TABLET_COUNT = 200;
+  static const int64_t MAX_TABLET_COUNT = share::schema::OB_MAX_TRANSFER_BINDING_TABLET_CNT;
   int64_t count_;
   common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };
@@ -140,9 +141,14 @@ public:
   int get_tablet_id_array(common::ObIArray<ObTabletID> &tablet_id_array);
   bool is_in_compatible_status();
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int check_transfer_tablet_is_same(
+      const common::ObIArray<ObTabletID> &tablet_id_array,
+      bool &is_same);
 
 private:
-  int update_trans_status_(const ObTransferInTransStatus::STATUS &trans_status);
+  int update_trans_status_(
+      const ObTransferInTransStatus::STATUS &trans_status,
+      const bool skip_check_trans_status);
 
 public:
   share::ObLSID src_ls_;

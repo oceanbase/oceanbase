@@ -144,7 +144,7 @@ void ObBalanceFilter::run1()
     for (int64_t i = 0; i < bucket_node_num_; i++) {
       bucket_nodes_[i].cnt = 0;
     }
-    ::usleep(REBALANCE_INTERVAL);
+    ob_usleep(REBALANCE_INTERVAL, true);
   }
 }
 

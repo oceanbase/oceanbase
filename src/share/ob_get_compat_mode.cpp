@@ -194,8 +194,6 @@ int ObCompatModeGetter::get_tenant_compat_mode(const uint64_t tenant_id, lib::Wo
     LOG_WARN("tenant id is invalid", K(ret), K(tenant_id), K(lbt()));
   } else if (OB_SYS_TENANT_ID == tenant_id) {
     mode = lib::Worker::CompatMode::MYSQL;
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    mode = lib::Worker::CompatMode::MYSQL;
   } else if (is_meta_tenant(tenant_id)) {
     mode = lib::Worker::CompatMode::MYSQL;
   } else if (OB_HASH_NOT_EXIST == (ret = id_mode_map_.get_refactored(tenant_id, mode))) {

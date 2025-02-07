@@ -285,7 +285,9 @@ int64_t ElectionPriorityImpl::to_string(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG(ERROR, "can't get closest priority from tuple", KR(ret), K(MTL_ID()), K(*this), K(GET_MIN_CLUSTER_VERSION()));
   } else {
-    databuff_printf(buf, buf_len, pos, "{priority:%s}", common::to_cstring(*functor.get_closest_priority()));
+    databuff_printf(buf, buf_len, pos, "{priority:");
+    databuff_printf(buf, buf_len, pos, *functor.get_closest_priority());
+    databuff_printf(buf, buf_len, pos, "}");
   }
   return pos;
 }

@@ -77,7 +77,7 @@ public:
       memtable_handles_.reset();
     }
 
-    TO_STRING_KV(K(memtable_head_), K(memtable_tail_), K(memtable_handles_));
+    TO_STRING_KV(KP(this), K(memtable_head_), K(memtable_tail_));
   };
 
 

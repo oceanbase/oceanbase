@@ -163,12 +163,37 @@ public:
   int64_t rpc_send_time_;
 };
 
+class ObDBMSSchedPurgeArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDBMSSchedPurgeArg():
+    tenant_id_(OB_INVALID_ID), rpc_send_time_(OB_INVALID_TIMESTAMP) {}
+
+  ObDBMSSchedPurgeArg(uint64_t tenant_id,
+               int64_t rpc_send_time)
+    : tenant_id_(tenant_id), rpc_send_time_(rpc_send_time) {}
+
+  inline bool is_valid() const
+  {
+    return common::is_valid_tenant_id(tenant_id_)
+        && rpc_send_time_ != OB_INVALID_TIMESTAMP;
+  }
+
+  TO_STRING_KV(K_(tenant_id),
+               K_(rpc_send_time));
+
+  uint64_t tenant_id_;
+  int64_t rpc_send_time_;
+};
+
 class ObDBMSSchedJobRpcProxy : public obrpc::ObRpcProxy
 {
 public:
   DEFINE_TO(ObDBMSSchedJobRpcProxy);
   RPC_AP(PR5 run_dbms_sched_job, obrpc::OB_RUN_DBMS_SCHED_JOB, (ObDBMSSchedJobArg), ObDBMSSchedJobResult);
   RPC_S(PR5 stop_dbms_sched_job, obrpc::OB_STOP_DBMS_SCHED_JOB, (ObDBMSSchedStopJobArg));
+  RPC_AP(PR5 purge_run_detail, obrpc::OB_DBMS_SCHED_PURGE, (ObDBMSSchedPurgeArg));
 
 public:
   int run_dbms_sched_job(
@@ -177,6 +202,9 @@ public:
   int stop_dbms_sched_job(
     uint64_t tenant_id, common::ObString &job_name,
     common::ObAddr server_addr, uint64_t session_id);
+  int purge_run_detail(
+    uint64_t tenant_id,
+    common::ObAddr server_addr);
 };
 
 }

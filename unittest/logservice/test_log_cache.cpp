@@ -42,6 +42,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
   static void SetUpTestCase() {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
     EXPECT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
                                                              DEFAULT_BUCKET_NUM,
                                                              DEFAULT_MAX_CACHE_SIZE,
@@ -50,6 +51,9 @@ public:
   }
   static void TearDownTestCase() {
     ObKVGlobalCache::get_instance().destroy();
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
   }
 };
 

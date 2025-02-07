@@ -17,6 +17,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "common/ob_tablet_id.h"
+#include "storage/high_availability/ob_storage_ha_struct.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,7 @@ namespace share
 class SCN;
 class ObLSID;
 struct ObTransferTabletInfo;
+class ObLSRestoreStatus;
 }
 namespace transaction {
 enum class ObTxDataSourceType : int64_t;
@@ -150,6 +152,14 @@ public:
       const int64_t len,
       const share::SCN &scn,
       mds::BufferCtx &ctx);
+  static bool check_can_do_tx_end(
+      const bool is_willing_to_commit,
+      const bool for_replay,
+      const share::SCN &log_scn,
+      const char *buf,
+      const int64_t buf_len,
+      mds::BufferCtx &ctx,
+      const char *&can_not_do_reason);
 private:
   static int on_register_success_(
       const ObTXStartTransferInInfo &tx_start_transfer_in_info,
@@ -241,6 +251,23 @@ private:
       const share::ObLSID &dest_ls_id,
       const share::SCN &scn,
       const bool for_replay);
+  static int do_tx_end_before_commit_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const share::SCN &scn,
+      const bool for_replay,
+      const char *&can_not_do_reason);
+  static int do_tx_end_before_abort_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const char *&can_not_do_reason);
+  static int get_migration_and_restore_status_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      ObMigrationStatus &migration_status,
+      share::ObLSRestoreStatus &ls_restore_status);
+  static int check_can_replay_redo_log_(
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const share::SCN &scn,
+      const ObMigrationStatus &migration_status,
+      const share::ObLSRestoreStatus &ls_restore_status);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);

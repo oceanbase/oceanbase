@@ -74,8 +74,8 @@ TEST_F(TestChunkMgr, NormalChunk)
     }
     EXPECT_EQ(8, slots_[0]->get_pushes());
     EXPECT_EQ(8, slots_[0]->get_pops());
-    EXPECT_EQ(0, slots_[1]->get_pushes());
-    EXPECT_EQ(0, slots_[1]->get_pops());
+    EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+    EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
     EXPECT_EQ(hold, hold_);
     // alloc chunk by wash 4M-cache
     {
@@ -90,8 +90,8 @@ TEST_F(TestChunkMgr, NormalChunk)
       hold -= (large_hold - normal_hold);
       EXPECT_EQ(8, slots_[0]->get_pushes());
       EXPECT_EQ(8, slots_[0]->get_pops());
-      EXPECT_EQ(1, slots_[1]->get_pushes());
-      EXPECT_EQ(1, slots_[1]->get_pops());
+      EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+      EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
       EXPECT_EQ(hold, hold_);
     }
   }
@@ -121,8 +121,8 @@ TEST_F(TestChunkMgr, LargeChunk)
     for (int i = 0; i < 8; ++i) {
       chunks[i] = alloc_chunk(LARGE_SIZE);
     }
-    EXPECT_EQ(8, slots_[1]->get_pushes());
-    EXPECT_EQ(8, slots_[1]->get_pops());
+    EXPECT_EQ(8, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+    EXPECT_EQ(8, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
     EXPECT_EQ(hold, hold_);
 
     // alloc chunk by wash 6M-cache and 2M-cache
@@ -137,8 +137,8 @@ TEST_F(TestChunkMgr, LargeChunk)
       free_chunk(chunk);
       EXPECT_EQ(1, slots_[0]->get_pushes());
       EXPECT_EQ(0, slots_[0]->get_pops());
-      EXPECT_EQ(1, slots_[2]->get_pushes());
-      EXPECT_EQ(0, slots_[2]->get_pops());
+      EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX+1]->get_pushes());
+      EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX+1]->get_pops());
       EXPECT_EQ(hold, hold_);
       set_limit(hold);
       chunk = alloc_chunk(LARGE_SIZE);
@@ -149,8 +149,8 @@ TEST_F(TestChunkMgr, LargeChunk)
       EXPECT_TRUE(NULL != chunk);
       EXPECT_EQ(1, slots_[0]->get_pushes());
       EXPECT_EQ(1, slots_[0]->get_pops());
-      EXPECT_EQ(1, slots_[2]->get_pushes());
-      EXPECT_EQ(1, slots_[2]->get_pops());
+      EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX+1]->get_pushes());
+      EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX+1]->get_pops());
       EXPECT_EQ(hold, hold_);
     }
   }
@@ -177,8 +177,8 @@ TEST_F(TestChunkMgr, HugeChunk)
       }
       EXPECT_EQ(8, slots_[0]->get_pushes());
       EXPECT_EQ(0, slots_[0]->get_pops());
-      EXPECT_EQ(8, slots_[1]->get_pushes());
-      EXPECT_EQ(0, slots_[1]->get_pops());
+      EXPECT_EQ(8, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+      EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
       EXPECT_EQ(hold, hold_);
     }
 
@@ -187,7 +187,7 @@ TEST_F(TestChunkMgr, HugeChunk)
       AChunk *chunk = alloc_chunk(HUGE_SIZE);
       EXPECT_TRUE(NULL != chunk);
       EXPECT_EQ(0, slots_[0]->get_pops());
-      EXPECT_EQ(0, slots_[1]->get_pops());
+      EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
       hold += chunk->hold();
       EXPECT_EQ(hold, hold_);
     }
@@ -198,7 +198,7 @@ TEST_F(TestChunkMgr, HugeChunk)
       AChunk *chunk = alloc_chunk(HUGE_SIZE);
       EXPECT_TRUE(NULL != chunk);
       EXPECT_NE(0, slots_[0]->hold());
-      EXPECT_EQ(0, slots_[1]->hold());
+      EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->hold());
 
       chunk = alloc_chunk(slots_[0]->hold());
       EXPECT_TRUE(NULL != chunk);
@@ -214,14 +214,14 @@ TEST_F(TestChunkMgr, BorderCase_advise_shrink)
   auto *chunk = alloc_chunk(LARGE_SIZE);
   // pollute chunk
   memset(chunk->data_, 0xaa, chunk->hold());
-  EXPECT_EQ(0, slots_[1]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
   int64_t orig_chunk_hold = chunk->hold();
   int64_t orig_hold = hold_;
   free_chunk(chunk);
-  EXPECT_EQ(1, slots_[1]->get_pushes());
-  EXPECT_EQ(0, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   chunk = alloc_chunk(LARGE_SIZE - ps * 3);
-  EXPECT_EQ(1, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   EXPECT_EQ(madvise_len_, ps * 3);
   EXPECT_FALSE(0 == chunk->data_[0] && 0 == memcmp(chunk->data_, chunk->data_ + 1, chunk->hold() - 1));
   EXPECT_EQ(orig_chunk_hold - chunk->hold(), orig_hold - hold_);
@@ -234,14 +234,14 @@ TEST_F(TestChunkMgr, BorderCase_advise_expand)
   auto *chunk = alloc_chunk(LARGE_SIZE);
   // pollute chunk
   memset(chunk->data_, 0xaa, chunk->hold());
-  EXPECT_EQ(0, slots_[1]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
   int64_t orig_chunk_hold = chunk->hold();
   int64_t orig_hold = hold_;
   free_chunk(chunk);
-  EXPECT_EQ(1, slots_[1]->get_pushes());
-  EXPECT_EQ(0, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   chunk = alloc_chunk(LARGE_SIZE + ps * 3);
-  EXPECT_EQ(1, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   EXPECT_FALSE(0 == chunk->data_[0] && 0 == memcmp(chunk->data_, chunk->data_ + 1, chunk->hold() - 1));
   EXPECT_EQ(orig_chunk_hold - (int64_t)chunk->hold(), orig_hold - hold_);
 }
@@ -253,16 +253,16 @@ TEST_F(TestChunkMgr, BorderCase_advise_fail)
   auto *chunk = alloc_chunk(LARGE_SIZE);
   // pollute chunk
   memset(chunk->data_, 0xaa, chunk->hold());
-  EXPECT_EQ(0, slots_[1]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
   int64_t orig_chunk_hold = chunk->hold();
   int64_t orig_hold = hold_;
   free_chunk(chunk);
-  EXPECT_EQ(1, slots_[1]->get_pushes());
-  EXPECT_EQ(0, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   need_fail_ = true;
   chunk = alloc_chunk(LARGE_SIZE - ps * 3);
-  EXPECT_EQ(1, slots_[1]->get_pushes());
-  EXPECT_EQ(1, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   // check remap happened
   EXPECT_TRUE(0 == chunk->data_[0] && 0 == memcmp(chunk->data_, chunk->data_ + 1, chunk->hold() - 1));
   EXPECT_EQ(orig_chunk_hold - (int64_t)chunk->hold(), orig_hold - hold_);
@@ -278,14 +278,14 @@ TEST_F(TestChunkMgr, alloc_co_chunk)
     chunk = alloc_chunk(LARGE_SIZE);
     free_chunk(chunk);
   }
-  EXPECT_EQ(1, slots_[1]->get_pushes());
-  EXPECT_EQ(0, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pushes());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   EXPECT_EQ(1, slots_[0]->get_pushes());
   EXPECT_EQ(0, slots_[0]->get_pops());
   set_limit(hold_);
   auto *chunk = alloc_co_chunk(NORMAL_SIZE);
   EXPECT_TRUE(chunk != NULL);
-  EXPECT_EQ(1, slots_[1]->get_pops());
+  EXPECT_EQ(1, slots_[MIN_LARGE_ACHUNK_INDEX]->get_pops());
   chunk = alloc_co_chunk(NORMAL_SIZE);
   EXPECT_TRUE(chunk != NULL);
   EXPECT_EQ(1, slots_[0]->get_pops());
@@ -333,10 +333,10 @@ TEST_F(TestChunkMgr, sync_wash)
   int64_t hold = get_freelist_hold();
   EXPECT_EQ(hold, hold_);
   EXPECT_EQ(16, slots_[0]->count());
-  EXPECT_EQ(16, slots_[1]->count());
+  EXPECT_EQ(16, slots_[MIN_LARGE_ACHUNK_INDEX]->count());
   int64_t washed_size = sync_wash();
   EXPECT_EQ(hold, washed_size);
   EXPECT_EQ(0, hold_);
   EXPECT_EQ(0, slots_[0]->count());
-  EXPECT_EQ(0, slots_[1]->count());
+  EXPECT_EQ(0, slots_[MIN_LARGE_ACHUNK_INDEX]->count());
 }

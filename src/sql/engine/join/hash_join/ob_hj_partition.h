@@ -89,7 +89,9 @@ public:
   }
 
   inline void close() {
-    return partition_store_->close();
+    if (OB_NOT_NULL(partition_store_)) {
+      partition_store_->close();
+    }
   }
 
   inline int rescan() {

@@ -115,11 +115,11 @@ public:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(begin), K(end), K(connect_str)
     int ret = OB_SUCCESS;
     int64_t pos = 0;
-    if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(begin)))) {
+    if (CLICK_FAIL(databuff_printf(buffer, len, pos, begin))) {
       OB_LOG_(WARN, "databuff_printf begin failed");
     } else if (CLICK_FAIL(join_string_(buffer, len, pos, connect_str, std::forward<T>(strs)...))) {
       OB_LOG_(WARN, "databuff_printf others failed");
-    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(end)))) {
+    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, end))) {
       OB_LOG_(WARN, "databuff_printf end failed");
     }
     return ret;
@@ -137,11 +137,11 @@ public:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(begin), K(end), K(connect_str)
     int ret = OB_SUCCESS;
     int64_t pos = 0;
-    if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(begin)))) {
+    if (CLICK_FAIL(databuff_printf(buffer, len, pos, begin))) {
       OB_LOG_(WARN, "databuff_printf begin failed");
     } else if (CLICK_FAIL(join_string_(buffer, len, pos, connect_str, array))) {
       OB_LOG_(WARN, "databuff_printf others failed");
-    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(end)))) {
+    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, end))) {
       OB_LOG_(WARN, "databuff_printf end failed");
     }
     return ret;
@@ -250,7 +250,16 @@ public:
     int ret = OB_SUCCESS;
     ObSqlString sql;
     int64_t affected_rows = 0;
-    if (CLICK_FAIL(sql.append_fmt("INSERT INTO %s VALUES %s", to_cstring(table), to_cstring(value)))) {
+    ObCStringHelper helper;
+    const char *table_str = helper.convert(table);
+    const char *value_str = helper.convert(value);
+    if (OB_ISNULL(table_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG_(WARN, "failed to convert table name");
+    } else if (OB_ISNULL(value_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG_(WARN, "failed to convert value");
+    } else if (CLICK_FAIL(sql.append_fmt("INSERT INTO %s VALUES %s", table_str, value_str))) {
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
@@ -279,8 +288,19 @@ public:
       OB_LOG_(WARN, "join column failed");
     } else if (CLICK_FAIL(join_string_with_begin_end(value_str, STACK_BUFFER_SIZE, "'", "'", "','", std::forward<T>(value)...))) {
       OB_LOG_(WARN, "join values failed");
-    } else if (CLICK_FAIL(sql.append_fmt("INSERT INTO %s(%s) VALUES (%s)", to_cstring(table), column_str, value_str))) {
-      OB_LOG_(WARN, "format sql failed");
+    } else {
+      ObCStringHelper helper;
+      const char *table_str = helper.convert(table);
+      if (OB_ISNULL(table_str)) {
+        ret = OB_ERR_NULL_VALUE;
+        OB_LOG_(WARN, "convert table name failed");
+      } else {
+        if (CLICK_FAIL(sql.append_fmt("INSERT INTO %s(%s) VALUES (%s)", table_str, column_str, value_str))) {
+          OB_LOG_(WARN, "format sql failed");
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
@@ -302,7 +322,14 @@ public:
     int ret = OB_SUCCESS;
     ObSqlString sql;
     int64_t affected_rows = 0;
-    if (CLICK_FAIL(sql.append_fmt("DELETE FROM %s WHERE %s", to_cstring(table), to_cstring(value)))) {
+    ObCStringHelper helper;
+    const char *table_str = NULL;
+    const char *value_str = NULL;
+    if (CLICK_FAIL(helper.convert(table, table_str))) {
+      OB_LOG_(WARN, "convert cstring failed", K(ret));
+    } else if (CLICK_FAIL(helper.convert(value, value_str))) {
+      OB_LOG_(WARN, "convert cstring failed", K(ret));
+    } else if (CLICK_FAIL(sql.append_fmt("DELETE FROM %s WHERE %s", table_str, value_str))) {
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
@@ -322,7 +349,12 @@ public:
     int ret = OB_SUCCESS;
     ObSqlString sql;
     int64_t affected_rows = 0;
-    if (CLICK_FAIL(sql.append_fmt("ALTER SYSTEM %s", to_cstring(value)))) {
+    ObCStringHelper helper;
+    const char *value_str = helper.convert(value);
+    if (OB_ISNULL(value_str)) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG_(WARN, "convert value failed");
+    } else if (CLICK_FAIL(sql.append_fmt("ALTER SYSTEM %s", value_str))) {
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is nullptr");
@@ -454,7 +486,16 @@ private:
       }
     }
     if (OB_SUCC(ret)) {
-      if (CLICK_FAIL(sql.append_fmt("SELECT %s FROM %s %s", columns_str, to_cstring(table), to_cstring(condition)))) {
+      ObCStringHelper helper;
+      const char *table_str = helper.convert(table);
+      const char *condition_str = helper.convert(condition);
+      if (OB_ISNULL(table_str)) {
+        ret = OB_ERR_NULL_VALUE;
+        OB_LOG_(WARN, "failed to convert table name");
+      } else if (OB_ISNULL(condition_str)) {
+        ret = OB_ERR_NULL_VALUE;
+        OB_LOG_(WARN, "failed to convert condition");
+      } else if (CLICK_FAIL(sql.append_fmt("SELECT %s FROM %s %s", columns_str, table_str, condition_str))) {
         OB_LOG_(WARN, "failed to append sql");
       } else if (CLICK_FAIL(proxy.read(res, tenant_id, sql.ptr()))) {
         OB_LOG_(WARN, "GCTX.sql_proxy_ read failed");
@@ -476,7 +517,7 @@ private:
     TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(connect_str), K(str)
     int ret = OB_SUCCESS;
-    if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(str)))) {
+    if (CLICK_FAIL(databuff_printf(buffer, len, pos, str))) {
       OB_LOG_(WARN, "databuff_printf string failed");
     }
     return ret;
@@ -492,7 +533,7 @@ private:
       if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", array[i]))) {
         OB_LOG(WARN, "print array failed", KR(ret), K(i), K(connect_str));
       } else if (i != N - 1) {
-        if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(connect_str)))) {
+        if (CLICK_FAIL(databuff_printf(buffer, len, pos, connect_str))) {
           OB_LOG(WARN, "print connect str failed", KR(ret), K(i), K(connect_str));
         }
       }
@@ -510,9 +551,9 @@ private:
     TIMEGUARD_INIT(OCCAM, 1_s, 60_s);
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(connect_str), K(str)
     int ret = OB_SUCCESS;
-    if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(str)))) {
+    if (CLICK_FAIL(databuff_printf(buffer, len, pos, str))) {
       OB_LOG_(WARN, "databuff_printf string failed");
-    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(connect_str)))) {
+    } else if (CLICK_FAIL(databuff_printf(buffer, len, pos, connect_str))) {
       OB_LOG_(WARN, "databuff_printf connect_str failed");
     } else if (CLICK_FAIL(join_string_(buffer, len, pos, connect_str, std::forward<Rest>(strs)...))) {
       OB_LOG_(WARN, "databuff_printf rest strs failed");
@@ -531,10 +572,10 @@ private:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(connect_str), K(array), K(i)
     int ret = OB_SUCCESS;
     for (int i = 0; i < array.count() && OB_SUCC(ret); ++i) {
-      if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(array.at(i))))) {
+      if (CLICK_FAIL(databuff_printf(buffer, len, pos, array.at(i)))) {
         OB_LOG_(WARN, "databuff_printf string failed");
       } else if (i != array.count() - 1) {
-        if (CLICK_FAIL(databuff_printf(buffer, len, pos, "%s", to_cstring(connect_str)))) {
+        if (CLICK_FAIL(databuff_printf(buffer, len, pos, connect_str))) {
           OB_LOG_(WARN, "databuff_printf string failed");
         }
       }

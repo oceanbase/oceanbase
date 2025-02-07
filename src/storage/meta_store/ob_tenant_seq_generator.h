@@ -44,9 +44,9 @@ public:
   OB_UNIS_VERSION(1);
 
 public:
-  uint64_t object_seq_;
-  uint64_t tmp_file_seq_;
-  uint64_t write_seq_;
+  uint64_t object_seq_; // meta obj seq
+  uint64_t tmp_file_seq_; // temp file seq
+  uint64_t write_seq_; // rename_obj in ss for atomic over-write
 };
 
 

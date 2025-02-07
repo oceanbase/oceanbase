@@ -238,7 +238,7 @@ bool ObStoreRange::is_single_rowkey() const
 {
   int ret = true;
 
-  if (!start_key_.simple_equal(end_key_)) {
+  if (0 != start_key_.compare(end_key_)) {
     ret = false;
   } else if (!border_flag_.inclusive_start() || !border_flag_.inclusive_end()) {
     ret = false;

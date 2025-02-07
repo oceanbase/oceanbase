@@ -584,7 +584,7 @@ int ObCachedGeoPolygon::check_valid(ObGeoEvalCtx& gis_context)
   int ret = OB_SUCCESS;
   if (!check_valid_) {
     bool invalid_for_cache = false;
-    if (OB_FAIL(ObGeoTypeUtil::polygon_check_self_intersections(*(gis_context.get_allocator()), *origin_geo_, srs_, invalid_for_cache))) {
+    if (OB_FAIL(ObGeoTypeUtil::polygon_check_self_intersections(gis_context.get_mem_ctx(), *origin_geo_, srs_, invalid_for_cache))) {
       LOG_WARN("cached polygon fail to check valid", K(ret));
     } else {
       check_valid_ = true;

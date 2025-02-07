@@ -154,7 +154,8 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_str));
         } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
-            j_in_type, j_base))) {
+                                                            j_in_type, j_base, 0,
+                                                            ObJsonExprHelper::get_json_max_depth_config()))) {
           LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
           if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
             ret = OB_ERR_INVALID_JSON_TEXT;
@@ -162,6 +163,11 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
           }
         } else {
           ObJsonNodeType j_type = j_base->json_type();
+          if (j_type == ObJsonNodeType::J_MYSQL_DATE){
+            j_type = ObJsonNodeType::J_DATE;
+          } else if (j_type == ObJsonNodeType::J_MYSQL_DATETIME){
+            j_type = ObJsonNodeType::J_DATETIME;
+          }
           type_idx = static_cast<uint32_t>(j_type);
           if (j_type == ObJsonNodeType::J_OPAQUE) {
             type_idx = opaque_index(j_base->field_type());
@@ -199,8 +205,11 @@ int ObExprJsonType::eval_json_type(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     uint32_t type_idx = 0;
     bool is_null = false;
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-    if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, type_idx, is_null))) {
+    uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+    MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+    if (OB_FAIL(tmp_allocator.add_baseline_size(datum, arg->obj_meta_.has_lob_header()))) {
+      LOG_WARN("failed to add baseline size.", K(ret));
+    } else if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, type_idx, is_null))) {
       LOG_WARN("fail to calc json type result", K(ret), K(arg->datum_meta_));
     } else if (is_null) {
       res.set_null();

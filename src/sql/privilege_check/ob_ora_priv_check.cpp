@@ -1664,7 +1664,8 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
     const uint64_t obj_id,
     const uint64_t col_id,
     const uint64_t obj_type,
-    const uint64_t obj_owner_id)
+    const uint64_t obj_owner_id,
+    const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
   UNUSED(database_name);
@@ -1676,6 +1677,7 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
       if (!is_owner) {
       /* 2. check sys priv */
         ObRawPrivArray priv_list;
+        ObRawObjPrivArray obj_p_list;
         if (!is_ora_sys_view_table(obj_id)) {
           OZ (priv_list.push_back(PRIV_ID_SELECT_ANY_TABLE));
           OZ (priv_list.push_back(PRIV_ID_INSERT_ANY_TABLE));
@@ -1695,7 +1697,6 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
         if (ret == OB_ERR_NO_PRIVILEGE) {
           /* 3. check obj priv */
           ret = OB_SUCCESS;
-          ObRawObjPrivArray obj_p_list;
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_SELECT));
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_INSERT));
           OZ (obj_p_list.push_back(OBJ_PRIV_ID_UPDATE));
@@ -1710,9 +1711,26 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
                                            obj_id, col_id, obj_p_list),
                 tenant_id, user_id, obj_type, obj_id, col_id, obj_p_list);  
         }
-        /* 调整错误码 to table or view not exists */
+        /* 4. check role priv for a proper error code */
+        /* if user can access object via a role, return OB_ERR_NO_PRIVILEGE, else OB_TABLE_NOT_EXIST */
         if (ret == OB_ERR_EMPTY_QUERY) {
-          ret = OB_TABLE_NOT_EXIST;
+          ret = OB_SUCCESS;
+          OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, priv_list, role_id_array),
+                OB_ERR_NO_PRIVILEGE);
+          if (OB_SUCC(ret)) {
+            ret = OB_ERR_NO_PRIVILEGE;
+          } else if (ret == OB_ERR_NO_PRIVILEGE) {
+            ret = OB_SUCCESS;
+            OZX1 (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type, obj_id, col_id,
+                                              obj_p_list, role_id_array), OB_ERR_NO_PRIVILEGE);
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_NO_PRIVILEGE;
+            } else if (ret == OB_ERR_NO_PRIVILEGE) {
+              /* 调整错误码 to table or view not exists */
+              ret = OB_TABLE_NOT_EXIST;
+            }
+          } else {
+          }
         }
       }
     } else if (obj_type == static_cast<uint64_t>(ObObjectType::SEQUENCE)) {
@@ -2029,7 +2047,8 @@ int ObOraSysChecker::check_ora_obj_priv(
                                             obj_id, 
                                             col_id,
                                             obj_type,
-                                            obj_owner_id));
+                                            obj_owner_id,
+                                            role_id_array));
     } else {
       bool is_owner = is_owner_user(user_id, obj_owner_id);
       

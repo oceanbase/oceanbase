@@ -65,7 +65,7 @@ int SortedLogEntryInfo::push_fetched_log_entry_node(LogEntryNode *log_entry_node
   if (OB_ISNULL(log_entry_node) || OB_UNLIKELY(!log_entry_node->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid log_entry_node pushed to fetche", KR(ret), KPC(log_entry_node));
-  } else if (OB_FAIL(fetched_log_entry_arr_.push(log_entry_node))) {
+  } else if (OB_FAIL(fetched_log_entry_arr_.push(*log_entry_node))) {
     LOG_ERROR("push log_entry_node into fetched_log_entry_arr failed", KR(ret), KPC(log_entry_node));
   } else {
     last_fetched_redo_log_entry_ = log_entry_node;
@@ -270,56 +270,16 @@ int SortedRedoLogList::push(const bool is_data_in_memory,
   if (OB_ISNULL(node) || OB_UNLIKELY(! node->is_valid(is_data_in_memory))) {
     OBLOG_LOG(ERROR, "invalid argument", K(node));
     ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == head_) {
-    head_ = node;
-    node->set_next(NULL);
-    tail_ = node;
-    node_num_ = 1;
-    if (is_data_in_memory) {
-      ready_node_num_ = 1;
-    }
-    log_num_ = node->get_log_num();
-  } else { // NULL != head_
-    if (OB_ISNULL(tail_)) {
-      OBLOG_LOG(ERROR, "tail node is NULL, but head node is not NULL", K(head_), K(tail_));
-      ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(redo_node_list_.push(*node))) {
+    if (OB_ENTRY_EXIST == ret) {
+      LOG_WARN("duplicate redo node", KR(ret), KPC(node));
     } else {
-      // quick-path
-      if (tail_->before(*node)) {
-        tail_->set_next(node);
-        tail_ = node;
-        node->set_next(NULL);
-      } else {
-        // Iterate through all nodes to find the first redo node that is greater than or equal to the target node
-        RedoLogMetaNode **next_ptr = &head_;
-        while ((*next_ptr)->before(*node)) {
-          next_ptr = &((*next_ptr)->get_next_ptr());
-        }
-
-        // If the node value is duplicated, export error OB_ENTRY_EXIST
-        // NOTE: if one redo contains multi log_entry(in LOB case), which means start_lsn != log_lsn, should modify code below
-        if ((*next_ptr)->get_start_log_lsn() == node->get_start_log_lsn()) {
-          OBLOG_LOG(INFO, "redo log is pushed twice", KPC(node), KPC(*next_ptr), KPC(this));
-          ret = OB_ENTRY_EXIST;
-        } else {
-          node->set_next((*next_ptr));
-          *next_ptr = node;
-        }
-      }
-
-      if (OB_SUCCESS == ret) {
-        log_num_ += node->get_log_num();
-        ATOMIC_INC(&node_num_);
-
-        if (is_data_in_memory) {
-          ATOMIC_INC(&ready_node_num_);
-        }
-      }
+      LOG_ERROR("push redo node failed", KR(ret), KPC(node));
     }
-  }
-
-  if (OB_SUCCESS == ret) {
-    last_push_node_ = node;
+  } else {
+    if (is_data_in_memory) {
+      inc_ready_node_num();
+    }
   }
 
   return ret;
@@ -327,8 +287,8 @@ int SortedRedoLogList::push(const bool is_data_in_memory,
 
 void SortedRedoLogList::init_iterator()
 {
-  cur_dispatch_redo_ = head_;
-  cur_sort_redo_ = head_;
+  cur_dispatch_redo_ = redo_node_list_.begin();
+  cur_sort_redo_ = redo_node_list_.begin();
   cur_sort_stmt_ = NULL; // row not format and stmt should be null
   sorted_progress_.reset();
 }
@@ -337,7 +297,7 @@ int SortedRedoLogList::next_dml_redo(RedoLogMetaNode *&dml_redo_meta, bool &is_l
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(cur_dispatch_redo_)) {
+  if (OB_UNLIKELY(!cur_dispatch_redo_.is_valid())) {
     if (is_dispatch_finish()) {
       ret = OB_EMPTY_RESULT;
     } else {
@@ -345,9 +305,8 @@ int SortedRedoLogList::next_dml_redo(RedoLogMetaNode *&dml_redo_meta, bool &is_l
       LOG_ERROR("can't get redo to dispatch but part_trans not dispatch finished", KR(ret), KPC(this));
     }
   } else {
-    RedoLogMetaNode *next_redo = cur_dispatch_redo_->get_next();
-    dml_redo_meta = cur_dispatch_redo_;
-    cur_dispatch_redo_ = next_redo;
+    dml_redo_meta = &(*cur_dispatch_redo_);
+    cur_dispatch_redo_++;
     // Theoretically no concurrent call of this function
     sorted_progress_.inc_dispatched_redo_count();
     is_last_redo = is_dispatch_finish();
@@ -363,7 +322,7 @@ int SortedRedoLogList::next_dml_stmt(ObLink *&dml_stmt_task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(cur_sort_redo_)) {
+  if (OB_UNLIKELY(!cur_sort_redo_.is_valid())) {
     if (OB_ISNULL(cur_sort_stmt_)) {
       ret = OB_ITER_END;
     } else {
@@ -374,12 +333,12 @@ int SortedRedoLogList::next_dml_stmt(ObLink *&dml_stmt_task)
     bool found = false;
 
     while(OB_SUCC(ret) && !found) {
-      if (OB_ISNULL(cur_sort_redo_)) {
+      if (OB_UNLIKELY(!cur_sort_redo_.is_valid())) {
         ret = OB_ITER_END;
       } else if (OB_ISNULL(cur_sort_stmt_)) {
         // set cur_sort_stmt_ to the first stmt of cur_sort_redo
         DmlRedoLogNode *dml_redo_node = NULL;
-        if (OB_ISNULL(dml_redo_node = static_cast<DmlRedoLogNode*>(cur_sort_redo_))) {
+        if (OB_ISNULL(dml_redo_node = static_cast<DmlRedoLogNode*>(&(*cur_sort_redo_)))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("cast RedoLogMetaNode to DmlRedoLogNode fail", KR(ret), K_(cur_sort_redo), KP(this), KPC(this));
         } else if (!dml_redo_node->is_formatted()) {
@@ -400,11 +359,11 @@ int SortedRedoLogList::next_dml_stmt(ObLink *&dml_stmt_task)
           // switch redo node:
           // 1. found dml_stmt_task and it is the last stmt of cur_sort_redo
           // 2. cur_sort_redo doesn't has any row
-          cur_sort_redo_ = cur_sort_redo_->get_next();
+          cur_sort_redo_++;
           sorted_progress_.inc_sorted_redo_count();
         }
       }
-    }
+    } // end while
   }
 
   if (OB_ITER_END == ret) {

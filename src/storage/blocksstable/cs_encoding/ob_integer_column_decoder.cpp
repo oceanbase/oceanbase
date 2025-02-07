@@ -242,21 +242,23 @@ int ObIntegerColumnDecoder::comparison_operator(
     } else {
       ObDatumCmpFuncType type_cmp_func = filter.cmp_func_;
       ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
-      ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval =
-      [&] (const ObDatum &cur_datum, const int64_t idx)
-      {
-	      int tmp_ret = OB_SUCCESS;
-        int cmp_ret = 0;
-        if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), cmp_ret))) {
-          LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
-        } else if (get_cmp_ret(cmp_ret)) {
-          if (OB_TMP_FAIL(result_bitmap.set(idx))) {
-            LOG_WARN("fail to set result bitmap", KR(ret), K(idx));
+      ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval;
+      if (OB_FAIL(eval.assign(
+        [&] (const ObDatum &cur_datum, const int64_t idx)
+        {
+          int tmp_ret = OB_SUCCESS;
+          int cmp_ret = 0;
+          if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), cmp_ret))) {
+            LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
+          } else if (get_cmp_ret(cmp_ret)) {
+            if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+              LOG_WARN("fail to set result bitmap", KR(ret), K(idx));
+            }
           }
-        }
-        return tmp_ret;
-      };
-      if (OB_FAIL(tranverse_datum_all_op(ctx, pd_filter_info, result_bitmap, eval))) {
+          return tmp_ret;
+        }))) {
+        LOG_WARN("assign function failed", K(ret));
+      } else if (OB_FAIL(tranverse_datum_all_op(ctx, pd_filter_info, result_bitmap, eval))) {
         LOG_WARN("fail to traverse_datum in cmp_op", KR(ret), K(ctx));
       }
     }
@@ -391,26 +393,28 @@ int ObIntegerColumnDecoder::between_operator(
       ObDatumCmpFuncType type_cmp_func = filter.cmp_func_;
       ObGetFilterCmpRetFunc get_le_cmp_ret = get_filter_cmp_ret_func(sql::WHITE_OP_LE);
       ObGetFilterCmpRetFunc get_ge_cmp_ret = get_filter_cmp_ret_func(sql::WHITE_OP_GE);
-      ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval =
-      [&] (const ObDatum &cur_datum, const int64_t idx)
-      {
-	      int tmp_ret = OB_SUCCESS;
-        int ge_ret = 0;
-        int le_ret = 0;
-        if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), ge_ret))) {
-          LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
-        } else if (!get_ge_cmp_ret(ge_ret)) {
-          // skip
-        } else if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(1), le_ret))) {
-          LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
-        } else if (!get_le_cmp_ret(le_ret)) {
-          // skip
-        } else if (OB_TMP_FAIL(result_bitmap.set(idx))) {
-          LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
-        }
-        return tmp_ret;
-      };
-      if (OB_FAIL(tranverse_datum_all_op(ctx, pd_filter_info, result_bitmap, eval))) {
+      ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval;
+      if (OB_FAIL(eval.assign(
+        [&] (const ObDatum &cur_datum, const int64_t idx)
+        {
+          int tmp_ret = OB_SUCCESS;
+          int ge_ret = 0;
+          int le_ret = 0;
+          if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(0), ge_ret))) {
+            LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
+          } else if (!get_ge_cmp_ret(ge_ret)) {
+            // skip
+          } else if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(1), le_ret))) {
+            LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
+          } else if (!get_le_cmp_ret(le_ret)) {
+            // skip
+          } else if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+            LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
+          }
+          return tmp_ret;
+        }))) {
+        LOG_WARN("assign function failed", K(ret));
+      } else if (OB_FAIL(tranverse_datum_all_op(ctx, pd_filter_info, result_bitmap, eval))) {
         LOG_WARN("fail to tranverse datum in bt_op", KR(ret), K(ctx));
       }
     }
@@ -526,33 +530,39 @@ int ObIntegerColumnDecoder::in_operator(
       storage::ObFilterInCmpType cmp_type = storage::get_filter_in_cmp_type(pd_filter_info.count_, filter.get_datums().count(), false);
       ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> eval;
       if (cmp_type == storage::ObFilterInCmpType::BINARY_SEARCH) {
-        eval = [&] (const ObDatum &cur_datum, const int64_t idx)
-        {
-          int tmp_ret = OB_SUCCESS;
-          bool is_exist = false;
-          if (OB_TMP_FAIL(filter.exist_in_datum_array(cur_datum, is_exist))) {
-            LOG_WARN("fail to check datum in array", KR(tmp_ret), K(cur_datum));
-          } else if (is_exist) {
-            if (OB_TMP_FAIL(result_bitmap.set(idx))) {
-              LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
+        if (OB_FAIL(eval.assign(
+          [&] (const ObDatum &cur_datum, const int64_t idx)
+          {
+            int tmp_ret = OB_SUCCESS;
+            bool is_exist = false;
+            if (OB_TMP_FAIL(filter.exist_in_datum_array(cur_datum, is_exist))) {
+              LOG_WARN("fail to check datum in array", KR(tmp_ret), K(cur_datum));
+            } else if (is_exist) {
+              if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+                LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
+              }
             }
-          }
-          return tmp_ret;
-        };
+            return tmp_ret;
+          }))) {
+          LOG_WARN("assign function failed", K(ret));
+        }
       } else if (cmp_type == storage::ObFilterInCmpType::HASH_SEARCH) {
-        eval = [&] (const ObDatum &cur_datum, const int64_t idx)
-        {
-          int tmp_ret = OB_SUCCESS;
-          bool is_exist = false;
-          if (OB_TMP_FAIL(filter.exist_in_set(cur_datum, is_exist))) {
-            LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
-          } else if (is_exist) {
-            if (OB_TMP_FAIL(result_bitmap.set(idx))) {
-              LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
+        if (OB_FAIL(eval.assign(
+          [&] (const ObDatum &cur_datum, const int64_t idx)
+          {
+            int tmp_ret = OB_SUCCESS;
+            bool is_exist = false;
+            if (OB_TMP_FAIL(filter.exist_in_set(cur_datum, is_exist))) {
+              LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
+            } else if (is_exist) {
+              if (OB_TMP_FAIL(result_bitmap.set(idx))) {
+                LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
+              }
             }
-          }
-          return tmp_ret;
-        };
+            return tmp_ret;
+          }))) {
+          LOG_WARN("assign function failed", K(ret));
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected filter in compare type", KR(ret), K(cmp_type));

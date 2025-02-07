@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_array_iterator.h"
+#include "lib/hash/ob_hashset.h"
 #include "lib/udt/ob_collection_type.h"
 #include "lib/string/ob_string_buffer.h"
 #include "lib/wide_integer/ob_wide_integer_str_funcs.h"
@@ -24,7 +25,6 @@
 #include "lib/utility/ob_fast_convert.h"
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 #include "src/share/datum/ob_datum.h"
-
 
 namespace oceanbase {
 namespace common {
@@ -42,6 +42,11 @@ struct ObArrayAttr {
   const char *ptr_;
   uint32_t length_;
 };
+
+OB_INLINE bool ob_is_array_supported_type(ObObjType type)
+{
+  return ObUNumberType >= type  || ObVarcharType == type || ObDecimalIntType == type;
+}
 
 template<typename T>
 class ObArrayData {
@@ -77,6 +82,9 @@ class ObIArrayType {
 public:
   virtual int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0) const = 0;
+  virtual int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+                    uint32_t begin = 0, uint32_t print_size = 0,
+                    ObString delimiter = ObString(","), bool has_null_str = true, ObString null_str = ObString("NULL")) const = 0;
   virtual int32_t get_raw_binary_len() = 0;
   virtual int get_raw_binary(char *res_buf, int64_t buf_len) = 0;
   // without length_
@@ -88,6 +96,7 @@ public:
   virtual void set_scale(ObScale scale) = 0;  // only for decimalint array
   virtual ArrayFormat get_format() const = 0;
   virtual uint32_t size() const = 0;
+  virtual uint32_t cardinality() const = 0;
   virtual int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const = 0;
   virtual bool is_null(uint32_t idx) const = 0; // check if the idx-th element is null or not, idx validity is guaranteed by caller
   virtual int push_null() = 0;
@@ -98,15 +107,21 @@ public:
   virtual uint32_t *get_offsets() const = 0;
   virtual uint8_t *get_nullbitmap() const = 0;
   virtual void set_element_type(int32_t type) = 0;
-  virtual int at(uint32_t idx, ObIArrayType &dest) = 0;
+  virtual int at(uint32_t idx, ObIArrayType &dest) const = 0;
   virtual void clear() = 0;
   virtual int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx) = 0;
   virtual int set_null_bitmaps(uint8_t *nulls, int64_t length) = 0;
   virtual int set_offsets(uint32_t *offsets, int64_t length) = 0;
-  virtual int compare(const ObIArrayType &right, int &cmp_ret) = 0;
+  virtual int compare(const ObIArrayType &right, int &cmp_ret) const = 0;
   virtual int compare_at(uint32_t left_begin, uint32_t left_len,
                          uint32_t right_begin, uint32_t right_len,
-                         const ObIArrayType &right, int &cmp_ret) = 0;
+                         const ObIArrayType &right, int &cmp_ret) const = 0;
+  virtual int contains_all(const ObIArrayType &other, bool &bret) const = 0;
+  virtual int overlaps(const ObIArrayType &other, bool &bret) const = 0;
+  virtual int hash(uint64_t &hash_val) const = 0;
+  virtual bool operator ==(const ObIArrayType &other) const = 0;
+  virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const = 0;
+  virtual int distinct(ObIAllocator &alloc, ObIArrayType *&output) const = 0;
 };
 
 template<typename T>
@@ -144,9 +159,12 @@ public :
     } else {
       int64_t curr_pos = data_container_->null_bitmaps_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->null_bitmaps_.prepare_allocate(capacity);
-      uint8_t *cur_null_bitmap = data_container_->null_bitmaps_.get_data() + curr_pos;
-      MEMCPY(cur_null_bitmap, nulls, length * sizeof(uint8_t));
+      if (OB_FAIL(data_container_->null_bitmaps_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        uint8_t *cur_null_bitmap = data_container_->null_bitmaps_.get_data() + curr_pos;
+        MEMCPY(cur_null_bitmap, nulls, length * sizeof(uint8_t));
+      }
     }
     return ret;
   }
@@ -159,9 +177,12 @@ public :
     } else {
       int64_t curr_pos = data_container_->offsets_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->offsets_.prepare_allocate(capacity);
-      char *cur_offsets =  reinterpret_cast<char *>(data_container_->offsets_.get_data() + curr_pos * sizeof(uint32_t));
-      MEMCPY(cur_offsets, offsets, length * sizeof(uint32_t));
+      if (OB_FAIL(data_container_->offsets_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        char *cur_offsets =  reinterpret_cast<char *>(data_container_->offsets_.get_data() + curr_pos * sizeof(uint32_t));
+        MEMCPY(cur_offsets, offsets, length * sizeof(uint32_t));
+      }
     }
     return ret;
   }
@@ -174,10 +195,24 @@ public :
     } else {
       int64_t curr_pos = data_container_->raw_data_.size();
       int64_t capacity = curr_pos + length;
-      data_container_->raw_data_.prepare_allocate(capacity);
-      data = reinterpret_cast<T *>(data_container_->raw_data_.get_data() + curr_pos);
+      if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        data = reinterpret_cast<T *>(data_container_->raw_data_.get_data() + curr_pos);
+      }
     }
     return ret;
+  }
+
+  bool operator ==(const ObIArrayType &other) const
+  {
+    bool b_ret = false;
+    int ret = OB_SUCCESS;
+    int cmp_ret = 0;
+    if (OB_SUCC(compare(other, cmp_ret))) {
+      b_ret = (cmp_ret == 0);
+    }
+    return b_ret;
   }
 
 protected :
@@ -198,6 +233,7 @@ public :
   inline int16_t get_scale() { return scale_; }
   void set_scale(ObScale scale) { scale_ = scale; }  // only for decimalint array
   T operator[](const int64_t i) const { return data_[i]; }
+  uint32_t cardinality() const { return this->length_; }
   ObDecimalInt *get_decimal_int(const int64_t i) { return (ObDecimalInt *)(data_ + i); }
   ArrayFormat get_format() const { return ArrayFormat::Fixed_Size; }
   uint32_t *get_offsets() const { return nullptr; }
@@ -259,27 +295,45 @@ public :
             uint32_t begin = 0, uint32_t print_size = 0) const
   {
     int ret = OB_SUCCESS;
+    if (OB_FAIL(format_str.append("["))) {
+      OB_LOG(WARN, "fail to append [", K(ret));
+    } else if (OB_FAIL(print_element(elem_type, format_str, begin, print_size))) {
+      OB_LOG(WARN, "fail to print element", K(ret));
+    } else if (OB_FAIL(format_str.append("]"))) {
+      OB_LOG(WARN, "fail to append ]", K(ret));
+    }
+    return ret;
+  }
+  int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+                    uint32_t begin = 0, uint32_t print_size = 0,
+                    ObString delimiter = ObString(","),
+                    bool has_null_str = true, ObString null_str = ObString("NULL")) const
+  {
+    int ret = OB_SUCCESS;
     const ObCollectionBasicType *basic_type = dynamic_cast<const ObCollectionBasicType *>(elem_type);
     if (OB_ISNULL(basic_type)) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "invalid argument", K(ret));
-    } else if (OB_FAIL(format_str.append("["))) {
-      OB_LOG(WARN, "fail to append [", K(ret));
     } else {
       if (print_size == 0) {
         // print whole element
         print_size = this->length_;
       }
       ObObjType obj_type = basic_type->basic_meta_.get_obj_type();
+      bool is_first_elem = true;
       for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
-        if (i > begin && OB_FAIL(format_str.append(","))) {
-          OB_LOG(WARN, "fail to append \",\" to buffer", K(ret));
+        if (this->null_bitmaps_[i] && !has_null_str) {
+          // do nothing
+        } else if (!is_first_elem && OB_FAIL(format_str.append(delimiter))) {
+          OB_LOG(WARN, "fail to append delimiter to buffer", K(ret), K(delimiter));
         } else if (this->null_bitmaps_[i]) {
           // value is null
-          if (OB_FAIL(format_str.append("NULL"))) {
-            OB_LOG(WARN, "fail to append NULL to buffer", K(ret));
+          is_first_elem = false;
+          if (OB_FAIL(format_str.append(null_str))) {
+            OB_LOG(WARN, "fail to append null string to buffer", K(ret), K(null_str));
           }
         } else {
+          is_first_elem = false;
           switch (obj_type) {
             case ObTinyIntType:
             case ObSmallIntType:
@@ -303,15 +357,17 @@ public :
               }
               break;
             }
-            case ObFloatType :
-            case ObDoubleType : {
-              int buf_size = obj_type == ObFloatType ? FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE : DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
+            case ObFloatType:
+            case ObUFloatType:
+            case ObDoubleType:
+            case ObUDoubleType: {
+              int buf_size = ob_is_float_tc(obj_type) ? FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE : DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
               if (OB_FAIL(format_str.reserve(buf_size + 1))) {
                 OB_LOG(WARN, "fail to reserve memory for format_str", K(ret));
               } else {
                 char *start = format_str.ptr() + format_str.length();
                 uint64_t len = ob_gcvt(data_[i],
-                                       obj_type == ObFloatType ? ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT : ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
+                                       ob_is_float_tc(obj_type) ? ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT : ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
                                        buf_size, start, NULL);
                 if (OB_FAIL(format_str.set_length(format_str.length() + len))) {
                   OB_LOG(WARN, "fail to set format_str len", K(ret), K(format_str.length()), K(len));
@@ -319,7 +375,7 @@ public :
               }
               break;
             }
-            case ObDecimalIntType : {
+            case ObDecimalIntType: {
               int64_t pos = 0;
               char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
               if (OB_FAIL(wide::to_string(reinterpret_cast<const ObDecimalInt *>(&data_[i]), sizeof(data_[i]), scale_,
@@ -338,12 +394,8 @@ public :
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(format_str.append("]"))) {
-      OB_LOG(WARN, "fail to append ]", K(ret));
-    }
     return ret;
   }
-
 
   int32_t get_data_binary_len()
   {
@@ -387,6 +439,22 @@ public :
       }
     }
     return ret;
+  }
+
+  int hash(uint64_t &hash_val) const
+  {
+    uint8_t *null_bitmaps = this->null_bitmaps_;
+    T *data = this->data_;
+    if (this->data_container_ != NULL) {
+      null_bitmaps = this->data_container_->null_bitmaps_.get_data();
+      data = this->data_container_->raw_data_.get_data();
+    }
+    hash_val = common::murmurhash(&this->length_, sizeof(this->length_), hash_val);
+    if (this->length_ > 0) {
+      hash_val = common::murmurhash(null_bitmaps, sizeof(uint8_t) * this->length_, hash_val);
+      hash_val = common::murmurhash(data, sizeof(T) * this->length_, hash_val);
+    }
+    return OB_SUCCESS;
   }
 
   int init()
@@ -470,20 +538,26 @@ public :
       const uint32_t src_null_offset = begin * sizeof(uint8_t);
       int64_t curr_pos = this->data_container_->raw_data_.size();
       int64_t capacity = curr_pos + len;
-      this->data_container_->raw_data_.prepare_allocate(capacity);
-      char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
-      MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(T));
-      // insert nullbitmaps
-      curr_pos = this->data_container_->null_bitmaps_.size();
-      capacity = curr_pos + len;
-      this->data_container_->null_bitmaps_.prepare_allocate(capacity);
-      uint8_t *cur_null_bitmap = this->data_container_->null_bitmaps_.get_data() + curr_pos;
-      MEMCPY(cur_null_bitmap, src.get_nullbitmap() + src_null_offset, len * sizeof(uint8_t));
-      this->length_ += len;
+      if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
+        OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+      } else {
+        char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
+        MEMCPY(cur_data, src.get_data() + src_data_offset, len * sizeof(T));
+        // insert nullbitmaps
+        curr_pos = this->data_container_->null_bitmaps_.size();
+        capacity = curr_pos + len;
+        if (OB_FAIL(this->data_container_->null_bitmaps_.prepare_allocate(capacity))) {
+          OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
+        } else {
+          uint8_t *cur_null_bitmap = this->data_container_->null_bitmaps_.get_data() + curr_pos;
+          MEMCPY(cur_null_bitmap, src.get_nullbitmap() + src_null_offset, len * sizeof(uint8_t));
+          this->length_ += len;
+        }
+      }
     }
     return ret;
   }
-  int at(uint32_t idx, ObIArrayType &dest) { return OB_NOT_SUPPORTED; }
+  int at(uint32_t idx, ObIArrayType &dest) const { return OB_NOT_SUPPORTED; }
   void clear()
   {
     data_ = nullptr;
@@ -512,7 +586,7 @@ public :
   }
 
   int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                 const ObIArrayType &right, int &cmp_ret)
+                 const ObIArrayType &right, int &cmp_ret) const
   {
     int ret = OB_SUCCESS;
     const ObArrayFixedSize<T> *right_data = dynamic_cast<const ObArrayFixedSize<T> *>(&right);
@@ -539,32 +613,195 @@ public :
     return ret;
   }
 
-  int compare(const ObIArrayType &right, int &cmp_ret)
+  int compare(const ObIArrayType &right, int &cmp_ret) const
   {
     return compare_at(0, this->length_, 0, right.size(), right, cmp_ret);
   }
   template<typename Elem_Type>
-  int contains(const Elem_Type &elem, bool &bret) const
+  int contains(const Elem_Type &elem, int &pos) const
   {
     int ret = OB_SUCCESS;
-    bret = false;
-    for (uint32_t i = 0; i < this->length_ && !bret; ++i) {
+    pos = -1;
+    for (uint32_t i = 0; i < this->length_ && pos < 0; ++i) {
       if (this->is_null(i)) {
       } else if (static_cast<Elem_Type>(this->data_[i]) == elem) {
-        bret = true;
+        pos = i;
       }
     }
     return ret;
   }
   template <>
-  int contains<ObString>(const ObString &elem, bool &bret) const
+  int contains<ObString>(const ObString &elem, int &pos) const
   {
     return OB_INVALID_ARGUMENT;
   }
   template <>
-  int contains<ObIArrayType>(const ObIArrayType &elem, bool &bret) const
+  int contains<ObIArrayType>(const ObIArrayType &elem, int &pos) const
   {
     return OB_INVALID_ARGUMENT;
+  }
+
+  int contains_all(const ObIArrayType &other, bool &bret) const
+  {
+    int ret = OB_SUCCESS;
+    const ObArrayFixedSize<T> *right_data = dynamic_cast<const ObArrayFixedSize<T> *>(&other);
+    if (OB_ISNULL(right_data)) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      OB_LOG(WARN, "invalid array type", K(ret), K(other.get_format()), K(this->get_format()));
+    } else if (other.contain_null() && !this->contain_null()) {
+      bret = false;
+    } else {
+      bret = true;
+      for (uint32_t i = 0; i < other.size() && bret && OB_SUCC(ret); ++i) {
+        int pos = -1;
+        if (right_data->is_null(i)) {
+          // do nothings, checked already
+        } else if (OB_FAIL(this->contains((*right_data)[i], pos))) {
+          OB_LOG(WARN, "check element contains failed", K(ret), K(i), K((*right_data)[i]));
+        } else if (pos < 0) {
+          bret = false;
+        }
+      }
+    }
+    return ret;
+  }
+
+  int overlaps(const ObIArrayType &other, bool &bret) const
+  {
+    int ret = OB_SUCCESS;
+    const ObArrayFixedSize<T> *right_data = dynamic_cast<const ObArrayFixedSize<T> *>(&other);
+    if (OB_ISNULL(right_data)) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      OB_LOG(WARN, "invalid array type", K(ret), K(other.get_format()), K(this->get_format()));
+    } else if (other.contain_null() && this->contain_null()) {
+      bret = true;
+    } else {
+      bret = false;
+      for (uint32_t i = 0; i < other.size() && !bret && OB_SUCC(ret); ++i) {
+        int pos = -1;
+        if (right_data->is_null(i)) {
+          // do nothings, checked already
+        } else if (OB_FAIL(this->contains((*right_data)[i], pos))) {
+          OB_LOG(WARN, "check element contains failed", K(ret), K(i), K((*right_data)[i]));
+        } else if (pos >= 0) {
+          bret = true;
+        }
+      }
+    }
+    return ret;
+  }
+
+  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const
+  {
+    int ret = OB_SUCCESS;
+    void *buf = alloc.alloc(sizeof(ObArrayFixedSize<T>));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "alloc memory failed", K(ret));
+    } else {
+      ObArrayFixedSize<T> *arr_ptr = new (buf) ObArrayFixedSize<T>();
+      if (read_only) {
+      } else if (OB_ISNULL(buf = alloc.alloc(sizeof(ObArrayData<T>)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "alloc memory failed", K(ret));
+      } else {
+        ObArrayData<T> *arr_data = new (buf) ObArrayData<T>(alloc);
+        arr_ptr->set_array_data(arr_data);
+        arr_ptr->set_element_type(this->element_type_);
+      }
+      if (OB_SUCC(ret)) {
+        output = arr_ptr;
+      }
+    }
+    return ret;
+  }
+
+  template<typename Elem_Type>
+  int clone_except(ObIAllocator &alloc, const Elem_Type *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(clone_empty(alloc, output, false))) {
+      OB_LOG(WARN, "clone empty failed", K(ret));
+    } else {
+      ObArrayFixedSize<T> *arr_data = dynamic_cast<ObArrayFixedSize<T> *>(output);
+      if (OB_ISNULL(arr_data)) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
+      }
+      for (uint32_t i = 0; i < this->length_ && OB_SUCC(ret); ++i) {
+        if (is_null) {
+          if (this->is_null(i)) {
+            // do nothing
+          } else if (OB_FAIL(arr_data->push_back((*this)[i]))) {
+            OB_LOG(WARN, "push null failed", K(ret));
+          }
+        } else if (this->is_null(i)) {
+          if (OB_FAIL(arr_data->push_null())) {
+            OB_LOG(WARN, "push null failed", K(ret));
+          }
+        } else if ((*this)[i] != *elem_except && OB_FAIL(arr_data->push_back((*this)[i]))) {
+          OB_LOG(WARN, "failed to add element", K(ret));
+        }
+      }
+    }
+    return ret;
+  }
+  template <>
+  int clone_except<ObString>(ObIAllocator &alloc, const ObString *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    return OB_INVALID_ARGUMENT;
+  }
+  template <>
+  int clone_except<ObIArrayType>(ObIAllocator &alloc, const ObIArrayType *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    return OB_INVALID_ARGUMENT;
+  }
+
+  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const
+  {
+    int ret = OB_SUCCESS;
+    ObIArrayType *arr_ptr = NULL;
+    if (OB_FAIL(clone_empty(alloc, arr_ptr, false))) {
+      OB_LOG(WARN, "clone empty failed", K(ret));
+    } else if (this->contain_null() && OB_FAIL(arr_ptr->push_null())) {
+      OB_LOG(WARN, "push null failed", K(ret));
+    } else {
+      hash::ObHashSet<ObString> elem_set;
+      ObArrayFixedSize<T> *arr_data = dynamic_cast<ObArrayFixedSize<T> *>(arr_ptr);
+      if (OB_ISNULL(arr_data)) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
+      } else if (OB_FAIL(elem_set.create(this->length_, ObMemAttr(common::OB_SERVER_TENANT_ID, "ArrayDistSet")))) {
+        OB_LOG(WARN, "failed to create cellid set", K(ret));
+      } else {
+        for (uint32_t i = 0; i < this->length_ && OB_SUCC(ret); ++i) {
+          ObString val;
+          if (this->is_null(i)) {
+            // do nothing
+          } else if (FALSE_IT(val.assign_ptr(reinterpret_cast<char *>(&data_[i]), sizeof(T)))) {
+          } else if (OB_FAIL(elem_set.exist_refactored(val))) {
+            if (ret == OB_HASH_NOT_EXIST) {
+              if (OB_FAIL(arr_data->push_back((*this)[i]))) {
+                OB_LOG(WARN, "failed to add element", K(ret));
+              } else if (OB_FAIL(elem_set.set_refactored(val))) {
+                OB_LOG(WARN, "failed to add element into set", K(ret));
+              }
+            } else if (ret == OB_HASH_EXIST) {
+              // duplicate element, do nothing
+              ret = OB_SUCCESS;
+            } else {
+              OB_LOG(WARN, "failed to check element exist", K(ret));
+            }
+          } else {
+            // do nothing
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        output = arr_ptr;
+      }
+    }
+    return ret;
   }
 
 private :
@@ -579,11 +816,17 @@ public :
     : ObArrayBase(length, ObFloatType, nullptr),
       data_(data) {}
   float operator[](const int64_t i) const { return data_[i]; }
+  uint32_t cardinality() const { return this->length_; }
   ArrayFormat get_format() const { return ArrayFormat::Vector; }
   int push_back(float value);
+  bool is_null(uint32_t idx) const { return false; }
   void set_scale(ObScale scale) { UNUSED(scale); }
   int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const;
+  int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+                    uint32_t begin = 0, uint32_t print_size = 0,
+                    ObString delimiter = ObString(","),
+                    bool has_null_str = true, ObString null_str = ObString("NULL")) const;
   uint32_t *get_offsets() const { return nullptr; }
   char *get_data() const { return reinterpret_cast<char*>(data_);}
   int32_t get_raw_binary_len()
@@ -593,37 +836,73 @@ public :
   int get_raw_binary(char *res_buf, int64_t buf_len);
   int32_t get_data_binary_len() { return get_raw_binary_len(); }
   int get_data_binary(char *res_buf, int64_t buf_len) { return get_raw_binary(res_buf, buf_len); }
+  int hash(uint64_t &hash_val) const;
   int init ();
   int init(ObString &raw_data);
   int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
   int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const;
   int push_null() { return OB_ERR_NULL_VALUE; }
   int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len);
-  int at(uint32_t idx, ObIArrayType &dest) { return OB_NOT_SUPPORTED; }
+  int at(uint32_t idx, ObIArrayType &dest) const { return OB_NOT_SUPPORTED; }
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
   int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                 const ObIArrayType &right, int &cmp_ret);
-  int compare(const ObIArrayType &right, int &cmp_ret);
+                 const ObIArrayType &right, int &cmp_ret) const;
+  int compare(const ObIArrayType &right, int &cmp_ret) const;
   template<typename Elem_Type>
-  int contains(const Elem_Type &elem, bool &bret) const
+  int contains(const Elem_Type &elem, int &pos) const
   {
     int ret = OB_SUCCESS;
-    bret = false;
-    for (uint32_t i = 0; i < length_ && !bret; ++i) {
+    pos = -1;
+    for (uint32_t i = 0; i < length_ && pos < 0; ++i) {
       if (static_cast<Elem_Type>(data_[i]) == elem) {
-        bret = true;
+        pos = i;
       }
     }
     return ret;
   }
   template <>
-  int contains<ObString>(const ObString &elem, bool &bret) const
+  int contains<ObString>(const ObString &elem, int &pos) const
   {
     return OB_INVALID_ARGUMENT;
   }
   template <>
-  int contains<ObIArrayType>(const ObIArrayType &elem, bool &bret) const
+  int contains<ObIArrayType>(const ObIArrayType &elem, int &pos) const
+  {
+    return OB_INVALID_ARGUMENT;
+  }
+  int contains_all(const ObIArrayType &other, bool &bret) const;
+  int overlaps(const ObIArrayType &other, bool &bret) const;
+  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
+  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
+
+  template<typename Elem_Type>
+  int clone_except(ObIAllocator &alloc, const Elem_Type *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(clone_empty(alloc, output, false))) {
+      OB_LOG(WARN, "clone empty failed", K(ret));
+    } else {
+      ObVectorData *arr_data = dynamic_cast<ObVectorData *>(output);
+      if (OB_ISNULL(arr_data)) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
+      }
+      for (uint32_t i = 0; i < length_ && OB_SUCC(ret); ++i) {
+        if (static_cast<Elem_Type>(data_[i]) != *elem_except && OB_FAIL(arr_data->push_back(data_[i]))) {
+          OB_LOG(WARN, "failed to add element", K(ret));
+        }
+      }
+    }
+    return ret;
+  }
+  template <>
+  int clone_except<ObString>(ObIAllocator &alloc, const ObString *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    return OB_INVALID_ARGUMENT;
+  }
+  template <>
+  int clone_except<ObIArrayType>(ObIAllocator &alloc, const ObIArrayType *elem_except, bool is_null, ObIArrayType *&output) const
   {
     return OB_INVALID_ARGUMENT;
   }
@@ -639,20 +918,28 @@ public :
     : ObArrayBase(length, elem_type, null_bitmaps),
       offsets_(offsets), data_(data) {}
   ObString operator[](const int64_t i) const;
+  uint32_t cardinality() const { return this->length_; }
   ArrayFormat get_format() const { return ArrayFormat::Binary_Varlen; }
   uint32_t *get_offsets() const { return offsets_; }
   char *get_data() const { return data_;}
   int push_back(const ObString &value, bool is_null = false);
   void set_scale(ObScale scale) { UNUSED(scale); }
+  int static escape_append(ObStringBuffer &format_str, ObString elem_str);
   int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const;
+  int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+                    uint32_t begin = 0, uint32_t print_size = 0,
+                    ObString delimiter = ObString(","),
+                    bool has_null_str = true, ObString null_str = ObString("NULL")) const;
 
   int32_t get_data_binary_len()
   {
     int32_t len = 0;
     if (this->data_container_ == NULL) {
-      uint32_t last_idx = this->length_ > 0 ? this->length_ - 1 : 0;
-      len = this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + this->offsets_[last_idx];
+      if (this->length_ > 0) {
+        uint32_t last_idx = this->length_ - 1;
+        len = this->length_ * sizeof(uint8_t) + this->length_ * sizeof(uint32_t) + this->offsets_[last_idx];
+      }
     } else {
       len = sizeof(uint8_t) * data_container_->null_bitmaps_.size()
                                         + sizeof(uint32_t) * data_container_->offsets_.size()
@@ -663,32 +950,73 @@ public :
   int get_data_binary(char *res_buf, int64_t buf_len);
   int32_t get_raw_binary_len() { return sizeof(length_) + get_data_binary_len(); }
   int get_raw_binary(char *res_buf, int64_t buf_len);
+  int hash(uint64_t &hash_val) const;
   int init();
   int init(ObString &raw_data);
   int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
   int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const { return OB_SUCCESS; }
   int push_null();
   int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len);
-  int at(uint32_t idx, ObIArrayType &dest) { return OB_NOT_SUPPORTED; }
+  int at(uint32_t idx, ObIArrayType &dest) const { return OB_NOT_SUPPORTED; }
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
-  int compare(const ObIArrayType &right, int &cmp_ret);
+  int compare(const ObIArrayType &right, int &cmp_ret) const;
   int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                 const ObIArrayType &right, int &cmp_ret);
+                 const ObIArrayType &right, int &cmp_ret) const;
   template<typename T>
-  int contains(const T &elem, bool &bret) const
+  int contains(const T &elem, int &pos) const
   {
     int ret = OB_SUCCESS;
-    bret = false;
+    pos = -1;
     const ObString *str = nullptr;
     if (typeid(T) != typeid(ObString)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid data type", K(ret));
     } else {
       str = reinterpret_cast<const ObString *>(&elem);
-      for (int i = 0; i < length_ && !bret; i++) {
+      for (int i = 0; i < length_ && pos < 0; i++) {
         if ((*this)[i].compare(*str) == 0) {
-          bret = true;
+          pos = i;
+        }
+      }
+    }
+    return ret;
+  }
+  int contains_all(const ObIArrayType &other, bool &bret) const;
+  int overlaps(const ObIArrayType &other, bool &bret) const;
+  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
+  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
+
+  template<typename T>
+  int clone_except(ObIAllocator &alloc, const T *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    int ret = OB_SUCCESS;
+    if (typeid(T) != typeid(ObString)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "invalid data type", K(ret));
+    } else if (OB_FAIL(clone_empty(alloc, output, false))) {
+      OB_LOG(WARN, "clone empty failed", K(ret));
+    } else {
+      ObArrayBinary *arr_data = dynamic_cast<ObArrayBinary *>(output);
+      if (OB_ISNULL(arr_data)) {
+        ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+        OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
+      }
+      const ObString *str = reinterpret_cast<const ObString *>(elem_except);
+      for (uint32_t i = 0; i < this->length_ && OB_SUCC(ret); ++i) {
+        if (is_null) {
+          // remove null
+          if (this->is_null(i)) {
+            // do nothing
+          } else if (OB_FAIL(arr_data->push_back((*this)[i]))) {
+            OB_LOG(WARN, "push null failed", K(ret));
+          }
+        } else if (this->is_null(i)) {
+          if (OB_FAIL(arr_data->push_null())) {
+            OB_LOG(WARN, "push null failed", K(ret));
+          }
+        } else if ((*this)[i] != *str && OB_FAIL(arr_data->push_back((*this)[i]))) {
+          OB_LOG(WARN, "failed to add element", K(ret));
         }
       }
     }
@@ -706,12 +1034,17 @@ public :
   ObArrayNested(uint32_t length, int32_t elem_type, uint8_t *null_bitmaps, uint32_t *offsets, ObArrayBase *data)
     : ObArrayBase(length, elem_type, null_bitmaps),
       offsets_(offsets), data_(data) {}
+  uint32_t cardinality() const { return data_->cardinality(); };
   ArrayFormat get_format() const { return ArrayFormat::Nested_Array; }
   uint32_t *get_offsets() const { return offsets_; }
   char *get_data() const { return data_->get_data();}
   void set_scale(ObScale scale) { UNUSED(scale); }
   int print(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
             uint32_t begin = 0, uint32_t print_size = 0) const;
+  int print_element(const ObCollectionTypeBase *elem_type, ObStringBuffer &format_str,
+                    uint32_t begin = 0, uint32_t print_size = 0,
+                    ObString delimiter = ObString(","),
+                    bool has_null_str = true, ObString null_str = ObString("NULL")) const;
 
   int32_t get_data_binary_len()
   {
@@ -724,6 +1057,7 @@ public :
 
   int32_t get_raw_binary_len() { return sizeof(length_) + get_data_binary_len(); }
   int get_raw_binary(char *res_buf, int64_t buf_len);
+  int hash(uint64_t &hash_val) const;
   int init();
   int init(ObString &raw_data);
   int init(ObDatum *attrs, uint32_t attr_count, bool with_length = true);
@@ -733,17 +1067,17 @@ public :
   inline ObIArrayType *get_child_array() const { return static_cast<ObIArrayType *>(data_);}
   int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len);
   int push_back(const ObIArrayType &src, bool is_null = false);
-  int at(uint32_t idx, ObIArrayType &dest);
+  int at(uint32_t idx, ObIArrayType &dest) const;
   void clear();
   int flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &attr_idx);
   int compare_at(uint32_t left_begin, uint32_t left_len, uint32_t right_begin, uint32_t right_len,
-                 const ObIArrayType &right, int &cmp_ret);
-  int compare(const ObIArrayType &right, int &cmp_ret);
+                 const ObIArrayType &right, int &cmp_ret) const;
+  int compare(const ObIArrayType &right, int &cmp_ret) const;
   template<typename T>
-  int contains(const T &elem, bool &bret) const
+  int contains(const T &elem, int &pos) const
   {
     int ret = OB_SUCCESS;
-    bret = false;
+    pos = -1;
     const ObIArrayType *elem_ptr = NULL;
     if (typeid(T) != typeid(ObIArrayType)) {
       ret = OB_ERR_UNEXPECTED;
@@ -751,7 +1085,7 @@ public :
     } else {
       elem_ptr = reinterpret_cast<const ObIArrayType *>(&elem);
     }
-    for (uint32_t i = 0; i < length_ && !bret && OB_SUCC(ret); ++i) {
+    for (uint32_t i = 0; i < length_ && pos < 0 && OB_SUCC(ret); ++i) {
       if (this->is_null(i)) {
       } else {
         uint32_t l_start = offset_at(i, get_offsets());
@@ -760,7 +1094,67 @@ public :
         if (OB_FAIL(get_child_array()->compare_at(l_start, l_child_len, 0, elem_ptr->size(), *elem_ptr, cmp_ret))) {
           OB_LOG(WARN, "failed to do nested array contains", K(ret));
         } else if (cmp_ret == 0) {
-          bret = true;
+          pos = i;
+        }
+      }
+    }
+    return ret;
+  }
+  int contains_all(const ObIArrayType &other, bool &bret) const;
+  int overlaps(const ObIArrayType &other, bool &bret) const;
+  int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const;
+  int distinct(ObIAllocator &alloc, ObIArrayType *&output) const;
+
+  template<typename T>
+  int clone_except(ObIAllocator &alloc, const T *elem_except, bool is_null, ObIArrayType *&output) const
+  {
+    int ret = OB_SUCCESS;
+    const ObIArrayType *elem_ptr = NULL;
+    if (!is_null && typeid(T) != typeid(ObIArrayType)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "invalid data type", K(ret));
+    } else {
+      if (OB_FAIL(clone_empty(alloc, output, false))) {
+        OB_LOG(WARN, "clone empty failed", K(ret));
+      } else {
+        ObArrayNested *arr_data = dynamic_cast<ObArrayNested *>(output);
+        if (OB_ISNULL(arr_data)) {
+          ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+          OB_LOG(WARN, "invalid array type", K(ret), K(this->get_format()));
+        } else {
+          ObIArrayType *inner_arr = get_child_array();
+          ObIArrayType *child_obj = NULL;
+          if (OB_FAIL(inner_arr->clone_empty(alloc, child_obj, false))) {
+            OB_LOG(WARN, "clone empty failed", K(ret));
+          }
+          for (uint32_t i = 0; i < this->length_ && OB_SUCC(ret); ++i) {
+            if (is_null) {
+              // remove null
+              if (this->is_null(i)) {
+                // do nothing
+              } else if (OB_FAIL(at(i, *child_obj))) {
+                OB_LOG(WARN, "get element failed", K(ret), K(i), K(length_));
+              } else if (OB_FAIL(arr_data->push_back(*child_obj))) {
+                OB_LOG(WARN, "push null failed", K(ret));
+              } else {
+                child_obj->clear();
+              }
+            } else if (this->is_null(i)) {
+              if (OB_FAIL(arr_data->push_null())) {
+                OB_LOG(WARN, "push null failed", K(ret));
+              }
+            } else if (OB_FAIL(at(i, *child_obj))) {
+              OB_LOG(WARN, "get element failed", K(ret), K(i), K(length_));
+            } else if (FALSE_IT(elem_ptr = reinterpret_cast<const ObIArrayType *>(elem_except))) {
+            } else if (*child_obj == *elem_ptr) {
+              // do nothing
+              child_obj->clear();
+            } else if (OB_FAIL(arr_data->push_back(*child_obj))) {
+              OB_LOG(WARN, "failed to add element", K(ret));
+            } else {
+              child_obj->clear();
+            }
+          }
         }
       }
     }
@@ -782,79 +1176,6 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArrayTypeObjFactory);
 };
-
-
-#define FIXED_ARRAY_OBJ_CONTAINS(Element_Type)                                                                 \
-  const ObArrayFixedSize<Element_Type> *arr_ptr = static_cast<const ObArrayFixedSize<Element_Type> *>(&array); \
-  if (OB_FAIL(arr_ptr->contains(elem, bret))) {                                                                \
-    OB_LOG(WARN, "array contains failed", K(ret));                                     \
-  }
-class ObArrayUtil
-{
-public :
-  static int get_type_name(const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth = 1);
-  static int push_back_decimal_int(const ObPrecision prec, const ObDecimalInt *dec_val, bool is_null, ObIArrayType *arr_obj);
-  template<typename Elem_Type>
-  static int contains(const ObIArrayType &array, const Elem_Type &elem, bool &bret)
-  {
-    int ret = OB_SUCCESS;
-    switch (array.get_format()) {
-    case ArrayFormat::Fixed_Size :
-      if (static_cast<ObObjType>(array.get_element_type()) == ObTinyIntType) {
-        FIXED_ARRAY_OBJ_CONTAINS(int8_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObSmallIntType) {
-        FIXED_ARRAY_OBJ_CONTAINS(int16_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObIntType) {
-        FIXED_ARRAY_OBJ_CONTAINS(int64_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObInt32Type) {
-        FIXED_ARRAY_OBJ_CONTAINS(int32_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObUTinyIntType) {
-        FIXED_ARRAY_OBJ_CONTAINS(uint8_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObUSmallIntType) {
-        FIXED_ARRAY_OBJ_CONTAINS(uint16_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObUInt64Type) {
-        FIXED_ARRAY_OBJ_CONTAINS(int64_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObUInt32Type) {
-        FIXED_ARRAY_OBJ_CONTAINS(uint32_t);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObFloatType) {
-        FIXED_ARRAY_OBJ_CONTAINS(float);
-      } else if (static_cast<ObObjType>(array.get_element_type()) == ObDoubleType) {
-        FIXED_ARRAY_OBJ_CONTAINS(double);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "invalid array type", K(ret), K(array.get_element_type()));
-      }
-      break;
-    case ArrayFormat::Binary_Varlen :
-      if (OB_FAIL(static_cast<const ObArrayBinary *>(&array)->contains(elem, bret))) {
-        OB_LOG(WARN, "failed to do array contains", K(ret));
-      }
-      break;
-    case ArrayFormat::Vector :
-      if (OB_FAIL(static_cast<const ObVectorData *>(&array)->contains(elem, bret))) {
-        OB_LOG(WARN, "failed to do array contains", K(ret));
-      }
-      break;
-    case ArrayFormat::Nested_Array :
-      if (OB_FAIL(static_cast<const ObArrayNested *>(&array)->contains(elem, bret))) {
-        OB_LOG(WARN, "failed to do array contains", K(ret));
-      }
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "invalid array type", K(ret), K(array.get_format()));
-      break;
-    }
-    return ret;
-  }
-  static int convert_collection_bin_to_string(const ObString &collection_bin,
-                                              const common::ObIArray<common::ObString> &extended_type_info,
-                                              common::ObIAllocator &allocator,
-                                              ObString &res_str);
-  static int get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
-                            obmysql::EMySQLFieldType &type);
-};
-#undef FIXED_ARRAY_OBJ_CONTAINS
 
 } // namespace common
 } // namespace oceanbase

@@ -296,7 +296,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 template<class LogEntryType>
 bool ObRemoteLogIterator<LogEntryType>::need_prepare_buf_(const int ret_code) const
 {
-  return OB_BUF_NOT_ENOUGH == ret_code || OB_NEED_RETRY == ret_code;
+  return OB_BUF_NOT_ENOUGH == ret_code;
 }
 
 template<class LogEntryType>

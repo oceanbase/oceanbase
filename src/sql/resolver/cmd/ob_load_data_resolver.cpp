@@ -30,6 +30,7 @@
 #include "lib/restore/ob_storage_info.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {
@@ -190,6 +191,8 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data to the view is");
     } else if (OB_FAIL(check_trigger_constraint(tschema))) {
       LOG_WARN("check trigger constraint failed", K(ret), KPC(tschema));
+    } else if (OB_FAIL(check_collection_sql_type(tschema))) {
+      LOG_WARN("check collection sql type column failed", K(ret), KPC(tschema));
     } else {
       load_args.table_id_ = tschema->get_table_id();
       load_args.table_name_ = table_name;
@@ -270,9 +273,12 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       load_args.file_cs_type_ = CS_TYPE_UTF8MB4_BIN;
     }
     if (OB_SUCC(ret)) {
-      if (ObCharset::charset_type_by_coll(load_args.file_cs_type_) == CHARSET_UTF16) {
+      int64_t mbminlen = 0;
+      if (OB_FAIL(common::ObCharset::get_mbminlen_by_coll(load_args.file_cs_type_, mbminlen))) {
+        LOG_WARN("unexpected error ", K(ret));
+      } else if (mbminlen > 1) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "utf16 encoded files are");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "compatible with ascii files are");
       }
     }
   }
@@ -372,6 +378,16 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
   }
 
   if (OB_SUCC(ret)) {
+    /*13. partition */
+    const ParseNode *child_node = node->children_[ENUM_OPT_USE_PARTITION];
+    if (OB_NOT_NULL(child_node)) {
+      if (OB_FAIL(resolve_partitions(*child_node, *load_stmt))) {
+        LOG_WARN("fail to resolve partition");
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
     const ObDirectLoadHint &direct_load_hint = load_stmt->get_hints().get_direct_load_hint();
     if (ObLoadDupActionType::LOAD_STOP_ON_DUP == load_args.dupl_action_ &&
@@ -430,9 +446,11 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
 
       switch (hint_node->type_) {
       case T_DIRECT: {
-        ObDirectLoadHint &direct_load_hint = stmt_hints.get_direct_load_hint();
+        ObDirectLoadHint direct_load_hint;
         if (OB_FAIL(ObDMLResolver::resolve_direct_load_hint(*hint_node, direct_load_hint))) {
           LOG_WARN("fail to resolve direct load hint", KR(ret));
+        } else {
+          stmt_hints.get_direct_load_hint().merge(direct_load_hint);
         }
         break;
       }
@@ -513,6 +531,10 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::NO_GATHER_OPTIMIZER_STATISTICS, 1))) {
           LOG_WARN("fail to set gather optimizer statistics", K(ret));
         }
+        break;
+      }
+      case T_NO_DIRECT: {
+        stmt_hints.get_direct_load_hint().has_no_direct_ = true;
         break;
       }
       default:
@@ -917,7 +939,8 @@ int ObLoadDataResolver::resolve_field_node(const ParseNode &node, const ObNameCa
     tmp_struct.column_type_ = col_schema->get_data_type();
     if (is_dup_field(field_or_var_list, tmp_struct)) {
       ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(tmp_struct.field_or_var_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, helper.convert(tmp_struct.field_or_var_name_));
     } else if (OB_FAIL(field_or_var_list.push_back(tmp_struct))) {
       LOG_WARN("failed to push back item", K(ret));
     }
@@ -1632,6 +1655,81 @@ int ObLoadDataResolver::check_trigger_constraint(const ObTableSchema *table_sche
         } else {
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "if table has insert or update trigger, load data");
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = load_stmt.get_load_arguments().table_id_;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", KR(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret));
+  }
+  OB_ASSERT(1 == node.num_child_ && node.children_[0]->num_child_ > 0);
+  if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[0]) && T_NAME_LIST == node.children_[0]->type_) {
+    const ParseNode *name_list = node.children_[0];
+    ObString partition_name;
+    ObArray<ObObjectID> part_ids;
+    for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
+      ObArray<ObObjectID> partition_ids;
+      partition_name.assign_ptr(name_list->children_[i]->str_value_,
+                                static_cast<int32_t>(name_list->children_[i]->str_len_));
+      //here just conver partition_name to its lowercase
+      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
+      ObPartGetter part_getter(*table_schema);
+      if (T_USE_PARTITION == node.type_) {
+        if (OB_FAIL(part_getter.get_part_ids(partition_name, partition_ids))) {
+          LOG_WARN("fail to get part ids", K(ret), K(partition_name));
+          if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
+            LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+                          table_schema->get_table_name_str().length(),
+                          table_schema->get_table_name_str().ptr());
+          }
+        }
+      } else if (OB_FAIL(part_getter.get_subpart_ids(partition_name, partition_ids))) {
+        LOG_WARN("fail to get subpart ids", K(ret), K(partition_name));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
+          LOG_WARN("Push partition id error", K(ret));
+        }
+      }
+    } // end of for
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(load_stmt.set_part_ids(part_ids))) {
+        LOG_WARN("fail to set partition ids", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::check_collection_sql_type(const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)
+      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object is null", K(ret), K(table_schema), K(schema_checker_),
+             K(session_info_), K(schema_checker_->get_schema_guard()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_column_count(); i++) {
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (OB_ISNULL(col_schema = table_schema->get_column_schema_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(table_schema));
+      } else if (col_schema->get_meta_type().is_collection_sql_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support load data if table has array/vector column", K(ret), KPC(col_schema));
       }
     }
   }

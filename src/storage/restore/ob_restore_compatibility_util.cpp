@@ -86,32 +86,32 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_(
       break;
     }
 
-    case ObLSRestoreStatus::QUICK_RESTORE: {
-      if (ls_id.is_sys_ls()) {
-        is_finish = ha_status.is_restore_status_full();
-      } else {
-        is_finish = !ha_status.is_restore_status_empty();
-      }
-      break;
-    }
-
+    case ObLSRestoreStatus::QUICK_RESTORE:
     case ObLSRestoreStatus::WAIT_QUICK_RESTORE:
     case ObLSRestoreStatus::QUICK_RESTORE_FINISH: {
       if (ls_id.is_sys_ls()) {
         is_finish = ha_status.is_restore_status_full();
-      } else {
-        if (ha_status.is_restore_status_remote()
-            || ha_status.is_restore_status_full()) {
+      } else if (ha_status.is_restore_status_undefined()) {
+        bool is_deleted = true;
+        // UNDEFINED should be deleted after log has recovered.
+        if (ls_restore_status.is_quick_restore()) {
           is_finish = true;
-        } else if (ha_status.is_restore_status_undefined()) {
-          // UNDEFINED should be deleted after log has been recovered.
-          bool is_deleted = true;
-          if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
-            LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
-          } else {
-            is_finish = is_deleted;
-          }
+        } else if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
+          LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
+        } else if (is_deleted) {
+          is_finish = true;
+          LOG_INFO("UNDEFINED tablet is deleted", K(tablet_meta));
         } else {
+          is_finish = false;
+          LOG_INFO("UNDEFINED tablet is not deleted", K(tablet_meta));
+        }
+      } else {
+        is_finish = ha_status.is_restore_status_remote();
+        if (!ha_status.is_restore_status_full()) {
+        } else if (!tablet_meta.has_transfer_table()) {
+          is_finish = true;
+        } else {
+          // FULL tablet with transfer table, need wait the table be replaced.
           is_finish = false;
         }
       }
@@ -176,40 +176,57 @@ int ObRestoreCompatibilityUtil::is_tablet_restore_phase_done_prev_v4_(
       break;
     }
 
-    case ObLSRestoreStatus::QUICK_RESTORE: {
-      is_finish = !ha_status.is_restore_status_empty();
-      break;
-    }
-
+    case ObLSRestoreStatus::QUICK_RESTORE:
     case ObLSRestoreStatus::WAIT_QUICK_RESTORE:
     case ObLSRestoreStatus::QUICK_RESTORE_FINISH: {
-      if (ha_status.is_restore_status_minor_and_major_meta()
-          || ha_status.is_restore_status_full()) {
-        is_finish = true;
-      } else if (ha_status.is_restore_status_undefined()) {
-        // UNDEFINED should be deleted after log has been recovered.
+      if (ha_status.is_restore_status_undefined()) {
         bool is_deleted = true;
-        if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
+        // UNDEFINED should be deleted after log has recovered.
+        if (ls_restore_status.is_quick_restore()) {
+          is_finish = true;
+        } else if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
           LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
+        } else if (is_deleted) {
+          is_finish = true;
+          LOG_INFO("UNDEFINED tablet is deleted", K(tablet_meta));
         } else {
-          is_finish = is_deleted;
+          is_finish = false;
+          LOG_INFO("UNDEFINED tablet is not deleted", K(tablet_meta));
         }
       } else {
-        is_finish = false;
+        is_finish = ha_status.is_restore_status_minor_and_major_meta();
+        if (!ha_status.is_restore_status_full()) {
+        } else if (!tablet_meta.has_transfer_table()) {
+          is_finish = true;
+        } else {
+          // FULL tablet with transfer table, need wait the table be replaced.
+          is_finish = false;
+        }
       }
       break;
     }
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
       is_finish = !ha_status.is_restore_status_minor_and_major_meta();
+      if (!is_finish && GCTX.is_shared_storage_mode()) {
+        bool is_deleted = false;
+        // follower may not see tablet deletion, check before restore major
+        if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
+          LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
+        } else {
+          is_finish = is_deleted;
+          LOG_INFO("skip tablet restore major when it has been deleted", K(tablet_meta), K(is_deleted));
+        }
+      }
       break;
     }
 
     case ObLSRestoreStatus::WAIT_RESTORE_MAJOR_DATA : {
       if (ha_status.is_restore_status_full()) {
         is_finish = true;
-      } else if (ha_status.is_restore_status_undefined()) {
+      } else if (ha_status.is_restore_status_undefined() || ha_status.is_restore_status_minor_and_major_meta()) {
         // UNDEFINED should be deleted after log has been recovered.
+        // MINOR_AND_MAJOR_DATA may because this tablet has been deleted before restore major
         bool is_deleted = true;
         if (OB_FAIL(ObStorageHAUtils::check_tablet_is_deleted(tablet_handle, is_deleted))) {
           LOG_WARN("failed to check tablet is deleted", K(ret), K(tablet_meta));
@@ -280,12 +297,21 @@ ObTabletRestoreAction::ACTION ObRestoreCompatibilityUtil::get_restore_action_pre
     }
 
     case ObLSRestoreStatus::QUICK_RESTORE: {
-      action = ObTabletRestoreAction::RESTORE_MINOR;
+      if (ls_id.is_sys_ls()) {
+        //restore full sys tablet, otherwise can not replay upgrade log
+        action =  ObTabletRestoreAction::RESTORE_ALL;
+      } else {
+        action = ObTabletRestoreAction::RESTORE_MINOR;
+      }
       break;
     }
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA : {
-      action = ObTabletRestoreAction::RESTORE_MAJOR;
+      if (ls_id.is_sys_ls()) {
+        //do nothing
+      } else {
+        action = ObTabletRestoreAction::RESTORE_MAJOR;
+      }
       break;
     }
 

@@ -107,22 +107,28 @@ enum ObCOMajorSSTableStatus: uint8_t {
   PURE_COL = 3, // rowkey cg + normal cg
   PURE_COL_ONLY_ALL = 4, // all cg only (schema do not have all cg)
   COL_REPLICA_MAJOR = 5, // temp status, row store major from F/R replica for column store replica
+  DELAYED_TRANSFORM_MAJOR = 6, // row store sstable under column store schema
+  PURE_COL_WITH_ALL = 7, // rowkey cg + normal cg (schema have all cg)
   MAX_CO_MAJOR_SSTABLE_STATUS
 };
 /*
-  +-----------------+---------------+---------------+-------+
-  |      status     |    schema     |  last_major   |IS_SAME|
-  +-----------------+---------------+---------------+-------+
-  |  COL_WITH_ALL   |   ALL+EACH    |   ALL+EACH    |  YES  |
-  +-----------------+---------------+---------------+-------+
-  |  COL_ONLY_ALL   |   ALL+EACH    |      ALL      |   NO  |
-  +-----------------+---------------+---------------+-------+
-  |     PURE_COL    |     EACH      |      EACH     |  YES  |
-  +-----------------+---------------+---------------+-------+
-  |PURE_COL_ONLY_ALL|     EACH      |      ALL      |   NO  |
-  +-----------------+---------------+---------------+-------+
-  |COL_REPLICA_MAJOR|    ROW STORE  |   ROW STORE   |  YES  |
-  +-----------------+---------------+---------------+-------+
+  +-----------------------+---------------+---------------+-------+
+  |         status        |    schema     |  last_major   |IS_SAME|
+  +-----------------------+---------------+---------------+-------+
+  |      COL_WITH_ALL     |   ALL+EACH    |   ALL+EACH    |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |      COL_ONLY_ALL     |   ALL+EACH    |      ALL      |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |        PURE_COL       |     EACH      |      EACH     |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |   PURE_COL_ONLY_ALL   |     EACH      |      ALL      |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |   COL_REPLICA_MAJOR   |    ROW STORE  |   ROW STORE   |  YES  |
+  +-----------------------+---------------+---------------+-------+
+  |DELAYED_TRANSFORM_MAJOR| ALL+EACH/EACH |   ROW STORE   |   NO  |
+  +-----------------------+---------------+---------------+-------+
+  |   PURE_COL_WITH_ALL   |    ALL+EACH   |      EACH     |   NO  |
+  +-----------------------+---------------+---------------+-------+
 */
 inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)
 {
@@ -140,7 +146,12 @@ inline bool is_major_sstable_match_schema(const ObCOMajorSSTableStatus& major_ss
 {
   return major_sstable_status == COL_WITH_ALL || major_sstable_status == PURE_COL;
 }
+inline bool is_build_redundent_row_store(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  return PURE_COL_WITH_ALL == major_sstable_status;
+}
 
+const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status);
 /*
  * The base part of ObCOSSTable maybe
  */
@@ -223,7 +234,9 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
-  int fill_column_ckm_array(const ObStorageSchema &storage_schema, ObIArray<int64_t> &column_checksums) const;
+  int fill_column_ckm_array(
+      const ObStorageSchema &storage_schema,
+      ObIArray<int64_t> &column_checksums) const;
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:

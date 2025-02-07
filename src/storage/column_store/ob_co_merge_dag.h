@@ -141,6 +141,9 @@ public:
   virtual int report_result() override;
   virtual int gene_compaction_info(compaction::ObTabletCompactionProgress &progress) override;
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
+  virtual bool check_can_schedule() override;
+  virtual bool check_need_stop_dag(const int error_code) override;
+  virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_status);
   uint32_t get_start_cg_idx() const { return start_cg_idx_; }
   uint32_t get_end_cg_idx() const { return end_cg_idx_; }
   bool get_retry_create_task() const { return retry_create_task_; }
@@ -184,6 +187,9 @@ protected:
   virtual int process() override;
 private:
   void merge_start();
+#ifdef ERRSIM
+  int errsim_before_merge_partition();
+#endif
 private:
   bool is_inited_;
   int64_t idx_;
@@ -275,14 +281,6 @@ public:
   {
     return ATOMIC_LOAD(&finish_added_);
   }
-  virtual int deal_with_cancel() override
-  {
-    if (!inner_check_finished() && OB_NOT_NULL(finish_dag_)) {
-      (void)MTL(share::ObTenantDagScheduler*)->free_dag(*finish_dag_);
-      finish_dag_ = nullptr;
-    }
-    return OB_SUCCESS;
-  }
   void cancel_dag_net(const int error_code);
   int create_co_execute_dags(share::ObIDag &schedule_dag);
   bool check_merge_finished();
@@ -298,6 +296,8 @@ public:
   int swap_tablet_after_minor();
   ObCOTabletMergeCtx *get_merge_ctx() const { return co_merge_ctx_; }
   const ObCOMergeDagParam& get_dag_param() const { return basic_param_; }
+  int64_t get_batch_dag_count() const { return ATOMIC_LOAD(&batch_dag_cnt_); }
+  void inc_batch_dag_count() { ATOMIC_INC(&batch_dag_cnt_); }
   void collect_running_info(const uint32_t start_cg_idx, const uint32_t end_cg_idx, const int64_t hash,
       const share::ObDagId &dag_id, const ObCompactionTimeGuard &time_guard);
   template<class T>
@@ -307,8 +307,10 @@ public:
     T *&dag,
     share::ObIDag *parent = nullptr,
     const bool add_scheduler_flag = true);
+  int init_min_sstable_end_scn();
+  int get_min_sstable_end_scn(SCN &min_end_scn); // return min_end_scn from ctx
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(basic_param), KP_(finish_dag));
+      K_(merge_batch_size), K_(batch_dag_cnt), K_(basic_param), KP_(finish_dag), K_(min_sstable_end_scn));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
@@ -351,12 +353,14 @@ private:
   bool batch_reduced_; // only reduce batch_size one time in a round // locked by ctx_lock_
   lib::ObMutex ctx_lock_;
   int64_t merge_batch_size_; // will decrease when meet memory allocate failed
+  int64_t batch_dag_cnt_; // record the batch exec dag cnt
   COMergeStatus merge_status_;
   ObCOMergeDagParam basic_param_;
   common::ObArenaAllocator tmp_allocator_; // TODO(@lixia.yq) temp solution, use allocator on ObIDagNet later
   ObCOTabletMergeCtx *co_merge_ctx_;
   ObCOMergeFinishDag *finish_dag_;
   ObStorageCompactionTimeGuard time_guard_;
+  int64_t min_sstable_end_scn_;
 };
 
 template<class T>
@@ -396,8 +400,8 @@ int ObCOMergeDagNet::create_dag(
 #endif
     }
     if (OB_SUCC(ret)) {
-      STORAGE_LOG(INFO, "success to create dag", K(ret), K_(basic_param), KP(dag),
-        "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), KP(parent));
+      STORAGE_LOG(INFO, "success to create dag", K(ret), K_(basic_param), KPC(dag),
+        "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), K(dag->get_indegree()));
     }
     if (OB_FAIL(ret) || !add_scheduler_flag) {
     } else if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {

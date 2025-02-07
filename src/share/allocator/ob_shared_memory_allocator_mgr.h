@@ -136,7 +136,7 @@ public:
       if (0 < sleep_interval) {
         sleep_time += sleep_interval;
         left_interval -= sleep_interval;
-        ::usleep(sleep_interval);
+        ob_usleep<ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval, sleep_interval, sleep_time, 0);
       }
 
       PrintThrottleUtil::pirnt_throttle_info(ret,

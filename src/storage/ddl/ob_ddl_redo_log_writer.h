@@ -317,6 +317,12 @@ public:
       share::SCN &commit_scn,
       bool &is_remote_write,
       uint32_t &lock_tid);
+  template <typename T>
+  static int write_auto_split_log(const share::ObLSID &ls_id,
+                                  const ObDDLClogType &clog_type,
+                                  const logservice::ObReplayBarrierType &replay_barrier_type,
+                                  const T &log,
+                                  SCN &scn);
   int write_commit_log_with_retry(
       const bool allow_remote_write,
       const ObITable::TableKey &table_key,
@@ -503,6 +509,7 @@ public:
             char *buf,
             const int64_t buf_len,
             const int64_t row_count) override;
+  int do_write_io() override;
   int wait();
 private:
   bool is_inited_;
@@ -511,6 +518,8 @@ private:
   ObDDLRedoLogWriter *ddl_writer_;
   int64_t task_id_;
   uint64_t data_format_version_;
+  ObArenaAllocator arena_allocator_;
+  ObDDLFinishLog finish_log_;
 };
 #endif
 }  // end namespace storage

@@ -286,7 +286,6 @@ int ObSharedMacroBlockMgr::write_block(
   read_info.offset_ = offset;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   ObMacroBlockHandle read_handle;
   ObSSTableMacroBlockChecker macro_block_checker;
@@ -532,6 +531,7 @@ int ObSharedMacroBlockMgr::defragment()
   } else if (OB_ALLOCATE_MEMORY_FAILED != ret
       && OB_SERVER_OUTOF_DISK_SPACE != ret
       && OB_TIMEOUT != ret
+      && OB_NOT_RUNNING != ret
       && REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
     LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids));
   }
@@ -794,6 +794,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
+          tablet.get_transfer_seq(),
           end_scn))) {
       LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
         K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
@@ -825,6 +826,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
+          tablet.get_transfer_seq(),
           end_scn,
           cg_schema,
           cg_idx))) {
@@ -907,7 +909,6 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.size_ = upper_align(sstable.get_macro_read_size(), DIO_READ_ALIGN_SIZE);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {

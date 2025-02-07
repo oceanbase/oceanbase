@@ -37,17 +37,19 @@ public:
       batch_size_(0),
       max_error_row_count_(0),
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
-      is_need_sort_(false)
+      is_need_sort_(false),
+      is_task_need_sort_(false)
   {
   }
   TO_STRING_KV(K_(parallel), K_(batch_size), K_(max_error_row_count), K_(dup_action),
-               K_(is_need_sort));
+               K_(is_need_sort), K_(is_task_need_sort));
 public:
   int32_t parallel_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;
   sql::ObLoadDupActionType dup_action_;
-  bool is_need_sort_;
+  bool is_need_sort_;         // 表示主表是否要排序
+  bool is_task_need_sort_;    // 表示导入任务是否会走到排序流程
 };
 
 struct ObTableLoadPartitionId

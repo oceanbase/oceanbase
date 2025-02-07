@@ -260,7 +260,7 @@ int ObDefaultValueUtils::resolve_default_expr(const ColumnItem &column_item, ObR
       LOG_WARN("params_.session_info_ is null", K(ret));
     } else {
       default_func_expr->set_func_name(ObString::make_string(N_DEFAULT));
-      default_func_expr->set_data_type(column_item.get_column_type()->get_type());
+      default_func_expr->set_result_type(*column_item.get_column_type());
       if (OB_FAIL(build_type_expr(&column_item, c_expr))) {
         LOG_WARN("fail to build type expr", K(ret));
       } else if (OB_FAIL(default_func_expr->add_param_expr(c_expr))) {
@@ -588,11 +588,13 @@ int ObDefaultValueUtils::get_default_type_for_insert(const ColumnItem *column, O
       if (params_->session_info_->get_ddl_info().is_ddl()) {
         op = OB_NOT_STRICT_DEFAULT_OP;
       } else if (is_strict_mode(params_->session_info_->get_sql_mode()) && !del_upd_stmt->is_ignore()) {
-        LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
         ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
         LOG_WARN("Column can not be null", K(column->column_name_), K(ret));
       } else {
-        LOG_USER_WARN(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+        ObCStringHelper helper;
+        LOG_USER_WARN(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
         op = OB_NOT_STRICT_DEFAULT_OP;
       }
     }
@@ -654,7 +656,8 @@ int ObDefaultValueUtils::get_default_type_for_default_function(const ColumnItem 
     op = OB_NORMAL_DEFAULT_OP;
   } else if (column->is_not_null_for_write() && column->default_value_.is_null()) {
     ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
-    LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(column->column_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, helper.convert(column->column_name_));
   } else {
     op = OB_NORMAL_DEFAULT_OP;
   }
@@ -780,11 +783,8 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     default_value.set_null();
   } else {
     default_value.set_type(column_schema->get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision()))) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision(), column_schema->get_collation_type()))) {
       LOG_WARN("failed to build not strict default value info", K(column_schema), K(ret));
-    } else if (default_value.is_string_type()) {
-      default_value.set_collation_level(CS_LEVEL_IMPLICIT);
-      default_value.set_collation_type(column_schema->get_collation_type());
     }
   }
   if (OB_SUCC(ret)) {
@@ -836,11 +836,8 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
     default_value.set_null();
   } else {
     default_value.set_type(column->get_column_type()->get_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision()))) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision(), column->get_column_type()->get_collation_type()))) {
       LOG_WARN("failed to build not strict default value info", K(column), K(ret));
-    } else if (default_value.is_string_type()) {
-      default_value.set_collation_level(CS_LEVEL_IMPLICIT);
-      default_value.set_collation_type(column->get_column_type()->get_collation_type());
     }
   }
   if (OB_SUCC(ret)) {

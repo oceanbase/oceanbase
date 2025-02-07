@@ -541,9 +541,10 @@ int ObRelativeTable::build_index_row(
     LOG_WARN("relative table is not storage index table", K(ret), K(*this));
   } else if (table_row.is_invalid() || !col_map.is_inited() || index_row.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
+    ObCStringHelper helper;
     LOG_WARN("table_row can not be empty",
-                "table_row", to_cstring(table_row),
-                "index_row", to_cstring(index_row));
+                "table_row", helper.convert(table_row),
+                "index_row", helper.convert(index_row));
   } else {
     share::schema::ObColDesc col_desc;
     null_idx_val = false;
@@ -643,8 +644,9 @@ int ObRelativeTable::set_index_value(
                   "column_id", id, "index", idx);
     } else if (idx >= table_row.count_) {
       ret = OB_ENTRY_NOT_EXIST;
+      ObCStringHelper helper;
       LOG_WARN("can not get row value",
-                  "table_row", to_cstring(table_row), "column_id", id, "index", idx);
+                  "table_row", helper.convert(table_row), "column_id", id, "index", idx);
     } else {
       *(index_row.cells_ + index_row.count_++) = table_row.cells_[idx];
     }

@@ -296,8 +296,7 @@ public:
   bool waiting_SWL_cb();
   void replay_SWL_succ(const share::SCN & swl_scn);
 
-  const char *
-  iter_ctx_mgr_stat_info(uint64_t &state_container, bool &is_master, bool &is_stopped) const;
+  void iter_ctx_mgr_stat_info(uint64_t &state_container, bool &is_master, bool &is_stopped) const;
   // TxLSState get_state() const;
   bool is_master() const;
   bool is_follower() const;

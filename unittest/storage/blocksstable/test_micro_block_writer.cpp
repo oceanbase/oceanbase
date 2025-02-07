@@ -186,10 +186,11 @@ TEST_F(TestMicroBlockWriter, append_success)
     //every obj should equal
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
     for (int64_t j = 0; j < column_num ; ++ j){
+      ObCStringHelper helper;
       ASSERT_TRUE(read_row.storage_datums_[j] == row.storage_datums_[j])
         << "\n i: " << i << " j: " << j
-        << "\n writer:  "<< to_cstring(row.storage_datums_[j])
-        << "\n reader:  " << to_cstring(read_row.storage_datums_[j]);
+        << "\n writer:  "<< helper.convert(row.storage_datums_[j])
+        << "\n reader:  " << helper.convert(read_row.storage_datums_[j]);
     }
   }
 }

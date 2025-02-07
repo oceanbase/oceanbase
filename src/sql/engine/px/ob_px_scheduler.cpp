@@ -41,6 +41,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/join/ob_join_filter_op.h"
+#include "src/sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
 
 namespace oceanbase
 {
@@ -322,7 +323,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
     LOG_WARN("fail to merge feedback info", K(ret));
   } else if (OB_ISNULL(session->get_tx_desc())) {
   } else if (OB_FAIL(MTL(transaction::ObTransService*)
-                     ->add_tx_exec_result(*session->get_tx_desc(),
+                    ->add_tx_exec_result(*session->get_tx_desc(),
                                           pkt.get_trans_result()))) {
     LOG_WARN("fail merge result", K(ret),
              "packet_trans_result", pkt.get_trans_result(),

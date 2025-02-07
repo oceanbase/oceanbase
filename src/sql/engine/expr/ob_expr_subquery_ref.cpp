@@ -498,7 +498,7 @@ int ObExprSubQueryRef::get_subquery_iter(ObEvalCtx &ctx,
     if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(extra), KP(kit));
-    } else if (PHY_SUBPLAN_FILTER != kit->op_->get_spec().type_) {
+    } else if (PHY_SUBPLAN_FILTER != kit->op_->get_spec().type_ && PHY_VEC_SUBPLAN_FILTER != kit->op_->get_spec().type_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("is not subplan filter operator", K(ret), K(extra),
                "spec", kit->op_->get_spec());

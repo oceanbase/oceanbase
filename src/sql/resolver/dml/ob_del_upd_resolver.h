@@ -178,6 +178,7 @@ protected:
                             ObIArray<ObRawExpr *> &base_columns);
   
   int view_pullup_column_ref_exprs_recursively(ObRawExpr *&expr,
+                                               uint64_t view_table_id,
                                                uint64_t base_table_id,
                                                const ObDMLStmt *stmt);
 
@@ -207,9 +208,6 @@ protected:
                               const int64_t row_index,
                               const uint64_t value_count,
                               bool& is_all_default);
-  int check_column_value_type(common::ObArray<ObRawExpr*> *value_row,
-                              ObInsertTableInfo& table_info,
-                              const ParamStore * params);
   int build_row_for_empty_brackets(common::ObArray<ObRawExpr*> &value_row,
                                    ObInsertTableInfo& table_info);
 
@@ -288,6 +286,11 @@ protected:
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
   int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
   int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+  int build_doc_id_function_expr(
+      const ObInsertTableInfo& table_info,
+      const ObColumnSchemaV2 &col_schema,
+      const ObColumnRefRawExpr &column,
+      ObRawExpr *&func_expr);
   int build_vec_vid_function_expr(
       const ObInsertTableInfo& table_info,
       const ObColumnSchemaV2 &col_schema,

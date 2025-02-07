@@ -64,3 +64,34 @@ drop database if exists luofan;
 --enable_warnings
 
 
+--disable_warnings
+drop table if exists space_t1;
+drop table if exists space_t2;
+--enable_warnings
+
+create table space_t1(c1 char(181) default (space( '1')), c2 int);
+select * from space_t1;
+insert into space_t1(c2) values(1);
+select * from space_t1;
+
+create table space_t2 as select space('1') as c1 from space_t1;
+# c1 is varchar type
+desc space_t2;
+drop table space_t2;
+
+create table space_t2 as select space('1024') as c1 from space_t1;
+# c1 is text type
+desc space_t2;
+drop table space_t2;
+
+create table space_t2 as select space(NULL) as c1 from space_t1;
+# c1 is varchar type
+desc space_t2;
+drop table space_t2;
+
+drop table space_t1;
+create table space_t1(c1 char(181) default (space(NULL)), c2 int);
+select * from space_t1;
+insert into space_t1(c2) values(1);
+select * from space_t1;
+drop table space_t1;

@@ -317,8 +317,9 @@ int ObLogSQLServerProvider::get_svr_list_based_on_blacklist_(ServerList &server_
     for (int64_t index = 0; index < svr_count_after_filter; index++) {
       ObRootAddr &addr = server_list.at(index);
 
+      ObCStringHelper helper;
       _LOG_INFO("[SQL_SERVER_PROVIDER] server[%ld/%ld]=%s  role=%ld  sql_port=%ld",
-          index, svr_count_after_filter, to_cstring(addr.get_server()),
+          index, svr_count_after_filter, helper.convert(addr.get_server()),
           static_cast<int64_t>(addr.get_role()), addr.get_sql_port());
     }
   }
@@ -386,8 +387,9 @@ int ObLogSQLServerProvider::get_server(
       server.set_port((int32_t)addr.get_sql_port());
     }
 
+    ObCStringHelper helper;
     _LOG_DEBUG("[SQL_SERVER_PROVIDER] get_server(%ld/%ld)=>%s ret=%d",
-        svr_idx, server_list_.count(), to_cstring(server), ret);
+        svr_idx, server_list_.count(), helper.convert(server), ret);
   }
 
   return ret;

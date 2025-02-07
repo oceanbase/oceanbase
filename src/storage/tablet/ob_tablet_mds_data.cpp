@@ -19,6 +19,7 @@
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/compaction/ob_extra_medium_info.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "storage/tablet/ob_i_tablet_mds_interface.h"
@@ -703,7 +704,7 @@ int ObTabletMdsData::init_for_merge_with_full_mds_data(
     const ObTabletFullMediumInfo &full_memory_medium_info_list,
     const int64_t finish_medium_scn)
 {
-  //TODO(xianzhi)/(muwei.ym) check it for migration/transfer
+  //TODO(muwei.ym) check it for migration/transfer
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {

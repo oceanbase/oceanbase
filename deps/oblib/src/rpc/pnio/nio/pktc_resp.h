@@ -26,6 +26,8 @@ static void pktc_do_cb_exception(pktc_t* io, pktc_cb_t* cb) {
         cb->errcode = PNIO_DISCONNECT_NOT_SENT_OUT;
       } else if (cb->errcode == PNIO_TIMEOUT) {
         cb->errcode = PNIO_TIMEOUT_NOT_SENT_OUT;
+      } else if (cb->errcode == PNIO_PKT_TERMINATE){
+        cb->errcode = PNIO_PKT_TERMINATE_NOT_SENT_OUT;
       }
       pktc_flush_cb(io, req);
     }

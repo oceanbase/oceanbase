@@ -14,6 +14,8 @@
 #include "ob_table_rpc_impl.h"
 #include "share/table/ob_table_rpc_proxy.h"               // ObTableRpcProxy
 #include "share/ob_tenant_mgr.h"
+#include "src/libtable/src/ob_tablet_location_proxy.h"
+
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -208,7 +210,7 @@ int ObTableRpcImpl::aggregate_tablet_by_server(const ObIArray<ObTabletLocation> 
   int tmp_ret = ret;
   FreeIdxArrayFunc free_idx_array_fn;
   if (OB_FAIL(server_tablet_map.foreach_refactored(free_idx_array_fn))) {
-    //overwrite ret
+    // overwrite ret
     LOG_WARN("failed to do foreach", K(ret));
   }
   ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret;
@@ -606,6 +608,8 @@ int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObT
     request.consistency_level_ = request_options.consistency_level();
     request.query_session_id_ = query_async_multi_result_.session_id_;
     request.query_type_ = ObQueryOperationType::QUERY_NEXT;
+    request.table_name_ = table_name_;
+    request.table_id_ = table_id_;
     query_async_multi_result_.has_more_ = false;
     result = &query_async_multi_result_.get_one_result();
     result->reset();

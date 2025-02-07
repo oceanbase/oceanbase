@@ -112,7 +112,9 @@ public:
   virtual int reuse() override;
   int adjust_cell_size();
   void after_process() override;
-  int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges) override;
+  int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                              bool need_deep_copy = false,
+                              common::ObIAllocator *allocator = nullptr) override;
   inline int init_query_range_info(const ObPxQueryRangeInfo &query_range_info)
   {
     return query_range_info_.assign(query_range_info);
@@ -296,7 +298,9 @@ public:
   virtual int reuse() override;
   void check_finish_receive() override final;
   void after_process() override;
-  int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges) override;
+  int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                              bool need_deep_copy = false,
+                              common::ObIAllocator *allocator = nullptr) override;
   inline int init_query_range_info(const ObPxQueryRangeInfo &query_range_info)
   {
     return query_range_info_.assign(query_range_info);
@@ -363,8 +367,13 @@ public:
   bool is_query_range_ready_;             // not need to serialize
   common::ObArenaAllocator query_range_allocator_;
   // ---end---
-  ObSmallHashSet<false> sm_hash_set_;
+  ObSmallHashSet<true> sm_hash_set_;
   bool use_hash_join_seed_ {false};
+
+  // if enable
+  // 1. only insert hash value if can't extract query range
+  // 2. insert hash value and data if can extract query range
+  bool build_send_opt_{false};
 };
 
 

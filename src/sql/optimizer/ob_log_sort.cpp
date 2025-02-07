@@ -352,19 +352,14 @@ int ObLogSort::est_cost()
   double sort_cost = 0.0;
   double double_topn_count = -1;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
-  } else if (OB_FAIL(inner_est_cost(get_parallel(), child->get_card(), double_topn_count, sort_cost))) {
-    LOG_WARN("failed to est sort cost", K(ret));
+  } else if (OB_FAIL(do_re_est_cost(param, card_, op_cost_, cost_))) {
+    LOG_WARN("failed to est cost", K(ret));
   } else {
-    set_op_cost(sort_cost);
-    set_cost(child->get_cost() + sort_cost);
-    if (double_topn_count >= 0 && child->get_card() > double_topn_count) {
-      set_card(double_topn_count);
-    } else {
-      set_card(child->get_card());
-    }
     LOG_TRACE("cost for sort operator", K(sort_cost), K(get_cost()),
               K(get_card()));
   }
@@ -374,26 +369,40 @@ int ObLogSort::est_cost()
 int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  double child_card = 0.0;
+  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  double child_card = OB_ISNULL(child) ? 0.0 : child->get_card();
   double child_cost = 0.0;
   double double_topn_count = -1;
-  card = get_card();
+  int64_t topn_count = -1;
+  bool is_null_value = false;
+  card = child_card;
   const int64_t parallel = param.need_parallel_;
   if (param.need_row_count_ >=0 && param.need_row_count_ < card) {
     card = param.need_row_count_;
   }
-  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
       || OB_ISNULL(get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_1_BP4) {
     param.need_row_count_ = -1;
-  } else if (-1 == param.need_row_count_) {
-    //do nothing
   } else if (!is_prefix_sort()) {
     param.need_row_count_ = -1;
+  } else if (NULL != topn_expr_ &&
+             OB_FAIL(ObTransformUtils::get_limit_value(topn_expr_,
+                                                       get_plan()->get_optimizer_context().get_params(),
+                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
+                                                       &get_plan()->get_optimizer_context().get_allocator(),
+                                                       topn_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get value", K(ret));
+  } else if ((is_null_value || topn_count < 0) &&
+             -1 == param.need_row_count_) {
+    // do nothing
   } else {
+    if (-1 == param.need_row_count_ || (topn_count >= 0 && param.need_row_count_ > topn_count)) {
+      param.need_row_count_ = topn_count;
+    }
     ObSEArray<ObRawExpr*, 4> prefix_ordering;
     for (int64_t i = 0; OB_SUCC(ret) && i < get_prefix_pos(); ++i) {
       if (OB_FAIL(prefix_ordering.push_back(sort_keys_.at(i).expr_))) {
@@ -402,6 +411,7 @@ int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     }
     if (OB_SUCC(ret)) {
       double prefix_ndv = 0.0;
+      get_plan()->get_selectivity_ctx().init_op_ctx(child);
       if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
                                                         get_plan()->get_selectivity_ctx(),
                                                         prefix_ordering,
@@ -660,7 +670,7 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
       LOG_WARN("fail to generate p2p dh id", K(ret));
     } else {
       (void)topn_filter_info_.init(p2p_sequence_id, pushdown_topn_filter_expr, effective_sk_cnt,
-                                   tsc_has_exchange);
+                                   tsc_has_exchange, node);
     }
   }
 

@@ -354,7 +354,7 @@ public:
   virtual ~ObChunkRowStore() { reset(); }
 
   int init(int64_t mem_limit,
-      uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+      uint64_t tenant_id,
       int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
       const char *label = common::ObModIds::OB_SQL_CHUNK_ROW_STORE,
       bool enable_dump = true,
@@ -535,7 +535,7 @@ inline int ObChunkRowStore::BlockBuffer::advance(int64_t size)
 class ObChunkStoreUtil
 {
 public:
-  static int alloc_dir_id(int64_t &dir_id);
+  static int alloc_dir_id(const uint64_t tenant_id, int64_t &dir_id);
 };
 
 } // end namespace sql

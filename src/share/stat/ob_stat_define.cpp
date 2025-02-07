@@ -33,7 +33,7 @@ void ObAnalyzeSampleInfo::set_rows(double row_num)
   sample_value_ = row_num;
 }
 
-bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
+bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type, bool is_online_stat)
 {
   bool ret = false;
   // currently, we only support the following type to collect histogram
@@ -54,7 +54,9 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
       type_class == ColumnTypeClass::ObEnumSetTC ||
       type_class == ColumnTypeClass::ObIntervalTC ||
       type_class == ColumnTypeClass::ObDecimalIntTC ||
-      (lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC)) {
+      (!is_online_stat && lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC) ||
+      type_class == ColumnTypeClass::ObMySQLDateTC ||
+      type_class == ColumnTypeClass::ObMySQLDateTimeTC) {
     ret = true;
   }
   return ret;
@@ -182,13 +184,20 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   allocator_ = other.allocator_;
   ref_table_type_ = other.ref_table_type_;
   is_async_gather_ = other.is_async_gather_;
-  async_gather_sample_size_ = other.async_gather_sample_size_;
   async_full_table_size_ = other.async_full_table_size_;
   async_partition_ids_ = other.async_partition_ids_;
   hist_sample_info_.is_sample_ = other.hist_sample_info_.is_sample_;
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  is_auto_gather_ = other.is_auto_gather_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -238,6 +247,14 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  is_auto_gather_ = other.is_auto_gather_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
+  consumer_group_id_ = other.consumer_group_id_;
+  min_iops_ = other.min_iops_;
+  max_iops_ = other.max_iops_;
+  weight_iops_ = other.weight_iops_;
   return ret;
 }
 
@@ -270,6 +287,13 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   hist_sample_info_.is_block_sample_ = other.hist_sample_info_.is_block_sample_;
   hist_sample_info_.sample_type_ = other.hist_sample_info_.sample_type_;
   hist_sample_info_.sample_value_ = other.hist_sample_info_.sample_value_;
+  is_auto_sample_size_ = other.is_auto_sample_size_;
+  need_refine_min_max_ = other.need_refine_min_max_;
+  auto_sample_row_cnt_ = other.auto_sample_row_cnt_;
+  data_table_id_ = other.data_table_id_;
+  is_global_index_ = other.is_global_index_;
+  part_level_ = other.part_level_;
+  consumer_group_id_ = other.consumer_group_id_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

@@ -205,7 +205,7 @@ ObRARowStore::ObRARowStore(common::ObIAllocator *alloc /* = NULL */,
 }
 
 int ObRARowStore::init(int64_t mem_limit,
-    uint64_t tenant_id /* = common::OB_SERVER_TENANT_ID */,
+    uint64_t tenant_id,
     int64_t mem_ctx_id /* = common::ObCtxIds::DEFAULT_CTX_ID */,
     const char *label /* = common::ObNewModIds::OB_SQL_ROW_STORE) */)
 {
@@ -226,7 +226,6 @@ int ObRARowStore::init(int64_t mem_limit,
 void ObRARowStore::reset()
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = common::OB_SERVER_TENANT_ID;
   label_ = common::ObModIds::OB_SQL_ROW_STORE;
   ctx_id_ = common::ObCtxIds::DEFAULT_CTX_ID;
   mem_limit_ = 0;
@@ -239,7 +238,7 @@ void ObRARowStore::reset()
   inner_reader_.reset();
 
   if (is_file_open()) {
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(fd));
     } else {
       LOG_INFO("close file success", K(ret), K_(fd));
@@ -249,6 +248,7 @@ void ObRARowStore::reset()
     file_size_ = 0;
   }
 
+  tenant_id_ = common::OB_SERVER_TENANT_ID;
   while (!blk_mem_list_.is_empty()) {
     LinkNode *node = blk_mem_list_.remove_first();
     if (NULL != node) {
@@ -273,7 +273,7 @@ void ObRARowStore::reuse()
   row_cnt_ = 0;
   inner_reader_.reuse();
   if (is_file_open()) {
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(fd_))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.remove(tenant_id_, fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(fd));
     } else {
       LOG_INFO("close file success", K(ret), K_(fd));
@@ -950,9 +950,9 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     LOG_WARN("get timeout failed", K(ret));
   } else {
     if (!is_file_open()) {
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id_))) {
+      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(tenant_id_, dir_id_))) {
         LOG_WARN("alloc file directory failed", K(ret));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.open(fd_, dir_id_))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.open(tenant_id_, fd_, dir_id_))) {
         LOG_WARN("open file failed", K(ret));
       } else {
         file_size_ = 0;
@@ -968,7 +968,7 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.size_ = size;
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
     io.io_timeout_ms_ = timeout_ms;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(tenant_id_, io))) {
       LOG_WARN("write to file failed", K(ret), K(io), K(timeout_ms));
     }
   }
@@ -1003,7 +1003,7 @@ int ObRARowStore::read_file(void *buf, const int64_t size, const int64_t offset)
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     io.io_timeout_ms_ = timeout_ms;
     tmp_file::ObTmpFileIOHandle handle;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, handle))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(tenant_id_, io, offset, handle))) {
       LOG_WARN("read form file failed", K(ret), K(io), K(offset), K(timeout_ms));
     } else if (handle.get_done_size() != size) {
       ret = OB_INNER_STAT_ERROR;

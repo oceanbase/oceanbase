@@ -255,6 +255,7 @@ int ObServerSchemaUpdater::batch_process_tasks(
 
 int ObServerSchemaUpdater::process_refresh_task(const ObServerSchemaTask &task)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
   const ObRefreshSchemaInfo &schema_info = task.schema_info_;
   ObTaskController::get().switch_task(share::ObTaskType::SCHEMA);
@@ -357,6 +358,7 @@ int ObServerSchemaUpdater::process_release_task()
 int ObServerSchemaUpdater::process_async_refresh_tasks(
     const ObIArray<ObServerSchemaTask> &tasks)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::ASYNC_REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
   ObTaskController::get().switch_task(share::ObTaskType::SCHEMA);
   THIS_WORKER.set_timeout_ts(INT64_MAX);
@@ -436,6 +438,7 @@ int ObServerSchemaUpdater::try_reload_schema(
       LOG_WARN("fail to set tenant received broadcast version", K(tmp_ret), K(schema_info));
     }
 
+    DEBUG_SYNC(BEFORE_ADD_REFRESH_SCHEMA_TASK);
     const bool did_retry = true;
     ObServerSchemaTask refresh_task(ObServerSchemaTask::REFRESH, did_retry, schema_info);
     if (OB_FAIL(task_queue_.add(refresh_task))) {
@@ -471,6 +474,7 @@ int ObServerSchemaUpdater::async_refresh_schema(
     const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_ADD_ASYNC_REFRESH_SCHEMA_TASK);
   ObServerSchemaTask refresh_task(ObServerSchemaTask::ASYNC_REFRESH,
                                   tenant_id, schema_version);
   if (!inited_) {

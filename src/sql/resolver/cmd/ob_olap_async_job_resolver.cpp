@@ -20,6 +20,7 @@ namespace oceanbase
 {
 using namespace common;
 using namespace share;
+using namespace dbms_scheduler;
 namespace sql
 {
 ObOLAPAsyncJobResolver::ObOLAPAsyncJobResolver(ObResolverParams &params)
@@ -57,7 +58,23 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
 {
   int ret = OB_SUCCESS;
   int64_t session_query_time_out_ts = 0;
-  if (OB_JOB_SQL_MAX_LENGTH - 1 < parse_tree.str_len_) {
+
+  const ParseNode* sql_stmt_node =  parse_tree.children_[0];
+  /* 解析的结构
+  parse_tree->T_OLAP_ASYNC_JOB_SUBMIT
+  |--[0] T_SQL_STMT
+    |--[0] [T_SELECT/T_INSERT/T_CREATE_TABLE] user_sql
+  */
+  if (parse_tree.num_child_ != 1 || OB_ISNULL(sql_stmt_node) || sql_stmt_node->type_ != T_SQL_STMT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid job name", K(ret));
+  } else if (sql_stmt_node->num_child_ != 1 || OB_ISNULL(sql_stmt_node->children_[0]) || (
+     sql_stmt_node->children_[0]->type_ != T_INSERT &&
+     sql_stmt_node->children_[0]->type_ != T_LOAD_DATA &&
+     sql_stmt_node->children_[0]->type_ != T_CREATE_TABLE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sql type");
+  } else if (OB_JOB_SQL_MAX_LENGTH - 1 < parse_tree.str_len_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("sql too long", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "sql length");
@@ -68,7 +85,6 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get session query timeout failed", KR(ret));
   } else {
-
     const int definer_buf_size = OB_MAX_USER_NAME_LENGTH + OB_MAX_HOST_NAME_LENGTH + 2; // @ + \0
     char *definer_buf = static_cast<char*>(allocator_->alloc(definer_buf_size));
     if (OB_ISNULL(definer_buf)) {
@@ -194,7 +210,7 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.cowner_ = stmt.get_job_database();
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString("OLAP_ASYNC_JOB_CLASS");
+      job_info.job_class_ = ObString(OLAP_ASYNC_JOB_CLASS);
       job_info.what_ = stmt.get_job_action();
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;

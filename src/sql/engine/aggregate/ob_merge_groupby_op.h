@@ -114,7 +114,6 @@ public:
       first_batch_from_sort_(true),
       dir_id_(-1),
       group_batch_factor_(8),
-      max_partial_rollup_idx_(INT64_MAX),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_),
       hp_infras_mgr_(MTL_ID())
@@ -261,7 +260,6 @@ private:
   int64_t dir_id_;
   // default is a magic number 8, may use a sophisticated way
   int64_t group_batch_factor_;
-  int64_t max_partial_rollup_idx_;
   ObSqlWorkAreaProfile profile_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   HashPartInfrasMgr hp_infras_mgr_;

@@ -179,8 +179,17 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       ObObjType input_type1 = gis_arg1->datum_meta_.type_;
       ObObjType input_type2 = gis_arg2->datum_meta_.type_;
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
+      common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+      uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+      MultimodeAlloctor temp_allocator(tmp_allocator, expr.type_, tenant_id, ret, N_SDO_RELATE);
+      ObGeoBoostAllocGuard guard(tenant_id);
+      lib::MemoryContext *mem_ctx = nullptr;
+      if (OB_FAIL(guard.init())) {
+        LOG_WARN("fail to init geo allocator guard", K(ret));
+      } else if (OB_ISNULL(mem_ctx = guard.get_memory_ctx())) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("fail to get mem ctx", K(ret));
+      } else if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
         LOG_WARN("eval geo args failed", K(ret));
       } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
         res.set_null();
@@ -243,7 +252,7 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         } else if (ObGeoTypeUtil::is_3d_geo_type(geo1->type()) || ObGeoTypeUtil::is_3d_geo_type(geo2->type())) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("only support 2D spatial relationship", K(ret));
-        } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
+        } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(srs, *geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
           LOG_WARN("zoom in geos failed", K(ret));
         } else {
           // add cache if need
@@ -260,7 +269,7 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
           if (OB_FAIL(ret)) {
           } else if (!result && mask.anyinteract_ == 1) {
             bool tmp_result = false;
-            if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2, const_param_cache, srs, temp_allocator, tmp_result))) {
+            if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2, const_param_cache, srs, mem_ctx, tmp_result))) {
               LOG_WARN("fail to get interact res", K(ret));
             } else {
               result = (result || tmp_result);

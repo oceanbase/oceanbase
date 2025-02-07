@@ -323,6 +323,7 @@ public:
                                     const ObObjParam &colname,
                                     const ObObjParam &part_name,
                                     ObObjMeta &col_meta,
+                                    ObAccuracy &col_accuracy,
                                     ObTableStatParam &param);
 
   static int parse_set_column_stats_options(ObExecContext &ctx,
@@ -436,13 +437,16 @@ public:
                                           const ObObjParam &eavs,
                                           ObHistogramParam &hist_param);
 
-  static int parser_pl_numarray(const ObObjParam &numarray_param,
+  static int parser_pl_numarray(const ObString &func_name,
+                                const ObObjParam &numarray_param,
                                 ObIArray<int64_t> &num_array);
 
-  static int parser_pl_chararray(const ObObjParam &chararray_param,
+  static int parser_pl_chararray(const ObString &func_name,
+                                 const ObObjParam &chararray_param,
                                  ObIArray<ObString> &char_array);
 
-  static int parser_pl_rawarray(const ObObjParam &rawarray_param,
+  static int parser_pl_rawarray(const ObString &func_name,
+                                const ObObjParam &rawarray_param,
                                 ObIArray<ObString> &raw_array);
 
   static int find_selected_part_infos(const ObString &part_name,
@@ -541,6 +545,14 @@ public:
   static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
                                                 const ObOptStatGatherStat *gather_stat);
 
+  static int get_stats_consumer_group_id(ObTableStatParam &param);
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
+  static int parse_refine_min_max_options(ObExecContext &ctx,
+                                          ObTableStatParam &param);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -563,12 +575,6 @@ private:
                                ObString &opt_value,
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
-
-  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
-                                      const common::ObDataTypeCastParams &dtc_params,
-                                      ObString &ident_name,
-                                      bool need_extra_conv = false);
-
 
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,
@@ -653,6 +659,19 @@ private:
   static int adjust_async_gather_stat_option(ObExecContext &ctx,
                                              const ObIArray<int64_t> &async_partition_ids,
                                              ObTableStatParam &param);
+  static int adjust_index_column_params(ObExecContext &ctx,
+                                        ObTableStatParam &index_param,
+                                        ObIArray<uint64_t> &filter_column_ids);
+
+  static int get_no_deduce_basic_stats_column_ids(const ObTableStatParam &param, ObIArray<uint64_t> &column_ids);
+
+  static int adjust_text_column_basic_stats(ObExecContext &ctx,
+                                            const share::schema::ObTableSchema &schema,
+                                            ObTableStatParam &param);
+
+  static int determine_auto_sample_table(ObExecContext &ctx,
+                                         ObTableStatParam &param);
+
 };
 
 }

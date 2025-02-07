@@ -492,16 +492,20 @@ int ObServiceNameProxy::check_is_service_name_enabled(const uint64_t tenant_id)
     LOG_WARN("not user tenant", KR(ret), K(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("fail to get the tenant's min data version", KR(ret), K(tenant_id));
-  } else if (!((tenant_data_version >= MOCK_DATA_VERSION_4_2_4_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
+  } else if (!((tenant_data_version >= MOCK_DATA_VERSION_4_2_1_9 && tenant_data_version < DATA_VERSION_4_2_2_0)
+      || (tenant_data_version >= MOCK_DATA_VERSION_4_2_4_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
       || tenant_data_version >= DATA_VERSION_4_3_3_0)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("tenant_data_version should be [4.2.4.0, 4.3.0.0) or [4.3.3.0, +infinity)", KR(ret), K(tenant_data_version));
+    LOG_WARN("tenant_data_version should be [4.2.1.9, 4.2.2.0) or [4.2.4.0, 4.3.0.0) "
+        "or [4.3.3.0, +infinity)", KR(ret), K(tenant_data_version));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(meta_tenant_id, meta_tenant_data_version))) {
     LOG_WARN("fail to get the meta tenant's min data version", KR(ret), K(meta_tenant_id));
-  } else if (!((meta_tenant_data_version >= MOCK_DATA_VERSION_4_2_4_0 && meta_tenant_data_version < DATA_VERSION_4_3_0_0)
+  } else if (!((meta_tenant_data_version >= MOCK_DATA_VERSION_4_2_1_9 && meta_tenant_data_version < DATA_VERSION_4_2_2_0)
+      || (meta_tenant_data_version >= MOCK_DATA_VERSION_4_2_4_0 && meta_tenant_data_version < DATA_VERSION_4_3_0_0)
       || meta_tenant_data_version >= DATA_VERSION_4_3_3_0)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("meta_tenant_data_version should be [4.2.4.0, 4.3.0.0) or [4.3.3.0, +infinity)", KR(ret), K(meta_tenant_data_version));
+    LOG_WARN("meta_tenant_data_version should be [4.2.1.9, 4.2.2.0) or [4.2.4.0, 4.3.0.0) "
+        "or [4.3.3.0, +infinity)", KR(ret), K(meta_tenant_data_version));
   }
   return ret;
 }

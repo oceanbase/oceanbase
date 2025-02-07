@@ -59,15 +59,40 @@ int ObDatumRowUtils::ob_create_rows(ObIAllocator &allocator, int64_t row_count, 
       int64_t i = 0;
       for (; OB_SUCC(ret) && i < row_count; ++i) {
         if (OB_FAIL(datum_rows[i].init(allocator, col_count))) {
-          LOG_WARN("fail to init datum row", K(ret), K(col_count), K(datum_rows[i]));
+          LOG_WARN("fail to init datum row", K(ret), K(row_count), K(col_count), K(i), K(datum_rows[i]));
         }
       }
       if (OB_FAIL(ret)) {
         // release storage_datums
-        for (int64_t j = i; j >= 0; --j) {
-          datum_rows[j].~ObDatumRow();
+        for (int64_t i = 0; i < row_count; ++i) {
+          datum_rows[i].~ObDatumRow();
         }
         allocator.free(rows_buf);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDatumRowUtils::ob_create_rows_shallow_copy(ObIAllocator &allocator, const ObIArray<ObDatumRow *> &src_rows, ObDatumRow *&datum_rows)
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = src_rows.count();
+  if (row_count <= 0) {
+    datum_rows = nullptr;
+  } else {
+    void *rows_buf = nullptr;
+    const size_t rows_buf_len = sizeof(blocksstable::ObDatumRow) * row_count;
+    if (OB_ISNULL(rows_buf = allocator.alloc(rows_buf_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to allocate row buffer", K(ret), K(rows_buf_len));
+    } else {
+      char *row_buf = static_cast<char*>(rows_buf);
+      datum_rows = new(row_buf) blocksstable::ObDatumRow[row_count]();
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
+        if (OB_FAIL(datum_rows[i].shallow_copy(*src_rows.at(i)))) {
+          LOG_WARN("fail to init datum row", K(ret), KPC(src_rows.at(i)));
+        }
       }
     }
   }

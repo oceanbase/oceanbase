@@ -33,7 +33,8 @@ public:
   int init(
       mds::BufferCtx &user_ctx,
       const share::SCN &scn,
-      const bool for_old_mds);
+      const bool for_old_mds,
+      const ObTabletCreateDeleteMdsUserData &user_data);
 
 protected:
   bool is_replay_update_tablet_status_() const override
@@ -52,6 +53,7 @@ private:
   mds::BufferCtx *user_ctx_;
   share::SCN scn_;
   bool for_old_mds_;
+  const ObTabletCreateDeleteMdsUserData *user_data_;
 };
 } // namespace storage
 } // namespace oceanbase

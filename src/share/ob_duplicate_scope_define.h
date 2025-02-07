@@ -85,7 +85,48 @@ public:
     ret = convert_duplicate_scope_string(this_string, duplicate_scope);
     return ret;
   }
+  static bool is_valid_duplicate_scope(const ObDuplicateScope duplicate_scope) {
+    return duplicate_scope == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER;
+  }
 };
+
+class ObDuplicateReadConsistencyChecker
+{
+public:
+  static bool is_valid_duplicate_read_consistency(ObDuplicateReadConsistency read_consistency) {
+    return read_consistency < ObDuplicateReadConsistency::MAX
+           && read_consistency >= ObDuplicateReadConsistency::STRONG;
+  }
+  static int convert_duplicate_read_consistency_string(
+      const common::ObString &duplicate_read_consistency_str,
+      ObDuplicateReadConsistency &duplicate_read_consistency) {
+    int ret = OB_SUCCESS;
+    duplicate_read_consistency = ObDuplicateReadConsistency::MAX;
+    bool found = false;
+    for (int64_t idx = static_cast<int64_t>(ObDuplicateReadConsistency::STRONG);
+         idx < static_cast<int64_t>(ObDuplicateReadConsistency::MAX) && !found;
+         ++idx) {
+      if (0 == common::ObString::make_string(duplicate_read_consistency_strings[idx]).case_compare(duplicate_read_consistency_str)) {
+        found = true;
+        duplicate_read_consistency = static_cast<ObDuplicateReadConsistency>(idx);
+      }
+    }
+    if (!found) {
+      ret = OB_INVALID_ARGUMENT;
+    }
+    return ret;
+  }
+  static const char* get_duplicate_read_consistency_str(const ObDuplicateReadConsistency &duplicate_read_consistency) {
+    switch (duplicate_read_consistency) {
+      case ObDuplicateReadConsistency::STRONG:
+      case ObDuplicateReadConsistency::WEAK:
+        return duplicate_read_consistency_strings[static_cast<uint64_t>(duplicate_read_consistency)];
+      default:
+        return "UNKNOWN";
+    }
+  }
+};
+
 }  // share
 }  // oceanbase
 

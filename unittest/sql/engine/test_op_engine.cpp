@@ -91,7 +91,7 @@ void TestOpEngine::destory()
   ObKVGlobalCache::get_instance().destroy();
   ObClusterVersion::get_instance().destroy();
 
-  // THE_IO_DEVICE->destroy();
+  // LOCAL_DEVICE_INSTANCE.destroy();
 }
 
 common::ObIODevice *TestOpEngine::get_device_inner()
@@ -99,7 +99,8 @@ common::ObIODevice *TestOpEngine::get_device_inner()
   int ret = OB_SUCCESS;
   common::ObIODevice *device = NULL;
   common::ObString storage_type_prefix(OB_LOCAL_PREFIX);
-  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, device))) {
+  const ObStorageIdMod storage_id_mode(0, ObStorageUsedMod::STORAGE_USED_DATA);
+  if (OB_FAIL(common::ObDeviceManager::get_local_device(storage_type_prefix, storage_id_mode, device))) {
     LOG_WARN("fail to get local device", K(ret));
   }
   return device;
@@ -108,7 +109,7 @@ common::ObIODevice *TestOpEngine::get_device_inner()
 // copy from mittest/mtlenv/mock_tenant_module_env.h and unittest/storage/blocksstable/ob_data_file_prepare.h
 // refine some code
 // call prepare_io() for testing operators that needs to dump intermediate data
-int TestOpEngine::prepare_io(const string & test_data_name_suffix)
+int TestOpEngine::prepare_io(const std::string & test_data_name_suffix)
 {
   int ret = OB_SUCCESS;
 
@@ -149,7 +150,7 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   storage_env_.data_disk_percentage_ = 0;
   storage_env_.log_disk_size_ = 20 * 1024 * 1024 * 1024ll;
   share::ObLocalDevice *local_device = static_cast<share::ObLocalDevice *>(get_device_inner());
-  THE_IO_DEVICE = local_device;
+  ObIODeviceWrapper::get_instance().set_local_device(local_device);
   iod_opt_array[0].set("data_dir", storage_env_.data_dir_);
   iod_opt_array[1].set("sstable_dir", storage_env_.sstable_dir_);
   iod_opt_array[2].set("block_size", storage_env_.default_block_size_);
@@ -171,21 +172,16 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
   } else if (0 != system(cmd)) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to exec cmd", K(ret), K(cmd), K(errno), KERRMSG);
-//<<<<<<< HEAD
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir))) {
     LOG_WARN("failed to create slog dir", K(ret), K(slog_dir));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {
     LOG_WARN("failed to create file dir", K(ret), K(file_dir));
-//=======
-  } else if (OB_ISNULL(THE_IO_DEVICE)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("io device is null", K(ret));
-//>>>>>>> origin/palf_tiered_storage
-  } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.init(iod_opts))) {
     LOG_WARN("fail to init io device", K(ret), K_(storage_env));
   } else if (OB_FAIL(ObIOManager::get_instance().init())) {
     LOG_WARN("fail to init io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE, async_io_thread_count,
+  } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
+                                                                    async_io_thread_count,
                                                                     sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
   } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(false/*is_shared_storage*/))) {
@@ -356,7 +352,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
     option.with_tree_line_ = true;
     ObSqlPlan sql_plan(log_plan->get_allocator());
     ObSEArray<common::ObString, 64> plan_strs;
-    if (OB_FAIL(sql_plan.print_sql_plan(log_plan, EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
+    if (OB_FAIL(sql_plan.print_sql_plan(log_plan->get_plan_root(), EXPLAIN_EXTENDED_NOADDR, option, plan_strs))) {
       LOG_WARN("failed to store sql plan", K(ret));
     } else {
       LOG_INFO("Generate Logical plan:");
@@ -561,7 +557,7 @@ int TestOpEngine::print_and_cmp_final_output(const ObBatchRows *brs, ObOperator 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < root->get_spec().output_.count(); j++) {
         ObExpr *output_expr = root->get_spec().output_.at(j);
-        string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, output_expr, root->eval_ctx_, i);
         output_line += result_str + " ";
 
         // compare whether is the same output
@@ -596,7 +592,7 @@ int TestOpEngine::print_to_file(const ObBatchRows *brs, ObOperator *root, const 
     if (!brs->skip_->exist(i)) {
       for (int j = 0; j < exprs.count(); j++) {
         ObExpr *expr = exprs.at(j);
-        string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
+        std::string result_str = get_data_by_datum_type(root, expr, root->eval_ctx_, i);
         output_line += result_str;
         if (j != exprs.count() - 1) { output_line += ", "; }
       }

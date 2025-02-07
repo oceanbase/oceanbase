@@ -88,7 +88,6 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   const int64_t size = sizeof(ObLSRouterValue);
   lib::ObMemAttr log_router_mem_attr(self_tenant_id, "LogRouter");
   lib::ObMemAttr asyn_task_mem_attr(self_tenant_id, "RouterAsynTask");
-  timer_.set_run_wrapper(MTL_CTX());
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -119,6 +118,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   } else if (OB_FAIL(LOG_ROUTE_TIMER_INIT_FAIL)) {
     LOG_ERROR("ERRSIM: LOG_ROUTE_TIMER_INIT_FAIL");
 #endif
+  } else if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
+    LOG_WARN("timer set run wrapper failed", K(ret));
   } else if (OB_FAIL(timer_.init("LogRouter"))) {
     LOG_ERROR("fail to init itable gc timer", K(ret));
 #ifdef ERRSIM
@@ -835,9 +836,10 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
 
       // print if has svr filtered
       if (svr_count_before_filter > svr_count_after_filter) {
+        ObCStringHelper helper;
         _LOG_INFO("[SERVER_BLACKLIST] [FILTER] [KEY=%s] [FILTER_SVR_CNT=%ld(%ld/%ld)] [REMOVE_SVR=%s]",
-            to_cstring(router_key), svr_count_before_filter - svr_count_after_filter,
-            svr_count_before_filter, svr_count_after_filter, to_cstring(remove_svrs));
+            helper.convert(router_key), svr_count_before_filter - svr_count_after_filter,
+            svr_count_before_filter, svr_count_after_filter, helper.convert(remove_svrs));
       }
     }
   }

@@ -40,6 +40,12 @@ int ObCloneTenantExecutor::execute(ObExecContext &ctx, ObCloneTenantStmt &stmt)
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", KR(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("clone tenant is not supported in shared storage mode", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "clone tenant is not supported in shared storage mode");
+#endif
   } else if (true == stmt.get_if_not_exists()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("if not exists is true", KR(ret));

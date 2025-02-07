@@ -97,6 +97,7 @@ public:
   // =========== Arbitration Event Reporting ===========
   int record_degrade_event(const int64_t palf_id, const char *degraded_list, const char *reasons) override final;
   int record_upgrade_event(const int64_t palf_id, const char *upgraded_list, const char *reasons) override final;
+  int record_election_silent_event(const bool is_silent, const int64_t palf_id) override final;
   // =========== Arbitration Event Reporting ===========
 #endif
 private:
@@ -120,6 +121,8 @@ private:
     REBUILD,
     FLASHBACK,
     TRUNCATE,
+    ENTER_ELECTION_SILENT,
+    EXIT_ELECTION_SILENT
   };
 
   const char *type_to_string_(const EventType &event) const
@@ -156,6 +159,10 @@ private:
       CHECK_LOG_EVENT_TYPE_STR(REBUILD);
       CHECK_LOG_EVENT_TYPE_STR(FLASHBACK);
       CHECK_LOG_EVENT_TYPE_STR(TRUNCATE);
+      case (EventType::ENTER_ELECTION_SILENT):
+        return "ENTER ELECTION SILENT";
+      case (EventType::EXIT_ELECTION_SILENT):
+        return "EXIT ELECTION SILENT";
       default:
         return "UNKNOWN";
     }

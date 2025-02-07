@@ -18,12 +18,13 @@ namespace common
 {
 int ObQSyncLock::init(const lib::ObMemAttr &mem_attr)
 {
-  return qsync_.init(mem_attr);
+  UNUSED(mem_attr);
+  return OB_SUCCESS;
 }
 
 void ObQSyncLock::destroy()
 {
-  qsync_.destroy();
+  // do nothing
 }
 
 int ObQSyncLock::rdlock()

@@ -93,7 +93,8 @@ int deserialize_(BufferCtx *&ctx_, int64_t type_idx, const char *buf, const int6
       ctx_->set_binding_type_id(type_idx);
       MTL(ObTenantMdsService*)->update_mem_leak_debug_info(p_impl, [p_impl](const ObIntWarp &key,
                                                                             ObMdsMemoryLeakDebugInfo &value) -> bool {
-        databuff_printf(value.tag_str_, TAG_SIZE, "%s", to_cstring(p_impl->get_writer()));
+        int64_t pos = 0;
+        databuff_printf(value.tag_str_, TAG_SIZE, pos, p_impl->get_writer());
         return true;
       });
       MDS_LOG(INFO, "deserialize ctx success", KR(ret), K(*p_impl), K(type_idx), K(IDX), K(buf_len), K(pos), K(lbt()));

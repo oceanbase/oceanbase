@@ -363,7 +363,7 @@ const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionTyp
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V4),
+  : medium_compat_version_(MEDIUM_COMPAT_VERSION_LATEST),
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -377,7 +377,8 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     medium_snapshot_(0),
     last_medium_snapshot_(0),
     storage_schema_(),
-    parallel_merge_info_()
+    parallel_merge_info_(),
+    encoding_granularity_(0)
 {
   STATIC_ASSERT(static_cast<int64_t>(COMPACTION_TYPE_MAX) == ARRAYSIZEOF(ObCompactionTypeStr), "compaction type str len is mismatch");
 }
@@ -412,6 +413,7 @@ int ObMediumCompactionInfo::init(
     medium_snapshot_ = medium_info.medium_snapshot_;
     last_medium_snapshot_ = medium_info.last_medium_snapshot_;
     data_version_ = medium_info.data_version_;
+    encoding_granularity_ = medium_info.encoding_granularity_;
   }
   return ret;
 }
@@ -427,14 +429,24 @@ int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
     LOG_WARN("invalid data version to schedule medium compaction", K(ret), K(compat_version));
   } else {
     data_version_ = compat_version;
+#ifdef ERRSIM
+    int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
+    int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
+    if (-errsim_data_version == error_code) {
+      data_version_ = DATA_VERSION_4_3_4_0;
+      LOG_INFO("ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set medium info", K(error_code), K_(data_version));
+    }
+#endif
     if (compat_version < DATA_VERSION_4_2_0_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
     } else if (compat_version < DATA_VERSION_4_2_1_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
     } else if (compat_version < DATA_VERSION_4_2_1_2) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
-    } else {
+    } else if (compat_version < DATA_VERSION_4_3_3_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
+    } else {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V5;
     }
   }
   return ret;
@@ -467,6 +479,7 @@ void ObMediumCompactionInfo::reset()
   data_version_ = 0;
   storage_schema_.reset();
   parallel_merge_info_.destroy();
+  encoding_granularity_ = 0;
 }
 
 bool ObMediumCompactionInfo::should_throw_for_standby_cluster() const
@@ -539,7 +552,12 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         OB_UNIS_ENCODE,
         last_medium_snapshot_);
     }
-    LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), K(buf), K(buf_len), K(pos));
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_ENCODE,
+        encoding_granularity_);
+    }
+    LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), KCSTRING(buf), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -569,12 +587,17 @@ int ObMediumCompactionInfo::deserialize(
       }
     } else {
       clear_parallel_range();
-      LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), K(buf), K(data_len), K(pos));
+      LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), KCSTRING(buf), K(data_len), K(pos));
     }
     if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_DECODE,
         last_medium_snapshot_);
+    }
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_DECODE,
+        encoding_granularity_);
     }
   }
   return ret;
@@ -600,6 +623,11 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
       OB_UNIS_ADD_LEN,
       last_medium_snapshot_);
   }
+  if (MEDIUM_COMPAT_VERSION_V5 <= medium_compat_version_) {
+    LST_DO_CODE(
+      OB_UNIS_ADD_LEN,
+      encoding_granularity_);
+  }
   return len;
 }
 
@@ -607,7 +635,8 @@ void ObMediumCompactionInfo::gene_info(
     char* buf, const int64_t buf_len, int64_t &pos) const
 {
   J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info));
+       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+       K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info), K_(encoding_granularity));
 }
 
 int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) const
@@ -617,11 +646,11 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
   } else {
     J_OBJ_START();
     J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
+      "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
       K_(medium_snapshot), K_(last_medium_snapshot), K_(tenant_id), K_(cluster_id),
       K_(medium_compat_version), K_(data_version), K_(is_schema_changed), K_(storage_schema),
       "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(co_major_merge_type_)),
-      K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info));
+      K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info), K_(encoding_granularity));
     J_OBJ_END();
   }
   return pos;

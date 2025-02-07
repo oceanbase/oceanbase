@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_
 
 #include "storage/tmp_file/ob_tmp_file_thread_job.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
@@ -28,12 +28,11 @@ class ObSNTenantTmpFileManager;
 class ObTmpFileFlushManager;
 
 // When originally designed, ObTmpFileFlushTG was an independent thread. in order to reduce the
-// number of threads, the thread of ObTmpFileFlushTG was drived ObTmpFileSwapTG.
+// number of threads, the thread of ObTmpFileFlushTG was driven by ObTmpFileSwapTG.
 class ObTmpFileFlushTG
 {
 public:
   typedef ObTmpFileFlushTask::ObTmpFileFlushTaskState FlushState;
-  static const int64_t MAX_FLUSHING_BLOCK_NUM = 50;
   enum RUNNING_MODE {
     INVALID = 0,
     NORMAL  = 1,
@@ -45,6 +44,9 @@ public:
                    ObIAllocator &allocator,
                    ObTmpFileBlockManager &tmp_file_block_mgr);
   int init();
+  int start();
+  void stop();
+  void wait();
   void destroy();
 
   int try_work();
@@ -65,12 +67,13 @@ private:
   int handle_generated_flush_tasks_(ObSpLinkQueue &flushing_list, int64_t &task_num);
   int wash_(const int64_t expect_flush_size, const RUNNING_MODE mode);
   int check_flush_task_io_finished_();
+  int retry_fast_flush_meta_task_();
   int retry_task_();
   int special_flush_meta_tree_page_();
   void flush_fast_();
   void flush_normal_();
   int get_fast_flush_size_();
-  int get_flushing_block_num_threshold_();
+  int64_t get_flushing_block_num_threshold_();
   int push_wait_list_(ObTmpFileFlushTask *flush_task);
   int pop_wait_list_(ObTmpFileFlushTask *&flush_task);
   int push_retry_list_(ObTmpFileFlushTask *flush_task);
@@ -103,6 +106,8 @@ private:
   int64_t normal_idle_loop_cnt_;
   int64_t fast_loop_cnt_;
   int64_t fast_idle_loop_cnt_;
+
+  int flush_timer_tg_id_[ObTmpFileGlobal::FLUSH_TIMER_CNT];
 };
 
 class ObTmpFileSwapTG : public lib::TGRunnable
@@ -110,8 +115,9 @@ class ObTmpFileSwapTG : public lib::TGRunnable
 public:
   ObTmpFileSwapTG(ObTmpWriteBufferPool &wbp,
                   ObTmpFileEvictionManager &elimination_mgr,
-                  ObTmpFileFlushTG &flush_tg);
-  int init(ObSNTenantTmpFileManager &file_mgr);
+                  ObTmpFileFlushTG &flush_tg,
+                  ObTmpFilePageCacheController &pc_ctrl);
+  virtual int init();
   int start();
   void stop();
   void wait();
@@ -123,7 +129,8 @@ public:
   int swap_job_dequeue(ObTmpFileSwapJob *&swap_job);
   // wake up swap thread to do work
   void notify_doing_swap();
-  TO_STRING_KV(K(is_inited_), K(tg_id_), K(swap_job_num_), K(has_set_stop()));
+  TO_STRING_KV(K(is_inited_), K(tg_id_), K(swap_job_num_), K(working_list_size_),
+               K(flush_io_finished_round_), K(last_swap_timestamp_), K(has_set_stop()));
 private:
   static const int64_t PAGE_SIZE = ObTmpFileGlobal::PAGE_SIZE;
   static const int64_t PROCCESS_JOB_NUM_PER_BATCH = 128;
@@ -138,6 +145,7 @@ private:
   int wakeup_satisfied_jobs_(int64_t& wakeup_job_cnt);
   int wakeup_timeout_jobs_();
   void wakeup_all_jobs_(int ret_code);
+  int shrink_wbp_if_needed_();
 private:
   bool is_inited_;
   int tg_id_;
@@ -156,9 +164,10 @@ private:
 
   ObTmpWriteBufferPool &wbp_;
   ObTmpFileEvictionManager &evict_mgr_;
+  ObTmpFilePageCacheController &pc_ctrl_;
   ObSNTenantTmpFileManager *file_mgr_;
 };
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_WRAPPER_H_

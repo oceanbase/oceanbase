@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #define private public
+#define protected public
 #include "share/ob_tenant_mgr.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/blocksstable/ob_row_generate.h"
@@ -162,6 +163,16 @@ public:
     TestDataFilePrepare(&getter, "TestTmpFile", 2 * 1024 * 1024, 2048) {};
   void SetUp();
   void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 
   int init_tenant_mgr()
   {
@@ -218,13 +229,18 @@ void TestCompactChunk::SetUp()
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
 
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
   tf_mgr->get_sn_file_manager().page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
-
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
@@ -238,6 +254,11 @@ void TestCompactChunk::TearDown()
   tmp_file::ObTmpBlockCache::get_instance().destroy();
   tmp_file::ObTmpPageCache::get_instance().destroy();
   common::ObClockGenerator::destroy();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 TEST_F(TestCompactChunk, test_read_writer_compact)

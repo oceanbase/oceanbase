@@ -946,7 +946,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
         } else if (!ci->check_unit(item->value_.ptr())) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("invalid config", "item", *item, KR(ret));
-        } else if (!ci->set_value(item->value_.ptr())) {
+        } else if (!ci->set_value_unsafe(item->value_.ptr())) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("invalid config", "item", *item, KR(ret));
         } else if (!ci->check()) {
@@ -1304,6 +1304,7 @@ int ObAdminSetConfig::update_config_for_compatible(const uint64_t tenant_id,
 int ObAdminSetConfig::execute(obrpc::ObAdminSetConfigArg &arg)
 {
   LOG_INFO("execute set config request", K(arg));
+  DEBUG_SYNC(BEFORE_EXECUTE_ADMIN_SET_CONFIG);
   int ret = OB_SUCCESS;
   int64_t config_version = 0;
   if (!ctx_.is_inited()) {
@@ -1655,7 +1656,7 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
       }
     } else if (OB_ISNULL(exist_schema)) {
       // no duplicate table name
-    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema, false/*delete_priv*/))) {
       LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
                "table", table.get_table_name(), "table_id", table.get_table_id());
     } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
@@ -1753,6 +1754,7 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg)
 {
   int ret = OB_SUCCESS;
+  uint64_t max_server_id = 0;
   HEAP_VAR(ObAdminSetConfigItem, item) {
     obrpc::ObAdminSetConfigArg set_config_arg;
     set_config_arg.is_inner_ = true;
@@ -1807,6 +1809,14 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg
             break;
           }
         } // end while
+      }
+      if (OB_FAIL(ret) || GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_4_0) {
+      } else if (OB_FAIL(ObServerTableOperator::get_clusters_max_server_id(max_server_id))) {
+        LOG_WARN("fail to get max server id", KR(ret));
+      } else if (OB_UNLIKELY(!is_valid_server_index(max_server_id))) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("max_server_id should be a valid server index", KR(ret), K(max_server_id));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "max server id in the cluster cannot be larget than MAX_SERVER_COUNT, UPGRADE is");
       }
       // end rolling upgrade, should raise min_observer_version
       const char *min_obs_version_name = "min_observer_version";
@@ -2272,15 +2282,20 @@ int ObAdminLoadBaselineV2::call_server(const common::ObAddr &server,
                                      obrpc::ObLoadBaselineRes &res)
 {
   int ret = OB_SUCCESS;
+  int64_t timeout = THIS_WORKER.get_timeout_remain();
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_UNLIKELY(0 >= timeout)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("query timeout is reached", K(timeout));
   } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
                                      .by(arg.tenant_id_)
                                      .as(arg.tenant_id_)
+                                     .timeout(timeout)
                                      .load_baseline_v2(arg, res))) {
     LOG_WARN("request server load baseline failed", KR(ret), K(server));
   }
@@ -2301,10 +2316,12 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
     if (OB_ISNULL(ctx_.unit_mgr_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ctx_.unit_mgr_), KR(ret));
-    } else if (!SVR_TRACER.has_build() || !ctx_.unit_mgr_->check_inner_stat()) {
+    } else if (!SVR_TRACER.has_build()) {
       ret = OB_SERVER_IS_INIT;
-      LOG_WARN("server manager or unit manager hasn't built",
-               "unit_mgr built", ctx_.unit_mgr_->check_inner_stat(), KR(ret));
+      LOG_WARN("server manager hasn't built", KR(ret));
+    } else if (OB_FAIL(ctx_.unit_mgr_->check_inner_stat())) {
+      ret = OB_SERVER_IS_INIT;
+      LOG_WARN("unit manager is not inited", KR(ret));
     } else if (OB_FAIL(ctx_.unit_mgr_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
       LOG_WARN("get_pool_ids_of_tenant failed", K(tenant_id), KR(ret));
     } else {

@@ -26,7 +26,8 @@ OB_SERIALIZE_MEMBER((ObDASIRScanCtDef, ObDASAttachCtDef),
                     match_filter_,
                     relevance_expr_,
                     relevance_proj_col_,
-                    estimated_total_doc_cnt_);
+                    estimated_total_doc_cnt_,
+                    mode_flag_);
 
 OB_SERIALIZE_MEMBER(ObDASIRScanRtDef);
 
@@ -34,6 +35,14 @@ OB_SERIALIZE_MEMBER((ObDASIRAuxLookupCtDef, ObDASAttachCtDef),
                     relevance_proj_col_);
 
 OB_SERIALIZE_MEMBER((ObDASIRAuxLookupRtDef, ObDASAttachRtDef));
+
+OB_SERIALIZE_MEMBER((ObDASFuncLookupCtDef, ObDASAttachCtDef),
+    main_lookup_cnt_,
+    doc_id_lookup_cnt_,
+    func_lookup_cnt_,
+    lookup_doc_id_expr_);
+
+OB_SERIALIZE_MEMBER((ObDASFuncLookupRtDef, ObDASAttachRtDef));
 
 } // sql
 } // oceanbase

@@ -121,6 +121,10 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "DROP ROLE"; break;
     case OB_PRIV_TRIGGER:
       name = "TRIGGER"; break;
+    case OB_PRIV_ENCRYPT:
+      name = "ENCRYPT"; break;
+    case OB_PRIV_DECRYPT:
+      name = "DECRYPT"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

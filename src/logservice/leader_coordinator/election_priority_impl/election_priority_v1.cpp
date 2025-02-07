@@ -286,14 +286,20 @@ int PriorityV1::compare_in_blacklist_flag_(int &ret, const PriorityV1&rhs, ObStr
     if (is_in_blacklist_ == rhs.is_in_blacklist_) {
       compare_result = 0;
     } else if (!is_in_blacklist_ && rhs.is_in_blacklist_) {
-      if (CLICK_FAIL(databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(%s)", to_cstring(rhs.in_blacklist_reason_)))) {
+      if (CLICK_FAIL({ret = databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(");
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, rhs.in_blacklist_reason_);
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, ")");
+                      ret;})) {
         COORDINATOR_LOG(WARN, "data buf printf failed");
       } else if (CLICK_FAIL(reason.assign(remove_reason))) {
         COORDINATOR_LOG(WARN, "assign reason failed");
       }
       compare_result = 1;
     } else {
-      if (CLICK_FAIL(databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(%s)", to_cstring(in_blacklist_reason_)))) {
+      if (CLICK_FAIL({ret = databuff_printf(remove_reason, 64, pos, "IN BLACKLIST(");
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, in_blacklist_reason_);
+                      OB_SUCCESS != ret ? : databuff_printf(remove_reason, 64, pos, ")");
+                      ret;})) {
         COORDINATOR_LOG(WARN, "data buf printf failed");
       } else if (CLICK_FAIL(reason.assign(remove_reason))) {
         COORDINATOR_LOG(WARN, "assign reason failed");

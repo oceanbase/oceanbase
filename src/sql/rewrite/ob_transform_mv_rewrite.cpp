@@ -20,6 +20,7 @@
 #include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/schema/ob_table_schema.h"
+#include "src/sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
@@ -257,7 +258,7 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(from_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(from_table->is_basic_table() || from_table->is_generated_table())
+      } else if (!(from_table->is_basic_table() || from_table->is_link_table())
                  || OB_INVALID_ID == from_table->ref_id_) {
         // do nothing
       } else if (NULL == (num = from_table_num.get(from_table->ref_id_))) {
@@ -275,7 +276,7 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(to_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(to_table->is_basic_table() || to_table->is_generated_table())
+      } else if (!(to_table->is_basic_table() || to_table->is_link_table())
                  || OB_INVALID_ID == to_table->ref_id_) {
         // do nothing
       } else if (NULL == (idx = to_table_map.get(to_table->ref_id_))) {
@@ -301,6 +302,7 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       LOG_WARN("failed to prepare allocate map array", K(ret), K(from_tables.count()));
     } else if (OB_FAIL(inner_gen_base_table_map(0,
                                                 from_tables,
+                                                to_tables,
                                                 from_table_num,
                                                 to_table_ids,
                                                 to_table_map,
@@ -321,6 +323,7 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
 // generate a base table map for from_table_idx-th from table
 int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
                                                    const ObIArray<TableItem*> &from_tables,
+                                                   const ObIArray<TableItem*> &to_tables,
                                                    hash::ObHashMap<uint64_t, int64_t> &from_table_num,
                                                    const ObIArray<ObSEArray<int64_t,4>> &to_table_ids,
                                                    const hash::ObHashMap<uint64_t, int64_t> &to_table_map,
@@ -352,13 +355,14 @@ int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
     if (OB_ISNULL(from_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("from table item is NULL", K(ret), K(from_table_idx));
-    } else if (!(from_table->is_basic_table() || from_table->is_generated_table())
+    } else if (!(from_table->is_basic_table() || from_table->is_link_table())
                || OB_INVALID_ID == from_table->ref_id_
                || NULL == (to_idx = to_table_map.get(from_table->ref_id_))) {
-      // table does not exists in to_tables
+      // table does not exists in to_tables, map from_table to nothing
       current_map.at(from_table_idx) = -1;
       if (OB_FAIL(SMART_CALL(inner_gen_base_table_map(from_table_idx + 1,
                                                       from_tables,
+                                                      to_tables,
                                                       from_table_num,
                                                       to_table_ids,
                                                       to_table_map,
@@ -372,17 +376,27 @@ int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected to_idx", K(ret), K(*to_idx));
     } else {
+      bool has_mapped = false;
       // try to map from_table to to_table which has same ref_id and not be used
       for (int64_t i = 0; OB_SUCC(ret) && max_map_num > table_maps.count()
            && i < to_table_ids.at(*to_idx).count(); ++i) {
         int64_t to_table_idx = to_table_ids.at(*to_idx).at(i);
+        QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
         if (used_to_table.has_member(to_table_idx)) {
           // do nothing, to_table has been used
+        } else if (OB_FAIL(ObStmtComparer::compare_basic_table_item(from_tables.at(from_table_idx),
+                                                                    to_tables.at(to_table_idx),
+                                                                    relation))) {
+          LOG_WARN("failed to compare basic table", K(ret), K(from_table_idx), K(to_table_idx));
+        } else if (QueryRelation::QUERY_EQUAL != relation) {
+          // do nothing, from table and to table are not equal
+        } else if (OB_FALSE_IT(has_mapped = true)) {
         } else if (OB_FAIL(used_to_table.add_member(to_table_idx))) {
           LOG_WARN("failed to add member", K(ret));
         } else if (OB_FALSE_IT(current_map.at(from_table_idx) = to_table_idx)) {
         } else if (OB_FAIL(SMART_CALL(inner_gen_base_table_map(from_table_idx + 1,
                                                                from_tables,
+                                                               to_tables,
                                                                from_table_num,
                                                                to_table_ids,
                                                                to_table_map,
@@ -397,20 +411,19 @@ int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
       }
       // try to map from_table to nothing
       int64_t from_num; // number of from tables with the same ref_id minus table has been mapped to -1
-      if (OB_FAIL(ret) || max_map_num <= table_maps.count()
-          || !(from_table->is_basic_table() || from_table->is_generated_table())
-          || OB_INVALID_ID == from_table->ref_id_) {
+      if (OB_FAIL(ret) || max_map_num <= table_maps.count()) {
         // do nothing
       } else if (OB_FAIL(from_table_num.get_refactored(from_table->ref_id_, from_num))) {
         LOG_WARN("failed to get from table num", K(ret), KPC(from_table));
-      } else if (from_num <= to_table_ids.at(*to_idx).count()) {
+      } else if (has_mapped && from_num <= to_table_ids.at(*to_idx).count()) {
         // do nothing, the number of remaining unmapped from tables is less than or equal to
-        // the number of remaining to tables, can not map from_table to nothing.
+        // the number of remaining to tables, should not map from_table to nothing.
       } else if (OB_FAIL(from_table_num.set_refactored(from_table->ref_id_, from_num - 1, 1))) {
         LOG_WARN("failed to set from table num", K(ret), KPC(from_table));
       } else if (OB_FALSE_IT(current_map.at(from_table_idx) = -1)) {
       } else if (OB_FAIL(SMART_CALL(inner_gen_base_table_map(from_table_idx + 1,
                                                              from_tables,
+                                                             to_tables,
                                                              from_table_num,
                                                              to_table_ids,
                                                              to_table_map,
@@ -508,9 +521,7 @@ int ObTransformMVRewrite::try_transform_contain_mode(ObSelectStmt *origin_stmt,
         } else if (OB_FAIL(check_rewrite_expected(helper, is_valid))) {
           LOG_WARN("failed to check rewrite expected", K(ret), K(base_table_maps.at(i)));
         } else if (!is_valid) {
-          if (OB_FAIL(try_trans_helper.recover(origin_stmt->get_query_ctx()))) {
-            LOG_WARN("failed to recover params", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, query_stmt))) {
+          if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, query_stmt))) {
             LOG_WARN("failed to free stmt", K(ret));
           } else {
             // query_stmt has been rewrited in generate_rewrite_stmt_contain_mode, need to re-copy stmt
@@ -522,6 +533,10 @@ int ObTransformMVRewrite::try_transform_contain_mode(ObSelectStmt *origin_stmt,
         } else {
           new_stmt = helper.query_stmt_;
           transform_happened = true;
+        }
+        if (OB_FAIL(ret)){
+        } else if (OB_FAIL(try_trans_helper.finish(transform_happened, origin_stmt->get_query_ctx(), ctx_))) {
+          LOG_WARN("failed to finish try trans helper", K(ret));
         }
       }
     }
@@ -711,8 +726,8 @@ int ObTransformMVRewrite::pre_process_quals(const ObIArray<ObRawExpr*> &input_co
     if (OB_ISNULL(cond)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("condition expr is null", K(ret));
-    } else if (cond->has_flag(CNT_ROWNUM) || cond->has_flag(CNT_SUB_QUERY) || cond->has_flag(CNT_RAND_FUNC)
-               || cond->has_flag(CNT_DYNAMIC_USER_VARIABLE) || cond->is_const_expr()) {
+    } else if (cond->has_flag(CNT_ROWNUM) || cond->has_flag(CNT_SUB_QUERY) ||
+               !cond->is_deterministic() || cond->is_const_expr()) {
       if (OB_FAIL(other_conds.push_back(cond))) {
         LOG_WARN("failed to push back other conds", K(ret));
       }
@@ -2785,6 +2800,9 @@ int ObTransformMVRewrite::adjust_rewrite_stmt(MvRewriteHelper &helper)
   } else if (OB_ISNULL(from_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("from table is null", K(ret));
+  } else if (from_table->is_joined_table() &&
+             OB_FAIL(rewrite_stmt->add_joined_table(static_cast<JoinedTable*>(from_table)))) {
+    LOG_WARN("failed to add joined table", K(ret));
   } else if (OB_FAIL(rewrite_stmt->add_from_item(from_table->table_id_,
                                                  from_table->is_joined_table()))) {
     LOG_WARN("failed to add from item", K(ret));
@@ -2853,8 +2871,6 @@ int ObTransformMVRewrite::recursive_build_from_table(MvRewriteHelper &helper,
   } else if (OB_ISNULL(new_joined_table = ObDMLStmt::create_joined_table(*ctx_->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create joined table", K(ret));
-  } else if (OB_FAIL(rewrite_stmt->add_joined_table(new_joined_table))) {
-    LOG_WARN("failed to add joined table", K(ret));
   } else if (OB_FALSE_IT(new_joined_table->table_id_ = rewrite_stmt->get_query_ctx()->available_tb_id_--)) {
   } else if (OB_FAIL(ObTransformUtils::add_joined_table_single_table_ids(*new_joined_table, *left_table))) {
     LOG_WARN("failed to add joined table left single table ids", K(ret));

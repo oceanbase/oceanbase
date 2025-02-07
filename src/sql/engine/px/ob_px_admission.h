@@ -40,9 +40,8 @@ public:
   ObPxAdmission() = default;
   ~ObPxAdmission() = default;
   static int64_t admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
-                       int64_t wait_time_us, int64_t session_target,
-                       ObHashMap<ObAddr, int64_t> &worker_map,
-                       int64_t req_cnt, int64_t &admit_cnt);
+                       int64_t wait_time_us, int64_t minimal_px_worker_count, int64_t &session_target,
+                       ObHashMap<ObAddr, int64_t> &worker_map, int64_t req_cnt, int64_t &admit_cnt);
   static int enter_query_admission(sql::ObSQLSessionInfo &session,
                                    sql::ObExecContext &exec_ctx,
                                    sql::stmt::StmtType stmt_type,

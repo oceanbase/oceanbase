@@ -23,6 +23,7 @@
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "rpc/obmysql/ob_mysql_global.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase {
 namespace common {
@@ -696,17 +697,19 @@ int ObWkbToJsonVisitor::appendMySQLFlagInfo(ObGeometry *geo)
     } else {
       box_geo = geo;
     }
-    ObGeoEvalCtx geo_ctx(allocator_);
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(geo_ctx.append_geo_arg(box_geo))) {
-      LOG_WARN("build gis context failed", K(ret));
-    } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(geo_ctx, box))) {
-      LOG_WARN("failed to do box functor failed", K(ret));
-    } else if (OB_FAIL(appendBox(*box))) {
-      LOG_WARN("fail to append bbox field", K(ret));
-    } else if (OB_FAIL(buffer_.append(", "))) {
-      LOG_WARN("fail to append comma", K(ret));
+    CREATE_WITH_TEMP_CONTEXT(lib::ContextParam().set_mem_attr(MTL_ID(), "GISModule", ObCtxIds::DEFAULT_CTX_ID)) {
+      ObGeoEvalCtx geo_ctx(CURRENT_CONTEXT);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(geo_ctx.append_geo_arg(box_geo))) {
+        LOG_WARN("build gis context failed", K(ret));
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(geo_ctx, box))) {
+        LOG_WARN("failed to do box functor failed", K(ret));
+      } else if (OB_FAIL(appendBox(*box))) {
+        LOG_WARN("fail to append bbox field", K(ret));
+      } else if (OB_FAIL(buffer_.append(", "))) {
+        LOG_WARN("fail to append comma", K(ret));
+      }
     }
   }
   return ret;

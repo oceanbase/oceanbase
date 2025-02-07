@@ -25,6 +25,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "share/location_cache/ob_location_service.h"
 #include "storage/tablelock/ob_table_lock_common.h"   //ObTableLockMode
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -147,18 +148,16 @@ public:
            ObRestoreSQLModifier *sql_modifer = NULL,
            const bool use_static_engine = false,
            const bool is_oracle_mode = false,
-           const int32_t group_id = 0);
+           const int32_t group_id = 0,
+           const bool is_resource_conn = false);
   int destroy(void);
   inline void reset() { destroy(); }
-  virtual int execute_read(const uint64_t tenant_id, const char *sql,
+  virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-                            int64_t &affected_rows, bool is_user_sql = false,
-                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
@@ -175,12 +174,13 @@ public:
   virtual sqlclient::ObCommonServerConnectionPool *get_common_server_pool() override;
   virtual int rollback() override;
   virtual int commit() override;
-  sql::ObSQLSessionInfo &get_session() { return NULL == extern_session_ ? inner_session_ : *extern_session_; }
-  const sql::ObSQLSessionInfo &get_session() const { return NULL == extern_session_ ? inner_session_ : *extern_session_; }
+  sql::ObSQLSessionInfo &get_session() { return NULL == extern_session_ ? *inner_session_ : *extern_session_; }
+  const sql::ObSQLSessionInfo &get_session() const { return NULL == extern_session_ ? *inner_session_ : *extern_session_; }
   const sql::ObSQLSessionInfo *get_extern_session() const { return extern_session_; }
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
   virtual int set_session_variable(const ObString &name, int64_t val) override;
+  virtual int set_session_variable(const ObString &name, const ObString &val) override;
   inline void set_spi_connection(bool is_spi_conn) { is_spi_conn_ = is_spi_conn; }
   int set_primary_schema_version(const common::ObIArray<int64_t> &primary_schema_versions);
 
@@ -231,7 +231,6 @@ public:
   bool is_in_trans() const { return is_in_trans_; }
   void set_is_in_trans(const bool is_in_trans) { is_in_trans_ = is_in_trans; }
   bool is_resource_conn() const { return is_resource_conn_; }
-  void set_is_resource_conn(const bool is_resource_conn) { is_resource_conn_ = is_resource_conn; }
   void set_resource_conn_id(uint64_t resource_conn_id) { resource_conn_id_ = resource_conn_id; }
   uint64_t get_resource_conn_id() const { return resource_conn_id_; }
   const common::ObAddr &get_resource_svr() const { return resource_svr_; }
@@ -306,6 +305,7 @@ public:
                                   bool is_from_pl = false);
   static void record_stat(sql::ObSQLSessionInfo &session,
                           const sql::stmt::StmtType type,
+                          const int64_t ret,
                           bool is_from_pl = false);
 
   static int init_session_info(sql::ObSQLSessionInfo *session,
@@ -376,11 +376,15 @@ private:
                        ObInnerSQLResult &res,
                        const int32_t group_id = 0);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
+  int create_session_by_mgr();
+  int create_default_session();
+  bool is_inner_session_mgr_enable();
+  int destroy_inner_session();
 private:
   bool inited_;
   observer::ObQueryRetryCtrl retry_ctrl_;
-  sql::ObSQLSessionInfo inner_session_;
   sql::ObSQLSessionInfo *extern_session_;   // nested sql and spi both use it, rename to extern.
+  sql::ObSQLSessionInfo *inner_session_;
   bool is_spi_conn_;
   int64_t ref_cnt_;
   ObInnerSQLConnectionPool *pool_;
@@ -428,9 +432,25 @@ private:
   int32_t group_id_;
   //support set user timeout of stream rpc but not depend on internal_sql_execute_timeout
   int64_t user_timeout_;
+  sql::ObFreeSessionCtx free_session_ctx_;
+  ObDiagnosticInfo *diagnostic_info_;
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 
+class ObInnerSqlWaitGuard
+{
+public:
+  explicit ObInnerSqlWaitGuard(const bool is_inner_session, common::ObDiagnosticInfo *di);
+  ~ObInnerSqlWaitGuard();
+private:
+  bool is_inner_session_;
+  int64_t inner_session_id_;
+  ObDiagnosticInfo *inner_sql_di_;
+  ObDiagnosticInfo *prev_di_;
+  bool need_record_;
+  bool has_finish_switch_di_;
+  int64_t prev_block_sessid_;
+};
 } // end of namespace observer
 } // end of namespace oceanbase
 

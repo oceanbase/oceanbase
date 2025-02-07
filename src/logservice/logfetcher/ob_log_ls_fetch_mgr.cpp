@@ -184,10 +184,12 @@ int ObLogLSFetchMgr::add_ls(
         LOG_ERROR("insert into map fail", KR(ret), K(tls_id), K(ctx));
       }
     } else {
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [LSFetchMgr] [ADD_LS] tls_id=%s start_lsn=%s start_tstamp_ns=%ld(%s) "
           "progress_id=%ld fetch_task=%p ls_ctx_add_info=%p start_parameters=%s",
-          to_cstring(tls_id), to_cstring(start_lsn), start_tstamp_ns, NTS_TO_STR(start_tstamp_ns),
-          progress_id, ctx, ls_ctx_add_info, to_cstring(start_parameters));
+          helper.convert(tls_id), helper.convert(start_lsn), start_tstamp_ns,
+          NTS_TO_STR(start_tstamp_ns), progress_id, ctx, ls_ctx_add_info,
+          helper.convert(start_parameters));
     }
   }
 
@@ -255,9 +257,10 @@ bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const logservice::TenantLSID &
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid part fetch ctx", K(ctx), K(tls_id));
     bool_ret = false;
   } else {
+    ObCStringHelper helper;
     _LOG_INFO("[STAT] [LSFetchMgr] [RECYCLE_LS] tls_id=%s "
         "fetch_task=%p fetch_task=%s",
-        to_cstring(tls_id), ctx, to_cstring(*ctx));
+        helper.convert(tls_id), ctx, helper.convert(*ctx));
 
     // modify partitin status to DISCARDED
     ctx->set_discarded();
@@ -319,9 +322,10 @@ int ObLogLSFetchMgr::remove_ls(const logservice::TenantLSID &tls_id)
       ObILogFetcherLSCtxAddInfo *ptr = fetch_ctx->get_ls_ctx_add_info();
       int64_t progress_id = fetch_ctx->get_progress_id();
 
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [PartFetchMgr] [REMOVE_LS] tls_id=%s progress_id=%ld "
           "fetch_task=%p ls_ctx_add_info=%p fetch_task=%s",
-          to_cstring(tls_id), progress_id, fetch_ctx, ptr, to_cstring(*fetch_ctx));
+          helper.convert(tls_id), progress_id, fetch_ctx, ptr, helper.convert(*fetch_ctx));
 
       // recycle progress id, delete from global progress_controller
       int release_ret = progress_controller_->release_progress(progress_id);

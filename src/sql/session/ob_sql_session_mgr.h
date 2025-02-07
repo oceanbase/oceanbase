@@ -144,7 +144,7 @@ public:
   int get_min_active_snapshot_version(share::SCN &snapshot_version);
 
   //used for guarantee the unique sessid when observer generates sessid
-  static uint64_t extract_server_id(uint32_t sessid);
+  static uint64_t extract_server_index(uint32_t sessid);
   static bool is_server_sessid(uint32_t sessid) {return SERVER_SESSID_TAG & sessid;}
   static int is_need_clear_sessid(const observer::ObSMConnection *conn, bool &is_need);
   int fetch_first_sessid();
@@ -287,10 +287,11 @@ private:
   // |Mask|resvd|    Server Id     |    Local Seq = 16 + 2                |
   // +----+------------------------------+--------------------------------+
   static const uint16_t LOCAL_SEQ_LEN = 18;
-  static const uint16_t RESERVED_SERVER_ID_LEN = 1;
-  static const uint16_t SERVER_ID_LEN = 13 - RESERVED_SERVER_ID_LEN;
+  static const uint16_t RESERVED_SERVER_INDEX_LEN = 1;
+  static const uint16_t SERVER_INDEX_LEN = 13 - RESERVED_SERVER_INDEX_LEN;
   static const uint32_t MAX_LOCAL_SEQ = (1ULL << LOCAL_SEQ_LEN) - 1;
-  static const uint64_t MAX_SERVER_ID = (1ULL << SERVER_ID_LEN) - 1;
+  // MAX_SERVER_INDEX cannot be larger than MAX_SERVER_COUNT
+  static const uint64_t MAX_SERVER_INDEX = (1ULL << SERVER_INDEX_LEN) - 1;
   common::ObFixedQueue<void> sessid_sequence_;
   uint32_t first_seq_;
   uint32_t increment_sessid_;

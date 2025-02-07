@@ -33,7 +33,8 @@ public:
       xa_inner_sql_count_(0), xa_inner_sql_used_time_us_(0), xa_inner_rpc_count_(0), xa_inner_rpc_used_time_us_(0),
       xa_inner_sql_ten_ms_count_(0), xa_inner_sql_twenty_ms_count_(0),
       xa_inner_rpc_ten_ms_count_(0), xa_inner_rpc_twenty_ms_count_(0),
-      active_xa_stmt_count_(0), active_xa_ctx_count_(0), xa_compensate_record_count_(0) {}
+      active_xa_stmt_count_(0), active_xa_ctx_count_(0), xa_compensate_record_count_(0),
+      xa_terminate_count_(0) {}
   ~ObXATransStatistics() { destroy(); }
   int init(const uint64_t tenant_id);
   void reset();
@@ -111,6 +112,8 @@ public:
   void dec_active_xa_ctx_count();
   // increment compensate record count
   void inc_compensate_record_count();
+  // increment session terminate count
+  void inc_session_terminate_count();
 
 public:
   void try_print_xa_statistics();
@@ -160,6 +163,7 @@ private:
   int64_t active_xa_ctx_count_;
   // inner logic
   int64_t xa_compensate_record_count_;
+  int64_t xa_terminate_count_;
 };
 
 class ObDBLinkTransStatistics

@@ -59,7 +59,13 @@ public:
     END_CG_ID,
     KEPT_SNAPSHOT,
     MERGE_LEVEL,
-    EXEC_MODE
+    EXEC_MODE,
+    IS_FULL_MERGE,
+    IO_COST_TIME_PERCENTAGE,
+    MERGE_REASON,
+    BASE_MAJOR_STATUS,
+    CO_MERGE_TYPE,
+    MDS_FILTER_INFO
   };
   ObAllVirtualTabletCompactionHistory();
   virtual ~ObAllVirtualTabletCompactionHistory();

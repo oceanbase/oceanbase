@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_lookup_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
+#include "src/sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -104,7 +105,7 @@ int ObDASLookupIter::inner_get_next_row()
         while (OB_SUCC(ret) && !index_end_ && lookup_rowkey_cnt_ < default_row_batch_cnt) {
           index_table_iter_->clear_evaluated_flag();
           if (OB_FAIL(index_table_iter_->get_next_row())) {
-            if(OB_UNLIKELY(OB_ITER_END != ret)) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
               LOG_WARN("failed to get next row from index table", K(ret));
             } else {
               index_end_ = true;

@@ -32,6 +32,8 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/restore/ob_restore_persist_helper.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_rebuild_service.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -97,7 +99,7 @@ int ObLSRestoreHandler::offline()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_online_) {
+  } else if (!is_online()) {
     LOG_INFO("ls restore handler is already offline");
   } else {
     int retry_cnt = 0;
@@ -110,7 +112,7 @@ int ObLSRestoreHandler::offline()
         if (OB_FAIL(cancel_task_())) {
           LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
         } else {
-          is_online_ = false;
+          set_is_online(false);
           LOG_INFO("ls restore handler offline finish");
         }
         mtx_.unlock();
@@ -129,13 +131,13 @@ int ObLSRestoreHandler::online()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (is_online_) {
+  } else if (is_online()) {
     // do nothing
     LOG_INFO("ls restore handler is already online");
   } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (!new_status.is_in_restoring_or_failed()) {
-    is_online_ = true;
+    set_is_online(true);
   } else {
     lib::ObMutexGuard guard(mtx_);
     if (nullptr != state_handler_) {
@@ -149,7 +151,7 @@ int ObLSRestoreHandler::online()
       }
     }
     if (OB_SUCC(ret)) {
-      is_online_ = true;
+       set_is_online(true);
       LOG_INFO("ls restore handler online finish");
     }
   }
@@ -268,7 +270,7 @@ int ObLSRestoreHandler::handle_pull_tablet(
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(state_handler_)) {
     ret = OB_ERR_SELF_IS_NULL;
-    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop_), K(is_online_));
+    LOG_WARN("need restart, wait later", KPC(ls_), K(is_stop()), K(is_online()));
   } else if (OB_FAIL(state_handler_->handle_pull_tablet(tablet_ids, leader_restore_status, leader_proposal_id))) {
     LOG_WARN("fail to handl pull tablet", K(ret), K(leader_restore_status), K(leader_proposal_id));
   }
@@ -283,6 +285,8 @@ int ObLSRestoreHandler::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (is_stop() || !is_online()) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
   } else if (OB_FAIL(check_before_do_restore_(can_do_restore))) {
     LOG_WARN("fail to check before do restore", K(ret), KPC(ls_));
   } else if (!can_do_restore) {
@@ -298,8 +302,13 @@ int ObLSRestoreHandler::process()
     // and an ls leader not exist error will be returned before leader is ready.
     // so in order to improve availability, we need control the retry frequency and the default retry time interval is 10s.
     lib::ObMutexGuard guard(mtx_);
-    if (is_stop_ || !is_online_) {
+    if (is_stop() || !is_online()) {
       LOG_INFO("ls stopped or disabled", KPC(ls_));
+  #ifdef ERRSIM
+    } else if (ls_->get_ls_id().id() == GCONF.errsim_restore_ls_id
+               && state_handler_->get_restore_status() == GCONF.errsim_ls_restore_status) {
+      ret = OB_EAGAIN;
+  #endif
     } else if (OB_FAIL(state_handler_->do_restore())) {
       ObTaskId trace_id(*ObCurTraceId::get_trace_id());
       result_mgr_.set_result(ret, trace_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
@@ -655,7 +664,7 @@ int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
       LOG_WARN("failed to cancel tasks", K(ret), KPC(ls_));
     } else {
       is_safe = true;
-      is_stop_ = true;
+      stop();
     }
   }
   LOG_INFO("wait ls restore stop", K(ret), K(is_safe), KPC(ls_));
@@ -872,7 +881,19 @@ int ObILSRestoreState::advance_status_(
   if (OB_SUCCESS != (tmp_ret = report_ls_restore_progress_(ls, next_status, *ObCurTraceId::get_trace_id()))) {
     LOG_WARN("fail to reprot ls restore progress", K(tmp_ret), K(ls), K(next_status));
   }
+
+  if (need_notify_rs_restore_finish_(next_status)) {
+    notify_rs_restore_finish_();
+  }
   return ret;
+}
+
+bool ObILSRestoreState::need_notify_rs_restore_finish_(const ObLSRestoreStatus &ls_restore_status)
+{
+  return ObLSRestoreStatus::WAIT_RESTORE_TO_CONSISTENT_SCN  == ls_restore_status
+         || ObLSRestoreStatus::QUICK_RESTORE_FINISH == ls_restore_status
+         || ObLSRestoreStatus::NONE == ls_restore_status
+         || ObLSRestoreStatus::RESTORE_FAILED == ls_restore_status;
 }
 
 int ObILSRestoreState::report_ls_restore_progress_(
@@ -1298,7 +1319,7 @@ int ObILSRestoreState::check_restore_concurrency_limit_(bool &reach_limit)
 
     if (restore_dag_net_count >= restore_concurrency) {
       reach_limit = true;
-      if (REACH_TENANT_TIME_INTERVAL(1000 * 1000 * 60 * 5)) {
+      if (REACH_THREAD_TIME_INTERVAL(1000 * 1000 * 60 * 5)) {
         LOG_INFO("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
       }
     }
@@ -1546,6 +1567,56 @@ int ObILSRestoreState::report_unfinished_tablet_cnt(const int64_t unfinished_tab
   return ret;
 }
 
+int ObILSRestoreState::add_finished_bytes(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSRestoreHandler *ls_restore_handler = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FALSE_IT(ls_restore_handler = ls_->get_ls_restore_handler())) {
+  } else if (OB_FAIL(ls_restore_handler->restore_stat().add_finished_bytes(bytes))) {
+    LOG_WARN("failed to add finished bytes", K(ret), KPC_(ls), K(bytes));
+  }
+
+  return ret;
+}
+
+int ObILSRestoreState::report_unfinished_bytes(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSRestoreHandler *ls_restore_handler = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FALSE_IT(ls_restore_handler = ls_->get_ls_restore_handler())) {
+  } else if (OB_FAIL(ls_restore_handler->restore_stat().report_unfinished_bytes(bytes))) {
+    LOG_WARN("failed to report unfinished bytes", K(ret), KPC_(ls), K(bytes));
+  }
+
+  return ret;
+}
+
+void ObILSRestoreState::notify_rs_restore_finish_()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ls_restore_arg_->tenant_id_;
+  common::ObAddr leader_addr;
+  obrpc::ObNotifyLSRestoreFinishArg arg;
+  arg.set_tenant_id(tenant_id);
+  arg.set_ls_id(ls_->get_ls_id());
+
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc proxy or location service is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+              GCONF.cluster_id, gen_meta_tenant_id(tenant_id), ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
+    LOG_WARN("failed to get meta tenant leader address", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id).notify_ls_restore_finish(arg))) {
+    LOG_WARN("failed to notify tenant restore scheduler", KR(ret), K(leader_addr), K(arg));
+  }
+}
+
 //================================ObLSRestoreStartState=======================================
 ObLSRestoreStartState::ObLSRestoreStartState()
   : ObILSRestoreState(ObLSRestoreStatus::Status::RESTORE_START)
@@ -1740,6 +1811,7 @@ int ObLSRestoreHandler::fill_restore_arg()
         ls_restore_arg_.backup_cluster_version_ = job_info.get_source_cluster_version();
         ls_restore_arg_.backup_data_version_ = job_info.get_source_data_version();
         ls_restore_arg_.backup_compatible_ = static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible());
+        ls_restore_arg_.progress_display_mode_ = job_info.get_progress_display_mode();
         ls_restore_arg_.backup_set_list_.reset();
         ls_restore_arg_.backup_piece_list_.reset();
         if (OB_FAIL(ls_restore_arg_.backup_piece_list_.assign(
@@ -2207,7 +2279,9 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     ObTabletCreateDeleteMdsUserData user_data;
-    bool is_commited = false;
+    mds::MdsWriter writer;// will be removed later
+    mds::TwoPhaseCommitState trans_stat;// will be removed later
+    share::SCN trans_version;// will be removed later
     if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
@@ -2226,9 +2300,10 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
     } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_empty()) {
       ++total_tablet_cnt_;
     } else if (!tablet->get_tablet_meta().has_transfer_table()) {
-    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, is_commited))) {
+    } else if (OB_FAIL(tablet->get_latest(user_data, writer, trans_stat, trans_version))) {
       LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
-    } else if (!is_commited && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat
+        && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
       LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
     } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
                                                          restore_status,
@@ -2309,6 +2384,7 @@ int ObLSQuickRestoreState::do_restore()
 int ObLSQuickRestoreState::leader_quick_restore_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -2376,6 +2452,7 @@ int ObLSQuickRestoreState::leader_quick_restore_()
 int ObLSQuickRestoreState::follower_quick_restore_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
@@ -2492,6 +2569,7 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
   ObLSTabletService *ls_tablet_svr = nullptr;
   ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   ObTablet *tablet = nullptr;
+  int64_t total_size = 0;
 
   if (OB_ISNULL(ls_tablet_svr = ls_->get_tablet_svr())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2500,6 +2578,7 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
     LOG_WARN("fail to get tablet iterator", K(ret), KPC(ls_));
   } else {
     while (OB_SUCC(ret)) {
+      int64_t tablet_size = 0;
       if (OB_FAIL(iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -2520,7 +2599,43 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet clog checkpoint ts should less than restore end ts", K(ret), K(tablet_meta),
               "ls restore end ts", ls_restore_arg_->get_restore_scn());
+        } else if (tablet->is_empty_shell()) {
+        } else if (!ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+        } else if (ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+          // sys ls's tablets have all been fully restore, take occupy size as total bytes
+          if (OB_FAIL(ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
+                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+          }
+        } else if (!ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_remote()) {
+          if (OB_FAIL(ObStorageHAUtils::get_tablet_backup_size_in_bytes(
+                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+          }
         }
+      }
+      if (OB_SUCC(ret)) {
+        total_size += tablet_size;
+      }
+    }
+    // report ls total_bytes
+    if (OB_SUCC(ret) && ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+      storage::ObLSRestoreHandler *ls_restore_handler = ls_->get_ls_restore_handler();
+      ObLSRestoreStat &restore_stat = ls_restore_handler->restore_stat();
+      share::ObRestorePersistHelper helper;
+      ObLSRestoreJobPersistKey ls_key;
+      ls_key.tenant_id_ = ls_->get_tenant_id();
+      ls_key.job_id_ = ls_restore_arg_->get_job_id();
+      ls_key.ls_id_ = ls_->get_ls_id();
+      ls_key.addr_ = self_addr_;
+      if (OB_FAIL(helper.init(ls_key.tenant_id_, share::OBCG_STORAGE))) {
+        LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
+      } else if (OB_FAIL(helper.set_ls_total_bytes(*proxy_, ls_key, total_size))) {
+        LOG_WARN("fail to set ls total bytes", K(ret), K(ls_key), K(total_size));
+      } else if (ls_key.ls_id_.is_sys_ls() && OB_FAIL(helper.set_ls_finish_bytes(*proxy_, ls_key, total_size))) {
+        LOG_WARN("fail to increase ls total bytes", K(ret), K(ls_key), K(total_size));
+      } else {
+        restore_stat.set_total_bytes(total_size);
       }
     }
   }
@@ -2611,13 +2726,35 @@ ObLSRestoreMajorState::~ObLSRestoreMajorState()
 {
 }
 
+ERRSIM_POINT_DEF(EN_REBUILD_BEFORE_RESTORE_MAJOR)
 int ObLSRestoreMajorState::do_restore()
 {
-  DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (OB_SUCCESS != EN_REBUILD_BEFORE_RESTORE_MAJOR && !ls_->is_sys_ls() && is_follower(role_)) {
+    // trigger follower rebuild
+    ObRebuildService *rebuild_service = MTL(ObRebuildService *);
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (OB_FAIL(rebuild_service->add_rebuild_ls(ls_->get_ls_id(), rebuild_type))) {
+      LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(ls_->get_ls_id()), K(rebuild_type));
+    } else {
+      LOG_INFO("fake EN_REBUILD_BEFORE_RESTORE_MAJOR", K(ls_->get_ls_id()), K(rebuild_type));
+    }
+  }
+#endif
+
+  if (!ls_->is_sys_ls()) {
+    DEBUG_SYNC(BEFORE_RESTORE_MAJOR);
+  }
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(errsim_rebuild_before_restore_major_())) {
+    LOG_WARN("[ERRSIM] fail to errsim rebuild before restore major", K(ret), KPC(this));
+#endif
   } else if (OB_FAIL(update_role_())) {
     LOG_WARN("fail to update role and status", K(ret), KPC(this));
   } else if (!is_follower(role_) && OB_FAIL(leader_restore_major_data_())) {
@@ -2739,6 +2876,24 @@ int ObLSRestoreMajorState::do_restore_major_(
   }
   return ret;
 }
+
+#ifdef ERRSIM
+int ObLSRestoreMajorState::errsim_rebuild_before_restore_major_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != EN_REBUILD_BEFORE_RESTORE_MAJOR && !ls_->is_sys_ls() && is_follower(role_)) {
+    // trigger follower rebuild
+    ObRebuildService *rebuild_service = MTL(ObRebuildService *);
+    const ObLSRebuildType rebuild_type(ObLSRebuildType::TRANSFER);
+    if (OB_FAIL(rebuild_service->add_rebuild_ls(ls_->get_ls_id(), rebuild_type))) {
+      LOG_WARN("[ERRSIM] failed to add rebuild ls", K(ret), K(ls_->get_ls_id()), K(rebuild_type));
+    } else {
+      LOG_INFO("fake EN_REBUILD_BEFORE_RESTORE_MAJOR", K(ls_->get_ls_id()), K(rebuild_type));
+    }
+  }
+  return ret;
+}
+#endif
 
 //================================ObLSRestoreFinishState=======================================
 ObLSRestoreFinishState::ObLSRestoreFinishState()
@@ -2955,10 +3110,36 @@ int ObLSWaitRestoreConsistentScnState::check_can_advance_status_(bool &can) cons
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
       if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
         LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
-      } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS != job_info.get_status()) {
-        can = false;
+      } else if (ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+        can = share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH == job_info.get_status();
       } else {
-        can = true;
+        can = share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS == job_info.get_status();
+      }
+    }
+  }
+  return ret;
+}
+
+//================================ObLSRestoreWaitQuickRestoreState=======================================
+int ObLSRestoreWaitQuickRestoreState::check_can_advance_status_(bool &can) const
+{
+  int ret = OB_SUCCESS;
+  if (ls_restore_arg_->get_progress_display_mode().is_tablet_cnt()) {
+    can = true;
+  } else {
+    share::ObPhysicalRestoreTableOperator restore_table_operator;
+    const uint64_t tenant_id = ls_->get_tenant_id();
+    if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id, share::OBCG_STORAGE))) {
+      LOG_WARN("fail to init restore table operator", K(ret), K(tenant_id));
+    } else {
+      HEAP_VAR(ObPhysicalRestoreJob, job_info) {
+        if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
+          LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
+        } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_WAIT_LS != job_info.get_status()) {
+          can = false;
+        } else {
+          can = true;
+        }
       }
     }
   }
@@ -3136,6 +3317,34 @@ int ObLSRestoreStat::dec_total_tablet_cnt()
   return ret;
 }
 
+int ObLSRestoreStat::increase_total_bytes_by(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mtx_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreStat not init", K(ret));
+  } else {
+    total_bytes_ += bytes;
+  }
+
+  return ret;
+}
+
+int ObLSRestoreStat::decrease_total_bytes_by(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mtx_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreStat not init", K(ret));
+  } else {
+    total_bytes_ -= bytes;
+  }
+
+  return ret;
+}
+
 int ObLSRestoreStat::add_finished_tablet_cnt(const int64_t inc_finished_tablet_cnt)
 {
   int ret = OB_SUCCESS;
@@ -3179,6 +3388,49 @@ int ObLSRestoreStat::report_unfinished_tablet_cnt(const int64_t unfinished_table
   return ret;
 }
 
+int ObLSRestoreStat::add_finished_bytes(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mtx_);
+  int64_t old_finished_bytes = get_finished_bytes();
+  int64_t new_finished_bytes = old_finished_bytes + bytes;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreStat not init", K(ret));
+  } else if (ObTimeUtility::current_time() - last_report_ts_ >= REPORT_INTERVAL) {
+    if (OB_FAIL(do_report_finished_bytes_(new_finished_bytes))) {
+      LOG_WARN("fail to report finished tablet cnt", K(ret), K_(ls_key));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    unfinished_tablet_cnt_ = total_tablet_cnt_ - new_finished_bytes;
+  }
+
+  return ret;
+}
+
+int ObLSRestoreStat::report_unfinished_bytes(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mtx_);
+  int64_t finished_bytes_ = total_bytes_ - bytes;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreStat not init", K(ret));
+  } else if (total_bytes_ > 0 && finished_bytes_ > 0) {
+    if (OB_FAIL(do_report_finished_bytes_(finished_bytes_))) {
+      LOG_WARN("fail to report finished tablet cnt", K(ret), K_(total_bytes), K_(unfinished_bytes));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    unfinished_bytes_ = unfinished_bytes_;
+  }
+
+  return ret;
+}
+
 int ObLSRestoreStat::load_restore_stat()
 {
   int ret = OB_SUCCESS;
@@ -3195,6 +3447,8 @@ int ObLSRestoreStat::load_restore_stat()
     LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key_.tenant_id_);
   } else if (OB_FAIL(helper.get_ls_total_tablet_cnt(*sql_proxy, ls_key_, total_tablet_cnt_))) {
     LOG_WARN("fail to get ls total tablet cnt", K(ret), K_(ls_key));
+  } else if (OB_FAIL(helper.get_ls_total_bytes(*sql_proxy, ls_key_, total_bytes_))) {
+    LOG_WARN("fail to get ls total bytes", K(ret), K_(ls_key));
   }
 
   return ret;
@@ -3206,6 +3460,8 @@ void ObLSRestoreStat::reset()
   ls_key_.reset();
   total_tablet_cnt_ = 0;
   unfinished_tablet_cnt_ = 0;
+  total_bytes_ = 0;
+  unfinished_bytes_ = 0;
   last_report_ts_ = 0;
   is_inited_ = false;
 }
@@ -3231,7 +3487,7 @@ int ObLSRestoreStat::do_report_finished_tablet_cnt_(const int64_t finished_table
   int ret = OB_SUCCESS;
   share::ObRestorePersistHelper helper;
   common::ObMySQLProxy *sql_proxy = nullptr;
-  if (finished_tablet_cnt > 0) {
+  if (finished_tablet_cnt < 0) {
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql prxoy must not be null", K(ret));
@@ -3249,4 +3505,44 @@ int ObLSRestoreStat::do_report_finished_tablet_cnt_(const int64_t finished_table
 int64_t ObLSRestoreStat::get_finished_tablet_cnt_() const
 {
   return total_tablet_cnt_ - unfinished_tablet_cnt_;
+}
+
+int ObLSRestoreStat::do_report_finished_bytes_(const int64_t finished_bytes)
+{
+  int ret = OB_SUCCESS;
+  share::ObRestorePersistHelper helper;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  if (finished_bytes < 0) {
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(helper.init(ls_key_.tenant_id_, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key_.tenant_id_);
+  } else if (OB_FAIL(helper.set_ls_finish_bytes(*sql_proxy, ls_key_, finished_bytes))) {
+    LOG_WARN("fail to set ls finished tablet cnt", K(ret), K_(ls_key));
+  } else {
+    last_report_ts_ = ObTimeUtility::current_time();
+  }
+
+  return ret;
+}
+
+int64_t ObLSRestoreStat::get_finished_bytes() const
+{
+  return total_bytes_ - unfinished_bytes_;
+}
+
+
+int ObLSRestoreStat::set_total_bytes(const int64_t bytes)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mtx_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSRestoreStat not init", K(ret));
+  } else {
+    total_bytes_ = bytes;
+  }
+
+  return ret;
 }

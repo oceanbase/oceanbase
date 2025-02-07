@@ -12,6 +12,7 @@
 #ifndef OBDEV_SRC_SQL_DAS_OB_VECTOR_INDEX_LOOKUP_OP_H_
 #define OBDEV_SRC_SQL_DAS_OB_VECTOR_INDEX_LOOKUP_OP_H_
 #include "sql/das/ob_domain_index_lookup_op.h"
+#include "sql/das/ob_das_attach_define.h"
 #include "src/share/vector_index/ob_plugin_vector_index_service.h"
 namespace oceanbase
 {
@@ -33,6 +34,7 @@ class ObVectorIndexLookupOp : public ObDomainIndexLookupOp
 public:
   ObVectorIndexLookupOp(ObIAllocator &allocator)
   : ObDomainIndexLookupOp(allocator),
+    vec_op_alloc_("VecIdxLookupOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     aux_lookup_iter_(nullptr),
     adaptor_vid_iter_(nullptr),
     search_vec_(nullptr),
@@ -94,6 +96,7 @@ public:
   int init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
                 ObDASVecAuxScanRtDef *ir_rtdef);
   int revert_iter_for_complete_data();
+  void reuse_scan_param_complete_data();
   int prepare_state(const ObVidAdaLookupStatus& cur_state, ObVectorQueryAdaptorResultContext &ada_ctx);
   int vector_do_index_lookup();
   int get_cmpt_aux_table_rowkey();
@@ -140,6 +143,7 @@ private:
   static const int64_t SNAPSHOT_PRI_KEY_CNT = 1;
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
 private:
+  common::ObArenaAllocator vec_op_alloc_;
   common::ObNewRowIterator *aux_lookup_iter_;
   ObVectorQueryVidIterator* adaptor_vid_iter_;
   ObExpr* search_vec_;

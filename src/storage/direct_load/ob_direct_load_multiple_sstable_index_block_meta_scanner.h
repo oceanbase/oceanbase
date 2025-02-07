@@ -110,9 +110,11 @@ class ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator
 public:
   ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator();
   virtual ~ObDirectLoadMultipleSSTableIndexBlockTabletEndKeyIterator();
-  int init(ObDirectLoadMultipleSSTableIndexBlockMetaIterator *index_block_meta_iter);
+  int init(const ObTabletID &tablet_id,
+           ObDirectLoadMultipleSSTableIndexBlockMetaIterator *index_block_meta_iter);
   int get_next_rowkey(const blocksstable::ObDatumRowkey *&rowkey) override;
 private:
+  ObTabletID tablet_id_;
   ObDirectLoadMultipleSSTableIndexBlockMetaIterator *index_block_meta_iter_;
   blocksstable::ObDatumRowkey rowkey_;
   bool is_inited_;

@@ -46,6 +46,7 @@ struct ObStaticMergeParam final
   int cal_major_merge_param(const bool force_full_merge, ObProgressiveMergeMgr &progressive_mgr);
   bool is_build_row_store_from_rowkey_cg() const;
   bool is_build_row_store() const;
+  bool is_build_redundent_row_store_from_rowkey_cg() const;
 
   OB_INLINE void set_full_merge_and_level(bool is_full_merge)
   {
@@ -53,6 +54,7 @@ struct ObStaticMergeParam final
     is_full_merge_ = is_full_merge;
     merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   }
+  ObMergeLevel get_merge_level_for_sstable(const ObSSTable &sstable) const; // unused
 private:
   int init_multi_version_column_descs();
 
@@ -64,7 +66,7 @@ public:
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard));
+      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -87,6 +89,7 @@ public:
   int64_t read_base_version_; // use for major merge
   int64_t create_snapshot_version_;
   int64_t start_time_;
+  uint64_t encoding_granularity_;
   share::SCN merge_scn_;
   ObVersionRange version_range_;
   share::ObScnRange scn_range_;
@@ -97,6 +100,8 @@ public:
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   share::ObPreWarmerParam pre_warm_param_;
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
+  int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
+  int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -159,9 +164,8 @@ public:
   int64_t get_result_progressive_merge_step(const int64_t column_group_idx) const
   {
     return progressive_merge_mgr_.is_inited()
-               ? progressive_merge_mgr_.get_result_progressive_merge_step(
-                     get_tablet_id(), column_group_idx)
-               : 0;
+         ? progressive_merge_mgr_.get_result_progressive_merge_step(get_tablet_id(), column_group_idx)
+         : 0;
   }
   OB_INLINE int filter(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret)
   {
@@ -192,7 +196,7 @@ public:
     const ObStorageColumnGroupSchema *cg_schema,
     const bool is_main_table) const;
 
-  OB_INLINE void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
+  void collect_tnode_dml_stat(const ObTransNodeDMLStat tnode_stat);
   void add_sstable_merge_info(ObSSTableMergeHistory &merge_history,
                               const share::ObDagId &dag_id,
                               const int64_t hash,
@@ -200,7 +204,8 @@ public:
                               const blocksstable::ObSSTable *sstable = nullptr,
                               const ObStorageSnapshotInfo *snapshot_info = nullptr,
                               const int64_t start_cg_idx = 0,
-                              const int64_t end_cg_idx = 0);
+                              const int64_t end_cg_idx = 0,
+                              const int64_t batch_exec_dag_cnt = 0);
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
   /* GET FUNC */
@@ -216,7 +221,7 @@ public:
   DAG_PARAM_FUNC(const ObLSID &, ls_id);
   DAG_PARAM_FUNC(const ObTabletID &, tablet_id);
   DAG_PARAM_FUNC(int64_t, merge_version);
-  DAG_PARAM_FUNC(int64_t, transfer_seq);
+  DAG_PARAM_FUNC(int64_t, schedule_transfer_seq);
   DAG_PARAM_FUNC(ObExecMode, exec_mode);
   STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);
@@ -226,6 +231,7 @@ public:
   STATIC_PARAM_FUNC(int64_t, ls_rebuild_seq);
   STATIC_PARAM_FUNC(const storage::ObTablesHandleArray &, tables_handle);
   STATIC_PARAM_FUNC(const ObTabletMergeDagParam &, dag_param);
+  STATIC_PARAM_FUNC(const ObCOMajorMergePolicy::ObCOMajorMergeType &, co_major_merge_type);
   STATIC_PARAM_FUNC(const SCN &, merge_scn);
   PROGRESSIVE_FUNC(progressive_merge_round);
   PROGRESSIVE_FUNC(progressive_merge_num);
@@ -246,16 +252,25 @@ public:
   int update_storage_schema_by_memtable(
     const ObStorageSchema &schema_on_tablet,
     const ObTablesHandleArray &merge_tables_handle);
-  static bool need_swap_tablet(ObProtectedMemtableMgrHandle &memtable_mgr_handle, const int64_t row_count, const int64_t macro_count);
+  static bool need_swap_tablet(
+    ObProtectedMemtableMgrHandle &memtable_mgr_handle,
+    const int64_t row_count,
+    const int64_t macro_count,
+    const int64_t cg_count);
   virtual int get_macro_seq_by_stage(const ObGetMacroSeqStage stage,
                                      int64_t &macro_start_seq) const;
   int build_update_table_store_param(
     const blocksstable::ObSSTable *sstable,
     ObUpdateTableStoreParam &param);
-  virtual int update_block_info(const ObMergeBlockInfo &block_info) { return OB_NOT_SUPPORTED; }
+  virtual int update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time)
+  { return OB_NOT_SUPPORTED; }
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:
+  int cal_major_merge_param(const bool force_full_merge,
+                            ObProgressiveMergeMgr &progressive_mgr);
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
   virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result)
   {

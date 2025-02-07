@@ -238,6 +238,7 @@ int ObStorageStreamRpcReader<RPC_CODE>::fetch_next_buffer()
     rpc_buffer_.get_position() = 0;
     rpc_buffer_parse_pos_ = 0;
     if (handle_.has_more()) {
+      handle_.reset_timeout();
       if (OB_FAIL(handle_.get_more(rpc_buffer_))) {
         STORAGE_LOG(WARN, "get_more(send request) failed", K(ret));
       } else if (rpc_buffer_.get_position() <= 0) {
@@ -283,6 +284,7 @@ int do_fetch_next_buffer_if_need(
     rpc_buffer.get_position() = 0;
     rpc_buffer_parse_pos = 0;
     if (handle.has_more()) {
+      handle.reset_timeout();
       if (OB_FAIL(handle.get_more(rpc_buffer))) {
         STORAGE_LOG(WARN, "get_more(send request) failed", KR(ret));
       } else if (rpc_buffer.get_position() < 0) {

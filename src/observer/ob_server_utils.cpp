@@ -159,14 +159,22 @@ const char *ObServerUtils::build_syslog_file_info(const common::ObAddr &addr)
   const static int64_t max_info_len = 512;
   static char info[max_info_len];
 
-  // self address
-  const char *self_addr = addr.is_valid() ? to_cstring(addr) : "";
-
   // OS info
   struct utsname uts;
   if (0 != ::uname(&uts)) {
     ret = OB_ERR_SYS;
     LOG_WARN("call uname failed");
+  }
+
+  // self address
+  char self_addr[OB_IP_PORT_STR_BUFF] = {'\0'};
+  if (OB_SUCC(ret)) {
+    if (addr.is_valid()) {
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(self_addr, sizeof(self_addr), pos, addr))) {
+        LOG_WARN("print addr to databuff failed", K(ret), K(addr), K(pos));
+      }
+    }
   }
 
   // time zone info

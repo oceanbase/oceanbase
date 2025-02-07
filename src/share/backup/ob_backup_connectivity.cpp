@@ -65,7 +65,7 @@ int ObBackupConnectivityCheckManager::schedule_connectivity_check_(
     const share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-  // TODO(wenjinyu.wjy) in 4.3, this code logic needs to be rewritten. Since server_mgr needs to be removed, first comment the code
+  // TODO(mingqiao) in 4.3, this code logic needs to be rewritten. Since server_mgr needs to be removed, first comment the code
   // obrpc::ObCheckBackupConnectivityArg args;
   // args.tenant_id_ = tenant_id_;
   // common::ObArray<ObAddr> server_list;
@@ -205,7 +205,7 @@ int ObBackupConnectivityCheckManager::check_backup_dest_connectivity(
     LOG_WARN("failed to check oss/cos io permission", K(ret), K_(tenant_id), K(backup_dest)); 
   } else if (OB_FAIL(set_connectivity_check_path_(backup_dest, path))) {
     LOG_WARN("failed to get check file", K(ret), K_(tenant_id), K(backup_dest));
-  // TODO(wenjinyu.wjy) in 4.3, support check connectivity
+  // TODO(mingqiao) in 4.3, support check connectivity
   //} else if (OB_FAIL(schedule_connectivity_check_(backup_dest, path))) {
   //  LOG_WARN("failed to schedule connectivity check", K(ret), K_(tenant_id));
   } else if (OB_FAIL(set_last_check_time_(backup_dest))) {
@@ -610,9 +610,7 @@ bool ObBackupCheckFile::is_permission_error_(const int32_t result)
   int ret = OB_SUCCESS;
   bool is_permission = false;
   if (OB_IO_ERROR == result
-      || OB_OSS_ERROR == result
-      || OB_COS_ERROR == result
-      || OB_S3_ERROR == result) {
+      || OB_OBJECT_STORAGE_IO_ERROR == result) {
     is_permission = true; 
   }
   return is_permission;

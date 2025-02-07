@@ -309,7 +309,7 @@ int ObLSService::wait()
     if (retry_times % 100 == 0) {
       LOG_WARN("ls service wait empty for too much time", K(retry_times), K(begin_time));
     }
-    usleep(100 * 1000); // 100 ms
+    ob_usleep(100 * 1000); // 100 ms
   }
   retry_times = 0;
   while(ATOMIC_LOAD(&iter_cnt_) != 0) {
@@ -317,7 +317,7 @@ int ObLSService::wait()
     if (retry_times % 100 == 0) {
       LOG_WARN("ls service wait ls iter for too much time", K(retry_times), K_(iter_cnt), K(begin_time));
     }
-    usleep(100 * 1000); // 100 ms
+    ob_usleep(100 * 1000); // 100 ms
   }
   return ret;
 }
@@ -420,6 +420,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
                                   const SCN &create_scn,
+                                  const ObMajorMVMergeInfo &major_mv_merge_info,
                                   const ObLSStoreFormat &store_format,
                                   ObLS *&ls)
 {
@@ -438,6 +439,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                               migration_status,
                               restore_status,
                               create_scn,
+                              major_mv_merge_info,
                               store_format,
                               rs_reporter_))) {
     LOG_WARN("fail to init ls", K(ret), K(lsid));
@@ -517,6 +519,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     common_arg.restore_status_ = get_restore_status_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.create_type_ = get_create_type_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.need_create_inner_tablet_ = need_create_inner_tablets_(arg);
+    common_arg.major_mv_merge_info_ = arg.get_major_mv_merge_info();
 
     if (OB_FAIL(create_ls_(common_arg, mig_arg))) {
       LOG_WARN("create ls failed", K(ret), K(arg));
@@ -780,7 +783,7 @@ int ObLSService::gc_ls_after_replay_slog()
               ls->wait();
             }
             if (OB_SUCCESS != tmp_ret) {
-              usleep(SLEEP_TS);
+              ob_usleep(SLEEP_TS);
             }
           } while(tmp_ret != OB_SUCCESS);
         }
@@ -791,7 +794,7 @@ int ObLSService::gc_ls_after_replay_slog()
               LOG_ERROR("fail to write create ls abort slog", K(tmp_ret), KPC(ls));
             }
             if (OB_TMP_FAIL(tmp_ret)) {
-              usleep(SLEEP_TS);
+              ob_usleep(SLEEP_TS);
             }
           } while (tmp_ret != OB_SUCCESS);
           remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
@@ -918,6 +921,7 @@ int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_me
                                       migration_status,
                                       restore_status,
                                       ls_meta.get_clog_checkpoint_scn(),
+                                      ls_meta.get_major_mv_merge_info(),
                                       ls_meta.get_store_format(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
@@ -1285,6 +1289,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                               arg.migration_status_,
                                               arg.restore_status_,
                                               arg.create_scn_,
+                                              arg.major_mv_merge_info_,
                                               ls_store_format,
                                               ls))) {
       LOG_WARN("create ls failed", K(ret), K(arg.ls_id_), K(ls_store_format));
@@ -1367,6 +1372,7 @@ int ObLSService::create_ls_for_ha(
     common_arg.restore_status_ = restore_status;
     common_arg.task_id_ = task_id;
     common_arg.need_create_inner_tablet_ = false;
+    common_arg.major_mv_merge_info_.reset();
 
     if (OB_FAIL(create_ls_(common_arg, arg))) {
       LOG_WARN("failed to create ls", K(ret), K(arg));

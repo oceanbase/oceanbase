@@ -164,6 +164,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorIPDistance);
 };
 
+class ObExprVectorNegativeIPDistance : public ObExprVectorDistance
+{
+public:
+  explicit ObExprVectorNegativeIPDistance(common::ObIAllocator &alloc);
+  virtual ~ObExprVectorNegativeIPDistance() {};
+
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+
+  static int calc_negative_inner_product(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprVectorNegativeIPDistance);
+};
+
 class ObExprVectorDims : public ObExprVector
 {
 public:

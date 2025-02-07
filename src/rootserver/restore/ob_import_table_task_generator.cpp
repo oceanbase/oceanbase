@@ -132,6 +132,7 @@ int ObImportTableTaskGenerator::gen_one_db_import_tasks_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   } else if (OB_FAIL(guard.get_table_schemas_in_database(src_tenant_id, database_id, table_schemas))) {
     LOG_WARN("failed to get table schemas", K(ret), K(src_tenant_id), K(database_id));
@@ -205,6 +206,7 @@ int ObImportTableTaskGenerator::gen_table_import_task_(
         LOG_WARN("failed to databuff printf", K(ret));
       } else {
         import_job.get_result().set_result(false, comment);
+        import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
       }
     } else if (OB_FAIL(fill_import_task_from_import_table_(import_job, guard, *table_schema, table_item, import_task))) {
       LOG_WARN("failed to fill import task", K(ret), K(import_job), K(table_item));
@@ -328,6 +330,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false/*failed*/, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   } else if (table_schema.is_in_recyclebin()) {
     ret = OB_OP_NOT_ALLOW;
@@ -339,6 +342,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false/*failed*/, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   } else if (table_schema.is_user_hidden_table()) {
     ret = OB_OP_NOT_ALLOW;
@@ -350,6 +354,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false/*failed*/, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   }
   return ret;
@@ -377,6 +382,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   } else if (OB_FAIL(ObImportTableUtil::check_table_schema_exist(*schema_service_,
                                                                  target_tenant_id,
@@ -394,6 +400,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   }
   is_exist = false;
@@ -412,6 +419,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   }
   is_exist = false;
@@ -430,6 +438,7 @@ int ObImportTableTaskGenerator::check_target_schema_(
       LOG_WARN("failed to databuff printf", K(ret));
     } else {
       import_job.get_result().set_result(false, comment);
+      import_job.get_result().set_tables_import_result(ObImportResult::FAILED);
     }
   }
   return ret;

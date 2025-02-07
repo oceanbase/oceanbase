@@ -30,6 +30,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "share/config/ob_config_helper.h"
+#include "src/pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -191,6 +192,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
   } else {
     ParamStore params( (ObWrapperAllocator(ctx.get_allocator())) );
     const share::schema::ObRoutineInfo *routine_info = NULL;
+    ObArray<bool> null_params;
 
     if (!call_proc_info->can_direct_use_param()) {
       ObObjParam param;
@@ -262,6 +264,11 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
               LOG_WARN("push back error", K(i), K(*expr), K(ret));
             } else {
               params.at(params.count() - 1).set_param_meta();
+              if (call_proc_info->get_output_count() > 0) {
+                if (OB_FAIL(null_params.push_back(param.is_null()))) {
+                  LOG_WARN("fail to push back", K(ret));
+                }
+              }
             }
           }
         }
@@ -281,8 +288,13 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
         LOG_DEBUG("params", "param", ctx.get_physical_plan_ctx()->get_param_store().at(i), K(i));
-        if (OB_FAIL(params.push_back(ctx.get_physical_plan_ctx()->get_param_store().at(i)))) {
+        ObObjParam param = ctx.get_physical_plan_ctx()->get_param_store().at(i);
+        if (OB_FAIL(params.push_back(param))) {
           LOG_WARN("push back error", K(i), K(ret));
+        } else if (call_proc_info->get_output_count() > 0) {
+          if (OB_FAIL(null_params.push_back(param.is_null()))) {
+            LOG_WARN("fail to push back", K(ret));
+          }
         }
       }
     }
@@ -296,26 +308,30 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       ObObj result;
       int64_t pkg_id = call_proc_info->is_udt_routine()
                ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
-      if (OB_ISNULL(stmt.get_dblink_routine_info())) {
-        if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
-                                                ctx.get_allocator(),
-                                                pkg_id,
-                                                routine_id,
-                                                path,
-                                                params,
-                                                nocopy_params,
-                                                result))) {
-          LOG_WARN("failed to execute pl", K(package_id), K(routine_id), K(ret), K(pkg_id));
-        }
-#ifdef OB_BUILD_ORACLE_PL
-      } else if (OB_FAIL(ObSPIService::spi_execute_dblink(ctx,
-                                                          ctx.get_allocator(),
-                                                          NULL,
-                                                          stmt.get_dblink_routine_info(),
-                                                          params,
-                                                          NULL))) {
-        LOG_WARN("failed to execute dblink pl", K(ret), KP(stmt.get_dblink_routine_info()));
-#endif
+      const ObRoutineInfo *dblink_routine_info = NULL;
+      uint64_t dblink_id = OB_INVALID_ID;
+      if (OB_NOT_NULL(stmt.get_dblink_routine_info())) {
+        dblink_routine_info = stmt.get_dblink_routine_info();
+        pkg_id = dblink_routine_info->get_package_id();
+        routine_id = dblink_routine_info->get_routine_id();
+        dblink_id = dblink_routine_info->get_dblink_id();
+      }
+      if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
+                                              ctx.get_allocator(),
+                                              pkg_id,
+                                              routine_id,
+                                              path,
+                                              params,
+                                              nocopy_params,
+                                              result,
+                                              NULL,
+                                              false,
+                                              false,
+                                              0,
+                                              false,
+                                              dblink_id,
+                                              dblink_routine_info))) {
+        LOG_WARN("failed to execute pl",  K(ret), K(package_id), K(routine_id), K(pkg_id), K(dblink_id));
       }
       if (OB_READ_NOTHING == ret
           && lib::is_oracle_mode()
@@ -334,9 +350,12 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             if (call_proc_info->is_out_param(i)) {
               if (ob_is_enum_or_set_type(params.at(i).get_type())) {
+                common::ObIArray<common::ObString>* type_info = NULL;
+                OZ (call_proc_info->get_out_type().at(idx).get_type_info(type_info));
+                CK (OB_NOT_NULL(type_info));
                 OZ (ObSPIService::cast_enum_set_to_string(
                   ctx,
-                  call_proc_info->get_out_type().at(idx).get_type_info(),
+                  *type_info,
                   params.at(i),
                   ctx.get_output_row()->cells_[idx]));
                 OX (idx++);
@@ -366,7 +385,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                     LOG_WARN("Failed to wrap expr ctx", K(ret));
                   } else {
                     const ObString var_name = expr->get_expr_items().at(1).get_obj().get_string();
-                    if (OB_FAIL(ObVariableSetExecutor::set_user_variable(params.at(i), var_name, expr_ctx))) {
+                    ObObj &value = ob_is_enum_or_set_type(params.at(i).get_type()) ? ctx.get_output_row()->cells_[idx - 1] : params.at(i);
+                    if (OB_FAIL(ObVariableSetExecutor::set_user_variable(value, var_name, expr_ctx))) {
                       LOG_WARN("set user variable failed", K(ret));
                     }
                   }
@@ -381,6 +401,16 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           } // for end
         }
       } else { /*do nothing*/ }
+      if (OB_FAIL(ret) && call_proc_info->get_output_count() > 0) {
+        for (int64_t i = 0; i < null_params.count() && i < params.count(); ++i) {
+          if (null_params.at(i) &&
+              params.at(i).is_pl_extend() &&
+              params.at(i).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE &&
+              params.at(i).get_ext() != 0) {
+            pl::ObUserDefinedType::destruct_obj(params.at(i), ctx.get_my_session());
+          }
+        }
+      }
     }
     ctx.get_sql_ctx()->cur_stmt_ = &stmt;
   }
@@ -514,7 +544,11 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
 
   if (OB_FAIL(ret)) {
   } else if (stmt.is_prepare_protocol()) {
+    ObArray<bool> null_params;
     ObBitSet<OB_DEFAULT_BITSET_SIZE> out_args;
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_params()->count(); ++i) {
+      OZ (null_params.push_back(stmt.get_params()->at(i).is_null()));
+    }
     OZ (ctx.get_pl_engine()->execute(
       ctx, *stmt.get_params(), stmt.get_stmt_id(), stmt.get_sql(), out_args),
       K(stmt), KPC(stmt.get_params()));
@@ -583,7 +617,7 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
             field.length_ = field.accuracy_.get_length();
             if (value.is_ref_cursor_type()) {
               OZ (ob_write_string(ctx.get_allocator(), ObString("SYS_REFCURSOR"), field.type_name_));
-            } else if (value.get_udt_id() != OB_INVALID_ID && extract_package_id(value.get_udt_id()) != OB_INVALID_ID) {
+            } else if (value.get_udt_id() != OB_INVALID_ID && !pl::is_invalid_or_mocked_package_id(value.get_udt_id())) {
               OZ (fill_field_with_udt_id(ctx, value.get_udt_id(), field));
             } else if (value.is_pl_extend()
                        && pl::PL_NESTED_TABLE_TYPE == value.get_meta().get_extend_type()) {
@@ -605,6 +639,16 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
             OX (ctx.get_field_columns()->at(out_idx) = field);
           }
           OX (out_idx ++);
+        }
+      }
+    }
+    if (OB_FAIL(ret) && !out_args.is_empty()) {
+      for (int64_t i = 0; i < null_params.count() && i < stmt.get_params()->count(); ++i) {
+        if (null_params.at(i) &&
+            stmt.get_params()->at(i).is_pl_extend() &&
+            stmt.get_params()->at(i).get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE &&
+            stmt.get_params()->at(i).get_ext() != 0) {
+          pl::ObUserDefinedType::destruct_obj(stmt.get_params()->at(i), ctx.get_my_session());
         }
       }
     }

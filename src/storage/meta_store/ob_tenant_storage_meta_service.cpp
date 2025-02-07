@@ -18,6 +18,8 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "observer/omt/ob_tenant.h"
+#include "storage/tx_storage/ob_tablet_gc_service.h"
+#include "storage/ls/ob_ls.h"
 #ifdef OB_BUILD_SHARED_STORAGE
   #include "meta_store/ob_shared_storage_obj_meta.h"
   #include "storage/compaction/ob_major_task_checkpoint_mgr.h"
@@ -32,6 +34,7 @@ namespace storage
 
 ObTenantStorageMetaService::ObTenantStorageMetaService()
   : is_inited_(false),
+    is_started_(false),
     is_shared_storage_(false),
     ckpt_slog_handler_(),
     slogger_(),
@@ -83,6 +86,7 @@ int ObTenantStorageMetaService::start()
   int ret = OB_SUCCESS;
   omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
   const ObTenantSuperBlock super_block = tenant->get_super_block();
+  uint64_t macro_block_id = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -97,6 +101,16 @@ int ObTenantStorageMetaService::start()
     LOG_WARN("fail to seq generator", K(ret));
   } else if (OB_FAIL(seq_generator_.start())) {
     LOG_WARN("fail to seq generator", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_shared_storage_ && OB_FAIL(seq_generator_.get_private_object_seq(macro_block_id))) {
+    LOG_WARN("failed to get_private_object_seq", KR(ret));
+  } else if (is_shared_storage_) {
+    // for macro check in observer start
+    MTL(checkpoint::ObTabletGCService*)->set_mtl_start_max_block_id(macro_block_id);
+#endif
+  }
+  if (OB_SUCC(ret)) {
+    is_started_ = true;
   }
   FLOG_INFO("finish start ObTenantStorageMetaService", K(ret));
   return ret;
@@ -134,6 +148,7 @@ void ObTenantStorageMetaService::destroy()
   shared_object_rwriter_.reset();
   shared_object_raw_rwriter_.reset();
   is_shared_storage_ = false;
+  is_started_ = false;
   is_inited_ = false;
 }
 
@@ -304,7 +319,7 @@ int ObTenantStorageMetaService::ObLSItemIterator::get_next_ls_item(
 #ifdef OB_BUILD_SHARED_STORAGE
 
 int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
-    const ObMetaDiskAddr &addr,
+    const ObMetaDiskAddr &tablet_addr,
     const int64_t ls_epoch,
     const bool is_shared,
     ObIArray<blocksstable::MacroBlockId> &block_ids/*OUT*/) const
@@ -315,16 +330,18 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
   char *buf = nullptr;
   int64_t buf_len = 0;
   int64_t pos = 0;
-  ObSEArray<blocksstable::MacroBlockId, 100> tmp_print_arr;
+  // TODO (gaishun.gs): remove debug log tmp arr once get tablet block ids is stable
+  const int64_t max_print_id_count = 30;
+  ObSEArray<blocksstable::MacroBlockId, max_print_id_count> tmp_print_arr;
 
-  if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(addr, ls_epoch, allocator, buf, buf_len))) {
-    LOG_WARN("fail to read tablet buf from disk", K(ret), K(addr), K(ls_epoch));
-  } else if (FALSE_IT(tablet.set_tablet_addr(addr))) {
+  if (OB_FAIL(MTL(ObTenantStorageMetaService*)->read_from_disk(tablet_addr, ls_epoch, allocator, buf, buf_len))) {
+    LOG_WARN("fail to read tablet buf from disk", K(ret), K(tablet_addr), K(ls_epoch));
+  } else if (FALSE_IT(tablet.set_tablet_addr(tablet_addr))) {
   } else if (OB_FAIL(tablet.deserialize_for_replay(allocator, buf, buf_len, pos))) {
     LOG_WARN("fail to deserialize tablet", K(ret), KP(buf), K(buf_len));
   } else if (!tablet.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("talbet is invalid", K(ret), K(tablet), K(addr));
+    LOG_WARN("talbet is invalid", K(ret), K(tablet), K(tablet_addr));
   } else {
     bool in_memory = true;
     ObTabletMacroInfo *macro_info = nullptr;
@@ -344,7 +361,9 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           } else {
             ret = OB_SUCCESS;
             if (0 != tmp_print_arr.count()) {
-              FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(addr), K(is_shared), K(tmp_print_arr));
+#ifndef OB_BUILD_PACKAGE
+              FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(tablet_addr), K(is_shared), K(tmp_print_arr));
+#endif
               tmp_print_arr.reuse();
             }
             break;
@@ -363,8 +382,10 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
         } else if (OB_FAIL(tmp_print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push shared macro id", K(ret), K(block_info));
-        } else if (30 == tmp_print_arr.count()) {
-          FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(addr), K(is_shared), K(tmp_print_arr));
+        } else if (max_print_id_count == tmp_print_arr.count()) {
+#ifndef OB_BUILD_PACKAGE
+          FLOG_INFO("iter get blocks", K(ret), K(ls_epoch), K(tablet_addr), K(is_shared), K(tmp_print_arr));
+#endif
           tmp_print_arr.reuse();
         }
       }
@@ -381,21 +402,22 @@ int ObTenantStorageMetaService::get_private_blocks_for_tablet(
     const int64_t ls_epoch,
     const ObTabletID &tablet_id,
     const int64_t tablet_version,
+    const int64_t tablet_transfer_seq,
     ObIArray<blocksstable::MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
-  ObMetaDiskAddr addr;
+  ObMetaDiskAddr tablet_addr;
   blocksstable::MacroBlockId object_id;
   blocksstable::ObStorageObjectOpt opt;
   const int64_t object_size = OB_DEFAULT_MACRO_BLOCK_SIZE;
 
-  opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), tablet_version);
+  opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), tablet_version, tablet_transfer_seq);
   if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, object_id))) {
     LOG_WARN("fail to get object id", K(ret), K(opt));
-  } else if (OB_FAIL(addr.set_block_addr(object_id, 0/*offset*/, object_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
-    LOG_WARN("fail to set initial tablet meta addr", K(ret), K(addr));
-  } else if (OB_FAIL(inner_get_blocks_for_tablet_(addr, ls_epoch, false/*is_shared*/, block_ids))) {
-    LOG_WARN("fail to deserialize tablet", K(ret), K(addr), K(ls_epoch), K(block_ids));
+  } else if (OB_FAIL(tablet_addr.set_block_addr(object_id, 0/*offset*/, object_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
+    LOG_WARN("fail to set initial tablet meta addr", K(ret), K(tablet_addr));
+  } else if (OB_FAIL(inner_get_blocks_for_tablet_(tablet_addr, ls_epoch, false/*is_shared*/, block_ids))) {
+    LOG_WARN("fail to deserialize tablet", K(ret), K(tablet_addr), K(ls_epoch), K(block_ids));
   }
   return ret;
 }
@@ -469,7 +491,7 @@ int ObTenantStorageMetaService::inner_get_gc_tablet_scn_arr_(
 {
   int ret = OB_SUCCESS;
   gc_tablet_scn_arr.tablet_version_arr_.reuse();
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "InnerGetGCScn"));
   bool is_exist = false;
 
   if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, 0/*do not need ls_epoch*/, is_exist))) {
@@ -520,10 +542,10 @@ int ObTenantStorageMetaService::write_gc_tablet_scn_arr(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(obj_type));
   } else if (blocksstable::ObStorageObjectType::SHARED_MAJOR_GC_INFO == obj_type &&
-      OB_FAIL(s2_write_gc_info_(tablet_id, tablet_scn_arr))) {
+      OB_FAIL(ss_write_gc_info_(tablet_id, tablet_scn_arr))) {
     LOG_WARN("failed to write gc_info", K(ret), K(tablet_id), K(tablet_scn_arr));
   } else if (blocksstable::ObStorageObjectType::SHARED_MAJOR_META_LIST == obj_type &&
-      OB_FAIL(s2_write_meta_list_(tablet_id, tablet_scn_arr))) {
+      OB_FAIL(ss_write_meta_list_(tablet_id, tablet_scn_arr))) {
     LOG_WARN("failed to write meta_list", K(ret), K(tablet_id), K(tablet_scn_arr));
   }
   return ret;
@@ -612,12 +634,12 @@ int ObTenantStorageMetaService::update_shared_tablet_meta_list(
   FLOG_INFO("finish update_shared_tablet_meta_list", K(ret), K(tablet_id), K(new_tablet_meta_scn), K(new_tablet_meta_version_list));
   return ret;
 }
-int ObTenantStorageMetaService::s2_write_gc_info_(
+int ObTenantStorageMetaService::ss_write_gc_info_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &gc_info_scn_arr)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "WriteGCSCN"));
   opt.set_ss_gc_info_object_opt(tablet_id.id());
   if (OB_FAIL(ObStorageMetaIOUtil::write_storage_meta_object(
       opt, gc_info_scn_arr, allocator, MTL_ID(), 0/*ls_epoch, unused*/))) {
@@ -625,12 +647,12 @@ int ObTenantStorageMetaService::s2_write_gc_info_(
   }
   return ret;
 }
-int ObTenantStorageMetaService::s2_write_meta_list_(
+int ObTenantStorageMetaService::ss_write_meta_list_(
     const ObTabletID tablet_id, const ObGCTabletMetaInfoList &meta_list_scn_arr)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "WriteMetaList"));
   opt.set_ss_meta_list_object_opt(tablet_id.id());
   if (OB_FAIL(ObStorageMetaIOUtil::write_storage_meta_object(
       opt, meta_list_scn_arr, allocator, MTL_ID(), 0/*ls_epoch, unused*/))) {
@@ -638,7 +660,7 @@ int ObTenantStorageMetaService::s2_write_meta_list_(
   }
   return ret;
 }
-int ObTenantStorageMetaService::s2_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist)
+int ObTenantStorageMetaService::ss_is_meta_list_exist(const ObTabletID tablet_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObStorageObjectOpt opt;

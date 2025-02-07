@@ -27,7 +27,18 @@ struct ObDASMergeIterParam : public ObDASIterParam
 {
 public:
   ObDASMergeIterParam()
-    : ObDASIterParam(ObDASIterType::DAS_ITER_MERGE)
+    : ObDASIterParam(ObDASIterType::DAS_ITER_MERGE),
+      eval_infos_(nullptr),
+      need_update_partition_id_(false),
+      pdml_partition_id_(nullptr),
+      partition_id_calc_type_(0),
+      should_scan_index_(false),
+      ref_table_id_(),
+      is_vectorized_(false),
+      frame_info_(nullptr),
+      execute_das_directly_(false),
+      enable_rich_format_(false),
+      used_for_keep_order_(false)
   {}
   ObFixedArray<ObEvalInfo*, ObIAllocator> *eval_infos_;
   bool need_update_partition_id_;
@@ -116,6 +127,7 @@ public:
       das_tasks_arr_(),
       get_next_row_(nullptr),
       get_next_rows_(nullptr),
+      first_get_row_(true),
       seq_task_idx_(OB_INVALID_INDEX),
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
@@ -198,6 +210,7 @@ private:
   DasTaskArray das_tasks_arr_;
   int (ObDASMergeIter::*get_next_row_)();
   int (ObDASMergeIter::*get_next_rows_)(int64_t&, int64_t);
+  bool first_get_row_;
 
   /********* SEQUENTIAL MERGE BEGIN *********/
   int64_t seq_task_idx_;

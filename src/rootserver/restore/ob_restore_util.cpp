@@ -31,6 +31,7 @@
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/restore/ob_restore_progress_display_mode.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -60,7 +61,6 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
-
     // check restore option
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPhysicalRestoreOptionParser::parse(arg.restore_option_, job))) {
@@ -77,6 +77,15 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fill_backup_info_(arg, job))) {
         LOG_WARN("failed to fill backup info", KR(ret), K(arg), K(job));
+      } else {
+        // restore progress display mode
+        if (share::ObBackupSetFileDesc::is_allow_quick_restore(
+            static_cast<share::ObBackupSetFileDesc::Compatible>(job.get_backup_compatible()))
+            && job.get_restore_type().is_full_restore()) {
+          job.set_progress_display_mode(BYTES_DISPLAY_MODE);
+        } else {
+          job.set_progress_display_mode(TABLET_CNT_DISPLAY_MODE);
+        }
       }
     }
 
@@ -97,6 +106,10 @@ int ObRestoreUtil::fill_physical_restore_job(
           LOG_WARN("fail to add table item", KR(ret), K(item));
         }
       }
+    }
+
+    if (FAILEDx(fill_sts_credential_(arg, job))) {
+      LOG_WARN("fail to fill sts credential", K(ret));
     }
   }
 
@@ -599,6 +612,24 @@ int ObRestoreUtil::fill_encrypt_info_(
   return ret;
 }
 
+int ObRestoreUtil::fill_sts_credential_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    share::ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  if (arg.sts_credential_.empty()) {
+  } else {
+    ObStsCredential tmp_credential;
+    if (OB_FAIL(check_sts_credential_format(arg.sts_credential_.ptr(), tmp_credential))) {
+      LOG_WARN("fail to check sts credential format", K(ret), K(arg.sts_credential_));
+    } else if (OB_FAIL(job.set_sts_credential(arg.sts_credential_))) {
+      LOG_WARN("fail to set sts crendential", K(ret), K(arg.sts_credential_));
+    }
+  }
+  return ret;
+}
+
 int ObRestoreUtil::get_restore_source(
     const bool restore_using_compl_log,
     const ObIArray<ObString>& tenant_path_array,
@@ -736,7 +767,7 @@ int ObRestoreUtil::get_restore_scn_from_multi_path_(
           }
         }
       } else if (OB_FAIL(get_backup_set_info_from_multi_path_(multi_path, backup_set_info))) { //read backup set info
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("ignore non backup set dir");
         } else {
@@ -859,7 +890,7 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
       } else if (OB_FAIL(store.init(backup_dest))) {
         LOG_WARN("failed to init backup store", K(ret));
       } else if (OB_FAIL(store.read_backup_set_info(backup_set_info))) { //check if backup set
-       if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+       if (OB_OBJECT_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         LOG_INFO("skip log dir", K(ret), K(backup_dest));
         continue;

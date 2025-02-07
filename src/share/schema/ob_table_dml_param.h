@@ -92,6 +92,7 @@ public:
   OB_INLINE bool is_vector_index() const { return share::schema::is_vec_index(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
+  OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
   const ObColumnParam * get_column_by_idx(const int64_t idx) const;
@@ -144,6 +145,7 @@ private:
   ObString vec_index_param_;
   int64_t vec_dim_;
   uint64_t vec_vector_col_id_;
+  ObMvMode mv_mode_;
 };
 
 class ObTableDMLParam

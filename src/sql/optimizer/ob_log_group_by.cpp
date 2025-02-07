@@ -66,6 +66,16 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   return ret;
 }
 
+int ObHashRollupInfo::assign(const ObHashRollupInfo &info)
+{
+  int ret = OB_SUCCESS;
+  rollup_grouping_id_ = info.rollup_grouping_id_;
+  expand_exprs_ = info.expand_exprs_;
+  gby_exprs_ = info.gby_exprs_;
+  dup_expr_pairs_ = info.dup_expr_pairs_;
+  return ret;
+}
+
 int ObLogGroupBy::get_explain_name_internal(char *buf,
                                             const int64_t buf_len,
                                             int64_t &pos)
@@ -237,6 +247,9 @@ int ObLogGroupBy::est_cost()
   double selectivity = 1.0;
   double group_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  double child_cost = 0;
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
@@ -245,13 +258,16 @@ int ObLogGroupBy::est_cost()
   } else if (OB_FAIL(inner_est_cost(get_parallel(),
                                     child_card,
                                     child_ndv,
-                                    distinct_per_dop_,
                                     group_cost))) {
     LOG_WARN("failed to est group by cost", K(ret));
+  } else if (need_re_est_child_cost() &&
+             OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est child cost", K(ret));
+  } else if (!need_re_est_child_cost() &&
+             OB_FALSE_IT(child_cost=child->get_cost())) {
   } else {
-    distinct_card_ = child_ndv;
-    set_card(distinct_card_ * selectivity);
-    set_cost(child->get_cost() + group_cost);
+    set_card(child_ndv * selectivity);
+    set_cost(child_cost + group_cost);
     set_op_cost(group_cost);
   }
   return ret;
@@ -310,7 +326,6 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
     } else if (OB_FAIL(inner_est_cost(parallel,
                                       child_card,
                                       need_ndv,
-                                      distinct_per_dop_,
                                       op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
@@ -324,11 +339,11 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
   return ret;
 }
 
-int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &per_dop_ndv, double &op_cost)
+int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &op_cost)
 {
   int ret = OB_SUCCESS;
   double per_dop_card = 0.0;
-  per_dop_ndv = 0.0;
+  double per_dop_ndv = 0.0;
   common::ObSEArray<ObRawExpr *, 8> group_rollup_exprs;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(get_plan()) ||
@@ -532,10 +547,33 @@ int ObLogGroupBy::print_outline_data(PlanText &plan_text)
         LOG_WARN("failed to print hint", K(ret), K(hint));
       }
     }
+    /*
+      if hash rollup with partition wise, we need hash shuffle after partition wise grouping,
+      =======================================================================                                                                                                                                         |
+      |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|                                                                                                                                         |
+      -----------------------------------------------------------------------                                                                                                                                         |
+      |0 |PX COORDINATOR MERGE SORT          |        |11      |50          |                                                                                                                                         |
+      |1 |└─EXCHANGE OUT DISTR               |:EX10001|11      |40          |                                                                                                                                         |
+      |2 |  └─SORT                           |        |11      |33          |                                                                                                                                         |
+      |3 |    └─HASH GROUP BY                |        |11      |33          |                                                                                                                                         |
+      |4 |      └─EXCHANGE IN DISTR          |        |18      |31          |                                                                                                                                         |
+      |5 |        └─EXCHANGE OUT DISTR (HASH)|:EX10000|18      |26          |                                                                                                                                         |
+      |6 |          └─PX PARTITION ITERATOR  |        |18      |14          |                                                                                                                                         |
+      |7 |            └─HASH GROUP BY        |        |18      |14          |                                                                                                                                         |
+      |8 |              └─EXPANSION          |        |21      |11          |                                                                                                                                         |
+      |9 |                └─TABLE FULL SCAN  |LYQ_TEST|11      |11          |                                                                                                                                         |
+      =======================================================================
+
+      dist method can't set to HASH, otherwise, we can't reproduce partition wise plan out of outline data
+    */
     if (OB_SUCC(ret) && T_DISTRIBUTE_BASIC != dist_method_) {
       ObPQHint hint(T_PQ_GBY_HINT);
       hint.set_qb_name(qb_name);
-      hint.set_dist_method(dist_method_);
+      if (hash_rollup_info_.valid() && is_partition_wise() && dist_method_ == T_DISTRIBUTE_HASH) {
+        hint.set_dist_method(T_DISTRIBUTE_NONE);
+      } else {
+        hint.set_dist_method(dist_method_);
+      }
       if (OB_FAIL(hint.print_hint(plan_text))) {
         LOG_WARN("failed to print hint", K(ret), K(hint));
       }
@@ -703,12 +741,16 @@ int ObLogGroupBy::compute_op_ordering()
     ObSEArray<OrderItem, 4> ordering;
     // for rollup distributor, sort key is inner
     if (ObRollupStatus::ROLLUP_DISTRIBUTOR != rollup_adaptive_info_.rollup_status_) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs_.count(); i++) {
+      bool has_ordering = true;
+      for (int64_t i = 0; OB_SUCC(ret) && has_ordering && i < group_exprs_.count(); i++) {
         if (i < child->get_op_ordering().count() &&
-            child->get_op_ordering().at(i).expr_ == group_exprs_.at(i) &&
-            OB_FAIL(ordering.push_back(child->get_op_ordering().at(i)))) {
-          LOG_WARN("failed to push back into ordering.", K(ret));
-        } else {}
+            child->get_op_ordering().at(i).expr_ == group_exprs_.at(i)) {
+            if (OB_FAIL(ordering.push_back(child->get_op_ordering().at(i)))) {
+              LOG_WARN("failed to push back into ordering.", K(ret));
+            }
+        } else {
+          has_ordering = false;
+        }
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(set_op_ordering(ordering))) {
@@ -879,7 +921,10 @@ int ObLogGroupBy::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
     LOG_WARN("unexpected null", K(ret));
   } else {
     is_fixed = ObOptimizerUtil::find_item(aggr_exprs_, expr) ||
-        (T_FUN_SYS_REMOVE_CONST == expr->get_expr_type() && ObOptimizerUtil::find_item(rollup_exprs_, expr));
+               ObOptimizerUtil::find_item(rollup_exprs_, expr) ||
+               expr == three_stage_info_.aggr_code_expr_ ||
+               expr == rollup_adaptive_info_.rollup_id_expr_ ||
+               (is_first_stage() && T_PSEUDO_DUP_EXPR == expr->get_expr_type());
   }
   return ret;
 }
@@ -912,7 +957,7 @@ int ObLogGroupBy::compute_sharding_info()
 int ObLogGroupBy::get_card_without_filter(double &card)
 {
   int ret = OB_SUCCESS;
-  card = get_distinct_card();
+  card = get_total_ndv();
   return ret;
 }
 
@@ -927,6 +972,27 @@ int ObLogGroupBy::check_use_child_ordering(bool &used, int64_t &inherit_child_or
   } else if (get_group_by_exprs().empty() &&
              get_rollup_exprs().empty()) {
     used = false;
+  }
+  return ret;
+}
+
+int ObLogGroupBy::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::compute_op_parallel_and_server_info())) {
+    LOG_WARN("failed to compute parallel and server info", K(ret));
+  } else if (is_partition_wise() && !is_push_down()) {
+    ObLogicalOperator *child = get_child(first_child);
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null child op", K(ret));
+    } else if (child->get_part_cnt() > 0 &&
+               get_parallel() > child->get_part_cnt()) {
+      int64_t reduce_parallel = child->get_part_cnt();
+      reduce_parallel = reduce_parallel < 2 ? 2 : reduce_parallel;
+      set_parallel(reduce_parallel);
+      need_re_est_child_cost_ = true;
+    }
   }
   return ret;
 }

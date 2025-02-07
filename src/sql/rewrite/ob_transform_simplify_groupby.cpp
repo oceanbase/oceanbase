@@ -51,6 +51,17 @@ int ObTransformSimplifyGroupby::transform_one_stmt(common::ObIArray<ObParentDMLS
     }
   }
   if (OB_SUCC(ret)) {
+    if (!stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
+      // do nothing
+    } else if (OB_FAIL(remove_redundant_aggr(stmt, is_happened))) {
+      LOG_WARN("failed to remove redundant by group by expr", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("remove redundant by group by expr:", is_happened);
+      LOG_TRACE("succeed to remove redundant by group by expr", K(is_happened));
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(remove_aggr_distinct(stmt, is_happened))) {
       LOG_WARN("failed to remove aggr distinct", K(ret));
     } else {
@@ -93,6 +104,15 @@ int ObTransformSimplifyGroupby::transform_one_stmt(common::ObIArray<ObParentDMLS
       trans_happened |= is_happened;
       OPT_TRACE("convert group by to distinct:", is_happened);
       LOG_TRACE("succeed to convert group by to distinct", K(is_happened));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(split_const_in_aggr_func(stmt, is_happened))) {
+      LOG_WARN("failed to rewrite agg by associative rule", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("rewrite agg by associative rule", is_happened);
+      LOG_TRACE("success to rewrite agg by associative rule", K(is_happened));
     }
   }
 
@@ -198,6 +218,7 @@ int ObTransformSimplifyGroupby::check_upper_stmt_validity(ObSelectStmt *upper_st
 //  2.upper stmt group by 不能包含 child stmt aggr
 //  3.upper stmt aggr 与 child aggr 满足消除匹配关系
 //  4.upper stmt condition 没有使用 child stmt aggr
+//熠华 2024.07.31 修正: 对union all不应该做这个改写
 int ObTransformSimplifyGroupby::get_valid_child_stmts(ObSelectStmt *upper_stmt,
                                                       ObSelectStmt *stmt,
                                                       ObArray<ObSelectStmt*> &valid_child_stmts)
@@ -212,16 +233,7 @@ int ObTransformSimplifyGroupby::get_valid_child_stmts(ObSelectStmt *upper_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (stmt->is_set_stmt()) {
-    if (ObSelectStmt::UNION != stmt->get_set_op()
-        || stmt->is_set_distinct()
-        || stmt->has_limit()) {//判断条件1
-      is_valid = false;
-    } else {
-      ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        ret = SMART_CALL(get_valid_child_stmts(upper_stmt, child_stmts.at(i), valid_child_stmts));
-      }
-    }
+    is_valid = false;
   } else if (!stmt->has_group_by()
              || stmt->has_rollup()
              || stmt->has_window_function()//判断条件1
@@ -545,7 +557,7 @@ int ObTransformSimplifyGroupby::check_stmt_group_by_can_be_removed(ObSelectStmt 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL pointer error", K(ret));
       } else if (OB_FAIL(check_aggr_win_can_be_removed(select_stmt, expr, can_be))) {
-        LOG_WARN("fialed to check aggr can be removed", K(ret), K(*expr));
+        LOG_WARN("failed to check aggr can be removed", K(ret), K(*expr));
       }
     }
   } else {
@@ -645,6 +657,231 @@ int ObTransformSimplifyGroupby::remove_group_by_duplicates(ObDMLStmt *&stmt, boo
   return ret;
 }
 
+/* remove aggregation functions if the following conditions are met:
+ * 1. The parameter of the aggregation function can be calculated by group by expr.
+ * 2. The value of aggregation function of each group can be determined.
+ */
+int ObTransformSimplifyGroupby::remove_redundant_aggr(ObDMLStmt *stmt, bool &trans_happened) {
+  int ret = OB_SUCCESS;
+  ObSelectStmt *select_stmt = NULL;
+  bool has_rownum = false;
+  bool is_unique = false;
+  ObArray<ObRawExpr*> new_exprs;
+  ObArray<ObRawExpr*> redundant_aggrs;
+  trans_happened = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_ is null", K(ret));
+  } else if (!stmt->is_select_stmt() ||
+             FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
+  } else if (select_stmt->get_group_expr_size() <= 0 ||
+             select_stmt->has_rollup()) { // do not transform stmt containing rollup for now
+  } else if (OB_FAIL(inner_remove_redundant_aggr(*select_stmt,
+                                                 redundant_aggrs,
+                                                 new_exprs,
+                                                 trans_happened))) {
+    LOG_WARN("failed to remove redundant aggrs that are determined by group by expr", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::inner_remove_redundant_aggr(
+    ObSelectStmt &select_stmt,
+    ObIArray<ObRawExpr *> &redundant_aggrs,
+    ObIArray<ObRawExpr *> &new_exprs,
+    bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObAggFunRawExpr*> remaining_aggrs;  // aggrs that can not be removed
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt.get_aggr_item_size(); ++i) {
+    bool can_remove = false;
+    ObRawExpr *new_expr = NULL;
+    ObAggFunRawExpr *aggr_expr = select_stmt.get_aggr_item(i);
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null aggr", K(ret));
+    } else if (OB_FAIL(check_can_remove_redundant_aggr(select_stmt, *aggr_expr, can_remove))) {
+      LOG_WARN("failed to check can remove redundant aggr");
+    } else if (!can_remove) {
+      if (OB_FAIL(remaining_aggrs.push_back(aggr_expr))) {
+        LOG_WARN("failed to push back aggr expr to remaining aggrs", K(ret));
+      }
+    } else if (OB_FAIL(simplify_redundant_aggr(select_stmt, *aggr_expr, new_expr))) {
+      LOG_WARN("failed to simplify redundant aggr", K(ret));
+    } else if (OB_FAIL(new_exprs.push_back(new_expr))) {
+      LOG_WARN("failed to push back new expr", K(ret));
+    } else if (OB_FAIL(redundant_aggrs.push_back(aggr_expr))) {
+      LOG_WARN("failed to push back redundant aggr", K(ret));
+    }
+  }
+  // replace redundant aggr exprs, and remove them from aggr_items
+  if (OB_FAIL(ret) || redundant_aggrs.count() == 0) {  // do nothing
+  } else if (OB_FAIL(select_stmt.replace_relation_exprs(redundant_aggrs, new_exprs))) {
+    LOG_WARN("failed to replace relation exprs", K(ret), K(select_stmt));
+  } else {
+    // remove simplified aggr exprs from aggr_items of stmt
+    ObIArray<ObAggFunRawExpr*> &stmt_aggrs = select_stmt.get_aggr_items();
+    if (OB_SUCC(ret)) {
+      stmt_aggrs.reset();
+      if (OB_FAIL(stmt_aggrs.assign(remaining_aggrs))) {
+        LOG_WARN("failed to assign new aggr items", K(ret));
+      } else {
+        trans_happened = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::check_can_remove_redundant_aggr(
+    ObSelectStmt &select_stmt,
+    ObAggFunRawExpr &aggr_expr,
+    bool &can_remove)
+{
+  int ret = OB_SUCCESS;
+  can_remove = false;
+  ObItemType func_type = aggr_expr.get_expr_type();
+  ObRawExpr *param_expr = NULL;
+  if (aggr_expr.get_param_count() == 0) { // do not rewrite count(*)
+  } else if (OB_ISNULL(param_expr = aggr_expr.get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null param of aggr");
+  } else {
+    switch (func_type) {
+    case T_FUN_MAX:
+    case T_FUN_MIN:
+    case T_FUN_MEDIAN:
+    case T_FUN_SYS_BIT_OR:
+    case T_FUN_SYS_BIT_AND: {
+      can_remove = true;
+      break;
+    }
+    case T_FUN_SUM: {
+      can_remove = aggr_expr.is_param_distinct();
+      break;
+    }
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_COUNT: {
+      // do not rewrite group_concat and count with multiple parameters for now
+      can_remove = aggr_expr.is_param_distinct() && (1 == aggr_expr.get_real_param_count());
+      break;
+    }
+    default: {
+      break;
+    }
+    }
+    if (!can_remove) {  // do nothing
+      // else, check if aggr parameter is calculable by group by expr
+      // if not, then the aggr can not be removed
+    } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(param_expr,
+                                                                 select_stmt.get_group_exprs(),
+                                                                 true,  // need_check_contain
+                                                                 true,  // used_in_compare
+                                                                 can_remove))) {
+      LOG_WARN("failed to check if aggr expr can be calculated by group exprs", K(ret), K(aggr_expr));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::simplify_redundant_aggr(
+    ObSelectStmt &select_stmt,
+    ObAggFunRawExpr &aggr_expr,
+    ObRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_not_null = false;
+  ObItemType func_type = aggr_expr.get_expr_type();
+  ObRawExpr *param_expr = aggr_expr.get_param_expr(0);
+  if (OB_ISNULL(param_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null param of aggr");
+  } else {
+    switch (func_type) {
+      case T_FUN_MAX:
+      case T_FUN_MIN:
+      case T_FUN_MEDIAN:
+      case T_FUN_SUM:
+      case T_FUN_GROUP_CONCAT: {
+        // max/min/median -> expr
+        // sum/group_concat(distinct expr) -> expr
+        new_expr = param_expr;
+        break;
+      }
+      case T_FUN_SYS_BIT_OR:
+      case T_FUN_SYS_BIT_AND: {
+        // bit_and/bit_or(expr)
+        // 1. expr is not nullable -> expr
+        // 2. expr is nullable     -> case when expr is not null then expr else uint64_max
+        ObConstRawExpr *const_u64_max_expr = NULL;
+        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_,
+                                                      &select_stmt,
+                                                      param_expr,
+                                                      NULLABLE_SCOPE::NS_GROUPBY,
+                                                      is_not_null))) {
+          LOG_WARN("failed to check if expr is not null", K(ret), K(aggr_expr));
+        } else if (is_not_null) {
+          new_expr = param_expr;
+        } else if (OB_FAIL(ObTransformUtils::transform_bit_aggr_to_common_expr(select_stmt,
+                                                                              &aggr_expr,
+                                                                              ctx_,
+                                                                              new_expr))) {
+          LOG_WARN("failed to transform bit aggr to common expr", KR(ret), K(aggr_expr),
+                                                                  K(func_type), K(select_stmt));
+        }
+        break;
+      }
+      case T_FUN_COUNT: {
+        // count(distinct expr)
+        // 1. expr is not nullable -> 1
+        // 2. expr is nullable     -> case when expr is not null then 1 else 0
+        ObConstRawExpr *const_one = NULL;
+        ObConstRawExpr *const_zero = NULL;
+        if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_,
+                                                      &select_stmt,
+                                                      param_expr,
+                                                      NULLABLE_SCOPE::NS_GROUPBY,
+                                                      is_not_null))) {
+          LOG_WARN("failed to check if expr is not null", K(ret), K(aggr_expr));
+        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_,
+                                                                        1,
+                                                                        const_one))) {
+          LOG_WARN("failed to build const one expr", K(ret));
+        } else if (is_not_null) {
+          new_expr = const_one;
+        } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_,
+                                                                        0,
+                                                                        const_zero))) {
+          LOG_WARN("failed to build const zero expr", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(select_stmt,
+                                                                  param_expr,
+                                                                  const_one,
+                                                                  const_zero,
+                                                                  new_expr,
+                                                                  ctx_))){
+          LOG_WARN("failed to build case when expr", K(ret));
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+      }
+      if (OB_SUCC(ret) && !OB_ISNULL(new_expr)) {
+        if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                  &aggr_expr,
+                                                                  new_expr,
+                                                                  ctx_->session_info_))) {
+          LOG_WARN("failed to add cast expr above simplified aggr expr", K(ret));
+        }
+      }
+  }
+  return ret;
+}
+
 // try to remove distinct in aggr(distinct) and window_function(distinct)
 int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &trans_happened)
 {
@@ -671,7 +908,8 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
         trans_happened = true;
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_COUNT == aggr_expr->get_expr_type() ||
-                 T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type()) {
+                 T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type() ||
+                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type()) {
         // sum/count/group_concat(distinct) 要求param在做group by之前是非严格unique的
         ObSEArray<ObRawExpr *, 4> aggr_param_exprs;
         bool is_unique = false;
@@ -982,7 +1220,8 @@ int ObTransformSimplifyGroupby::get_valid_count_aggr(ObSelectStmt *select_stmt,
       if (OB_ISNULL(aggr = aggrs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null", K(ret), K(aggr));
-      } else if (T_FUN_COUNT != aggr->get_expr_type() || 1 != aggr->get_real_param_exprs().count()) {
+      } else if (T_FUN_COUNT != aggr->get_expr_type() ||
+                 1 != aggr->get_real_param_exprs().count()) {
         /* do nothing */
         /* count(distinct 1, null) can not convert, count(1, null) do not convert now */
       } else if (OB_ISNULL(param = aggr->get_param_expr(0))) {
@@ -1036,7 +1275,15 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
   if (OB_SUCC(ret)) {
     switch (func_type) {
     // aggr func
-    case T_FUN_COUNT: //case when 1 or 0
+    case T_FUN_COUNT: { //case when 1 or 0
+      if (OB_ISNULL(aggr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null aggr", K(ret));
+      } else {
+        can_remove = aggr->get_real_param_count() <= 1; // do not rewrite count with multi params
+      }
+      break;
+    }
     case T_FUN_MAX: //return expr
     case T_FUN_MIN:
       //case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: //不进行改写
@@ -1497,7 +1744,8 @@ int ObTransformSimplifyGroupby::transform_const_aggr(ObDMLStmt *stmt, bool &tran
     //from dual
   } else if (select_stmt->is_single_table_stmt()
              && OB_NOT_NULL(table = select_stmt->get_table_item(0))
-             && table->is_generated_table()) {
+             && table->is_generated_table()
+             && select_stmt->get_condition_size() == 0) {
     ObSelectStmt *ref_query = NULL;
     if (OB_ISNULL(ref_query = table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1875,7 +2123,8 @@ int ObTransformSimplifyGroupby::convert_group_by_to_distinct(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformSimplifyGroupby::check_can_convert_to_distinct(ObSelectStmt *stmt, bool &can_convert) {
+int ObTransformSimplifyGroupby::check_can_convert_to_distinct(ObSelectStmt *stmt, bool &can_convert)
+{
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   can_convert = false;
@@ -1944,3 +2193,431 @@ int ObTransformSimplifyGroupby::check_can_convert_to_distinct(ObSelectStmt *stmt
   }
   return ret;
 }
+
+/**
+ *       sum
+ *        |                    map
+ *        +           ------->  sum(c1) + count(c1) * const
+ *    c1    const             column_expr
+ *
+ *  1. the expr to transform must be like "sum(column_expr + const_expr)" (or cast(column_expr))
+ *  2. if a column expr appear more than 3 times in such aggr expr, than transform
+ *
+ */
+int ObTransformSimplifyGroupby::split_const_in_aggr_func(ObDMLStmt *stmt, bool &trans_happened) {
+  int ret = OB_SUCCESS;
+  ObSelectStmt *select_stmt = NULL;
+  bool is_valid = false;
+  ObSEArray<ObRawExpr*, 16> valid_column_exprs;
+  ObSEArray<ObAggFunRawExpr*, 16> existed_sum_exprs;
+  ObSEArray<ObAggFunRawExpr*, 16> existed_count_exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (!stmt->is_select_stmt() ||
+             FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))){
+    /*do nothing*/
+  } else if (OB_FAIL(get_valid_column_exprs(*select_stmt,
+                                            valid_column_exprs,
+                                            existed_sum_exprs,
+                                            existed_count_exprs))) {
+    LOG_WARN("failed to fast check", K(ret));
+  } else if (valid_column_exprs.count() == 0) {
+    /* do nothing */
+  } else if (OB_FAIL(transform_split_const(*select_stmt,
+                                           valid_column_exprs,
+                                           existed_sum_exprs,
+                                           existed_count_exprs,
+                                           trans_happened))) {
+    LOG_WARN("failed to do transform", K(ret));
+  }
+  return ret;
+}
+
+bool ObTransformSimplifyGroupby::is_numeric(ObObjType type)
+{
+  bool aggr_is_valid = false;
+  switch (type) {
+    case common::ObTinyIntType:
+    case common::ObSmallIntType:
+    case common::ObMediumIntType:
+    case common::ObInt32Type:
+    case common::ObIntType:
+    case common::ObNumberType:
+    case common::ObDecimalIntType: {
+      aggr_is_valid = true;
+      break;
+    }
+    default: {
+      aggr_is_valid = false;
+    }
+  }
+  return aggr_is_valid;
+}
+
+bool ObTransformSimplifyGroupby::is_column_or_cast_column_expr(ObRawExpr &expr)
+{
+  bool is_column = false;
+  if (expr.is_column_ref_expr() ||
+      (expr.get_expr_type() == T_FUN_SYS_CAST &&
+       expr.get_param_count() == 1 &&
+       expr.get_param_expr(0)->is_column_ref_expr())) {
+    is_column = true;
+  }
+  return is_column;
+}
+
+int ObTransformSimplifyGroupby::get_column_and_const_expr(
+    ObRawExpr *expr,
+    ObRawExpr *&column_expr,
+    ObRawExpr *&const_expr,
+    bool &is_add,
+    bool &column_is_left)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->get_expr_type() == T_OP_ADD ||
+             expr->get_expr_type() == T_OP_MINUS) {
+    ObRawExpr *left_expr = NULL;
+    ObRawExpr *right_expr = NULL;
+    if (expr->get_param_count() != 2 ||
+        OB_ISNULL(left_expr = expr->get_param_expr(0)) ||
+        OB_ISNULL(right_expr = expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if ((!left_expr->is_const_expr() && !right_expr->is_const_expr()) ||
+               (!is_column_or_cast_column_expr(*left_expr) && !is_column_or_cast_column_expr(*right_expr))) {
+      column_expr = NULL;
+      const_expr = NULL;
+    } else {
+      is_add = expr->get_expr_type() == T_OP_ADD;
+      if (is_column_or_cast_column_expr(*left_expr)) {
+        column_is_left = true;
+        column_expr = left_expr;
+        const_expr = right_expr;
+      } else {
+        column_is_left = false;
+        column_expr = right_expr;
+        const_expr = left_expr;
+      }
+    }
+  } else {
+    if (is_column_or_cast_column_expr(*expr)) {
+      column_expr = expr;
+    } else {
+      column_expr = NULL;
+    }
+    const_expr = NULL;
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::check_aggr_validity(ObAggFunRawExpr &aggr_expr,
+                                                    ObRawExpr *&column_expr,
+                                                    ObRawExpr *&const_expr,
+                                                    bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *param_expr = NULL;
+  bool is_add = false;
+  bool column_is_left = false;
+  is_valid = false;
+  if (aggr_expr.get_expr_type() != T_FUN_SUM ||
+      aggr_expr.is_param_distinct() ||
+      aggr_expr.get_param_count() != 1) {
+    is_valid = false;
+  } else if (OB_ISNULL(param_expr = aggr_expr.get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!is_numeric(param_expr->get_data_type())) {
+    is_valid = false;
+  } else if (OB_FAIL(get_column_and_const_expr(
+                 param_expr, column_expr, const_expr, is_add, column_is_left))) {
+    LOG_WARN("failed to get column and const expr", K(ret));
+  } else if (column_expr == NULL) {
+    is_valid = false;
+  } else {
+    is_valid = true;
+  }
+  return ret;
+}
+
+/**
+ * step 1: check aggr validity
+ * step 2: count appear times of column expr
+ * step 3: check all count expr. for example, "sum(c1) + count(c1) + sum(c1 + 1)", should take use of "count(c1)"
+ * step 4: extract all column expr to rewrite
+ */
+int ObTransformSimplifyGroupby::get_valid_column_exprs(
+    ObSelectStmt &select_stmt,
+    ObIArray<ObRawExpr *> &valid_column_exprs,
+    ObIArray<ObAggFunRawExpr *> &existed_sum_exprs,
+    ObIArray<ObAggFunRawExpr *> &existed_count_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 16> column_exprs;
+  ObSEArray<int64_t, 16> column_count;
+  ObSEArray<bool, 16> exist_column_only; /* whether expr like "sum(column_expr)" already exist */
+  ObSEArray<ObAggFunRawExpr *, 16> sum_exprs;
+  ObSEArray<ObAggFunRawExpr *, 16> count_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt.get_aggr_item_size(); ++i) {
+    ObAggFunRawExpr *aggr_expr = select_stmt.get_aggr_item(i);
+    ObRawExpr *column_expr = NULL;
+    ObRawExpr *const_expr = NULL;
+    bool is_valid = false;
+    // step 1: check aggr validity
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(check_aggr_validity(*aggr_expr, column_expr, const_expr, is_valid))) {
+      LOG_WARN("failed to check aggr_validity", K(ret));
+    } else if (!is_valid || OB_ISNULL(column_expr)) {
+      /* do nothing */
+    } else {
+      // step 2: count appear times of column expr
+      // column only expr (expr like "sum(column_expr)") only count once and record in sum_exprs
+      bool is_column_only = (const_expr == NULL);
+      ObAggFunRawExpr *sum_expr = is_column_only ? aggr_expr : NULL;
+      int64_t idx = -1;
+      if (OB_FAIL(ObTransformUtils::get_expr_idx(column_exprs, column_expr, idx))) {
+        LOG_WARN("failed to get expr idx", K(ret));
+      } else if (idx == -1) {
+        if (OB_FAIL(column_exprs.push_back(column_expr)) ||
+            OB_FAIL(column_count.push_back(1)) ||
+            OB_FAIL(exist_column_only.push_back(is_column_only)) ||
+            OB_FAIL(sum_exprs.push_back(sum_expr)) ||
+            OB_FAIL(count_exprs.push_back(NULL))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else {
+        if (is_column_only) {
+          if (!exist_column_only.at(idx)) {
+            column_count.at(idx)++;
+            exist_column_only.at(idx) = true;
+            sum_exprs.at(idx) = sum_expr;
+          }
+        } else {
+          column_count.at(idx)++;
+        }
+      }
+    }
+  }
+
+  // step 3
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    bool found = (count_exprs.at(i) != NULL);
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < select_stmt.get_aggr_item_size(); ++j) {
+      ObAggFunRawExpr *aggr_expr = select_stmt.get_aggr_item(j);
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (aggr_expr->get_expr_type() == T_FUN_COUNT &&
+                 aggr_expr->get_param_count() == 1 &&
+                 aggr_expr->get_param_expr(0) == column_exprs.at(i)) {
+        found = true;
+        count_exprs.at(i) = aggr_expr;
+        column_count.at(i)++;
+      }
+    }
+  }
+
+  valid_column_exprs.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    if (column_count.at(i) > 2) {
+      if (OB_FAIL(valid_column_exprs.push_back(column_exprs.at(i))) ||
+          OB_FAIL(existed_sum_exprs.push_back(sum_exprs.at(i))) ||
+          OB_FAIL(existed_count_exprs.push_back(count_exprs.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::get_split_result_expr(
+    ObSelectStmt &select_stmt,
+    ObAggFunRawExpr *aggr_expr,
+    ObAggFunRawExpr *&sum_expr,
+    ObAggFunRawExpr *&count_expr,
+    ObRawExpr *&result_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *param_expr = NULL;
+  ObRawExpr *column_expr = NULL;
+  ObRawExpr *const_expr = NULL;
+  bool is_add = false;
+  bool column_is_left = false;
+  if (OB_ISNULL(aggr_expr) || OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (aggr_expr->get_param_count() != 1 ||
+             OB_ISNULL(param_expr = aggr_expr->get_param_expr(0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid aggr_expr", K(aggr_expr), K(ret));
+  } else if (OB_FAIL(get_column_and_const_expr(
+                 param_expr, column_expr, const_expr, is_add, column_is_left))) {
+    LOG_WARN("failed to get column and const expr", K(ret));
+  } else if (OB_ISNULL(column_expr) || OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
+
+  if (OB_SUCC(ret) && sum_expr == NULL) {
+    if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx_->expr_factory_,
+                                                       ctx_->session_info_,
+                                                       T_FUN_SUM,
+                                                       column_expr,
+                                                       sum_expr))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_ISNULL(sum_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(select_stmt.add_agg_item(*sum_expr))) {
+      LOG_WARN("failed to add agg item", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && count_expr == NULL) {
+    if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx_->expr_factory_,
+                                                       ctx_->session_info_,
+                                                       T_FUN_COUNT,
+                                                       column_expr,
+                                                       count_expr))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_ISNULL(count_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(select_stmt.add_agg_item(*count_expr))) {
+      LOG_WARN("failed to add agg item", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObExprResType res_type = aggr_expr->get_result_type();
+    ObRawExpr *casted_const_expr = NULL;
+    ObOpRawExpr *mul_expr = NULL; /* count(column) * const */
+    ObOpRawExpr *upper_expr = NULL; /* add expr or minus expr */
+    ObRawExpr *casted_upper_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+            ctx_->expr_factory_, ctx_->session_info_, *const_expr, res_type, casted_const_expr))) {
+      LOG_WARN("failed to add cast", K(ret));
+    } else if (OB_ISNULL(casted_const_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("casted const expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_mul_expr(
+                   *ctx_->expr_factory_, count_expr, casted_const_expr, mul_expr))) {
+      LOG_WARN("failed to build mul expr", K(ret));
+    } else if (OB_ISNULL(mul_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("count mul const expr is null", K(ret));
+    } else {
+      if (is_add) {
+        if (OB_FAIL(ObRawExprUtils::build_add_expr(
+                *ctx_->expr_factory_, sum_expr, mul_expr, upper_expr))) {
+          LOG_WARN("failed to build add expr", K(ret));
+        }
+      } else if (column_is_left) {
+        if (OB_FAIL(ObRawExprUtils::build_minus_expr(
+                *ctx_->expr_factory_, sum_expr, mul_expr, upper_expr))) {
+          LOG_WARN("failed to build add expr", K(ret));
+        }
+      } else /* column is right child*/ {
+        if (OB_FAIL(ObRawExprUtils::build_minus_expr(
+                *ctx_->expr_factory_, mul_expr, sum_expr, upper_expr))) {
+          LOG_WARN("failed to build add expr", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)){
+    } else if (OB_ISNULL(upper_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("add expr is null", K(ret));
+    } else if (OB_FAIL(upper_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize", K(ret));
+    } else if (FALSE_IT(casted_upper_expr = upper_expr)) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      aggr_expr,
+                                                                      casted_upper_expr,
+                                                                      ctx_->session_info_))) {
+      LOG_WARN("failed to add cast", K(ret));
+    } else {
+      result_expr = casted_upper_expr;
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyGroupby::transform_split_const(
+    ObSelectStmt &select_stmt,
+    ObIArray<ObRawExpr *> &valid_column_exprs,
+    ObIArray<ObAggFunRawExpr *> &sum_exprs,
+    ObIArray<ObAggFunRawExpr *> &count_exprs,
+    bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 16> src_exprs;
+  ObSEArray<ObRawExpr *, 16> dst_exprs;
+  trans_happened = false;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(count_exprs.reserve(sum_exprs.count()))) {
+    LOG_WARN("failed to reserve count exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sum_exprs.count(); ++i) {
+      if (OB_FAIL(count_exprs.push_back(NULL))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt.get_aggr_item_size(); ++i) {
+    ObAggFunRawExpr *aggr_expr = select_stmt.get_aggr_item(i);
+    ObRawExpr *column_expr = NULL;
+    ObRawExpr *const_expr = NULL;
+    ObRawExpr *result_expr = NULL;
+    bool is_valid = false;
+    if (OB_ISNULL(aggr_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(check_aggr_validity(*aggr_expr, column_expr, const_expr, is_valid))) {
+      LOG_WARN("failed to check aggr_validity", K(ret));
+    } else if (!is_valid || OB_ISNULL(column_expr) || const_expr == NULL ||
+               !is_contain(valid_column_exprs, column_expr)) {
+      /* do nothing */
+    } else {
+      int64_t idx = -1;
+      if (OB_FAIL(ObTransformUtils::get_expr_idx(valid_column_exprs, column_expr, idx))) {
+        LOG_WARN("failed to get expr idx", K(ret));
+      } else if (idx == -1) {
+        /* do nothing */
+      } else if (OB_FAIL(get_split_result_expr(select_stmt,
+                                               aggr_expr,
+                                               sum_exprs.at(idx),
+                                               count_exprs.at(idx),
+                                               result_expr))) {
+        LOG_WARN("failed to get split result expr", K(ret));
+      } else if (OB_ISNULL(result_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(src_exprs.push_back(aggr_expr)) ||
+                 OB_FAIL(dst_exprs.push_back(result_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(select_stmt.replace_relation_exprs(src_exprs, dst_exprs))) {
+    LOG_WARN("failed to replace relation exprs", K(ret));
+  } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize stmt", K(ret));
+  } else {
+    trans_happened = true;
+  }
+  return ret;
+}
+
+// end of split const expr in aggr expr

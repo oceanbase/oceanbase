@@ -28,7 +28,15 @@ class ObLinkedMacroBlockReader final
 {
 public:
   ObLinkedMacroBlockReader();
-  ~ObLinkedMacroBlockReader() = default;
+  ~ObLinkedMacroBlockReader()
+  {
+    macros_handle_.reset();
+    handles_[0].reset();
+    handles_[1].reset();
+    // Need to pay attention!!!
+    // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
+    allocator_.reset();
+  }
   ObLinkedMacroBlockReader(const ObLinkedMacroBlockReader &) = delete;
   ObLinkedMacroBlockReader &operator=(const ObLinkedMacroBlockReader &) = delete;
 

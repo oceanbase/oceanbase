@@ -128,6 +128,7 @@ public:
 
   // functions to splice batch sql statement
   int splice_batch_insert_sql(const char *table_name, common::ObSqlString &sql) const;
+  int splice_batch_insert_ignore_sql(const char *table_name, common::ObSqlString &sql) const;
   int splice_batch_insert_update_sql(
       const char *table_name,
       common::ObSqlString &sql) const;

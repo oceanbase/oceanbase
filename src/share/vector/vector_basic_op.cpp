@@ -151,6 +151,14 @@ HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc)
     res_func = VecTCHashCalc<VEC_TC_COLLECTION, ObMurmurHash, true>::hash;
     break;
   }
+  case (VEC_TC_MYSQL_DATETIME) : {
+    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATETIME, ObMurmurHash, true>::hash;
+    break;
+  }
+  case (VEC_TC_MYSQL_DATE) : {
+    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATE, ObMurmurHash, true>::hash;
+    break;
+  }
   case (VEC_TC_ROARINGBITMAP) : {
     res_func = VecTCHashCalc<VEC_TC_ROARINGBITMAP, ObMurmurHash, true>::hash;
     break;
@@ -297,6 +305,14 @@ NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc)
   }
   case (VEC_TC_COLLECTION) : {
     res_func = VectorBasicOp<VEC_TC_COLLECTION>::null_hash<ObMurmurHash, true>;
+    break;
+  }
+  case (VEC_TC_MYSQL_DATETIME) : {
+    res_func = VectorBasicOp<VEC_TC_MYSQL_DATETIME>::null_hash<ObMurmurHash, true>;
+    break;
+  }
+  case (VEC_TC_MYSQL_DATE) : {
+    res_func = VectorBasicOp<VEC_TC_MYSQL_DATE>::null_hash<ObMurmurHash, true>;
     break;
   }
   case (VEC_TC_ROARINGBITMAP) : {

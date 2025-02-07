@@ -23,7 +23,6 @@
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/engine/basic/ob_ra_row_store.h"
 #include "common/row/ob_row_store.h"

@@ -35,6 +35,8 @@ int init_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
 int init_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                               ObIAllocator &allocator, IAggregate *&agg,
                               int32 *tmp_res_size = NULL);
+int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                              ObIAllocator &allocator, IAggregate *&agg);
 }
 }
 }
@@ -84,6 +86,12 @@ int ObAggCellVec::init()
       case PD_SUM: {
         if (OB_FAIL(helper::init_sum_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
           LOG_WARN("Failed to init SUM aggregate", K_(agg_idx));
+        }
+        break;
+      }
+      case PD_RB_BUILD: {
+        if (OB_FAIL(helper::init_rb_build_aggregate(basic_info_.agg_ctx_, agg_idx_, allocator_, aggregate_))) {
+          LOG_WARN("Failed to init rb build aggregate", K_(agg_idx));
         }
         break;
       }
@@ -366,7 +374,7 @@ int ObAggCellVec::read_agg_datum(
     skip_index_datum_.reuse();
     skip_index_datum_.set_null();
     blocksstable::ObSkipIndexColMeta meta;
-    // TODO: @luhaopeng.lhp fix col_index in cg, use 0 temporarily
+    // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = col_index;
     switch (agg_type_) {
       case PD_COUNT: {
@@ -471,7 +479,7 @@ int ObCountAggCellVec::eval_batch(
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
     if (!exclude_null_) {
       data += row_count;
-    } else if (nullptr == reader) { // row scan or group by pushdown or has other aggregate in one column
+    } else if (nullptr == reader) { // row scan or group by pushdown
       if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
       }
@@ -763,6 +771,15 @@ int ObSumAggCellVec::eval_index_info(
   return ret;
 }
 
+ObRbBuildAggCellVec::ObRbBuildAggCellVec(
+    const int64_t agg_idx,
+    const ObAggCellVecBasicInfo &basic_info,
+    common::ObIAllocator &allocator)
+      : ObAggCellVec(agg_idx, basic_info, allocator)
+{
+  agg_type_ = PD_RB_BUILD;
+}
+
 int ObPDAggVecFactory::alloc_cell(
     const ObAggCellVecBasicInfo &basic_info,
     ObAggCellVec *&agg_cell,
@@ -806,6 +823,13 @@ int ObPDAggVecFactory::alloc_cell(
       }
       break;
     }
+    case T_FUN_SYS_RB_BUILD_AGG:
+      if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObRbBuildAggCellVec))) ||
+          OB_ISNULL(agg_cell = new (buf) ObRbBuildAggCellVec(agg_idx, basic_info, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to alloc memory for rb build agg cell", K(ret));
+      }
+      break;
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Not supported aggregate type", K(ret), K(type));
@@ -914,7 +938,7 @@ int ObGroupByCellVec::init(const ObTableAccessParam &param, const ObTableAccessC
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pd_agg_ctx_.init(param, batch_size_))) {
+    } else if (OB_FAIL(pd_agg_ctx_.init(param, MIN(batch_size_, USE_GROUP_BY_MAX_DISTINCT_CNT)))) {
       LOG_WARN("Failed to init agg context", K(ret), K(param));
     } else if (OB_FAIL(init_agg_cells(param, context, eval_ctx, false))) {
       LOG_WARN("Failed to init agg cells", K(ret));

@@ -437,7 +437,7 @@ void TestSqlUtils::do_resolve(
   resolver_ctx.expr_factory_ = &expr_factory_;
   resolver_ctx.stmt_factory_ = &stmt_factory_;
   resolver_ctx.query_ctx_ = stmt_factory_.get_query_ctx();
-  resolver_ctx.query_ctx_->question_marks_count_ = param_store.count();
+  resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
   ObResolver resolver(resolver_ctx);
   ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
   if (OB_SUCC(ret)) {
@@ -902,7 +902,8 @@ void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
   }else{
     _OB_LOG_RET(ERROR, OB_ERROR, "no data table found for tid=%lu", data_table_schema->get_table_id());
   }
-  _OB_LOG(DEBUG, "index_schema: %s", to_cstring(index_schema));
+  ObCStringHelper helper;
+  _OB_LOG(DEBUG, "index_schema: %s", helper.convert(index_schema));
 }
 
 int TestSqlUtils::get_hidden_column_value(

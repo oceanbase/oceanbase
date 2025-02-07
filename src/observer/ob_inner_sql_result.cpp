@@ -15,12 +15,12 @@
 #include "ob_inner_sql_result.h"
 
 #include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/rc/context.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/ob_req_time_service.h"
 #include "omt/ob_tenant.h"
+#include "observer/ob_inner_sql_connection.h"
 
 namespace oceanbase
 {
@@ -45,7 +45,7 @@ inline int ObInnerSQLResult::check_extend_value(const common::ObObj &obj)
   return ret;
 }
 
-ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
+ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session)
     : column_map_created_(false), column_indexed_(false), column_map_(),
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
@@ -59,7 +59,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
       iter_end_(false),
       is_read_(true),
       has_tenant_resource_(true),
-      tenant_(nullptr)
+      tenant_(nullptr),
+      is_inner_session_(is_inner_session)
 
 {
   sql_ctx_.exec_type_ = InnerSql;

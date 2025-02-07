@@ -892,6 +892,7 @@ int ObLogTenantMgr::drop_tenant_end(const uint64_t tenant_id,
   } else if (OB_FAIL(tenant->mark_drop_tenant_start(drop_tenant_end_tstamp))) {
     LOG_ERROR("mark drop tenant start fail", KR(ret), KPC(tenant), K(drop_tenant_end_tstamp));
   } else {
+    try_del_tenant_start_ddl_info_(tenant_id);
     LOG_INFO("succeed to mark drop tenant start while handling drop tenant end DDL", KPC(tenant),
         K(drop_tenant_end_tstamp));
   }

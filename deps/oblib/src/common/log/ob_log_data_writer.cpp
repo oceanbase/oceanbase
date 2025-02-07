@@ -138,8 +138,9 @@ ObLogDataWriter::~ObLogDataWriter()
 int64_t ObLogDataWriter::to_string(char *buf, const int64_t len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, len, pos, "DataWriter(%s, sync_type=%ld)",
-                  to_cstring(end_cursor_), log_sync_type_);
+  databuff_printf(buf, len, pos, "DataWriter(");
+  databuff_printf(buf, len, pos, end_cursor_);
+  databuff_printf(buf, len, pos, ", sync_type=%ld)", log_sync_type_);
   return pos;
 }
 

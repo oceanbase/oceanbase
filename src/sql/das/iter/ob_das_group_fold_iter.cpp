@@ -146,7 +146,6 @@ int ObDASGroupFoldIter::set_scan_group(int64_t group_id)
     ret = OB_ITER_END;
   }
   LOG_TRACE("set group id for fold iter", K(cur_group_idx_), K(group_id), K(group_size_), K(lbt()));
-  LOG_DEBUG("set scan group", K(ret), K(group_id), K(*this));
   return ret;
 }
 
@@ -240,7 +239,8 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   int64_t storage_count = 0;
   int64_t ret_count = 0;
   int64_t group_idx = MIN_GROUP_INDEX;
-  LOG_DEBUG("das group fold iter get next rows begin", K_(available_group_idx), K_(cur_group_idx));
+  available_group_idx_ = group_save_rows_.cur_group_idx();
+  LOG_TRACE("das group fold iter get next rows begin", K_(available_group_idx), K_(cur_group_idx));
 
   if (available_group_idx_ > cur_group_idx_) {
     ret = OB_ITER_END;
@@ -263,7 +263,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
         if (storage_count > 0) {
           ret = OB_SUCCESS;
         } else {
-          LOG_DEBUG("underlying iter tree reached iter end", K_(available_group_idx), K_(cur_group_idx));
+          LOG_TRACE("underlying iter tree reached iter end", K_(available_group_idx), K_(cur_group_idx));
           // subsequent calls to get next rows will no longer be able to return rows.
           available_group_idx_ = INT64_MAX;
         }
@@ -293,17 +293,10 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   if (OB_SUCC(ret)) {
     if (available_group_idx_ == cur_group_idx_) { // there are rows available in row_store_.
       int64_t start_pos = group_save_rows_.get_start_pos();
-      while (cur_group_idx_ == available_group_idx_) {
-        group_idx = group_save_rows_.cur_group_idx();
-        if (cur_group_idx_ == group_idx) {
-          group_save_rows_.next_start_pos();
-          ret_count++;
-        } else {
-          available_group_idx_ = group_idx;
-          if (OB_INVALID_INDEX == available_group_idx_) {
-            available_group_idx_ = MIN_GROUP_INDEX;
-          }
-        }
+      while (cur_group_idx_ == available_group_idx_ && ret_count < capacity) {
+        ret_count++;
+        group_save_rows_.next_start_pos();
+        available_group_idx_ = group_save_rows_.cur_group_idx();
       } // while end
 
       if (ret_count > 0) {
@@ -326,7 +319,7 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   }
   count = ret_count;
 
-  LOG_DEBUG("das group fold iter get next rows end", K(ret_count), K(storage_count), K(*this));
+  LOG_TRACE("das group fold iter get next rows end", K(ret_count), K(storage_count), K(*this));
   return ret;
 }
 

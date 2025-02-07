@@ -93,7 +93,8 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, func_name);
   int num_args = expr.arg_cnt_;
   bool is_null_result = false;
   ObString res_wkt;
@@ -107,16 +108,16 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
   ObString wkb;
   bool is_3d_geo = false;
   // get geo
-  if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
+  if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[0], ctx, gis_datum))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum->is_null()) {
     is_null_result = true;
   } else if (FALSE_IT(wkb = gis_datum->get_string())) {
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *gis_datum,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *gis_datum,
              expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
     LOG_WARN("fail to get real string data", K(ret), K(wkb));
   } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_allocator,
-      wkb, srs_guard, srs, geo, func_name))) {
+      wkb, srs_guard, srs, geo, func_name, true, false))) {
     LOG_WARN("fail to create geo", K(ret), K(wkb));
   } else if (OB_NOT_NULL(srs)){
     is_geog = srs->is_geographical_srs();
@@ -128,7 +129,7 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
     ObGeoAxisOrder axis_order = ObGeoAxisOrder::INVALID;
     ObDatum *datum = NULL;
     ObString dstr;
-    if (OB_FAIL(expr.args_[1]->eval(ctx, datum))) {
+    if (OB_FAIL(tmp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
       LOG_WARN("eval axis_order axis_order failed", K(ret));
     } else if (datum->is_null()){
       is_null_result = true;
@@ -137,7 +138,7 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
     } else if (FALSE_IT(dstr = datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(tmp_allocator, *datum,
               expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), dstr))) {
       LOG_WARN("fail to get real string data", K(ret), K(dstr));
     } else if (OB_FAIL(ObGeoExprUtils::parse_axis_order(dstr, func_name, axis_order))) {
@@ -175,6 +176,10 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(to_wkt(tmp_allocator, geo, res_wkt, func_name))) {
           LOG_WARN("failed to transform geo to wkt", K(ret));
+        } else {
+          // assume that ObStringBuffer has 4 times memory enlargement
+          tmp_allocator.set_baseline_size(res_wkt.length() * 4 + wkb.length());
+          tmp_allocator.memory_usage_check_if_need();
         }
       }
     }

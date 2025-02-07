@@ -127,3 +127,58 @@ select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_inte
 create spatial index idx on partition_t1 (g) local;
 select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
 drop table partition_t1;
+
+create table ptgeom1(c1 int, g geometry not null srid 0, g1 geometry not null srid 0) partition by hash(c1) partitions 3;
+insert into ptgeom1 values (0, st_geomfromtext('point(1 1)'), st_geomfromtext('point(2 2)'));
+insert into ptgeom1 values (1, st_geomfromtext('point(1 0)'), st_geomfromtext('point(2 2)'));
+select st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+create index pgidx1 on ptgeom1(g) local;
+explain select /*+index(ptgeom1 pgidx1)*/ st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+select /*+index(ptgeom1 pgidx1)*/ st_astext(g) from ptgeom1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+drop table ptgeom1;
+
+--disable_warnings
+  DROP TABLE IF EXISTS group_change_info;
+--enable_warnings
+create table group_change_info(
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `geom` geometry NOT NULL /*!80003 SRID 0 */,
+  `city_code` int(11) NOT NULL COMMENT '分区分表key',
+  `change_status` varchar(32) NOT NULL COMMENT '变化状态: ● INIT  初始\n● PROCESSING 进入产线\n● SUCCESS 产线变更完成\n● MTL_NG  采集NG\n● DELETE  删除\n● INTERCEPT 已拦截\n● DIFF_NG 差分NG',
+  `change_date` datetime NOT NULL COMMENT '变化时间，本来带的属性',
+  PRIMARY KEY (`id`, `city_code`),
+  SPATIAL KEY `idx_geom` (`geom`) BLOCK_SIZE 16384 LOCAL COMMENT '变化范围'
+) partition by list(city_code) (partition `p10` values in (10), partition `p20` values in (20));
+
+insert into group_change_info values(1, st_geomfromtext('point(1 1)', 0), 10, 'SUCCESS', '2023-06-07 00:00:00'),
+                                    (2, st_geomfromtext('point(1 0)', 0), 10, 'SUCCESS', '2023-06-07 00:00:00'),
+                                    (3, st_geomfromtext('point(1 1)', 0), 10, 'DELETE', '2023-06-07 00:00:00'),
+                                    (4, st_geomfromtext('point(1 1)', 0), 20, 'SUCCESS', '2023-06-07 00:00:00'),
+                                    (5, st_geomfromtext('point(1 1)', 0), 10, 'SUCCESS', '2023-06-06 00:00:00');
+
+explain select id, st_astext(geom) from group_change_info where st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and city_code = 10
+  and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+
+select id, st_astext(geom) from group_change_info where st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and city_code = 10
+  and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and st_intersects(geom, st_geomfromtext('point(1 1)', 0))
+  and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+
+select id, st_astext(geom) from group_change_info where city_code = 10 and st_intersects(geom, st_geomfromtext('point(1 1)', 0))
+  and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
+
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+  and change_date != '2023-06-06 00:00:00' and st_intersects(geom, st_geomfromtext('point(1 1)', 0));
+
+select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+  and change_date != '2023-06-06 00:00:00' and st_intersects(geom, st_geomfromtext('point(1 1)', 0));
+
+explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+  and st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and change_date != '2023-06-06 00:00:00';
+
+select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
+   and st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and change_date != '2023-06-06 00:00:00';
+
+
+drop table group_change_info;

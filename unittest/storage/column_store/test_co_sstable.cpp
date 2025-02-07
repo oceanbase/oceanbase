@@ -172,7 +172,7 @@ int TestCOSSTable::mock_major_sstable(
   ObStorageSchema storage_schema;
   if (OB_FAIL(storage_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL))) {
     LOG_WARN("failed to init storage schema", K(ret));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(storage_schema, tablet_id, snapshot_version, param))) {
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, -1, false))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(table_key));
   } else if (FALSE_IT(param.table_key_ = table_key)) {
   } else if (FALSE_IT(param.column_group_cnt_ = column_group_cnt)) {
@@ -478,7 +478,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_co_sstable.log");
   OB_LOGGER.set_file_name("test_co_sstable.log", true);
-  OB_LOGGER.set_log_level("DEBUG");
+  OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_co_sstable");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

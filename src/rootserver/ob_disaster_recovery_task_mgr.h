@@ -35,13 +35,42 @@ namespace rootserver
 class ObDRTaskExecutor;
 class ObDRTaskMgr;
 
+class ObParallelMigrationMode
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum ParallelMigrationMode
+  {
+    AUTO = 0,
+    ON,
+    OFF,
+    MAX
+  };
+public:
+  ObParallelMigrationMode() : mode_(MAX) {}
+  ObParallelMigrationMode(ParallelMigrationMode mode) : mode_(mode) {}
+  ObParallelMigrationMode &operator=(const ParallelMigrationMode mode) { mode_ = mode; return *this; }
+  ObParallelMigrationMode &operator=(const ObParallelMigrationMode &other) { mode_ = other.mode_; return *this; }
+  bool operator==(const ObParallelMigrationMode &other) const { return other.mode_ == mode_; }
+  bool operator!=(const ObParallelMigrationMode &other) const { return other.mode_ != mode_; }
+  void reset() { mode_ = MAX; }
+  void assign(const ObParallelMigrationMode &other) { mode_ = other.mode_; }
+  bool is_auto_mode() const { return AUTO == mode_; }
+  bool is_on_mode() const { return ON == mode_; }
+  bool is_off_mode() const { return OFF == mode_; }
+  bool is_valid() const { return MAX != mode_; }
+  const ParallelMigrationMode &get_mode() const { return mode_; }
+  int parse_from_string(const ObString &mode);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  const char* get_mode_str() const;
+private:
+  ParallelMigrationMode mode_;
+};
+
 class ObDRTaskQueue
 {
 public:
   typedef common::ObDList<ObDRTask> TaskList;
-  typedef common::hash::ObHashMap<ObDRTaskKey,
-                                  ObDRTask *,
-                                  common::hash::NoPthreadDefendMode> TaskMap;
 public:
   ObDRTaskQueue();
   virtual ~ObDRTaskQueue();
@@ -50,39 +79,35 @@ public:
   void reset();
   // init a ObDRTaskQueue
   // @param [in] config, server config
-  // @param [in] bucket_num, the size of task_map
   // @param [in] rpc_proxy, to send rpc
   int init(
       common::ObServerConfig &config,
-      const int64_t bucket_num,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       ObDRTaskPriority priority);
 
 public:
-  // check whether a task in task_map is executing
-  // @param [in] task_key, task's tenant_id and ls_id
-  // @param [out] task_in_scheduling, whether this task is in scheduling
-  int check_task_in_scheduling(
+  // check whether task is conflict with task in queue
+  // @param [in] task_key, task's tenant_id and ls_id and zone
+  // @param [in] enable_parallel_migration, if enable parallel migration
+  // @param [out] is_conflict, whether this task is conflict with any task in queue
+  int check_whether_task_conflict(
       const ObDRTaskKey &task_key,
-      bool &task_in_scheduling) const;
+      const bool enable_parallel_migration,
+      bool &is_conflict);
 
-  // check whether a task exist in task_map
-  // @param [in] task_key, task's tenant_id and ls_id
-  // @param [out] task_exist, whether task exist in task_map
-  int check_task_exist(
-      const ObDRTaskKey &task_key,
-      bool &task_exist);
-
-  // push a task into this queue's wait_list
+  // do push a task in wait list
   // @param [in] task_mgr, to deal with concurrency_limit
-  // @param [in] sibling_queue, to check whether another task is scheduling in sibling_queue
   // @param [in] task, the task to push in
-  // @param [out] has_task_in_schedule, whether another task is scheduling in sibling_queue
-  int push_task_in_wait_list(
+  int do_push_task_in_wait_list(
       ObDRTaskMgr &task_mgr,
-      const ObDRTaskQueue &sibling_queue,
-      const ObDRTask &task,
-      bool &has_task_in_schedule);
+      const ObDRTask &task);
+
+  // get a certain task from queue by task_id
+  // @param [in] task_id, the only id to identify a task
+  // @param [out] task, the task getted
+  int get_task_by_task_id(
+      const share::ObTaskId &task_id,
+      ObDRTask *&task);
 
   // push a task into this queue's schedule_list
   // @param [in] task, the task to push in
@@ -94,18 +119,9 @@ public:
   int pop_task(
       ObDRTask *&task);
 
-  // get a certain task from task_map
-  // @param [in] task_id, the only id to identify a task
-  // @param [in] task_key, tenant_id and ls_id to locate task quickly in task_map
-  // @param [out] the task getted
-  int get_task(
-      const share::ObTaskId &task_id,
-      const ObDRTaskKey &task_key,
-      ObDRTask *&task);
-
   // to deal with those not running tasks in schedule_list
   // @param [in] task_mgr, to execute over a task
-  int handle_not_in_progress_task(
+  int try_clean_and_cancel_task(
       ObDRTaskMgr &task_mgr);
 
   // remove task from schedule_list and clean it
@@ -113,23 +129,9 @@ public:
   int finish_schedule(
       ObDRTask *task);
 
-  // set task's sibling_in_schedule
-  // @param [in] task, to locate which task to modify
-  // @oaram [in] in_schedule, whether another task is scheduling in sibling queue
-  int set_sibling_in_schedule(
-      const ObDRTask &task,
-      const bool in_schedule);
-
-  // set task's sibling_in_schedule
-  // @param [in] task_key, to locate which task to modify quickly
-  // @oaram [in] in_schedule, whether another task is scheduling in sibling queue
-  int set_sibling_in_schedule(
-      const ObDRTaskKey &task_key,
-      const bool in_schedule);
-
   int64_t wait_task_cnt() const { return wait_list_.get_size(); }
   int64_t in_schedule_task_cnt() const { return schedule_list_.get_size(); }
-  int64_t task_cnt() const { return task_map_.size(); }
+  int64_t task_cnt() const { return wait_list_.get_size() + schedule_list_.get_size(); }
   int dump_statistic() const;
 
   const char* get_priority_str() const {
@@ -153,17 +155,25 @@ public:
   TaskList &get_schedule_list() { return schedule_list_; }
 
 private:
-  // do push a task in wait list
-  // @param [in] task_mgr, to deal with concurrency limit
-  // @param [in] sibling_queue, another queue
-  // @param [in] task, the task to push in
-  // @param [out] has_task_in_schedule, whether task is schedule in sibling queue
-  int do_push_task_in_wait_list_(
-      ObDRTaskMgr &task_mgr,
-      const ObDRTaskQueue &sibling_queue,
-      const ObDRTask &task,
-      bool &has_task_in_schedule);
+  // check whether a task is conflict with task in list
+  // @param [in] task_key, task's tenant_id and ls_id and zone
+  // @param [in] list, target list to check
+  // @param [in] enable_parallel_migration, if enable parallel migration
+  // @param [out] is_conflict, whether this task is conflict with any task in list
+  int check_whether_task_conflict_in_list_(
+      const ObDRTaskKey &task_key,
+      const TaskList &list,
+      const bool enable_parallel_migration,
+      bool &is_conflict) const;
 
+  // get a certain task from list by task_id
+  // @param [in] task_id, the only id to identify a task
+  // @param [in] list, target list to find
+  // @param [out] task, the task getted
+  int get_task_by_task_id_in_list_(
+      const share::ObTaskId &task_id,
+      TaskList &list,
+      ObDRTask *&task);
   // check whether to clean this task
   // @param [in]  task, the task to check
   // @param [out] need_cleaning, whether to clean this task
@@ -176,16 +186,12 @@ private:
   // @param [in] task, task to free
   void free_task_(ObDRTask *&task);
 
-  // remove task from task_map and free it
-  // @param [in] task, task to clean
-  void remove_task_from_map_and_free_it_(ObDRTask *&task);
 private:
   bool inited_;
   common::ObServerConfig *config_;
   common::ObFIFOAllocator task_alloc_;
   TaskList wait_list_;
   TaskList schedule_list_;
-  TaskMap task_map_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObDRTaskPriority priority_;
 private:
@@ -207,8 +213,6 @@ public:
                   stopped_(true),
                   loaded_(false),
                   config_(nullptr),
-                  concurrency_limited_ts_(0),
-                  cond_(),
                   queues_(),
                   high_task_queue_(queues_[0]),
                   low_task_queue_(queues_[1]),
@@ -243,32 +247,26 @@ public:
   void wait();
   void reuse();
 public:
-  // check whether a task is in schedule
-  // @param [in] task_key, the task to check
-  // @param [in] priority, which queue to check
-  // @param [out] task_in_executing, whether task is scheduling
-  virtual int check_task_in_executing(
-      const ObDRTaskKey &task_key,
-      const ObDRTaskPriority priority,
-      bool &task_in_executing);
+  // check whether a migrate task need to be cancelled
+  // @param [in] task, the task to check
+  // @param [out] need_cancel, whether task need to be cancelled
+  int check_need_cancel_migrate_task(
+      const ObDRTask &task,
+      bool &need_cancel);
 
-  // check whether a task exist
-  // @param [in] task_key, the task to check
-  // @param [in] priority, which queue to check
-  // @param [out] task_exist, whether task is exist
-  virtual int check_task_exist(
-      const ObDRTaskKey &task_key,
-      const ObDRTaskPriority priority,
-      bool &task_exist);
+  // send rpc to target server to cancel a migrate task
+  // @param [in] task, the task to be cancelled
+  int send_rpc_to_cancel_migrate_task(
+      const ObDRTask &task);
 
   // add task in schedule list and execute task
   // @param [in] task, target task
   virtual int add_task_in_queue_and_execute(
-      const ObDRTask &task);
+      ObDRTask &task);
   // add a task into queue
   // @param [in] task, the task to push in
   virtual int add_task(
-      const ObDRTask &task);
+      ObDRTask &task);
 
   // to do something after receive task reply
   // param [in] reply, the execute result of this task
@@ -290,27 +288,16 @@ public:
 
   // finish schedule this task and clean it
   // param [in] task_id, to identify a task
-  // param [in] task_key, to locate a task quickly
   // param [in] ret_code, execute result of this task
   // param [in] need_clear_server_data_in_limit, whether clear data_in_limit
+  // param [in] ret_comment, ret comment
   int do_cleaning(
       const share::ObTaskId &task_id,
-      const ObDRTaskKey &task_key,
       const int ret_code,
       const bool need_clear_server_data_in_limit,
       const bool need_record_event,
       const ObDRTaskRetComment &ret_comment);
 
-  // operations of reach_concurrency_limit
-  void set_reach_concurrency_limit() {
-    concurrency_limited_ts_ = common::ObTimeUtility::current_time();
-  }
-  void clear_reach_concurrency_limit() {
-    concurrency_limited_ts_ = 0;
-  }
-  int64_t get_reach_concurrency_limit() const {
-    return concurrency_limited_ts_;
-  }
   int64_t get_schedule_interval() const {
     return 1000L; // 1s
   }
@@ -335,18 +322,42 @@ public:
       const ObDRTaskRetComment &ret_comment);
 
 private:
+  // check tenant has unit in target server
+  // @param [in] tenant_id, the tenant to which the unit belongs
+  // @param [in] server_addr, unit address
+  // @param [out] has_unit, is there a unit
+  int check_tenant_has_unit_in_server_(
+      const uint64_t tenant_id,
+      const common::ObAddr &server_addr,
+      bool &has_unit);
+  // check whether a task conflict with any task in double queue
+  // @param [in] task, the task to check
+  // @param [out] is_conflict, whether task is conflict
+  int check_whether_task_conflict_(
+      ObDRTask &task,
+      bool &is_conflict);
+  // check if tenant enable parallel migration
+  // @param [in] tenant_id, tenant_id to check
+  // @param [out] enable_parallel_migration, if enable parallel migration
+  int check_tenant_enable_parallel_migration_(
+      const uint64_t &tenant_id,
+      bool &enable_parallel_migration);
+  // set migrate task prioritize_same_zone_src field
+  // @param [in] enable_parallel_migration, if enable parallel migration
+  // @param [out] task, target task to set
+  int set_migrate_task_prioritize_src_(
+      const bool enable_parallel_migration,
+      ObDRTask &task);
   ObDRTaskQueue &get_high_priority_queue_() { return high_task_queue_; }
   ObDRTaskQueue &get_low_priority_queue_() { return low_task_queue_; }
   int check_inner_stat_() const;
 
   // get a task by task id
   // @param [in] task_id, to identify a certain task
-  // @param [in] task_key, to quickly locate a task
   // @param [out] task, the task to get
   // ATTENTION: need to lock task memory before use this function
   int get_task_by_id_(
       const share::ObTaskId &task_id,
-      const ObDRTaskKey &task_key,
       ObDRTask *&task);
 
   // free a task
@@ -372,12 +383,12 @@ private:
   // try to log inmemory task infos according to balancer_log_interval
   // @param [in] last_dump_ts, last time do logging
   int try_dump_statistic_(
-      int64_t &last_dump_ts) const;
+      int64_t &last_dump_ts);
   int inner_dump_statistic_() const;
   // try to deal with those tasks not in scheduling
-  int try_clean_not_in_schedule_task_in_schedule_list_(
+  int try_clean_and_cancel_task_in_schedule_list_(
       int64_t &last_check_task_in_progress_ts);
-  int inner_clean_not_in_schedule_task_in_schedule_list_();
+  int inner_clean_and_cancel_task_in_schedule_list_();
 
   // get total wait and schedule task count in two queues
   // @param [out] wait_cnt, total wait task count in two queues
@@ -408,13 +419,6 @@ private:
   int execute_manual_task_(
       const ObDRTask &task);
 
-  // set sibling in schedule
-  // @param [in] task, which task to deal with
-  // @param [in] in_schedule, whether in schedule
-  int set_sibling_in_schedule(
-      const ObDRTask &task,
-      const bool in_schedule);
-
 private:
   bool inited_;
   bool stopped_;
@@ -423,8 +427,6 @@ private:
   /* has waiting task but cannot be scheduled,
    * since mgr reaches server_data_copy_[in/out]_concurrency
    */
-  volatile int64_t concurrency_limited_ts_;
-  mutable common::ObThreadCond cond_;
   ObDRTaskQueue queues_[static_cast<int64_t>(ObDRTaskPriority::MAX_PRI)];
   ObDRTaskQueue &high_task_queue_; // queues_[0]
   ObDRTaskQueue &low_task_queue_;  // queues_[1]

@@ -93,7 +93,8 @@ public:
 	{ }
 	virtual ~ObGranuleTaskInfo() { }
   int assign(const ObGranuleTaskInfo &other);
-	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id));
+	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id), "tablet_id: ",
+               OB_ISNULL(tablet_loc_) ? OB_INVALID_ID : tablet_loc_->tablet_id_.id());
 public:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
   common::ObSEArray<common::ObNewRange, 1> ss_ranges_;

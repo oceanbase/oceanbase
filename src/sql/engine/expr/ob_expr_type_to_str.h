@@ -15,6 +15,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -110,7 +111,10 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
-
+  static int inner_to_str(const ObCollationType cs_type,
+                          const uint64_t enum_val,
+                          const ObIArray<common::ObString> &str_values,
+                          common::ObTextStringResult &text_result);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSetToStr) const;
@@ -125,6 +129,9 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int inner_to_str(const uint64_t enum_val,
+                          const ObIArray<common::ObString> &str_values,
+                          common::ObTextStringResult &text_result);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEnumToStr) const;

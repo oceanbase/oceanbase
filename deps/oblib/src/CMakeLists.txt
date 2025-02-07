@@ -18,10 +18,13 @@ target_include_directories(
   ${DEP_DIR}/include
   ${DEP_DIR}/include/libxml2
   ${DEVTOOLS_DIR}
+  ${DEVTOOLS_DIR}/include
   ${DEP_DIR}/include/apr-1/
+  ${DEP_DIR}/include/icu
   ${DEP_DIR}/include/icu/common
   ${DEP_DIR}/include/apache-arrow
-  # ${DEP_DIR}/include/apache-orc
+  ${DEP_DIR}/include/apache-orc
+  ${DEP_DIR}/include/fast_float
   ${USSL_INCLUDE_DIRS}
 )
 
@@ -107,9 +110,7 @@ endif()
 
 if (OB_USE_CLANG)
   # The following clang warnings should be fixed later: -Wno-unused-variable -Wno-invalid-offsetof
-  target_compile_options(oblib_base_base_base
-    INTERFACE
-    -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
+  set(OBLIB_COMPILE_DEFINITIONS -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION -DTSI_STATIC_SUM
     -DOCI_LINK_RUNTIME
     -Wall -Wextra -Wformat -Werror
@@ -123,10 +124,22 @@ if (OB_USE_CLANG)
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
     $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>)
+  if (CPP_STANDARD_20)
+    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
+        -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+        -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+        -Wno-enum-constexpr-conversion -Wno-covered-switch-default
+        -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
+        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class -Wno-register
+        -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
+        -Wno-ambiguous-reversed-operator -Wno-invalid-partial-specialization
+        -Wno-string-concatenation)
+  endif()
+  target_compile_options(oblib_base_base_base INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
     target_compile_options(oblib_base_base
       INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${CMAKE_CURRENT_SOURCE_DIR}/lib/alloc/libsanity_${ARCHITECTURE}.so>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
       -fno-builtin-memset
       -fno-builtin-bzero
       -fno-builtin-memcpy
@@ -190,6 +203,28 @@ endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 
+set(OBLIB_ABSEIL_LIST
+    ${DEP_DIR}/lib64/libabsl_base.a
+    ${DEP_DIR}/lib64/libabsl_city.a
+    ${DEP_DIR}/lib64/libabsl_debugging_internal.a
+    ${DEP_DIR}/lib64/libabsl_demangle_internal.a
+    ${DEP_DIR}/lib64/libabsl_hash.a
+    ${DEP_DIR}/lib64/libabsl_int128.a
+    ${DEP_DIR}/lib64/libabsl_low_level_hash.a
+    ${DEP_DIR}/lib64/libabsl_malloc_internal.a
+    ${DEP_DIR}/lib64/libabsl_raw_hash_set.a
+    ${DEP_DIR}/lib64/libabsl_raw_logging_internal.a
+    ${DEP_DIR}/lib64/libabsl_spinlock_wait.a
+    ${DEP_DIR}/lib64/libabsl_stacktrace.a
+    ${DEP_DIR}/lib64/libabsl_str_format_internal.a
+    ${DEP_DIR}/lib64/libabsl_strings.a
+    ${DEP_DIR}/lib64/libabsl_strings_internal.a
+    ${DEP_DIR}/lib64/libabsl_symbolize.a
+    ${DEP_DIR}/lib64/libabsl_synchronization.a
+    ${DEP_DIR}/lib64/libabsl_throw_delegate.a
+    ${DEP_DIR}/lib64/libabsl_time.a
+    ${DEP_DIR}/lib64/libabsl_time_zone.a)
+
 if(OB_BUILD_OPENSOURCE)
 set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
 if (OB_STATIC_LINK_LGPL_DEPS)
@@ -202,13 +237,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libcurl.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${DEP_DIR}/lib/libroaring.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
-  ${DEP_DIR}/lib/libs2.a
-  ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
@@ -216,12 +250,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
-  # ${DEP_DIR}/lib64/liborc.a
-  # ${DEP_DIR}/lib64/libsnappy.a
-  # ${DEP_DIR}/lib64/libprotoc.a
-  # ${DEP_DIR}/lib64/libprotobuf.a
-  # ${DEP_DIR}/lib64/liblz4.a
-  # ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/liborc.a
+  ${DEP_DIR}/lib64/libsnappy.a
+  ${DEP_DIR}/lib64/libprotoc.a
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/liblz4.a
+  ${DEP_DIR}/lib64/libzstd.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
@@ -241,7 +275,8 @@ target_link_libraries(oblib_base_base_base
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libssl.a
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
-  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib64/libs2.a
+  ${OBLIB_ABSEIL_LIST}
   ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
@@ -251,12 +286,12 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
-  # ${DEP_DIR}/lib64/liborc.a
-  # ${DEP_DIR}/lib64/libsnappy.a
-  # ${DEP_DIR}/lib64/libprotoc.a
-  # ${DEP_DIR}/lib64/libprotobuf.a
-  # ${DEP_DIR}/lib64/liblz4.a
-  # ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/liborc.a
+  ${DEP_DIR}/lib64/libsnappy.a
+  ${DEP_DIR}/lib64/libprotoc.a
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/liblz4.a
+  ${DEP_DIR}/lib64/libzstd.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
@@ -269,7 +304,9 @@ endif()
 target_link_libraries(oblib_base_base INTERFACE oblib_base_base_base)
 
 add_library(oblib_base INTERFACE)
-target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
+if(NOT CPP_STANDARD_20)
+  target_compile_options(oblib_base INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
+endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_base)
 
 function(oblib_add_library target)

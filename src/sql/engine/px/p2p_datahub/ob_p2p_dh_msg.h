@@ -79,6 +79,9 @@ public:
       is_ready_(false), is_empty_(true), ref_count_(0),
       register_dm_info_(), dm_cb_node_seq_id_(0) {}
   virtual ~ObP2PDatahubMsgBase() {}
+
+  // this interface will be used both in send and receive process, ensure copy all
+  // members that need to been serialize.
   virtual int assign(const ObP2PDatahubMsgBase &);
   virtual int merge(ObP2PDatahubMsgBase &) = 0;
   virtual int deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr) = 0;
@@ -127,7 +130,9 @@ public:
       uint64_t *batch_hash_values)
   { return OB_SUCCESS; }
   virtual void after_process() {}
-  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges)
+  virtual int try_extract_query_range(bool &has_extract, ObIArray<ObNewRange> &ranges,
+                                      bool need_deep_copy = false,
+                                      common::ObIAllocator *allocator = nullptr)
   {
     return OB_SUCCESS;
   }
@@ -217,6 +222,34 @@ struct ObP2PDatahubMsgGuard
   void release();
   ObP2PDatahubMsgBase *msg_;
 };
+
+template <typename ResVec>
+static int proc_filter_not_active(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
+
+template <>
+int proc_filter_not_active<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBitVector::flip_foreach(
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
+            res_vec->set_int(idx, 1);
+            return OB_SUCCESS;
+          }))) {
+    SQL_LOG(WARN, "fail to do for each operation", K(ret));
+  }
+  return ret;
+}
+
+template <>
+int proc_filter_not_active<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
+                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
+  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
+  return ret;
+}
 
 }
 }

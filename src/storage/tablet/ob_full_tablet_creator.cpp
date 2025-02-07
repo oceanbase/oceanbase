@@ -111,7 +111,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
       break;
     } else {
       need_wait = true;
-      if (REACH_TENANT_TIME_INTERVAL(log_timeout)) {
+      if (REACH_THREAD_TIME_INTERVAL(log_timeout)) {
         const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
         LOG_WARN("prepare create tablet timeout",
             K_(created_tablets_cnt), K(wait_create_tablets_cnt), K(limit_size),

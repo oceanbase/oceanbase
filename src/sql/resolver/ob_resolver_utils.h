@@ -381,7 +381,10 @@ public:
                            const ObSQLMode mode,
                            bool enable_decimal_int_type,
                            const ObCompatType compat_type,
-                           bool is_from_pl = false);
+                           const bool enable_mysql_compatible_dates,
+                           bool use_plan_cache,
+                           bool is_from_pl = false,
+                           bool formalize_int_precision = false);
 
   static int set_string_val_charset(ObIAllocator &allocator,
                                     ObObjParam &val,
@@ -398,6 +401,7 @@ public:
                                const ObSessionNLSParams &nls_session_param,
                                uint64_t tenant_id,
                                const bool enable_decimal_int_type,
+                               const bool enable_mysql_compatible_dates,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
@@ -430,6 +434,8 @@ public:
   static int unique_idx_covered_partition_columns(const share::schema::ObTableSchema &table_schema,
                                                   const common::ObIArray<uint64_t> &index_columns,
                                                   const common::ObPartitionKeyInfo &partition_info);
+  static int unique_idx_covered_presetting_partition_columns(const share::schema::ObTableSchema &table_schema,
+                                                             const common::ObIArray<uint64_t> &index_columns);
 
   static int get_collation_type_of_names(const ObSQLSessionInfo *session_info,
                                          const ObNameTypeClass type_class,
@@ -588,6 +594,7 @@ public:
   static bool is_valid_partition_column_type(const common::ObObjType type,
                                              const share::schema::ObPartitionFuncType part_type,
                                              const bool is_check_value);
+  static bool is_partition_range_column_type(const common::ObObjType type);
   static bool is_valid_oracle_partition_data_type(const common::ObObjType type, const bool check_value);
   static bool is_valid_oracle_interval_data_type(
       const common::ObObjType type,
@@ -667,9 +674,14 @@ public:
                                        const common::ObString &db_name,
                                        const common::ObString &pkg_name,
                                        ParseNode *&func_udf);
-  static int set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item);
+  static int set_direction_by_mode(const ParseNode &sort_node, OrderItem &order_item, bool opt_nulls = false);
   static int resolve_string(const ParseNode *node, common::ObString &string);
-
+  static int resolve_xid(const ParseNode *node, common::ObString &gtrid_string, common::ObString &bqual_string, int64_t & format_id);
+  static int resolve_text(const ParseNode *node, common::ObString &string);
+  static int resolve_ulong(const ParseNode *node, int64_t & format_id);
+  static int resolve_opt_join_or_resume(const ParseNode *node, int64_t & flag);
+  static int resolve_opt_suspend(const ParseNode *node, int64_t & flag);
+  static int resolve_opt_one_phase(const ParseNode *node, int64_t & flag);
   // check some kind of the non-updatable view, which is forbidden for all dml statement:
   // mysql:
   //    aggregate
@@ -841,7 +853,14 @@ public:
   static bool is_external_file_column_name(const common::ObString &name);
   static bool is_external_pseudo_column_name(const common::ObString &name);
   static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
-
+  static int resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value);
+  static int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value);
+  static int resolve_file_format(const ParseNode *node,
+                                 ObExternalFileFormat &format,
+                                 ObResolverParams &params);
+  static int resolve_file_compression_format(const ParseNode *node,
+                                             ObExternalFileFormat &format,
+                                             ObResolverParams &params);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,
                                               ObResolverParams &params,
@@ -863,8 +882,10 @@ public:
                             const ObBitSet<> &neg_param_index,
                             const ObBitSet<> &not_param_index,
                             const ObBitSet<> &must_be_positive_idx,
+                            const ObBitSet<> &formalize_prec_idx,
                             const ObPCParam *pc_param,
                             const int64_t param_idx,
+                            const bool enable_mysql_compatible_dates,
                             ObObjParam &obj_param,
                             bool &is_param,
                             const bool enable_decimal_int);

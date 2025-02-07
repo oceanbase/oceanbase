@@ -791,6 +791,8 @@ public:
           const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(agg_cell));
           ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
           ObString agg_array_data(agg_cell_len, agg_data);
+          ObLobLocatorV2 locator(agg_array_data, true/*has_lob_header*/);
+          bool is_outrow = !locator.has_inrow_data();
           if (!agg_lob_comm->is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
@@ -813,6 +815,15 @@ public:
               if (isinff(float_res[i]) != 0) {
                 ret = OB_OPERATE_OVERFLOW;
                 SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
+              }
+            }
+            if (OB_SUCC(ret) && is_outrow) {
+              ObString res;
+              if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, agg_array_data.length(), agg_ctx.allocator_, res, agg_array_data.ptr()))) {
+                SQL_LOG(WARN, "failed to set array res", K(ret));
+              } else {
+                *reinterpret_cast<int64_t *>(agg_cell) = reinterpret_cast<int64_t>(res.ptr());
+                *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = res.length();
               }
             }
           }
@@ -873,6 +884,8 @@ public:
         const char *agg_data = reinterpret_cast<const char *>(*reinterpret_cast<int64_t *>(aggr_cell));
         ObLobCommon *agg_lob_comm = (ObLobCommon*)(agg_data);
         ObString agg_array_data(agg_cell_len, agg_data);
+        ObLobLocatorV2 locator(agg_array_data, true/*has_lob_header*/);
+        bool is_outrow = !locator.has_inrow_data();
         if (!agg_lob_comm->is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "unexpected data", K(ret), K(*agg_lob_comm));
@@ -895,6 +908,15 @@ public:
             if (isinff(float_res[i]) != 0) {
               ret = OB_OPERATE_OVERFLOW;
               SQL_LOG(WARN, "value overflow", K(ret), K(i), K(float_data[i]), K(float_res[i]));
+            }
+          }
+          if (OB_SUCC(ret) && is_outrow) {
+            ObString res;
+            if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, agg_array_data.length(), agg_ctx.allocator_, res, agg_array_data.ptr()))) {
+              SQL_LOG(WARN, "failed to set array res", K(ret));
+            } else {
+              *reinterpret_cast<int64_t *>(aggr_cell) = reinterpret_cast<int64_t>(res.ptr());
+              *reinterpret_cast<int32_t *>(aggr_cell + sizeof(char *)) = res.length();
             }
           }
         }

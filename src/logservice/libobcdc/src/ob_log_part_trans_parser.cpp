@@ -126,7 +126,7 @@ int ObLogPartTransParser::parse(PartTransTask &task, const bool is_build_baselin
   } else {
     const SortedRedoLogList &sorted_redo_list = task.get_sorted_redo_list();
     // Parse Redo logs if they exist
-    if (sorted_redo_list.log_num_ > 0 && OB_FAIL(parse_ddl_redo_log_(task, is_build_baseline, stop_flag))) {
+    if (sorted_redo_list.get_node_number() > 0 && OB_FAIL(parse_ddl_redo_log_(task, is_build_baseline, stop_flag))) {
       LOG_ERROR("parse_ddl_redo_log_ fail", KR(ret), K(task), K(is_build_baseline));
     }
   }
@@ -212,7 +212,7 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
   int ret = OB_SUCCESS;
   int64_t redo_num = 0;
   SortedRedoLogList &sorted_redo_list = task.get_sorted_redo_list();
-  DdlRedoLogNode *redo_node = static_cast<DdlRedoLogNode *>(sorted_redo_list.head_);
+  RedoNodeIterator redo_iter = sorted_redo_list.redo_iter_begin();
   const uint64_t tenant_id = task.get_tenant_id();
 
   if (OB_UNLIKELY(! sorted_redo_list.is_valid())) {
@@ -241,27 +241,37 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
     }
 
     if (OB_SUCC(ret)) {
-      while (OB_SUCCESS == ret && NULL != redo_node) {
-        LOG_DEBUG("parse redo log", "redo_node", *redo_node);
-
-        if (OB_UNLIKELY(! redo_node->is_valid())) {
-          LOG_ERROR("redo_node is invalid", "redo_node", *redo_node, "redo_index", redo_num);
-          ret = OB_INVALID_DATA;
-        }
-        // Calibrate data for completeness
-        else if (OB_UNLIKELY(! redo_node->check_data_integrity())) {
-          LOG_ERROR("redo data is not valid", KPC(redo_node));
-          ret = OB_INVALID_DATA;
-        } else if (OB_FAIL(parse_stmts_(tenant, *redo_node, is_build_baseline,
-            invalid_redo_log_entry_task, task, row_index, stop_flag))) {
-          LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *redo_node,
-              K(is_build_baseline), K(task), K(row_index));
+      while (OB_SUCCESS == ret && redo_iter != sorted_redo_list.redo_iter_end() && !stop_flag) {
+        if (OB_UNLIKELY(!redo_iter.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("invalid redo iterator", KR(ret), K(sorted_redo_list), K(redo_iter));
         } else {
-          redo_num += redo_node->get_log_num();
-          redo_node = static_cast<DdlRedoLogNode *>(redo_node->get_next());
+          DdlRedoLogNode *ddl_redo = static_cast<DdlRedoLogNode*>(&(*redo_iter));
+          LOG_DEBUG("parse redo log", "redo_node", *ddl_redo);
+
+          if (OB_UNLIKELY(! ddl_redo->is_valid())) {
+            ret = OB_INVALID_DATA;
+            LOG_ERROR("redo_node is invalid", KR(ret), "redo_node", *ddl_redo, "redo_index", redo_num);
+          }
+          // Calibrate data for completeness
+          else if (OB_UNLIKELY(! ddl_redo->check_data_integrity())) {
+            LOG_ERROR("redo data is not valid", KPC(ddl_redo));
+            ret = OB_INVALID_DATA;
+          } else if (OB_FAIL(parse_stmts_(tenant, *ddl_redo, is_build_baseline,
+              invalid_redo_log_entry_task, task, row_index, stop_flag))) {
+            LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *ddl_redo,
+                K(is_build_baseline), K(task), K(row_index));
+          } else {
+            redo_num += ddl_redo->get_log_num();
+            redo_iter++;
+          }
         }
-      } // while
+      } // end while
     }
+  }
+
+  if (OB_SUCC(ret) && stop_flag) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;
@@ -1132,7 +1142,7 @@ int ObLogPartTransParser::parse_ext_info_log_mutator_row_(
         "row_seq_no", row->seq_no_);
   } else if (part_trans_task.is_ddl_trans()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part tans task is ddl not expected", KR(ret), K(part_trans_task));
+    LOG_ERROR("part tans task is ddl not expected", KR(ret), K(part_trans_task));
   }
 
   if (OB_SUCC(ret)) {
@@ -1179,17 +1189,19 @@ int ObLogPartTransParser::handle_mutator_ext_info_log_(
     const uint64_t tenant_id = tenant->get_tenant_id();
     const transaction::ObTransID &trans_id = part_trans_task.get_trans_id();
     const uint64_t table_id = 0;
-    ObLobId lob_id; // empty
+    ObLobId lob_id;
     transaction::ObTxSEQ row_seq_no = row->get_seq_no();
     ObString ext_info_log;
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
-    LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
-    if (OB_FAIL(row->parse_ext_info_log(ext_info_log))) {
-      LOG_WARN("parse_ext_info_log fail", KR(ret));
-    } else if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "ext_info_log", ext_info_log.ptr(), ext_info_log.length()))) {
-      LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
+    if (OB_FAIL(row->parse_ext_info_log(lob_id, ext_info_log))) {
+      LOG_ERROR("parse_ext_info_log fail", KR(ret));
     } else {
-      LOG_DEBUG("put ext info log success", K(lob_aux_meta_key), "log_length", ext_info_log.length());
+      LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
+      if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "ext_info_log", ext_info_log.ptr(), ext_info_log.length()))) {
+        LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
+      } else {
+        LOG_DEBUG("put ext info log success", K(lob_aux_meta_key), "log_length", ext_info_log.length());
+      }
     }
   } else {
     LOG_INFO("ext info log is ignored", K(tablet_id),

@@ -11,8 +11,13 @@
 #define OB_SHARE_STORAGE_I_PRE_WARMER_H_
 #include "/usr/include/stdint.h"
 #include "deps/oblib/src/lib/utility/ob_print_utils.h"
+#include "share/schema/ob_table_param.h"
 namespace oceanbase
 {
+namespace storage
+{
+class ObITableReadInfo;
+}
 namespace blocksstable
 {
 struct ObMicroBlockDesc;
@@ -29,7 +34,7 @@ class ObIPreWarmer
 public:
   ObIPreWarmer() : is_inited_(false) {}
   virtual ~ObIPreWarmer() {}
-  virtual int init(const ObIArray<share::schema::ObColDesc> *col_desc_array) = 0;
+  virtual int init(const storage::ObITableReadInfo *table_read_info) = 0;
   virtual void reuse() = 0;
   virtual int reserve(const blocksstable::ObMicroBlockDesc &micro_block_desc,
                       bool &reserve_succ_flag,

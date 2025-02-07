@@ -57,7 +57,12 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
       STORAGE_LOG(WARN, "Failed to reserve full row", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_scn_.get_val_for_tx()))) {
+    } else if (OB_FAIL(fuse_row_cache_fetcher_.init(access_ctx_->get_scan_type(),
+                                                    access_param_->iter_param_.tablet_id_,
+                                                    access_param_->iter_param_.get_read_info(),
+                                                    tablet_meta.clog_checkpoint_scn_.get_val_for_tx(),
+                                                    access_ctx_->trans_version_range_.base_version_,
+                                                    access_ctx_->trans_version_range_.snapshot_version_))) {
       STORAGE_LOG(WARN, "fail to init fuse row cache fetcher", K(ret));
     } else {
       rowkey_ = &rowkey;
@@ -160,6 +165,7 @@ int ObSingleMerge::get_table_row(const int64_t table_idx,
       if (prow->row_flag_.is_exist() && !has_uncommited_row) {
         has_uncommited_row = prow->is_have_uncommited_row() || fuse_row.snapshot_version_ == INT64_MAX;
       }
+      REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
       STORAGE_LOG(DEBUG, "process row fuse", K(ret), KPC(prow), K(fuse_row), KPC(access_ctx_->store_ctx_));
     }
   }
@@ -220,9 +226,6 @@ int ObSingleMerge::get_and_fuse_cache_row(const int64_t read_snapshot_version,
     } else if (OB_FAIL(get_table_row(i, tables_, full_row_, final_result, have_uncommited_row))) {
       STORAGE_LOG(WARN, "fail to get table row", K(ret), K(i), K(full_row_), K(tables_));
     }
-#ifdef ENABLE_DEBUG_LOG
-    access_ctx_->defensive_check_record_.end_access_table_idx_ = i;
-#endif
   }
   if (OB_SUCC(ret) && handle_.is_valid()) {
     ObDatumRow cache_row;
@@ -235,9 +238,6 @@ int ObSingleMerge::get_and_fuse_cache_row(const int64_t read_snapshot_version,
       if (OB_FAIL(ObRowFuse::fuse_row(cache_row, fuse_row, nop_pos_, final_result))) {
         STORAGE_LOG(WARN, "fail to fuse row", K(ret));
       } else {
-#ifdef ENABLE_DEBUG_LOG
-        access_ctx_->defensive_check_record_.use_fuse_cache_data_ = true;
-#endif
         STORAGE_LOG(TRACE, "fuse row cache", K(cache_row), K(fuse_row));
       }
     }
@@ -250,16 +250,16 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (NULL != rowkey_ && 0 < tables_.count()) {
-    bool final_result = false;
-    int64_t table_idx = -1;
     ObITable *table = tables_.at(0);
     bool have_uncommited_row = false;
+    const StorageScanType scan_type = access_ctx_->get_scan_type();
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
     const ObTabletMeta &tablet_meta = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta();
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
-                                       access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
-                                       read_snapshot_version >= tablet_meta.snapshot_version_ &&
+                                       access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_, scan_type) &&
+                                       (is_mview_table_scan(scan_type) ||
+                                        read_snapshot_version >= tablet_meta.snapshot_version_) &&
                                        (!table->is_co_sstable() || static_cast<ObCOSSTableV2 *>(table)->is_all_cg_base()) &&
                                        !tablet_meta.has_transfer_table(); // The query in the transfer scenario does not enable fuse row cache
     bool need_update_fuse_cache = false;
@@ -272,55 +272,23 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     access_ctx_->use_fuse_row_cache_ = enable_fuse_row_cache;
 
     STORAGE_LOG(DEBUG, "single merge start to get next row", KPC(rowkey_), K(access_ctx_->use_fuse_row_cache_),
-                K(access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_)), K(access_param_->iter_param_));
-
-    for (table_idx = tables_.count() - 1; OB_SUCC(ret) && !final_result && table_idx >= 0; --table_idx) {
-      if (OB_ISNULL(table = tables_.at(table_idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null table to single get", K(ret), K(table_idx), K(tables_));
-      } else if (!table->is_memtable()) {
-        break;
-      } else if (OB_FAIL(get_table_row(table_idx, tables_, full_row_, final_result, have_uncommited_row))) {
-        STORAGE_LOG(WARN, "fail to get table row", K(ret), K(table_idx), K(full_row_), K(tables_));
-      } else {
-#ifdef ENABLE_DEBUG_LOG
-      if (table_idx == tables_.count() - 1) {
-        access_ctx_->defensive_check_record_.start_access_table_idx_ = table_idx;
-        access_ctx_->defensive_check_record_.total_table_handle_cnt_ = tables_.count();
-        access_ctx_->defensive_check_record_.fist_access_table_start_scn_ = table->get_start_scn();
+                K(access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_, scan_type)), K(access_param_->iter_param_));
+    if (is_mview_table_scan(scan_type)) {
+      if (OB_FAIL(get_mview_table_scan_row(enable_fuse_row_cache, have_uncommited_row, need_update_fuse_cache))) {
+        STORAGE_LOG(WARN, "Failed to get mview table scan row", K(ret), K(enable_fuse_row_cache));
       }
-#endif
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (final_result) {
-#ifdef ENABLE_DEBUG_LOG
-      access_ctx_->defensive_check_record_.is_all_data_from_memtable_ = true;
-#endif
-    } else if (enable_fuse_row_cache) {
-      if (OB_FAIL(get_and_fuse_cache_row(read_snapshot_version,
-                                         tablet_meta.multi_version_start_,
-                                         full_row_,
-                                         final_result,
-                                         have_uncommited_row,
-                                         need_update_fuse_cache))) {
-        STORAGE_LOG(WARN, "Failed to get fuse cache row", K(ret), K(full_row_));
-      }
-    } else {
-      // secondly, try to get from other delta table
-      for (; OB_SUCC(ret) && !final_result && table_idx >= 0; --table_idx) {
-        if (OB_FAIL(get_table_row(table_idx, tables_, full_row_, final_result, have_uncommited_row))) {
-          STORAGE_LOG(WARN, "fail to get table row", K(ret), K(table_idx), K(full_row_), K(tables_));
-        }
-      }
-#ifdef ENABLE_DEBUG_LOG
-      access_ctx_->defensive_check_record_.end_access_table_idx_ = table_idx;
-#endif
+    } else if (OB_FAIL(get_normal_table_scan_row(read_snapshot_version,
+                                                 tablet_meta.multi_version_start_,
+                                                 enable_fuse_row_cache,
+                                                 have_uncommited_row,
+                                                 need_update_fuse_cache))) {
+      STORAGE_LOG(WARN, "Failed to get normal row", K(ret), K(read_snapshot_version), K(tablet_meta.multi_version_start_),
+                  K(enable_fuse_row_cache));
     }
 
     if (OB_SUCC(ret)) {
-      STORAGE_LOG(DEBUG, "row before project", K(full_row_));
-      if (!full_row_.row_flag_.is_exist_without_delete()) {
+      STORAGE_LOG(DEBUG, "row before project", K(iter_del_row_), K(full_row_));
+      if (!full_row_.row_flag_.is_exist_without_delete() && !(iter_del_row_  && full_row_.row_flag_.is_delete())) {
         ret = OB_ITER_END;
       } else {
         const ObColumnIndexArray &cols_index = read_info->get_columns_index();
@@ -336,10 +304,10 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
         }
         if (OB_FAIL(ret)) {
         } else if (!have_uncommited_row && need_update_fuse_cache
-            && access_ctx_->enable_put_fuse_row_cache(SINGLE_GET_FUSE_ROW_CACHE_PUT_COUNT_THRESHOLD)) {
+            && access_ctx_->enable_put_fuse_row_cache(SINGLE_GET_FUSE_ROW_CACHE_PUT_COUNT_THRESHOLD, is_mview_table_scan(scan_type))) {
           // try to put row cache
           int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = fuse_row_cache_fetcher_.put_fuse_row_cache(*rowkey_, full_row_, read_snapshot_version))) {
+          if (OB_SUCCESS != (tmp_ret = fuse_row_cache_fetcher_.put_fuse_row_cache(*rowkey_, full_row_))) {
             STORAGE_LOG(WARN, "fail to put fuse row cache", K(ret), KPC(rowkey_), K(full_row_), K(read_snapshot_version));
           } else {
             access_ctx_->table_store_stat_.fuse_row_cache_put_cnt_++;
@@ -347,27 +315,6 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
         }
       }
     }
-#ifdef ENABLE_DEBUG_LOG
-    /*
-    if (OB_SUCC(ret)) {
-      access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
-      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
-      bool trx_id_valid = (NULL != access_ctx_->store_ctx_
-                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_.is_valid());
-      if (OB_NOT_NULL(trx)
-          && trx_id_valid
-          && NULL != trx->get_defensive_check_mgr()) {
-        (void)trx->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
-                                                  access_ctx_->store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_,
-                                                  row,
-                                                  *rowkey_,
-                                                  access_ctx_->defensive_check_record_);
-      }
-    }
-    access_ctx_->defensive_check_record_.reset();
-    */
-#endif
-
     // When the index lookups the rowkeys from the main table, it should exists
     // and if we find that it does not exist, there must be an anomaly
     if (GCONF.enable_defensive_check()
@@ -384,6 +331,95 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     rowkey_ = NULL;
   } else {
     ret = OB_ITER_END;
+  }
+  return ret;
+}
+
+int ObSingleMerge::get_normal_table_scan_row(const int64_t read_snapshot_version,
+                                             const int64_t multi_version_start,
+                                             const bool enable_fuse_row_cache,
+                                             bool &have_uncommited_row,
+                                             bool &need_update_fuse_cache)
+{
+  int ret = OB_SUCCESS;
+  bool final_result = false;
+  int64_t table_idx = -1;
+  ObITable *table = nullptr;
+  for (table_idx = tables_.count() - 1; OB_SUCC(ret) && !final_result && table_idx >= 0; --table_idx) {
+    if (OB_ISNULL(table = tables_.at(table_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected null table to single get", K(ret), K(table_idx), K(tables_));
+    } else if (!table->is_memtable()) {
+      break;
+    } else if (OB_FAIL(get_table_row(table_idx, tables_, full_row_, final_result, have_uncommited_row))) {
+      STORAGE_LOG(WARN, "fail to get table row", K(ret), K(table_idx), K(full_row_), K(tables_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (final_result) {
+  } else if (enable_fuse_row_cache) {
+    if (OB_FAIL(get_and_fuse_cache_row(read_snapshot_version,
+                                       multi_version_start,
+                                       full_row_,
+                                       final_result,
+                                       have_uncommited_row,
+                                       need_update_fuse_cache))) {
+      STORAGE_LOG(WARN, "Failed to get fuse cache row", K(ret), K(full_row_));
+    }
+  } else {
+    // secondly, try to get from other delta table
+    for (; OB_SUCC(ret) && !final_result && table_idx >= 0; --table_idx) {
+      if (OB_FAIL(get_table_row(table_idx, tables_, full_row_, final_result, have_uncommited_row))) {
+        STORAGE_LOG(WARN, "fail to get table row", K(ret), K(table_idx), K(full_row_), K(tables_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSingleMerge::get_mview_table_scan_row(const bool enable_fuse_row_cache,
+                                            bool &have_uncommited_row,
+                                            bool &need_update_fuse_cache)
+{
+  int ret = OB_SUCCESS;
+  bool final_result = false;
+  if (enable_fuse_row_cache) {
+    if (OB_FAIL(fuse_row_cache_fetcher_.get_fuse_row_cache(*rowkey_, handle_))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "Failed to get from fuse row cache", K(ret), KPC(rowkey_));
+      } else {
+        ++access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
+        ret = OB_SUCCESS;
+      }
+    } else if (handle_.is_valid()) {
+      ObDatumRow cache_row;
+      cache_row.count_ = handle_.value_->get_column_cnt();
+      cache_row.storage_datums_ = handle_.value_->get_datums();
+      cache_row.row_flag_ = handle_.value_->get_flag();
+      ++access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
+      STORAGE_LOG(DEBUG, "find fuse row cache", K(handle_), KPC(rowkey_));
+      if (cache_row.row_flag_.is_exist()) {
+        if (OB_FAIL(ObRowFuse::fuse_row(cache_row, full_row_, nop_pos_, final_result))) {
+          STORAGE_LOG(WARN, "Failed to fuse row", K(ret));
+        } else {
+          STORAGE_LOG(TRACE, "fuse row cache", K(cache_row), K(full_row_), K(final_result));
+          final_result = true;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !final_result) {
+    need_update_fuse_cache = enable_fuse_row_cache;
+    int64_t table_idx = -1;
+    ObITable *table = nullptr;
+    for (table_idx = tables_.count() - 1; OB_SUCC(ret) && !final_result && table_idx >= 0; --table_idx) {
+      if (OB_ISNULL(table = tables_.at(table_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected null table to single get", K(ret), K(table_idx), K(tables_));
+      } else if (OB_FAIL(get_table_row(table_idx, tables_, full_row_, final_result, have_uncommited_row))) {
+        STORAGE_LOG(WARN, "Failed to get table row", K(ret), K(table_idx), K(full_row_), K(tables_));
+      }
+    }
   }
   return ret;
 }

@@ -94,11 +94,13 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0},                           /* ObDecimalIntType */
   {EMySQLFieldType::MYSQL_TYPE_STRING,     0, 0},   /* ObCollectionSQLType, will cast to string */
-  {EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,     0, 0},   /* reserved for ObMySQLDateType */
-  {EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED,     0, 0},   /* reserved for ObMySQLDateTimeType */
+  {EMySQLFieldType::MYSQL_TYPE_DATE,      BINARY_FLAG, 0}, /* ObMySQLDateType */
+  {EMySQLFieldType::MYSQL_TYPE_DATETIME,  BINARY_FLAG, 0}, /* ObMySQLDateTimeType */
   {EMySQLFieldType::MYSQL_TYPE_BLOB,       BLOB_FLAG, 0},                         /* ObRoaringBitmapType */
   /* ObMaxType */
 };
+
+static_assert(sizeof(type_maps_) / sizeof(ObMySQLTypeMap) == ObMaxType, "Not enough initializer");
 
 //called by handle COM_STMT_EXECUTE offset is 0
 bool ObSMUtils::update_from_bitmap(ObObj &param, const char *bitmap, int64_t field_index)
@@ -302,17 +304,39 @@ int ObSMUtils::cell_str(
               ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(obj.get_ext());
               ObNestedTableType *nested_type = NULL;
               ObPLDataType element_type;
-              if (OB_ISNULL(nested_type =
+              if (OB_ISNULL(coll)) {
+                ret = OB_ERR_UNEXPECTED;
+                OB_LOG(WARN, "coll is null", K(ret));
+              } else if (OB_ISNULL(nested_type =
                 reinterpret_cast<ObNestedTableType*>(allocator.alloc(sizeof(ObNestedTableType))))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 OB_LOG(WARN, "failed to alloc memory for ObNestedTableType", K(ret));
-              } else if (OB_ISNULL(coll)) {
-                ret = OB_ERR_UNEXPECTED;
-                OB_LOG(WARN, "coll is null", K(ret));
               } else if (FALSE_IT(new (nested_type) ObNestedTableType())) {
+              } else if (ObExtendType == coll->get_element_type().get_obj_type()) {
+                const ObUDTTypeInfo *udt_info = NULL;
+                const ObUserDefinedType *elem_user_type = NULL;
+                ObArenaAllocator local_allocator;
+                uint64_t udt_id = coll->get_element_type().get_udt_id();
+                const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+                if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+                  OB_LOG(WARN,"failed to get udt info", K(ret), K(tenant_id), K(udt_id));
+                } else if (OB_ISNULL(udt_info)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  OB_LOG(WARN,"udt info is null", K(ret), K(udt_id));
+                }  else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, elem_user_type))) {
+                  OB_LOG(WARN,"failed to transform to pl type", K(ret), KPC(udt_info));
+                } else if (OB_ISNULL(elem_user_type)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  OB_LOG(WARN,"user type is null", K(ret), K(elem_user_type));
+                } else {
+                  OX (nested_type->set_element_type(*elem_user_type));
+                }
               } else if (FALSE_IT(element_type.reset())) {
               } else if (FALSE_IT(element_type.set_data_type(coll->get_element_type()))) {
-              } else if (FALSE_IT(nested_type->set_element_type(element_type))) {
+              } else {
+                OX (nested_type->set_element_type(element_type));
+              }
+              if (OB_FAIL(ret)){
               } else if (OB_FAIL(nested_type->serialize(
                                   *schema_guard, dtc_params.tz_info_, type, src, buf, len, pos))) {
                 OB_LOG(WARN, "failed to serialize anonymous collection", K(ret));
@@ -399,6 +423,12 @@ int ObSMUtils::cell_str(
                                                obj.get_scale(), pos, zerofill, zflength);
         break;
       }
+      case ObMySQLDateTC:
+        ret = ObMySQLUtil::mdate_cell_str(buf, len, obj.get_mysql_date(), type, pos);
+        break;
+      case ObMySQLDateTimeTC:
+        ret = ObMySQLUtil::mdatetime_cell_str(buf, len, obj.get_mysql_datetime(), type, pos, NULL, scale);
+        break;
       default:
         _OB_LOG(ERROR, "invalid ob type=%d", obj.get_type());
         ret = OB_ERROR;

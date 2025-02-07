@@ -16,6 +16,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -74,7 +75,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
   } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
+  } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));
@@ -94,7 +95,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
   } else if (get_item_size() > 0 &&
-             OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+             OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to do estimate", K(ret));
   } else if (!no_sample_idx.empty() &&
@@ -210,6 +211,8 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
   } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
     LOG_WARN("failed to fill hints", K(ret));
+  } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
+    LOG_WARN("failed to fill parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
                                                                param.max_duration_time_,
                                                                duration_time))) {
@@ -220,7 +223,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
     LOG_WARN("failed to pack", K(ret));
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+  } else if (OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to do estimate", K(ret));
   } else {/*do nothing*/}

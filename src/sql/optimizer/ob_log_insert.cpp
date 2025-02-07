@@ -143,6 +143,10 @@ int ObLogInsert::get_plan_item_info(PlanText &plan_text,
       } else { /* Do nothing */ }
       BUF_PRINTF(")");
     } else { /* Do nothing */ }
+
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }
@@ -178,6 +182,23 @@ int ObLogInsert::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
                                                                 true))) {
     LOG_WARN("failed to add table columns to ctx", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogInsert::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(is_dml_fixed_expr(expr, get_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_replace_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_insert_up_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
   return ret;
 }
 
@@ -557,6 +578,61 @@ int ObLogInsert::inner_replace_op_exprs(ObRawExprReplacer &replacer)
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+// set plain insert flag : insert into values(..); // value num is n (n >= 1);
+int ObLogInsert::is_plain_insert(bool &is_plain_insert)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertStmt *insert_stmt = nullptr;
+  is_plain_insert = false;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(insert_stmt = static_cast<const ObInsertStmt *>(get_stmt()))) {
+
+  } else {
+    is_plain_insert = (!insert_stmt->value_from_select()
+                        && !insert_stmt->is_insert_up()
+                        && insert_stmt->get_subquery_exprs().empty()
+                        && !insert_stmt->is_replace());
+  }
+
+  return ret;
+}
+
+int ObLogInsert::is_insertup_or_replace_values(bool &is)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertStmt *insert_stmt = nullptr;
+  is = false;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(insert_stmt = static_cast<const ObInsertStmt *>(get_stmt()))) {
+
+  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
+    is = (!insert_stmt->value_from_select() && insert_stmt->get_subquery_exprs().empty());
+  }
+
+  return ret;
+}
+int ObLogInsert::op_is_update_pk_with_dop(bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  if (!index_dml_infos_.empty()) {
+    IndexDMLInfo *index_dml_info = index_dml_infos_.at(0);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index_dml_infos_));
+    } else if (!is_pdml_update_split_) {
+      // is_update = false;
+    } else if (index_dml_info->is_update_primary_key_ && (is_pdml() || get_das_dop() > 1)) {
+      is_update = true;
     }
   }
   return ret;

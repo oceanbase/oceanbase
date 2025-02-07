@@ -18,6 +18,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "lib/ash/ob_active_session_guard.h"
 #include <dlfcn.h>
 #include <poll.h>
 #include <sys/epoll.h>
@@ -137,6 +138,7 @@ int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		  int __maxevents, int __timeout) = epoll_wait;
   int ret = 0;
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+  oceanbase::common::ObBKGDSessInActiveGuard inactive_guard;
   ret = SYS_HOOK(epoll_wait, __epfd, __events, __maxevents, __timeout);
   return ret;
 }
@@ -173,10 +175,15 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
   return ret;
 }
 
+// ob_usleep wrapper function for C file
 void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ObSleepEventGuard wait_guard((int64_t)v);
-  ::usleep(v);
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v);
+}
+
+void ob_idle_usleep(const useconds_t v)
+{
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v, true);
 }
 
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)

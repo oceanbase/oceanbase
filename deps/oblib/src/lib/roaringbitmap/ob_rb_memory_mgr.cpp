@@ -29,6 +29,7 @@ static void *roaring_malloc(size_t size) {
     // reserve header for mem_mgr, tenant_id and size, returning data ptr
     // | mem_mgr | tenant_id | size | data |
     size_t alloc_size = size + sizeof(ObRbMemMgr *) + sizeof(uint64_t) + sizeof(size_t);
+    lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
     if (OB_INVALID_TENANT_ID == tenant_id) {
       // use ob_malloc
       alloc_ptr = ob_malloc(alloc_size, lib::ObLabel("RbMemMgr"));
@@ -36,6 +37,12 @@ static void *roaring_malloc(size_t size) {
       int ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mem_mgr is null", K(tenant_id));
       ob_abort();
+    } else if (last_mem_attr.label_.is_valid() &&
+               last_mem_attr.label_[0] == 'V' &&
+               last_mem_attr.label_[1] == 'I' &&
+               last_mem_attr.label_[2] == 'B') {
+      alloc_ptr = ob_malloc(alloc_size, SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, last_mem_attr.label_)));
+      mem_mgr->incr_vec_idx_used(alloc_size);
     } else {
       alloc_ptr = mem_mgr->alloc(alloc_size);
     }
@@ -70,8 +77,17 @@ static void roaring_free(void *ptr) {
       size_t alloc_location = ptr_location - sizeof(size_t) - sizeof(uint64_t) - sizeof(ObRbMemMgr *);
       void * alloc_ptr = reinterpret_cast<void *>(alloc_location);
       ObRbMemMgr *mem_mgr = *reinterpret_cast<ObRbMemMgr **>(alloc_ptr);
+      lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
       if (OB_ISNULL(mem_mgr)) {
         ob_free(alloc_ptr);
+      } else if (last_mem_attr.label_.is_valid() &&
+                 last_mem_attr.label_[0] == 'V' &&
+                 last_mem_attr.label_[1] == 'I' &&
+                 last_mem_attr.label_[2] == 'B') {
+        void *size_ptr = reinterpret_cast<void *>(ptr_location - sizeof(size_t));
+        size_t free_size = *reinterpret_cast<size_t *>(size_ptr);
+        ob_free(alloc_ptr);
+        mem_mgr->decr_vec_idx_used(free_size + sizeof(ObRbMemMgr *) + sizeof(uint64_t) + sizeof(size_t));
       } else {
         mem_mgr->free(alloc_ptr);
       }
@@ -87,11 +103,16 @@ static void *roaring_realloc(void *ptr, size_t size) {
   } else if (NULL == ptr) {
     res = roaring_malloc(size);
   } else {
-    res = roaring_malloc(size);
     size_t ptr_location = reinterpret_cast<size_t>(ptr);
     void *size_ptr = reinterpret_cast<void *>(ptr_location - sizeof(size_t));
-    MEMCPY(res, ptr, *reinterpret_cast<size_t *>(size_ptr));
-    roaring_free(ptr);
+    size_t orig_size = *reinterpret_cast<size_t *>(size_ptr);
+    if (orig_size > size) {
+      res = ptr;
+    } else {
+      res = roaring_malloc(size);
+      MEMCPY(res, ptr, orig_size);
+      roaring_free(ptr);
+    }
   }
   return res;
 }
@@ -156,6 +177,7 @@ int ObRbMemMgr::init()
     LOG_WARN("init allocator failed.", K(ret));
   } else {
     allocator_.set_nway(RB_ALLOC_CONCURRENCY);
+    vec_idx_used_ = 0;
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
@@ -166,6 +188,7 @@ int ObRbMemMgr::init()
 
 void ObRbMemMgr::destroy()
 {
+  FLOG_INFO("destroy Roaring bitmap manager", K(MTL_ID()));
   allocator_.destroy();
   is_inited_ = false;
 }
@@ -178,6 +201,16 @@ void *ObRbMemMgr::alloc(size_t size)
 void ObRbMemMgr::free(void *ptr)
 {
   return allocator_.free(ptr);
+}
+
+void ObRbMemMgr::incr_vec_idx_used(size_t size)
+{
+  ATOMIC_AAF(&vec_idx_used_, size);
+}
+
+void ObRbMemMgr::decr_vec_idx_used(size_t size)
+{
+  ATOMIC_SAF(&vec_idx_used_, size);
 }
 
 } // common

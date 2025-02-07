@@ -42,7 +42,10 @@ int ObCompileTriggerInf::compile_trigger(sql::ObExecContext &ctx,
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
   CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
   OZ (ctx.get_sql_ctx()->schema_guard_->get_trigger_info(tenant_id, db_id, trigger_name, trigger_info));
-  CK (OB_NOT_NULL(trigger_info));
+  if (OB_SUCC(ret) && OB_ISNULL(trigger_info)) {
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_WARN("trigger not exist", K(db_id), K(trigger_name), K(ret));
+  }
   CK (OB_NOT_NULL(ctx.get_pl_engine()));
   if (OB_SUCC(ret) && schema_version == trigger_info->get_schema_version()) {
     ObPLPackage *package_spec = nullptr;
@@ -245,8 +248,8 @@ int ObCreateTriggerExecutor::analyze_dependencies(ObSchemaGetterGuard &schema_gu
                                             trigger_name, trigger_info))) {
     LOG_WARN("failed to get trigger info", K(ret));
   } else if (NULL == trigger_info) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("trigger info is null", K(db_name), K(trigger_name), K(ret));
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_WARN("trigger not exist", K(db_name), K(trigger_name), K(ret));
   } else {
     if (OB_FAIL(ObTriggerResolver::analyze_trigger(schema_guard, session_info, sql_proxy,
                                                    allocator, *trigger_info, db_name, arg.dependency_infos_, false))) {

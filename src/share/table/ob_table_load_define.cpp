@@ -24,7 +24,8 @@ OB_SERIALIZE_MEMBER(ObTableLoadConfig,
                     batch_size_,
                     max_error_row_count_,
                     dup_action_,
-                    is_need_sort_);
+                    is_need_sort_,
+                    is_task_need_sort_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadSegmentID,
                     id_);

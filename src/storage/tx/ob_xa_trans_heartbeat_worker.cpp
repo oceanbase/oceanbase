@@ -19,6 +19,7 @@ namespace oceanbase
 {
 using namespace common;
 using namespace storage;
+using namespace share;
 
 namespace transaction
 {
@@ -59,18 +60,22 @@ void ObXATransHeartbeatWorker::run1()
   static const int64_t INTERVAL_US = 5 * 1000 * 1000; // 5s
   int64_t loop_count = 0;
   int64_t total_time = 0;
-
+  const uint64_t tenant_id = MTL_ID();
   lib::set_thread_name("ObXAHbWorker");
+
   while (!has_set_stop()) {
-    int64_t start_time = ObTimeUtility::current_time();
     loop_count++;
-    // MTL(ObXAService *)->get_xa_statistics().print_statistics(start_time);
     MTL(ObXAService *)->try_print_statistics();
+    bool is_oracle_mode = false;
+    int64_t start_time = ObTimeUtility::current_time();
+    (void)ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode);
+    // currently, heartbeat is only for oracle user tenant
+    const bool need_heartbeat = is_oracle_mode && is_user_tenant(tenant_id);
 
     if (OB_UNLIKELY(!is_inited_)) {
       TRANS_LOG(WARN, "xa trans heartbeat not init");
       ret = OB_NOT_INIT;
-    } else {
+    } else if (need_heartbeat) {
       if (OB_FAIL(xa_service_->xa_scheduler_hb_req())) {
         TRANS_LOG(WARN, "xa scheduler heartbeat failed", K(ret));
       }
@@ -87,7 +92,7 @@ void ObXATransHeartbeatWorker::run1()
     }
 
     if (time_used < INTERVAL_US) {
-      ob_usleep((uint32_t)(INTERVAL_US - time_used));
+      ob_usleep((uint32_t)(INTERVAL_US - time_used), true/*is_idle_sleep*/);
     }
   }
 }

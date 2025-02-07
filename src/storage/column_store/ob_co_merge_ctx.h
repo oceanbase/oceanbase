@@ -65,6 +65,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int cal_merge_param() override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
+  int collect_running_info_in_batch(
+    const uint32_t start_cg_idx,
+    const uint32_t end_cg_idx,
+    const ObCompactionTimeGuard &time_guard);
   virtual int build_ctx(bool &finish_flag) override;
   virtual int check_merge_ctx_valid() override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
@@ -86,10 +90,14 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     ++exe_stat_.error_count_;
     ++exe_stat_.period_error_count_;
   }
+  OB_INLINE int64_t get_unfinished_cg_cnt() const
+  {
+    return array_count_ - exe_stat_.finish_cg_count_;
+  }
   const ObITableReadInfo *get_full_read_info() const
   {
     const ObITableReadInfo *ret_info = NULL;
-    if (is_build_row_store_from_rowkey_cg()) {
+    if (is_build_row_store_from_rowkey_cg() || is_build_redundant_row_store_from_rowkey_cg()) {
       ret_info = &mocked_row_store_table_read_info_;
     } else {
       ret_info = &read_info_;
@@ -129,7 +137,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx,
     const bool check_info_ready) const;
-  int init_major_sstable_status();
+  int prepare_row_store_cg_schema();
   int construct_column_param(
       const uint64_t column_id,
       const ObStorageColumnSchema *column_schema,
@@ -143,15 +151,16 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
   int prepare_cs_replica_param();
+  int check_and_set_build_redundant_row_merge();
+  int check_convert_co_checksum(const ObSSTable *new_sstable);
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
+  OB_INLINE bool is_build_redundant_row_store_from_rowkey_cg() const { return static_param_.is_build_redundent_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   const ObSSTableMergeHistory &get_merge_history() { return dag_net_merge_history_; }
-
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
-      K_(array_count), K_(exe_stat));
+      K_(array_count), K_(exe_stat), K_(base_rowkey_cg_idx));
   virtual int mark_cg_finish(const int64_t start_cg_idx, const int64_t end_cg_idx) { return OB_SUCCESS; }
-  static const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;
   static const int64_t SCHEDULE_MINOR_CG_CNT_THREASHOLD = 20;
   static const int64_t SCHEDULE_MINOR_TABLE_CNT_THREASHOLD = 3;
   static const int64_t SCHEDULE_MINOR_ROW_CNT_THREASHOLD = 100 * 1000L;
@@ -163,6 +172,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   static const int64_t DAG_NET_ERROR_COUNT_UP_THREASHOLD = 2000;
   int64_t array_count_; // equal to cg count
   int64_t start_schedule_cg_idx_;
+  int64_t base_rowkey_cg_idx_;
   ObCOMergeExeStat exe_stat_;
   ObCOMergeDagNet &dag_net_;
   ObTabletMergeInfo **cg_merge_info_array_;
@@ -178,7 +188,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OLD_MAJOR is pure col, need mock one row_store read_info to read row from pure_col(use query interface)
 */
   ObTableReadInfo mocked_row_store_table_read_info_; // read info for merge from col store to row store
-  ObSSTableMergeHistory dag_net_merge_history_; // TODO, record info for dag net
+  ObSSTableMergeHistory dag_net_merge_history_; // record info for dag net
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE

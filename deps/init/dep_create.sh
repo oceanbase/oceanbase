@@ -7,6 +7,7 @@ PWD="$(cd $(dirname $0); pwd)"
 
 OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
+AL3_RELEASE="0"
 
 if [[ ! -f /etc/os-release ]]; then
   echo "[ERROR] os release info not found" 1>&2 && exit 1
@@ -32,6 +33,12 @@ function compat_centos7() {
   OS_RELEASE=7
 }
 
+function compat_alinux3() {
+  echo_log "[NOTICE] '$PNAME' is compatible with Alinux3, use al8 dependencies list"
+  AL3_RELEASE="1"
+  OS_RELEASE=8
+}
+
 function not_supported() {
   echo_log "[ERROR] '$PNAME' is not supported yet."
 }
@@ -51,13 +58,8 @@ function echo_err() {
 function get_os_release() {
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
-      rhel)
-        version_ge "9.0" && compat_centos9 && return
-        version_ge "8.0" && compat_centos8 && return
-        version_ge "7.0" && compat_centos7 && return
-        ;;
       alinux)
-        version_ge "3.0" && compat_centos9 && return
+        version_ge "3.0" && compat_alinux3 && return
         version_ge "2.1903" && compat_centos7 && return
         ;;
       alios)
@@ -116,11 +118,6 @@ function get_os_release() {
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
-      rhel)
-        version_ge "9.0" && compat_centos9 && return
-        version_ge "8.0" && compat_centos8 && return
-        version_ge "7.0" && compat_centos7 && return
-        ;;
       alios)
         version_ge "8.0" && compat_centos8 && return
         version_ge "7.0" && compat_centos7 && return
@@ -148,6 +145,9 @@ function get_os_release() {
         version_ge "22.04" && compat_centos9 && return
         version_ge "16.04" && compat_centos7 && return
         ;;
+      alinux)
+        version_ge "3.0" && compat_alinux3 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
     case "$ID" in
@@ -161,7 +161,12 @@ function get_os_release() {
 
 get_os_release || exit 1
 
-OS_TAG="el$OS_RELEASE.$OS_ARCH"
+if [[ "${AL3_RELEASE}x" == "1x" ]]; then
+    OS_TAG="al$OS_RELEASE.$OS_ARCH"
+else
+    OS_TAG="el$OS_RELEASE.$OS_ARCH"
+fi
+
 DEP_FILE="oceanbase.${OS_TAG}.deps"
 
 MD5=`md5sum ${DEP_FILE} | cut -d" " -f1`
@@ -173,14 +178,15 @@ WORKSACPE_DEPS_DIR="$(cd $(dirname $0); cd ..; pwd)"
 WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
 WORKSAPCE_DEPS_3RD_DONE=${WORKSPACE_DEPS_3RD}/DONE
 WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
+WORKSAPCE_DEPS_3RD_CPP_STANDARD=${WORKSPACE_DEPS_3RD}/CPP_${CPP_STANDARD}
 
 # 开始判断本地目录依赖目录是否存在
 if [ -f ${WORKSAPCE_DEPS_3RD_MD5} ]; then
-    if [ -f ${WORKSAPCE_DEPS_3RD_DONE} ]; then
-        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5} and ${WORKSAPCE_DEPS_3RD_DONE} exists"
+    if [ -f "${WORKSAPCE_DEPS_3RD_DONE}" ] && [ -f "${WORKSAPCE_DEPS_3RD_CPP_STANDARD}" ]; then
+        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5}, ${WORKSAPCE_DEPS_3RD_DONE} and ${WORKSAPCE_DEPS_3RD_CPP_STANDARD} exists"
         exit 0
     else
-        echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_DONE} not exists"
+        echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_DONE} or ${WORKSAPCE_DEPS_3RD_CPP_STANDARD} not exists"
     fi
 else
     echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_MD5} not exists"
@@ -284,11 +290,21 @@ do
     while read -r line
     do
         [[ "$line" == "" ]] && continue
-        pkg=${line%%\ *}
-        target_name="default"
+	pkg=${line%%\ *}
+	target_name="default"
         temp=$(echo "$line" | grep -Eo "target=(\S*)")
         [[ "$temp" != "" ]] && target_name=${temp#*=}
-        if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
+
+  if [[ "$pkg" == *"obdevtools-llvm"* || "$pkg" == *"obdevtools-gcc"* ]]; then
+    if [[ "$line" =~ cpp_standard=([0-9]+) ]]; then
+      cpp_standard="${BASH_REMATCH[1]}"
+      if [ "$cpp_standard" -ne "$CPP_STANDARD" ]; then
+          continue
+      fi
+    fi
+  fi
+
+	if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
             echo_log "find package <${pkg}> in cache"
         else
             echo_log "downloading package <${pkg}>"
@@ -326,6 +342,7 @@ done
 if [ ${NEED_SHARE_CACHE} == "OFF" ]; then
     touch ${WORKSAPCE_DEPS_3RD_MD5}
     touch ${WORKSAPCE_DEPS_3RD_DONE}
+    touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}
     exit $?
 fi
 
@@ -382,6 +399,7 @@ if [ ${LINK_TARGET_DIRECT} == "ON" ]; then
     fi
     touch ${WORKSAPCE_DEPS_3RD_MD5}
     touch ${WORKSAPCE_DEPS_3RD_DONE}
+    touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}
     exit $?
 fi
 
@@ -409,3 +427,4 @@ echo_log "link deps ${WORKSPACE_DEPS_3RD} -> ${CACHE_DEPS_DIR_3RD}"
 # 标记md5和done文件
 touch ${WORKSAPCE_DEPS_3RD_MD5}
 touch ${WORKSAPCE_DEPS_3RD_DONE}
+touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}

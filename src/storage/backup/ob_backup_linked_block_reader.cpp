@@ -112,8 +112,8 @@ int ObBackupLinkedBlockReader::pread_block_(const ObBackupLinkedBlockAddr &block
 {
   int ret = OB_SUCCESS;
   ObBackupPath backup_path;
-  const int64_t offset = static_cast<int64_t>(block_addr.aligned_offset_) * DIO_READ_ALIGN_SIZE;
-  const int64_t length = static_cast<int64_t>(block_addr.aligned_length_) * DIO_READ_ALIGN_SIZE;
+  const int64_t offset = static_cast<int64_t>(block_addr.offset_) * DIO_READ_ALIGN_SIZE;
+  const int64_t length = static_cast<int64_t>(block_addr.length_) * DIO_READ_ALIGN_SIZE;
   const ObBackupStorageInfo *storage_info = backup_set_dest_.get_storage_info();
   if (!block_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -140,17 +140,17 @@ int ObBackupLinkedBlockReader::get_backup_file_path_(const ObBackupLinkedBlockAd
 {
   int ret = OB_SUCCESS;
   ObBackupDataType backup_data_type;
-  backup_data_type.set_minor_data_backup(); // TODO(yanfeng): change to major when quick restore branch merge
+  backup_data_type.set_user_data_backup();
   if (!block_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arg", K(ret), K(block_addr));
-  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest_,
-                                                                   ObLSID(block_addr.ls_id_),
-                                                                   backup_data_type,
-                                                                   block_addr.turn_id_,
-                                                                   block_addr.retry_id_,
-                                                                   block_addr.file_id_,
-                                                                   backup_path))) {
+  } else if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest_,
+                                                                          ObLSID(block_addr.ls_id_),
+                                                                          backup_data_type,
+                                                                          block_addr.turn_id_,
+                                                                          block_addr.retry_id_,
+                                                                          block_addr.file_id_,
+                                                                          backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), K_(backup_set_dest), K(block_addr));
   }
   return ret;
@@ -269,7 +269,7 @@ int ObBackupLinkedBlockItemReader::get_next_item(ObBackupLinkedItem &link_item)
   bool need_fetch_new = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObBackupLinkedBlockItemReader has not been inited", K(ret));;
+    LOG_WARN("ObBackupLinkedBlockItemReader has not been inited", K(ret));
   } else if (!has_prev_ && item_idx_ >= block_item_list_.count()) {
     ret = OB_ITER_END;
     LOG_WARN("ObBackupLinkedBlockItemReader has reach end", K_(has_prev), K_(item_idx), "count", block_item_list_.count());

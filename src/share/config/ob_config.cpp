@@ -17,6 +17,8 @@
 #include "common/ob_smart_var.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_task_define.h"
+#include "lib/lock/ob_drw_lock.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::share;
 namespace oceanbase
@@ -103,6 +105,57 @@ ObConfigItem::~ObConfigItem()
   }
 }
 
+bool ObConfigItem::set_value_with_lock(const common::ObString &string)
+{
+  DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+  return set_value_unsafe(string);
+}
+
+bool ObConfigItem::set_value_with_lock(const char *str)
+{
+  DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+  return set_value_unsafe(str);
+}
+
+bool ObConfigItem::set_value_unsafe(const common::ObString &string)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  const char *ptr = value_ptr();
+  if (nullptr == ptr) {
+    value_valid_ = false;
+  } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos,
+                                      "%.*s", string.length(), string.ptr()))) {
+    value_valid_ = false;
+  } else {
+    value_valid_ = set(ptr);
+    if (inited_ && value_valid_) {
+      value_updated_ = true;
+    }
+  }
+  return value_valid_;
+}
+
+bool ObConfigItem::set_value_unsafe(const char *str)
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  const char *ptr = value_ptr();
+  if (nullptr == ptr) {
+    value_valid_ = false;
+  } else if (OB_FAIL(databuff_printf(const_cast<char *>(ptr), value_len(), pos, "%s", str))) {
+    value_valid_ = false;
+  } else {
+    value_valid_ = set(str);
+    if (inited_ && value_valid_) {
+      value_updated_ = true;
+    }
+  }
+  return value_valid_;
+}
+
 void ObConfigItem::init(Scope::ScopeInfo scope_info,
                         const char *name,
                         const char *def,
@@ -113,7 +166,7 @@ void ObConfigItem::init(Scope::ScopeInfo scope_info,
     OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "name or def or info is null", K(name), K(def), K(info));
   } else {
     set_name(name);
-    if (!set_value(def)) {
+    if (!set_value_unsafe(def)) {
       OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Set config item value failed", K(name), K(def));
     } else {
      set_info(info);

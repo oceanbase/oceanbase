@@ -39,6 +39,9 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
+#include "sql/ob_sql_utils.h"
+#include "share/stat/ob_opt_stat_manager.h"
+
 
 namespace oceanbase {
 using namespace common;
@@ -1515,8 +1518,10 @@ int ObTransformUtils::update_table_id_for_pseudo_columns(const ObIArray<ObRawExp
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pseudo column", K(other_pseudo_columns.at(i)),
           K(pseudo_columns.at(i)), K(ret));
-    } else if (T_ORA_ROWSCN == other_pseudo_columns.at(i)->get_expr_type()
-               && T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()) {
+    } else if (other_pseudo_columns.at(i)->get_expr_type() != pseudo_columns.at(i)->get_expr_type()) {
+      /* do nothing */
+    } else if (T_ORA_ROWSCN == pseudo_columns.at(i)->get_expr_type()
+               || T_PSEUDO_OLD_NEW_COL == pseudo_columns.at(i)->get_expr_type()) {
       ObPseudoColumnRawExpr *pseudo_col1 = static_cast<ObPseudoColumnRawExpr*>(other_pseudo_columns.at(i));
       ObPseudoColumnRawExpr *pseudo_col2 = static_cast<ObPseudoColumnRawExpr*>(pseudo_columns.at(i));
       if (pseudo_col1->get_table_id() == old_table_id) {
@@ -2272,7 +2277,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
-    } else if (is_not_null && NULL != constraints &&
+    } else if (is_not_null && !expr->is_const_raw_expr() &&
+               NULL != constraints &&
                OB_FAIL(constraints->push_back(const_cast<ObRawExpr*>(expr)))) {
       LOG_WARN("failed to push back constraint expr", K(ret));
     }
@@ -2352,7 +2358,7 @@ int ObTransformUtils::is_const_expr_not_null(ObNotNullContext &ctx,
     LOG_WARN("failed to calc const or calculable expr", K(ret));
   } 
   
-  if (OB_SUCC(ret) && got_result) {
+  if (OB_SUCC(ret) && got_result && !result.is_ext()) {
     if (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())) {
       is_not_null = false;
       is_null = true;
@@ -2483,8 +2489,13 @@ int ObTransformUtils::is_general_expr_not_null(ObNotNullContext &ctx,
       }
     }
   } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
-    if (OB_FAIL(check_list.push_back(expr->get_param_expr(0)))) {
-      LOG_WARN("failed to append check list", K(ret));
+    const ObExprResType &res_type = expr->get_result_type();
+    if (res_type.is_numeric_type()
+        || res_type.is_string_or_lob_locator_type()
+        || res_type.is_oracle_temporal_type()) {
+      if (OB_FAIL(check_list.push_back(expr->get_param_expr(0)))) {
+        LOG_WARN("failed to append check list", K(ret));
+      }
     }
   } else if (T_FUN_SYS_NVL == expr->get_expr_type()) {
     if (OB_FAIL(check_list.push_back(expr->get_param_expr(1)))) {
@@ -2876,6 +2887,7 @@ inline bool is_valid_sys_func(const ObItemType type)
     T_FUN_SYS_LEAST,
     T_FUN_SYS_GREATEST,
     T_FUN_SYS_CAST,
+    T_FUN_SYS_TIMESTAMP,
   };
   for (int64_t i = 0; !ret && i < sizeof(WHITE_LIST) / sizeof(ObItemType); ++i) {
     ret = (type == WHITE_LIST[i]);
@@ -3038,9 +3050,13 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    OB_ISNULL(right = expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcept null param expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left)) ||
-                   OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right))) {
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(left, left)) ||
+                   OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(right, right))) {
           LOG_WARN("failed to get expr without lossless cast", K(ret));
+        } else if (IS_BASIC_CMP_OP(expr->get_expr_type()) &&
+                   (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                    OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
+          LOG_WARN("failed to get column expr without nvl", K(ret));
         } else if (left->is_column_ref_expr() &&
                    table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {
           if (right->get_relation_ids().has_member(stmt->get_table_bit_index(table_id))) {
@@ -3480,27 +3496,50 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   ObRawExpr *condition_expr = NULL;
   ObArenaAllocator alloc(ObMemAttr(MTL_ID(), "RewriteMinMax"));
   void *tmp_ptr = NULL;
-  ObQueryRange *query_range = NULL;
   const ParamStore *params = NULL;
   ObQueryCtx *query_ctx = NULL;
+  ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())
-      || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
+      || OB_ISNULL(query_ctx = stmt->get_query_ctx())
+      || OB_ISNULL(session = ctx->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
+  } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
+                                                   table_id,
+                                                   index_cols,
+                                                   range_columns))) {
+    LOG_WARN("failed to get index column items by index cols", K(ret));
+  } else if (session->is_enable_new_query_range() &&
+            ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
+            ObSQLUtils::is_opt_feature_version_ge_425_or_435(query_ctx->optimizer_features_enable_version_)) {
+    ObPreRangeGraph *pre_range_graph = NULL;
+    params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
+    if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObPreRangeGraph))) ||
+        OB_ISNULL(pre_range_graph = new(tmp_ptr)ObPreRangeGraph(alloc))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pre range graph", K(ret));
+    } else if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns,
+                                                                        predicate_exprs,
+                                                                        ctx->exec_ctx_,
+                                                                        NULL,
+                                                                        params))) {
+      LOG_WARN("failed to extract query range", K(ret));
+    } else if (pre_range_graph->get_range_exprs().count() != predicate_exprs.count()) {
+      is_match = false;
+    }
+    if (OB_NOT_NULL(pre_range_graph)) {
+      pre_range_graph->~ObPreRangeGraph();
+      pre_range_graph = NULL;
+    }
   } else {
+    ObQueryRange *query_range = NULL;
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx->session_info_);
     params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObQueryRange)))
-               || OB_ISNULL(query_range = new(tmp_ptr)ObQueryRange(alloc))) {
+    if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObQueryRange))) ||
+        OB_ISNULL(query_range = new(tmp_ptr)ObQueryRange(alloc))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for query range", K(ret));
-    } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
-                                                     table_id,
-                                                     index_cols,
-                                                     range_columns))) {
-      LOG_WARN("failed to get index column items by index cols", K(ret));
     } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
                                                                     predicate_exprs,
                                                                     dtc_params,
@@ -4073,146 +4112,6 @@ int ObTransformUtils::is_foreign_key_rely(ObSQLSessionInfo* session_info,
   return ret;
 }
 
-int ObTransformUtils::check_stmt_limit_validity(ObTransformerCtx *ctx,
-                                                const ObSelectStmt *select_stmt,
-                                                bool &is_valid,
-                                                bool &need_add_const_constraint)
-{
-  int ret = OB_SUCCESS;
-  bool has_rownum = false;
-  ObPhysicalPlanCtx *plan_ctx = NULL;
-  is_valid = false;
-  if (OB_ISNULL(select_stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_) ||
-      OB_ISNULL(plan_ctx = ctx->exec_ctx_->get_physical_plan_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(ctx),
-                                    K(ctx->exec_ctx_), K(plan_ctx));
-  } else if (!select_stmt->has_limit() ||
-             select_stmt->get_offset_expr() != NULL ||
-             select_stmt->get_limit_percent_expr() != NULL) {
-    //do nothing
-  } else if (select_stmt->has_distinct()
-             || select_stmt->has_group_by()
-             || select_stmt->is_set_stmt()
-             || select_stmt->is_hierarchical_query()
-             || select_stmt->has_order_by()
-             || select_stmt->is_contains_assignment()
-             || select_stmt->has_window_function()
-             || select_stmt->has_sequence()) {
-    /*do nothing*/
-  } else if (OB_FAIL(select_stmt->has_rownum(has_rownum))) {
-    LOG_WARN("failed to has rownum", K(ret));
-  } else if (has_rownum) {
-    /*do nothing */
-  } else {
-    bool is_null_value = false;
-    int64_t limit_value = 0;
-    if (OB_FAIL(ObTransformUtils::get_expr_int_value(select_stmt->get_limit_expr(),
-                                                  &plan_ctx->get_param_store(),
-                                                  ctx->exec_ctx_,
-                                                  ctx->allocator_,
-                                                  limit_value,
-                                                  is_null_value))) {
-      LOG_WARN("failed to get_expr_int_value", K(ret));
-    } else if (!is_null_value && limit_value >= 1) {
-      is_valid = true;
-      //Just in case different parameters hit same plan, firstly we need add const param constraint
-      need_add_const_constraint = true;
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::check_stmt_is_non_sens_dul_vals(ObTransformerCtx *ctx,
-                                                      const ObDMLStmt *upper_stmt,
-                                                      const ObDMLStmt *stmt,
-                                                      bool &is_match,
-                                                      bool &need_add_limit_constraint)
-{
-  int ret = OB_SUCCESS;
-  is_match = false;
-  need_add_limit_constraint = false;
-  if (OB_ISNULL(upper_stmt) || OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(upper_stmt), K(stmt), K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < upper_stmt->get_condition_size(); ++i) {
-      const ObRawExpr *cond_expr = upper_stmt->get_condition_expr(i);
-      if (OB_ISNULL(cond_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null1", K(ret), K(cond_expr));
-      } else if (OB_FAIL(check_stmt_is_non_sens_dul_vals_rec(ctx, 
-                                                            stmt, 
-                                                            cond_expr, 
-                                                            is_match, 
-                                                            need_add_limit_constraint))) {
-        LOG_WARN("failed to check semi join info", K(ret), K(*cond_expr));
-      } else {
-        /*do nothing*/
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::check_stmt_is_non_sens_dul_vals_rec(ObTransformerCtx *ctx,
-                                              const ObDMLStmt *stmt,
-                                              const ObRawExpr *expr,
-                                              bool &is_match,
-                                              bool &need_add_limit_constraint)
-{
-  int ret = OB_SUCCESS;
-  const ObRawExpr *param_expr = NULL;
-  const ObRawExpr *param_child = NULL;  // child of param
-  if (OB_ISNULL(ctx) || OB_ISNULL(stmt) || OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (is_match) {
-    /*do nothing*/
-  } else if (T_OP_EXISTS == expr->get_expr_type() ||
-                 T_OP_NOT_EXISTS == expr->get_expr_type()) {
-    if (OB_ISNULL(param_child = expr->get_param_expr(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(param_child), K(ret));
-    } else if (!param_child->is_query_ref_expr()) {
-      /*do nothing*/
-    } else if (static_cast<const ObQueryRefRawExpr *>(param_child)->get_ref_stmt() == stmt) {
-      if (static_cast<const ObQueryRefRawExpr *>(param_child)->get_ref_stmt()->is_spj()) {
-        is_match = true;
-      } else if (OB_FAIL(check_stmt_limit_validity(ctx,
-                                                   static_cast<const ObQueryRefRawExpr *>(param_child)->get_ref_stmt(),
-                                                   is_match,
-                                                   need_add_limit_constraint))) {
-        LOG_WARN("failed to check stmt limit validity", K(ret));
-      } 
-    }
-  } else if (expr->has_flag(IS_WITH_ALL) ||
-                 expr->has_flag(IS_WITH_ANY)) {
-    if (OB_ISNULL(param_expr = expr->get_param_expr(1))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL pointer error", K(param_expr), K(ret));
-    } else if (!param_expr->is_query_ref_expr()) {
-      /*do nothing*/
-    } else if (static_cast<const ObQueryRefRawExpr *>(param_expr)->get_ref_stmt() == stmt) {
-      is_match = static_cast<const ObQueryRefRawExpr *>(param_expr)->get_ref_stmt()->is_spj();
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      const ObRawExpr *param = expr->get_param_expr(i);
-      if (OB_ISNULL(param)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null param", K(ret), K(*param));
-      } else if (OB_FAIL(SMART_CALL(check_stmt_is_non_sens_dul_vals_rec(ctx,
-                                                                      stmt,
-                                                                      param,
-                                                                      is_match,
-                                                                      need_add_limit_constraint)))) {
-        LOG_WARN("failed to check semi join info recursively", K(ret), K(*param));
-      }
-    }
-  }
-  return ret;
-}                                              
 int ObTransformUtils::check_exprs_unique(const ObDMLStmt &stmt,
                                          TableItem *table,
                                          const ObIArray<ObRawExpr*> &exprs,
@@ -4545,6 +4444,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
                                               check_helper.session_info_,
                                               stmt, set_exprs, equal_conds))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
+  } else if (FALSE_IT(res_info.equal_sets_.reset())) {
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(check_helper.alloc_, equal_conds,
                                                         tmp_equal_sets, res_info.equal_sets_))) {
     LOG_WARN("failed to compute compute equal set", K(ret));
@@ -4698,7 +4598,7 @@ void ObTransformUtils::UniqueCheckInfo::reset()
 {
   table_set_.clear_all();
   const_exprs_.reuse();
-  equal_sets_.reuse();
+  equal_sets_.reset();
   fd_sets_.reuse();
   candi_fd_sets_.reuse();
   not_null_.reuse();
@@ -4916,8 +4816,8 @@ int ObTransformUtils::compute_basic_table_property(const ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 8> cur_cond_exprs;
   ObSqlBitSet<> table_set;
   ObSqlSchemaGuard *schema_guard = NULL;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(check_helper.alloc_)
       || OB_ISNULL(check_helper.fd_factory_)
       || OB_ISNULL(check_helper.schema_checker_)
@@ -5491,10 +5391,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (source_ids.is_superset2(child1->get_relation_ids())
                   && target_ids.is_superset2(child2->get_relation_ids())) {
         // child2 contain target exprs
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child1->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child1->get_result_type(),
+                                                                  child2->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child1 expr type as the (child1, child2) compare type");
@@ -5508,10 +5407,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (target_ids.is_superset2(child1->get_relation_ids())
                   && source_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain target column
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child2->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child2->get_result_type(),
+                                                                  child1->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5525,10 +5423,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (target_ids.is_superset2(child1->get_relation_ids())
                   && target_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain target column and child2 contain target column too.
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child1->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            child2->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child1->get_result_type(),
+                                                                  child2->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5540,10 +5437,9 @@ int ObTransformUtils::get_table_joined_exprs(const ObSqlBitSet<> &source_ids,
       } else if (source_ids.is_superset2(child1->get_relation_ids())
                   && source_ids.is_superset2(child2->get_relation_ids())) {
         // child1 contain source column and child2 contain source column too.
-        if (OB_FAIL(ObRelationalExprOperator::is_equivalent(child2->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            child1->get_result_type(),
-                                                            is_valid))) {
+        if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(child2->get_result_type(),
+                                                                  child1->get_result_type(),
+                                                                  is_valid))) {
           LOG_WARN("failed to check expr is equivalent", K(ret));
         } else if (!is_valid) {
           LOG_TRACE("can not use child2 expr type as the (child2, child1) compare type");
@@ -5631,9 +5527,8 @@ int ObTransformUtils::is_equal_correlation(const ObIArray<ObExecParamRawExpr *> 
       }
     }
     if (OB_SUCC(ret) && is_valid) {
-      if (OB_FAIL(ObRelationalExprOperator::is_equivalent(
-                    left->get_result_type(), right->get_result_type(),
-                    right->get_result_type(), is_valid))) {
+      if (OB_FAIL(ObRelationalExprOperator::is_equal_transitive(
+                    left->get_result_type(), right->get_result_type(), is_valid))) {
         LOG_WARN("failed to check is expr result equivalent", K(ret));
       } else if (!is_valid) {
         // left = right <=> group by right (right = right)
@@ -6101,6 +5996,22 @@ int StmtUniqueKeyProvider::generate_unique_key(ObTransformerCtx *ctx,
   return ret;
 }
 
+int StmtUniqueKeyProvider::formalize_stmt_expr_reference_for_temp_table(ObTransformerCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmts_.count(); ++i) {
+    ObSelectStmt *sel_stmt = sel_stmts_.at(i);
+    if (OB_ISNULL(sel_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null temp table stmt", K(ret));
+    } else if (OB_FAIL(sel_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                               ctx->session_info_))) {
+      LOG_WARN("failed to formalize stmt expr reference for temp table", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
                                           ObTransformerCtx *ctx,
                                           TableItem *source_table,
@@ -6252,11 +6163,9 @@ int ObTransformUtils::check_table_item_containment(ObDMLStmt *source_stmt,
   } else if (source_table->is_basic_table() && target_table->is_basic_table()) {
     QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
     //zhenling.zzg 修复存在partition hint的情况下，正确性bug
-    if (OB_FAIL(ObStmtComparer::compare_basic_table_item(source_stmt,
-                                                        source_table,
-                                                        target_stmt,
-                                                        target_table,
-                                                        relation))) {
+    if (OB_FAIL(ObStmtComparer::compare_basic_table_item(source_table,
+                                                         target_table,
+                                                         relation))) {
       LOG_WARN("compare table part failed",K(ret), K(source_table), K(target_table));
     } else if (QueryRelation::QUERY_LEFT_SUBSET == relation ||
                QueryRelation::QUERY_EQUAL == relation) {
@@ -7171,7 +7080,8 @@ int ObTransformUtils::check_need_pushdown_pseudo_column(const ObRawExpr &expr,
   int ret = OB_SUCCESS;
   need_pushdown = false;
   switch (expr.get_expr_type()) {
-    case T_ORA_ROWSCN: {
+    case T_ORA_ROWSCN:
+    case T_PSEUDO_OLD_NEW_COL: {
       need_pushdown = true;
       break;
     }
@@ -7937,7 +7847,7 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
 {
   int ret = OB_SUCCESS;
   int64_t set_size = 32;
-  hash::ObHashSet<uint64_t> expr_set;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
   if (OB_ISNULL(parent)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(parent));
@@ -8001,13 +7911,15 @@ int ObTransformUtils::remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
 }
 
 int ObTransformUtils::append_hashset(ObRawExpr *expr,
-                                     hash::ObHashSet<uint64_t> &expr_set)
+                                     hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set)
 {
   int ret = OB_SUCCESS;
   uint64_t key = reinterpret_cast<uint64_t>(expr);
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     // do nothing
   } else if (OB_FAIL(expr_set.set_refactored(key))) {
@@ -8024,7 +7936,7 @@ int ObTransformUtils::append_hashset(ObRawExpr *expr,
 }
 
 int ObTransformUtils::find_hashset(ObRawExpr *expr,
-                                   hash::ObHashSet<uint64_t> &expr_set,
+                                   hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                    ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
@@ -8032,6 +7944,8 @@ int ObTransformUtils::find_hashset(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     if (OB_FAIL(add_var_to_array_no_dup(common_exprs, expr))) {
       LOG_WARN("failed to append expr", K(ret));
@@ -10891,9 +10805,10 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
     const ObObjParam &right_param = param_store.at(idx_right);
     if (!check_objparam_abs_equal(left_param, right_param)) {
       //do nothing.
-    } else if (OB_FAIL(add_neg_or_pos_constraint(trans_ctx,
-                                                 static_cast<ObConstRawExpr*>(expr_r),
-                                                 check_objparam_negative(right_param)))) {
+    } else if (OB_FAIL(add_compare_int_constraint(trans_ctx,
+                                                   static_cast<ObConstRawExpr*>(expr_r),
+                                                   check_objparam_negative(right_param) ? T_OP_LT : T_OP_GE,
+                                                   0))) {
       LOG_WARN("fail to add positive constraint to grouping sets");
     } else if (check_objparam_negative(left_param) && !check_objparam_negative(right_param)) {
       // replace the expr with a T_OP_NEG expr who's child is groupby_exprs.at(k);
@@ -10942,43 +10857,52 @@ bool ObTransformUtils::check_objparam_negative(const ObObjParam &obj1) {
   return is_neg;
 }
 
-int ObTransformUtils::add_neg_or_pos_constraint(ObTransformerCtx *trans_ctx,
-                                              ObRawExpr *expr,
-                                              bool is_negative )
+int ObTransformUtils::add_compare_int_constraint(ObTransformerCtx *trans_ctx,
+                                                 ObRawExpr *expr,
+                                                 const ObItemType op_type,
+                                                 int64_t val)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = NULL;
   if (OB_ISNULL(trans_ctx) || OB_ISNULL(expr) || OB_ISNULL(trans_ctx->exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null expr", K(ret));
+    LOG_WARN("unexpected null expr", K(ret), K(trans_ctx), K(expr));
   } else if (OB_ISNULL(expr_factory = trans_ctx->exec_ctx_->get_expr_factory())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret));
-  } else if (!expr->is_static_const_expr()) {
+  } else if (OB_UNLIKELY(T_OP_EQ != op_type
+                         && T_OP_LE != op_type
+                         && T_OP_LT != op_type
+                         && T_OP_GE != op_type
+                         && T_OP_GT != op_type
+                         && T_OP_NE != op_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected op type", K(ret), K(op_type));
+  } else if (OB_UNLIKELY(!expr->is_static_const_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is not static const", K(ret), KPC(expr));
+  } else if (!expr->has_flag(CNT_STATIC_PARAM)) {
     // do nothing
   } else {
     // construct expr >= 0;
-    ObConstRawExpr *zero_expr = NULL;
+    ObConstRawExpr *int_expr = NULL;
     ObOpRawExpr *true_expr = NULL;
-    if (OB_FAIL(expr_factory->create_raw_expr(T_INT, zero_expr))) {
+    if (OB_FAIL(expr_factory->create_raw_expr(T_INT, int_expr))) {
       LOG_WARN("create raw expr fail", K(ret));
-    } else if (OB_ISNULL(zero_expr)) {
+    } else if (OB_ISNULL(int_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (!is_negative && OB_FAIL(expr_factory->create_raw_expr(T_OP_GE, true_expr))) {
-      LOG_WARN("create raw expr fail", K(ret));
-    } else if (is_negative && OB_FAIL(expr_factory->create_raw_expr(T_OP_LT, true_expr))) {
+    } else if (OB_FAIL(expr_factory->create_raw_expr(op_type, true_expr))) {
       LOG_WARN("create raw expr fail", K(ret));
     } else if (OB_ISNULL(true_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (OB_FAIL(true_expr->set_param_exprs(static_cast<ObRawExpr*>(expr),
-                                                      static_cast<ObRawExpr*>(zero_expr)))) {
+    } else if (OB_FAIL(true_expr->set_param_exprs(expr, int_expr))) {
       LOG_WARN("set param expr fail", K(ret));
     } else {
       ObObj obj;
-      obj.set_int(ObIntType, 0);
-      zero_expr->set_value(obj);
+      obj.set_int(ObIntType, val);
+      int_expr->set_value(obj);
     }
 
     if (OB_SUCC(ret)) {
@@ -11203,10 +11127,13 @@ int ObTransformUtils::check_select_item_need_remove(const ObSelectStmt *stmt,
       ret = SMART_CALL(check_select_item_need_remove(child_stmts.at(i), child_idx, need_remove));
     }
     for (int64_t i = 0; OB_SUCC(ret) && need_remove && i < stmt->get_order_item_size(); ++i) {
+      ObRawExpr *find_expr = NULL;
       if (OB_ISNULL(order_expr = stmt->get_order_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null order expr", K(ret));
-      } else if (order_expr == expr) {
+      } else if (OB_FAIL(find_parent_expr(order_expr, expr, find_expr))) {
+        LOG_WARN("failed to find select expr in order_expr", K(ret));
+      } else if (NULL != find_expr) {
         need_remove = false;
       }
     }
@@ -11301,6 +11228,8 @@ int ObTransformUtils::check_correlated_exprs_can_pullup_for_set(const ObIArray<O
   if (subquery.get_set_op() != ObSelectStmt::UNION || subquery.is_recursive_union()) {
     //TODO: pullup correlated exprs for intersect and minus
     can_pullup = !subquery.is_set_distinct();
+  } else if (subquery.has_order_by()) {
+    can_pullup = false;
   }
   ObSEArray<ObRawExpr*, 4> left_select_exprs;
   ObSEArray<ObRawExpr*, 4> right_select_exprs;
@@ -11344,7 +11273,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                                             const ObIArray<ObExecParamRawExpr *> &right_exec_params,
                                                             bool &is_valid,
                                                             ObIArray<ObRawExpr*> &left_new_select_exprs,
-                                                            ObIArray<ObRawExpr*> &right_new_select_exprs)
+                                                            ObIArray<ObRawExpr*> &right_new_select_exprs,
+                                                            const bool ignore_select_item)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -11422,7 +11352,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
                                         left_select_exprs,
-                                        left_new_select_exprs))) {
+                                        left_new_select_exprs,
+                                        ignore_select_item))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
                                                left_where_exprs,
@@ -11434,7 +11365,8 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
                                                right_select_exprs,
-                                               right_new_select_exprs))) {
+                                               right_new_select_exprs,
+                                               ignore_select_item))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
                                                right_where_exprs,
@@ -11631,11 +11563,15 @@ int ObTransformUtils::is_from_item_correlated(
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_json_table()) {
-      if (OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      if (table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_expr_, is_correlated))) {
-        LOG_WARN("failed to check function table expr correlated", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_correlated && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (OB_FAIL(is_correlated_expr(exec_params, table->json_table_def_->doc_exprs_.at(j), is_correlated))) {
+            LOG_WARN("failed to check function table expr correlated", K(ret));
+          }
+        }
       }
     } else if (table->is_values_table()) {
       if (OB_ISNULL(table->values_table_def_)) {
@@ -11898,10 +11834,17 @@ int ObTransformUtils::check_result_type_same(ObRawExpr* left_expr,
   * Separate spj and pull up related expressions
   * You need to call check_correlated_exprs_can_pullup before calling the interface
   * Ensure that all related expressions can be pulled up
+  * the params ignore_select_item and skip_const_select_item are both used to indicate
+  * whether the const select item can be skipped when pullup correlated exprs.
+  * set ignore_select_item to true when the subquery is in T_OP_EXISTS/T_OP_NOT_EXISTS.
+  * DO NOT explicit set skip_const_select_item, it will be set to true only when
+  * ignore_select_item is false and the subquery is child of a set stmt
   */
 int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                              ObSelectStmt *&subquery,
-                                                             ObTransformerCtx *ctx)
+                                                             ObTransformerCtx *ctx,
+                                                             const bool ignore_select_item,
+                                                             const bool skip_const_select_item)
 {
   int ret = OB_SUCCESS;
   ObStmtFactory *stmt_factory = NULL;
@@ -11917,7 +11860,7 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt_factory), K(view_stmt));
   } else if (view_stmt->is_set_stmt()) {
-    if (OB_FAIL(create_spj_and_pullup_correlated_exprs_for_set(exec_params, view_stmt, ctx))) {
+    if (OB_FAIL(create_spj_and_pullup_correlated_exprs_for_set(exec_params, view_stmt, ctx, ignore_select_item))) {
       LOG_WARN("failed to create spj without correlated exprs for set", K(ret));
     } else {
       subquery = view_stmt;
@@ -11940,7 +11883,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
   } else if (OB_FAIL(pullup_correlated_select_expr(exec_params,
                                                    *subquery,
                                                    *view_stmt,
-                                                   new_select_list))) {
+                                                   new_select_list,
+                                                   skip_const_select_item))) {
     LOG_WARN("failed to pullup correlated select expr", K(ret));
   } else if (OB_FAIL(pullup_correlated_conditions(exec_params,
                                                   view_stmt->get_having_exprs(),
@@ -11970,7 +11914,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
       if (OB_FAIL(replace_none_correlated_expr(item.expr_,
                                                exec_params,
                                                pos, 
-                                               new_column_list))) {
+                                               new_column_list,
+                                               skip_const_select_item))) {
         LOG_WARN("failed to replace expr", K(ret));
       }
     }
@@ -11995,7 +11940,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObIArray<ObEx
 
 int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                                      ObSelectStmt *&stmt,
-                                                                     ObTransformerCtx *ctx)
+                                                                     ObTransformerCtx *ctx,
+                                                                     const bool ignore_select_item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
@@ -12028,7 +11974,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
                                                                  exec_params,
                                                                  can_pullup,
                                                                  left_new_select_exprs.at(i),
-                                                                 right_new_select_exprs.at(i)))) {
+                                                                 right_new_select_exprs.at(i),
+                                                                 ignore_select_item))) {
           LOG_WARN("failed to check correlated subquery isomorphic", K(ret));                                                        
         }
       }
@@ -12037,10 +11984,11 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
         ObSelectStmt *query = set_queries.at(i);
         if (OB_ISNULL(query)) {
           ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null stmt", K(ret));
+          LOG_WARN("unexpect null stmt", K(ret));
         // somehow, the following implemenation is quite tircky,
         // the function actually modify the origin set stmt
-        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(exec_params, query, ctx))) {
+        } else if (OB_FAIL(create_spj_and_pullup_correlated_exprs(exec_params, query, ctx,
+                                                        ignore_select_item, ignore_select_item))) {
           LOG_WARN("failed to create spj", K(ret));
         } else if (0 < i &&
                   OB_FAIL(adjust_select_item_pos(right_new_select_exprs.at(i),
@@ -12074,6 +12022,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs_for_set(const ObIAr
       } else if (OB_FAIL(stmt->create_select_list_for_set_stmt(*ctx->expr_factory_))) {
         LOG_WARN("failed to create select list for union", K(ret));
       } else {
+        first_query->set_limit_offset(stmt->get_limit_expr(), stmt->get_offset_expr());
+        stmt->set_limit_offset(NULL, NULL);
         view_table->ref_query_ = stmt;
         stmt = first_query;
       }
@@ -12177,14 +12127,16 @@ int ObTransformUtils::adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_
 int ObTransformUtils::replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
                                                     const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     int &pos,
-                                                    ObIArray<ObRawExpr*> &new_column_list)
+                                                    ObIArray<ObRawExpr*> &new_column_list,
+                                                    const bool skip_const)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     if (OB_FAIL(replace_none_correlated_expr(exprs.at(i),
                                              exec_params,
                                              pos,
-                                             new_column_list))) {
+                                             new_column_list,
+                                             skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }
@@ -12194,7 +12146,8 @@ int ObTransformUtils::replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
 int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
                                                   const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                   int &pos,
-                                                  ObIArray<ObRawExpr*> &new_column_list)
+                                                  ObIArray<ObRawExpr*> &new_column_list,
+                                                  const bool skip_const)
 {
   int ret = OB_SUCCESS;
   bool is_correlated = false;
@@ -12202,7 +12155,7 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
-  } else if (expr->is_static_const_expr()) {
+  } else if (skip_const && expr->is_static_const_expr()) {
     //do nothing
   } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
     LOG_WARN("failed to check is scalar expr", K(ret));
@@ -12226,7 +12179,8 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
       if (OB_FAIL(SMART_CALL(replace_none_correlated_expr(expr->get_param_expr(i),
                                                           exec_params,
                                                           pos,
-                                                          new_column_list)))) {
+                                                          new_column_list,
+                                                          skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -12236,13 +12190,14 @@ int ObTransformUtils::replace_none_correlated_expr(ObRawExpr *&expr,
 
 int ObTransformUtils::pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                               ObIArray<ObRawExpr*> &exprs,
-                                              ObIArray<ObRawExpr*> &new_select_list)
+                                              ObIArray<ObRawExpr*> &new_select_list,
+                                              const bool skip_const)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     ObRawExpr *expr = exprs.at(i);
     bool is_correlated = false;
-    if (OB_FAIL(pullup_correlated_expr(exec_params, expr, new_select_list, is_correlated))) {
+    if (OB_FAIL(pullup_correlated_expr(exec_params, expr, new_select_list, is_correlated, skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }
@@ -12252,7 +12207,8 @@ int ObTransformUtils::pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr 
 int ObTransformUtils::pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                              ObRawExpr *expr,
                                              ObIArray<ObRawExpr*> &new_select_list,
-                                             bool &is_correlated)
+                                             bool &is_correlated,
+                                             const bool skip_const)
 {
   int ret = OB_SUCCESS;
   is_correlated = false;
@@ -12260,7 +12216,7 @@ int ObTransformUtils::pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
-  } else if (expr->is_static_const_expr()) {
+  } else if (skip_const && expr->is_static_const_expr()) {
     //do nothing
   } else if (OB_FAIL(is_scalar_expr(expr, is_scalar))) {
     LOG_WARN("failed to check is scalar expr", K(ret));
@@ -12281,7 +12237,8 @@ int ObTransformUtils::pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *
       if (OB_FAIL(SMART_CALL(pullup_correlated_expr(exec_params,
                                                     expr->get_param_expr(i),
                                                     new_select_list,
-                                                    param_correlated)))) {
+                                                    param_correlated,
+                                                    skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -12292,7 +12249,8 @@ int ObTransformUtils::pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *
 int ObTransformUtils::pullup_correlated_select_expr(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt &stmt,
                                                     ObSelectStmt &view,
-                                                    ObIArray<ObRawExpr*> &new_select_list)
+                                                    ObIArray<ObRawExpr*> &new_select_list,
+                                                    const bool skip_const)
 {
   int ret = OB_SUCCESS;
   ObIArray<SelectItem> &select_items = view.get_select_items();
@@ -12305,7 +12263,8 @@ int ObTransformUtils::pullup_correlated_select_expr(const ObIArray<ObExecParamRa
     } else if (OB_FAIL(pullup_correlated_expr(exec_params,
                                               expr,
                                               new_select_list,
-                                              is_correlated))) {
+                                              is_correlated,
+                                              skip_const))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     }
   }
@@ -12657,31 +12616,48 @@ int ObTransformUtils::extract_const_bool_expr_info(ObTransformerCtx *ctx,
                                                    common::ObIArray<int64_t> &false_exprs)
 {
   int ret = OB_SUCCESS;
+  bool is_true = false;
+  bool is_false = false;
+  ObRawExpr *temp = NULL;
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx), K(ret));
   } else {
-    ObObj result;
-    bool is_true = false;
-    bool is_valid = false;
-    ObRawExpr *temp = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
-      is_valid = false;
       if (OB_ISNULL(temp = exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(calc_const_expr_result(temp, ctx, result, is_valid))) {
-        LOG_WARN("fail to calc const expr", K(ret));
-      }
-      if (OB_FAIL(ret) || !is_valid) {
-      } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_true))) {
-        LOG_WARN("failed to get bool value", K(ret));
-      } else if (!is_true && OB_FAIL(false_exprs.push_back(i))) {
-        LOG_WARN("failed to push back into array", K(ret));
+      } else if (OB_FAIL(extract_const_bool_expr_result(ctx, temp, is_true, is_false))) {
+        LOG_WARN("failed to extract_const_bool_expr_result", K(ret));
       } else if (is_true && OB_FAIL(true_exprs.push_back(i))) {
+        LOG_WARN("failed to push back into array", K(ret));
+      } else if (is_false && OB_FAIL(false_exprs.push_back(i))) {
         LOG_WARN("failed to push back into array", K(ret));
       } else { /*do nothing*/ }
     }
+  }
+  return ret;
+}
+
+
+int ObTransformUtils::extract_const_bool_expr_result(ObTransformerCtx *ctx,
+                                                   ObRawExpr *expr,
+                                                   bool &is_true,
+                                                   bool &is_false)
+{
+  int ret = OB_SUCCESS;
+  ObObj result;
+  bool is_valid = false;
+  is_true = false;
+  is_false = false;
+  if (OB_FAIL(calc_const_expr_result(expr, ctx, result, is_valid))) {
+    LOG_WARN("fail to calc const expr", K(ret));
+  } else if (!is_valid) {
+    /* do nothing */
+  } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_true))) {
+    LOG_WARN("failed to get bool value", K(ret));
+  } else if (!is_true) {
+    is_false = true;
   }
   return ret;
 }
@@ -13030,130 +13006,6 @@ int ObTransformUtils::check_joined_table_combinable(ObDMLStmt *stmt,
     }
   } else {
     //TODO: check left child
-  }
-  return ret;
-}
-
-int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
-                                                            TableItem *view_table,
-                                                            ObIArray<ObRawExpr*> &outer_join_conditions,
-                                                            bool &combinable)
-{
-  int ret = OB_SUCCESS;
-  combinable = false;
-  ObSelectStmt *child_stmt = NULL;
-  ObSqlBitSet<> outer_expr_relation_ids;
-  ObSEArray<ObRawExpr*, 4> view_exprs;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) || 
-      !view_table->is_generated_table() || 
-      OB_ISNULL(child_stmt = view_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (OB_FAIL(get_view_exprs(parent_stmt, 
-                                    view_table, 
-                                    outer_join_conditions, 
-                                    view_exprs))) {
-    LOG_WARN("failed to get view exprs", K(ret));
-  } else if (OB_FAIL(get_exprs_relation_ids(view_exprs, 
-                                            outer_expr_relation_ids))) {
-    LOG_WARN("failed to add expr relation ids", K(ret));
-  } else if (OB_FAIL(get_exprs_relation_ids(child_stmt->get_condition_exprs(), 
-                                            outer_expr_relation_ids))) {
-    LOG_WARN("failed to add expr relation ids", K(ret));
-  } else {
-    ObIArray<JoinedTable*> &joined_tables = child_stmt->get_joined_tables();
-    ObIArray<SemiInfo*> &semi_infos = child_stmt->get_semi_infos();
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-      if (OB_FAIL(get_left_rel_ids_from_semi_info(child_stmt, 
-                                                  semi_infos.at(i), 
-                                                  outer_expr_relation_ids))) {
-        LOG_WARN("failed to get left table ids from semi info", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !combinable && i < joined_tables.count(); ++i) {
-      if (OB_FAIL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                              joined_tables.at(i), 
-                                                              outer_expr_relation_ids, 
-                                                              combinable))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::inner_check_left_join_right_table_combinable(ObSelectStmt *child_stmt, 
-                                                                  TableItem *table, 
-                                                                  ObSqlBitSet<> &outer_expr_relation_ids, 
-                                                                  bool &combinable)
-{
-  int ret = OB_SUCCESS;
-  combinable = false;
-  if (OB_ISNULL(child_stmt) || OB_ISNULL(table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (table->is_joined_table()) {
-    JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (LEFT_OUTER_JOIN == joined_table->joined_type_ ||
-        RIGHT_OUTER_JOIN == joined_table->joined_type_) {
-      ObSqlBitSet<> left_table_ids;
-      ObSqlBitSet<> right_table_ids;
-      ObRelIds left_ids;
-      TableItem *left_table = (LEFT_OUTER_JOIN == joined_table->joined_type_) ? 
-                                joined_table->left_table_ : 
-                                joined_table->right_table_;
-      TableItem *right_table = (RIGHT_OUTER_JOIN == joined_table->joined_type_) ? 
-                                joined_table->left_table_ : 
-                                joined_table->right_table_;
-      if (OB_ISNULL(left_table) || OB_ISNULL(right_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table", K(ret));
-      } else if (OB_FAIL(child_stmt->get_table_rel_ids(*right_table, right_table_ids))) {
-        LOG_WARN("failed to get table rel ids", K(ret));
-      } else if (outer_expr_relation_ids.overlap(right_table_ids)) {
-        combinable = false;
-      } else if (OB_FAIL(child_stmt->get_table_rel_ids(*left_table, left_table_ids))) {
-        LOG_WARN("failed to get table rel ids", K(ret));
-      } else if (OB_FAIL(left_ids.add_members(left_table_ids))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (OB_FAIL(is_null_reject_conditions(joined_table->join_conditions_,
-                                                   left_ids,
-                                                   combinable))) {
-        LOG_WARN("failed to check is null reject conditions", K(ret));
-      }
-      if (OB_SUCC(ret) && !combinable) {
-        if (OB_FAIL(ObTransformUtils::get_exprs_relation_ids(joined_table->join_conditions_, 
-                                                             outer_expr_relation_ids))) {
-          LOG_WARN("failed to add expr relation ids", K(ret));
-        } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt, 
-                                                                                  left_table,
-                                                                                  outer_expr_relation_ids, 
-                                                                                  combinable)))) {
-          LOG_WARN("failed to check left join`s right table combinable", K(ret));
-        }
-      }
-    } else if (INNER_JOIN == joined_table->joined_type_) {
-      if (OB_FAIL(get_exprs_relation_ids(joined_table->join_conditions_, 
-                                         outer_expr_relation_ids))) {
-        LOG_WARN("failed to add expr relation ids", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                                                joined_table->left_table_, 
-                                                                                outer_expr_relation_ids, 
-                                                                                combinable)))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      } else if (combinable) {
-        //find
-      } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                                                joined_table->right_table_, 
-                                                                                outer_expr_relation_ids, 
-                                                                                combinable)))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      }
-    } else {
-      //do nothing
-    }
-  } else {
-    //do nothing
   }
   return ret;
 }
@@ -14393,7 +14245,7 @@ int ObTransformUtils::get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
   return ret;
 }
 
-int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
+int ObTransformUtils::check_inline_temp_table_valid(ObSelectStmt *stmt, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> exprs;
@@ -14420,7 +14272,7 @@ int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is
       LOG_WARN("failed to get child stmts", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(check_expand_temp_table_valid(child_stmts.at(i), is_valid)))) {
+      if (OB_FAIL(SMART_CALL(check_inline_temp_table_valid(child_stmts.at(i), is_valid)))) {
         LOG_WARN("failed to check expand temp table valid", K(ret));
       }
     }
@@ -14428,7 +14280,7 @@ int ObTransformUtils::check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is
   return ret;
 }
 
-int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
+int ObTransformUtils::inline_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *temp_table_query = NULL;
@@ -14440,6 +14292,7 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
   for (int64_t j = 0; OB_SUCC(ret) && j < table_info.table_items_.count(); ++j) {
     TableItem *table = table_info.table_items_.at(j);
     ObDMLStmt *upper_stmt = table_info.upper_stmts_.at(j);
+    ObString qb_name;
     if (OB_ISNULL(table) || OB_ISNULL(upper_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -14486,6 +14339,10 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
       } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
                                                                    ctx->session_info_))) {
         LOG_WARN("failed to formalize stmt reference", K(ret));
+      } else if (OB_FAIL(child_stmt->get_qb_name(qb_name))) {
+        LOG_WARN("failed to get qb name", K(ret));
+      } else if (OB_FAIL(ctx->materialize_blacklist_.push_back(qb_name))) {
+        LOG_WARN("failed to push back qb name", K(ret));
       } else {
         table->ref_query_ = child_stmt;
       }
@@ -15156,6 +15013,62 @@ int ObTransformUtils::recursive_check_pushdown_into_set_valid(
       if (OB_SUCC(ret)) {
         parent_exprs.pop_back();
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::calc_column_repeat_rate(ObTransformerCtx *ctx,
+                                              const TableItem *table,
+                                              const ObIArray<uint64_t> &column_ids,
+                                              double &repeat_rate)
+{
+  int ret = OB_SUCCESS;
+  ObOptColumnStatHandle handle;
+  const ObTableSchema *table_schema = NULL;
+  ObGlobalTableStat table_stat;
+  double joint_ndv = 1;
+  repeat_rate = -1;
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->schema_checker_)
+      || OB_ISNULL(ctx->opt_stat_mgr_) || OB_ISNULL(ctx->session_info_)
+      || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx), K(table));
+  } else if (!table->is_basic_table()) {
+    // do nothing
+  } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(
+                              ctx->session_info_->get_effective_tenant_id(),
+                              table->ref_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), KPC(table));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ctx->opt_stat_mgr_->get_table_stat(ctx->session_info_->get_effective_tenant_id(),
+                                                        table->ref_id_,
+                                                        table_schema->is_partitioned_table() ? -1 : table->ref_id_,
+                                                        1,
+                                                        table_stat))) {
+    LOG_WARN("get table stat failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      ObOptColumnStatHandle column_handle;
+      if (OB_FAIL(ctx->opt_stat_mgr_->get_column_stat(ctx->session_info_->get_effective_tenant_id(),
+                                                      table->ref_id_,
+                                                      table_schema->is_partitioned_table() ? -1 : table->ref_id_,
+                                                      column_ids.at(i),
+                                                      column_handle))) {
+        LOG_WARN("failed to get column stat", K(ret), K(i), K(column_ids.at(i)));
+      } else if (OB_ISNULL(column_handle.stat_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column stat is NULL", K(ret));
+      } else if (i == 0) {
+        joint_ndv *= column_handle.stat_->get_num_distinct();
+      } else {
+        joint_ndv *= column_handle.stat_->get_num_distinct() / std::sqrt(2);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      repeat_rate = max(table_stat.get_row_count() / joint_ndv, 1.0);
     }
   }
   return ret;
@@ -15867,44 +15780,28 @@ int ObTransformUtils::check_contain_correlated_json_table(const ObDMLStmt *stmt,
         LOG_WARN("unexpect null table item", K(ret));
       } else if (!table->is_json_table()) {
         // do nothing
-      } else if (OB_ISNULL(table->json_table_def_) || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      } else if (OB_ISNULL(table->json_table_def_) || table->json_table_def_->doc_exprs_.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret), K(table->json_table_def_));
-      } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-        is_contain = true;
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && !is_contain && j < table->json_table_def_->doc_exprs_.count(); ++j) {
+          if (!table->json_table_def_->doc_exprs_.at(j)->get_relation_ids().is_empty()) {
+            is_contain = true;
+          }
+        }
       }
     }
   }
   return ret;
 }
 
-int ObTransformUtils::check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain) {
+int ObTransformUtils::check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
+                                                            bool &is_contain) {
   int ret = OB_SUCCESS;
   is_contain = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < exprs.count(); ++i) {
-    if (OB_FAIL(recursive_check_cannot_duplicate_expr(exprs.at(i), is_contain))) {
-      LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), K(exprs));
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::recursive_check_cannot_duplicate_expr(const ObRawExpr *expr, bool &is_contain) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)
-             || expr->has_flag(CNT_STATE_FUNC)
-             || expr->has_flag(CNT_RAND_FUNC)) {
-    is_contain = true;
-  } else if (!expr->is_deterministic()) {
-    is_contain = true;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(recursive_check_cannot_duplicate_expr(expr->get_param_expr(i), is_contain)))) {
-        LOG_WARN("fail to check cannot duplicate expr", K(ret), K(i), KPC(expr));
-      }
+    if (!exprs.at(i)->is_deterministic()) {
+      is_contain = true;
     }
   }
   return ret;
@@ -16033,12 +15930,12 @@ int ObTransformUtils::check_lateral_ref_outer_table(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain)
+int ObTransformUtils::check_contain_correlated_lateral_table(const ObDMLStmt *stmt, bool &is_contain)
 {
   int ret = OB_SUCCESS;
   is_contain = false;
   for (int i = 0; OB_SUCC(ret) && !is_contain && i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
+    const TableItem *table = stmt->get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -16452,7 +16349,12 @@ int ObTransformUtils::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
         match_index = has_index_matched;
         is_valid = (!need_match_index || has_index_matched) && is_valid;
       }
+    } else if (is_correlated) {
+      // If IN set subquery is already correlated, it can be beneficial
+      // to transform IN to EXISTS without introducing new correlated subquery
+      is_valid = true;
     } else {
+      // Otherwise, transform if one of set branches has a matching index
       is_valid = true;
       for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_set_query().count(); ++i) {
         has_index_matched = false;
@@ -16776,6 +16678,303 @@ int ObTransformUtils::check_enable_global_parallel_execution(ObDMLStmt *stmt,
   } else if (ObGlobalHint::DEFAULT_PARALLEL < session_dml_dop ||
              ObGlobalHint::DEFAULT_PARALLEL < session_query_dop) {
     enable_parallel = true;
+  }
+  return ret;
+}
+
+int ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx *ctx,
+                                                 const ObGlobalHint &global_hint,
+                                                 bool &is_enabled)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (global_hint.disable_cost_based_transform()) {
+    is_enabled = false;
+  } else {
+    is_enabled = TransPolicy::ENABLE_TRANS == ctx->cbqt_policy_ ||
+      (TransPolicy::LIMITED_TRANS == ctx->cbqt_policy_ &&
+        !(ctx->complex_cbqt_table_num_ > 0 && ctx->max_table_num_ > ctx->complex_cbqt_table_num_));
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
+                                         const ObSelectStmt *stmt,
+                                         bool &is_const_select)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  ObSEArray<ObRawExpr*, 4> const_exprs;
+  is_const_select = true;
+  if (OB_ISNULL(ctx) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx), K(stmt));
+  } else if (OB_FALSE_IT(ctx->equal_sets_.reset())) {
+  } else if (OB_FAIL(stmt->get_stmt_equal_sets(ctx->equal_sets_, alloc, true, true))) {
+    LOG_WARN("failed to get stmt equal sets", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
+                                                          const_exprs))) {
+    LOG_WARN("failed to compute const equivalent exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_const_select && i < stmt->get_select_item_size(); ++i) {
+    if (OB_FAIL(ObOptimizerUtil::is_const_expr(stmt->get_select_item(i).expr_,
+                                               ctx->equal_sets_,
+                                               const_exprs,
+                                               is_const_select))) {
+      LOG_WARN("failed to check is const expr", K(ret), K(i), KPC(stmt->get_select_item(i).expr_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx->equal_sets_.reset();
+  }
+  return ret;
+}
+
+// 搜集下层 stmt 中会被上层过滤空值的投影项
+int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+                                                      ObDMLStmt *stmt,
+                                                      ObIArray<ObRawExpr *> &conditions)
+{
+  int ret = OB_SUCCESS;
+  bool has_rownum = false;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(parent_stmt)) {
+    // do nothing
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
+    LOG_WARN("failed to check stmt has rownum", K(ret));
+  } else if (stmt->has_limit() ||
+             stmt->has_sequence() ||
+             has_rownum) {
+    // do nothing
+  } else if (stmt->is_select_stmt() &&
+             !static_cast<const ObSelectStmt*>(stmt)->get_window_func_exprs().empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::get_generated_table_item(*parent_stmt, stmt, table_item))) {
+    LOG_WARN("failed to get table_item", K(ret));
+  } else if (OB_NOT_NULL(table_item)) {
+    ObSEArray<ObColumnRefRawExpr *, 8> table_columns;
+    ObSEArray<ObRawExpr *, 16> all_conditions;
+    bool has_null_reject = false;
+    ObColumnRefRawExpr *col = NULL;
+    ObRawExpr *select_expr = NULL;
+    if (OB_FAIL(parent_stmt->get_column_exprs(table_item->table_id_, table_columns))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::get_table_related_condition(*parent_stmt,
+                                                                     table_item,
+                                                                     all_conditions))) {
+      LOG_WARN("failed to get table related condition", K(ret));
+    } else if (OB_LIKELY(stmt->is_select_stmt())) {
+      ObSelectStmt *child_stmt = static_cast<ObSelectStmt *>(stmt);
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
+        if (OB_ISNULL(col = table_columns.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_UNLIKELY(col->get_column_id() < OB_APP_MIN_COLUMN_ID ||
+                   col->get_column_id() - OB_APP_MIN_COLUMN_ID >= child_stmt->get_select_item_size())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected view column", K(ret), K(*col));
+        } else if (OB_ISNULL(select_expr = child_stmt->get_select_item(col->get_column_id() - OB_APP_MIN_COLUMN_ID).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (select_expr->has_flag(CNT_AGG) ||
+                   select_expr->has_flag(CNT_WINDOW_FUNC) ||
+                   select_expr->has_flag(CNT_SUB_QUERY)) {
+          // do nothing
+        } else if (OB_FAIL(ObTransformUtils::has_null_reject_condition(all_conditions,
+                                                                       col,
+                                                                       has_null_reject))) {
+          LOG_WARN("faield to check has null reject condition", K(ret));
+        } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// left join 右表视图合并后可能会丧失条件下推的机会，需要限制 merge 场景
+// 场景1：view 中只引用唯一一张表，可以直接 merge
+// 场景2：view 中引用多张表，要求合并后能构成 left join 链式连接，即 A ⟕ (B ⟕ C) => (A ⟕ B) ⟕ C
+int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
+                                                            TableItem *view_table,
+                                                            ObIArray<ObRawExpr*> &outer_join_conditions,
+                                                            bool &combinable)
+{
+  int ret = OB_SUCCESS;
+  combinable = false;
+  ObSelectStmt *child_stmt = NULL;
+  JoinedTable* view_joined_table = NULL;
+  ObSEArray<ObRawExpr*, 4> conditions;
+  bool is_valid_join_chain = false;
+  ObSqlBitSet<> target_rels;
+  ObSqlBitSet<> upper_join_left_rels; //dummy
+  ObSqlBitSet<> upper_join_right_rels;
+  ObSEArray<ObRawExpr*, 4> view_exprs;
+  ObSqlBitSet<> null_reject_rels;
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) ||
+      !view_table->is_generated_table() ||
+      OB_ISNULL(child_stmt = view_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (child_stmt->get_from_items().count() != 1 ||
+             child_stmt->get_semi_infos().count() > 0) {
+    // view 中存在 semi info 或者超过一个 from item 时，会在 join tree 上层分配 semi 或 inner join，
+    // 整体处于 left join 右侧时，无法进行 reorder，不合并
+  } else if (!child_stmt->get_from_item(0).is_joined_) {
+    combinable = true;
+  } else if (OB_ISNULL(view_joined_table = child_stmt->get_joined_table(child_stmt->get_from_item(0).table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null joined table", K(ret));
+  } else if (!view_joined_table->is_left_join() && !view_joined_table->is_right_join()) {
+    // 无法与上层构成 left/right 链式连接，不合并
+  } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmt, child_stmt, conditions))) {
+    LOG_WARN("failed to get extra condition from parent", K(ret));
+  } else if (OB_FAIL(append(conditions, child_stmt->get_condition_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(get_null_reject_rels(conditions, null_reject_rels))) {
+    LOG_WARN("failed to get null reject rels", K(ret));
+  } else if (OB_FAIL(get_view_exprs(parent_stmt,
+                                    view_table,
+                                    outer_join_conditions,
+                                    view_exprs))) {
+    LOG_WARN("failed to get view exprs", K(ret));
+  } else if (OB_FAIL(get_exprs_relation_ids(view_exprs,
+                                            target_rels))) {
+    LOG_WARN("failed to add expr relation ids", K(ret));
+  } else if (OB_FAIL(upper_join_right_rels.add_members(target_rels))) {
+    LOG_WARN("failed to add members", K(ret));
+  } else if (OB_FAIL(get_exprs_relation_ids(child_stmt->get_condition_exprs(), upper_join_right_rels))) {
+    LOG_WARN("failed to add expr relation ids", K(ret));
+  } else if (OB_FAIL(check_left_join_chain_recursively(child_stmt,
+                                                      view_joined_table,
+                                                      target_rels,
+                                                      upper_join_left_rels,
+                                                      upper_join_right_rels,
+                                                      null_reject_rels,
+                                                      true,
+                                                      is_valid_join_chain))) {
+    LOG_WARN("failed to check left join chain", K(ret));
+  } else if (is_valid_join_chain) {
+    combinable = true;
+  }
+  return ret;
+}
+
+// 根据过滤条件集抽取出能空值拒绝的关系集
+int ObTransformUtils::get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
+                                           ObSqlBitSet<> &null_reject_rels)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> column_exprs;
+  bool is_null_reject = false;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(conditions, column_exprs))) {
+    LOG_WARN("failed to extrace column exprs", K(ret));
+  }
+  int64_t N = column_exprs.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    ObRawExpr *expr = column_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(has_null_reject_condition(conditions,
+                                                 expr,
+                                                 is_null_reject))) {
+      LOG_WARN("failed to check null reject", K(ret));
+    } else if (!is_null_reject) {
+      // do nothing
+    } else if (OB_FAIL(null_reject_rels.add_members(expr->get_relation_ids()))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
+// 检查目标表是否可以 reorder 到 stmt 的 join tree 最上层作为 left join 的驱动表
+int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
+                                                        JoinedTable *joined_table,
+                                                        const ObSqlBitSet<> &target_relation_ids,
+                                                        const ObSqlBitSet<> &upper_join_left_rels,
+                                                        const ObSqlBitSet<> &upper_join_right_rels,
+                                                        const ObSqlBitSet<> &null_reject_rels,
+                                                        bool check_top_level,
+                                                        bool &is_valid_join_chain)
+{
+  int ret = OB_SUCCESS;
+  bool left_null_reject = false;
+  bool right_null_reject = false;
+  is_valid_join_chain = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else if (joined_table->is_left_join() || joined_table->is_right_join()) {
+    ObSqlBitSet<> left_table_ids;
+    ObSqlBitSet<> right_table_ids;
+    ObRelIds left_ids;
+    ObSqlBitSet<> join_rels;
+    ObSqlBitSet<> join_left_rels;
+    ObSqlBitSet<> join_right_rels;
+    TableItem *left_table = (LEFT_OUTER_JOIN == joined_table->joined_type_) ?
+                              joined_table->left_table_ :
+                              joined_table->right_table_;
+    TableItem *right_table = (RIGHT_OUTER_JOIN == joined_table->joined_type_) ?
+                              joined_table->left_table_ :
+                              joined_table->right_table_;
+    if (OB_ISNULL(left_table) || OB_ISNULL(right_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table", K(ret));
+    } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_table_ids))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    } else if (OB_FAIL(stmt->get_table_rel_ids(*left_table, left_table_ids))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    } else if (OB_FAIL(get_exprs_relation_ids(joined_table->get_join_conditions(),
+                                              join_rels))) {
+      LOG_WARN("failed to add expr relation ids", K(ret));
+    } else if (OB_FAIL(join_left_rels.intersect(join_rels, left_table_ids))) {
+      LOG_WARN("failed to intersect rels", K(ret));
+    } else if (OB_FAIL(join_right_rels.intersect(join_rels, right_table_ids))) {
+      LOG_WARN("failed to intersect rels", K(ret));
+    } else if (check_top_level && upper_join_right_rels.overlap(right_table_ids)) {
+      // 上层 left join 连接条件引用下层 left join 右表中的列，
+      // 存在形如 A LEFT JOIN (B LEFT JOIN C on B.b = C.b) on A.c = B.c and A.f = C.f 的环状连接，无法 reorder
+      is_valid_join_chain = false;
+    } else if (!left_table_ids.is_superset(target_relation_ids)) {
+      // 目标表不位于下层 left join chain 的最左侧，无法 reorder
+      is_valid_join_chain = false;
+    } else if (OB_FAIL(left_ids.add_members(left_table_ids))) {
+      LOG_WARN("failed to add members", K(ret));
+    } else if (OB_FAIL(is_null_reject_conditions(joined_table->get_join_conditions(),
+                                                 left_ids,
+                                                 left_null_reject))) {
+      LOG_WARN("failed to check is null reject conditions", K(ret));
+    } else if (!left_null_reject) {
+      // 链式 left join 应用结合律的必要条件：右侧两表的连接条件空值拒绝中间的表
+      is_valid_join_chain = false;
+    } else if (join_left_rels.num_members() < 1 || join_right_rels.num_members() < 1) {
+      // 笛卡尔积无法 reorder
+      is_valid_join_chain = false;
+    } else if (null_reject_rels.overlap(join_right_rels)) {
+      // left join 退化成 inner join，无法 reorder
+      is_valid_join_chain = false;
+    } else if (!left_table->is_joined_table()) {
+      is_valid_join_chain = true;
+    } else if (OB_FAIL(check_left_join_chain_recursively(stmt,
+                                                        static_cast<JoinedTable*>(left_table),
+                                                        target_relation_ids,
+                                                        join_left_rels,
+                                                        join_right_rels,
+                                                        null_reject_rels,
+                                                        false,
+                                                        is_valid_join_chain))) {
+      LOG_WARN("failed to check left join chain recursively", K(ret));
+    }
+  } else {
+    is_valid_join_chain = false;
   }
   return ret;
 }

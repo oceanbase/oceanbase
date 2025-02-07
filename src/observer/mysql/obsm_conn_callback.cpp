@@ -22,6 +22,7 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_srv_task.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -218,11 +219,16 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
     } else if (is_need_clear) {
       if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn.sessid_))) {
         LOG_ERROR("fail to mark sessid unused", K(ret), K(conn.sessid_),
-                  "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_);
+                  "proxy_sessid", conn.proxy_sessid_);
       } else {
         LOG_INFO("mark session id unused", K(conn.sessid_));
       }
     }
+  }
+  if (OB_NOT_NULL(conn.di_)) {
+    common::ObLocalDiagnosticInfo::dec_ref(conn.di_);
+    common::ObLocalDiagnosticInfo::return_diagnostic_info(conn.di_);
+    conn.di_ = nullptr;
   }
 
   sm_conn_unlock_tenant(conn);
@@ -231,7 +237,6 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
            "sessid", conn.sessid_,
            "proxy_sessid", conn.proxy_sessid_,
            "tenant_id", conn.tenant_id_,
-           "server_id", GCTX.server_id_,
            "from_proxy", conn.is_proxy_,
            "from_java_client", conn.is_java_client_,
            "c/s protocol", get_cs_protocol_type_name(conn.get_cs_protocol_type()),
@@ -261,11 +266,10 @@ int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)
                 "proxy_sessid", conn.proxy_sessid_);
     } else {
       sess_info->set_session_state(sql::SESSION_KILLED);
-      sess_info->set_shadow(true);
+      sess_info->set_mark_killed(true);
     }
   }
-  LOG_INFO("kill and revert session", K(conn.sessid_),
-          "proxy_sessid", conn.proxy_sessid_, "server_id", GCTX.server_id_, K(ret));
+  LOG_INFO("kill and revert session", K(conn.sessid_), "proxy_sessid", conn.proxy_sessid_, K(ret));
   return ret;
 }
 

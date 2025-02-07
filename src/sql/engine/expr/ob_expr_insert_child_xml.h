@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/xml/ob_xpath.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 
 namespace oceanbase
 {
@@ -41,7 +42,7 @@ private:
   static int insert_child_xml(const ObExpr &expr,
                               ObEvalCtx &ctx,
                               ObMulModeMemCtx* mem_ctx,
-                              ObArenaAllocator &allocator,
+                              MultimodeAlloctor &allocator,
                               ObPathExprIter &xpath_iter,
                               ObString child_str,
                               ObString value_str,
@@ -49,14 +50,14 @@ private:
 
   static int check_child_expr(const ObExpr &expr,
                               ObEvalCtx &ctx,
-                              ObArenaAllocator &allocator,
+                              ObIAllocator &allocator,
                               ObMulModeMemCtx* mem_ctx,
                               ObString &child_str,
                               ObString &value_str,
                               bool &is_insert_attributes);
   static bool is_first_char_attribute(ObString child_str);
 
-  static int insert_element_node(ObArenaAllocator &allocator, ObIMulModeBase *insert_node, ObIMulModeBase *value_node);
+  static int insert_element_node(ObIAllocator &allocator, ObIMulModeBase *insert_node, ObIMulModeBase *value_node);
 
   static int insert_attributes_node(ObString key_str,
                                     ObString value_str,

@@ -70,6 +70,7 @@ public:
                               const ObCGBitmap &parent_bitmap,
                               const ObCSRange &row_range);
   int get_next_valid_block(sql::ObPushdownFilterExecutor *parent,
+                           sql::PushdownFilterInfo &filter_info,
                            const ObCGBitmap *parent_bitmap,
                            ObCGBitmap &result_bitmap);
   int build_index_filter(sql::ObPushdownFilterExecutor &filter);

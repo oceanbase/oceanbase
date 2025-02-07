@@ -17,6 +17,7 @@
 
 #include "lib/lock/ob_tc_ref.h"
 #include "lib/utility/utility.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -139,6 +140,46 @@ public:
     ObLinkHashMap& hash_;
     HashNode* next_;
   };
+  class PrintFunctor
+  {
+  public:
+    PrintFunctor(char *buf, int64_t len, int64_t &pos) : buf_(buf), len_(len), pos_(pos), loop_cnt_(0) {}
+    bool operator()(const Key &key, const Value *value)
+    {
+      int ret = common::OB_SUCCESS;
+      int64_t tmp_pos = 0;
+      int64_t save_pos = pos_;
+      if (loop_cnt_ > 0) {
+        ret = databuff_printf(buf_, len_, pos_, ", ");
+      }
+      if (OB_SUCC(ret)) {
+        tmp_pos = key.to_string(buf_ + pos_, len_ - pos_);
+        if (tmp_pos > 0) {
+          pos_ += tmp_pos;
+          if (OB_SUCC(databuff_printf(buf_, len_, pos_, "->"))) {
+            tmp_pos = value->to_string(buf_ + pos_, len_ - pos_);
+            if (tmp_pos > 0) {
+              pos_ += tmp_pos;
+            } else {
+              ret = common::OB_SIZE_OVERFLOW;
+            }
+          }
+        } else {
+          ret = common::OB_SIZE_OVERFLOW;
+        }
+      }
+      if (common::OB_SUCCESS != ret) {
+        pos_ = save_pos;
+      }
+      return common::OB_SUCCESS == ret;
+    }
+  private:
+    char *buf_;
+    int64_t len_;
+    int64_t &pos_;
+  private:
+    int64_t loop_cnt_;
+  };
   static constexpr uint64 MAGIC_CODE = 0x0ceaba5e0ceaba5e;
 public:
   explicit ObLinkHashMap(int64_t min_size = 1<<16, int64_t max_size = INT64_MAX)
@@ -217,7 +258,13 @@ public:
   }
   void free_value(Value *value)
   {
-    static_cast<decltype(this)>(value->hash_node_->host_)->alloc_handle_.free_value(value);
+    if (OB_NOT_NULL(value->hash_node_)) {
+      if (value->hash_node_->host_ != this) {
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "not free within the original hashmap",
+                        K(value->hash_node_->host_), K(this), K(lbt()));
+      }
+    }
+    alloc_handle_.free_value(value);
   }
   int create(const Key &key, Value *&value)
   {
@@ -380,12 +427,12 @@ public:
     HandleOn<Function> handle_on(*this, fn);
     return map(handle_on);
   }
+
   template <typename Function> int remove_if(Function &fn)
   {
     RemoveIf<Function> remove_if(*this, fn);
     return map(remove_if);
   }
-
   const AllocHandle& get_alloc_handle() const { return alloc_handle_; }
 
 private:

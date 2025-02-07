@@ -81,13 +81,14 @@ install(FILES
   tools/systemd/profile/oceanbase-pre.json
   tools/systemd/profile/oceanbase.service
   tools/systemd/profile/oceanbase-service.sh
+  tools/systemd/profile/telemetry-pre.json
   tools/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
 endif()
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
+if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
   list(APPEND CPACK_COMPONENTS_ALL cdc)
   include(GNUInstallDirs)
   install(
@@ -352,18 +353,17 @@ if (NOT OB_BUILD_OPENSOURCE)
   endif()
 endif()
 
+## oceanbase-libs
+list(APPEND CPACK_COMPONENTS_ALL libs)
+install(PROGRAMS
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
+  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
+  DESTINATION lib
+  COMPONENT libs
+)
+
 if(OB_BUILD_OPENSOURCE)
-  ## oceanbase-libs
-  list(APPEND CPACK_COMPONENTS_ALL libs)
-  install(PROGRAMS
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so
-    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so.3
-    DESTINATION lib
-    COMPONENT libs
-  )
   if(OB_BUILD_OBADMIN)
     ## oceanbase-utils
     list(APPEND CPACK_COMPONENTS_ALL utils)

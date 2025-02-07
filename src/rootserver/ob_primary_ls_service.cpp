@@ -229,7 +229,7 @@ int ObPrimaryLSService::set_tenant_dropping_status_(
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(ERRSIM_BEFORE_LS_STATUS_NORMAL);
 int ObPrimaryLSService::try_set_next_ls_status_(
     const common::ObIArray<ObLSStatusMachineParameter> &status_machine_array)
 {
@@ -269,7 +269,9 @@ int ObPrimaryLSService::try_set_next_ls_status_(
           }
         } else if (status_info.ls_is_created()) {
           //set ls to normal
-          if (OB_FAIL(ls_operator.update_ls_status(
+          if (OB_UNLIKELY(ERRSIM_BEFORE_LS_STATUS_NORMAL)) {
+            FLOG_INFO("ERRSIM_BEFORE_LS_STATUS_NORMAL, skip update ls status to normal", K(tenant_id_), K(status_info));
+          } else if (OB_FAIL(ls_operator.update_ls_status(
                   machine.ls_id_, ls_info.get_ls_status(), share::OB_LS_NORMAL, working_sw_status))) {
             LOG_WARN("failed to update ls status", KR(ret), K(machine));
           }

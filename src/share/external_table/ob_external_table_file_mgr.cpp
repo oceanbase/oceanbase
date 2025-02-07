@@ -43,6 +43,7 @@
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #include "storage/ob_common_id_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 
 namespace oceanbase
 {
@@ -52,8 +53,25 @@ using namespace sql;
 using namespace transaction::tablelock;
 using namespace pl;
 using namespace common::sqlclient;
+using namespace dbms_scheduler;
 namespace share
 {
+
+int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_string(allocator, other.file_url_, this->file_url_))) {
+    LOG_WARN("fail to write string", K(ret));
+  } else {
+    this->file_id_ = other.file_id_;
+    this->part_id_ = other.part_id_;
+    this->file_addr_ = other.file_addr_;
+    this->file_size_ = other.file_size_;
+    this->row_start_ = other.row_start_;
+    this->row_count_ = other.row_count_;
+  }
+  return ret;
+}
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
@@ -591,8 +609,10 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = exec_ctx.get_allocator();
-  CK (OB_NOT_NULL(table_schema) && OB_LIKELY(table_schema->is_odps_external_table()));
-  if (OB_SUCC(ret)) {
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
     const common::ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
     const int part_key_size = part_key_info.get_size();
     for (int64_t i = 0; OB_SUCC(ret) && i < file_infos.count(); i++) {
@@ -601,8 +621,10 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
       if (OB_FAIL(ObSQLUtils::extract_odps_part_spec(all_part_spec, part_spec_list))) {
         LOG_WARN("failed to extract odps part spec", K(ret), K(all_part_spec));
       } else if (part_spec_list.count() != part_key_size) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected count find part spec of odps", K(ret), K(file_infos), K(file_infos.count()), K(i), K(all_part_spec), K(part_spec_list.count()), K(part_key_size));
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("unexpected count find part spec of odps", K(ret), K(file_infos), K(file_infos.count()), K(i), K(all_part_spec), K(part_spec_list.count()), K(part_key_size));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "unexpected count of partition key between odps table and external table");
       } else {
         ObNewRow odps_part_row;
         ObObj *obj_array = nullptr;
@@ -625,9 +647,30 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
           } else if (FALSE_IT(part_key_type = part_col->get_meta_type().get_type())) {
           } else if (part_key_type == ObVarcharType ||
             part_key_type == ObCharType) {
-            odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
-            odps_part_row.get_cell(j).set_collation_type(ObCharset::get_system_collation());
-            odps_part_row.get_cell(j).set_varchar_value(part_spec.ptr(), part_spec.length());
+            oceanbase::common::ObObjMeta meta_type = part_col->get_meta_type();
+            ObCollationType coll_dst = static_cast<ObCollationType>(meta_type.get_cs_type());
+            ObCollationType coll_src = CS_TYPE_UTF8MB4_BIN;
+            int64_t dst_maxblen = 0;
+            int64_t src_minblen = 0;
+            if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(coll_dst, dst_maxblen))) {
+              LOG_WARN("failed to get dst mb max len", K(ret), K(coll_dst));
+            } else if (OB_FAIL(ObCharset::get_mbminlen_by_coll(coll_src, src_minblen))) {
+              LOG_WARN("failed to get src mb min len", K(ret), K(coll_src));
+            } else {
+              void *dst_buf = NULL;
+              uint64_t dst_buf_size = (part_spec.length() / src_minblen) * dst_maxblen;
+              uint32_t dst_len = 0;
+              if (OB_ISNULL(dst_buf = exec_ctx.get_allocator().alloc(dst_buf_size))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed to alloc buf", K(ret));
+              } else if (OB_FAIL(ObCharset::charset_convert(coll_src, part_spec.ptr(), part_spec.length(), coll_dst, static_cast<char*>(dst_buf), dst_buf_size, dst_len))) {
+                LOG_WARN("failed to convert charset", K(ret));
+              } else {
+                odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
+                odps_part_row.get_cell(j).set_varchar_value(static_cast<char*>(dst_buf),
+                                                            static_cast<int64_t>(dst_len));
+              }
+            }
           } else if (part_key_type == ObTinyIntType ||
                      part_key_type == ObSmallIntType ||
                      part_key_type == ObMediumIntType ||
@@ -646,9 +689,21 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
               odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
               odps_part_row.get_cell(j).set_int(val);
             }
+          } else if (is_oracle_mode() && ObNumberType == part_key_type) {
+            number::ObNumber num;
+            if (OB_FAIL(num.from(part_spec.ptr(), part_spec.length(), allocator))) {
+              LOG_WARN("cast string to number failed", K(ret), K(part_spec),
+                       K(part_key_type));
+            } else {
+              LOG_INFO("cast string to number success", K(ret));
+              odps_part_row.get_cell(j).set_meta_type(part_col->get_meta_type());
+              odps_part_row.get_cell(j).set_number(num);
+            }
           } else {
+            // TODO(bitao): fix support to run in oracle mode and more types
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected part_key_type", K(part_key_type), K(j), K(ret));
+            LOG_WARN("unexpected part_key_type", K(part_spec), K(part_key_type),
+                     K(j), K(ret));
           }
         }
         if (OB_SUCC(ret) && OB_FAIL(part_vals.push_back(odps_part_row))) {
@@ -675,11 +730,16 @@ int ObExternalTableFileManager::calculate_file_part_val_by_file_name(const ObTab
   OZ (cg_partition_expr_rt_expr(table_schema, exec_ctx.get_expr_factory(), exec_ctx.get_my_session(),
                                 schema_guard, exec_ctx.get_allocator(), temp_exprs));
   OZ (build_row_for_file_name(file_name_row, exec_ctx.get_allocator()));
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < file_infos.count(); i++) {
     ObNewRow list_val;
     ObObj *obj_array = nullptr;
     if (file_name_row.get_count() > 0) {
-      file_name_row.get_cell(0).set_string(ObVarcharType, table_schema->is_odps_external_table() ?
+      file_name_row.get_cell(0).set_string(ObVarcharType, is_odps_external_table ?
                                                             file_infos.at(i).file_url_.after(equals_delimiter) :
                                                             (is_local_storage ?
                                                               file_infos.at(i).file_url_.after(ip_delimiter) :
@@ -716,7 +776,7 @@ int ObExternalTableFileManager::add_item_to_map(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObArray<ObExternalFileInfoTmp> *part_file_urls = NULL;
-  OZ (hash_map.get_refactored(part_id, part_file_urls));
+  ret = hash_map.get_refactored(part_id, part_file_urls);
   if (ret == OB_HASH_NOT_EXIST) {
     ret = OB_SUCCESS;
     if (OB_ISNULL(part_file_urls = OB_NEWx(ObArray<ObExternalFileInfoTmp>, &allocator))) {
@@ -754,12 +814,13 @@ int ObExternalTableFileManager::calculate_all_files_partitions(share::schema::Ob
   ObArray<ObNewRow> existed_part_vals;
   ObArray<int64_t> existed_part_ids;
   ObArray<ObNewRow> file_part_vals;
-  bool is_odps_external_table = false;
   CK (OB_NOT_NULL(table_schema) && OB_LIKELY(table_schema->is_external_table()));
   OZ (get_all_partition_list_val(table_schema, existed_part_vals, existed_part_ids));
-  OX(is_odps_external_table = table_schema->is_odps_external_table());
-
-  if (is_odps_external_table) {
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
     OZ(calculate_odps_part_val_by_part_spec(table_schema, file_infos, file_part_vals, schema_guard, exec_ctx));
   } else {
     OZ (calculate_file_part_val_by_file_name(table_schema, file_infos, file_part_vals, schema_guard, exec_ctx));
@@ -808,11 +869,19 @@ int ObExternalTableFileManager::update_inner_table_file_list(
     const uint64_t table_id,
     ObIArray<ObString> &file_urls,
     ObIArray<int64_t> &file_sizes,
-    const uint64_t part_id)
+    ObIArray<uint64_t> &updated_part_ids,
+    bool &has_partition_changed,
+    const uint64_t part_id,
+    bool collect_statistic)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObArenaAllocator allocator;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
+  CK (OB_NOT_NULL(table_schema));
   CK (OB_NOT_NULL(GCTX.sql_proxy_),
       OB_NOT_NULL(GCTX.schema_service_));
   OZ (trans.start(GCTX.sql_proxy_, tenant_id));
@@ -823,13 +892,62 @@ int ObExternalTableFileManager::update_inner_table_file_list(
   }
   if (OB_FAIL(ret)) {
   } else if (part_id != -1) {
-    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, part_id, file_infos));
+    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, part_id, file_infos, updated_part_ids));
   } else {
-    OZ (update_inner_table_files_list_by_table(exec_ctx, trans, tenant_id, table_id, file_infos));
+    OZ (update_inner_table_files_list_by_table(exec_ctx, trans, tenant_id, table_id, file_infos, updated_part_ids, has_partition_changed));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(collect_odps_table_statistics(collect_statistic, tenant_id, table_id, updated_part_ids, trans))) {
+    LOG_WARN("failed to collect odps table statistics", K(collect_statistic), K(tenant_id), K(table_id));
   }
   OZ (trans.end(true));
   if (trans.is_started()) {
     trans.end(false);
+  }
+  return ret;
+}
+
+int ObExternalTableFileManager::collect_odps_table_statistics(const bool collect_statistic,
+                                                              const uint64_t tenant_id,
+                                                              const uint64_t table_id,
+                                                              ObIArray<uint64_t> &updated_part_ids,
+                                                              ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, table_id, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps table or not", K(ret), K(tenant_id), K(table_id));
+  } else if (is_odps_external_table && collect_statistic) {
+    int64_t update_rows = 0;
+    ObSqlString update_sql;
+    int64_t dop_of_collect_external_table_statistics = 16;
+    if (updated_part_ids.count() <= 32) {
+      // do nothing
+    } else {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_LIKELY(tenant_config.is_valid()) && static_cast<int64_t>(tenant_config->_dop_of_collect_external_table_statistics) > 0) {
+        dop_of_collect_external_table_statistics = tenant_config->_dop_of_collect_external_table_statistics;
+      } else {
+        double min_cpu;
+        double max_cpu;
+        if (OB_ISNULL(GCTX.omt_)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
+          LOG_WARN("fail to get tenant cpu", K(ret));
+        } else {
+          dop_of_collect_external_table_statistics = max_cpu;
+        }
+      }
+    }
+    OZ(update_sql.assign_fmt("UPDATE /*+ enable_parallel_dml parallel(%ld) */ %s SET FILE_SIZE = CALC_ODPS_SIZE(FILE_URL, TABLE_ID) WHERE TABLE_ID = %ld and PART_ID IN (",
+                            dop_of_collect_external_table_statistics,
+                            OB_ALL_EXTERNAL_TABLE_FILE_TNAME,
+                            table_id));
+    for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
+      OZ(update_sql.append_fmt("%ld%c", updated_part_ids.at(i), ((updated_part_ids.count() - 1) == i) ? ' ' : ','));
+    }
+    OZ(update_sql.append(")"));
+    OZ(trans.write(tenant_id, update_sql.ptr(), update_rows));
   }
   return ret;
 }
@@ -856,7 +974,9 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
     ObMySQLTransaction &trans,
     const uint64_t tenant_id,
     const uint64_t table_id,
-    const ObIArray<ObExternalFileInfoTmp> &file_infos)
+    const ObIArray<ObExternalFileInfoTmp> &file_infos,
+    ObIArray<uint64_t> &updated_part_ids,
+    bool &has_partition_changed)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
@@ -873,7 +993,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
   CK (OB_NOT_NULL(database_schema));
   if (OB_FAIL(ret)) {
   } else if (!table_schema->is_partitioned_table()) {
-    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, table_id, file_infos));
+    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, table_id, file_infos, updated_part_ids));
   } else {
     int64_t max_part_id = 0;
     common::hash::ObHashMap<int64_t, ObArray<ObExternalFileInfoTmp> *> part_id_to_file_urls; //part id to file urls.
@@ -890,6 +1010,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
         OZ (table_schema->get_max_part_idx(max_part_idx, true/*without default*/));
 
         if (OB_SUCC(ret) && partitions_to_del.count() > 0) {
+          has_partition_changed = true;
           ObAlterTableStmt *alter_table_stmt = NULL;
           OZ (create_alter_table_stmt(exec_ctx, table_schema, database_schema, partitions_to_del.count(), ObAlterTableArg::DROP_PARTITION, alter_table_stmt));
           if (OB_SUCC(ret)) {
@@ -913,11 +1034,12 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("partitions to del is null", K(ret));
             } else {
-              OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, partitions_to_del.at(i)->get_part_id(), empty));
+              OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, partitions_to_del.at(i)->get_part_id(), empty, updated_part_ids));
             }
           }
         }
         if (OB_SUCC(ret) && partitions_to_add.count() > 0) {
+          has_partition_changed = true;
           ObAlterTableStmt *alter_table_stmt = NULL;
           OZ (create_alter_table_stmt(exec_ctx, table_schema, database_schema, partitions_to_add.count(), ObAlterTableArg::ADD_PARTITION, alter_table_stmt));
           for (int64_t i = 0; OB_SUCC(ret) && i < partitions_to_add.count(); i++) {
@@ -960,8 +1082,11 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
           OB_SUCC(ret) && it != part_id_to_file_urls.end(); it++) {
         CK (OB_NOT_NULL(it->second));
         //OZ (get_file_sizes_by_map(*it->second, mapped_sizes, file_urls_to_sizes));
-        OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, it->first, *it->second));
+        OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, it->first, *it->second, updated_part_ids));
       }
+      LOG_TRACE("external table refresh report", "total parts", part_ids.count(), "total files", file_infos.count(),
+                "partitions to add", partitions_to_add.count(), "partitions to del", partitions_to_del.count(),
+                K(has_partition_changed));
     }
 
     for (common::hash::ObHashMap<int64_t, ObArray<ObExternalFileInfoTmp> *>::iterator it = part_id_to_file_urls.begin(); it != part_id_to_file_urls.end(); it++) {
@@ -1004,7 +1129,8 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
     const uint64_t tenant_id,
     const uint64_t table_id,
     const uint64_t partition_id,
-    const ObIArray<ObExternalFileInfoTmp> &file_infos)
+    const ObIArray<ObExternalFileInfoTmp> &file_infos,
+    ObIArray<uint64_t> &updated_part_ids)
 {
   int ret = OB_SUCCESS;
   int64_t cur_time = ObTimeUtil::current_time();
@@ -1016,6 +1142,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
   ObSEArray<int64_t, 16> update_file_ids;
   ObSEArray<ObExternalFileInfoTmp, 16> delete_file_infos;
   ObSEArray<int64_t, 16> delete_file_ids;
+  bool updated = false;
   ObArenaAllocator allocator;
   ObSqlString update_sql;
   ObSqlString insert_sql;
@@ -1024,15 +1151,10 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
   int64_t insert_rows = 0;
   int64_t max_file_id = 0;// ObCSVTableRowIterator::MIN_EXTERNAL_TABLE_FILE_ID - 1
   common::hash::ObHashMap<ObString, int64_t> hash_map;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = NULL;
-  bool is_odps_external_table = false;
   char file_url_buf[256] = { 0 };
-  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-  OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
-  CK (OB_NOT_NULL(table_schema));
-  if (OB_SUCC(ret)) {
-    is_odps_external_table = table_schema->is_odps_external_table();
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(tenant_id, table_id, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret), K(tenant_id), K(table_id));
   }
   OZ(get_all_records_from_inner_table(allocator, tenant_id, table_id, partition_id, old_file_infos, old_file_ids));
   OZ(hash_map.create(std::max(file_infos.count(), old_file_infos.count()) + 1, "ExternalFile"));
@@ -1075,6 +1197,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
     }
     OZ(delete_sql.append(")"));
     OZ(trans.write(tenant_id, delete_sql.ptr(), update_rows));
+    updated = true;
   }
   if (OB_SUCC(ret) && update_file_infos.count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < update_file_infos.count(); i++) {
@@ -1087,6 +1210,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
                               update_file_ids.at(i)));
       OZ (trans.write(tenant_id, update_sql.ptr(), update_rows));
     }
+    updated = true;
   }
   if (OB_SUCC(ret) && insert_file_infos.count() > 0) {
     OZ(insert_sql.assign_fmt("INSERT INTO %s(TABLE_ID,PART_ID,FILE_ID,FILE_URL,CREATE_VERSION,DELETE_VERSION,FILE_SIZE) VALUES",
@@ -1102,6 +1226,10 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_part(
                                   cur_time, MAX_VERSION, insert_file_infos.at(i).file_size_));
     }
     OZ(trans.write(tenant_id, insert_sql.ptr(), insert_rows));
+    updated = true;
+  }
+  if (OB_SUCC(ret) && updated) {
+    OZ (updated_part_ids.push_back(partition_id));
   }
 
   return ret;
@@ -1165,8 +1293,8 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
   int64_t total_wait_secs = 0;
 
   while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT))
-         && OB_TIMEOUT == ret && !THIS_WORKER.is_timeout()) {
-    total_wait_secs += LOAD_CACHE_LOCK_CNT;
+         && OB_TIMEOUT == ret && OB_SUCC(THIS_WORKER.check_status())) {
+    total_wait_secs += (LOCK_TIMEOUT / 1000000);
     LOG_WARN("fill external table cache wait", K(total_wait_secs));
   }
   if (OB_SUCC(ret)) {
@@ -1261,12 +1389,19 @@ int ObExternalTableFileManager::lock_for_refresh(
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = 1000L * 1000L * 2; //2s
+    lock_arg.is_from_sql_ = true;
     if (OB_FAIL(lock_arg.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                       get_tid_cache()))) {
       LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
     } else {
-      while (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn)) && !THIS_WORKER.is_timeout()) {
-        LOG_WARN("lock failed try again", K(ret));
+      while (OB_SUCC(ret) && OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
+        LOG_WARN("external table add object lock failed", K(ret));
+        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+          // overwrite ret
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("worker status error", K(ret));
+          }
+        }
       }
     }
   }
@@ -1340,7 +1475,8 @@ int ObExternalTableFileManager::flush_external_file_cache(
 int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
                                                        const uint64_t table_id,
                                                        ObSchemaGetterGuard &schema_guard,
-                                                       ObExecContext &exec_ctx) {
+                                                       ObExecContext &exec_ctx,
+                                                       bool &has_partition_changed) {
   int ret = OB_SUCCESS;
   ObArray<ObString> file_urls;
   ObArray<int64_t> file_sizes;
@@ -1350,13 +1486,14 @@ int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
                                     table_id,
                                     table_schema));
   CK (table_schema != NULL);
-  OZ (refresh_external_table(tenant_id, table_schema, exec_ctx));
+  OZ (refresh_external_table(tenant_id, table_schema, exec_ctx, has_partition_changed));
   return ret;
 }
 
 int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
                                                        const ObTableSchema *table_schema,
-                                                       ObExecContext &exec_ctx) {
+                                                       ObExecContext &exec_ctx,
+                                                       bool &has_partition_changed) {
   int ret = OB_SUCCESS;
   ObArray<ObString> file_urls;
   ObArray<int64_t> file_sizes;
@@ -1382,14 +1519,15 @@ int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
               file_urls, file_sizes));
   //TODO [External Table] opt performance
   ObSEArray<ObAddr, 8> all_servers;
+  ObSEArray<uint64_t, 64> updated_part_ids;
   OZ (GCTX.location_service_->external_table_get(tenant_id, table_schema->get_table_id(), all_servers));
-  OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(exec_ctx, tenant_id, table_schema->get_table_id(), file_urls, file_sizes));
-  if (OB_SUCC(ret)) {
+  OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(exec_ctx, tenant_id,
+                          table_schema->get_table_id(), file_urls, file_sizes, updated_part_ids, has_partition_changed));
+  if (OB_SUCC(ret) && updated_part_ids.count() > 0) {
     if (table_schema->is_partitioned_table()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_partition_num(); i++) {
-        CK (OB_NOT_NULL(table_schema->get_part_array()[i]));
+      for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
         OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, table_schema->get_table_id(),
-        table_schema->get_part_array()[i]->get_part_id(), all_servers));
+                      updated_part_ids.at(i), all_servers));
       }
     } else {
       OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(tenant_id, table_schema->get_table_id(),
@@ -1423,7 +1561,8 @@ int ObExternalTableFileManager::auto_refresh_external_table(ObExecContext &exec_
           OZ (exec_ctx.get_sql_ctx()->schema_guard_->get_table_schema(tenant_id, simple_table->get_table_id(), table_schema));
           CK (table_schema != NULL);
           if (OB_SUCC(ret) && (2 == ((table_schema->get_table_flags() & 0B1100) >> 2))) {
-            OZ (refresh_external_table(tenant_id, simple_table->get_table_id(), *exec_ctx.get_sql_ctx()->schema_guard_, exec_ctx));
+            bool has_partition_changed = false;
+            OZ (refresh_external_table(tenant_id, simple_table->get_table_id(), *exec_ctx.get_sql_ctx()->schema_guard_, exec_ctx, has_partition_changed));
           }
         }
       }
@@ -1508,7 +1647,7 @@ int ObExternalTableFileManager::create_repeat_job_sql_(const bool is_oracle_mode
   OZ (dml.add_time_column("start_date", start_usec));
   OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(interval.string()))); //ObString("FREQ=SECONDLY; INTERVAL=1")
   OZ (dml.add_raw_time_column("end_date", end_date));
-  OZ (dml.add_column("job_class", "DEFAULT_JOB_CLASS"));
+  OZ (dml.add_column("job_class", DEFAULT_JOB_CLASS));
   OZ (dml.add_column("enabled", true));
   OZ (dml.add_column("auto_drop", false));
   OZ (dml.add_column("comments", "used to auto refresh external tables"));
@@ -1586,7 +1725,7 @@ int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, cons
 
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_);
 
 }
 }

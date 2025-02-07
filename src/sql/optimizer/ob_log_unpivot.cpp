@@ -158,11 +158,10 @@ int ObLogUnpivot::compute_sharding_info()
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = NULL;
   const ObSelectStmt *child_stmt = NULL;
-  const ObDMLStmt *parent_stmt = NULL;
-  if (OB_ISNULL(child = get_child(first_child)) || OB_ISNULL(child->get_stmt()) ||
-      OB_ISNULL(parent_stmt = get_stmt()) || OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(child = get_child(first_child))
+      || OB_ISNULL(child->get_stmt()) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(child), K(get_plan()), K(parent_stmt), K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(child), K(get_plan()));
   } else if (OB_UNLIKELY(!child->get_stmt()->is_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected stmt type", K(child->get_stmt()->get_stmt_type()), K(ret));
@@ -171,10 +170,9 @@ int ObLogUnpivot::compute_sharding_info()
   } else if (!child->is_distributed()) {
     ret = ObLogicalOperator::compute_sharding_info();
   } else {
-    ObShardingInfo *strong_sharding = NULL;
-    ObSEArray<ObShardingInfo*, 8> weak_sharding;
-    for (int64_t i = -1; OB_SUCC(ret) && i < child->get_weak_sharding().count(); i++) {
+    for (int64_t i = -1; OB_SUCC(ret) && i < child->get_weak_sharding().count(); ++i) {
       bool exist_in_unpivot = false;
+      bool is_inherited_sharding = false;
       ObShardingInfo *sharding =
           (i == -1) ? child->get_strong_sharding() : child->get_weak_sharding().at(i);
       if (NULL != sharding) {
@@ -184,26 +182,50 @@ int ObLogUnpivot::compute_sharding_info()
           exist_in_unpivot = ObOptimizerUtil::find_item(sharding->get_partition_keys(), expr)
               || ObOptimizerUtil::find_item(sharding->get_sub_partition_keys(), expr);
         }
-        if (exist_in_unpivot && i == -1) {
-          strong_sharding = get_plan()->get_optimizer_context().get_distributed_sharding();
-        } else if (!exist_in_unpivot && i == -1) {
-          strong_sharding = child->get_strong_sharding();
-        } else if (!exist_in_unpivot && i != -1) {
-          ret = weak_sharding.push_back(child->get_weak_sharding().at(i));
-        } else { /*do nothing*/ }
+        // Only inherit the sharding when partition keys do not exist in the unpivot
+        // "for" clause, because those columns will be output by unpivot op directly.
+        if (-1 == i) {
+          // strong sharding
+          if (exist_in_unpivot) {
+            // strong sharding, can not inherit
+            strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+            inherit_sharding_index_ = -1;
+          } else {
+            // strong sharding, can inherit
+            if (OB_FAIL(ObJoinOrder::convert_subplan_scan_sharding_info(*get_plan(),
+                                                                        *child,
+                                                                        subquery_id_,
+                                                                        true, // is_strong
+                                                                        sharding,
+                                                                        strong_sharding_,
+                                                                        is_inherited_sharding))) {
+              LOG_WARN("failed to convert sharding info", K(ret));
+            } else {
+              inherit_sharding_index_ = is_inherited_sharding ? 0 : -1;
+            }
+          }
+        } else if (!exist_in_unpivot) {
+          // weak sharding, can inherit
+          ObShardingInfo *temp_sharding = NULL;
+          if (OB_FAIL(ObJoinOrder::convert_subplan_scan_sharding_info(*get_plan(),
+                                                                      *child,
+                                                                      subquery_id_,
+                                                                      false, // is_strong
+                                                                      sharding,
+                                                                      temp_sharding,
+                                                                      is_inherited_sharding))) {
+            LOG_WARN("failed to convert sharding info", K(ret));
+          } else if (OB_NOT_NULL(temp_sharding)) {
+            inherit_sharding_index_ = 0;
+            if (OB_FAIL(weak_sharding_.push_back(temp_sharding))) {
+              LOG_WARN("failed to push back weak sharding", K(ret));
+            }
+          }
+        } else { /* weak sharding, can not inherit, do nothing */ }
       }
     }
-
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObJoinOrder::convert_subplan_scan_sharding_info(*get_plan(),
-                                                                  *child,
-                                                                  subquery_id_,
-                                                                  strong_sharding_,
-                                                                  weak_sharding_))) {
-        LOG_WARN("failed to convert subplan scan sharding info", K(ret));
-      } else {
-        LOG_TRACE("succeed to convert unpovit scan sharding info", K(ret));
-      }
+      LOG_TRACE("succeed to convert unpovit scan sharding info", KPC(strong_sharding_), K(weak_sharding_), K(inherit_sharding_index_));
     }
   }
   return ret;

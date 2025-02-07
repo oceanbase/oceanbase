@@ -13,7 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/utility/ob_sort.h"
+#include "share/ob_errno.h"
+#include "share/rc/ob_tenant_base.h"
 #include "storage/tmp_file/ob_tmp_file_flush_list_iterator.h"
+#include "storage/tmp_file/ob_shared_nothing_tmp_file.h"
 
 namespace oceanbase
 {
@@ -21,7 +24,7 @@ namespace tmp_file
 {
 ObTmpFileFlushListIterator::ObTmpFileFlushListIterator() :
   is_inited_(false), files_(), dirs_(), cur_caching_list_is_meta_(false),
-  cur_caching_list_idx_(ObTmpFileFlushPriorityManager::FileList::L1),
+  cur_caching_list_idx_(FileList::L1),
   cur_iter_dir_idx_(-1), cur_iter_file_idx_(-1),
   cached_file_num_(0), cached_dir_num_(0)
 {}
@@ -93,7 +96,7 @@ int ObTmpFileFlushListIterator::clear()
 
   if (OB_SUCC(ret)) {
     cur_caching_list_is_meta_ = false;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L1;
+    cur_caching_list_idx_ = FileList::L1;
     cur_iter_dir_idx_ = -1;
     cur_iter_file_idx_ = -1;
     cached_file_num_ = 0;
@@ -138,15 +141,24 @@ int ObTmpFileFlushListIterator::reinsert_files_into_flush_list_(const int64_t st
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("uninitialized file is unexpected", KR(ret), K(i), K(files_[i]));
     } else {
-      ObTmpFileHandle &file_handle = files_[i].file_handle_;
+      ObITmpFileHandle &file_handle = files_[i].file_handle_;
       if (OB_ISNULL(file_handle.get())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", KR(ret));
-      } else if (files_[i].is_meta_ && file_handle.get()->is_in_meta_flush_list()) {
-        // do nothing, because meta flush node may be re-inserted after
-        // tmp file insert meta tree item; do not handle data flush node here
-        // because data node will not be re-inserted during flushing procedure
-      } else if (OB_FAIL(file_handle.get()->reinsert_flush_node(files_[i].is_meta_))) {
+      } else if (files_[i].is_meta_) {
+        ObSharedNothingTmpFile *sn_file = nullptr;
+        if (OB_UNLIKELY(file_handle.get()->get_mode() != ObITmpFile::ObTmpFileMode::SHARED_NOTHING)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected file mode", KR(ret), KPC(file_handle.get()));
+        } else if (FALSE_IT(sn_file = static_cast<ObSharedNothingTmpFile *>(file_handle.get()))) {
+        } else if (sn_file->is_in_meta_flush_list()) {
+          // do nothing, because meta flush node may be re-inserted after
+          // tmp file insert meta tree item; do not handle data flush node here
+          // because data node will not be re-inserted during flushing procedure
+        } else if (OB_FAIL(sn_file->reinsert_meta_flush_node())) {
+          LOG_WARN("fail to reinsert flush node", KR(ret), K(files_[i]));
+        }
+      } else if (OB_FAIL(file_handle.get()->reinsert_data_flush_node())) {
         LOG_WARN("fail to reinsert flush node", KR(ret), K(files_[i]));
       }
     }
@@ -154,7 +166,7 @@ int ObTmpFileFlushListIterator::reinsert_files_into_flush_list_(const int64_t st
   return ret;
 }
 
-int ObTmpFileFlushListIterator::next(const FlushCtxState iter_stage, bool &is_meta, ObTmpFileHandle &file_handle)
+int ObTmpFileFlushListIterator::next(const FlushCtxState iter_stage, ObITmpFileHandle &file_handle)
 {
   int ret = OB_SUCCESS;
   FlushCtxState cur_stage = FlushCtxState::FSM_FINISHED;
@@ -202,9 +214,8 @@ int ObTmpFileFlushListIterator::next(const FlushCtxState iter_stage, bool &is_me
   } else if (OB_FAIL(check_cur_idx_status_())) {
     LOG_WARN("fail to check cur idx status", KR(ret));
   } else {
-    is_meta = files_[cur_iter_file_idx_].is_meta_;
     file_handle = files_[cur_iter_file_idx_].file_handle_;
-    if (ObTmpFileFlushPriorityManager::FileList::L1 == cur_caching_list_idx_) {
+    if (FileList::L1 == cur_caching_list_idx_) {
       if (OB_FAIL(advance_big_file_idx_())) {
         LOG_WARN("fail to advance big file idx", KR(ret));
       }
@@ -212,7 +223,7 @@ int ObTmpFileFlushListIterator::next(const FlushCtxState iter_stage, bool &is_me
       LOG_WARN("fail to advance small file idx", KR(ret));
     }
   }
-  LOG_DEBUG("try to get next file", KR(ret), K(iter_stage), K(cur_stage), K(is_meta),
+  LOG_DEBUG("try to get next file", KR(ret), K(iter_stage), K(cur_stage),
             K(cur_iter_file_idx_), K(cached_file_num_), K(file_handle));
   return ret;
 }
@@ -220,10 +231,10 @@ int ObTmpFileFlushListIterator::next(const FlushCtxState iter_stage, bool &is_me
 int ObTmpFileFlushListIterator::cache_files_(const FlushCtxState iter_stage)
 {
   int ret = OB_SUCCESS;
-  ObTmpFileFlushPriorityManager::FileList end_list_idx = ObTmpFileFlushPriorityManager::FileList::MAX;
+  FileList end_list_idx = FileList::MAX;
   const int64_t target_cache_file_num = iter_stage == FlushCtxState::FSM_F1 ?
                                         BIG_FILE_CACHE_NUM : MAX_CACHE_NUM;
-  ObArray<ObTmpFileHandle> file_handles;
+  ObArray<ObITmpFileHandle> file_handles;
 
   if (OB_UNLIKELY(0 != cached_dir_num_ || 0 != cached_file_num_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -267,7 +278,7 @@ int ObTmpFileFlushListIterator::cache_files_(const FlushCtxState iter_stage)
   }
 
   if (OB_SUCC(ret)) {
-    if (ObTmpFileFlushPriorityManager::FileList::L1 == cur_caching_list_idx_) {
+    if (FileList::L1 == cur_caching_list_idx_) {
       if (OB_FAIL(cache_big_files_(file_handles))) {
         LOG_WARN("fail to cache big files", KR(ret));
       }
@@ -277,19 +288,30 @@ int ObTmpFileFlushListIterator::cache_files_(const FlushCtxState iter_stage)
   }
 
   if (OB_FAIL(ret)) {
+    cached_file_num_ = 0; // to guarantee that the iterator must not reinsert cached part files into priority list
     int tmp_ret = OB_SUCCESS;
     for (int64_t i = 0; OB_LIKELY(OB_SUCCESS == tmp_ret) && i < file_handles.count(); ++i) {
-      if (OB_ISNULL(file_handles[i].get())) {
+      ObITmpFile *tmp_file = file_handles[i].get();
+      if (OB_ISNULL(tmp_file)) {
         // could not happen, just skip
-      } else if (OB_TMP_FAIL(file_handles[i].get()->reinsert_flush_node(cur_caching_list_is_meta_))) {
-        LOG_WARN("fail to reinsert flush node", KR(tmp_ret), K(i), K(file_handles[i]));
+      } else if (cur_caching_list_is_meta_) {
+        ObSharedNothingTmpFile *sn_file = nullptr;
+        if (OB_UNLIKELY(tmp_file->get_mode() != ObITmpFile::ObTmpFileMode::SHARED_NOTHING)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected file mode", KR(ret), KPC(tmp_file));
+        } else if (FALSE_IT(sn_file = static_cast<ObSharedNothingTmpFile *>(tmp_file))) {
+        } else if (OB_FAIL(sn_file->reinsert_meta_flush_node())) {
+          LOG_WARN("fail to reinsert flush node", KR(ret), K(files_[i]));
+        }
+      } else if (OB_TMP_FAIL(tmp_file->reinsert_data_flush_node())) {
+        LOG_ERROR("fail to reinsert flush node", KR(tmp_ret), K(i), K(file_handles[i]));
       }
     }
   }
   return ret;
 }
 
-int ObTmpFileFlushListIterator::cache_big_files_(const ObArray<ObTmpFileHandle> &file_handles)
+int ObTmpFileFlushListIterator::cache_big_files_(const ObArray<ObITmpFileHandle> &file_handles)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(build_file_wrappers_(file_handles))) {
@@ -302,7 +324,7 @@ int ObTmpFileFlushListIterator::cache_big_files_(const ObArray<ObTmpFileHandle> 
   return ret;
 }
 
-int ObTmpFileFlushListIterator::cache_small_files_(const ObArray<ObTmpFileHandle> &file_handles)
+int ObTmpFileFlushListIterator::cache_small_files_(const ObArray<ObITmpFileHandle> &file_handles)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(build_file_wrappers_(file_handles))) {
@@ -316,7 +338,7 @@ int ObTmpFileFlushListIterator::cache_small_files_(const ObArray<ObTmpFileHandle
   return ret;
 }
 
-int ObTmpFileFlushListIterator::build_file_wrappers_(const ObArray<ObTmpFileHandle> &file_handles)
+int ObTmpFileFlushListIterator::build_file_wrappers_(const ObArray<ObITmpFileHandle> &file_handles)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(file_handles.empty())) {
@@ -358,7 +380,7 @@ int ObTmpFileFlushListIterator::build_dir_wrappers_()
     int64_t end_file_idx = -1;
     int64_t page_num = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < cached_file_num_; ++i) {
-      ObSharedNothingTmpFile *file = nullptr;
+      ObITmpFile *file = nullptr;
       int64_t file_dirty_page_num = 0;
       if (OB_UNLIKELY(!files_[i].is_inited_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -427,7 +449,7 @@ int ObTmpFileFlushListIterator::build_dir_wrappers_()
   return ret;
 }
 
-int ObTmpFileFlushListIterator::get_flushing_file_dirty_page_num_(const ObSharedNothingTmpFile &file, int64_t &page_num)
+int ObTmpFileFlushListIterator::get_flushing_file_dirty_page_num_(const ObITmpFile &file, int64_t &page_num)
 {
   int ret = OB_SUCCESS;
   FlushCtxState cur_stage = cal_current_flush_stage_();
@@ -435,13 +457,16 @@ int ObTmpFileFlushListIterator::get_flushing_file_dirty_page_num_(const ObShared
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected flush stage", KR(ret), K(cur_stage));
   } else if (cur_stage <= FlushCtxState::FSM_F3) {
-    ObSharedNothingTmpFile &mutable_file_ref = const_cast<ObSharedNothingTmpFile &>(file);
+    ObITmpFile &mutable_file_ref = const_cast<ObITmpFile &>(file);
     int64_t dirty_page_size = mutable_file_ref.get_dirty_data_page_size_with_lock();
     page_num = upper_align(dirty_page_size, ObTmpFileGlobal::PAGE_SIZE) / ObTmpFileGlobal::PAGE_SIZE;
-  } else {
+  } else if (OB_UNLIKELY(file.get_mode() != ObITmpFile::ObTmpFileMode::SHARED_NOTHING)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected file mode", KR(ret), K(file));
+  } else { // stage > FlushCtxState::FSM_F3 is flushing meta page
     int64_t non_rightmost_dirty_page_num = 0;
     int64_t rightmost_dirty_page_num = 0;
-    ObSharedNothingTmpFile &mutable_file_ref = const_cast<ObSharedNothingTmpFile &>(file);
+    ObSharedNothingTmpFile &mutable_file_ref = static_cast<ObSharedNothingTmpFile &>(const_cast<ObITmpFile &>(file));
     mutable_file_ref.get_dirty_meta_page_num_with_lock(non_rightmost_dirty_page_num, rightmost_dirty_page_num);
     if (cur_stage == FlushCtxState::FSM_F4) {
       page_num = non_rightmost_dirty_page_num;
@@ -455,22 +480,22 @@ int ObTmpFileFlushListIterator::get_flushing_file_dirty_page_num_(const ObShared
 int ObTmpFileFlushListIterator::advance_caching_list_idx_()
 {
   int ret = OB_SUCCESS;
-  if (!cur_caching_list_is_meta_ && ObTmpFileFlushPriorityManager::FileList::L5 == cur_caching_list_idx_) {
+  if (!cur_caching_list_is_meta_ && FileList::L5 == cur_caching_list_idx_) {
     cur_caching_list_is_meta_ = true;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L1;
+    cur_caching_list_idx_ = FileList::L1;
   } else {
     switch(cur_caching_list_idx_) {
-      case ObTmpFileFlushPriorityManager::FileList::L1:
-        cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L2;
+      case FileList::L1:
+        cur_caching_list_idx_ = FileList::L2;
         break;
-      case ObTmpFileFlushPriorityManager::FileList::L2:
-        cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L3;
+      case FileList::L2:
+        cur_caching_list_idx_ = FileList::L3;
         break;
-      case ObTmpFileFlushPriorityManager::FileList::L3:
-        cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L4;
+      case FileList::L3:
+        cur_caching_list_idx_ = FileList::L4;
         break;
-      case ObTmpFileFlushPriorityManager::FileList::L4:
-        cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L5;
+      case FileList::L4:
+        cur_caching_list_idx_ = FileList::L5;
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -488,7 +513,7 @@ int ObTmpFileFlushListIterator::check_cur_idx_status_()
   if (OB_UNLIKELY(cur_iter_file_idx_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status", KR(ret), K(cur_iter_file_idx_));
-  } else if (ObTmpFileFlushPriorityManager::FileList::L1 == cur_caching_list_idx_) {
+  } else if (FileList::L1 == cur_caching_list_idx_) {
     // the file in L1 list will not be flushed with an aggregating dir.
     // thus, it is no need to check dir
     if (OB_UNLIKELY(cur_iter_file_idx_ >= cached_file_num_ || cached_file_num_ > files_.count())) {
@@ -520,7 +545,7 @@ int ObTmpFileFlushListIterator::check_cur_idx_status_()
 int ObTmpFileFlushListIterator::advance_big_file_idx_()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ObTmpFileFlushPriorityManager::FileList::L1 != cur_caching_list_idx_)) {
+  if (OB_UNLIKELY(FileList::L1 != cur_caching_list_idx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid caching list idx", KR(ret), K(cur_caching_list_idx_));
   } else if (OB_UNLIKELY(cur_iter_file_idx_ < 0 || cur_iter_file_idx_ >= cached_file_num_ ||
@@ -537,8 +562,8 @@ int ObTmpFileFlushListIterator::advance_big_file_idx_()
 int ObTmpFileFlushListIterator::advance_small_file_idx_()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cur_caching_list_idx_ <= ObTmpFileFlushPriorityManager::FileList::L1 ||
-                  cur_caching_list_idx_ > ObTmpFileFlushPriorityManager::FileList::L5)) {
+  if (OB_UNLIKELY(cur_caching_list_idx_ <= FileList::L1 ||
+                  cur_caching_list_idx_ > FileList::L5)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid caching list idx", KR(ret), K(cur_caching_list_idx_));
   } else if (OB_UNLIKELY(cur_iter_dir_idx_ < 0 || cur_iter_dir_idx_ >= cached_dir_num_ ||
@@ -578,7 +603,7 @@ int ObTmpFileFlushListIterator::advance_dir_idx_()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(ObTmpFileFlushPriorityManager::FileList::L1 == cur_caching_list_idx_)) {
+  if (OB_UNLIKELY(FileList::L1 == cur_caching_list_idx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid caching list idx", KR(ret), K(cur_caching_list_idx_));
   } else if (OB_UNLIKELY(cur_iter_dir_idx_ < 0 || cur_iter_dir_idx_ >= cached_dir_num_ ||
@@ -596,21 +621,21 @@ int ObTmpFileFlushListIterator::advance_dir_idx_()
 FlushCtxState ObTmpFileFlushListIterator::cal_current_flush_stage_()
 {
   FlushCtxState stage = FlushCtxState::FSM_FINISHED;
-  if (OB_UNLIKELY(cur_caching_list_idx_ < ObTmpFileFlushPriorityManager::FileList::L1 ||
-                  cur_caching_list_idx_ > ObTmpFileFlushPriorityManager::FileList::L5)) {
+  if (OB_UNLIKELY(cur_caching_list_idx_ < FileList::L1 ||
+                  cur_caching_list_idx_ > FileList::L5)) {
     // stage = FlushCtxState::FSM_FINISHED;
   } else if (!cur_caching_list_is_meta_) {
-    if (cur_caching_list_idx_ == ObTmpFileFlushPriorityManager::FileList::L1) {
+    if (cur_caching_list_idx_ == FileList::L1) {
       stage = FlushCtxState::FSM_F1;
-    } else if (cur_caching_list_idx_ <= ObTmpFileFlushPriorityManager::FileList::L4) {
+    } else if (cur_caching_list_idx_ <= FileList::L4) {
       stage = FlushCtxState::FSM_F2;
-    } else if (cur_caching_list_idx_ == ObTmpFileFlushPriorityManager::FileList::L5) {
+    } else if (cur_caching_list_idx_ == FileList::L5) {
       stage = FlushCtxState::FSM_F3;
     }
   } else {
-    if (cur_caching_list_idx_ <= ObTmpFileFlushPriorityManager::FileList::L4) {
+    if (cur_caching_list_idx_ <= FileList::L4) {
       stage = FlushCtxState::FSM_F4;
-    } else if (cur_caching_list_idx_ == ObTmpFileFlushPriorityManager::FileList::L5) {
+    } else if (cur_caching_list_idx_ == FileList::L5) {
       stage = FlushCtxState::FSM_F5;
     }
   }
@@ -625,19 +650,19 @@ int ObTmpFileFlushListIterator::init_caching_list_with_flush_stage_(const FlushC
     // no need to change caching list
   } else if (iter_stage == FlushCtxState::FSM_F1) {
     cur_caching_list_is_meta_ = false;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L1;
+    cur_caching_list_idx_ = FileList::L1;
   } else if (iter_stage == FlushCtxState::FSM_F2) {
     cur_caching_list_is_meta_ = false;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L2;
+    cur_caching_list_idx_ = FileList::L2;
   } else if (iter_stage == FlushCtxState::FSM_F3) {
     cur_caching_list_is_meta_ = false;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L5;
+    cur_caching_list_idx_ = FileList::L5;
   } else if (iter_stage == FlushCtxState::FSM_F4) {
     cur_caching_list_is_meta_ = true;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L1;
+    cur_caching_list_idx_ = FileList::L1;
   } else if (iter_stage == FlushCtxState::FSM_F5) {
     cur_caching_list_is_meta_ = true;
-    cur_caching_list_idx_ = ObTmpFileFlushPriorityManager::FileList::L5;
+    cur_caching_list_idx_ = FileList::L5;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid stage", KR(ret), K(iter_stage));
@@ -647,24 +672,24 @@ int ObTmpFileFlushListIterator::init_caching_list_with_flush_stage_(const FlushC
 }
 
 int ObTmpFileFlushListIterator::acquire_final_list_of_flush_stage_(const FlushCtxState iter_stage,
-                                                                   ObTmpFileFlushPriorityManager::FileList &list_idx)
+                                                                   FileList &list_idx)
 {
   int ret = OB_SUCCESS;
   switch(iter_stage) {
     case FlushCtxState::FSM_F1:
-      list_idx = ObTmpFileFlushPriorityManager::FileList::L1;
+      list_idx = FileList::L1;
       break;
     case FlushCtxState::FSM_F2:
-      list_idx = ObTmpFileFlushPriorityManager::FileList::L4;
+      list_idx = FileList::L4;
       break;
     case FlushCtxState::FSM_F3:
-      list_idx = ObTmpFileFlushPriorityManager::FileList::L5;
+      list_idx = FileList::L5;
       break;
     case FlushCtxState::FSM_F4:
-      list_idx = ObTmpFileFlushPriorityManager::FileList::L4;
+      list_idx = FileList::L4;
       break;
     case FlushCtxState::FSM_F5:
-      list_idx = ObTmpFileFlushPriorityManager::FileList::L5;
+      list_idx = FileList::L5;
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -673,7 +698,7 @@ int ObTmpFileFlushListIterator::acquire_final_list_of_flush_stage_(const FlushCt
   return ret;
 }
 
-int ObTmpFileFlushListIterator::ObFlushingTmpFileWrapper::init(const bool is_meta, const ObTmpFileHandle &file_handle)
+int ObTmpFileFlushListIterator::ObFlushingTmpFileWrapper::init(const bool is_meta, const ObITmpFileHandle &file_handle)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -705,7 +730,7 @@ bool ObTmpFileFlushListIterator::ObFlushingTmpFileWrapper::operator <(const ObFl
   bool b_ret = false;
   if (OB_UNLIKELY(!other.is_inited_ || !is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status", KR(ret), K(other), K(*this));
+    LOG_WARN("unexpected status", KR(ret), K(other), KPC(this));
   } else if (OB_ISNULL(other.file_handle_.get()) || OB_ISNULL(file_handle_.get())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attempt to compare file handle with nullptr", KR(ret), K(file_handle_), K(other.file_handle_));
@@ -718,7 +743,16 @@ bool ObTmpFileFlushListIterator::ObFlushingTmpFileWrapper::operator <(const ObFl
   } else if (file_handle_.get()->get_dir_id() > other.file_handle_.get()->get_dir_id()) {
     b_ret = false;
   } else if (is_meta_) {
-    b_ret = file_handle_.get()->get_meta_page_flush_level() < other.file_handle_.get()->get_meta_page_flush_level();
+    if (OB_UNLIKELY(file_handle_.get()->get_mode() != ObITmpFile::ObTmpFileMode::SHARED_NOTHING ||
+                    other.file_handle_.get()->get_mode() != ObITmpFile::ObTmpFileMode::SHARED_NOTHING)) {
+      ret = OB_ERR_UNEXPECTED;
+      b_ret = false;
+      LOG_ERROR("unexpected file mode", KR(ret), K(file_handle_), K(other.file_handle_));
+    } else {
+      ObSharedNothingTmpFile *sn_file = static_cast<ObSharedNothingTmpFile *>(file_handle_.get());
+      ObSharedNothingTmpFile *sn_other_file = static_cast<ObSharedNothingTmpFile *>(other.file_handle_.get());
+      b_ret = sn_file->get_meta_page_flush_level() < sn_other_file->get_meta_page_flush_level();
+    }
   } else {
     b_ret = file_handle_.get()->get_data_page_flush_level() < other.file_handle_.get()->get_data_page_flush_level();
   }
@@ -762,7 +796,7 @@ bool ObTmpFileFlushListIterator::ObFlushingTmpFileDirWrapper::operator <(const O
   int ret = OB_SUCCESS;
   bool b_ret = false;
   if (OB_UNLIKELY(!other.is_inited_ || !is_inited_)) {
-    LOG_WARN("unexpected status", K(other), K(*this));
+    LOG_WARN("unexpected status", K(other), KPC(this));
   } else if (!is_meta_ && other.is_meta_) {
     b_ret = true;
   } else if (is_meta_ && !other.is_meta_) {

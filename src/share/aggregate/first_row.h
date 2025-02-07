@@ -14,7 +14,6 @@
 #define OCEANBASE_SHARE_AGGREGATE_FIRST_ROW_H_
 
 #include "iaggregate.h"
-#include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
 {
@@ -71,6 +70,10 @@ public:
           ObIVector *data_vec = aggr_info.expr_->get_vector(ctx);
           if (data_vec->is_null(i)) {
             null_cell = true;
+          } else if (aggr_info.expr_->is_nested_expr()) {
+            if(OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, ctx, *aggr_info.expr_, i, payload, data_len))) {
+              SQL_LOG(WARN, "get collection payload failed", K(ret));
+            }
           } else {
             data_vec->get_payload(i, payload, data_len);
           }
@@ -82,6 +85,10 @@ public:
         ObIVector *data_vec = aggr_info.expr_->get_vector(ctx);
         if (data_vec->is_null(row_sel.index(i))) {
           null_cell = true;
+        } else if (aggr_info.expr_->is_nested_expr()) {
+          if(OB_FAIL(ObArrayExprUtils::get_collection_payload(agg_ctx.allocator_, ctx, *aggr_info.expr_, row_sel.index(i), payload, data_len))) {
+            SQL_LOG(WARN, "get collection payload failed", K(ret));
+          }
         } else {
           aggr_info.expr_->get_vector(ctx)->get_payload(row_sel.index(i), payload, data_len);
         }
@@ -91,6 +98,9 @@ public:
     if (OB_SUCC(ret) && (payload != nullptr || null_cell)) {
       if (null_cell) {
         agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_id, agg_cell);
+      } else if (aggr_info.expr_->is_nested_expr() && data_len > 0) {
+        // do memcpy in get_collection_payload
+        agg_ctx.set_agg_cell(payload, data_len, agg_col_id, agg_cell);
       } else if (data_len > 0) {
         void *tmp_buf = agg_ctx.allocator_.alloc(data_len);
         if (OB_ISNULL(tmp_buf)) {

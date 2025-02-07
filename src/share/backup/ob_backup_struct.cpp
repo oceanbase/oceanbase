@@ -1151,10 +1151,23 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64
     LOG_WARN("invalid args", K(ret), KP(authorization), K(length));
   } else if (OB_STORAGE_FILE == device_type_) {
     // do nothing
-  } else if (OB_FAIL(get_access_key_(access_key_buf, sizeof(access_key_buf)))) {
-    LOG_WARN("failed to get access key", K(ret));
-  } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s",  access_id_, access_key_buf))) {
-    LOG_WARN("failed to set authorization", K(ret), K(length), K_(access_id), K(strlen(access_key_buf)));
+  } else if (!is_assume_role_mode_) {
+    // access by ak/sk mode
+    if (OB_FAIL(get_access_key_(access_key_buf, sizeof(access_key_buf)))) {
+      LOG_WARN("failed to get access key", K(ret));
+    } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s", access_id_, access_key_buf))) {
+      LOG_WARN("failed to set authorization", K(ret), K(length), K_(access_id), K(strlen(access_key_buf)));
+    }
+  } else {
+    // access by assume role mode
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(authorization, length, pos, "%s", role_arn_))) {
+      LOG_WARN("failed to set authorization", K(ret), K(length), KP_(role_arn));
+    } else if (external_id_[0] != '\0') {
+      if (OB_FAIL(databuff_printf(authorization, length, pos, "&%s", external_id_))) {
+        LOG_WARN("failed to set authorization", K(ret), K(length), KP_(external_id));
+      }
+    }
   }
 
   return ret;
@@ -1400,6 +1413,8 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest)
     LOG_WARN("failed to get storage type", K(ret));
   } else {
     // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
+    // oss://backup_dir/?host=xxx.com&role_arn=xxx&external_id=xxx
+    // oss://backup_dir/?host=xxx.com&role_arn=xxx (external_id is optional)
     // file:///root_backup_dir"
     while (backup_dest[pos] != '\0') {
       if ('?' == backup_dest[pos]) {
@@ -2078,6 +2093,8 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_TABLET_NOT_EXIST :
     case OB_CHECKSUM_ERROR :
     case OB_VERSION_NOT_MATCH:
+    case OB_INVALID_DATA:
+    case OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE:
       bret = false;
       break;
     default:
@@ -2967,6 +2984,7 @@ const char* ObBackupStatus::get_str() const
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
     "BACKUP_FUSE_TABLET_META",
+    "PREPARE_BACKUP_LOG",
   };
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
@@ -2997,6 +3015,7 @@ int ObBackupStatus::set_status(const char *str)
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
     "BACKUP_FUSE_TABLET_META",
+    "PREPARE_BACKUP_LOG",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {
@@ -4395,9 +4414,15 @@ int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
     if (OB_FALSE_IT(pos = 0)) {
     } else if (OB_FAIL(backup_scn_to_time_tag(backup_set_desc_.min_restore_scn_, scn_display_buf, OB_MAX_TIME_STR_LENGTH, pos))) {
       LOG_WARN("failed to backup scn to time tag", K(ret));
-    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "type: %s, min_restore_scn_display: %s, size: %s.",
-        type_str, scn_display_buf, to_cstring(ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_))))) {
-      LOG_WARN("failed to databuff print", K(ret), KPC(this));
+    } else {
+      ret = databuff_printf(str_buf, str_buf_len, pos,
+          "type: %s, min_restore_scn_display: %s, size: ", type_str, scn_display_buf);
+      OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos,
+          ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_));
+      OB_SUCCESS != ret ? : ret = databuff_printf(str_buf, str_buf_len, pos, ".");
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to databuff print", K(ret), KPC(this));
+      }
     }
   }
   if (OB_FAIL(ret)) {

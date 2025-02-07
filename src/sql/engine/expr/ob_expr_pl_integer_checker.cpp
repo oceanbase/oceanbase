@@ -172,7 +172,7 @@ int ObExprPLIntegerChecker::calc(ObObj &result,
             OX (result.set_number(obj.get_type(), n));
           }
         } else {
-          result = obj;
+          OZ (deep_copy_obj(calc_buf, obj, result));
         }
       }
       break;
@@ -185,7 +185,7 @@ int ObExprPLIntegerChecker::calc(ObObj &result,
     case PL_POSITIVEN:
     case PL_SIGNTYPE: {
       OZ (check_range(obj, obj.get_type(), pls_range.range_));
-      OX (result = obj);
+      OZ (deep_copy_obj(calc_buf, obj, result));
       break;
     }
     default: {

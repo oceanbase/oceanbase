@@ -68,7 +68,7 @@ int ObExprJsonValid::calc_result_type1(ObExprResType &type,
 }
 
 int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
-                          bool has_lob_header, ObIAllocator *allocator, ObDatum &res)
+                          bool has_lob_header, MultimodeAlloctor *allocator, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObObjType type = meta.type_;
@@ -93,14 +93,16 @@ int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
       } else {
         is_invalid = true;
       }
+    } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (type == ObJsonType) { // json bin
       ObIJsonBase *j_bin = NULL;
       if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
-          ObJsonInType::JSON_BIN, j_bin))) {
+                                                   ObJsonInType::JSON_BIN, j_bin, 0,
+                                                   ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base", K(ret), K(type), K(j_str));
       }
     } else { // json tree
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator))) {
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, 0, ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }
@@ -135,7 +137,8 @@ int ObExprJsonValid::eval_json_valid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ret = OB_SUCCESS;
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+    MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
     if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
       LOG_WARN("fail to calc json valid result", K(ret), K(arg->datum_meta_));
     }

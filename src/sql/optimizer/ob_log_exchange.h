@@ -101,7 +101,8 @@ public:
   const common::ObIArray<ObRawExpr *> &get_repart_func_exprs() const {return repartition_func_exprs_;}
   const common::ObIArray<ObExchangeInfo::HashExpr> &get_hash_dist_exprs() const {return hash_dist_exprs_;}
   const common::ObIArray<common::ObObj> *get_popular_values() const {return &popular_values_;}
-  const ObRawExpr *get_calc_part_id_expr() { return calc_part_id_expr_; }
+  const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
+  ObRawExpr *get_calc_part_id_expr() { return calc_part_id_expr_; }
   ObRepartitionType get_repartition_type() const {return repartition_type_;}
   int64_t get_repartition_ref_table_id() const {return repartition_ref_table_id_;}
   int64_t get_repartition_table_id() const {return repartition_table_id_;}

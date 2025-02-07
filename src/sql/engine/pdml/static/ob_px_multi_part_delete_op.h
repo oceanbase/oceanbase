@@ -107,6 +107,12 @@ public:
   virtual int inner_get_next_row();
   virtual int inner_open();
   virtual int inner_close();
+  virtual void destroy()
+  {
+    // destroy
+    del_rtdef_.~ObDelRtDef();
+    ObTableModifyOp::destroy();
+  }
 private:
   ObPDMLOpDataDriver data_driver_;
   ObDelRtDef del_rtdef_;

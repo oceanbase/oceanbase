@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/cmd/ob_load_data_direct_impl.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
@@ -42,7 +43,7 @@ using namespace omt;
  */
 
 ObLoadDataDirectImpl::DataAccessParam::DataAccessParam()
-  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObLoadCompressionFormat::NONE)
+  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObCSVGeneralFormat::ObCSVCompression::NONE)
 {
 }
 
@@ -70,6 +71,7 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE),
     method_(ObDirectLoadMethod::INVALID_METHOD),
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
+    load_level_(ObDirectLoadLevel::INVALID_LEVEL),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     online_sample_percent_(100.)
 {
@@ -85,6 +87,7 @@ bool ObLoadDataDirectImpl::LoadExecuteParam::is_valid() const
          ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
          ObDirectLoadMethod::is_type_valid(method_) &&
          ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+         ObDirectLoadLevel::is_type_valid(load_level_) &&
          (storage::ObDirectLoadMethod::is_full(method_)
             ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
             : true) &&
@@ -504,7 +507,6 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.file_location_      = data_access_param.file_location_;
       file_read_param.filename_           = data_desc.filename_;
       file_read_param.compression_format_ = data_access_param.compression_format_;
-      file_read_param.access_info_        = data_access_param.access_info_;
       file_read_param.packet_handle_      = nullptr;
       if (OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info())
           && OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender())) {
@@ -513,7 +515,9 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
       file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
-      if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
+      if (OB_FAIL(file_read_param.access_info_.assign(data_access_param.access_info_))) {
+        LOG_WARN("fail to assign access info", KR(ret), K_(data_access_param.access_info));
+      } else if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
         LOG_WARN("failed to open file", KR(ret), K(data_desc));
       } else if (file_reader_->seekable()) {
 
@@ -819,7 +823,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected data format", KR(ret), K(data_access_param));
   } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)
-             || data_access_param.compression_format_ != ObLoadCompressionFormat::NONE) {
+             || data_access_param.compression_format_ != ObCSVGeneralFormat::ObCSVCompression::NONE) {
     if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
       LOG_WARN("fail to push back", KR(ret));
     }
@@ -832,14 +836,16 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     ObFileReadParam file_read_param;
     file_read_param.file_location_      = data_access_param.file_location_;
     file_read_param.filename_           = data_desc.filename_;
-    file_read_param.access_info_        = data_access_param.access_info_;
     file_read_param.compression_format_ = data_access_param.compression_format_;
     file_read_param.packet_handle_      = NULL;
     file_read_param.session_            = NULL;
     file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
     ObFileReader *file_reader = NULL;
-    if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
+
+    if (OB_FAIL(file_read_param.access_info_.assign(data_access_param.access_info_))) {
+      LOG_WARN("fail to assign access info", KR(ret), K_(data_access_param.access_info));
+    } else if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
       LOG_WARN("failed to open file.", KR(ret), K(data_desc));
     } else if (!file_reader->seekable()) {
       if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
@@ -972,9 +978,11 @@ int ObLoadDataDirectImpl::FileLoadExecutor::inner_init(const LoadExecuteParam &e
     LOG_WARN("fail to init allocator", KR(ret));
   }
   // init task_scheduler_
-  else if (OB_ISNULL(task_scheduler_ =
-                         OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
-                                 worker_count_, execute_param_->table_id_, "Parse"))) {
+  else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
+                                               worker_count_,
+                                               execute_param_->table_id_,
+                                               "Parse",
+                                               execute_ctx.exec_ctx_.get_session_info()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {
@@ -1252,14 +1260,14 @@ int ObLoadDataDirectImpl::FileLoadExecutor::process_task_handle(TaskHandle *hand
     }
     while (OB_SUCC(ret) && !is_iter_end) {
       // 每个新的batch需要分配一个新的shared_allocator
-      ObTableLoadSharedAllocatorHandle allocator_handle =
-        ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      if (!allocator_handle) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to make allocator handle", KR(ret));
-      }
+      ObTableLoadSharedAllocatorHandle allocator_handle;
       ObTableLoadObjRowArray obj_rows;
-      obj_rows.set_allocator(allocator_handle);
+      if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+            allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+        LOG_WARN("fail to make allocator handle", KR(ret));
+      } else {
+        obj_rows.set_allocator(allocator_handle);
+      }
 
       while (OB_SUCC(ret) && (processed_line_count < execute_param_->batch_row_count_)) {
         if (OB_FAIL(worker_ctx.data_parser_.get_next_row(row))) {
@@ -1440,6 +1448,7 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
   int64_t current_line_count = 0;
   const int64_t chunk_id = next_chunk_id_ ++;
   expr_buffer_.reuse();
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_IMPORT);
   if (OB_UNLIKELY(chunk_id > ObTableLoadSequenceNo::MAX_CHUNK_ID)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size is overflow", KR(ret), K(chunk_id));
@@ -1894,9 +1903,11 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::init(const LoadExecuteParam &execu
           LOG_WARN("fail to init task controller", KR(ret), K(worker_count_));
         } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", execute_param_->tenant_id_))) {
           LOG_WARN("fail to init allocator", KR(ret));
-        } else if (OB_ISNULL(task_scheduler_ =
-                               OB_NEWx(ObTableLoadTaskThreadPoolScheduler, &allocator_,
-                                       worker_count_, execute_param_->table_id_, "Parse"))) {
+        } else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, &allocator_,
+                                                       worker_count_,
+                                                       execute_param_->table_id_,
+                                                       "Parse",
+                                                       execute_ctx.exec_ctx_.get_session_info()))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
         } else if (OB_FAIL(task_scheduler_->init())) {
@@ -2052,17 +2063,12 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
       processed_line_count = 0;
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret), K(partition_idx), K(session_id));
+      } else if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+                   allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+        LOG_WARN("failed to make allocator handle", KR(ret));
       } else {
-        allocator_handle = ObTableLoadSharedAllocatorHandle::make_handle(
-          "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        if (OB_UNLIKELY(!allocator_handle)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to make allocator handle", KR(ret));
-        } else {
-          obj_rows.set_allocator(allocator_handle);
-        }
+        obj_rows.set_allocator(allocator_handle);
       }
-
       while (OB_SUCC(ret) && processed_line_count < execute_param_->batch_row_count_) {
         if (OB_FAIL(row_iter->get_next_row(new_row))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -2217,14 +2223,6 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_execute_param())) {
       LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
-    } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
-                                                                     execute_param_.table_id_,
-                                                                     execute_param_.method_,
-                                                                     execute_param_.insert_mode_,
-                                                                     ObDirectLoadMode::LOAD_DATA,
-                                                                     ObDirectLoadLevel::TABLE,
-                                                                     execute_param_.column_ids_))) {
-      LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(init_execute_context())) {
       LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
     } else {
@@ -2315,6 +2313,12 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     }
   }
 
+  if (OB_FAIL(ret)) {
+    if (!execute_param_.need_sort_ && OB_ROWKEY_ORDER_ERROR == ret) {
+      LOG_USER_ERROR(OB_ROWKEY_ORDER_ERROR, "The data to be imported is unordered, please set need_sort to true");
+    }
+  }
+
   direct_loader_.destroy();
   if (OB_NOT_NULL(session)) {
     session->reset_cur_phy_plan_to_null();
@@ -2328,6 +2332,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   int ret = OB_SUCCESS;
   const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
   const ObLoadDataHint &hint = load_stmt_->get_hints();
+  ObDirectLoadOptimizerCtx *optimizer_ctx = load_stmt_->get_optimizer_ctx();
   const ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list =
     load_stmt_->get_field_or_var_list();
   ObSchemaGetterGuard *schema_guard = ctx_->get_sql_ctx()->schema_guard_;
@@ -2347,6 +2352,19 @@ int ObLoadDataDirectImpl::init_execute_param()
                                                   table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(execute_param_));
   }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(optimizer_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("optimizer_ctx is null", KR(ret));
+    } else {
+      execute_param_.need_sort_ = optimizer_ctx->need_sort_;
+      execute_param_.max_error_rows_ = optimizer_ctx->max_error_row_count_;
+      execute_param_.dup_action_ = optimizer_ctx->dup_action_;
+      execute_param_.method_ = optimizer_ctx->load_method_;
+      execute_param_.insert_mode_ = optimizer_ctx->insert_mode_;
+      execute_param_.load_level_ = optimizer_ctx->load_level_;
+    }
+  }
   // parallel_
   if (OB_SUCC(ret)) {
     ObTenant *tenant = nullptr;
@@ -2365,44 +2383,10 @@ int ObLoadDataDirectImpl::init_execute_param()
     int64_t hint_batch_size = 0;
     if (OB_FAIL(hint.get_value(ObLoadDataHint::BATCH_SIZE, hint_batch_size))) {
       LOG_WARN("fail to get value of BATCH_SIZE", KR(ret), K(hint));
+    } else if (hint_batch_size > 0) {
+      execute_param_.batch_row_count_ = MIN(hint_batch_size, ObTableLoadParam::MAX_BATCH_SIZE);
     } else {
-      execute_param_.batch_row_count_ =
-        hint_batch_size > 0 ? hint_batch_size : DEFAULT_BUFFERRED_ROW_COUNT;
-    }
-  }
-  // direct load hint
-  if (OB_SUCC(ret)) {
-    const ObDirectLoadHint &direct_load_hint = hint.get_direct_load_hint();
-    if (direct_load_hint.is_enable()) {
-      execute_param_.need_sort_ = direct_load_hint.need_sort();
-      execute_param_.max_error_rows_ = direct_load_hint.get_max_error_row_count();
-      execute_param_.method_ =
-        (direct_load_hint.is_inc_direct_load() ? ObDirectLoadMethod::INCREMENTAL
-                                               : ObDirectLoadMethod::FULL);
-      execute_param_.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
-      if (OB_UNLIKELY(direct_load_hint.is_inc_load_method())) {
-        if (OB_UNLIKELY(ObLoadDupActionType::LOAD_REPLACE == load_args.dupl_action_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("replace for inc load method not supported", KR(ret),
-                   K(direct_load_hint), K(load_args.dupl_action_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace for inc load method in direct load is");
-        }
-      } else if (direct_load_hint.is_inc_replace_load_method()) {
-        if (OB_UNLIKELY(ObLoadDupActionType::LOAD_STOP_ON_DUP != load_args.dupl_action_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("replace or ignore for inc_replace load method not supported", KR(ret),
-                   K(direct_load_hint), K(load_args.dupl_action_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace or ignore for inc_replace load method in direct load is");
-        } else {
-          execute_param_.dup_action_ = ObLoadDupActionType::LOAD_REPLACE; // rewrite dup action
-          execute_param_.insert_mode_ = ObDirectLoadInsertMode::INC_REPLACE;
-        }
-      }
-    } else { // append
-      execute_param_.need_sort_ = true;
-      execute_param_.max_error_rows_ = 0;
-      execute_param_.method_ = ObDirectLoadMethod::FULL;
-      execute_param_.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
+      execute_param_.batch_row_count_ = ObTableLoadParam::DEFAULT_BATCH_SIZE;
     }
   }
   // online_opt_stat_gather_
@@ -2430,7 +2414,9 @@ int ObLoadDataDirectImpl::init_execute_param()
     data_access_param.file_column_num_ = field_or_var_list.count();
     data_access_param.file_format_ = load_stmt_->get_data_struct_in_file();
     data_access_param.file_cs_type_ = load_args.file_cs_type_;
-    data_access_param.access_info_ = load_args.access_info_;
+    if (OB_FAIL(data_access_param.access_info_.assign(load_args.access_info_))) {
+      LOG_WARN("fail to set access info", KR(ret));
+    }
     data_access_param.compression_format_ = load_args.compression_format_;
   }
   // column_ids_
@@ -2480,7 +2466,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   // compressor_type_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
-                 table_schema->get_compressor_type(), execute_param_.parallel_, execute_param_.compressor_type_))) {
+                 table_schema, execute_param_.parallel_, execute_param_.compressor_type_))) {
       LOG_WARN("fail to get tmp store compressor type", KR(ret));
     }
   }
@@ -2493,6 +2479,12 @@ int ObLoadDataDirectImpl::init_execute_param()
                                                                   execute_param_.online_sample_percent_))) {
       LOG_WARN("failed to get sys online sample percent", K(ret));
     }
+  }
+  // tablet_ids_
+  if (OB_SUCC(ret) && OB_FAIL(ObTableLoadSchema::get_tablet_ids_by_part_ids(table_schema,
+                                                               load_stmt_->get_part_ids(),
+                                                               execute_param_.tablet_ids_))) {
+    LOG_WARN("fail to get tablet ids", KR(ret));
   }
   return ret;
 }
@@ -2521,9 +2513,11 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
   load_param.compressor_type_ = execute_param_.compressor_type_;
   load_param.online_sample_percent_ = execute_param_.online_sample_percent_;
-  load_param.load_level_ = ObDirectLoadLevel::TABLE;
-  if (OB_FAIL(
-        direct_loader_.init(load_param, execute_param_.column_ids_, &execute_ctx_.exec_ctx_))) {
+  load_param.load_level_ = execute_param_.load_level_;
+  if (OB_FAIL(direct_loader_.init(load_param,
+                                  execute_param_.column_ids_,
+                                  execute_param_.tablet_ids_,
+                                  &execute_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));
   } else if (OB_FAIL(init_logger())) {
     LOG_WARN("fail to init logger", KR(ret));
@@ -2563,6 +2557,7 @@ int ObLoadDataDirectImpl::init_logger()
     const ObString &cur_query_str = session->get_current_query_string();
     const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
     int64_t current_time = ObTimeUtil::current_time();
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     OZ(databuff_printf(buf, buf_len, pos,
                        "Tenant name:\t%.*s\n"
                        "File name:\t%.*s\n"
@@ -2573,8 +2568,8 @@ int ObLoadDataDirectImpl::init_logger()
                        session->get_tenant_name().length(), session->get_tenant_name().ptr(),
                        load_args.file_name_.length(), load_args.file_name_.ptr(),
                        load_args.combined_name_.length(), load_args.combined_name_.ptr(),
-                       execute_param_.thread_count_, execute_param_.batch_row_count_,
-                       ObCurTraceId::get_trace_id_str()));
+                       execute_param_.parallel_, execute_param_.batch_row_count_,
+                       ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))));
     OZ(databuff_printf(buf, buf_len, pos, "Start time:\t"));
     OZ(ObTimeConverter::datetime_to_str(current_time, TZ_INFO(session), ObString(),
                                         MAX_SCALE_FOR_TEMPORAL, buf, buf_len, pos, true));

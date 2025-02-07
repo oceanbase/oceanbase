@@ -34,13 +34,14 @@ class ObLSTabletIterator final
 {
   friend class ObLSTabletService;
 public:
+  // mode only affect get_next_tablet interface, the other three get_xxx interfaces
+  // retrieve data from ObTabletPointer thus doesn't need ObMDSGetTabletMode
   explicit ObLSTabletIterator(const ObMDSGetTabletMode mode);
   ~ObLSTabletIterator();
   ObLSTabletIterator(const ObLSTabletIterator&) = delete;
   ObLSTabletIterator &operator=(const ObLSTabletIterator&) = delete;
 public:
   int get_next_tablet(ObTabletHandle &handle);
-  int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
   int get_tablet_ids(ObIArray<common::ObTabletID> &ids) const;
 
@@ -53,6 +54,31 @@ private:
   common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
   int64_t idx_;
   ObMDSGetTabletMode mode_;
+};
+
+class ObLSTabletAddrIterator final
+{
+  friend class ObLSTabletService;
+public:
+  // iter all tablets' addr without filter
+  ObLSTabletAddrIterator();
+  ~ObLSTabletAddrIterator();
+  ObLSTabletAddrIterator(const ObLSTabletAddrIterator&) = delete;
+  ObLSTabletAddrIterator &operator=(const ObLSTabletAddrIterator&) = delete;
+public:
+  int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
+  void reset() {
+    ls_tablet_service_ = nullptr;
+    idx_ = -1;
+    tablet_ids_.reset();
+  }
+  bool is_valid() const { return nullptr != ls_tablet_service_; }
+
+  TO_STRING_KV(KP_(ls_tablet_service), K_(tablet_ids), K_(idx));
+private:
+  ObLSTabletService *ls_tablet_service_;
+  common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
+  int64_t idx_;
 };
 
 class ObHALSTabletIDIterator final

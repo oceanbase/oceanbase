@@ -149,6 +149,7 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
     arg.in_offline_ddl_white_list_ = index_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
+    arg.data_table_id_ = index_schema->get_data_table_id();
     int64_t ddl_rpc_timeout = 0;
     int64_t table_id = index_schema->get_table_id();
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
@@ -357,10 +358,14 @@ int ObDropIndexTask::process()
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END_FOR_UNUSABLE:
-        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, DROP_SCHEMA))) {
+        {
+        ObDDLTaskStatus next_status = drop_index_arg_.only_set_status_?
+                                      SUCCESS : DROP_SCHEMA;
+        if (OB_FAIL(wait_trans_end(wait_trans_ctx_, next_status))) {
           LOG_WARN("wait trans end failed", K(ret));
         }
         break;
+        }
       case ObDDLTaskStatus::DROP_SCHEMA:
         if (OB_FAIL(drop_index(SUCCESS))) {
           LOG_WARN("drop index failed", K(ret));
@@ -401,8 +406,6 @@ int ObDropIndexTask::check_switch_succ()
   } else if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret));
-  } else if (OB_FAIL(refresh_schema_version())) {
-    LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service_->get_sql_proxy(), tenant_id_))) {
     if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
       need_retry_ = false;
@@ -410,6 +413,8 @@ int ObDropIndexTask::check_switch_succ()
     } else {
       LOG_WARN("check tenant status failed", K(ret), K(tenant_id_));
     }
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_index_exist))) {

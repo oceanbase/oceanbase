@@ -24,14 +24,16 @@ namespace cdc
 
 ExpiredArchiveClientLSFunctor::ExpiredArchiveClientLSFunctor(const int64_t current_time):
     current_time_us_(current_time),
-    valid_client_ls_cnt_(0),
+    valid_client_ls_cnt_v1_(0),
+    valid_client_ls_cnt_v2_(0),
     other_client_ls_cnt_(0)
 {
 }
 
 ExpiredArchiveClientLSFunctor::~ExpiredArchiveClientLSFunctor()
 {
-  valid_client_ls_cnt_ = 0;
+  valid_client_ls_cnt_v1_ = 0;
+  valid_client_ls_cnt_v2_ = 0;
   other_client_ls_cnt_ = 0;
 }
 
@@ -40,12 +42,19 @@ bool ExpiredArchiveClientLSFunctor::operator()(const ClientLSKey &key, ClientLSC
   int ret = OB_SUCCESS;
   bool bret = true;
   if (OB_ISNULL(value)) {
-    // ignore ret
-    EXTLOG_LOG(WARN, "get null clientls ctx", K(key));
+    EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get null clientls ctx", K(key));
   } else {
     const FetchMode fetch_mode = value->get_fetch_mode();
     if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
-      valid_client_ls_cnt_++;
+      const obrpc::ObCdcFetchLogProtocolType proto = value->get_proto_type();
+      if (is_v1_fetch_log_protocol(proto)) {
+        valid_client_ls_cnt_v1_++;
+      } else if (is_v2_fetch_log_protocol(proto)) {
+        valid_client_ls_cnt_v2_++;
+      } else {
+        other_client_ls_cnt_++;
+        EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get suspicious proto, unexpected", K(key), K(proto));
+      }
     } else {
       other_client_ls_cnt_++;
     }
@@ -86,6 +95,22 @@ bool UpdateCtxFunctor::operator()(const ClientLSKey &key, ClientLSCtx *value)
       bret = false;
       EXTLOG_LOG(WARN, "failed to change archive source for ctx", KPC(value), K(dest_), K(dest_ver_));
     }
+  }
+
+  return bret;
+}
+
+bool CtxSnapshotFunctor::operator()(const ClientLSKey &key, ClientLSCtx *value)
+{
+  bool bret = true;
+
+  if (OB_ISNULL(value)) {
+    bret = false;
+    EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get null ctx when snapshot ctx", KP(value), K(key));
+  } else if (obrpc::ObCdcFetchLogProtocolType::UnknownProto != value->get_proto_type()) {
+    value->snapshot_for_traffic_stat();
+  } else {
+    // ignore those non-inited ctx
   }
 
   return bret;
@@ -157,10 +182,12 @@ void ObCdcService::run1()
     static const int64_t RECYCLE_INTERVAL = 10L * 60 * BASE_INTERVAL;
     static const int64_t BUFFER_POOL_PURGE_INTERVAL = 10L * 60 * BASE_INTERVAL;
     static const int64_t CHECK_CDC_READ_ARCHIVE_INTERVAL = 10L * BASE_INTERVAL;
+    static const int64_t SNAPSHOT_TRAFFIC_INFO_INTERVAL = 10L * BASE_INTERVAL;
     int64_t last_query_ts = 0;
     int64_t last_recycle_ts = 0;
     int64_t last_purge_ts = 0;
     int64_t last_check_cdc_read_archive_ts = 0;
+    int64_t last_snapshot_traffic_info_ts = 0;
     while(! has_set_stop()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
@@ -206,7 +233,17 @@ void ObCdcService::run1()
         }
         last_check_cdc_read_archive_ts = current_ts;
       }
-      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
+
+      if (current_ts - last_snapshot_traffic_info_ts >= SNAPSHOT_TRAFFIC_INFO_INTERVAL) {
+        if (OB_FAIL(snapshot_traffic_info_())) {
+          EXTLOG_LOG(WARN, "failed to snapshot traffic info");
+        } else {
+          EXTLOG_LOG(INFO, "snapshot_traffic_info once");
+        }
+        last_snapshot_traffic_info_ts = current_ts;
+      }
+
+      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL), true/*is_idle_sleep*/);
     }
 
     EXTLOG_LOG(INFO, "CdcSrv Thread Exit due to has_set_stop", "stop_flag", has_set_stop());
@@ -288,6 +325,7 @@ int ObCdcService::fetch_log(const obrpc::ObCdcLSFetchLogReq &req,
     const int64_t recv_ts)
 {
   int ret = OB_SUCCESS;
+  ClientLSCtx *ctx = NULL;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -295,20 +333,56 @@ int ObCdcService::fetch_log(const obrpc::ObCdcLSFetchLogReq &req,
   } else if (is_stoped()) {
     resp.set_err(OB_IN_STOP_STATE);
     EXTLOG_LOG(INFO, "ObCdcService is stopped", K(req));
-  } else {
+  } else if (OB_FAIL(get_or_create_client_ls_ctx(req.get_client_id(),
+      req.get_tenant_id(), req.get_ls_id() , req.get_flag(),
+      req.get_progress(), ObCdcFetchLogProtocolType::LogGroupEntryProto,
+      get_client_type_from_req_(req), ctx))) {
+    EXTLOG_LOG(WARN, "failed to get or create client ls ctx", K(req), KP(ctx));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    EXTLOG_LOG(WARN, "get null ctx afeter get_or_create_client_ls_ctx, unexpected", KP(ctx), K(req));
+  } else{
+    ObCdcFetchLogTimeStats fetch_log_time_stat;
     const int64_t start_ts = ObTimeUtility::current_time();
-    ret = fetcher_.fetch_log(req, resp);
+    ctx->set_progress(req.get_progress());
+    ctx->set_req_lsn(req.get_start_lsn());
+    ctx->set_proto_type(obrpc::ObCdcFetchLogProtocolType::LogGroupEntryProto);
+    ctx->update_touch_ts();
+    ret = fetcher_.fetch_log(req, resp, *ctx, fetch_log_time_stat);
     const int64_t end_ts = ObTimeUtility::current_time();
     if (end_ts - start_ts > FETCH_LOG_WARN_THRESHOLD) {
       EXTLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fetch log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
     }
 
-    resp.set_l2s_net_time(recv_ts - send_ts);
-    resp.set_svr_queue_time(start_ts - recv_ts);
-    resp.set_process_time(end_ts - start_ts);
+    const int64_t l2s_time = recv_ts - send_ts;
+    const int64_t queue_time = start_ts - recv_ts;
+    const int64_t process_time = end_ts - start_ts;
+    const int64_t read_log_time = fetch_log_time_stat.get_read_log_time();
+    const int64_t read_log_size = resp.get_pos();
+
+    resp.set_l2s_net_time(l2s_time);
+    resp.set_svr_queue_time(queue_time);
+    resp.set_process_time(process_time);
     do_monitor_stat_(start_ts, end_ts, send_ts, recv_ts);
 
+    ctx->record_rpc_info(start_ts,
+        NULL != ObCurTraceId::get_trace_id() ? *ObCurTraceId::get_trace_id() : ObCurTraceId::TraceId(),
+        ret, resp.get_feedback_type());
+
+    if (OB_SUCC(ret)) {
+      ctx->record_rpc_stat(queue_time, process_time, read_log_time, read_log_size);
+    }
+
     EXTLOG_LOG(TRACE, "ObCdcService fetch_log", K(ret), K(req), K(resp));
+  }
+
+  if (OB_NOT_NULL(ctx)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(revert_client_ls_ctx(ctx))) {
+      EXTLOG_LOG_RET(WARN, tmp_ret, "failed to revert client ls ctx", K(req));
+    } else {
+      ctx = nullptr;
+    }
   }
 
   return ret;
@@ -374,27 +448,63 @@ int ObCdcService::fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
     const int64_t recv_ts)
 {
   int ret = OB_SUCCESS;
-
+  ClientLSCtx *ctx = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     EXTLOG_LOG(WARN, "ObCdcService not init", KR(ret));
   } else if (is_stoped()) {
     resp.set_err(OB_IN_STOP_STATE);
     EXTLOG_LOG(INFO, "ObCdcService is stopped", K(req));
+  } else if (OB_FAIL(get_or_create_client_ls_ctx(req.get_client_id(),
+      req.get_tenant_id(), req.get_ls_id(), req.get_flag(),
+      req.get_progress(), ObCdcFetchLogProtocolType::RawLogDataProto,
+      get_client_type_from_req_(req), ctx))) {
+    EXTLOG_LOG(WARN, "failed to get or create client ls ctx when fetching raw log", K(req), KP(ctx));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    EXTLOG_LOG(WARN, "get null ctx afeter get_or_create_client_ls_ctx, unexpected", KP(ctx), K(req));
   } else {
     const int64_t start_ts = ObTimeUtility::current_time();
+    ctx->update_touch_ts();
+    ctx->set_progress(req.get_progress());
+    ctx->set_req_lsn(req.get_start_lsn());
+    ctx->set_proto_type(obrpc::ObCdcFetchLogProtocolType::RawLogDataProto);
     ObCdcFetchRawStatus &status = resp.get_fetch_status();
-    ret = fetcher_.fetch_raw_log(req, resp);
+    ret = fetcher_.fetch_raw_log(req, resp, *ctx);
     const int64_t end_ts = ObTimeUtility::current_time();
     if (end_ts - start_ts > FETCH_LOG_WARN_THRESHOLD) {
       EXTLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "fetch raw log cost too much time", "time", end_ts - start_ts, K(req), K(resp));
     }
-    status.set_local_to_svr_time(recv_ts - send_ts);
-    status.set_queue_time(start_ts - recv_ts);
-    status.set_process_time(end_ts - start_ts);
+
+    const int64_t l2s_time = recv_ts - send_ts;
+    const int64_t queue_time = start_ts - recv_ts;
+    const int64_t process_time = end_ts - start_ts;
+    const int64_t read_log_time = status.get_read_palf_time() + status.get_read_archive_time();
+    const int64_t read_log_size = resp.get_read_size();
+
+    status.set_local_to_svr_time(l2s_time);
+    status.set_queue_time(queue_time);
+    status.set_process_time(process_time);
     do_monitor_stat_(start_ts, end_ts, send_ts, recv_ts);
 
-    EXTLOG_LOG(TRACE, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp));
+    ctx->record_rpc_info(start_ts,
+        NULL != ObCurTraceId::get_trace_id() ? *ObCurTraceId::get_trace_id() : ObCurTraceId::TraceId(),
+        ret, resp.get_feedback());
+
+    if (OB_SUCC(ret)) {
+      ctx->record_rpc_stat(queue_time, process_time, read_log_time, read_log_size);
+    }
+
+    EXTLOG_LOG(INFO, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp), K(send_ts), K(recv_ts));
+  }
+
+  if (OB_NOT_NULL(ctx)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(revert_client_ls_ctx(ctx))) {
+      EXTLOG_LOG_RET(WARN, tmp_ret, "failed to revert client ls ctx", K(req));
+    } else {
+      ctx = nullptr;
+    }
   }
 
   return ret;
@@ -405,7 +515,8 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
     const ObLSID &ls_id,
     const int8_t flag,
     const int64_t client_progress,
-    const FetchLogProtocolType proto_type,
+    const ObCdcFetchLogProtocolType proto_type,
+    const obrpc::ObCdcClientType client_type,
     ClientLSCtx *&ctx)
 {
   int ret = OB_SUCCESS;
@@ -435,22 +546,20 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
           } else if (OB_FAIL(ls_ctx_map_.get(ls_key, ctx))) {
             EXTLOG_LOG(WARN, "failed to get ctx from ctx_map when creating ctx failed", K(ls_key));
           }
-        } else if (FetchLogProtocolType::LogGroupEntryProto == proto_type) {
-          if (OB_FAIL(ctx->init(client_progress, proto_type))) {
-            EXTLOG_LOG(WARN, "failed to init client ls ctx", KR(ret), K(client_progress), K(proto_type));
-          } else {
+        } else if (OB_FAIL(ctx->init(client_progress, proto_type, client_type))) {
+          EXTLOG_LOG(WARN, "failed to init client ls ctx", KR(ret), K(client_progress), K(proto_type));
+        } else {
+          EXTLOG_LOG(INFO, "create client ls ctx succ", K(ls_key), K(ctx));
+
+          if (ObCdcFetchLogProtocolType::LogGroupEntryProto == proto_type) {
             // if test_switch_mode is enabled, set the init fetch mode to FETCHMODE_ARCHIVE
             // so that the fetch mode could be switched to FETCHMODE_ONLINE in the next rpc in some test cases.
             if (flag & ObCdcRpcTestFlag::OBCDC_RPC_TEST_SWITCH_MODE) {
               ctx->set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "InitTestSwitchMode");
             }
-            EXTLOG_LOG(INFO, "create client ls ctx succ", K(ls_key), K(ctx));
+          } else if (ObCdcFetchLogProtocolType::RawLogDataProto == proto_type) {
+
           }
-        } else if (FetchLogProtocolType::RawLogDataProto == proto_type) {
-          ctx->set_proto_type(proto_type);
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          EXTLOG_LOG(WARN, "get invalid proto_type", K(proto_type), K(ls_id), K(client_id));
         }
       } else {
         EXTLOG_LOG(ERROR, "get client ls ctx from ctx map failed", KR(ret));
@@ -626,18 +735,31 @@ int ObCdcService::resize_log_ext_handler_()
     EXTLOG_LOG(ERROR, "failed to get expired archive client ls key in ls_ctx_map");
   } else {
     const int64_t other_ls_count = functor.get_other_client_ls_cnt();
-    const int64_t valid_ls_count = functor.get_valid_client_ls_cnt();
+    const int64_t valid_ls_v1_count = functor.get_valid_client_ls_v1_cnt();
+    const int64_t valid_ls_v2_count = functor.get_valid_client_ls_v2_cnt();
     const int64_t single_read_concurrency = 8; // default 8
-    const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) * valid_ls_count);
+    const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) *
+        (valid_ls_v1_count + valid_ls_v2_count));
 
     if (OB_FAIL(log_ext_handler_.resize(new_concurrency))) {
       EXTLOG_LOG(WARN, "log_ext_handler failed to resize", K(new_concurrency));
     }
 
     if (OB_SUCC(ret)) {
-      EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts),
-          K(tenant_max_cpu), K(valid_ls_count), K(other_ls_count), K(new_concurrency));
+      EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts), K(tenant_max_cpu),
+          K(valid_ls_v1_count), K(valid_ls_v2_count), K(other_ls_count), K(new_concurrency));
     }
+  }
+
+  return ret;
+}
+
+int ObCdcService::snapshot_traffic_info_()
+{
+  int ret = OB_SUCCESS;
+  CtxSnapshotFunctor functor(ls_ctx_map_);
+  if (OB_FAIL(ls_ctx_map_.for_each(functor))) {
+    EXTLOG_LOG(WARN, "failed to take snapsht for ctx in ls_ctx_map");
   }
 
   return ret;

@@ -208,6 +208,7 @@ private:
   int process_sql_udt_construct_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sql_udt_attr_access_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_element_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xml_forest_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xmlparse_node(const ParseNode *node, ObRawExpr *&expr);
@@ -219,6 +220,12 @@ private:
                               ObQualifiedName &column_ref,
                               ObRawExpr *&expr);
   int process_array_contains_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_lambda_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_array_map_func_node(const ParseNode *node, ObRawExpr *&expr);
+  int check_replace_lambda_params_node(const ParseNode *params_node, ParseNode *func_node);
+  int process_lambda_var_node(const ParseNode *node, ObRawExpr *&expr);
+  int extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawExpr *> &var_exprs);
+  int check_lambda_params_duplicated(const ParseNode *params_node);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);

@@ -30,12 +30,10 @@ public:
   static bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr);
   static void set_interval(int32_t max_ratio, int32_t min_ratio);
 private:
-  static int32_t min_malloc_sample_interval;
-  static int32_t max_malloc_sample_interval;
+  static int32_t min_sample_size;
   static const int32_t INTERVAL_UPPER_LIMIT = 10000;
   static const int32_t MUST_SAMPLE_SIZE = 16<<20;
   static const int32_t CUMULATIVE_SAMPLE_SIZE = 4<<20;
-  int64_t count_;
   int64_t hold_;
 };
 
@@ -94,23 +92,22 @@ inline uint64_t ob_malloc_sample_hash(uint64_t v1, uint64_t v2)
 }
 
 inline ObMallocSampleLimiter::ObMallocSampleLimiter()
-  : count_(0), hold_(0)
+  : hold_(0)
 {}
 
 inline bool ObMallocSampleLimiter::try_acquire(int64_t alloc_bytes)
 {
-  bool ret = false;
   // Condition sample: controlled by sampler interval and Cumulative hold.
-  hold_ += alloc_bytes;
-  count_ += 1;
-  if (min_malloc_sample_interval <= count_) {
-    if (hold_ >= CUMULATIVE_SAMPLE_SIZE || max_malloc_sample_interval <= count_) {
-      count_ = 0;
-      hold_ = 0;
-      ret = true;
-    }
+  if (min_sample_size > alloc_bytes) {
+    hold_ += min_sample_size;
+  } else {
+    hold_ += alloc_bytes;
   }
-  return ret;
+  if (OB_LIKELY(hold_ < CUMULATIVE_SAMPLE_SIZE)) {
+    return false;
+  }
+  hold_ = 0;
+  return true;
 }
 
 inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
@@ -119,7 +116,7 @@ inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, con
   if (ObLightBacktraceGuard::is_enabled()) {
     // light_backtrace can sample all.
     ret = true;
-  } else if (OB_UNLIKELY(INTERVAL_UPPER_LIMIT == min_malloc_sample_interval)) {
+  } else if (OB_UNLIKELY(min_sample_size == 0)) {
     // Zero sample mode.
   } else if (OB_UNLIKELY(MUST_SAMPLE_SIZE <= size)) {
     // Full sample when size is bigger than 16M.
@@ -141,9 +138,10 @@ inline void ObMallocSampleLimiter::set_interval(int32_t max_interval, int32_t mi
       || max_interval < min_interval) {
     _OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "set the min or max malloc times between two samples unexpected,"
                 "max_interval=%d, min_interval=%d", max_interval, min_interval);
+  } else if (min_interval == INTERVAL_UPPER_LIMIT) {
+    min_sample_size = 0;
   } else {
-    min_malloc_sample_interval = min_interval;
-    max_malloc_sample_interval = max_interval;
+    min_sample_size = CUMULATIVE_SAMPLE_SIZE/max_interval;
     _OB_LOG_RET(INFO, common::OB_SUCCESS, "set the min or max malloc times between two samples succeed,"
                 "max_interval=%d, min_interval=%d", max_interval, min_interval);
   }
@@ -179,6 +177,7 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
   return ret;
 }
 
+bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr);
 } // end of namespace lib
 } // end of namespace oceanbase
 

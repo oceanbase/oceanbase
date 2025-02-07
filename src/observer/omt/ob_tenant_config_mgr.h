@@ -104,6 +104,7 @@ using UpdateTenantConfigCb = common::ObFunction<void(uint64_t tenant_id)>;
 
 class ObTenantConfigMgr
 {
+  friend class ObTenantConfig;
 public:
   static ObTenantConfigMgr &get_instance();
   virtual ~ObTenantConfigMgr();
@@ -175,6 +176,8 @@ public:
 private:
   static const int64_t RECYCLE_LATENCY = 30L * 60L * 1000L * 1000L;
   ObTenantConfigMgr();
+  // whitout lock, only used inner
+  int dump2file_unsafe();
   bool inited_;
   common::ObAddr self_;
   common::ObMySQLProxy *sql_proxy_;

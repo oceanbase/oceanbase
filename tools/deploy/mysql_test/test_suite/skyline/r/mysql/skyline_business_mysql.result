@@ -211,8 +211,7 @@ Outputs & filters:
        luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
        luna_core_bidword_diagnose.click_factor)})}]),
       update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
-       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
-       0)))])
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,8)])
   1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -221,7 +220,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
-       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))]), rowset=16
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -258,8 +257,7 @@ Outputs & filters:
        luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
        luna_core_bidword_diagnose.click_factor)})}]),
       update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
-       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
-       0)))])
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,8)])
   1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -268,7 +266,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
-       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))]), rowset=16
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -305,8 +303,7 @@ Outputs & filters:
        luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
        luna_core_bidword_diagnose.click_factor)})}]),
       update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
-       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
-       0)))])
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,8)])
   1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
        [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
@@ -316,7 +313,7 @@ Outputs & filters:
        [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
        [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
        [luna_core_bidword_diagnose.click_factor]), filter([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid 
-      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))], [luna_core_bidword_diagnose.type 
+      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(20, 0))], [luna_core_bidword_diagnose.type 
       = 6], [luna_core_bidword_diagnose.platform = 7]), rowset=16
       access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
        [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
@@ -578,17 +575,17 @@ where b.card_no is null
 order by a.card_no
 limit 0,2000;
 Query Plan
-==================================================================================================
-|ID|OPERATOR               |NAME                                           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------------------------------
-|0 |LIMIT                  |                                               |1       |5           |
-|1 |└─MERGE ANTI JOIN      |                                               |1       |5           |
-|2 |  ├─SUBPLAN SCAN       |a                                              |1       |3           |
-|3 |  │ └─MERGE DISTINCT   |                                               |1       |3           |
-|4 |  │   └─TABLE FULL SCAN|pcb_common_bill_01(UK_CARDNO_ATTR_PRODID_OUTNO)|1       |3           |
-|5 |  └─SUBPLAN SCAN       |VIEW1                                          |1       |3           |
-|6 |    └─TABLE FULL SCAN  |b(uk_cardno)                                   |1       |3           |
-==================================================================================================
+===================================================================================================
+|ID|OPERATOR                |NAME                                           |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------------------------------
+|0 |LIMIT                   |                                               |1       |5           |
+|1 |└─MERGE ANTI JOIN       |                                               |1       |5           |
+|2 |  ├─SUBPLAN SCAN        |a                                              |1       |3           |
+|3 |  │ └─MERGE DISTINCT    |                                               |1       |3           |
+|4 |  │   └─TABLE RANGE SCAN|pcb_common_bill_01(UK_CARDNO_ATTR_PRODID_OUTNO)|1       |3           |
+|5 |  └─SUBPLAN SCAN        |VIEW1                                          |1       |3           |
+|6 |    └─TABLE RANGE SCAN  |b(uk_cardno)                                   |1       |3           |
+===================================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.card_no]), filter(nil), rowset=16
@@ -702,16 +699,16 @@ KEY `WSJJDM_LOCAL` (`WSJJDM`, `WSJWSY`) LOCAL
 partition by key(`wsjjdm`, `wsjjzh`) partitions 31;
 explain select `WSJJDM`, `WSJWSY` from wfsydp where wsjjdm = '666888' order by `WSJJDM`, `WSJWSY` limit 0 , 181819;
 Query Plan
-======================================================================
-|ID|OPERATOR                    |NAME          |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |DISTRIBUTED TABLE RANGE SCAN|wfsydp(WSJJDM)|1       |3           |
-======================================================================
+==========================================================
+|ID|OPERATOR        |NAME          |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------
+|0 |TABLE RANGE SCAN|wfsydp(WSJJDM)|1       |3           |
+==========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([wfsydp.WSJJDM], [wfsydp.WSJWSY]), filter(nil), rowset=16
       access([wfsydp.WSJJDM], [wfsydp.WSJWSY]), partitions(p0)
-      limit(181819), offset(0), is_index_back=false, is_global_index=true, keep_ordering=true, 
+      limit(181819), offset(0), is_index_back=false, is_global_index=true, 
       range_key([wfsydp.WSJJDM], [wfsydp.WSJWSY], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH]), range(666888,MIN,MIN,MIN,MIN ; 666888,MAX,MAX,MAX,
       MAX), 
       range_cond([wfsydp.WSJJDM = '666888'])

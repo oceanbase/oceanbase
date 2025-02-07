@@ -140,6 +140,7 @@ void ObQueryRetryInfo::reset()
   last_query_retry_err_ = OB_SUCCESS;
   retry_cnt_ = 0;
   query_switch_leader_retry_timeout_ts_ = 0;
+  query_retry_ash_diag_info_.reset();
 }
 
 void ObQueryRetryInfo::clear()
@@ -208,6 +209,8 @@ ObSqlCtx::ObSqlCtx()
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+  format_sql_id_[0] = '\0';
+  format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
 }
 
 void ObSqlCtx::reset()
@@ -223,6 +226,8 @@ void ObSqlCtx::reset()
   retry_times_ = OB_INVALID_COUNT;
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+  format_sql_id_[0] = '\0';
+  format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   exec_type_ = InvalidType;
   is_prepare_protocol_ = false;
   is_pre_execute_ = false;
@@ -278,6 +283,7 @@ void ObSqlCtx::clear()
   cur_stmt_ = nullptr;
   is_text_ps_mode_ = false;
   ins_opt_ctx_.clear();
+  cur_plan_ = nullptr;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

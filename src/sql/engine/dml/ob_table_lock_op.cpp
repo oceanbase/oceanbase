@@ -432,7 +432,6 @@ int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs)
       brs_.skip_->set(i);
     }
   }
-  clear_evaluated_flag();
 
   return ret;
 }
@@ -441,7 +440,7 @@ OB_INLINE int ObTableLockOp::get_next_batch_from_child(const int64_t max_row_cnt
                                                        const ObBatchRows *&child_brs)
 {
   int ret = OB_SUCCESS;
-  clear_datum_eval_flag();
+  clear_evaluated_flag();
   if (OB_FAIL(child_->get_next_batch(max_row_cnt, child_brs))) {
     LOG_WARN("fail to get next batch", K(ret));
   } else if (OB_LIKELY(!child_brs->end_ && child_brs->size_ > 0)) {

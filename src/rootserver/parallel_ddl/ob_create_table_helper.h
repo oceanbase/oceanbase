@@ -70,7 +70,7 @@ private:
 
   int lock_objects_();
   int generate_schemas_();
-  int calc_schema_version_cnt_();
+  virtual int calc_schema_version_cnt_() override;
   int create_schemas_();
   int create_tablets_();
   int add_index_name_to_cache_();

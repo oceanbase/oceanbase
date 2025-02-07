@@ -19,9 +19,9 @@ using namespace sql;
 using namespace common;
 const static int64_t EXPLAIN_FORMAT = 0;
 const static int64_t EXPLAIN_DISPLAY_OPTION = 1;
-const static int64_t EXPLAIN_CHILD_STMT = 2;
-const static int64_t EXPLAIN_INTO_TABLE = 3;
-const static int64_t EXPLAIN_STMT_ID = 4;
+const static int64_t EXPLAIN_INTO_TABLE = 2;
+const static int64_t EXPLAIN_STMT_ID = 3;
+const static int64_t EXPLAIN_CHILD_STMT = 4;
 int ObExplainResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

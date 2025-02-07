@@ -29,7 +29,7 @@ using namespace oceanbase::common;
 int init_cos_env()
 {
   int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "OSS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "COS_GLOBAL_INIT", IO_HANDLED_SIZE_ZERO);
   return qcloud_cos::ObCosEnv::get_instance().init(ob_apr_abort_fn);
 }
 
@@ -46,7 +46,7 @@ void fin_cos_env()
       OB_LOG(INFO, "force fin_cos_env", K(flying_io_cnt));
       break;
     }
-    usleep(100 * 1000L); // 100ms
+    ob_usleep(100 * 1000L); // 100ms
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 
@@ -200,7 +200,7 @@ int ObStorageCosUtil::open(ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util already open, cannot open again", K(ret));
   } else if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
@@ -252,7 +252,7 @@ int ObStorageCosUtil::head_object_meta(const ObString &uri, ObStorageObjectMetaB
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -329,7 +329,7 @@ int ObStorageCosUtil::is_tagging(
   is_tagging = false;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -352,7 +352,7 @@ int ObStorageCosUtil::del_file(const ObString &uri)
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -380,7 +380,7 @@ int ObStorageCosUtil::batch_del_files(
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -409,7 +409,7 @@ int ObStorageCosUtil::list_files(
   ObArenaAllocator allocator(ObModIds::BACKUP);
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -446,7 +446,7 @@ int ObStorageCosUtil::list_files(
   ObStorageListObjectsCtx &list_ctx = static_cast<ObStorageListObjectsCtx &>(ctx_base);
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty() || !list_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -483,7 +483,7 @@ int ObStorageCosUtil::list_directories(
   ObArenaAllocator allocator(ObModIds::BACKUP);
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -517,7 +517,7 @@ int ObStorageCosUtil::del_unmerged_parts(const ObString &uri)
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos util not opened", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -720,7 +720,7 @@ int ObStorageCosBase::delete_objects(
       // By comparing it to files_to_delete, we can identify the objects that failed to be deleted.
       for (int64_t i = 0; OB_SUCC(ret) && i < n_succeed_deleted_objects; i++) {
         if (OB_ISNULL(succeed_deleted_objects_list[i])) {
-          ret = OB_COS_ERROR;
+          ret = OB_OBJECT_STORAGE_IO_ERROR;
           OB_LOG(WARN, "returned object key is null",
               K(ret), K(i), K(n_succeed_deleted_objects), K(n_files_to_delete));
         }
@@ -878,7 +878,7 @@ int ObStorageCosReader::open(const ObString &uri,
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos reader already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
     OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri));
@@ -923,7 +923,7 @@ int ObStorageCosReader::pread(
   ObExternalIOCounterGuard io_guard;
 
   if (!is_opened_) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos reader cannot read before it is opened", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -935,9 +935,8 @@ int ObStorageCosReader::pread(
     // To maintain thread safety, a new temporary cos_handle should be created for each individual
     // pread operation rather than reusing the same handle. This approach ensures that memory
     // allocation is safely performed without conflicts across concurrent operations.
-  } else if (OB_FAIL(create_cos_handle(
-      allocator, handle_.get_cos_account(),
-      checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
+  } else if (OB_FAIL(handle_.create_cos_handle(
+      allocator, checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
     OB_LOG(WARN, "fail to create tmp cos handle", K(ret), K_(checksum_type));
   } else {
     // When is_range_read is true, it indicates that only a part of the data is read.
@@ -1009,7 +1008,7 @@ int ObStorageCosWriter::open(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos writer already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
     OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri));
@@ -1047,6 +1046,10 @@ int ObStorageCosWriter::write(const char *buf, const int64_t size)
   } else if (NULL == buf || size < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "buf is NULL or size is invalid", K(ret), KP(buf), K(size));
+#ifdef ERRSIM
+  } else if (OB_FAIL(EventTable::EN_OBJECT_STORAGE_CHECKSUM_ERROR)) {
+    OB_LOG(WARN, "fake checksum error", K(ret));
+#endif
   } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
         handle_.get_bucket_name().ptr(), handle_.get_bucket_name().length());
@@ -1082,7 +1085,7 @@ int ObStorageCosAppendWriter::open(
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos appender already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
     OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri));
@@ -1110,7 +1113,7 @@ int ObStorageCosAppendWriter::pwrite(const char *buf, const int64_t size, const 
   const bool is_pwrite = true;
 
   if(OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos append writer cannot write before it is not opened", K(ret));
   } else if(NULL == buf || size <= 0 || offset < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1164,7 +1167,7 @@ int ObStorageCosAppendWriter::do_write(
       ret = OB_CLOUD_OBJECT_NOT_APPENDABLE;
       OB_LOG(WARN, "we can only append an appendable obj", K(ret), K(is_appendable));
     } else if (is_pwrite && pos != offset) {
-      ret = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+      ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
       OB_LOG(WARN, "offset is not match with real length", K(ret), K(pos), K(offset), K(obj_meta.type_));
     } else if (OB_FAIL(qcloud_cos::ObCosWrapper::append(handle_.get_ptr(), bucket_name,
                object_name, buf, size, offset))) {
@@ -1230,7 +1233,7 @@ int ObStorageCosMultiPartWriter::open(const ObString &uri, common::ObObjectStora
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "already open, cannot open again", K(ret));
   } else if (OB_UNLIKELY(uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1275,7 +1278,7 @@ int ObStorageCosMultiPartWriter::write(const char * buf, const int64_t size)
   int64_t fill_size = 0;
   int64_t buf_pos = 0;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "write cos should open first", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(size < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1322,7 +1325,7 @@ int ObStorageCosMultiPartWriter::write_single_part()
     ret = OB_OUT_OF_ELEMENT;
     OB_LOG(WARN, "Out of cos element ", K(ret), K_(partnum));
   } else if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "write cos should open first", K(ret));
   } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
@@ -1382,7 +1385,7 @@ int ObStorageCosMultiPartWriter::complete()
   ObExternalIOCounterGuard io_guard;
   const int64_t start_time = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos multipart writer cannot close before it is opened", K(ret));
   } else if (0 != base_buf_pos_) {
     if (OB_FAIL(write_single_part())) {
@@ -1432,7 +1435,7 @@ int ObStorageCosMultiPartWriter::abort()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos multipart writer cannot abort before it is opened", K(ret));
   } else {
     qcloud_cos::CosStringBuffer bucket_name = qcloud_cos::CosStringBuffer(
@@ -1482,7 +1485,7 @@ int ObStorageParallelCosMultiPartWriter::open(const ObString &uri, ObObjectStora
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "already open, cannot open again", K(ret));
   } else if (OB_FAIL(ObStorageCosBase::open(uri, storage_info))) {
     OB_LOG(WARN, "fail to open in cos_base", K(ret), K(uri), KPC(storage_info));
@@ -1524,7 +1527,7 @@ int ObStorageParallelCosMultiPartWriter::upload_part(
   const char *etag_header_str = nullptr;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "write cos should open first", K(ret));
   } else if (OB_UNLIKELY(part_id < 1 || part_id > COS_MAX_PART_NUM)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1562,7 +1565,7 @@ int ObStorageParallelCosMultiPartWriter::complete()
   ObExternalIOCounterGuard io_guard;
 
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos multipart writer cannot close before it is opened", K(ret));
   } else if (FAILEDx(construct_complete_part_list(handle_.get_ptr(),
                                                   part_info_map_,
@@ -1590,7 +1593,7 @@ int ObStorageParallelCosMultiPartWriter::abort()
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "cos multipart writer cannot abort before it is opened", K(ret));
   } else {
     if (OB_FAIL(qcloud_cos::ObCosWrapper::abort_multipart_upload(

@@ -25,12 +25,16 @@ class ObDASBaseCtDef;
 class ObDASBaseRtDef;
 class ObDASScanCtDef;
 class ObDASScanRtDef;
+
 struct ObDASLookupIterParam : public ObDASIterParam
 {
 public:
+  static const int64_t LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT = 1000;
+  static const int64_t GLOBAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT = 10000;
+
   ObDASLookupIterParam(bool is_global_index)
     : ObDASIterParam(is_global_index ? DAS_ITER_GLOBAL_LOOKUP : DAS_ITER_LOCAL_LOOKUP),
-      default_batch_row_count_(0),
+      default_batch_row_count_(is_global_index ? GLOBAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT : LOCAL_LOOKUP_ITER_DEFAULT_BATCH_ROW_COUNT),
       index_ctdef_(nullptr),
       index_rtdef_(nullptr),
       lookup_ctdef_(nullptr),
@@ -93,6 +97,14 @@ protected:
   virtual int check_index_lookup() = 0;
 
 protected:
+  enum LookupState : uint32_t
+  {
+    INDEX_SCAN,
+    DO_LOOKUP,
+    OUTPUT_ROWS,
+    FINISHED
+  };
+
   const ObDASBaseCtDef *index_ctdef_;
   ObDASBaseRtDef *index_rtdef_;
   const ObDASScanCtDef *lookup_ctdef_;
@@ -102,22 +114,12 @@ protected:
   ObDASIter *data_table_iter_;
   int64_t lookup_rowkey_cnt_;
   int64_t lookup_row_cnt_;
-  int build_lookup_range(ObNewRange &range);
-  int build_trans_info_datum(const ObExpr *trans_info_expr, ObDatum *&datum_ptr);
-  common::ObArenaAllocator &get_arena_allocator() { return lookup_memctx_->get_arena_allocator(); }
-
-private:
-  enum LookupState : uint32_t
-  {
-    INDEX_SCAN,
-    DO_LOOKUP,
-    OUTPUT_ROWS,
-    FINISHED
-  };
-
   LookupState state_;
   bool index_end_;
   int64_t default_batch_row_count_;
+  int build_lookup_range(ObNewRange &range);
+  int build_trans_info_datum(const ObExpr *trans_info_expr, ObDatum *&datum_ptr);
+  common::ObArenaAllocator &get_arena_allocator() { return lookup_memctx_->get_arena_allocator(); }
   lib::MemoryContext lookup_memctx_;
 };
 

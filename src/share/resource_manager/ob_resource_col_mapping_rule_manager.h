@@ -195,6 +195,7 @@ public:
   int get_group_id(uint64_t rule_id, const ObString &user_name,
                         const common::ObString &literal_value, uint64_t &group_id);
   int64_t get_version() { return version_; }
+  int64_t to_string(char* buf, int64_t buf_len) const;
 private:
   uint64_t tenant_id_;
   //avoid concurrent modification on maps.
@@ -251,6 +252,7 @@ public:
                                        const common::ObString &user_name,
                                        const common::ObString &literal_value);
   int64_t get_column_mapping_version(uint64_t tenant_id);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   common::ObLinkHashMap<ObResTenantId, ObTenantResColMappingInfo, AllocHandle> tenant_rule_infos_;
   bool inited_;

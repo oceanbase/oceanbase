@@ -104,7 +104,8 @@ public:
       ref_count_(0),
       lib_cache_(lib_cache),
       co_list_lock_(common::ObLatchIds::PLAN_SET_LOCK),
-      co_list_(allocator_)
+      co_list_(allocator_),
+      is_invalid_(false)
   {
     lock_timeout_ts_ = GCONF.large_query_threshold;
   }
@@ -160,6 +161,7 @@ public:
   lib::MemoryContext &get_mem_context() { return mem_context_; }
   int64_t get_mem_size();
   ObPlanCache *get_lib_cache() const { return lib_cache_; }
+  bool is_invalid() const { return is_invalid_; }
 
   VIRTUAL_TO_STRING_KV(K_(ref_count), K_(lock_timeout_ts));
 
@@ -211,6 +213,7 @@ protected:
   ObPlanCache *lib_cache_;
   common::SpinRWLock co_list_lock_;
   CacheObjList co_list_;
+  bool is_invalid_;
 };
 
 } // namespace common

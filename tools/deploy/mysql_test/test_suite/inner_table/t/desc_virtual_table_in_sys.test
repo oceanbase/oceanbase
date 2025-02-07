@@ -41,7 +41,8 @@ when "$table_name" in (
 when "$table_name" in (
 "__all_virtual_sysstat",
 "__all_virtual_sesstat",
-"__all_virtual_session_event") then 4
+"__all_virtual_session_event",
+"__all_virtual_storage_leak_info") then 4
 when "$table_name" in (
 "__all_virtual_tx_data",
 "__all_virtual_checkpoint_diagnose_memtable_info",
@@ -60,6 +61,26 @@ if ($part_level == 1)
 --echo "$database_name.$table_name runs in single server"
 eval select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name where svr_ip = "$svr_ip" and svr_port = "$svr_port";
 --enable_query_log
+}
+let $select_type = `
+select (
+case when "$table_name" in (
+# __all_virtual_mds_node_stat need tenant_id or ls_id
+"__all_virtual_mds_node_stat",
+# __tenant_virtual_show_restore_preview need run `ALTER SYSTEM RESTORE PREVIEW` first
+"__tenant_virtual_show_restore_preview"
+) then 2
+else 1 end) as select_type from dual`;
+
+if ($select_type == 1) {
+# select all virtual tables to ensure each added column is implemented or set null
+# table with bugs may pass the test if the table is empty
+# --echo "select $database_name $table_name"
+--enable_abort_on_error
+--disable_result_log
+eval select /*+QUERY_TIMEOUT(60000000)*/ * from $database_name.$table_name limit 1;
+--enable_result_log
+--disable_abort_on_error
 }
 }
 

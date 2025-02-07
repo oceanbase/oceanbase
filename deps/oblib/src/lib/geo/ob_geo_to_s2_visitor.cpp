@@ -648,6 +648,8 @@ int64_t ObWkbToS2Visitor::get_mbr(S2LatLngRect &mbr, bool need_buffer, S1Angle d
   INIT_SUCC(ret);
   if (invalid_ || has_reset_) {
     mbr = S2LatLngRect::Full();
+  } else if (mbr_.is_empty()) {
+    // it's empty collection, do nothing
   } else {
     if (need_buffer) {
       mbr_ = mbr_.ExpandedByDistance(distance);

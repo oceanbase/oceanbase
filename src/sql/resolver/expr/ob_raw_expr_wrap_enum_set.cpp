@@ -32,7 +32,9 @@ int ObRawExprWrapEnumSet::wrap_enum_set(ObDMLStmt &stmt)
   int ret = OB_SUCCESS;
   cur_stmt_ = &stmt;
   if (stmt.is_select_stmt()) {
-    //handle the target list of first level
+    // handle the target list of first level
+    // In the enum/set type with subschema, we keep this behavior now, as the obj meta information
+    // of the original expr is not valid that can be directly returned to the client.
     ObSelectStmt &select_stmt = static_cast<ObSelectStmt &>(stmt);
     if (OB_FAIL(wrap_target_list(select_stmt))) {
       LOG_WARN("failed to wrap target list", K(ret));
@@ -83,12 +85,49 @@ int ObRawExprWrapEnumSet::wrap_sub_select(ObInsertStmt &stmt)
       } else if (OB_FAIL(static_cast<ObConstRawExpr *>(conv_expr->get_param_expr(0))
                          ->get_value().get_int32(const_value))) {
         LOG_WARN("failed to get obj type from convert expr", K(ret));
+      } else if (conv_expr->get_param_expr(4)->is_enum_set_with_subschema()) {
+        ObRawExpr *arg_expr = conv_expr->get_param_expr(4);
+        if (arg_expr->get_data_type() == const_value) {
+          bool need_to_str = true;
+          // same type
+          if (OB_ISNULL(my_session_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session is null", K(ret));
+          } else if (my_session_->get_ddl_info().is_ddl()) {
+            uint16_t subschema_id = 0;
+            ObExecContext *exec_ctx = NULL;
+            if (conv_expr->is_enum_set_with_subschema()) {
+              need_to_str = (arg_expr->get_subschema_id() != conv_expr->get_subschema_id());
+            } else if (OB_ISNULL(exec_ctx = my_session_->get_cur_exec_ctx())) {
+            } else if (OB_UNLIKELY(conv_expr->get_enum_set_values().empty())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("str values for enum set expr is empty", K(ret));
+            } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_info(
+                                conv_expr->get_result_type().get_obj_meta(),
+                                conv_expr->get_enum_set_values(),
+                                subschema_id))) {
+              LOG_WARN("failed to get subschema id by udt id", K(ret));
+            } else if (subschema_id == arg_expr->get_subschema_id()) {
+              need_to_str = false;
+            }
+          }
+          if (OB_FAIL(ret) || !need_to_str) {
+          } else if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_,
+                                                              arg_expr,
+                                                              wrapped_expr,
+                                                              my_session_,
+                                                              true /*is_type_to_str*/,
+                                                              static_cast<ObObjType>(const_value)))) {
+            LOG_WARN("failed to create_type_to_string_expr", K(ret));
+          }
+        }
       } else if (OB_FAIL(wrap_type_to_str_if_necessary(conv_expr->get_param_expr(4),
                                                        static_cast<ObObjType>(const_value),
                                                        is_same_need,
                                                        wrapped_expr))) {
         LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
-      } else if (NULL != wrapped_expr) {
+      }
+      if (OB_SUCC(ret) && NULL != wrapped_expr) {
         conv_expr->get_param_expr(4) = wrapped_expr;
       }
     }
@@ -126,12 +165,28 @@ int ObRawExprWrapEnumSet::wrap_value_vector(ObInsertStmt &stmt)
       } else {
         int64_t index = i % desc_count;
         ObSysFunRawExpr *new_expr = NULL;
-        if (OB_FAIL(wrap_type_to_str_if_necessary(value_expr, stmt.get_values_desc().at(index)->get_data_type(),
+        const ObExprResType &dst_type = stmt.get_values_desc().at(index)->get_result_type();
+        if (value_expr->is_enum_set_with_subschema()) {
+          if (!ob_is_enum_or_set_type(dst_type.get_type())) {
+            // skip wrap to string, it can cast directly
+          } else if (dst_type.is_enum_set_with_subschema() &&
+              dst_type.get_subschema_id() == value_expr->get_subschema_id()) {
+            // same type, no need to cast
+          } else if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_,
+                                                              value_expr,
+                                                              new_expr,
+                                                              my_session_,
+                                                              true /*is_type_to_str*/,
+                                                              dst_type.get_type()))) {
+            LOG_WARN("failed to create_type_to_string_expr", K(ret));
+          }
+        } else if (OB_FAIL(wrap_type_to_str_if_necessary(value_expr, dst_type.get_type(),
                                                   is_same_need, new_expr))) {
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
-        } else if (NULL != new_expr) {
+        }
+        if (OB_SUCC(ret) && NULL != new_expr) {
           value_expr = new_expr;
-        } else {/*do nothing*/}
+        }
       }
     }
   }
@@ -150,9 +205,15 @@ int ObRawExprWrapEnumSet::wrap_target_list(ObSelectStmt &select_stmt)
       LOG_WARN("expr of select_items should not be NULL", K(i), K(ret));
     } else if (ob_is_enumset_tc(target_expr->get_data_type())) {
       ObSysFunRawExpr *new_expr = NULL;
+      // the return type of mysql client for enum/set is FIELD_TYPE_STRING instead of
+      // FIELD_TYPE_VAR_STRING.
+      const ObObjType dst_type = target_expr->is_enum_set_with_subschema() ?
+          ObCharType : ObVarcharType;
       if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, target_expr,
                                                           new_expr,
-                                                          my_session_, is_type_to_str))) {
+                                                          my_session_,
+                                                          is_type_to_str,
+                                                          dst_type))) {
         LOG_WARN("failed to create_type_to_string_expr", K(i), K(target_expr), K(ret));
       } else if (OB_ISNULL(new_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -275,7 +336,7 @@ int ObRawExprWrapEnumSet::visit(ObColumnRefRawExpr &expr)
 int ObRawExprWrapEnumSet::visit(ObWinFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (expr.has_enum_set_column() || expr.has_flag(CNT_SUB_QUERY)) {
+  if (has_enumset_expr_need_wrap(expr) || expr.has_flag(CNT_SUB_QUERY)) {
     if (T_WIN_FUN_LEAD == expr.get_func_type() ||
           T_WIN_FUN_LAG == expr.get_func_type()) {
       ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_func_params();
@@ -303,7 +364,7 @@ int ObRawExprWrapEnumSet::visit(ObOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   ObExprOperator *op = NULL;
-  if (!expr.has_enum_set_column() && !expr.has_flag(CNT_SUB_QUERY)) {
+  if (!has_enumset_expr_need_wrap(expr) && !expr.has_flag(CNT_SUB_QUERY)) {
     //不含有enum或者set，则不需要做任何转换
   } else if (T_OP_ROW != expr.get_expr_type()) {
     if (OB_ISNULL(op = expr.get_op())) {
@@ -322,10 +383,10 @@ int ObRawExprWrapEnumSet::visit(ObOpRawExpr &expr)
         } else if (OB_ISNULL(left_expr = expr.get_param_expr(0)) || OB_ISNULL(right_expr = expr.get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child expr is NULL", K(left_expr), K(right_expr), K(ret));
-        } else if ((left_expr->has_enum_set_column() || left_expr->has_flag(CNT_SUB_QUERY)) && 
+        } else if ((has_enumset_expr_need_wrap(*left_expr) || left_expr->has_flag(CNT_SUB_QUERY)) &&
                    OB_FAIL(visit_left_expr(expr, row_dimension, cmp_types))) {
           LOG_WARN("failed to visit left expr", K(expr), K(ret));
-        } else if ((right_expr->has_enum_set_column() || right_expr->has_flag(CNT_SUB_QUERY))
+        } else if ((has_enumset_expr_need_wrap(*right_expr) || right_expr->has_flag(CNT_SUB_QUERY))
                     && OB_FAIL(visit_right_expr(*right_expr, row_dimension,
                                                 cmp_types, expr.get_expr_type()))) {
           LOG_WARN("failed to visit right expr", K(expr), K(ret));
@@ -452,7 +513,7 @@ int ObRawExprWrapEnumSet::check_and_wrap_left(ObRawExpr &expr, int64_t idx,
     for (int64_t i = 0; OB_SUCC(ret) && i < target_num && !(need_numberic && need_varchar); ++i) {
       bool need_wrap = false;
       dest_type = cmp_types.at(row_dimension * i + idx).get_type();
-      if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(expr_type,
+      if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(expr.get_result_type(),
                                                       dest_type,
                                                       is_same_type_need, need_wrap))) {
         LOG_WARN("failed to check whether need wrap", K(i), K(expr), K(ret));
@@ -647,7 +708,7 @@ int ObRawExprWrapEnumSet::wrap_type_to_str_if_necessary(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is NULL", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(expr->get_data_type(), dest_type,
+  } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(expr->get_result_type(), dest_type,
                                                          is_same_need, need_wrap))) {
     LOG_WARN("failed to check_need_wrap_to_string", K(ret));
   } else if (need_wrap && OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory_, expr,
@@ -692,7 +753,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
           } else if (NULL != wrapped_expr && OB_FAIL(expr.replace_when_param_expr(i, wrapped_expr))){
             LOG_WARN("failed to replace_when_param_expr", K(i), K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(arg_type, calc_type, is_same_need, need_wrap))) {
+          } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(arg_param_expr->get_result_type(), calc_type, is_same_need, need_wrap))) {
             LOG_WARN("failed to check whether need wrap", K(arg_type), K(calc_type), K(ret));
           } else if (need_wrap) {
             need_varchar = true;
@@ -758,7 +819,7 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr &expr)
 int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if ((expr.has_enum_set_column() || expr.has_flag(CNT_SUB_QUERY)) &&
+  if ((has_enumset_expr_need_wrap(expr) || expr.has_flag(CNT_SUB_QUERY)) &&
       (T_FUN_GROUP_CONCAT == expr.get_expr_type() ||
       T_FUN_MAX == expr.get_expr_type() ||
       T_FUN_MIN == expr.get_expr_type() ||
@@ -857,7 +918,7 @@ int ObRawExprWrapEnumSet::visit(ObAliasRefRawExpr &expr)
   if (OB_ISNULL(ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null", K(ret));
-  } else if (expr.has_enum_set_column() && OB_FAIL(analyze_expr(ref_expr))) {
+  } else if (has_enumset_expr_need_wrap(expr) && OB_FAIL(analyze_expr(ref_expr))) {
     LOG_WARN("failed to analyze expr", K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -925,7 +986,7 @@ int ObRawExprWrapEnumSet::visit_query_ref_expr(ObQueryRefRawExpr &expr,
                                                const bool is_same_need)
 {
   int ret = OB_SUCCESS;
-  if (!expr.has_enum_set_column() && !expr.has_flag(CNT_SUB_QUERY)) {
+  if (!has_enumset_expr_need_wrap(expr) && !expr.has_flag(CNT_SUB_QUERY)) {
     // no-op if expr doesn't have enumset column
   } else if (1 == expr.get_output_column() && expr.is_set() &&
               ob_is_enumset_tc(expr.get_column_types().at(0).get_type())) {
@@ -977,6 +1038,24 @@ int ObRawExprWrapEnumSet::wrap_param_expr(ObIArray<ObRawExpr*> &param_exprs, ObO
     } else {/*do nothing*/}
   }
   return ret;
+}
+
+bool ObRawExprWrapEnumSet::has_enumset_expr_need_wrap(const ObRawExpr &expr)
+{
+  int need_wrap = false;
+  if (expr.has_enum_set_column()) {
+    if (expr.get_result_type().is_enum_or_set()) {
+      need_wrap = !expr.is_enum_set_with_subschema();
+    }
+    for (int64_t i = 0; !need_wrap && i < expr.get_param_count(); ++i) {
+      const ObRawExpr *param_expr = expr.get_param_expr(i);
+      if (OB_ISNULL(param_expr)) {
+      } else {
+        need_wrap = has_enumset_expr_need_wrap(*param_expr);
+      }
+    }
+  }
+  return need_wrap;
 }
 
 }  // namespace sql

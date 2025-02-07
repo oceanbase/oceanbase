@@ -68,8 +68,8 @@ int ObDiagnoseTabletMgr::add_diagnose_tablet(
     ret = OB_NOT_INIT;
     LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
-    if (!ls_id.is_valid() || !tablet_id.is_valid()
-        || !is_valid_diagnose_tablet_type(type)) {
+    if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid()
+        || !is_valid_diagnose_tablet_type(type))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(type));
     } else {

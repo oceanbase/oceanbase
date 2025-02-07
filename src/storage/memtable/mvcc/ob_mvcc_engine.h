@@ -22,6 +22,8 @@ namespace oceanbase
 namespace storage
 {
 struct ObPartitionEst;
+struct ObStoreCtx;
+struct ObRowState;
 }
 
 namespace memtable

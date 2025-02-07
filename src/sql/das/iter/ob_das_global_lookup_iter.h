@@ -20,16 +20,24 @@ using namespace common;
 namespace sql
 {
 
+class ObDASScanOp;
+struct ObDASBaseRtDef;
+struct ObDASAttachRtInfo;
+
 struct ObDASGlobalLookupIterParam : public ObDASLookupIterParam
 {
 public:
   ObDASGlobalLookupIterParam()
     : ObDASLookupIterParam(true /*global lookup*/),
       can_retry_(false),
-      calc_part_id_(nullptr)
+      calc_part_id_(nullptr),
+      attach_ctdef_(nullptr),
+      attach_rtinfo_(nullptr)
   {}
   bool can_retry_;
   const ObExpr *calc_part_id_;
+  ObDASBaseCtDef *attach_ctdef_;
+  ObDASAttachRtInfo *attach_rtinfo_;
 
   virtual bool is_valid() const override
   {
@@ -44,7 +52,9 @@ public:
     : ObDASLookupIter(ObDASIterType::DAS_ITER_GLOBAL_LOOKUP),
       can_retry_(false),
       calc_part_id_(nullptr),
-      index_ordered_idx_(0)
+      index_ordered_idx_(0),
+      attach_ctdef_(nullptr),
+      attach_rtinfo_(nullptr)
   {}
   virtual ~ObDASGlobalLookupIter() {}
 
@@ -57,11 +67,15 @@ protected:
   virtual int do_index_lookup() override;
   virtual int check_index_lookup() override;
   virtual void reset_lookup_state();
+  int pushdown_attach_task_to_das(ObDASScanOp &target_op);
+  int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
 
 private:
   bool can_retry_;
   const ObExpr *calc_part_id_;
   int64_t index_ordered_idx_; // used for keep order of global lookup
+  ObDASBaseCtDef *attach_ctdef_;
+  ObDASAttachRtInfo *attach_rtinfo_;
 };
 
 }  // namespace sql

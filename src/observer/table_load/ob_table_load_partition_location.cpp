@@ -51,6 +51,46 @@ int ObTableLoadPartitionLocation::check_tablet_has_same_leader(const ObTableLoad
   return ret;
 }
 
+int ObTableLoadPartitionLocation::init_partition_location(
+                              const ObIArray<ObTableLoadPartitionId> &partition_ids,
+                              const ObIArray<ObTableLoadPartitionId> &target_partition_ids,
+                              ObTableLoadPartitionLocation &partition_location,
+                              ObTableLoadPartitionLocation &target_partition_location)
+{
+  int ret = OB_SUCCESS;
+  int retry = 0;
+  bool flag = false;
+  while (retry < 3 && OB_SUCC(ret)) {
+    partition_location.reset();
+    target_partition_location.reset();
+    // init partition_location_
+    if (OB_FAIL(partition_location.init(MTL_ID(), partition_ids))) {
+      LOG_WARN("fail to init partition location", KR(ret));
+    } else if (OB_FAIL(target_partition_location.init(MTL_ID(), target_partition_ids))) {
+      LOG_WARN("fail to init origin partition location", KR(ret));
+    } else if (OB_FAIL(partition_location.check_tablet_has_same_leader(target_partition_location, flag))) {
+      LOG_WARN("fail to check_tablet_has_same_leader", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (flag) {
+        break;
+      } else {
+        LOG_WARN("invalid leader info, maybe change master");
+      }
+    }
+    retry ++;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!flag) {
+      ret = OB_EAGAIN;
+      LOG_WARN("invalid leader info", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableLoadPartitionLocation::fetch_ls_id(uint64_t tenant_id, const ObTabletID &tablet_id,
                                               ObLSID &ls_id)
 {
@@ -87,14 +127,14 @@ int ObTableLoadPartitionLocation::fetch_ls_location(uint64_t tenant_id, const Ob
 }
 
 int ObTableLoadPartitionLocation::fetch_ls_locations(uint64_t tenant_id,
-    const ObTableLoadArray<ObTableLoadPartitionId> &partition_ids)
+    const ObIArray<ObTableLoadPartitionId> &partition_ids)
 {
   int ret = OB_SUCCESS;
   ObArray<ObLSID> ls_ids;
   ls_ids.set_tenant_id(MTL_ID());
 
   for (int64_t i = 0; OB_SUCC(ret) && (i < partition_ids.count()); ++i) {
-    const ObTabletID &tablet_id = partition_ids[i].tablet_id_;
+    const ObTabletID &tablet_id = partition_ids.at(i).tablet_id_;
     if (OB_FAIL(tablet_ids_.push_back(tablet_id))) {
       LOG_WARN("failed to push back tablet_id", K(tablet_id), K(i));
     }
@@ -207,7 +247,7 @@ int ObTableLoadPartitionLocation::fetch_tablet_handle(uint64_t tenant_id,
 }
 
 int ObTableLoadPartitionLocation::init(
-  uint64_t tenant_id, const ObTableLoadArray<ObTableLoadPartitionId> &partition_ids)
+    uint64_t tenant_id, const ObIArray<ObTableLoadPartitionId> &partition_ids)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -231,7 +271,7 @@ int ObTableLoadPartitionLocation::init(
 }
 
 int ObTableLoadPartitionLocation::init_all_partition_location(
-  uint64_t tenant_id, const ObTableLoadArray<ObTableLoadPartitionId> &partition_ids)
+  uint64_t tenant_id, const ObIArray<ObTableLoadPartitionId> &partition_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fetch_ls_locations(tenant_id, partition_ids))) {

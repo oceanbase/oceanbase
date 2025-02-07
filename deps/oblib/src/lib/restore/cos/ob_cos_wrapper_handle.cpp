@@ -12,6 +12,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "ob_cos_wrapper_handle.h"
+#include "lib/restore/ob_i_storage.h"
 
 namespace oceanbase
 {
@@ -46,6 +47,10 @@ void ObCosMemAllocator::reuse()
   allocator_.reuse();
 }
 
+void ObCosMemAllocator::reset()
+{
+  allocator_.clear();
+}
 
 // Memory function used for cos context
 static void *ob_cos_malloc(void *opaque, size_t size)
@@ -68,7 +73,7 @@ static void ob_cos_free(void *opaque, void *address)
 
 /*--------------------------------ObCosWrapperHandle-----------------------------------*/
 ObCosWrapperHandle::ObCosWrapperHandle()
-  : is_inited_(false), handle_(nullptr), cos_account_(), allocator_(),
+  : is_inited_(false), handle_(nullptr), cos_account_(), sts_token_(), allocator_(),
     delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE)
 {}
 
@@ -83,11 +88,13 @@ int ObCosWrapperHandle::init(const ObObjectStorageInfo *storage_info)
   } else if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "storage info is null", K(ret));
-  } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
+  } else if (OB_FAIL(storage_info->get_authorization_str(
+                 storage_info_str, sizeof(storage_info_str), sts_token_))) {
     OB_LOG(WARN, "fail to get cos storage info str", K(ret), K(storage_info));
   } else if (OB_FAIL(cos_account_.parse_from(storage_info_str, strlen(storage_info_str)))) {
-    OB_LOG(WARN, "fail to parse cos account from storage info str", K(ret));
-  } else if (strlen(cos_account_.delete_mode_) > 0 && OB_FAIL(set_delete_mode(cos_account_.delete_mode_))) {
+    OB_LOG(WARN, "fail to parse cos account from authorization str", K(ret));
+  } else if (strlen(cos_account_.delete_mode_) > 0
+             && OB_FAIL(set_delete_mode(cos_account_.delete_mode_))) {
     OB_LOG(WARN, "fail to set cos delete mode", K(cos_account_.delete_mode_), K(ret));
   } else {
     is_inited_ = true;
@@ -100,25 +107,28 @@ void ObCosWrapperHandle::reset()
   destroy_cos_handle();
   is_inited_ = false;
   delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  // clear memory used by cos account sts token
+  cos_account_.clear();
+  sts_token_.reset();
+  allocator_.reset();
 }
 
-int create_cos_handle(
+int ObCosWrapperHandle::create_cos_handle(
     ObCosMemAllocator &allocator,
-    const qcloud_cos::ObCosAccount &cos_account,
     const bool check_md5,
     qcloud_cos::ObCosWrapper::Handle *&handle)
 {
   int ret = OB_SUCCESS;
   handle = nullptr;
   qcloud_cos::OB_COS_customMem cos_mem = {ob_cos_malloc, ob_cos_free, &allocator};
-  if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account,
-                                                          check_md5, &handle))) {
+  const char *sts_data = sts_token_.get_data();
+  if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(
+                 cos_mem, cos_account_, check_md5, sts_data, &handle))) {
     OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
   } else if (OB_ISNULL(handle)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
   }
-
   return ret;
 }
 
@@ -131,7 +141,7 @@ int ObCosWrapperHandle::create_cos_handle(const bool check_md5)
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "handle is not inited", K(ret));
-  } else if (OB_FAIL(common::create_cos_handle(allocator_, cos_account_, check_md5, handle_))) {
+  } else if (OB_FAIL(create_cos_handle(allocator_, check_md5, handle_))) {
     OB_LOG(WARN, "failed to create cos handle", K(ret));
   }
   return ret;
@@ -149,10 +159,10 @@ int ObCosWrapperHandle::create_tmp_cos_handle(
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "handle is not inited", K(ret));
   } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_,
-                                                                 check_md5, &handle))) {
+                                                                 check_md5, sts_token_.get_data(), &handle))) {
     OB_LOG(WARN, "failed to create tmp cos handle", K(ret));
   } else if (OB_ISNULL(handle)) {
-    ret = OB_COS_ERROR;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     OB_LOG(WARN, "create tmp handle succeed, but returned handle is null", K(ret));
   }
 

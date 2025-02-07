@@ -362,6 +362,10 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
       if (OB_SUCCESS == retcode) {
         ctx_->push_replayed_log_ts(log_ts_ns_, lsn_, replaying_log_entry_no_);
       }
+    } else {
+      if (OB_SUCCESS == retcode) {
+        ctx_->update_rec_log_ts_for_parallel_replay(log_ts_ns_);
+      }
     }
     if (OB_SUCCESS != retcode) {
       ctx_->print_trace_log();
@@ -780,7 +784,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
 }
 
 int ObTxReplayExecutor::prepare_memtable_replay_(ObStorageTableGuard &w_guard,
-                                                 ObIMemtable *&mem_ptr)
+                                                 storage::ObIMemtable *&mem_ptr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(w_guard.refresh_and_protect_memtable_for_replay())) {
@@ -803,7 +807,7 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
   const share::ObLSID &ls_id = tablet->get_ls_id();
   const common::ObTabletID &tablet_id = tablet->get_tablet_id();
   common::ObTimeGuard timeguard("replay_row_in_memtable", 10_ms);
-  ObIMemtable *mem_ptr = nullptr;
+  storage::ObIMemtable *mem_ptr = nullptr;
   ObMemtable *data_mem_ptr = nullptr;
   ObStorageTableGuard w_guard(tablet, store_ctx, true, true, log_ts_ns_);
   if (OB_ISNULL(mmi_ptr)) {

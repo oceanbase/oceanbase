@@ -25,6 +25,7 @@ public:
   JoinHashTable() : hash_table_(NULL)
   {}
   int init(JoinTableCtx &hjt_ctx, ObIAllocator &allocator);
+  int init_generic_ht(JoinTableCtx &hjt_ctx, ObIAllocator &allocator);
   bool use_normalized_ht(JoinTableCtx &hjt_ctx);
   int build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count);
   int build(JoinPartitionRowIter &iter, JoinTableCtx &jt_ctx);

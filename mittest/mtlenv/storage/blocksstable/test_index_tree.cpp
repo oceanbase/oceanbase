@@ -1,3 +1,6 @@
+// owner: baichangmin.bcm
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -143,6 +146,7 @@ protected:
   ObDatumRow multi_row_;
   ObArenaAllocator allocator_;
   ObSharedMacroBlockMgr *shared_blk_mgr_;
+  ObTimerService *timer_service_;
 };
 
 TestIndexTree::TestIndexTree()
@@ -151,7 +155,8 @@ TestIndexTree::TestIndexTree()
     decode_res_pool_(nullptr),
     mem_pool_(nullptr),
     tenant_base_(500),
-    shared_blk_mgr_(nullptr)
+    shared_blk_mgr_(nullptr),
+    timer_service_(nullptr)
 {
   ObAddr self;
   rpc::frame::ObReqTransport req_transport(NULL, NULL);
@@ -184,21 +189,25 @@ void TestIndexTree::SetUp()
 {
   ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
+  timer_service_ = OB_NEW(ObTimerService, ObModIds::TEST, 500);
   mgr_ = OB_NEW(ObTenantFreezeInfoMgr, ObModIds::TEST);
   decode_res_pool_ = OB_NEW(ObDecodeResourcePool, ObModIds::TEST);
   shared_blk_mgr_ = OB_NEW(ObSharedMacroBlockMgr, ObModIds::TEST);
   mem_pool_ = OB_NEW(ObTenantCompactionMemPool, ObModIds::TEST);
+  tenant_base_.set(timer_service_);
   tenant_base_.set(shared_blk_mgr_);
   tenant_base_.set(mgr_);
   tenant_base_.set(decode_res_pool_);
   tenant_base_.set(mem_pool_);
   share::ObTenantEnv::set_tenant(&tenant_base_);
+  ASSERT_EQ(OB_SUCCESS, timer_service_->start());
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(OB_SUCCESS, mgr_->init(500, *GCTX.sql_proxy_));
   ASSERT_EQ(OB_SUCCESS, decode_res_pool_->init());
   ASSERT_EQ(OB_SUCCESS, mem_pool_->init());
   ASSERT_EQ(OB_SUCCESS, shared_blk_mgr_->init());
   fake_freeze_info();
+  ASSERT_EQ(timer_service_, MTL(ObTimerService *));
   ASSERT_EQ(shared_blk_mgr_, MTL(ObSharedMacroBlockMgr *));
   ASSERT_EQ(mgr_, MTL(ObTenantFreezeInfoMgr *));
   ASSERT_EQ(decode_res_pool_, MTL(ObDecodeResourcePool *));
@@ -223,6 +232,12 @@ void TestIndexTree::TearDown()
   row_generate_.reset();
   index_row_generate_.reset();
   table_schema_.reset();
+  if (nullptr != timer_service_) {
+    timer_service_->stop();
+    timer_service_->wait();
+    timer_service_->destroy();
+    timer_service_ = nullptr;
+  }
   tenant_base_.destroy_mtl_module(); // stop threads
   tenant_base_.destroy();
   share::ObTenantEnv::set_tenant(nullptr);
@@ -432,7 +447,7 @@ void TestIndexTree::prepare_data()
 
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered());
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -604,7 +619,7 @@ void TestIndexTree::prepare_data_desc(ObWholeDataStoreDesc &data_desc,
   int ret = OB_SUCCESS;
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered());
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/);
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -618,7 +633,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   scn.convert_for_tx(SNAPSHOT_VERSION);
   const bool is_ddl = false;
   ASSERT_EQ(OB_SUCCESS, desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/));
+  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/));
   ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
   for (int64_t i = 0; i < col_descs.count(); ++i) {
     if (col_descs.at(i).col_type_.type_ == ObIntType) {
@@ -636,7 +651,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   cg_schema.column_idxs_ = cg_cols;
 
   ASSERT_EQ(OB_SUCCESS, data_desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/,
+                    MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/,
                     scn, &cg_schema, 0));
   data_desc.get_desc().static_desc_->schema_version_ = 10;
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
@@ -2337,7 +2352,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObWholeDataStoreDesc index_desc;
   OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                      ObTimeUtility::fast_current_time()/*snapshot*/, 0/*cluster_version*/,
-                     table_schema_.get_micro_index_clustered()));
+                     table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/));
   index_desc.static_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   --index_desc.get_desc().col_desc_->full_stored_col_cnt_;
   index_desc.get_desc().col_desc_->col_default_checksum_array_.pop_back();

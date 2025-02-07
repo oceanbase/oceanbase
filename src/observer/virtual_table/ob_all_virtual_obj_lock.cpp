@@ -419,6 +419,12 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           // TODO: set the column with real data
           break;
         }
+        case PRIORITY: {
+          break;
+        }
+        case WAIT_SEQ: {
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

@@ -41,7 +41,7 @@ protected:
 
   int add_result(ObObj &obj)  { return results_.push_back(obj); }
 
-  int do_estimate(uint64_t tenant_id,
+  int do_estimate(const ObOptStatGatherParam &gather_param,
                   const ObString &raw_sql,
                   bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,
@@ -49,13 +49,9 @@ protected:
 
   int pack(ObSqlString &raw_sql_str);
 
-  int add_from_table(const ObString &db_name,
-                     const ObString &table_name)
-  {
-    db_name_ = db_name;
-    from_table_ = table_name;
-    return OB_SUCCESS;
-  }
+  int add_from_table(common::ObIAllocator &allocator,
+                     const ObString &db_name,
+                     const ObString &table_name);
 
   int add_partition_hint(const ObString &partition);
 

@@ -1445,11 +1445,11 @@ TEST_F(TestObjectStorage, test_del_unmerged_parts)
 
     ASSERT_EQ(OB_SUCCESS, util.del_unmerged_parts(uri));
     if (info_base.get_type() == ObStorageType::OB_STORAGE_OSS) {
-      ASSERT_EQ(OB_OSS_ERROR, writer.close());
+      ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, writer.close());
     } else if (ObStorageType::OB_STORAGE_S3 == info_base.get_type()) {
-      ASSERT_EQ(OB_S3_ERROR, writer.close());
+      ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, writer.close());
     } else if (info_base.get_type() == ObStorageType::OB_STORAGE_COS) {
-      ASSERT_EQ(OB_COS_ERROR, writer.close());
+      ASSERT_EQ(OB_OBJECT_STORAGE_IO_ERROR, writer.close());
     }
 
   }

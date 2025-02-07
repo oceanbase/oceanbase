@@ -31,7 +31,9 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_id_set.h"
 #include "storage/tablet/ob_tablet_persister.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ob_storage_schema.h"
@@ -113,7 +115,7 @@ int ObTabletCreateDeleteHelper::try_get_current_version_tablet_(
   } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet service is null", K(ret), K(key));
-  } else if (OB_FAIL(ls_tablet_svr->s2_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
+  } else if (OB_FAIL(ls_tablet_svr->ss_replay_create_tablet(current_version.tablet_addr_, key.tablet_id_))) {
     LOG_WARN("fail to replay create tablet", K(ret), K(current_version));
   } else if (OB_FAIL(get_tablet(key, handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
@@ -195,8 +197,8 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
       LOG_WARN("failed to check tablet status", K(ret), K(key));
     }
   } else if (ObMDSGetTabletMode::READ_READABLE_COMMITED == mode) {
-    if (OB_FAIL(tablet->check_new_mds_with_cache(snapshot_version, timeout_us))) {
-      LOG_WARN("failed to check status for new mds", K(ret), K(mode), K(snapshot_version), K(timeout_us));
+    if (OB_FAIL(tablet->check_new_mds_with_cache(snapshot_version))) {
+      LOG_WARN("failed to check status for new mds", K(ret), K(mode), K(snapshot_version));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -206,21 +208,22 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
 }
 
 int ObTabletCreateDeleteHelper::check_status_for_new_mds(
-    ObTablet &tablet,
+    const ObTablet &tablet,
     const int64_t snapshot_version,
-    const int64_t timeout_us,
     ObTabletStatusCache &tablet_status_cache)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   ObTabletCreateDeleteMdsUserData user_data;
-  bool is_committed = false;
+  mds::MdsWriter writer;// will be removed later
+  mds::TwoPhaseCommitState trans_state;// will be removed later
+  share::SCN trans_version;// will be removed later
 
   if (OB_UNLIKELY(tablet.is_empty_shell())) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_FAIL(tablet.get_latest<ObTabletCreateDeleteMdsUserData>(ReadMdsFunctor(user_data), is_committed))) {
+  } else if (OB_FAIL(tablet.get_latest(user_data, writer, trans_state, trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
@@ -231,19 +234,24 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     const ObTabletStatus::Status &status = user_data.tablet_status_.get_status();
     switch (status) {
       case ObTabletStatus::NORMAL:
-        ret = check_read_snapshot_for_normal(tablet, snapshot_version, timeout_us, user_data, is_committed);
-        break;
-      case ObTabletStatus::DELETED:
-        ret = check_read_snapshot_for_deleted(tablet, snapshot_version, user_data, is_committed);
+      case ObTabletStatus::SPLIT_DST:
+        ret = check_read_snapshot_for_normal_or_split_dst(tablet, snapshot_version, user_data, writer, trans_state, trans_version);
         break;
       case ObTabletStatus::TRANSFER_IN:
-        ret = check_read_snapshot_for_transfer_in(tablet, snapshot_version, user_data, is_committed);
+        ret = check_read_snapshot_for_transfer_in(tablet, snapshot_version, user_data, writer, trans_state, trans_version);
         break;
+      case ObTabletStatus::DELETED:
       case ObTabletStatus::TRANSFER_OUT:
-        ret = check_read_snapshot_for_transfer_out(tablet, snapshot_version, user_data, is_committed);
+        ret = check_read_snapshot_for_deleted_or_transfer_out(tablet, snapshot_version, user_data, writer, trans_state, trans_version);
         break;
       case ObTabletStatus::TRANSFER_OUT_DELETED:
-        ret = check_read_snapshot_for_transfer_out_deleted(tablet, snapshot_version, user_data, is_committed);
+        ret = check_read_snapshot_for_transfer_out_deleted(tablet, snapshot_version, user_data);
+        break;
+      case ObTabletStatus::SPLIT_SRC:
+        ret = check_read_snapshot_for_split_src(tablet, snapshot_version, user_data, trans_state);
+        break;
+      case ObTabletStatus::SPLIT_SRC_DELETED:
+        ret = check_read_snapshot_for_split_src_deleted(tablet, user_data, trans_state);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -251,7 +259,7 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (ObTabletStatus::NORMAL == user_data.tablet_status_ && is_committed) {
+    } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state && ObTabletStatus::NORMAL == user_data.tablet_status_) {
       tablet_status_cache.set_value(user_data);
       LOG_INFO("refresh tablet status cache", K(ret), K(ls_id), K(tablet_id), K(tablet_status_cache), K(snapshot_version));
     }
@@ -261,7 +269,7 @@ int ObTabletCreateDeleteHelper::check_status_for_new_mds(
 }
 
 int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
-    ObTablet &tablet,
+    const ObTablet &tablet,
     const int64_t create_commit_version,
     const int64_t delete_commit_version,
     const int64_t snapshot_version,
@@ -294,11 +302,11 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
     // snapshot_version >= user_data.delete_commit_version_
     ret = ObTabletStatus::TRANSFER_OUT_DELETED == tablet_status ? OB_TABLET_NOT_EXIST : OB_TABLE_NOT_EXIST;
     LOG_INFO("tablet is deleted or transfer out deleted",
-      K(ret), K(ls_id), K(tablet_id), K(tablet_status), K(snapshot_version), K(delete_commit_version));
+        K(ret), K(ls_id), K(tablet_id), K(tablet_status), K(snapshot_version), K(delete_commit_version));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObTabletStatus::NORMAL == tablet_status || ObTabletStatus::TRANSFER_IN == tablet_status) {
+  } else if (ObTabletStatus::NORMAL == tablet_status || ObTabletStatus::TRANSFER_IN == tablet_status || ObTabletStatus::SPLIT_DST == tablet_status) {
     if (OB_UNLIKELY(tablet.is_empty_shell())) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("tablet is empty shell", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(create_commit_version));
@@ -310,12 +318,13 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_by_commit_version(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
-    ObTablet &tablet,
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal_or_split_dst(
+    const ObTablet &tablet,
     const int64_t snapshot_version,
-    const int64_t timeout_us,
     const ObTabletCreateDeleteMdsUserData &user_data,
-    const bool is_committed)
+    const mds::MdsWriter &writer,
+    const mds::TwoPhaseCommitState &trans_state,
+    const share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
@@ -323,144 +332,376 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
   share::SCN read_snapshot;
 
-  if (OB_UNLIKELY(ObTabletStatus::NORMAL != tablet_status)) {
+  if (OB_UNLIKELY(ObTabletStatus::NORMAL != tablet_status && ObTabletStatus::SPLIT_DST != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (is_committed) {
-    if (snapshot_version < user_data.create_commit_version_) {
-      ret = OB_SNAPSHOT_DISCARDED;
-      LOG_WARN("read snapshot smaller than create commit version",
-          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+  } else if (user_data.create_commit_version_ == ObTransVersion::MAX_TRANS_VERSION) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("create commit version is max trans version",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
+  } else if (user_data.create_commit_version_ != ObTransVersion::INVALID_TRANS_VERSION) {
+    LOG_INFO("tablet create transaction is committed, currently in finish transfer in transacation",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
+    if (OB_FAIL(check_read_snapshot_for_finish_transfer_in_tx(tablet, snapshot_version, user_data))) {
+      LOG_WARN("fail to check readsnapshot for finish transfer in tx",
+          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
     }
-  } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
-    LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(tablet.get_snapshot<ObTabletCreateDeleteMdsUserData>(
-      DummyReadMdsFunctor(), read_snapshot, timeout_us))) {
-    if (OB_EMPTY_RESULT == ret) {
-      ret = OB_TABLET_NOT_EXIST;
-      LOG_WARN("tablet creation has not been committed, or has been roll backed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      LOG_WARN("tablet transaction is in commit progress", K(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(timeout_us));
-    } else {
-      LOG_WARN("failed to get snapshot", KR(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(timeout_us));
-    }
-  } else {
-    // status is normal, transaction finally committed, do nothing
+  } else if (OB_FAIL(check_read_snapshot_for_create_tx(
+      tablet, snapshot_version, user_data, writer, trans_state, trans_version))) {
+    LOG_WARN("fail to check read snapshot for create tx",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
   }
 
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::check_read_snapshot_for_deleted(
-    ObTablet &tablet,
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_finish_transfer_in_tx(
+    const ObTablet &tablet,
+    const int64_t snapshot_version,
+    const ObTabletCreateDeleteMdsUserData &user_data)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+
+  if (snapshot_version < user_data.create_commit_version_) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    LOG_WARN("read snapshot smaller than create commit version",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_create_tx(
+    const ObTablet &tablet,
     const int64_t snapshot_version,
     const ObTabletCreateDeleteMdsUserData &user_data,
-    const bool is_committed)
+    const mds::MdsWriter &writer,
+    const mds::TwoPhaseCommitState &trans_state,
+    const share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
+  share::SCN read_snapshot;
 
-  if (OB_UNLIKELY(ObTabletStatus::DELETED != tablet_status)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (snapshot_version < user_data.create_commit_version_) {
+  if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
     ret = OB_SNAPSHOT_DISCARDED;
-    LOG_WARN("read snapshot smaller than create commit version",
-        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
-  } else if (is_committed && snapshot_version >= user_data.delete_commit_version_) {
-    ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("tablet does not exist", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    LOG_WARN("tablet creation transaction has not entered 2pc procedure",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
+  } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
+    LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
+  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+    if (read_snapshot < trans_version) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read snapshot is smaller than prepare version",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      // primary tenant
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("tablet creation transaction has not committed",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    } else {
+      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // whether allow to read
+      const ObTransID tx_id(writer.writer_id_);
+      ObTxCommitData::TxDataState tx_data_state;
+      share::SCN commit_version;
+      if (OB_FAIL(check_for_standby(ls_id, tx_id, read_snapshot, tx_data_state, commit_version))) {
+        LOG_WARN("failed to check for standby", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(read_snapshot));
+      } else {
+        switch (tx_data_state) {
+          case ObTxCommitData::TxDataState::COMMIT:
+            {
+              if (read_snapshot < commit_version) {
+                ret = OB_SNAPSHOT_DISCARDED;
+                LOG_WARN("read snapshot is smaller than trans version",
+                    K(ret), K(ls_id), K(tablet_id), K(tx_id), K(trans_state), K(read_snapshot), K(trans_version));
+              }
+            }
+            break;
+          case ObTxCommitData::TxDataState::RUNNING:
+          case ObTxCommitData::TxDataState::ABORT:
+            ret = OB_SNAPSHOT_DISCARDED;
+            LOG_WARN("transaction has not been committed", K(ret), K(ls_id), K(tx_id), K(tx_data_state), K(read_snapshot));
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tx data state", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(tx_data_state), K(read_snapshot));
+        }
+      }
+    }
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
+    if (snapshot_version < user_data.create_commit_version_) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read snapshot smaller than create commit version",
+          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    }
   }
 
   return ret;
 }
 
 int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_in(
-    ObTablet &tablet,
+    const ObTablet &tablet,
     const int64_t snapshot_version,
     const ObTabletCreateDeleteMdsUserData &user_data,
-    const bool is_committed)
+    const mds::MdsWriter &writer,
+    const mds::TwoPhaseCommitState &trans_state,
+    const share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
+  share::SCN read_snapshot;
 
   if (OB_UNLIKELY(ObTabletStatus::TRANSFER_IN != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_UNLIKELY(!is_committed)) {
-    // if start transfer in transaction has not committed, we ensure that location cache will not choose
-    // the dst ls for read operations, so here it won't happen
+  } else if (snapshot_version < user_data.create_commit_version_) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    LOG_WARN("read snapshot smaller than create commit version",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+  } else if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
     ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("start transfer in transaction has not committed, should retry",
-        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(tablet_status));
-  } else if (is_committed) {
-    // check create commit version
-    if (snapshot_version < user_data.create_commit_version_) {
-      ret = OB_SNAPSHOT_DISCARDED;
-      LOG_WARN("read snapshot smaller than create commit version",
-          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    LOG_WARN("start transfer in transaction has not entered 2pc procedure, should retry",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state));
+  } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
+    LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
+  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+    if (read_snapshot < trans_version) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("read snapshot is smaller than prepare version, should retry",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      // primary tenant: not allowed to read, retry
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("read snapshot is no smaller than prepare version, primary tenant should retry",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    } else {
+      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // whether allow to read
+      const ObTransID tx_id(writer.writer_id_);
+      ObTxCommitData::TxDataState tx_data_state;
+      share::SCN commit_version;
+      if (OB_FAIL(check_for_standby(ls_id, tx_id, read_snapshot, tx_data_state, commit_version))) {
+        LOG_WARN("failed to check for standby", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(read_snapshot));
+      } else {
+        switch (tx_data_state) {
+          case ObTxCommitData::TxDataState::COMMIT:
+            {
+              if (read_snapshot < commit_version) {
+                ret = OB_TABLET_NOT_EXIST;
+                LOG_WARN("read snapshot is smaller than commit version, should retry",
+                    K(ret), K(ls_id), K(tablet_id), K(tx_id), K(trans_state), K(read_snapshot), K(trans_version));
+              }
+            }
+            break;
+          case ObTxCommitData::TxDataState::RUNNING:
+          case ObTxCommitData::TxDataState::ABORT:
+            ret = OB_TABLET_NOT_EXIST;
+            LOG_WARN("transaction has not been committed", K(ret), K(ls_id), K(tx_id), K(tx_data_state), K(read_snapshot));
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tx data state", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(tx_data_state), K(read_snapshot));
+            break;
+        }
+      }
+    }
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
+    // check start transfer commit version
+    // trans version is regarded as transfer in commit version
+    if (read_snapshot < trans_version) {
+      // not allow to read
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("read snapshot is smaller than start transfer in transaction commit version, should retry",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
     }
   }
 
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out(
-    ObTablet &tablet,
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_deleted_or_transfer_out(
+    const ObTablet &tablet,
     const int64_t snapshot_version,
     const ObTabletCreateDeleteMdsUserData &user_data,
-    const bool is_committed)
+    const mds::MdsWriter &writer,
+    const mds::TwoPhaseCommitState &trans_state,
+    const share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
-  const share::SCN &transfer_scn = user_data.transfer_scn_;
   share::SCN read_snapshot;
 
-  if (OB_UNLIKELY(ObTabletStatus::TRANSFER_OUT != tablet_status)) {
+  if (OB_UNLIKELY(ObTabletStatus::TRANSFER_OUT != tablet_status && ObTabletStatus::DELETED != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  } else if (snapshot_version < user_data.create_commit_version_) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    LOG_WARN("read snapshot smaller than create commit version",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (read_snapshot >= transfer_scn) {
-    // TODO(@gaishun.gs): TEMP SOLUTION,
-    // return OB_TABLET_NOT_EXIST if read snapshot is no smaller than transfer scn,
-    // no matter start transfer out transaction is committed or not.
-    ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("read snapshot is no smaller than transfer scn under transfer out status, should retry on dst ls",
-        K(ret), K(read_snapshot), K(transfer_scn), K(tablet_status));
+  } else if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
+    if (read_snapshot.is_max()) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("read snapshot is MAX, maybe this is a write request, should retry on dst ls",
+          K(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(user_data));
+    }
+  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+    if (read_snapshot < trans_version) {
+      // allow to read
+    } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+      // primary tenant: retry
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_INFO("read snapshot is no smaller than prepare version on primary tenant, should retry on target ls",
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(trans_version));
+    } else {
+      // standby tenant(including restore/invalid role): call interface from @xuwang.txw, get "potential" commit version, then decide
+      // whether allow to read
+      const ObTransID tx_id(writer.writer_id_);
+      ObTxCommitData::TxDataState tx_data_state;
+      share::SCN commit_version;
+      if (OB_FAIL(check_for_standby(ls_id, tx_id, read_snapshot, tx_data_state, commit_version))) {
+        LOG_WARN("failed to check for standby", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(read_snapshot));
+      } else {
+        switch (tx_data_state) {
+          case ObTxCommitData::TxDataState::COMMIT:
+            {
+              if (read_snapshot < commit_version) {
+                // allow to read
+              } else {
+                ret = OB_TABLET_NOT_EXIST;
+                LOG_WARN("read snapshot is no smaller than trans version, should retry on target ls",
+                    K(ret), K(ls_id), K(tablet_id), K(tx_id), K(read_snapshot), K(trans_version));
+              }
+            }
+            break;
+          case ObTxCommitData::TxDataState::RUNNING:
+          case ObTxCommitData::TxDataState::ABORT:
+            // allow to read
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tx data state", K(ret), K(ls_id), K(tablet_id), K(tx_id), K(tx_data_state), K(read_snapshot));
+            break;
+        }
+      }
+    }
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
+    // check start transfer commit version
+    // trans version is regarded as transfer out commit version
+    if (read_snapshot < trans_version) {
+      // allow to read
+    } else {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("read snapshot is no smaller than trans version, should retry on target ls",
+          K(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(trans_version));
+    }
   }
 
   return ret;
 }
 
 int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out_deleted(
-    ObTablet &tablet,
+    const ObTablet &tablet,
     const int64_t snapshot_version,
-    const ObTabletCreateDeleteMdsUserData &user_data,
-    const bool is_committed)
+    const ObTabletCreateDeleteMdsUserData &user_data)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
-  const share::SCN &transfer_scn = user_data.transfer_scn_;
-  share::SCN read_snapshot;
 
   if (OB_UNLIKELY(ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
-  } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
-    LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (read_snapshot >= transfer_scn) {
+  } else if (snapshot_version < user_data.create_commit_version_) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    LOG_WARN("read snapshot smaller than create commit version",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+  } else if (snapshot_version >= user_data.start_transfer_commit_version_) {
     ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("read snapshot is no smaller than transfer scn after transfer out deleted status, should retry on dst ls",
-        K(ret), K(read_snapshot), K(transfer_scn), K(tablet_status));
+    LOG_WARN("read snapshot is no smaller than start transfer commit version, should retry on dst ls",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_for_standby(
+    const share::ObLSID &ls_id,
+    const transaction::ObTransID &tx_id,
+    const share::SCN &snapshot,
+    ObTxCommitData::TxDataState &tx_data_state,
+    share::SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+  ObTransService *trans_service = MTL(ObTransService*);
+  ObPartTransCtx *tx_ctx = nullptr;
+
+  if (OB_UNLIKELY(snapshot.is_max())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args, snapshot is MAX", K(ret), K(snapshot));
+  } else if (OB_FAIL(trans_service->mds_infer_standby_trx_state(nullptr/*ls_ptr*/,
+      ls_id, tx_id, snapshot, tx_data_state, commit_version))) {
+    LOG_WARN("failed to do mds infer standby trx state", K(ret), K(ls_id), K(tx_id), K(snapshot));
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_split_src(
+    const ObTablet &tablet,
+    const int64_t snapshot_version,
+    const ObTabletCreateDeleteMdsUserData &user_data,
+    const mds::TwoPhaseCommitState &trans_state)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObTabletStatus &tablet_status = user_data.tablet_status_;
+
+  if (OB_UNLIKELY(ObTabletStatus::SPLIT_SRC != tablet_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
+    if (snapshot_version < user_data.create_commit_version_) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("read snapshot smaller than create commit version",
+          K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
+    } else {
+      ret = OB_TABLET_IS_SPLIT_SRC;
+      LOG_WARN("tablet is split src", K(ret), K(ls_id), K(tablet_id), K(common::lbt()));
+    }
+  }
+
+  return ret;
+}
+
+int ObTabletCreateDeleteHelper::check_read_snapshot_for_split_src_deleted(
+    const ObTablet &tablet,
+    const ObTabletCreateDeleteMdsUserData &user_data,
+    const mds::TwoPhaseCommitState &trans_state)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const ObTabletStatus &tablet_status = user_data.tablet_status_;
+
+  if (OB_UNLIKELY(ObTabletStatus::SPLIT_SRC_DELETED != tablet_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(user_data));
+  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_state) {
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("split src deleted", K(ret), K(ls_id), K(tablet_id), K(common::lbt()));
   }
 
   return ret;
@@ -578,8 +819,8 @@ int ObTabletCreateDeleteHelper::create_empty_sstable(
     if (OB_FAIL(create_empty_co_sstable(allocator, storage_schema, tablet_id, snapshot_version, table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(storage_schema));
     }
-  } else if (OB_FAIL(build_create_sstable_param(storage_schema, tablet_id, snapshot_version, param))) {
-    LOG_WARN("failed to build sstable param", K(ret), K(tablet_id), K(storage_schema), K(snapshot_version), K(param));
+  } else if (OB_FAIL(param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, -1/*cg idx*/, false/*has all cg*/))) {
+    LOG_WARN("failed to build sstable param", K(ret), K(tablet_id), K(storage_schema), K(snapshot_version));
   } else if (OB_FAIL(create_sstable(param, allocator, table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param));
   }
@@ -619,9 +860,8 @@ int ObTabletCreateDeleteHelper::create_empty_co_sstable(
       ObCOSSTableV2 *co_sstable = nullptr;
       ObSSTable *sstable = nullptr;
 
-      if (OB_FAIL(build_create_cs_sstable_param(storage_schema, tablet_id, snapshot_version, idx, has_all_cg, cs_param))) {
+      if (OB_FAIL(cs_param.init_for_empty_major_sstable(tablet_id, storage_schema, snapshot_version, idx, has_all_cg))) {
         LOG_WARN("failed to build table cs param for column store", K(ret), K(tablet_id), K(cg_schema));
-      } else if (FALSE_IT(cs_param.is_co_table_without_cgs_ = true)) {
       } else if (OB_FAIL(create_sstable<ObCOSSTableV2>(cs_param, allocator, co_handle))) {
         LOG_WARN("failed to create all cg sstable", K(ret), K(cs_param));
       } else if (OB_FAIL(co_handle.get_sstable(sstable))) {
@@ -669,117 +909,6 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
-}
-
-int ObTabletCreateDeleteHelper::build_create_sstable_param(
-    const ObStorageSchema &storage_schema,
-    const ObTabletID &tablet_id,
-    const int64_t snapshot_version,
-    ObTabletCreateSSTableParam &param)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!storage_schema.is_valid()
-      || !tablet_id.is_valid()
-      || OB_INVALID_VERSION == snapshot_version)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(storage_schema), K(snapshot_version));
-  } else if (OB_FAIL(storage_schema.get_encryption_id(param.encrypt_id_))) {
-    LOG_WARN("fail to get_encryption_id", K(ret), K(storage_schema));
-  } else {
-    param.master_key_id_ = storage_schema.get_master_key_id();
-    MEMCPY(param.encrypt_key_, storage_schema.get_encrypt_key_str(), storage_schema.get_encrypt_key_len());
-
-    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.table_key_.table_type_ = 1 < storage_schema.get_column_group_count()
-                                 ? ObITable::TableType::COLUMN_ORIENTED_SSTABLE
-                                 : ObITable::TableType::MAJOR_SSTABLE;
-
-    param.table_key_.tablet_id_ = tablet_id;
-    param.table_key_.version_range_.snapshot_version_ = snapshot_version;
-    param.max_merged_trans_version_ = snapshot_version;
-
-    param.schema_version_ = storage_schema.get_schema_version();
-    param.create_snapshot_version_ = 0;
-    param.progressive_merge_round_ = storage_schema.get_progressive_merge_round();
-    param.progressive_merge_step_ = 0;
-
-    param.table_mode_ = storage_schema.get_table_mode_struct();
-    param.index_type_ = storage_schema.get_index_type();
-    param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();
-    param.root_row_store_type_ = (ObRowStoreType::ENCODING_ROW_STORE == storage_schema.get_row_store_type()
-        ? ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE : storage_schema.get_row_store_type());
-    param.latest_row_store_type_ = storage_schema.get_row_store_type();
-    param.data_index_tree_height_ = 0;
-    param.index_blocks_cnt_ = 0;
-    param.data_blocks_cnt_ = 0;
-    param.micro_block_cnt_ = 0;
-    param.use_old_macro_block_count_ = 0;
-    param.data_checksum_ = 0;
-    param.occupy_size_ = 0;
-    param.ddl_scn_.set_min();
-    param.filled_tx_scn_.set_min();
-    param.original_size_ = 0;
-    param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    param.table_backup_flag_.reset();
-    param.table_shared_flag_.reset();
-    if (OB_FAIL(storage_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
-      LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(storage_schema));
-    } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {
-    } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
-        param.column_checksums_))) {
-      LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
-    }
-  }
-
-  return ret;
-}
-
-int ObTabletCreateDeleteHelper::build_create_cs_sstable_param(
-    const ObStorageSchema &storage_schema,
-    const ObTabletID &tablet_id,
-    const int64_t snapshot_version,
-    const int64_t column_group_idx,
-    const bool has_all_column_group,
-    ObTabletCreateSSTableParam &cs_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(build_create_sstable_param(storage_schema, tablet_id, snapshot_version, cs_param))) {
-    LOG_WARN("failed to build sstable cs_param", K(ret));
-  } else if (FALSE_IT(cs_param.table_key_.column_group_idx_ = column_group_idx)) {
-  } else if (OB_FAIL(storage_schema.get_stored_column_count_in_sstable(cs_param.full_column_cnt_))) {
-    LOG_WARN("failed to get_stored_column_count_in_sstable", K(ret));
-  } else {
-    const ObStorageColumnGroupSchema &cg_schema = storage_schema.get_column_groups().at(column_group_idx);
-
-    if (cg_schema.is_all_column_group()) {
-      cs_param.table_key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
-      cs_param.co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
-    } else if (cg_schema.is_rowkey_column_group()) {
-      cs_param.table_key_.table_type_ = has_all_column_group
-                                      ? ObITable::TableType::ROWKEY_COLUMN_GROUP_SSTABLE
-                                      : ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
-
-      cs_param.co_base_type_ = has_all_column_group
-                             ? ObCOSSTableBaseType::ALL_CG_TYPE
-                             : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
-
-      cs_param.rowkey_column_cnt_ = cg_schema.column_cnt_;
-      cs_param.column_cnt_ = cg_schema.column_cnt_;
-    } else {
-      cs_param.table_key_.table_type_ = ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
-      cs_param.rowkey_column_cnt_ = 0;
-      cs_param.column_cnt_ = cg_schema.column_cnt_;
-    }
-
-    if (ObITable::TableType::COLUMN_ORIENTED_SSTABLE == cs_param.table_key_.table_type_) {
-      cs_param.column_group_cnt_ = storage_schema.get_column_group_count();
-    }
-  }
-  return ret;
 }
 } // namespace storage
 } // namespace oceanbase

@@ -228,6 +228,8 @@ public:
 
   void set_enable_channel_sync(bool enable_channel_sync) { enable_channel_sync_ = enable_channel_sync; }
   uint64_t enable_channel_sync() const { return enable_channel_sync_; }
+  void set_send_by_tenant(bool send_by_tenant) { send_by_tenant_ = send_by_tenant; }
+  uint64_t send_by_tenant() const { return send_by_tenant_; }
 
   OB_INLINE void set_loop_index(int64_t loop_idx) { loop_idx_ = loop_idx; }
   OB_INLINE int64_t get_loop_index() { return loop_idx_; }
@@ -294,6 +296,7 @@ protected:
   // choose new dtl channel sync or first buffer cache
   bool enable_channel_sync_;
   DtlChannelType channel_type_;
+  bool send_by_tenant_;
 
 public:
   // ObDtlChannel is link base, so it add extra link
@@ -342,16 +345,16 @@ OB_INLINE uint64_t ObDtlChannel::generate_id(uint64_t ch_cnt)
   //
   int64_t start_id = (common::ObTimeUtility::current_time() / 1000000) << 20;
   static volatile uint64_t sequence = start_id;
-  const uint64_t svr_id = GCTX.server_id_;
+  const uint64_t server_index = GCTX.get_server_index();
   uint64_t ch_id = -1;
   if (1 < ch_cnt) {
     uint64_t org_ch_id = 0;
     do {
-      org_ch_id = (sequence & 0x0000FFFFFFFFFFFF) | (svr_id << 48);
-      ch_id = ((ATOMIC_AAF(&sequence, ch_cnt) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
+      org_ch_id = (sequence & 0x0000FFFFFFFFFFFF) | (server_index << 48);
+      ch_id = ((ATOMIC_AAF(&sequence, ch_cnt) & 0x0000FFFFFFFFFFFF) | (server_index << 48));
     } while (ch_id < org_ch_id);
   } else {
-    ch_id = ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
+    ch_id = ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (server_index << 48));
   }
   return ch_id;
 }

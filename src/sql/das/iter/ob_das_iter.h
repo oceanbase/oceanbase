@@ -23,6 +23,7 @@ using namespace common;
 namespace sql
 {
 
+class ObDASDocIdMergeIter;
 class ObDASVIdMergeIter;
 class ObEvalCtx;
 class ObExecContext;
@@ -61,7 +62,7 @@ public:
   ObExecContext *exec_ctx_;
   const ObIArray<ObExpr*> *output_;
   const ObExpr *group_id_expr_;
-  TO_STRING_KV(K_(type), K_(max_size), K_(eval_ctx), K_(exec_ctx), KPC_(output), K_(group_id_expr));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(max_size), K_(eval_ctx), K_(exec_ctx), KPC_(output), K_(group_id_expr));
 };
 
 class ObDASIter : public common::ObNewRowIterator
@@ -117,6 +118,7 @@ public:
   virtual void reset() override {}
   // for compatibility with ObNewRowIterator
 
+  int get_doc_id_merge_iter(ObDASDocIdMergeIter *&doc_id_merge_iter);
   int get_vid_merge_iter(ObDASVIdMergeIter *&vid_merge_iter);
 protected:
   virtual int inner_init(ObDASIterParam &param) = 0;

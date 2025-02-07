@@ -265,7 +265,9 @@ int ObUpdateResolver::check_update_assign_duplicated(const ObUpdateStmt *update_
         const ObAssignment &assign_item = table_info->assignments_.at(j);
         if (assign_item.is_duplicated_) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
-          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign_item.column_expr_->get_column_name()));
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE,
+              helper.convert(assign_item.column_expr_->get_column_name()));
         }
       }
     }
@@ -487,8 +489,8 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
   const ObTableSchema *table_schema = NULL;
   const TableItem *table_item = NULL;
   ObUpdateTableInfo *table_info = NULL;
-  uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
-  int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t index_tid[OB_MAX_AUX_TABLE_PER_MAIN_TABLE];
+  int64_t gindex_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(update_stmt)) {
@@ -563,15 +565,7 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
       }
     }
     if (OB_SUCC(ret)) {
-      TableItem *rowkey_doc = NULL;
-      if (OB_FAIL(try_add_join_table_for_fts(table_item, rowkey_doc))) {
-        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
-      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
-                                                                      *table_item,
-                                                                      rowkey_doc,
-                                                                      table_info->column_exprs_))) {
-        LOG_WARN("fail to try update column expr for fts", K(ret), KPC(table_item));
-      } else if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
+      if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         update_stmt->set_has_global_index(true);

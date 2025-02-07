@@ -17,21 +17,24 @@
 #include "lib/utility/ob_macro_utils.h"         //DISALLOW_COPY_AND_ASSIGN
 #include "log_define.h"
 #include "palf_iterator.h"
+#include "common/storage/ob_io_device.h"        // ObIOFd
+#include "log_io_context.h"                     // LogIOContext
 namespace oceanbase
 {
 namespace common
 {
-  class ObIOFd;
+class ObIOFd;
 }
 namespace palf
 {
 class ReadBuf;
+class LogIOAdapter;
 class LogReader
 {
 public:
   LogReader();
   ~LogReader();
-  int init(const char *log_dir, const offset_t block_size);
+  int init(const char *log_dir, const offset_t block_size, LogIOAdapter *io_adapter);
   //int init(LogDir *log_dir, const offset_t block_size);
   void destroy();
   int pread(const block_id_t block_id,
@@ -39,7 +42,7 @@ public:
             int64_t in_read_size,
             ReadBuf &read_buf,
             int64_t &out_read_size,
-            LogIteratorInfo *iterator_info) const;
+            LogIOContext &io_ctx) const;
 private:
   int limit_and_align_in_read_size_by_block_size_(
       offset_t aligned_start_offset,
@@ -48,13 +51,13 @@ private:
   offset_t limit_read_end_offset_by_block_size_(
       offset_t start_offset,
       offset_t end_offset) const;
-  int inner_pread_(const int read_io_fd,
+  int inner_pread_(const ObIOFd &read_io_fd,
                    offset_t start_offset,
                    int64_t in_read_size,
                    char *read_buf,
                    const int64_t read_buf_len,
                    int64_t &out_read_size,
-                   LogIteratorInfo *iterator_info) const;
+                   LogIOContext &io_ctx) const;
 
 private:
   offset_t block_size_;
@@ -64,6 +67,7 @@ private:
   mutable int64_t accum_read_io_count_;
   mutable int64_t accum_read_log_size_;
   mutable int64_t accum_read_cost_ts_;
+  LogIOAdapter *io_adapter_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogReader);
   // TODO by runlin

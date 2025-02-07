@@ -165,8 +165,9 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
                                               accessible));
       if (OB_SUCC(ret) && !accessible) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(create_mlog_stmt->get_database_name()),
-                                          to_cstring(create_mlog_stmt->get_table_name()));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(create_mlog_stmt->get_database_name()),
+                                          helper.convert(create_mlog_stmt->get_table_name()));
       }
     }
   }
@@ -231,8 +232,10 @@ int ObCreateMLogResolver::resolve_table_name_node(
   bool table_exist = false;
   const ObTableSchema *data_table_schema = nullptr;
   uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t compat_version = 0;
   ObNameCaseMode mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
+  ObCStringHelper helper;
   if (OB_ISNULL(table_name_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table option node", KR(ret), KP(table_name_node));
@@ -251,7 +254,7 @@ int ObCreateMLogResolver::resolve_table_name_node(
       new_tbl_name,
       data_table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(data_table_name));
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(data_table_name));
       LOG_WARN("table not exist", KR(ret), K(database_name), K(data_table_name));
     } else {
       LOG_WARN("failed to get table schema", KR(ret));
@@ -259,16 +262,23 @@ int ObCreateMLogResolver::resolve_table_name_node(
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table schema is null", KR(ret));
-  } else if(!data_table_schema->is_user_table()) {
-    ret = OB_NOT_SUPPORTED;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if((compat_version < DATA_VERSION_4_3_5_0) && OB_UNLIKELY(!data_table_schema->is_user_table())) {
     LOG_WARN("create materialized view log on a non-user table is not supported",
         KR(ret), K(data_table_schema->get_table_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table is");
+  } else if((compat_version >= DATA_VERSION_4_3_5_0)
+      && OB_UNLIKELY(!data_table_schema->is_user_table() && !data_table_schema->is_materialized_view())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create materialized view log on a non-user table or mview is not supported",
+        KR(ret), K(data_table_schema->get_table_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table or mview is");
   } else if (data_table_schema->has_mlog_table()) {
     ret = OB_ERR_MLOG_EXIST;
     LOG_WARN("a materialized view log already exists on table",
         K(data_table_name), K(data_table_schema->get_mlog_tid()));
-    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, to_cstring(data_table_name));
+    LOG_USER_ERROR(OB_ERR_MLOG_EXIST, helper.convert(data_table_name));
   } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(
       *allocator_, data_table_name, mlog_table_name, lib::is_oracle_mode()))) {
     LOG_WARN("failed to build mlog table name", KR(ret), K(data_table_name));
@@ -307,13 +317,31 @@ int ObCreateMLogResolver::resolve_table_name_node(
     } else if (OB_FAIL(deep_copy_str(new_tbl_name, tmp_new_tbl_name))) {
       LOG_WARN("failed to deep copy new_tbl_name", KR(ret));
     } else {
-      create_mlog_stmt.set_database_name(tmp_new_db_name);
-      create_mlog_stmt.set_table_name(tmp_new_tbl_name);
-      create_mlog_stmt.set_mlog_name(mlog_table_name);
-      create_mlog_stmt.set_tenant_id(tenant_id);
-      create_mlog_stmt.set_data_table_id(data_table_schema->get_table_id());
-      create_mlog_stmt.set_name_generated_type(GENERATED_TYPE_SYSTEM);
-      is_heap_table_ = data_table_schema->is_heap_table();
+      const ObTableSchema *real_table_schema = nullptr;
+      if (data_table_schema->is_materialized_view()) {
+        const ObTableSchema *container_table_schema = nullptr;
+        if (OB_FAIL(schema_checker_->get_table_schema(
+            tenant_id, data_table_schema->get_data_table_id(), container_table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(container_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null container table schema", KR(ret), KP(container_table_schema));
+        } else {
+          real_table_schema = container_table_schema;
+        }
+      } else {
+        real_table_schema = data_table_schema;
+      }
+
+      if (OB_SUCC(ret)) {
+        is_heap_table_ = real_table_schema->is_heap_table();
+        create_mlog_stmt.set_database_name(tmp_new_db_name);
+        create_mlog_stmt.set_table_name(tmp_new_tbl_name);
+        create_mlog_stmt.set_mlog_name(mlog_table_name);
+        create_mlog_stmt.set_tenant_id(tenant_id);
+        create_mlog_stmt.set_data_table_id(data_table_schema->get_table_id());
+        create_mlog_stmt.set_name_generated_type(GENERATED_TYPE_SYSTEM);
+      }
     }
   }
 

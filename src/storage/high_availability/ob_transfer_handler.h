@@ -103,6 +103,7 @@ public:
       const uint64_t timestamp,
       const int64_t start_ts,
       const bool is_report);
+  void wakeup_thread_cond();
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
   int get_transfer_task_from_inner_table_(
@@ -139,11 +140,13 @@ private:
   int inner_lock_ls_member_list_(
       const share::ObTransferTaskInfo &task_info,
       const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list);
+      const common::ObMemberList &member_list,
+      const ObTransferLockStatus &status);
   int inner_unlock_ls_member_list_(
       const share::ObTransferTaskInfo &task_info,
       const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list);
+      const common::ObMemberList &member_list,
+      const ObTransferLockStatus &status);
   int insert_lock_info_(const share::ObTransferTaskInfo &task_info);
   int check_ls_member_list_same_(
       const share::ObLSID &src_ls_id,
@@ -160,13 +163,18 @@ private:
       const share::ObLSID &ls_id,
       int64_t &active_trans_count);
   int check_start_status_transfer_tablets_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int get_dest_ls_mv_merge_scn_(
+      const share::ObTransferTaskInfo &task_info,
+      share::SCN &new_mv_merge_scn);
   int get_ls_leader_(
       const share::ObLSID &ls_id,
       common::ObAddr &addr);
   int do_trans_transfer_start_(
       const share::ObTransferTaskInfo &task_info,
       const palf::LogConfigVersion &config_version,
+      const share::SCN &dest_max_desided_scn,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int do_trans_transfer_start_prepare_(
@@ -179,6 +187,7 @@ private:
       ObTimeoutCtx &timeout_ctx);
   int do_trans_transfer_start_v2_(
       const share::ObTransferTaskInfo &task_info,
+      const share::SCN &dest_max_desided_scn,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int do_trans_transfer_dest_prepare_(
@@ -197,14 +206,21 @@ private:
       ObIArray<transaction::ObTransID> *move_tx_ids,
       int64_t &move_tx_count);
   int start_trans_(
+      const int64_t stmt_timeout,
+      const int32_t group_id,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int commit_trans_(
       const int32_t &result,
       ObMySQLTransaction &trans);
+  int get_start_trans_timeout_(
+      int64_t &stmt_timeout);
+  int get_abort_trans_timeout_(
+      int64_t &stmt_timeout);
 
   int do_tx_start_transfer_out_(
       const share::ObTransferTaskInfo &task_info,
+      const share::SCN &dest_max_desided_scn,
       common::ObMySQLTransaction &trans,
       const transaction::ObTxDataSourceType data_source_type,
       SCN data_end_scn,
@@ -239,13 +255,9 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       ObTimeoutCtx &timeout_ctx);
-  int get_transfer_tablets_meta_(
-      const share::ObTransferTaskInfo &task_info,
-      common::ObIArray<ObMigrationTabletParam> &params);
   int do_tx_start_transfer_in_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
-      const common::ObIArray<ObMigrationTabletParam> &params,
       ObTimeoutCtx &timeout_ctx,
       common::ObMySQLTransaction &trans);
   int inner_tx_start_transfer_in_(
@@ -316,11 +328,35 @@ private:
   int check_config_version_(
       const palf::LogConfigVersion &config_version);
   int check_task_exist_(
-      const ObTransferStatus &status,
+      const share::ObTransferTaskInfo &task_info,
       const bool find_by_src_ls,
       bool &task_exist) const;
-  int get_src_ls_member_list_(
+  int wait_transfer_in_tablet_abort_(
+      const share::ObTransferTaskInfo &task_info,
+      const common::ObMemberList &member_list);
+  int do_trans_transfer_aborted_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      ObMySQLTransaction &trans);
+  int update_transfer_meta_info_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      ObTimeoutCtx &timeout_ctx);
+  int build_transfer_meta_info_(
+      const share::ObTransferTaskInfo &task_info,
+      const share::SCN &start_scn,
+      ObLSTransferMetaInfo &transfer_meta_info);
+  int get_dest_ls_max_desided_scn_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      share::SCN &dest_desided_scn);
+  int get_local_ls_member_list_(
       common::ObMemberList &member_list);
+  int check_transfer_in_tablet_abort_(
+      const share::ObTransferTaskInfo &task_info,
+      const common::ObIArray<ObAddr> &member_addr_list,
+      ObTimeoutCtx &timeout_ctx,
+      common::ObIArray<ObAddr> &finished_addr_list);
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
   void process_perf_diagnose_info_(
       const ObStorageHACostItemName name,
@@ -328,12 +364,38 @@ private:
       const int64_t start_ts,
       const int64_t round, const bool is_report) const;
   int do_clean_diagnose_info_();
+  int inner_do_with_abort_status_(const share::ObTransferTaskInfo &task_info);
 
   int register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
                                   const SCN transfer_scn,
                                   ObMySQLTransaction &trans,
                                   CollectTxCtxInfo &collect_batch,
                                   int64_t &batch_len);
+  int inner_do_with_abort_status_before_4230_(const share::ObTransferTaskInfo &task_info);
+  int inner_check_task_exist_(
+      const ObTransferStatus &status,
+      const bool find_by_src_ls,
+      bool &task_exist) const;
+  int inner_check_task_exist_before_4230_(
+      const ObTransferStatus &status,
+      const bool find_by_src_ls,
+      bool &task_exist) const;
+  int parallel_get_transfer_tablets_meta_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int generate_parallel_tablet_info_dag_(
+      const share::ObTransferTaskInfo &task_info);
+  int do_build_tablet_info_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int wait_parallel_tablet_info_ready_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      int32_t &result);
+  int wait_parallel_tablet_info_dag_finish_(
+      const share::ObTransferTaskInfo &task_info);
+  void finish_parallel_tablet_info_dag_(
+      const share::ObTransferTaskInfo &task_info);
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
@@ -355,6 +417,9 @@ private:
   share::ObStorageHACostItemName diagnose_result_msg_;
   common::SpinRWLock transfer_handler_lock_;
   bool transfer_handler_enabled_;
+  ObTransferBuildTabletInfoCtx ctx_;
+  common::ObThreadCond cond_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 

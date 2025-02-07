@@ -37,11 +37,12 @@ class ObDBMSSchedJobInfo;
 namespace storage {
 class ObVectorIndexSchedJobUtils : public ObMViewSchedJobUtils {
 public:
-  static constexpr char *VETCOR_INDEX_REFRESH_JOB_PREFIX =
-      const_cast<char *>("VECTOR_INDEX_REFRESH$J_");
   static constexpr int64_t DEFAULT_REFRESH_INTERVAL_TS =
-      10 * 60 * 1000000; // 10min
+      10L * 60 * 1000000; // 10min
+  static constexpr int64_t DEFAULT_REBUILD_INTERVAL_TS =
+      24L * 60 * 60 * 1000000; // 24H
   static constexpr int64_t DEFAULT_REFRESH_TRIGGER_THRESHOLD = 10000;
+  static constexpr double DEFAULT_REBUILD_TRIGGER_THRESHOLD = 0.2;
   ObVectorIndexSchedJobUtils() : ObMViewSchedJobUtils() {}
   virtual ~ObVectorIndexSchedJobUtils() {}
 
@@ -55,15 +56,27 @@ public:
 
   static int add_vector_index_refresh_job(common::ObISQLClient &sql_client,
                                           const uint64_t tenant_id,
-                                          const common::ObString &vec_id_index_tb_name,
-                                          const common::ObString &db_name,
-                                          const common::ObString &table_name,
-                                          const common::ObString &index_name,
+                                          const uint64_t vidx_table_id,
                                           const common::ObString &exec_env);
 
   static int remove_vector_index_refresh_job(common::ObISQLClient &sql_client,
                                              const uint64_t tenant_id,
-                                             const common::ObString &vec_id_index_tb_name);
+                                             const uint64_t vidx_table_id);
+
+  static int add_vector_index_rebuild_job(common::ObISQLClient &sql_client,
+                                          const uint64_t tenant_id,
+                                          const uint64_t vidx_table_id,
+                                          const common::ObString &exec_env);
+
+  static int remove_vector_index_rebuild_job(common::ObISQLClient &sql_client,
+                                             const uint64_t tenant_id,
+                                             const uint64_t vidx_table_id);
+  static int get_vector_index_job_info(common::ObISQLClient &sql_client,
+                                       const uint64_t tenant_id,
+                                       const uint64_t vidx_table_id,
+                                       common::ObIAllocator &allocator,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       dbms_scheduler::ObDBMSSchedJobInfo &job_info);
 };
 
 } // namespace storage

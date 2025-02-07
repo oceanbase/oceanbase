@@ -26,7 +26,7 @@ public:
   ObQSyncLock() : write_flag_(0) {}
   ~ObQSyncLock() {}
   int init(const lib::ObMemAttr &mem_attr);
-  bool is_inited() const { return qsync_.is_inited(); }
+  bool is_inited() const { return true; }
   void destroy();
   int rdlock();
   void rdunlock();
@@ -36,9 +36,10 @@ public:
   int try_rdlock();
 private:
   static const int64_t TRY_SYNC_COUNT = 16;
+  static const int64_t MAX_REF_CNT = 48;
 private:
   int64_t write_flag_ CACHE_ALIGNED;
-  common::ObDynamicQSync qsync_;
+  common::ObQSyncWrapper<MAX_REF_CNT> qsync_;
 };
 
 class ObQSyncLockWriteGuard

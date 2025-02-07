@@ -64,31 +64,15 @@ class ObIndexBackDim : public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObIndexBackDim() : ObSkylineDim(INDEX_BACK), need_index_back_(false),
-    has_interesting_order_(true),
-    can_extract_range_(true),
-    index_column_cnt_(0),
-    filter_column_cnt_(0)
-  { MEMSET(filter_column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
+  ObIndexBackDim() : ObSkylineDim(INDEX_BACK), need_index_back_(false)
+  {}
 
   virtual ~ObIndexBackDim() {}
   void set_index_back(const bool index_back) { need_index_back_ = index_back; }
-  void set_interesting_order(const bool has) { has_interesting_order_ = has; }
-  void set_extract_range(const bool can) { can_extract_range_ = can;}
-  void set_index_column_cnt(const int64_t size) { index_column_cnt_ = size; }
-  int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  VIRTUAL_TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range),
-               K_(index_column_cnt),
-               "restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+  VIRTUAL_TO_STRING_KV(K_(need_index_back));
 private:
   bool need_index_back_;
-  bool has_interesting_order_;
-  bool can_extract_range_;
-  int64_t index_column_cnt_;
-  //some filter conditions on index columns
-  int64_t filter_column_cnt_;
-  uint64_t filter_column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
 };
 
 
@@ -222,10 +206,6 @@ public:
   int add_skyline_dim(const ObSkylineDim &dim);
   void set_index_id(const uint64_t index_id) { index_id_ = index_id; }
   int add_index_back_dim(const bool is_index_back,
-                         const bool has_interest_order,
-                         const bool can_extract_range,
-                         const int64_t index_column_cnt,
-                         const common::ObIArray<uint64_t> &restrict_ids,
                          common::ObIAllocator &allocator);
   int add_interesting_order_dim(const bool is_index_back,
                                 const bool can_extract_range,

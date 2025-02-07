@@ -18,6 +18,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_sdo_geo_object.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 
 namespace oceanbase
 {
@@ -114,22 +115,23 @@ int ObExprUDTAttributeAccess::eval_attr_access(const ObExpr &expr, ObEvalCtx &ct
   ObDatum *attr_datum = NULL;
   int32_t attr_idx = 0;
   int num_args = expr.arg_cnt_;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_UDT_ATTR_ACCESS);
   if (num_args != 2) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params number", K(ret), K(num_args));
-  } else if (OB_FAIL(expr.args_[0]->eval(ctx, udt_datum))) {
+  } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[0], ctx, udt_datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
   } else if (udt_datum->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(expr.args_[1]->eval(ctx, attr_datum))) {
+  } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[1], ctx, attr_datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
   } else if (attr_datum->is_null()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid attribute idx", K(ret));
   } else {
     attr_idx = attr_datum->get_int();
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     const ObExprUdtAttrAccessInfo *info
                   = static_cast<ObExprUdtAttrAccessInfo *>(expr.extra_info_);
     ObSqlUDT sql_udt;
@@ -143,6 +145,7 @@ int ObExprUDTAttributeAccess::eval_attr_access(const ObExpr &expr, ObEvalCtx &ct
                                                                  CS_TYPE_BINARY, true,
                                                                  raw_data))) {
       LOG_WARN("failed to get udt raw data", K(ret), K(info->udt_id_));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(raw_data.length()))) {
     } else if (expr.args_[0]->datum_meta_.type_ == ObGeometryType) {
       if (OB_FAIL(eval_sdo_geom_attr_access(temp_allocator, raw_data, attr_idx, res))) {
         LOG_WARN("failed to eval sdo_geometry attribute", K(ret), K(attr_idx));
@@ -189,7 +192,7 @@ int ObExprUDTAttributeAccess::eval_attr_access(const ObExpr &expr, ObEvalCtx &ct
 int ObExprUDTAttributeAccess::eval_sdo_geom_attr_access(ObIAllocator &allocator, const ObString &swkb, const int32_t attr_idx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObSdoGeoObject sdo_geo;
+  ObSdoGeoObject sdo_geo(allocator);
   if (OB_FAIL(ObGeoTypeUtil::wkb_to_sdo_geo(swkb, sdo_geo, true))) {
     LOG_WARN("fail to wkb_to_sdo_geo", K(ret), K(swkb));
   } else {

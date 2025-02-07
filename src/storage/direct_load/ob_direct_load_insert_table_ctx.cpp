@@ -19,6 +19,8 @@
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "share/stat/ob_stat_item.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
@@ -46,16 +48,20 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     reserved_parallel_(0),
     rowkey_column_count_(0),
     column_count_(0),
-    lob_column_count_(0),
+    lob_inrow_threshold_(-1),
     is_partitioned_table_(false),
     is_heap_table_(false),
     is_column_store_(false),
     online_opt_stat_gather_(false),
     is_incremental_(false),
+    reuse_pk_(true),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),
-    online_sample_percent_(1.)
+    lob_column_idxs_(nullptr),
+    online_sample_percent_(1.),
+    is_no_logging_(false),
+    max_batch_size_(0)
 {
 }
 
@@ -72,11 +78,13 @@ bool ObDirectLoadInsertTableParam::is_valid() const
          reserved_parallel_ >= 0 &&
          rowkey_column_count_ > 0 &&
          column_count_ > 0 && column_count_ >= rowkey_column_count_ &&
-         lob_column_count_ >= 0 && lob_column_count_ < column_count_ &&
+         lob_inrow_threshold_ >= 0 &&
          (!is_incremental_ || trans_param_.is_valid()) &&
          nullptr != datum_utils_ &&
          nullptr != col_descs_ && col_descs_->count() == column_count_ &&
-         nullptr != cmp_funcs_;
+         nullptr != cmp_funcs_ &&
+         nullptr != lob_column_idxs_ &&
+         max_batch_size_ > 0;
 }
 
 /**
@@ -140,7 +148,7 @@ int ObDirectLoadInsertTabletContext::init(ObDirectLoadInsertTableContext *table_
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                  ObMDSGetTabletMode::READ_ALL_COMMITED))) {
       LOG_WARN("get tablet handle failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(SCN::max_scn(), ddl_data))) {
       LOG_WARN("get ddl data failed", K(ret));
     } else {
       table_ctx_ = table_ctx;
@@ -207,6 +215,7 @@ int ObDirectLoadInsertTabletContext::create_tablet_direct_load()
     direct_load_param.common_param_.read_snapshot_ = param_->snapshot_version_;
     direct_load_param.common_param_.ls_id_ = ls_id_;
     direct_load_param.common_param_.tablet_id_ = tablet_id_;
+    direct_load_param.common_param_.is_no_logging_ = param_->is_no_logging_;
     direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
     direct_load_param.runtime_only_param_.task_id_ = param_->ddl_task_id_;
     direct_load_param.runtime_only_param_.table_id_ = param_->table_id_;
@@ -216,6 +225,7 @@ int ObDirectLoadInsertTabletContext::create_tablet_direct_load()
     direct_load_param.runtime_only_param_.tx_desc_ = param_->trans_param_.tx_desc_;
     direct_load_param.runtime_only_param_.trans_id_ = param_->trans_param_.tx_id_;
     direct_load_param.runtime_only_param_.seq_no_ = param_->trans_param_.tx_seq_.cast_to_int();
+    direct_load_param.runtime_only_param_.max_batch_size_ = param_->max_batch_size_;
     if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(context_id_,
                                                               context_id_ /*execution_id*/,
                                                               direct_load_param))) {
@@ -297,7 +307,7 @@ int ObDirectLoadInsertTabletContext::get_pk_interval(uint64_t count,
     if (OB_UNLIKELY(OB_EAGAIN != ret)) {
       LOG_WARN("fail to fetch from pk cache", KR(ret));
     } else {
-      if (OB_FAIL(refresh_pk_cache(origin_tablet_id_, pk_cache_))) {
+      if (OB_FAIL(refresh_pk_cache((param_->reuse_pk_ ? origin_tablet_id_ : tablet_id_), pk_cache_))) {
         LOG_WARN("fail to refresh pk cache", KR(ret));
       } else if (OB_FAIL(pk_cache_.fetch(count, pk_interval))) {
         LOG_WARN("fail to fetch from pk cache", KR(ret));
@@ -351,6 +361,7 @@ int ObDirectLoadInsertTabletContext::get_write_ctx(ObDirectLoadInsertTabletWrite
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = start_seq_.macro_data_seq_;
+      // the macro block may not be recycled when load data failed in shared storage mode, TODO(jianming)
       start_seq_.macro_data_seq_ += WRITE_BATCH_SIZE;
     }
   }
@@ -395,7 +406,31 @@ int ObDirectLoadInsertTabletContext::refresh_pk_cache(const ObTabletID &tablet_i
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row)
+int ObDirectLoadInsertTabletContext::get_row_info(ObDirectLoadInsertTableRowInfo &row_info, const bool is_delete)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", K(ret), KP(this));
+  } else {
+    row_info.row_flag_.set_flag(
+      is_delete ? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT,
+      // 只有增量inc_replace模式下的主表insert行需要DF_TYPE_INSERT_DELETE
+      // * 目前这里没有细分增量inc和增量inc_replace
+      // * 增量inc_replace带索引或lob会退化成增量inc
+      (!param_->is_incremental_ || is_delete) ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
+    row_info.mvcc_row_flag_.set_compacted_multi_version_row(true);
+    row_info.mvcc_row_flag_.set_first_multi_version_row(true);
+    row_info.mvcc_row_flag_.set_last_multi_version_row(true);
+    row_info.mvcc_row_flag_.set_uncommitted_row(param_->is_incremental_);
+    row_info.trans_version_ = !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
+    row_info.trans_id_ = param_->trans_param_.tx_id_;
+    row_info.seq_no_ = param_->trans_param_.tx_seq_.cast_to_int();
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row, const bool is_delete)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -410,7 +445,12 @@ int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row)
       const int64_t trans_version =
         !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
       datum_row.trans_id_ = param_->trans_param_.tx_id_;
-      datum_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT, !param_->is_incremental_ ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
+      datum_row.row_flag_.set_flag(
+        is_delete ? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT,
+        // 只有增量inc_replace模式下的主表insert行需要DF_TYPE_INSERT_DELETE
+        // * 目前这里没有细分增量inc和增量inc_replace
+        // * 增量inc_replace带索引或lob会退化成增量inc
+        (!param_->is_incremental_ || is_delete) ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
       datum_row.mvcc_row_flag_.set_compacted_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_first_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
@@ -483,6 +523,32 @@ int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
   return ret;
 }
 
+int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
+                                                        const ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
+  } else {
+    ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
+    ObDirectLoadSliceInfo slice_info;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
+    slice_info.is_lob_slice_ = false;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
+    slice_info.slice_id_ = slice_id;
+    slice_info.context_id_ = context_id_;
+    if (OB_FAIL(ddl_agent_.fill_sstable_slice(slice_info, datum_rows))) {
+      LOG_WARN("fail to fill sstable slice", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadInsertTabletContext::fill_lob_meta_sstable_slice(const int64_t &lob_slice_id,
                                                                  ObIStoreRowIterator &iter,
                                                                  int64_t &affected_rows)
@@ -546,6 +612,36 @@ int ObDirectLoadInsertTabletContext::fill_lob_sstable_slice(ObIAllocator &alloca
   return ret;
 }
 
+int ObDirectLoadInsertTabletContext::fill_lob_sstable_slice(ObIAllocator &allocator,
+                                                            const int64_t &lob_slice_id,
+                                                            ObTabletCacheInterval &pk_interval,
+                                                            ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
+  } else if (OB_UNLIKELY(!is_open_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not open", KR(ret));
+  } else {
+    ObDirectLoadSliceInfo slice_info;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
+    slice_info.is_lob_slice_ = true;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
+    slice_info.slice_id_ = lob_slice_id;
+    slice_info.context_id_ = context_id_;
+    if (OB_FAIL(ddl_agent_.fill_lob_sstable_slice(allocator, slice_info, pk_interval, datum_rows))) {
+      LOG_WARN("fail to fill sstable slice", KR(ret), K(slice_info));
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadInsertTabletContext::open_sstable_slice(const ObMacroDataSeq &start_seq,
                                                         int64_t &slice_id)
 {
@@ -564,6 +660,7 @@ int ObDirectLoadInsertTabletContext::open_sstable_slice(const ObMacroDataSeq &st
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {
@@ -593,6 +690,7 @@ int ObDirectLoadInsertTabletContext::open_lob_sstable_slice(const ObMacroDataSeq
     slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
+    slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {
@@ -658,8 +756,8 @@ int ObDirectLoadInsertTabletContext::calc_range(const int64_t thread_cnt)
     ret = OB_CANCELED;
     LOG_WARN("task is cancel", KR(ret));
   } else {
-    if (OB_FAIL(ddl_agent_.calc_range(thread_cnt))) {
-      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_));
+    if (OB_FAIL(ddl_agent_.calc_range(context_id_, thread_cnt))) {
+      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_), K(context_id_), K(thread_cnt));
     } else {
       LOG_INFO("success to calc range", K(tablet_id_));
     }
@@ -776,7 +874,7 @@ int ObDirectLoadInsertTableContext::init(
                  MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
       LOG_WARN("alloc execution context id failed", K(ret));
     } else if (OB_FAIL(create_all_tablet_contexts(ls_partition_ids, target_ls_partition_ids))) {
-      LOG_WARN("fail to create all tablet contexts", KR(ret));
+      LOG_WARN("fail to create all tablet contexts", KR(ret), K(ls_partition_ids), K(target_ls_partition_ids));
     } else if (param_.online_opt_stat_gather_ &&
                sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", MTL_ID())) {
       LOG_WARN("fail to create sql stat map", KR(ret));
@@ -800,7 +898,7 @@ int ObDirectLoadInsertTableContext::create_all_tablet_contexts(
     if (OB_ISNULL(tablet_ctx = OB_NEWx(ObDirectLoadInsertTabletContext, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadInsertTabletContext", KR(ret));
-    } else if (OB_FAIL(tablet_ctx->init(this, ls_id, origin_tablet_id, tablet_id))) {
+    } else if (OB_FAIL(tablet_ctx->init(this, ls_id, origin_tablet_id, tablet_id))){
       LOG_WARN("fail to init fast heap table tablet ctx", KR(ret));
     } else if (OB_FAIL(tablet_ctx_map_.set_refactored(origin_tablet_id, tablet_ctx))) {
       LOG_WARN("fail to set tablet ctx map", KR(ret));
@@ -958,7 +1056,7 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
         const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
-        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
         if (is_valid) {
           if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
             LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
@@ -968,7 +1066,170 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
           } else if (OB_FAIL(col_stat->update_column_stat_info(&datum,
                                                                col_desc.col_type_,
                                                                cmp_func.cmp_func_))) {
-            LOG_WARN("fail to merge obj", KR(ret), KP(col_stat));
+            LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatistics &sql_statistics,
+                                                          const ObBatchDatumRows &datum_rows)
+{
+  int ret = OB_SUCCESS;
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
+  } else if (OB_UNLIKELY(datum_rows.get_column_count() != param_.column_count_ + extra_rowkey_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid datum row", KR(ret), K(param_));
+  } else {
+    bool ignore = false;
+    ObOptOSGColumnStat *col_stat = nullptr;
+    ObDatum datum;
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < datum_rows.row_count_; ++row_idx) {
+      if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
+        LOG_WARN("failed to sample row", KR(ret));
+      } else if (ignore) {
+        // do nothing
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
+          if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+            // ignore heap table hidden pk
+          } else {
+            const int64_t datum_idx = i < param_.rowkey_column_count_ ? i : i + extra_rowkey_cnt;
+            const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+            const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+            const ObColDesc &col_desc = param_.col_descs_->at(i);
+            ObIVector *vector = datum_rows.vectors_.at(datum_idx);
+            const bool is_valid =
+              ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
+            if (is_valid) {
+              if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
+                LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
+              } else if (OB_ISNULL(col_stat)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
+              } else if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, datum))) {
+                LOG_WARN("fail to get datum", KR(ret));
+              } else if (OB_FAIL(col_stat->update_column_stat_info(&datum,
+                                                                   col_desc.col_type_,
+                                                                   cmp_func.cmp_func_))) {
+                LOG_WARN("fail to merge obj", KR(ret), KP(col_stat));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatistics &sql_statistics,
+                                                          const ObDatumRow &datum_row,
+                                                          const ObDirectLoadRowFlag &row_flag)
+{
+  int ret = OB_SUCCESS;
+  bool ignore = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
+  } else if (OB_UNLIKELY(row_flag.get_column_count(datum_row.get_column_count()) !=
+                           param_.column_count_ ||
+                         (row_flag.uncontain_hidden_pk_ && !param_.is_heap_table_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid datum row", KR(ret), K(param_), K(datum_row), K(row_flag));
+  } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
+    LOG_WARN("failed to sample row", KR(ret));
+  } else if (ignore) {
+    // do nothing
+  } else {
+    ObOptOSGColumnStat *col_stat = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
+      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+        // ignore heap table hidden pk
+      } else {
+        const int64_t datum_idx = row_flag.uncontain_hidden_pk_ ? i - 1 : i;
+        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
+        const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+        const ObColDesc &col_desc = param_.col_descs_->at(i);
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
+        if (is_valid) {
+          if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
+            LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
+          } else if (OB_ISNULL(col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
+          } else if (OB_FAIL(col_stat->update_column_stat_info(&datum,
+                                                               col_desc.col_type_,
+                                                               cmp_func.cmp_func_))) {
+            LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatistics &sql_statistics,
+                                                          const IVectorPtrs &vectors,
+                                                          const int64_t row_idx,
+                                                          const ObDirectLoadRowFlag &row_flag)
+{
+  int ret = OB_SUCCESS;
+  bool ignore = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
+  } else if (OB_UNLIKELY(row_flag.get_column_count(vectors.count()) != param_.column_count_ ||
+                         row_idx < 0 ||
+                         (row_flag.uncontain_hidden_pk_ && !param_.is_heap_table_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid datum row", KR(ret), K(param_), K(vectors.count()), K(row_idx), K(row_flag));
+  } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
+    LOG_WARN("failed to sample row", KR(ret));
+  } else if (ignore) {
+    // do nothing
+  } else {
+    ObOptOSGColumnStat *col_stat = nullptr;
+    ObDatum datum;
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
+      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+        // ignore heap table hidden pk
+      } else {
+        const int64_t datum_idx = row_flag.uncontain_hidden_pk_ ? i - 1 : i;
+        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+        const ObColDesc &col_desc = param_.col_descs_->at(i);
+        ObIVector *vector = vectors.at(datum_idx);
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type(), true);
+        if (is_valid) {
+          if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
+            LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
+          } else if (OB_ISNULL(col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
+          } else if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, datum))) {
+            LOG_WARN("fail to get datum", KR(ret));
+          } else if (OB_FAIL(col_stat->update_column_stat_info(&datum,
+                                                               col_desc.col_type_,
+                                                               cmp_func.cmp_func_))) {
+            LOG_WARN("fail to merge obj", KR(ret), K(i), K(col_desc), K(datum), KP(col_stat));
           }
         }
       }

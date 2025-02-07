@@ -110,7 +110,9 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObIJsonBase *j_base = NULL;
   ObIJsonBase *j_patch_node = NULL;
   bool has_null = false;
@@ -185,7 +187,9 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
 {
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
 
   bool is_cover_error = false;
   int err_code = 0;
@@ -197,7 +201,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
     ObExpr *opt_expr = expr.args_[i];
     ObObjType val_type = opt_expr->datum_meta_.type_;
     ObCollationType cs_type = opt_expr->datum_meta_.cs_type_;
-    if (OB_UNLIKELY(OB_FAIL(opt_expr->eval(ctx, opt_datum)))) {
+    if (OB_FAIL(temp_allocator.eval_arg(opt_expr, ctx, opt_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || opt_datum->is_null()) {
     } else if (!ob_is_integer_type(val_type)) {
@@ -311,7 +315,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
         ObString result_str;
         bool is_quote = j_base->json_type() == ObJsonNodeType::J_STRING;
 
-        if (OB_FAIL(j_base->print(*jbuf, is_quote, is_pretty > 0))) {
+        if (OB_FAIL(j_base->print(*jbuf, is_quote, 0, is_pretty > 0))) {
           LOG_WARN("json binary to string failed", K(ret));
         } else if (jbuf->empty()) {
           ret = OB_ERR_UNEXPECTED;

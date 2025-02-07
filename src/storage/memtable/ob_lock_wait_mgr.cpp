@@ -208,7 +208,7 @@ void ObLockWaitMgr::run1()
         row_holder_mapper_.clear();
       }
     }
-    ob_usleep(10000);
+    ob_usleep(10000, true/*is_idle_sleep*/);
   }
 }
 
@@ -622,21 +622,28 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
         } else if (OB_FAIL(tx_service->get_trans_start_session_id(ls_id, holder_tx_id, holder_session_id))) {
           TRANS_LOG(WARN, "get transaction start session_id failed", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
         } else {
-          node->set((void *)node,
-                    hash,
-                    wait_on_row ? row_lock_seq : tx_lock_seq,
-                    timeout,
-                    tablet_id.id(),
-                    last_compact_cnt,
-                    total_trans_node_cnt,
-                    to_cstring(row_key),  // just for virtual table display
-                    sess_id,
-                    holder_session_id,
-                    tx_id,
-                    holder_tx_id,
-                    ls_id);
-          node->set_need_wait();
-          advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::CONFLICTED);
+          ObCStringHelper helper;
+          const char *row_key_str = helper.convert(row_key);
+          if (OB_ISNULL(row_key_str)) {
+            ret = OB_ERR_NULL_VALUE;
+            TRANS_LOG(WARN, "fail to convert row_key", K(ret), K(row_key));
+          } else {
+            node->set((void *)node,
+                      hash,
+                      wait_on_row ? row_lock_seq : tx_lock_seq,
+                      timeout,
+                      tablet_id.id(),
+                      last_compact_cnt,
+                      total_trans_node_cnt,
+                      row_key_str,  // just for virtual table display
+                      sess_id,
+                      holder_session_id,
+                      tx_id,
+                      holder_tx_id,
+                      ls_id);
+            node->set_need_wait();
+            advance_tlocal_request_lock_wait_stat(rpc::RequestLockWaitStat::RequestStat::CONFLICTED);
+          }
         }
       }
     }

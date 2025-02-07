@@ -313,7 +313,7 @@ int ObModifyAutoincTask::unlock_table()
   } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                  task_id_))) {
     LOG_WARN("convert owner id failed", K(ret), K(task_id_));
-  } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id_, object_id_, owner_id, trans))) {
+  } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id_, object_id_, nullptr/*hidden_tablet_ids_alone*/, owner_id, trans))) {
     LOG_WARN("failed to unlock table", K(ret));
   }
 

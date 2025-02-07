@@ -32,6 +32,7 @@
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -271,7 +272,7 @@ ObSQLSessionInfo *ObSQLSessionMgr::ValueAlloc::alloc_value(uint64_t tenant_id)
       LOG_INFO("alloc_session_count", K(alloc_total_count));
     }
   } else {
-    LOG_ERROR("switch tenant failed", K(ret), K(tenant_id));
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   }
   return session;
 }
@@ -323,7 +324,6 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     if (free_total_count > 0 && free_total_count % 10000 == 0) {
       LOG_INFO("free_session_count", K(free_total_count));
     }
-    ObActiveSessionGuard::setup_default_ash();
   }
 }
 
@@ -364,10 +364,10 @@ void ObSQLSessionMgr::destroy()
   sess_hold_map_.destroy();
 }
 
-uint64_t ObSQLSessionMgr::extract_server_id(uint32_t sessid)
+uint64_t ObSQLSessionMgr::extract_server_index(uint32_t sessid)
 {
-  uint64_t server_id = sessid >> LOCAL_SEQ_LEN;
-  return server_id & MAX_SERVER_ID;
+  uint64_t server_index = sessid >> LOCAL_SEQ_LEN;
+  return server_index & MAX_SERVER_INDEX;
 }
 
 int ObSQLSessionMgr::inc_session_ref(const ObSQLSessionInfo *my_session)
@@ -393,7 +393,7 @@ int ObSQLSessionMgr::inc_session_ref(const ObSQLSessionInfo *my_session)
 //
 //MASK: 1 表示是server自己生成connection id,
 //      0 表示是proxy生成的connection id(已废弃，目前仅用于 in_mgr = false 的场景)；
-//Server Id: 集群中server的id由RS分配，集群内唯一；
+//Server index: 集群中server的id由RS分配，集群内唯一，但在server删除后可能会被复用；
 //Local Seq: 一个server可用连接数，目前单台server最多有INT16_MAX个连接;
 //
 int ObSQLSessionMgr::create_sessid(uint32_t &sessid, bool in_mgr)
@@ -401,29 +401,29 @@ int ObSQLSessionMgr::create_sessid(uint32_t &sessid, bool in_mgr)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   sessid = 0;
-  const uint64_t server_id = GCTX.server_id_;
+  const uint64_t server_index = GCTX.get_server_index();
   uint32_t local_seq = 0;
   static uint32_t abnormal_seq = 0;//用于server_id == 0是的sessid分配
-  if (server_id > MAX_SERVER_ID) {
+  if (server_index > MAX_SERVER_INDEX) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("server id maybe invalid", K(ret), K(server_id));
+    LOG_ERROR("server index maybe invalid", K(ret), K(server_index));
   } else if (!in_mgr) {
     sessid = (GETTID() | LOCAL_SESSID_TAG);
-    sessid |= static_cast<uint32_t>(server_id << LOCAL_SEQ_LEN);  // set observer
-  } else if (0 == server_id) {
+    sessid |= static_cast<uint32_t>(server_index << LOCAL_SEQ_LEN);  // set observer
+  } else if (0 == server_index) {
     local_seq = (ATOMIC_FAA(&abnormal_seq, 1) & MAX_LOCAL_SEQ);
     uint32_t max_local_seq = MAX_LOCAL_SEQ;
-    uint32_t max_server_id = MAX_SERVER_ID;
-    LOG_WARN("server is initiating", K(server_id), K(local_seq), K(max_local_seq), K(max_server_id));
+    uint32_t max_server_index = MAX_SERVER_INDEX;
+    LOG_WARN("server is initiating", K(server_index), K(local_seq), K(max_local_seq), K(max_server_index));
   } else if (OB_UNLIKELY(OB_SUCCESS != (ret = tmp_ret = get_avaiable_local_seq(local_seq)))) {
     LOG_WARN("fail to get avaiable local_seq", K(local_seq));
   } else {/*do nothing*/}
 
   if (OB_SUCC(ret) && in_mgr) {
     sessid = local_seq | SERVER_SESSID_TAG;// set observer sessid mark
-    sessid |= static_cast<uint32_t>(server_id << LOCAL_SEQ_LEN);  // set observer
-    // high bit is reserved for server id
-    sessid |= static_cast<uint32_t>(1ULL << (LOCAL_SEQ_LEN + SERVER_ID_LEN));
+    sessid |= static_cast<uint32_t>(server_index << LOCAL_SEQ_LEN);  // set observer
+    // high bit is reserved for server index
+    sessid |= static_cast<uint32_t>(1ULL << (LOCAL_SEQ_LEN + SERVER_INDEX_LEN));
   }
   return ret;
 }
@@ -471,6 +471,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
                                     const uint32_t client_sessid,
                                     const int64_t client_create_time)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   int err = OB_SUCCESS;
   session_info = NULL;
@@ -574,6 +575,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
 
 int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_connection_mgr);
   int ret = OB_SUCCESS;
   uint32_t sessid = ctx.sessid_;
   uint64_t proxy_sessid = ctx.proxy_sessid_;
@@ -605,7 +607,6 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   if (OB_FAIL(sessinfo_map_.del(Key(sessid)))) {
     LOG_WARN("fail to remove session from session map", K(ret), K(sessid), K(proxy_sessid));
   } else if (tenant_id != 0 && sessid != 0 && has_inc) {
-    ObTenantStatEstGuard guard(tenant_id);
     EVENT_DEC(ACTIVE_SESSIONS);
   }
   return ret;
@@ -815,8 +816,8 @@ int ObSQLSessionMgr::mark_sessid_used(uint32_t sess_id)
 int ObSQLSessionMgr::mark_sessid_unused(uint32_t sess_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t server_id = extract_server_id(sess_id);
-  if (server_id == 0) {
+  uint64_t server_index = extract_server_index(sess_id);
+  if (0 == server_index) {
     // 参考：create_sessid方法
     // 由于server_id == 0时, 此时的local_seq，是由ATOMIC_FAA(&abnormal_seq, 1)产生，
     // 使用ATOMIC_FAA的原因无从考证（原作者的信息描述无任何具体信息），采取保守修改策略
@@ -899,6 +900,35 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
       }
     }
   }
+  //detect sql hung
+  int64_t tmp_ret = (OB_E(EventTable::EN_SQL_HUNG_DETECT) OB_SUCCESS);
+  int64_t timeout_multiplier = OB_ERROR == tmp_ret ? 2 : std::max(static_cast<int64_t>(1), std::abs(tmp_ret));
+  if (OB_FAIL(ret)) {
+  } else if (OB_SUCCESS == tmp_ret) {
+    //do nothing
+  } else if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
+    int64_t cur_time = common::ObTimeUtility::current_time();
+    int64_t query_timeout = 0;
+    ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
+    if (sess_info->get_ddl_info().is_ddl() || sess_info->is_real_inner_session()) {
+      //do nothing
+    } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
+      LOG_WARN("failed to get sesion variable", K(ret));
+    } else if (sess_info->get_query_start_time() > 0 &&
+               cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout) {
+      LOG_ERROR("detect sql hung!!!", K(sess_info->get_current_trace_id()),
+                                      K(sess_info->get_cur_sql_id()),
+                                      K(sess_info->get_thread_id()),
+                                      K(cur_time - sess_info->get_query_start_time()),
+                                      K(query_timeout), K(timeout_multiplier),
+                                      K(sess_info->is_user_session()),
+                                      "session_state", ObString::make_string(sess_info->get_session_state_str()),
+                                      K(sess_info->get_current_query_string()));
+    }
+  }
   return OB_SUCCESS == ret;
 }
 
@@ -955,8 +985,8 @@ int ObSQLSessionMgr::is_need_clear_sessid(const ObSMConnection *conn, bool &is_n
     LOG_WARN("unexpected parameter", K(conn));
   } else if (is_server_sessid(conn->sessid_)
              && ObSMConnection::INITIAL_SESSID != conn->sessid_
-             && 0 != extract_server_id(conn->sessid_)
-             && GCTX.server_id_ == extract_server_id(conn->sessid_)
+             && 0 != extract_server_index(conn->sessid_)
+             && GCTX.get_server_index() == extract_server_index(conn->sessid_)
              && conn->is_need_clear_sessid_) {
     is_need = true;
   } else {/*do nothing*/  }

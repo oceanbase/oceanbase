@@ -937,7 +937,7 @@ int ObLogExchange::find_need_drop_expr_idxs(ObLogicalOperator *op,
   if (OB_ISNULL(op->get_child(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
-  } else if (OB_FAIL(op->get_child(0)->check_has_exchange_below(left_has_exchange))) {
+  } else if (OB_FAIL(op->get_child(0)->check_has_op_below(log_op_def::LOG_EXCHANGE, left_has_exchange))) {
     LOG_WARN("fail to check has exchange below");
   } else if (!left_has_exchange) {
     if (type == log_op_def::LOG_SUBPLAN_FILTER) {
@@ -1043,18 +1043,29 @@ int ObLogExchange::allocate_startup_expr_post()
 int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
 {
   int ret = OB_SUCCESS;
-  is_fixed = expr == calc_part_id_expr_ ||
-             expr == partition_id_expr_ ||
-             expr == ddl_slice_id_expr_ ||
-             expr == random_expr_;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    is_fixed = expr == calc_part_id_expr_ ||
+               expr == partition_id_expr_ ||
+               expr == ddl_slice_id_expr_ ||
+               expr == random_expr_ ||
+               T_OP_OUTPUT_PACK == expr->get_expr_type();
+    for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < hash_dist_exprs_.count(); i++) {
+      if (OB_ISNULL(hash_dist_exprs_.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else {
+        is_fixed = expr == hash_dist_exprs_.at(i).expr_;
+      }
+    }
+  }
   return OB_SUCCESS;
 }
 
 bool ObLogExchange::support_rich_format_vectorize() const {
-  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANGE ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_HASH);
+  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST);
   int tmp_ret = abs(OB_E(EventTable::EN_OFS_IO_SUBMIT) OB_SUCCESS);
   if (tmp_ret & (1 << dist_method_)) {
     res = false;

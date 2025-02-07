@@ -36,6 +36,8 @@ public:
   uint16_t join_filter_count_{0}; // total join filter count in the left side of a hash join
   uint16_t extra_hash_count_{0}; // hash value count(one for hash join, several for join filter)
   bool each_sqc_has_full_data_{false}; // mark whether each sqc has complete data
+  bool need_sync_row_count_{false}; // if at least one join filter is shared join filter, we need to
+                                    // send datahub msg to synchronize row count
 };
 
 

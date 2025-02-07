@@ -258,7 +258,8 @@ ObTabletReplicaChecksumItem::ObTabletReplicaChecksumItem()
     row_count_(0),
     compaction_scn_(),
     data_checksum_(0),
-    column_meta_()
+    column_meta_(),
+    data_checksum_type_(ObDataChecksumType::DATA_CHECKSUM_MAX)
 {}
 
 void ObTabletReplicaChecksumItem::reset()
@@ -271,6 +272,7 @@ void ObTabletReplicaChecksumItem::reset()
   compaction_scn_.reset();
   data_checksum_ = 0;
   column_meta_.reset();
+  data_checksum_type_ = ObDataChecksumType::DATA_CHECKSUM_MAX;
 }
 
 bool ObTabletReplicaChecksumItem::is_key_valid() const
@@ -289,7 +291,9 @@ bool ObTabletReplicaChecksumItem::is_key_valid() const
 
 bool ObTabletReplicaChecksumItem::is_valid() const
 {
-  return is_key_valid() && column_meta_.is_valid();
+  return is_key_valid()
+       && column_meta_.is_valid()
+       && is_valid_data_checksum_type(data_checksum_type_);
 }
 
 bool ObTabletReplicaChecksumItem::is_same_tablet(const ObTabletReplicaChecksumItem &other) const
@@ -299,6 +303,19 @@ bool ObTabletReplicaChecksumItem::is_same_tablet(const ObTabletReplicaChecksumIt
       && tenant_id_ == other.tenant_id_
       && ls_id_ == other.ls_id_
       && tablet_id_ == other.tablet_id_;
+}
+
+int ObTabletReplicaChecksumItem::check_data_checksum_type(bool &is_cs_replica) const
+{
+  int ret = OB_SUCCESS;
+  is_cs_replica = false;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid checksum item", K(ret), KPC(this));
+  } else if (ObDataChecksumType::DATA_CHECKSUM_COLUMN_STORE == data_checksum_type_) {
+    is_cs_replica = true;
+  }
+  return ret;
 }
 
 int ObTabletReplicaChecksumItem::verify_checksum(const ObTabletReplicaChecksumItem &other) const
@@ -322,12 +339,76 @@ int ObTabletReplicaChecksumItem::verify_checksum(const ObTabletReplicaChecksumIt
 int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChecksumItem &other) const
 {
   int ret = OB_SUCCESS;
-  if (compaction_scn_ == other.compaction_scn_) {
-    bool column_meta_equal = false;
-    if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
-      LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
-    } else if (!column_meta_equal) {
+  bool column_meta_equal = false;
+  bool is_cs_replica_flag1 = false;
+  bool is_cs_replica_flag2 = false;
+  if (OB_UNLIKELY(compaction_scn_ != other.compaction_scn_)) {
+    // do nothing
+  } else if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
+    LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
+  } else if (column_meta_equal) {
+    // do nothing
+  } else if (OB_FAIL(check_data_checksum_type(is_cs_replica_flag1))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), KPC(this));
+  } else if (OB_FAIL(other.check_data_checksum_type(is_cs_replica_flag2))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), K(other));
+  } else if (is_cs_replica_flag1 == is_cs_replica_flag2) {
+    ret = OB_CHECKSUM_ERROR; // compaction between the same replica type can be compared
+  } else if (OB_FAIL(verify_column_checksum_between_diffrent_replica(other))) {
+    LOG_WARN("fail to verify column checksum between diffrent replica", KR(ret), K(other), K(*this));
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumItem::verify_column_checksum_between_diffrent_replica(const ObTabletReplicaChecksumItem &other) const
+{
+  int ret = OB_SUCCESS;
+  ObFreezeInfo boundary_freeze_info;
+  ObFreezeInfo to_check_freeze_info;
+  if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_lower_bound_freeze_info_before_snapshot_version(compaction_scn_.get_val_for_tx(), boundary_freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get boundary freeze info", K(ret), K_(compaction_scn));
+    }
+  } else if (boundary_freeze_info.is_valid() && boundary_freeze_info.data_version_ >= DATA_VERSION_4_3_5_0) {
+    ret = OB_CHECKSUM_ERROR; // it is compacted in lob column checksum fixed version
+    LOG_WARN("failed to check column checksum", K(ret), K(boundary_freeze_info));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_freeze_info_by_snapshot_version(compaction_scn_.get_val_for_tx(), to_check_freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get freeze info", K(ret), K_(compaction_scn));
+    }
+  } else if (!to_check_freeze_info.is_valid()) {
+  } else if (to_check_freeze_info.data_version_ >= DATA_VERSION_4_3_5_0) {
+    ret = OB_CHECKSUM_ERROR; // it is compacted in lob column checksum fixed version
+    LOG_WARN("failed to check column checksum", K(ret), K(to_check_freeze_info));
+  } else {
+    // only freeze_info of this round compaction reserved can we get the correct table schema to check lob column
+    bool is_all_large_text_column = false;
+    ObSEArray<int64_t, 8> column_idxs;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_meta_.column_checksums_.count(); ++idx) {
+      if (column_meta_.column_checksums_.at(idx) == other.column_meta_.column_checksums_.at(idx)) {
+        // do nothing
+      } else if (OB_FAIL(column_idxs.push_back(idx))) {
+        LOG_WARN("failed to add column idx", K(ret), K(idx));
+      }
+    }
+
+    if (FAILEDx(compaction::ObCSReplicaChecksumHelper::check_column_type(tablet_id_,
+                                                                         to_check_freeze_info,
+                                                                         column_idxs,
+                                                                         is_all_large_text_column))) {
+      LOG_WARN("failed to check column type for cs replica", K(ret), KPC(this), K(other));
+    } else if (is_all_large_text_column) {
+      // do nothing
+    } else {
       ret = OB_CHECKSUM_ERROR;
+      LOG_WARN("failed to check column checksum", K(ret), K(to_check_freeze_info));
     }
   }
   return ret;
@@ -364,6 +445,7 @@ int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other
       row_count_ = other.row_count_;
       compaction_scn_ = other.compaction_scn_;
       data_checksum_ = other.data_checksum_;
+      data_checksum_type_ = other.data_checksum_type_;
     }
   }
   return ret;
@@ -683,6 +765,9 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
   int64_t port = OB_INVALID_INDEX;
   int64_t ls_id = OB_INVALID_ID;
   uint64_t compaction_scn_val = 0;
+  uint64_t min_data_version = 0;
+  const int64_t tenant_id = MTL_ID();
+  int64_t data_checksum_type = 0;
   ObString column_meta_hex_str;
 
   (void)GET_COL_IGNORE_NULL(res.get_int, "tenant_id", int_tenant_id);
@@ -694,6 +779,20 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
   (void)GET_COL_IGNORE_NULL(res.get_int, "row_count", item.row_count_);
   (void)GET_COL_IGNORE_NULL(res.get_int, "data_checksum", item.data_checksum_);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "b_column_checksums", column_meta_hex_str);
+
+  if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret), K(tenant_id));
+  } else if (min_data_version < DATA_VERSION_4_3_3_0) {
+    item.data_checksum_type_ = ObDataChecksumType::DATA_CHECKSUM_NORMAL;
+  } else {
+    (void)GET_COL_IGNORE_NULL(res.get_int, "data_checksum_type", data_checksum_type);
+    if (is_valid_data_checksum_type(data_checksum_type)) {
+      item.data_checksum_type_ = static_cast<ObDataChecksumType>(data_checksum_type);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid data checksum type", KR(ret), K(data_checksum_type));
+    }
+  }
 
   if (FAILEDx(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
@@ -760,11 +859,11 @@ int ObTabletReplicaChecksumOperator::inner_batch_insert_or_update_by_sql_(
   } else {
     int64_t affected_rows = 0;
     ObSqlString sql;
+    ObDMLSqlSplicer dml_splicer;
+    uint64_t min_data_version = 0;
 
-    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (tenant_id, tablet_id, ls_id, svr_ip, svr_port, row_count, "
-          "compaction_scn, data_checksum, column_checksums, b_column_checksums, gmt_modified, gmt_create) VALUES",
-          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME))) {
-        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret), K(tenant_id));
     } else {
       ObArenaAllocator allocator;
       char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
@@ -784,24 +883,28 @@ int ObTabletReplicaChecksumOperator::inner_batch_insert_or_update_by_sql_(
           LOG_WARN("fail to get visible column meta str", KR(ret));
         } else if (OB_FAIL(get_hex_column_meta(cur_item.column_meta_, allocator, hex_column_meta))) {
           LOG_WARN("fail to get hex column meta str", KR(ret));
-        } else if (OB_FAIL(sql.append_fmt("('%lu', '%lu', %ld, '%s', %d, %ld, %lu, %ld, "
-                  "'%.*s', '%.*s', now(6), now(6))%s", cur_item.tenant_id_, cur_item.tablet_id_.id(),
-                  cur_item.ls_id_.id(), ip, port, cur_item.row_count_,
-                  compaction_scn_val, cur_item.data_checksum_, visible_column_meta.length(),
-                  visible_column_meta.ptr(), hex_column_meta.length(), hex_column_meta.ptr(),
-                  ((idx == end_idx - 1) ? " " : ", ")))) {
-          LOG_WARN("fail to assign sql", KR(ret), K(idx), K(end_idx), K(cur_item));
+        } else if (OB_FAIL(dml_splicer.add_gmt_modified())
+                || OB_FAIL(dml_splicer.add_gmt_create())
+                || OB_FAIL(dml_splicer.add_pk_column("tenant_id", cur_item.tenant_id_))
+                || OB_FAIL(dml_splicer.add_pk_column("tablet_id", cur_item.tablet_id_.id()))
+                || OB_FAIL(dml_splicer.add_pk_column("svr_ip", ip))
+                || OB_FAIL(dml_splicer.add_pk_column("svr_port", port))
+                || OB_FAIL(dml_splicer.add_pk_column("ls_id", cur_item.ls_id_.id()))
+                || OB_FAIL(dml_splicer.add_column("compaction_scn", compaction_scn_val))
+                || OB_FAIL(dml_splicer.add_column("row_count", cur_item.row_count_))
+                || OB_FAIL(dml_splicer.add_column("data_checksum", cur_item.data_checksum_))
+                || OB_FAIL(dml_splicer.add_column("column_checksums", visible_column_meta))
+                || OB_FAIL(dml_splicer.add_column("b_column_checksums", hex_column_meta))
+                || (min_data_version >= DATA_VERSION_4_3_3_0 && OB_FAIL(dml_splicer.add_column("data_checksum_type", cur_item.data_checksum_type_)))
+                ) {
+          LOG_WARN("fail to fill dml splicer", KR(ret), K(min_data_version), K(idx), K(end_idx), K(cur_item));
+        } else if (OB_FAIL(dml_splicer.finish_row())) {
+          LOG_WARN("fail to finish row", KR(ret), K(idx), K(end_idx), K(cur_item));
         }
       }
 
-      if (FAILEDx(sql.append_fmt(" ON DUPLICATE KEY UPDATE "))) {
-        LOG_WARN("fail to append sql string", KR(ret), K(sql));
-      } else if (OB_FAIL(sql.append(" row_count = values(row_count)"))
-          || OB_FAIL(sql.append(", compaction_scn = values(compaction_scn)"))
-          || OB_FAIL(sql.append(", data_checksum = values(data_checksum)"))
-          || OB_FAIL(sql.append(", column_checksums = values(column_checksums)"))
-          || OB_FAIL(sql.append(", b_column_checksums = values(b_column_checksums)"))) {
-        LOG_WARN("fail to append sql string", KR(ret), K(sql));
+      if (FAILEDx(dml_splicer.splice_batch_insert_update_sql(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, sql))) {
+        LOG_WARN("fail to splice batch insert update sql", KR(ret), K(sql));
       }
     }
 
@@ -1363,7 +1466,7 @@ int ObTabletReplicaChecksumOperator::get_min_compaction_scn(
     } else {
       ObSqlString sql;
       SMART_VAR(ObISQLClient::ReadResult, res) {
-        ObMySQLResult *result = NULL;
+        sqlclient::ObMySQLResult *result = NULL;
         if (OB_FAIL(sql.assign_fmt("SELECT MIN(compaction_scn) as value FROM %s WHERE tenant_id ="
                                    " '%ld' ", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id))) {
           LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
@@ -1391,8 +1494,7 @@ int ObTabletReplicaChecksumOperator::get_min_compaction_scn(
 
 // ----------------------- ObTabletDataChecksumChecker -----------------------
 ObTabletDataChecksumChecker::ObTabletDataChecksumChecker()
-  : normal_ckm_item_(nullptr),
-    cs_replica_ckm_item_(nullptr)
+  : normal_ckm_item_(nullptr)
 {}
 
 ObTabletDataChecksumChecker::~ObTabletDataChecksumChecker()
@@ -1403,20 +1505,16 @@ ObTabletDataChecksumChecker::~ObTabletDataChecksumChecker()
 void ObTabletDataChecksumChecker::reset()
 {
   normal_ckm_item_ = nullptr;
-  cs_replica_ckm_item_ = nullptr;
 }
 
-int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecksumItem& curr_item, bool is_cs_replica)
+int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecksumItem& curr_item)
 {
   int ret = OB_SUCCESS;
-  if (is_cs_replica) {
-    if (OB_ISNULL(cs_replica_ckm_item_)) {
-      cs_replica_ckm_item_ = &curr_item;
-    } else if (cs_replica_ckm_item_->compaction_scn_ != curr_item.compaction_scn_) {
-      LOG_INFO("no need to check data checksum", K(curr_item), KPC(this));
-    } else if (cs_replica_ckm_item_->data_checksum_ != curr_item.data_checksum_) {
-      ret = OB_CHECKSUM_ERROR;
-    }
+  bool is_cs_replica = false;
+  if (OB_FAIL(curr_item.check_data_checksum_type(is_cs_replica))) {
+    LOG_WARN("fail to check data checksum type", KR(ret), K(curr_item));
+  } else if (is_cs_replica) {
+    // skip checking data checksum between cs replicas
   } else {
     if (OB_ISNULL(normal_ckm_item_)) {
       normal_ckm_item_ = &curr_item;
@@ -1424,6 +1522,20 @@ int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecks
       LOG_INFO("no need to check data checksum", K(curr_item), KPC(this));
     } else if (normal_ckm_item_->data_checksum_ != curr_item.data_checksum_) {
       ret = OB_CHECKSUM_ERROR;
+    }
+  }
+  return ret;
+}
+
+int ObTabletDataChecksumChecker::set_data_checksum(const ObTabletReplicaChecksumItem& curr_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(normal_ckm_item_)) {
+    bool is_cs_replica = false;
+    if (OB_FAIL(curr_item.check_data_checksum_type(is_cs_replica))) {
+      LOG_WARN("fail to check data checksum type", KR(ret), K(curr_item));
+    } else if (!is_cs_replica) {
+      normal_ckm_item_ = &curr_item;
     }
   }
   return ret;

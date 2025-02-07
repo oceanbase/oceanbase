@@ -268,7 +268,7 @@ int LSFetchCtx::init_remote_iter()
   } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
     LOG_ERROR("get log external handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   } else if (OB_FAIL(remote_iter_.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
     LOG_ERROR("remote iter set_io_context failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
@@ -313,16 +313,22 @@ void LSFetchCtx::reset_memory_storage()
 int LSFetchCtx::get_next_group_entry(
     palf::LogGroupEntry &group_entry,
     palf::LSN &lsn,
-    const char *&buf)
+    const char *&buf,
+    const share::SCN replayable_point,
+    const obrpc::ObCdcFetchRawSource data_end_source)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!group_iterator_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_ERROR("group_iterator_ not init!");
-  } else if (OB_FAIL(group_iterator_.next())) {
+  } else if (OB_FAIL(group_iterator_.next(replayable_point))) {
     if (OB_ITER_END != ret) {
-      LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      if (obrpc::ObCdcFetchRawSource::ARCHIVE != data_end_source && OB_PARTIAL_LOG != ret) {
+        LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      } else {
+        LOG_WARN("iterate group_entry failed", KR(ret), K_(group_iterator));
+      }
     }
   } else if (OB_FAIL(group_iterator_.get_entry(buf, group_entry, lsn))) {
     LOG_ERROR("get_next_group_entry failed", KR(ret), K_(group_iterator), K(group_entry), K(lsn));
@@ -897,21 +903,23 @@ void LSFetchCtx::print_dispatch_info() const
 
   if (fetch_info_.is_from_idle_to_idle()) {
     if (REACH_TIME_INTERVAL_THREAD_LOCAL(10 * _SEC_)) {
+      ObCStringHelper helper;
       _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
           "DELAY=%s PROGRESS=%s DISCARDED=%d",
-          to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-          to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+          helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+          helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
           NTS_TO_DELAY(progress),
-          to_cstring(cur_progress),
+          helper.convert(cur_progress),
           discarded_);
     }
   } else {
+    ObCStringHelper helper;
     _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
         "DELAY=%s PROGRESS=%s DISCARDED=%d",
-        to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-        to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+        helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+        helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
         NTS_TO_DELAY(progress),
-        to_cstring(cur_progress),
+        helper.convert(cur_progress),
         discarded_);
   }
 }
@@ -991,9 +999,9 @@ void LSFetchCtx::handle_error(const share::ObLSID &ls_id,
       const int err_no,
       const char *fmt, ...)
 {
-   if (OB_NOT_NULL(err_handler_)) {
-     err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
-   }
+  if (OB_NOT_NULL(err_handler_)) {
+    err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
+  }
 }
 
 /////////////////////////////////// LSProgress ///////////////////////////////////
@@ -1125,8 +1133,9 @@ int64_t LSFetchCtx::FetchModule::to_string(char *buffer, const int64_t size) con
     }
 
     case FETCH_MODULE_FETCH_STREAM: {
-      (void)databuff_printf(buffer, size, pos, "[%s](%p)",
-          to_cstring(svr_), fetch_stream_);
+      (void)databuff_printf(buffer, size, pos, "[");
+      (void)databuff_printf(buffer, size, pos, svr_);
+      (void)databuff_printf(buffer, size, pos, "](%p)", fetch_stream_);
       break;
     }
 
@@ -1240,12 +1249,13 @@ void LSFetchInfoForPrint::print_fetch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s mod=%s "
       "discarded=%d delay=%s tps=%.2lf progress=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
-      to_cstring(fetch_mod_),
+      description, idx, array_cnt, helper.convert(tls_id_),
+      helper.convert(fetch_mod_),
       is_discarded_, TVAL_TO_STR(cur_time * NS_CONVERSION - progress_.get_progress()),
-      tps_, to_cstring(progress_));
+      tps_, helper.convert(progress_));
 }
 
 void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
@@ -1253,10 +1263,11 @@ void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s delay=%s pending_task(queue/total)=%ld/%ld "
       "dispatch_progress=%s last_dispatch_log_lsn=%lu next_task=%s "
       "next_trans(log_lsn=%lu,committed=%d,ready_to_commit=%d,global_version=%s) checkpoint=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
+      description, idx, array_cnt, helper.convert(tls_id_),
       TVAL_TO_STR(cur_time - dispatch_progress_/NS_CONVERSION),
       dispatch_info_.task_count_in_queue_,
       dispatch_info_.pending_task_count_,

@@ -105,18 +105,15 @@ public:
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
-  int do_resolve_set_query_in_cte(const ParseNode &parse_tree, bool swap_branch);
-  int do_resolve_set_query(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_recursive_cte(const ParseNode &parse_tree);
+  int do_resolve_set_query_in_normal(const ParseNode &parse_tree);
   int resolve_set_query_hint();
-  int do_resolve_set_query(const ParseNode &parse_tree,
-                           common::ObIArray<ObSelectStmt*> &child_stmt,
-                           const bool is_left_child = false);
   virtual int do_resolve_set_query(const ParseNode &parse_tree,
                                    ObSelectStmt *&child_stmt,
                                    const bool is_left_child = false);
   int check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt);
   int set_stmt_set_type(ObSelectStmt *select_stmt, ParseNode *set_node);
-  int is_set_type_same(const ObSelectStmt *select_stmt, ParseNode *set_node, bool &is_type_same);
+  int is_set_type_same(const ObSelectStmt &select_stmt, const ParseNode *set_node, bool &is_type_same);
   int check_recursive_cte_limited();
   int check_pseudo_column_name_legal(const ObString& name);
   int search_connect_group_by_clause(const ParseNode &parent,
@@ -178,7 +175,7 @@ protected:
                                  bool &has_explicit_dir);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
-  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us);
+  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
   int set_for_update_oracle(ObSelectStmt &stmt,
                             const int64_t wait_us,
                             bool skip_locked,
@@ -203,8 +200,8 @@ protected:
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_file_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
-  int resolve_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item);
-  int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const;
+  int resolve_into_outfile_without_format(const ParseNode *node, ObSelectIntoItem &into_item);
+  int resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item);
   // resolve_star related functions
   int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);
@@ -270,11 +267,14 @@ protected:
                                const ObItemType func_type,
                                common::ObIArray<ObRawExpr *> &arg_exp_arr,
                                common::ObIArray<ObRawExpr *> &partition_exp_arr);
-  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union, bool &need_swap_child);
+  int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_basic_table_in_cte_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_node_in_cte_recursive_union(const ParseNode* node, bool &recursive_union);
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
+  int check_set_child_stmt_pullup(const ObSelectStmt &child_stmt, bool &enable_pullup);
+  int transfer_rb_iterate_items();
+
 private:
   int parameterize_fields_name(const ParseNode *project_node,
                                const ObString &org_alias_name,
@@ -365,6 +365,14 @@ private:
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
 
   int check_audit_log_stmt(ObSelectStmt *select_stmt);
+  int try_resolve_values_table_from_union(const ParseNode &parse_node, bool &resolve_happened);
+  int check_union_to_values_table_valid(const ParseNode &parse_node,
+                                        const ObSelectStmt &select_stmt,
+                                        ObIArray<int64_t> &leaf_nodes,
+                                        bool &is_valid);
+  int check_union_leaf_to_values_table_valid(const ParseNode &parse_node, bool &is_valid);
+  int resolve_values_table_from_union(const ObIArray<int64_t> &values_nodes,
+                                      ObValuesTableDef *&table_def);
 protected:
   // data members
   /*these member is only for with clause*/

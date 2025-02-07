@@ -51,7 +51,7 @@ private:
       ObCartesianMultilinestring *ml = nullptr;
       ObCartesianMultipolygon *mpo = nullptr;
       ObIAllocator *allocator = context.get_allocator();
-      ObCartesianPoint *res_geo = OB_NEWx(ObCartesianPoint, allocator, 0, 0, g->get_srid(), allocator);
+      ObCartesianPoint *res_geo = OB_NEWx(ObCartesianPoint, allocator, 0, 0, g->get_srid());
       ObGeoToTreeVisitor tree_visitor(allocator);
       if (OB_ISNULL(res_geo)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -85,7 +85,7 @@ private:
   static int centroid_default(const ObGeometry *g, const ObGeoEvalCtx &context, ObGeometry *&result)
   {
     int ret = OB_SUCCESS;
-    ObCartesianPoint *res_geo = OB_NEWx(ObCartesianPoint, context.get_allocator(), 0, 0, g->get_srid(), context.get_allocator());
+    ObCartesianPoint *res_geo = OB_NEWx(ObCartesianPoint, context.get_allocator(), 0, 0, g->get_srid());
     if (OB_ISNULL(res_geo)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for result grometry", K(ret));

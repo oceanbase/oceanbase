@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -35,6 +38,34 @@ using namespace oceanbase;
 namespace oceanbase
 {
 using namespace logservice;
+
+namespace logservice
+{
+int ObLogService::start()
+{
+  int ret = OB_SUCCESS;
+  // palf_env has been started in log_server.init()
+  if (OB_FAIL(apply_service_.start())) {
+    CLOG_LOG(WARN, "failed to start apply_service_", K(ret));
+  } else if (OB_FAIL(replay_service_.start())) {
+    CLOG_LOG(WARN, "failed to start replay_service_", K(ret));
+  } else if (OB_FAIL(role_change_service_.start())) {
+    CLOG_LOG(WARN, "failed to start role_change_service_", K(ret));
+  } else if (OB_FAIL(cdc_service_.start())) {
+    CLOG_LOG(WARN, "failed to start cdc_service_", K(ret));
+  } else if (OB_FAIL(restore_service_.start())) {
+    CLOG_LOG(WARN, "failed to start restore_service_", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(arb_service_.start())) {
+    CLOG_LOG(WARN, "failed to start arb_service_", K(ret));
+#endif
+  } else {
+    is_running_ = true;
+    FLOG_INFO("ObLogService is started");
+  }
+  return ret;
+}
+}
 namespace unittest
 {
 class TestObSimpleLogClusterSingleReplica : public ObSimpleLogClusterTestEnv
@@ -538,7 +569,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_truncate_failed)
     LSN max_lsn = leader.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 1000));
     wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader);
-    int64_t fd = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.io_fd_;
+    int64_t fd = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_handler_.io_fd_.second_id_;
     block_id_t block_id = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.curr_writable_block_id_;
     char *log_dir = leader.palf_handle_impl_->log_engine_.log_storage_.block_mgr_.log_dir_;
     convert_to_normal_block(log_dir, block_id, block_path, OB_MAX_FILE_NAME_LENGTH);
@@ -1757,7 +1788,6 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
     const int64_t invalid_nbytes = 1;
 
     // 非DIO对齐度
-
     palf::LogIOContext io_ctx(palf::LogIOUser::META_INFO);
     EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
       invalid_lsn, invalid_read_buf, invalid_nbytes, out_read_size, io_ctx));
@@ -1767,6 +1797,8 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
       invalid_lsn, read_buf, invalid_nbytes, out_read_size, io_ctx));
     EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
       invalid_lsn, invalid_read_buf, nbytes, out_read_size, io_ctx));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
+      LSN(PALF_INITIAL_LSN_VAL), read_buf, invalid_nbytes, out_read_size, io_ctx));
     PALF_LOG(INFO, "raw read success");
 
     // 读取成功

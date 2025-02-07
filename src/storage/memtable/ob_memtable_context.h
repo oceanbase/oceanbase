@@ -375,6 +375,7 @@ public:
                         const share::SCN final_scn);
   virtual int trans_clear();
   virtual int elr_trans_preparing();
+  virtual void elr_trans_revoke();
   virtual int trans_kill();
   virtual int trans_publish();
   virtual int trans_replay_begin();
@@ -559,10 +560,16 @@ public:
   inline ObRedoLogGenerator &get_redo_generator() { return log_gen_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);
+
+  static const int8_t ELR_STATE_INIT = 0;
+  static const int8_t ELR_STATE_DONE = 1;
+  static const int8_t ELR_STATE_REVOKED = 2;
+
   RWLock rwlock_;
   common::ObByteLock lock_;
   int end_code_;
   int64_t tx_status_;
+  int8_t elr_state_;
   int64_t ref_;
   // allocate memory for callback when query executing
   ObQueryAllocator query_allocator_;

@@ -116,7 +116,7 @@ void ObITransCallback::after_append_cb(const bool is_replay)
   (void)after_append(is_replay);
 }
 
-int ObITransCallback::log_submitted_cb(const SCN scn, ObIMemtable *&last_mt)
+int ObITransCallback::log_submitted_cb(const SCN scn, storage::ObIMemtable *&last_mt)
 {
   int ret = OB_SUCCESS;
   if (need_submit_log_) {
@@ -574,12 +574,14 @@ int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const ObCallbackScopeAr
 int ObTransCallbackMgr::remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
-  const bool serial_final = is_serial_final_();
-  const share::SCN stop_scn = serial_final ? share::SCN::max_scn() : serial_sync_scn_;
   if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K(ret));
-  } else {
+  } else if (!memtable_set->empty()) {
+    share::SCN stop_scn = share::SCN::min_scn();
+    for (common::hash::ObHashSet<uint64_t>::const_iterator iter = memtable_set->begin(); iter != memtable_set->end(); ++iter) {
+      stop_scn = share::SCN::max(((const memtable::ObMemtable *)iter->first)->get_max_end_scn(), stop_scn);
+    }
     CALLBACK_LISTS_FOREACH(idx, list) {
       if (OB_FAIL(list->remove_callbacks_for_remove_memtable(memtable_set, stop_scn))) {
         TRANS_LOG(WARN, "fifo remove callback fail", K(ret), K(idx), KPC(memtable_set));
@@ -799,7 +801,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
     } else if (FALSE_IT(pending_too_large = list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
     } else if (!check_list_has_min_epoch_(list_idx, my_epoch, pending_too_large, min_epoch, min_epoch_idx)) {
       ret = OB_EAGAIN;
-      ObIMemtable *to_log_memtable = list->get_log_cursor()->get_memtable();
+      storage::ObIMemtable *to_log_memtable = list->get_log_cursor()->get_memtable();
       if (TC_REACH_TIME_INTERVAL(1_s)) {
         TRANS_LOG(WARN, "has smaller epoch unlogged", KPC(this),
                   K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
@@ -1101,7 +1103,7 @@ inline bool check_dup_tablet_(ObITransCallback *callback_ptr)
 int ObTransCallbackMgr::log_submitted(const ObCallbackScopeArray &callbacks, share::SCN scn, int &submitted)
 {
   int ret = OB_SUCCESS;
-  ObIMemtable *last_mt = NULL;
+  storage::ObIMemtable *last_mt = NULL;
   ARRAY_FOREACH(callbacks, i) {
     ObCallbackScope scope = callbacks.at(i);
     if (!scope.is_empty()) {
@@ -1421,6 +1423,15 @@ void ObTransCallbackMgr::elr_trans_preparing()
   }
 }
 
+void ObTransCallbackMgr::elr_trans_revoke()
+{
+  int ret = OB_SUCCESS;
+  CALLBACK_LISTS_FOREACH(idx, list) {
+    list->tx_elr_revoke();
+  }
+}
+
+
 void ObTransCallbackMgr::trans_start()
 {
   reset();
@@ -1445,7 +1456,7 @@ void ObMvccRowCallback::after_append(const bool is_replay)
   // do nothing
 }
 
-int ObMvccRowCallback::log_submitted(const SCN scn, ObIMemtable *&last_mt)
+int ObMvccRowCallback::log_submitted(const SCN scn, storage::ObIMemtable *&last_mt)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(memtable_)) {
@@ -1509,7 +1520,7 @@ int ObMvccRowCallback::del()
   }
 
   if (need_submit_log_) {
-    ObIMemtable *last_mt = NULL;
+    storage::ObIMemtable *last_mt = NULL;
     log_submitted(share::SCN(), last_mt);
   }
 
@@ -1531,12 +1542,12 @@ const common::ObTabletID &ObMvccRowCallback::get_tablet_id() const
   return memtable_->get_key().get_tablet_id();
 }
 
-bool ObMvccRowCallback::on_memtable(const ObIMemtable * const memtable)
+bool ObMvccRowCallback::on_memtable(const storage::ObIMemtable * const memtable)
 {
   return memtable == memtable_;
 }
 
-ObIMemtable *ObMvccRowCallback::get_memtable() const
+storage::ObIMemtable *ObMvccRowCallback::get_memtable() const
 {
   return memtable_;
 };
@@ -1610,6 +1621,13 @@ int ObMvccRowCallback::elr_trans_preparing()
                (ObMemtableKey*)&key_);
   }
   return OB_SUCCESS;
+}
+
+void ObMvccRowCallback::elr_trans_revoke()
+{
+  if (OB_NOT_NULL(tnode_)) {
+    tnode_->clear_elr();
+  }
 }
 
 int ObMvccRowCallback::get_trans_id(ObTransID &trans_id) const
@@ -1999,13 +2017,16 @@ int ObMvccRowCallback::row_delete()
 int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, buf_len, pos,
-      "[this=%p, ctx=%s, is_link=%d, need_submit_log=%d, "
-      "value=%s, tnode=(%s), "
-      "seq_no=%s, memtable=%p, scn=%s",
-      this, to_cstring(ctx_), is_link_, need_submit_log_,
-      to_cstring(value_), NULL == tnode_ ? "null" : to_cstring(*tnode_),
-      to_cstring(seq_no_), memtable_, to_cstring(scn_));
+  databuff_printf(buf, buf_len, pos, "[this=%p, ctx=", this);
+  databuff_printf(buf, buf_len, pos, ctx_);
+  databuff_printf(buf, buf_len, pos, ", is_link=%d, need_submit_log=%d, value=",
+      is_link_, need_submit_log_);
+  databuff_printf(buf, buf_len, pos, value_);
+  databuff_printf(buf, buf_len, pos, ", tnode=(");
+  databuff_printf(buf, buf_len, pos, tnode_);
+  databuff_printf(buf, buf_len, pos, "), seq_no=%ld, memtable=%p, scn=",
+      seq_no_.cast_to_int(), memtable_);
+  databuff_printf(buf, buf_len, pos, scn_);
   return pos;
 }
 

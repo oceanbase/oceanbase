@@ -174,9 +174,11 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
       }
 
       if (OB_SUCC(ret)) {
-        if (CHARSET_UTF16 == charset_type) {
+        ObCollationType col_type = ObCharset::get_default_collation(charset_type);
+        if (!ObCharset::is_valid_collation(col_type) ||
+          ObCharset::get_charset(ObCharset::get_default_collation(charset_type))->mbminlen > 1) {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use utf16 as database charset");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use utf16 and utf16le as database charset");
         }
       }
 

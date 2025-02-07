@@ -13,6 +13,11 @@
 #ifndef SRC_LIBRARY_SRC_LIB_OB_SINGLETON_H_
 #define SRC_LIBRARY_SRC_LIB_OB_SINGLETON_H_
 
+#include "lib/ob_define.h"
+#include "lib/string/ob_string.h"
+#include "lib/utility/utility.h"
+#include <type_traits>
+
 namespace oceanbase
 {
 namespace common
@@ -42,9 +47,9 @@ private:
   ObSingleton& operator=(const ObSingleton&);
 };
 
+} // qcloud_cos
 
-}
-}
-}
+} // common
+} // oceanbase
 
 #endif

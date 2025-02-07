@@ -18,6 +18,7 @@
 #include "ob_i_cg_iterator.h"
 #include "ob_cg_iter_param_pool.h"
 #include "ob_cg_bitmap.h"
+#include "storage/access/ob_where_optimizer.h"
 
 namespace oceanbase
 {
@@ -137,12 +138,14 @@ private:
   ObTableAccessContext* access_ctx_;
   ObCOSSTableV2* co_sstable_;
   common::ObIAllocator *allocator_;
-  sql::ObPushdownFilterExecutor *filter_;
-  ObSEArray<ObICGIterator*, 4> filter_iters_;
-  ObSEArray<sql::ObPushdownFilterExecutor*, 4> iter_filter_node_;
   ObSEArray<ObCGBitmap*, 4> bitmap_buffer_;
   sql::PushdownFilterInfo pd_filter_info_;
   bool can_continuous_filter_;
+public:
+  sql::ObPushdownFilterExecutor *filter_;
+  ObSEArray<ObICGIterator*, 4> filter_iters_;
+  ObSEArray<sql::ObPushdownFilterExecutor*, 4> iter_filter_node_;
+  ObWhereOptimizer *where_optimizer_;
 };
 }
 }

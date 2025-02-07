@@ -5,7 +5,7 @@ TENANT_NAME	varchar(128)	NO		NULL
 TENANT_TYPE	varchar(4)	NO			
 CREATE_TIME	timestamp(6)	YES			
 MODIFY_TIME	timestamp(6)	YES			
-PRIMARY_ZONE	varchar(128)	YES		NULL	
+PRIMARY_ZONE	varchar(8192)	YES		NULL	
 LOCALITY	varchar(4096)	NO			
 PREVIOUS_LOCALITY	varchar(4096)	NO			
 COMPATIBILITY_MODE	varchar(6)	NO			
@@ -57,7 +57,7 @@ TENANT_NAME	varchar(128)	NO		NULL
 TENANT_TYPE	varchar(4)	NO			
 CREATE_TIME	timestamp(6)	YES			
 MODIFY_TIME	timestamp(6)	YES			
-PRIMARY_ZONE	varchar(128)	YES		NULL	
+PRIMARY_ZONE	varchar(8192)	YES		NULL	
 LOCALITY	varchar(4096)	NO			
 PREVIOUS_LOCALITY	varchar(4096)	NO			
 COMPATIBILITY_MODE	varchar(6)	NO			

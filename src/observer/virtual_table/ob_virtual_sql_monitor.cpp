@@ -42,6 +42,7 @@ ObVirtualSqlMonitor::ObVirtualSqlMonitor() : ObVirtualTableProjector(),
     execution_time_(0)
   {
     info_buf_[0] = '\0';
+    extend_info_buf_[0] = '\0';
   }
 
 ObVirtualSqlMonitor::~ObVirtualSqlMonitor()
@@ -57,6 +58,7 @@ void ObVirtualSqlMonitor::reset()
     }
   }
   info_buf_[0] = '\0';
+  extend_info_buf_[0] = '\0';
   ObVirtualTableProjector::reset();
 }
 
@@ -188,57 +190,73 @@ int ObVirtualSqlMonitor::inner_get_next_row(common::ObNewRow *&row)
       for (int64_t cell_idx = 0; cell_idx < col_count && OB_SUCC(ret); cell_idx++) {
         uint64_t col_id = output_column_ids_.at(cell_idx);
         switch (col_id) {
-          case TENANT_ID:
+          case TENANT_ID: {
             cells[cell_idx].set_int(tenant_id_);
             break;
-          case SVR_IP:
+          }
+          case SVR_IP: {
             cells[cell_idx].set_varchar(ipstr_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                     ObCharset::get_default_charset()));
             break;
-          case SVR_PORT:
+          }
+          case SVR_PORT: {
             cells[cell_idx].set_int(port_);
             break;
-          case REQUEST_ID:
+          }
+          case REQUEST_ID: {
             cells[cell_idx].set_int(request_id_);
             break;
-          case JOB_ID:
+          }
+          case JOB_ID: {
             cells[cell_idx].set_int(plan_info->get_job_id());
             break;
-          case TASK_ID:
+          }
+          case TASK_ID: {
             cells[cell_idx].set_int(plan_info->get_task_id());
             break;
-          case PLAN_ID:
+          }
+          case PLAN_ID: {
             cells[cell_idx].set_int(plan_id_);
             break;
-          case SCHEDULER_IP:
+          }
+          case SCHEDULER_IP: {
             cells[cell_idx].set_varchar(scheduler_ipstr_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                     ObCharset::get_default_charset()));
             break;
-          case SCHEDULER_PORT:
+          }
+          case SCHEDULER_PORT: {
             cells[cell_idx].set_int(scheduler_port_);
             break;
-          case MONITOR_INFO:
-            {
-              int64_t size = plan_info->print_info(info_buf_, OB_MAX_INFO_LENGTH);
-              cells[cell_idx].set_varchar(ObString(size, info_buf_));
+          }
+          case MONITOR_INFO: {
+            int64_t size = plan_info->print_info(info_buf_, OB_MAX_INFO_LENGTH);
+            cells[cell_idx].set_varchar(ObString(size, info_buf_));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
+            break;
+          }
+          case EXTEND_INFO: {
+            int64_t pos = 0;
+            if (OB_FAIL(databuff_printf(extend_info_buf_, sizeof(extend_info_buf_), pos, plan_info_->get_trace()))) {
+              SERVER_LOG(WARN, "fail to format extend_info", K(ret), K(pos));
+            } else {
+              cells[cell_idx].set_varchar(ObString::make_string(extend_info_buf_));
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                       ObCharset::get_default_charset()));
             }
             break;
-          case EXTEND_INFO:
-            cells[cell_idx].set_varchar(ObString::make_string(to_cstring(plan_info_->get_trace())));
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                    ObCharset::get_default_charset()));
-            break;
-          case SQL_EXEC_START:
+          }
+          case SQL_EXEC_START: {
             cells[cell_idx].set_timestamp(execution_time_);
             break;
-          default:
+          }
+          default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));
             break;
+          }
         }
       }
 

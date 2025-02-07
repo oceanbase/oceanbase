@@ -111,8 +111,8 @@ Query Plan
 ================================================================
 |ID|OPERATOR         |NAME               |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |TOP-N SORT       |                   |        |        |
-|  |└─TABLE FULL SCAN|gis_point(xy_index)|    |        |
+|0 |TOP-N SORT       |                   |        |          |
+|  |└─TABLE FULL SCAN|gis_point(xy_index)|       |          |
 ================================================================
 Outputs & filters:
 -------------------------------------
@@ -123,3 +123,13 @@ Outputs & filters:
       is_index_back=true, is_global_index=false, 
       range_key([gis_point.x], [gis_point.y], [gis_point.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 drop table if exists gis_point;
+drop table if exists t_test_srs_id_column;
+CREATE TABLE `t_test_srs_id_column` ( `id` INT PRIMARY KEY, `c1` POINT NOT NULL SRID 4326, `c2` GEOMETRY NOT NULL SRID 4326, `c3` POLYGON NOT NULL SRID 4326, `c4` GEOMETRY NOT NULL );
+SELECT `COLUMN_NAME`, `COLUMN_TYPE` /*!80003 ,`SRS_ID` */ FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_NAME` = 't_test_srs_id_column';
+COLUMN_NAME	COLUMN_TYPE	SRS_ID
+id	int(11)	NULL
+c1	point	4326
+c2	geometry	4326
+c3	polygon	4326
+c4	geometry	NULL
+drop table t_test_srs_id_column;

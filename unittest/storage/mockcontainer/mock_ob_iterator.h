@@ -19,7 +19,6 @@
 #include "lib/hash/ob_hashmap.h"
 #include "share/ob_time_utility2.h"
 #include "lib/string/ob_string.h"
-#include "storage/ob_i_store.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"
@@ -160,15 +159,17 @@ public:
     }
 
     if (!bool_ret) {
+      ObCStringHelper helper;
       STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx), K(ret1), K(ret2),
-                  "this_row", this_row ? to_cstring(*this_row): "null",
-                  "other_row", other_row ? to_cstring(*other_row) : "null");
+                  "this_row", this_row ? helper.convert(*this_row): "null",
+                  "other_row", other_row ? helper.convert(*other_row) : "null");
     } else {
+      ObCStringHelper helper;
       STORAGE_LOG(INFO, "iter is equal",
           K(idx), K(ret1), K(ret2),
-          "this_row", this_row ? to_cstring(*this_row): "null",
-          "other_row", other_row ? to_cstring(*other_row) : "null");
+          "this_row", this_row ? helper.convert(*this_row): "null",
+          "other_row", other_row ? helper.convert(*other_row) : "null");
     }
 
     return bool_ret;
@@ -236,10 +237,11 @@ public:
     }
 
     if (!bool_ret) {
+      ObCStringHelper helper;
       STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "iter is not equal",
                   K(idx),
-                  "this_row", to_cstring(*this_row),
-                  "other_row", to_cstring(*other_row));
+                  "this_row", helper.convert(*this_row),
+                  "other_row", helper.convert(*other_row));
     }
 
     return bool_ret;

@@ -1,3 +1,6 @@
+// owner: jiahua.cjh
+// owner group: storage
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -51,6 +54,7 @@ TEST_F(TestMediumInfoReader, read_multi_medium_info_from_minor)
   ret = create_tablet(tablet_id, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *tablet = tablet_handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
 
   {
     ObTabletCreateDeleteMdsUserData user_data;

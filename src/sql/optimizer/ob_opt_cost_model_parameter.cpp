@@ -210,6 +210,24 @@ double ObOptCostModelParameter::get_px_batch_rescan_per_row_cost(const OptSystem
     }
 }
 
+double ObOptCostModelParameter::get_das_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_das_batch_rescan_per_row_rpc_cost(const OptSystemStat& stat) const
+{
+    if (stat.get_network_speed() <= 0) {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST;
+    } else {
+        return DAS_BATCH_RESCAN_PER_ROW_RPC_COST / stat.get_network_speed();
+    }
+}
+
 double ObOptCostModelParameter::get_nl_scan_cost(const OptSystemStat& stat) const
 {
     if (stat.get_cpu_speed() <= 0) {
@@ -408,5 +426,15 @@ double ObOptCostModelParameter::get_cmp_err_handle_expr_cost(const OptSystemStat
         return CMP_ERR_HANDLE_EXPR_COST;
     } else {
         return CMP_ERR_HANDLE_EXPR_COST / stat.get_cpu_speed();
+    }
+}
+
+double ObOptCostModelParameter::get_functional_lookup_per_row_cost(const OptSystemStat& stat) const
+{
+    // jinmao TODO: 这里需要再考虑一下
+    if (stat.get_cpu_speed() <= 0) {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST;
+    } else {
+        return FUNCTIONAL_LOOKUP_PER_ROW_COST / stat.get_cpu_speed();
     }
 }

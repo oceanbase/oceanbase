@@ -346,6 +346,11 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_COLUMN_PRIV, = 2072)                          \
   ACT(OB_DDL_DEL_COLUMN_PRIV, = 2073)                            \
   ACT(OB_DDL_COLUMN_PRIV_OPERATION_END, = 2080)                  \
+  ACT(OB_DDL_CATALOG_OPERATION_BEGIN, = 2081)                    \
+  ACT(OB_DDL_CREATE_CATALOG, = 2082)                             \
+  ACT(OB_DDL_ALTER_CATALOG, = 2083)                              \
+  ACT(OB_DDL_DROP_CATALOG, = 2084)                               \
+  ACT(OB_DDL_CATALOG_OPERATION_END, = 2090)                      \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -1327,6 +1332,18 @@ public:
               const common::ObIArray<uint64_t> &table_ids,
               common::ObIArray<ObSchemaIdVersion> &versions) = 0;
 
+  virtual int get_table_index_infos(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const uint64_t data_table_id,
+              common::ObIArray<ObIndexSchemaInfo> &index_infos) = 0;
+  virtual bool schema_name_is_equal(
+               const ObString &src,
+               const ObString &dst,
+               const bool case_compare,
+               const bool compare_with_collation) = 0;
   /*----------- interfaces for latest schema end -------------*/
 
 };

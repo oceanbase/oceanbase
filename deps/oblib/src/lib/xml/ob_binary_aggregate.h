@@ -87,7 +87,7 @@ public:
 
 private:
   int construct_meta();
-  void construct_key_and_value();
+  int construct_key_and_value();
 
   int rewrite_total_size();
 
@@ -128,8 +128,8 @@ private:
   ObIAllocator* get_array_allocator() { return arr_allocator_ == nullptr ? allocator_ : arr_allocator_; }
 
   void set_value_entry_for_json(int64_t entry_idx,  uint8_t type, int64_t value_offset);
-  void set_key(int64_t key_offset, int64_t key_len);
-  void set_value(int64_t value_offset, int64_t value_len);
+  int set_key(int64_t key_offset, int64_t key_len);
+  int set_value(int64_t value_offset, int64_t value_len);
   static int64_t estimate_total(int64_t base_length, int64_t count, int32_t type, int64_t xml_header_size = 4);
   static int text_serialize(ObString value, ObStringBuffer &res);
   static int text_deserialize(ObString value, ObStringBuffer &res);

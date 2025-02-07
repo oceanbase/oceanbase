@@ -126,7 +126,6 @@ public:
   static const uint64_t MIN_CHECK_POPULAR_VALID_ROWS = 10000;
   constexpr static const float SKEW_POPULAR_MAX_RATIO = 0.5;
   const static int64_t SKEW_HEAP_SIZE = 15;
-  const static int64_t INIT_BUCKET_COUNT_FOR_POPULAR = 32;
 
 public:
   ObHashGroupByVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -150,7 +149,7 @@ public:
       first_batch_from_store_(true),
       dup_groupby_exprs_(),
       is_dumped_(nullptr),
-      no_non_distinct_aggr_(false),
+      can_skip_last_group_(false),
       start_calc_hash_idx_(0),
       base_hash_vals_(nullptr),
       has_calc_base_hash_(false),
@@ -180,7 +179,6 @@ public:
       use_sstr_aggr_(false),
       aggr_vectors_(nullptr),
       reorder_aggr_rows_(false),
-      old_row_selector_(nullptr),
       batch_aggr_rows_table_(),
       llc_est_(),
       dump_add_row_selectors_(nullptr),
@@ -188,6 +186,10 @@ public:
       dump_vectors_(nullptr),
       dump_rows_(nullptr),
       need_reinit_vectors_(true),
+      new_row_selector_(nullptr),
+      old_row_selector_(nullptr),
+      new_row_selector_cnt_(0),
+      old_row_selector_cnt_(0),
       skew_detection_enabled_(false),
       by_pass_rows_(0),
       total_load_rows_(0),
@@ -359,7 +361,8 @@ private:
   void reuse_dump_selectors();
   int init_by_pass_op();
 
-  int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs);
+  int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs,
+                           uint16_t *selector, int64_t selector_cnt);
   // Alloc one batch group_row_item at a time
   static const int64_t BATCH_GROUP_ITEM_SIZE = 16;
   // const int64_t EXTEND_BKT_NUM_PUSH_DOWN = INIT_L3_CACHE_SIZE / ObExtendHashTableVec<ObGroupRowBucket>::get_sizeof_aggr_row();
@@ -395,7 +398,7 @@ private:
   ObSEArray<ObExpr*, 4> dup_groupby_exprs_;
   ObSEArray<ObExpr*, 4> all_groupby_exprs_;
   bool *is_dumped_;
-  bool no_non_distinct_aggr_;
+  bool can_skip_last_group_;
   int64_t start_calc_hash_idx_;
   uint64_t *base_hash_vals_;
   bool has_calc_base_hash_;
@@ -437,7 +440,6 @@ private:
   bool use_sstr_aggr_;
   ObIVector **aggr_vectors_;
   bool reorder_aggr_rows_;
-  uint16_t *old_row_selector_;
   BatchAggrRowsTable batch_aggr_rows_table_;
   LlcEstimate llc_est_;
   uint16_t **dump_add_row_selectors_;
@@ -445,6 +447,10 @@ private:
   common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
   ObCompactRow **dump_rows_;
   bool need_reinit_vectors_;
+  uint16_t *new_row_selector_;
+  uint16_t *old_row_selector_;
+  int64_t new_row_selector_cnt_;
+  int64_t old_row_selector_cnt_;
   // for data skew :
   bool skew_detection_enabled_;
   uint64_t by_pass_rows_;

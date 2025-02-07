@@ -36,9 +36,14 @@ int ObInListResolver::resolve_inlist(ObInListInfo &inlist_info)
     LOG_WARN("got NULL ptr", K(ret), KP(list_node), KP(cur_resolver_));
   } else {
     ObResolverParams &params = cur_resolver_->params_;
-    if (OB_FAIL(resolve_values_table_from_inlist(list_node, column_cnt, row_cnt,
-                                                 inlist_info.is_question_mark_, params.param_list_,
-                                                 params.session_info_, params.allocator_,
+    if (OB_FAIL(resolve_values_table_from_inlist(list_node,
+                                                 column_cnt,
+                                                 row_cnt,
+                                                 inlist_info.is_question_mark_,
+                                                 params.is_prepare_stage_,
+                                                 params.param_list_,
+                                                 params.session_info_,
+                                                 params.allocator_,
                                                  table_def))) {
       LOG_WARN("failed to resolve values table from inlist", K(ret));
     } else if (OB_FAIL(resolve_subquery_from_values_table(params.stmt_factory_,
@@ -60,6 +65,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
                                                 const int64_t column_cnt,
                                                 const int64_t row_cnt,
                                                 const bool is_question_mark,
+                                                const bool is_prepare_stage,
                                                 const ParamStore *param_store,
                                                 ObSQLSessionInfo *session_info,
                                                 ObIAllocator *allocator,
@@ -67,8 +73,10 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
 {
   int ret = OB_SUCCESS;
   char *table_buf = NULL;
-  ObValuesTableDef::TableAccessType access_type = is_question_mark ?
-                                      ObValuesTableDef::ACCESS_PARAM : ObValuesTableDef::ACCESS_OBJ;
+  // we treat question marks in prepare stmt as objs instead of params
+  ObValuesTableDef::TableAccessType access_type = is_question_mark && !is_prepare_stage
+                                                  ? ObValuesTableDef::ACCESS_PARAM
+                                                  : ObValuesTableDef::ACCESS_OBJ;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(in_list)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
@@ -83,6 +91,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
     table_def->column_cnt_ = column_cnt;
     table_def->row_cnt_ = row_cnt;
     table_def->access_type_ = access_type;
+    table_def->is_const_ = true;
   }
   if (OB_FAIL(ret)) {
   } else if (ObValuesTableDef::ACCESS_PARAM == access_type &&
@@ -91,7 +100,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
     LOG_WARN("failed to resolve access param values table", K(ret));
   } else if (ObValuesTableDef::ACCESS_OBJ == access_type &&
              OB_FAIL(resolve_access_obj_values_table(*in_list, column_cnt, row_cnt, session_info,
-                                                     allocator, *table_def))) {
+                                                     allocator, is_prepare_stage, *table_def))) {
     LOG_WARN("failed to resolve access obj values table", K(ret));
   } else if (OB_FAIL(cur_resolver_->estimate_values_table_stats(*table_def))) {
     LOG_WARN("failed to estimate values table stats", K(ret));
@@ -155,8 +164,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObStmtScope &scope,
                                                   const bool is_root_condition,
                                                   const bool is_need_print,
-                                                  const bool is_prepare_protocol,
-                                                  const bool is_in_pl,
+                                                  const bool is_in_pl_prepare,
                                                   const ObSQLSessionInfo *session_info,
                                                   const ParamStore *param_store,
                                                   const ObStmt *stmt,
@@ -168,15 +176,22 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
   is_enable = false;
   int64_t threshold = INT64_MAX;
   uint64_t optimizer_features_enable_version = 0;
+  bool is_prepare_stmt = false;
   // 1. check basic requests
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(session_info));
-  } else if (T_WHERE_SCOPE != scope || !is_root_condition || T_OP_IN != op_type ||
-             T_EXPR_LIST != in_list.type_ || is_need_print || is_prepare_protocol ||
-             (NULL != stmt && stmt->is_select_stmt() && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
-    LOG_TRACE("no need rewrite inlist", K(is_root_condition), K(scope), K(in_list.type_),
-              K(op_type), K(is_need_print), K(is_prepare_protocol));
+  } else if (T_WHERE_SCOPE != scope
+             || !is_root_condition
+             || (T_OP_IN != op_type && T_OP_NOT_IN != op_type)
+             || T_EXPR_LIST != in_list.type_
+             || is_need_print
+             || is_in_pl_prepare
+             || (NULL != stmt
+                 && stmt->is_select_stmt()
+                 && static_cast<const ObSelectStmt *>(stmt)->is_hierarchical_query())) {
+    LOG_TRACE("no need rewrite inlist",
+              K(is_root_condition), K(scope), K(in_list.type_), K(op_type), K(is_need_print));
   } else {
     if (NULL == stmt) {
       if (OB_FAIL(session_info->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
@@ -189,6 +204,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else {
+        is_prepare_stmt = stmt->get_query_ctx()->is_prepare_stmt();
         threshold = session_info->get_inlist_rewrite_threshold();
         const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
         if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(
@@ -206,7 +222,9 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         LOG_TRACE("current optimizer version is less then COMPAT_VERSION_4_3_2");
       } else if (in_list.num_child_ < threshold) {
         LOG_TRACE("check rewrite inlist threshold", K(threshold), K(in_list.num_child_));
-      } else {
+      } else if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+                  GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) ||
+                  GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
         is_enable = true;
       }
     }
@@ -232,48 +250,45 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                               share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && is_enable && j < column_cnt; j++) {
-        const ParseNode *node = column_cnt == 1 ? in_list.children_[0] :
-                                                  in_list.children_[0]->children_[j];
-        DistinctObjMeta param_type;
-        // know this inlist is question mark or const
-        if (j == 0) {
-          if (OB_ISNULL(node)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected param", K(ret));
-          } else {
-            is_question_mark = T_QUESTIONMARK == node->type_;
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(get_const_node_types(node, param_store, is_question_mark,
-                           connect_collation, nchar_collation, static_cast<ObCollationType>(server_collation), enable_decimal_int, alloc,
-                           param_type, is_enable))) {
-          LOG_WARN("failed to got const node types", K(ret));
-        } else if (is_enable) {
-          if (ob_is_enum_or_set_type(param_type.obj_type_) ||
-              is_lob_locator(param_type.obj_type_)) {
-            is_enable = false;
-          } else if (OB_FAIL(param_types.push_back(param_type))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }
-
-      for (int64_t i = 1; OB_SUCC(ret) && is_enable && i < row_cnt; i++) {
-        for (int64_t j = 0; OB_SUCC(ret) && is_enable && j < column_cnt; j++) {
+      for (int64_t j = 0; OB_SUCC(ret) && is_enable && j < column_cnt; ++j) {
+        DistinctObjMeta param_type_prev;
+        for (int64_t i = 0; OB_SUCC(ret) && is_enable && i < row_cnt; ++i) {
           if (OB_UNLIKELY(column_cnt > 1 && in_list.children_[i]->num_child_ != column_cnt)) {
             is_enable = false; /* delay return error code */
           } else {
-            const ParseNode *node = column_cnt == 1 ? in_list.children_[i] :
-                                                      in_list.children_[i]->children_[j];
-            DistinctObjMeta param_type;
-            if (OB_FAIL(get_const_node_types(node, param_store, is_question_mark,
-                        connect_collation, nchar_collation, static_cast<ObCollationType>(server_collation), enable_decimal_int, alloc,
-                        param_type, is_enable))) {
+            DistinctObjMeta param_type_cur;
+            const ParseNode *node = column_cnt == 1 ? in_list.children_[i]
+                                                    : in_list.children_[i]->children_[j];
+            if (OB_ISNULL(node)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected param", K(ret));
+            } else if (FALSE_IT(is_question_mark = T_QUESTIONMARK == node->type_)) {
+            } else if (is_prepare_stmt && is_question_mark) {
+              // skip type matching for question marks in prepare stmt, because they have no type
+            } else if (OB_FAIL(get_const_node_types(node,
+                                                    param_store,
+                                                    is_question_mark,
+                                                    connect_collation,
+                                                    nchar_collation,
+                                                    static_cast<ObCollationType>(server_collation),
+                                                    enable_decimal_int,
+                                                    alloc,
+                                                    param_type_cur,
+                                                    is_enable))) {
               LOG_WARN("failed to got const node types", K(ret));
-            } else if (is_enable && param_type == param_types.at(j)) {
-              /*is same type*/
+            } else if (!is_enable) {
+            } else if (ObMaxType == param_type_prev.obj_type_) {
+              param_type_prev = param_type_cur;
+              if (lib::is_oracle_mode() && ObCharType == param_type_cur.obj_type_) {
+                // in oracle mode, inlist to values table rewrite may cast char types to varchar2
+                // but comparison behaviors for chars and varchar2s are different for trailing spaces
+                // which will lead to unexpect comparison result
+                is_enable = false;
+              } else if (ob_is_enum_or_set_type(param_type_cur.obj_type_)
+                         || is_lob_locator(param_type_cur.obj_type_)) {
+                is_enable = false;
+              }
+            } else if (param_type_prev == param_type_cur) {
             } else {
               is_enable = false;
             }
@@ -387,6 +402,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                       const int64_t row_cnt,
                                                       ObSQLSessionInfo *session_info,
                                                       ObIAllocator *allocator,
+                                                      const bool is_prepare_stage,
                                                       ObValuesTableDef &table_def)
 {
   int ret = OB_SUCCESS;
@@ -404,6 +420,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   const ParseNode *row_node = NULL;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
@@ -416,6 +433,9 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
+                       enable_mysql_compatible_dates))) {
+    LOG_WARN("fail to check enable mysql compatible dates", K(ret));
   } else {
     if (lib::is_oracle_mode() && cur_resolver_->params_.is_expanding_view_) {
       // numeric constants should parsed with ObNumber in view expansion for oracle mode
@@ -445,6 +465,8 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  session_info->get_sql_mode(),
                                                  enable_decimal_int,
                                                  compat_type,
+                                                 enable_mysql_compatible_dates,
+                                                 session_info->get_local_ob_enable_plan_cache(),
                                                  is_from_pl))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {
@@ -457,7 +479,16 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
           if (OB_FAIL(table_def.column_types_.push_back(res_type))) {
             LOG_WARN("failed to push back", K(ret));
           }
-        } else {
+        } else if (is_prepare_stage
+                   && (ObUnknownType == res_type.get_type()
+                       || ObUnknownType == table_def.column_types_.at(j).get_type())) {
+          // in prepare stage, question marks are resolved as unknown type
+          // since unknown type cannot be merged with other normal types
+          // we ignore type aggregation if:
+          // 1. the current node is a question mark
+          // 2. the values table contains a question mark
+          // this is safe because correct column types will be deduced later in execute stage
+        } else if (!ObSQLUtils::is_same_type(res_type, table_def.column_types_.at(j))) {
           ObExprResType new_res_type;
           ObExprVersion dummy_op(*allocator);
           ObSEArray<ObExprResType, 2> tmp_res_types;

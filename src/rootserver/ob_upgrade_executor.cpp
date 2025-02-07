@@ -1058,6 +1058,27 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
   return ret;
 }
 
+int ObUpgradeExecutor::run_upgrade_processor_(const uint64_t tenant_id,
+    ObBaseUpgradeProcessor *processor, int64_t &version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_ISNULL(processor) || !is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", KR(ret), KP(processor), K(tenant_id));
+  } else {
+    processor->set_tenant_id(tenant_id);
+    version = processor->get_version();
+    if (OB_FAIL(check_schema_sync_(tenant_id))) {
+      LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(processor->post_upgrade())) {
+      LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), KDV(version));
+    }
+  }
+  return ret;
+}
+
 int ObUpgradeExecutor::run_upgrade_all_post_action_(
     const uint64_t tenant_id)
 {
@@ -1071,6 +1092,8 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
     int64_t start_idx = OB_INVALID_INDEX;
     int64_t end_idx = OB_INVALID_INDEX;
     ObGlobalStatProxy proxy(*sql_proxy_, tenant_id);
+    int64_t version = OB_INVALID_VERSION;
+    ObBaseUpgradeProcessor *processor  = NULL;
     if (OB_FAIL(proxy.get_current_data_version(current_data_version))) {
       LOG_WARN("fail to get current data version",
                KR(ret), K(tenant_id), KDV(current_data_version));
@@ -1083,19 +1106,15 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
                        start_idx, end_idx))) {
       LOG_WARN("fail to get processor by version", KR(ret), KDV(current_data_version));
     }
-    int64_t version = OB_INVALID_VERSION;
     for (int64_t i = start_idx + 1; OB_SUCC(ret) && i <= end_idx; i++) {
-      ObBaseUpgradeProcessor *processor  = NULL;
+      processor = NULL;
+      version = OB_INVALID_VERSION;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(upgrade_processors_.get_processor_by_idx(i, processor))) {
-        LOG_WARN("fail to get processor", KR(ret), K(current_data_version), K(i));
-      } else if (FALSE_IT(version = processor->get_version())) {
-      } else if (FALSE_IT(processor->set_tenant_id(tenant_id))) {
-      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
-        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(processor->post_upgrade())) {
-        LOG_WARN("run post upgrade by version failed", KR(ret), K(tenant_id), KDV(version));
+        LOG_WARN("fail to get processor", KR(ret), KDV(current_data_version), K(i));
+      } else if (OB_FAIL(run_upgrade_processor_(tenant_id, processor, version))) {
+        LOG_WARN("failed to run upgrade processor", KR(ret), K(tenant_id), KDV(version));
       } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
         LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       } else if (i < end_idx) {
@@ -1106,6 +1125,14 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
         LOG_WARN("fail to update final current data version", KR(ret), K(tenant_id), KDV(version));
       }
     } // end for
+    // finish to run processor for each version, begin to run processor for all version
+    processor = NULL;
+    version = OB_INVALID_VERSION;
+    if (FAILEDx(upgrade_processors_.get_all_version_processor(processor))) {
+      LOG_WARN("failed to get all version processor", KR(ret));
+    } else if (OB_FAIL(run_upgrade_processor_(tenant_id, processor, version))) {
+      LOG_WARN("failed to run all version processor", KR(ret), K(tenant_id));
+    }
   }
   return ret;
 }

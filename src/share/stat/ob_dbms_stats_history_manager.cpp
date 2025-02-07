@@ -581,6 +581,7 @@ int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &tr
     ObSqlString select_sql;
     ObSqlString where_str;
     uint64_t data_version = 0;
+    bool need_backup = true;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("fail to get tenant data version", KR(ret));
     } else if (OB_LIKELY(having_stat_part_col_map.size() == partition_ids.count() * column_ids.count())) {
@@ -668,6 +669,8 @@ int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &tr
                    OB_FAIL(part_col_where2.append_fmt("((partition_id, column_id) in (%s))",
                                                        part_col_list.ptr()))) {
           LOG_WARN("failed to append fmt", K(ret));
+        } else if (part_col_where1.empty() && part_col_where2.empty()) {
+          need_backup = false;
         } else if (OB_FAIL(where_str.append_fmt(" tenant_id = %lu and table_id = %lu and (%s %s %s)",
                                                 share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
                                                 share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
@@ -678,7 +681,7 @@ int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &tr
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && need_backup) {
       int64_t affected_rows = 0;
       if (OB_FAIL(select_sql.append_fmt(SELECT_COLUMN_STAT,
                                         saving_time,

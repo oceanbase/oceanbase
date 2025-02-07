@@ -104,6 +104,9 @@ void ObLobDataGetCtx::reset(
   } else if (lob_data_out_row_ctx->is_diff()) {
     type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
     LOG_DEBUG("lob_data_out_row_ctx is diff", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
+  } else if (ObLobDataOutRowCtx::OpType::EXT_INFO_LOG == lob_data_out_row_ctx->op_) {
+    type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
+    LOG_DEBUG("lob_data_out_row_ctx is outrow ext", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
   }
 }
 
@@ -120,21 +123,36 @@ int ObLobDataGetCtx::get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out
   return ret;
 }
 
-ObLobId ObLobDataGetCtx::get_lob_id() const
+int ObLobDataGetCtx::get_lob_id(const bool is_new_col, ObLobId &lob_id) const
 {
-  ObLobId lob_id;
-  switch (get_type()) {
-    case ObLobDataGetTaskType::FULL_LOB:
-      if (OB_NOT_NULL(new_lob_data_)) {
-        lob_id = new_lob_data_->id_;
-      } else {
-        LOG_DEBUG("new_lob_data_ is null", KPC(this));
+  int ret = OB_SUCCESS;
+  const ObLobData *lob_data = nullptr;
+  if (OB_ISNULL(lob_data = get_lob_data(is_new_col))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lob_data is nullptr", KR(ret), K(is_new_col), KPC(this));
+  } else {
+    switch (get_type()) {
+      case ObLobDataGetTaskType::FULL_LOB: {
+        lob_id = lob_data->id_;
+        break;
       }
-      break;
-    default:
-      break;
+      case ObLobDataGetTaskType::EXT_INFO_LOG: {
+        const ObLobDataOutRowCtx *lob_data_out_row_ctx = reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data->buffer_);
+        if (OB_ISNULL(lob_data_out_row_ctx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(is_new_col), KPC(lob_data), KPC(this));
+        } else if (lob_data_out_row_ctx->is_diff_v1()) {
+          // old diff ext info log no lob id
+        } else {
+          lob_id = lob_data->id_;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   }
-  return lob_id;
+  return ret;
 }
 
 int ObLobDataGetCtx::get_data_length(const bool is_new_col, uint64_t &data_length) const
@@ -215,10 +233,10 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
 
     if (nullptr != lob_data_out_row_ctx) {
       (void)common::databuff_printf(buf, buf_len, pos,
-          "tenant_id=%ld, tx_id=%s, aux_tid=%ld, ",
-          lob_data_out_row_ctx->get_tenant_id(),
-          to_cstring(lob_data_out_row_ctx->get_trans_id()),
-          lob_data_out_row_ctx->get_aux_lob_meta_table_id());
+          "tenant_id=%ld, tx_id=", lob_data_out_row_ctx->get_tenant_id());
+      (void)common::databuff_printf(buf, buf_len, pos, lob_data_out_row_ctx->get_trans_id());
+      (void)common::databuff_printf(buf, buf_len, pos,
+          ", aux_tid=%ld, ", lob_data_out_row_ctx->get_aux_lob_meta_table_id());
     }
 
     (void)common::databuff_printf(buf, buf_len, pos,
@@ -227,16 +245,16 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
         old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_, type_);
 
     if (nullptr != new_lob_data_) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "byte_size=%ld, lob_id=%s ",
-           new_lob_data_->byte_size_, to_cstring(new_lob_data_->id_));
+      (void)common::databuff_printf(buf, buf_len, pos, "byte_size=%ld, lob_id=", new_lob_data_->byte_size_);
+      (void)common::databuff_printf(buf, buf_len, pos, new_lob_data_->id_);
+      (void)common::databuff_printf(buf, buf_len, pos, " ");
 
       const ObLobDataOutRowCtx *lob_data_out_row_ctx =
         reinterpret_cast<const ObLobDataOutRowCtx *>(new_lob_data_->buffer_);
 
       if (nullptr != lob_data_out_row_ctx) {
-        (void)common::databuff_printf(buf, buf_len, pos,
-            "lob_out_row=%s", to_cstring(*lob_data_out_row_ctx));
+        (void)common::databuff_printf(buf, buf_len, pos, "lob_out_row=");
+        (void)common::databuff_printf(buf, buf_len, pos, *lob_data_out_row_ctx);
       }
     }
   }
@@ -367,21 +385,23 @@ int64_t ObLobDataOutRowCtxList::to_string(char *buf, const int64_t buf_len) cons
   int64_t pos = 0;
 
   if (nullptr != buf && buf_len > 0) {
-    (void)common::databuff_printf(buf, buf_len, pos,
-          "tenant_id=%ld, tx_id=%s, aux_tid=%ld, lob_col_cnt=%ld/%ld,",
-          tenant_id_, to_cstring(trans_id_), aux_lob_meta_table_id_, lob_col_get_succ_count_, get_total_lob_count());
+    (void)common::databuff_printf(buf, buf_len, pos, "tenant_id=%ld, tx_id=", tenant_id_);
+    (void)common::databuff_printf(buf, buf_len, pos, trans_id_);
+    (void)common::databuff_printf(buf, buf_len, pos, ", aux_tid=%ld, lob_col_cnt=%ld/%ld,",
+        aux_lob_meta_table_id_, lob_col_get_succ_count_, get_total_lob_count());
 
     ObLobDataGetCtx *head = lob_data_get_ctxs_.head_;
     ObLobDataGetCtx *tail = lob_data_get_ctxs_.tail_;
 
     if (nullptr != head) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "head=%s,", to_cstring(*head));
+      (void)common::databuff_printf(buf, buf_len, pos, "head=");
+      (void)common::databuff_printf(buf, buf_len, pos, *head);
+      (void)common::databuff_printf(buf, buf_len, pos, ",");
     }
 
     if (nullptr != tail && head != tail) {
-      (void)common::databuff_printf(buf, buf_len, pos,
-          "tail=%s", to_cstring(*tail));
+      (void)common::databuff_printf(buf, buf_len, pos, "tail=");
+      (void)common::databuff_printf(buf, buf_len, pos, *tail);
     }
   }
 

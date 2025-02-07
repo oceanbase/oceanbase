@@ -61,6 +61,7 @@ namespace transaction
 namespace tablelock
 {
 struct ObLockParam;
+struct ObReplaceLockParam;
 class ObTableLockOp;
 class ObLockMemtable;
 class ObLockMemtableMgr;
@@ -103,16 +104,24 @@ public:
       const ObTableLockOp &lock_op,
       ObTxIDSet &conflict_tx_set,
       const bool include_finish_tx = true);
-  // lock a object
+  // lock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   int lock(storage::ObStoreCtx &ctx,
            const ObLockParam &param);
-  // unlock a object
+  // unlock an object
   // @param[in] ctx, store ctx for trans.
-  // @param[in] unlock_op, contain the lock id, lock type and so on.
+  // @param[in] param, contain the lock id, lock type and so on.
   int unlock(storage::ObStoreCtx &ctx,
              const ObLockParam &param);
+  // replace the lock of an object,
+  // it is equivalent to unlocking and locking with a new lock_op.
+  // In addition, the owner of new lock_op can be different with
+  // previous owner.
+  // @param[in] ctx, store ctx for trans.
+  // @param[in] param, contain the lock id, lock type and so on of the previous lock, and new owner_id,
+  // lock_mode of new lock
+  int replace_lock(storage::ObStoreCtx &ctx, const ObReplaceLockParam &param);
   // get all the lock id in the lock map
   // @param[out] iter, the iterator returned.
   // int get_lock_id_iter(ObLockIDIterator &iter);
@@ -143,15 +152,20 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const share::SCN &scn) override { return OB_SUCCESS; }
+             const share::SCN &scn) override;
   // for checkpoint
-  share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
-  int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
+  share::SCN get_rec_scn() override;
+  int flush(share::SCN &rec_scn) override;
   // for role change
   void switch_to_follower_forcedly() override{};
   int switch_to_leader() override;
   int switch_to_follower_gracefully() override { return OB_SUCCESS; }
   int resume_leader() override { return OB_SUCCESS; }
+  // flush lock_memtable that flush had been failed
+  int traversal_flush();
+  int table_lock_split(const common::ObTabletID &src_tablet_id,
+                       const ObSArray<common::ObTabletID> &dst_tablet_ids,
+                       const transaction::ObTransID &trans_id);
 
   int enable_check_tablet_status(const bool need_check);
 

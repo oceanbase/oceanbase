@@ -753,5 +753,97 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
   return ret;
 }
 
+static const int32_t DEFAULT_DATA_TYPE_LEGNTH[] =
+{
+  /*ObNullType        = 0*/  12,
+  /*ObTinyIntType     = 1*/  20,
+  /*ObSmallIntType    = 2*/  20,
+  /*ObMediumIntType   = 3*/  20,
+  /*ObInt32Type       = 4*/  20,
+  /*ObIntType         = 5*/  20,
+
+  /*ObUTinyIntType    = 6*/  20,
+  /*ObUSmallIntType   = 7*/  20,
+  /*ObUMediumIntType  = 8*/  20,
+  /*ObUInt32Type      = 9*/  20,
+  /*ObUInt64Type      = 10*/ 20,
+
+  /*ObFloatType       = 11*/ 16,
+  /*ObDoubleType      = 12*/ 20,
+
+  /*ObUFloatType      = 13*/ 16,
+  /*ObUDoubleType     = 14*/ 20,
+
+  /*ObNumberType      = 15*/ -1,
+  /*ObUNumberType     = 16*/ -1,
+
+  /*ObDateTimeType    = 17*/ 20,
+  /*ObTimestampType   = 18*/ 20,
+  /*ObDateType        = 19*/ 16,
+  /*ObTimeType        = 20*/ 20,
+  /*ObYearType        = 21*/ 13,
+
+  /*ObVarcharType     = 22*/ -1,
+  /*ObCharType        = 23*/ -1,
+
+  /*ObHexStringType   = 24*/ -1,
+
+  /*ObExtendType      = 25*/ -1,
+  /*ObUnknownType     = 26*/ -1,
+
+  /*ObTinyTextType    = 27*/ -1,
+  /*ObTextType        = 28*/ -1,
+  /*ObMediumTextType  = 29*/ -1,
+  /*ObLongTextType    = 30*/ -1,
+
+  /*ObBitType         = 31*/ 20,
+  /*ObEnumType        = 32*/ 20,
+  /*ObSetType         = 33*/ 20,
+  /*ObEnumInnerType   = 34*/ -1,
+  /*ObSetInnerType    = 35*/ -1,
+
+  /*ObTimestampTZType   = 36*/ 24,
+  /*ObTimestampLTZType  = 37*/ 22,
+  /*ObTimestampNanoType = 38*/ 22,
+  /*ObRawType           = 39*/ -1,
+  /*ObIntervalYMType    = 40*/ -1,
+  /*ObIntervalDSType    = 41*/ -1,
+  /*ObNumberFloatType   = 42*/ -1,
+  /*ObNVarchar2Type     = 43*/ -1,
+  /*ObNCharType         = 44*/ -1,
+  /*ObURowIDType        = 45*/ -1,
+  /*ObLobType           = 46*/ -1,
+  /*ObJsonType          = 47*/ -1,
+  /*ObGeometryType      = 48*/ -1,
+
+  /*ObUserDefinedSQLType = 49*/ -1,
+  /*ObDecimalIntType     = 50*/ -1,
+  /*ObCollectionSQLType  = 51*/ -1,
+  /*ObMySQLDateType      = 52*/ 16,
+  /*ObMySQLDateTimeType  = 53*/ 20,
+  /*ObMaxType                */ -1
+};
+
+int ObStatAvgLen::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t type_count = sizeof(DEFAULT_DATA_TYPE_LEGNTH) / sizeof(int32_t);
+  if (OB_ISNULL(col_param_) || OB_ISNULL(get_fmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column param is null", K(ret));
+  } else if (col_param_->column_type_ < type_count &&
+             DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_] > 0) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d",
+                                DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_]))) {
+      LOG_WARN("failed to print avg column size", K(ret));
+    }
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, get_fmt(),
+                                     col_param_->column_name_.length(),
+                                     col_param_->column_name_.ptr()))) {
+    LOG_WARN("failed to print AVG(SYS_OP_OPNSIZE(c2)) expr", K(ret));
+  }
+  return ret;
+}
+
 } // end of common
 } // end of oceanbase

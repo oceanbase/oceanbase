@@ -18,6 +18,7 @@
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "ob_storage_ha_reader.h"
+#include "ob_physical_copy_task.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
@@ -40,6 +41,7 @@ public:
 };
 
 
+class ObCopyTabletRecordExtraInfo;
 class ObStorageHAMacroBlockWriter : public ObIStorageHAMacroBlockWriter
 {
 public:
@@ -52,7 +54,9 @@ public:
       const ObDagId &dag_id,
       const ObMigrationSSTableParam *sstable_param,
       ObICopyMacroBlockReader *reader,
-      ObIndexBlockRebuilder *index_block_rebuilder);
+      ObIndexBlockRebuilder *index_block_rebuilder,
+      ObCopyTabletRecordExtraInfo *extra_info
+  );
 
   virtual int process(blocksstable::ObMacroBlocksWriteCtx &copied_ctx, ObIHADagNetCtx &ha_dag_net_ctx) override;
 
@@ -87,6 +91,7 @@ protected:
   ObICopyMacroBlockReader *reader_;
   ObIndexBlockRebuilder *index_block_rebuilder_;
   blocksstable::ObSSTableMacroBlockChecker macro_checker_;
+  ObCopyTabletRecordExtraInfo *extra_info_;
 };
 
 class ObStorageHALocalMacroBlockWriter final : public ObStorageHAMacroBlockWriter

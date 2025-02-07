@@ -328,6 +328,7 @@ public:
   bool operator==(const common::ObNewRow &other) const;
 
   int is_datums_changed(const ObDatumRow &other, bool &is_changed) const;
+  int copy_attributes_except_datums(const ObDatumRow &other);
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
@@ -469,6 +470,21 @@ public:
   common::ObDatum *datum_ptr_;
   const sql::ObExpr *expr_;
 };
+
+OB_INLINE int64_t ObStorageDatumWrapper::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (nullptr != buf && buf_len > 0) {
+    pos = datum_.storage_to_string(buf, buf_len - 1, for_dump_);
+    if (pos >= 0 && pos < buf_len) {
+      buf[pos] = '\0';
+    }
+  } else {
+    pos = 0;
+    buf[0] = '\0';
+  }
+  return pos;
+}
 
 } // namespace blocksstable
 } // namespace oceanbase

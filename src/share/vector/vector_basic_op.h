@@ -47,9 +47,14 @@ struct VecTCHashCalc {
 template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_FIXED_DOUBLE, HashMethod, hash_v2> {
   inline static int hash(HASH_ARG_LIST) {
-    const double *d_val = reinterpret_cast<const double *>(data);
+    double d_val = *reinterpret_cast<const double *>(data);
+    // zero distinguishes positive and negative zeros, formatted as positive zero to calculate
+    // hash value
+    if (d_val == 0.0) {
+      d_val = 0.0;
+    }
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-    int64_t length = ob_fcvt(*d_val, static_cast<int>(meta.get_scale()),
+    int64_t length = ob_fcvt(d_val, static_cast<int>(meta.get_scale()),
                              sizeof(buf) - 1, buf, NULL);
     res = HashMethod::hash(buf, static_cast<int32_t>(length), seed);
     return OB_SUCCESS;
@@ -220,7 +225,7 @@ struct VecTCHashCalc<VEC_TC_LOB, HashMethod, hash_v2>
           const uchar *key = reinterpret_cast<const uchar *>(char_data);
           const uchar *pos = key;
           int length = char_len;
-          key = skip_trailing_space(key, char_len, 0);
+          key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, char_len);
           length = (int)(key - pos);
           res = HashMethod::hash((void*)pos, length, seed);
         }
@@ -345,6 +350,33 @@ struct VecTCHashCalc<VEC_TC_COLLECTION, HashMethod, hash_v2>
 };
 
 template<typename HashMethod, bool hash_v2>
+struct VecTCHashCalc<VEC_TC_ROARINGBITMAP, HashMethod, hash_v2>
+{
+  inline static int hash(HASH_ARG_LIST)
+  {
+    int ret = OB_SUCCESS;
+    ObString bin_str;
+    res = 0;
+    const char *in_str = reinterpret_cast<const char *>(data);
+    ObLobLocatorV2 loc(in_str, false);
+    if (!loc.is_valid()) {
+      COMMON_LOG(WARN, "invalid lob", K(ret));
+    } else if (!loc.has_inrow_data()) {
+      COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(loc));
+    } else if (OB_FAIL(loc.get_inrow_data(bin_str))) {
+      COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(loc));
+    } else {
+      res = seed;
+      if (bin_str.length() > 0) {
+        res = ObCharset::hash(CS_TYPE_BINARY, bin_str.ptr(), bin_str.length(), seed, false,
+                              HashMethod::is_varchar_hash ? HashMethod::hash : NULL);
+      }
+    }
+    return ret;
+  }
+};
+
+template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_ROWID, HashMethod, hash_v2>
 {
   inline static int hash(HASH_ARG_LIST)
@@ -405,6 +437,10 @@ template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_ENUM_SET, HashMethod, hash_v2>
   : public VecTCHashCalcWithHashType<VEC_TC_ENUM_SET, HashMethod, hash_v2, uint64_t> {};
 
+template <typename HashMethod, bool hash_v2>
+struct VecTCHashCalc<VEC_TC_MYSQL_DATE, HashMethod, hash_v2>
+  : public VecTCHashCalcWithHashType<VEC_TC_UINTEGER, HashMethod, hash_v2, int32_t> {};
+
 
 // string data hash
 
@@ -419,7 +455,7 @@ struct VecTCHashCalc<VEC_TC_STRING, HashMethod, hash_v2> {
         const uchar *key = reinterpret_cast<const uchar *>(data);
         const uchar *pos = key;
         int length = len;
-        key = skip_trailing_space(key, len, 0);
+        key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, len);
         length = (int)(key - pos);
         res = HashMethod::hash((void*)pos, length, seed);
       }
@@ -500,12 +536,19 @@ struct VecTCCmpCalc<VEC_TC_DATE, VEC_TC_DATE>
   : public BasicCmpCalc<VEC_TC_DATE, VEC_TC_DATE> {};
 
 template<>
+struct VecTCCmpCalc<VEC_TC_MYSQL_DATE, VEC_TC_MYSQL_DATE>
+  : public BasicCmpCalc<VEC_TC_MYSQL_DATE, VEC_TC_MYSQL_DATE> {};
+template<>
 struct VecTCCmpCalc<VEC_TC_TIME, VEC_TC_TIME>
   : public BasicCmpCalc<VEC_TC_TIME, VEC_TC_TIME> {};
 
 template<>
 struct VecTCCmpCalc<VEC_TC_DATETIME, VEC_TC_DATETIME>
   : public BasicCmpCalc<VEC_TC_DATETIME, VEC_TC_DATETIME> {};
+
+template<>
+struct VecTCCmpCalc<VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATETIME>
+  : public BasicCmpCalc<VEC_TC_MYSQL_DATETIME, VEC_TC_MYSQL_DATETIME> {};
 
 template<>
 struct VecTCCmpCalc<VEC_TC_YEAR, VEC_TC_YEAR>
@@ -831,6 +874,18 @@ struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
                                     l_len, static_cast<const char *>(r_v), r_len, calc_end_space);
       cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
     }
+    return ret;
+  }
+};
+
+template<>
+struct VecTCCmpCalc<VEC_TC_ROARINGBITMAP, VEC_TC_ROARINGBITMAP>
+{
+  static const constexpr bool defined_ = true;
+  inline static int cmp(CMP_ARG_LIST)
+  {
+    int ret = OB_SUCCESS;
+    // not used
     return ret;
   }
 };

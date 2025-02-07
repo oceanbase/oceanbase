@@ -1,3 +1,6 @@
+// owner: xuwang.txw
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -310,7 +313,9 @@ void advance_checkpoint(share::ObLSID ls_id, share::SCN aim_scn)
 void write_result_to_file(const char *file_name)
 {
   char buffer[2048] = { 0 };
-  databuff_printf(buffer, 2048, "result from virtual table:%s", to_cstring(RESULT));
+  int64_t pos = 0;
+  databuff_printf(buffer, 2048, pos, "result from virtual table:");
+  databuff_printf(buffer, 2048, pos, RESULT);
   std::ofstream file(file_name);
   file << TEST_LS_ID.id() << std::endl
         << TEST_TABLET_ID.id() << std::endl

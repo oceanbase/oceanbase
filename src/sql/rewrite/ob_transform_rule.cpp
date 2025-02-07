@@ -28,6 +28,7 @@
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
 {
 namespace sql
@@ -73,6 +74,9 @@ void ObTransformerCtx::reset()
   iteration_level_ = 0;
   mv_infos_.reset();
   mv_stmt_gen_count_ = 0;
+  cbqt_policy_ = TransPolicy::DISABLE_TRANS;
+  complex_cbqt_table_num_ = 0;
+  max_table_num_ = 0;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -144,6 +148,7 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(CONDITIONAL_AGGR_COALESCE)
     TRANS_TYPE_TO_STR(MV_REWRITE)
     TRANS_TYPE_TO_STR(LATE_MATERIALIZATION)
+    TRANS_TYPE_TO_STR(DISTINCT_AGGREGATE)
     default:  return NULL;
   }
 }
@@ -160,6 +165,8 @@ int ObTransformRule::transform(ObDMLStmt *&stmt,
     LOG_WARN("failed to transform stmt recursively", K(ret));
   } else if (OB_FAIL(adjust_transform_types(transform_types))) {
     LOG_WARN("failed to adjust transform types", K(ret));
+  } else if (OB_FAIL(update_trans_ctx(stmt))) {
+    LOG_WARN("failed to update trans ctx", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -306,11 +313,15 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *top_stmt = parent_stmts.empty() ? stmt : parent_stmts.at(0).stmt_;
   bool is_expected = false;
   bool is_original_expected = false;
+  const int64_t check_try_times = 32;
   ObDMLStmt *tmp1 = NULL;
   ObDMLStmt *tmp2 = NULL;
+  bool ignore_cost = (OB_E(EventTable::EN_CBQT_IGNORE_COST) OB_SUCCESS) != OB_SUCCESS;
   cost_based_trans_tried_ = true;
   BEGIN_OPT_TRACE_EVA_COST;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
+  if (OB_UNLIKELY((OB_SUCCESS != (ret = TRY_CHECK_MEM_STATUS(check_try_times))))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
+  } else if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt), K(trans_stmt), K(top_stmt));
   } else if (force_accept) {
@@ -325,14 +336,14 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
                               check_ctx))) {
       LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
     } else if ((!check_original_plan && stmt_cost_ >= 0) || !is_expected) {
-      trans_happened = is_expected && trans_stmt_cost < stmt_cost_;
+      trans_happened = is_expected && (ignore_cost || trans_stmt_cost < stmt_cost_);
     } else if (OB_FAIL(evaluate_cost(parent_stmts, stmt, false, stmt_cost_, is_original_expected,
                                      check_original_plan ? check_ctx : NULL))) {
       LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
     } else if (!is_original_expected) {
       trans_happened = is_original_expected;
     } else {
-      trans_happened = trans_stmt_cost < stmt_cost_;
+      trans_happened = ignore_cost || trans_stmt_cost < stmt_cost_;
     }
     if (stmt->get_query_ctx()->get_injected_random_status()) {
       trans_happened = true;
@@ -346,10 +357,12 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     OPT_TRACE("reject transform because the cost is increased or the query plan is unexpected.");
     OPT_TRACE("before transform cost:", stmt_cost_);
     OPT_TRACE("after transform cost:", trans_stmt_cost);
+    OPT_TRACE("is ignore cost:", ignore_cost);
     OPT_TRACE("is expected plan:", is_expected);
     OPT_TRACE("is expected original plan:", is_original_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
-              K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+              K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(ignore_cost),
+              K(is_expected), K(is_original_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
@@ -402,6 +415,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
     ObDMLStmt *root_stmt = NULL;
     lib::ContextParam param;
     ObTransformerImpl trans(ctx_);
+    int64_t start_time_us = ObTimeUtil::current_time();
     param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
                        "CostBasedRewrit",
                        ObCtxIds::DEFAULT_CTX_ID)
@@ -804,6 +818,10 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                          ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
+  } else if (OB_FAIL(stmt->formalize_implicit_distinct())) {
+    LOG_WARN("failed to update implicit distinct", K(ret));
+  } else if (OB_FAIL(update_max_table_num(stmt))) {
+      LOG_WARN("failed to update max table num", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {
     // do nothing
@@ -967,6 +985,24 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   return ret;
 }
 
+int ObTryTransHelper::finish(bool trans_happened,
+                             ObQueryCtx *query_ctx,
+                             ObTransformerCtx *trans_ctx) {
+  int ret = OB_SUCCESS;
+  if (NULL == query_ctx || NULL == trans_ctx) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null parameter", K(ret), K(query_ctx), K(trans_ctx));
+  } else if (trans_happened) {
+    if (NULL != unique_key_provider_
+        && OB_FAIL(unique_key_provider_->formalize_stmt_expr_reference_for_temp_table(trans_ctx))) {
+      LOG_WARN("failed to formalize stmt expr reference for temp table", K(ret));
+    }
+  } else if (OB_FAIL(recover(query_ctx))){
+    LOG_WARN("failed to recover try trans helper", K(ret));
+  }
+  return ret;
+}
+
 int ObEvalCostHelper::fill_helper(const ObPhysicalPlanCtx &phy_plan_ctx,
                                   const ObQueryCtx &query_ctx,
                                   const ObTransformerCtx &trans_ctx)
@@ -1080,6 +1116,7 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
   const ObHint *myhint = get_hint(stmt.get_stmt_hint());
   bool is_enable = (NULL != myhint && myhint->is_enable_hint());
   bool is_disable = (NULL != myhint && myhint->is_disable_hint());
+  bool enable_cost_rule = true;
   need_trans = false;
   if (OB_ISNULL(ctx_) ||
       OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
@@ -1096,8 +1133,10 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
         LOG_WARN("failed to add used transform hint", K(ret));
       }
       OPT_TRACE("hint reject current transform");
-    } else if ((ALL_COST_BASED_RULES & (1L << get_transformer_type())) &&
-               query_hint->global_hint_.disable_cost_based_transform()) {
+    } else if (OB_FAIL(ObTransformUtils::is_cost_based_trans_enable(ctx_, query_hint->global_hint_,
+                                                                    enable_cost_rule))) {
+      LOG_WARN("failed to check cost based transform enable", K(ret));
+    } else if ((ALL_COST_BASED_RULES & (1L << get_transformer_type())) && !enable_cost_rule) {
       /* disable transform by NO_COST_BASED_QUERY_TRANSFORMATION hint */
     } else {
       need_trans = true;
@@ -1106,6 +1145,51 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
     need_trans = true;
   } else {
     OPT_TRACE("outline reject current transform");
+  }
+  return ret;
+}
+
+int ObTransformRule::update_trans_ctx(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (trans_happened_) {
+    ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
+    ctx_->max_table_num_ = 0;
+    if (OB_FAIL(update_max_table_num(stmt))) {
+      LOG_WARN("failed to update max table num", K(ret));
+    } else if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+    LOG_WARN("failed to collect temp table infos", K(ret));
+    }
+    for(int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
+      ObDMLStmt *child_stmt = temp_table_infos.at(i).temp_table_query_;
+      if (OB_FAIL(update_max_table_num(child_stmt))) {
+        LOG_WARN("failed to update max table num", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformRule::update_max_table_num(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    ctx_->max_table_num_ = MAX(ctx_->max_table_num_, stmt->get_table_size());
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(update_max_table_num(child_stmts.at(i))))) {
+        LOG_WARN("failed to update max table num", K(ret));
+      }
+    }
   }
   return ret;
 }

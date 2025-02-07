@@ -132,7 +132,8 @@ private:
 
   int compute_pullup_predicates(ObSelectStmt &view,
                                 const ObIArray<int64_t> &select_list,
-                                ObIArray<ObRawExpr *> &local_preds,
+                                ObIArray<ObRawExpr *> &original_preds,
+                                ObIArray<ObRawExpr *> &input_pullup_preds,
                                 ObIArray<ObRawExpr *> &pull_up_preds);
 
   int check_expr_pullup_validity(ObRawExpr *expr,
@@ -306,7 +307,9 @@ private:
 
   int inner_split_or_having_expr(ObSelectStmt &stmt,
                                 ObIArray<ObSEArray<ObRawExpr *, 16> > &sub_exprs,
-                                ObRawExpr *&new_expr);                                      
+                                ObRawExpr *&new_expr);
+
+  int extract_leaf_filters(ObRawExpr *expr, ObIArray<ObRawExpr *> &leaf_filters);
 
   int choose_pushdown_preds(ObIArray<ObRawExpr *> &preds,
                             ObIArray<ObRawExpr *> &invalid_preds,
@@ -317,15 +320,23 @@ private:
                                  ObIArray<ObRawExpr *> &preds);
 
   int transform_predicates(ObDMLStmt &stmt,
-                           ObIArray<ObRawExpr *> &input_preds,
+                           ObIArray<ObRawExpr *> &original_preds,
+                           ObIArray<ObRawExpr *> &other_preds,
                            ObIArray<ObRawExpr *> &target_exprs,
                            ObIArray<ObRawExpr *> &output_preds,
+                           bool &is_happened,
                            bool is_pullup = false);
-
+  int check_need_transform_predicates(ObIArray<ObRawExpr *> &exprs, bool &is_needed);
+  int accept_outjoin_predicates(ObDMLStmt &stmt,
+                                ObIArray<ObRawExpr *> &conds,
+                                ObSqlBitSet <> &filter_table_set,
+                                ObIArray<ObRawExpr *> &properties,
+                                ObIArray<ObRawExpr *> &new_conds);
   int accept_predicates(ObDMLStmt &stmt,
                         ObIArray<ObRawExpr *> &conds,
                         ObIArray<ObRawExpr *> &properties,
-                        ObIArray<ObRawExpr *> &new_conds);
+                        ObIArray<ObRawExpr *> &new_conds,
+                        const bool preserve_conds = false);
 
   int extract_generalized_column(ObRawExpr *expr,
                                  ObIArray<ObRawExpr *> &output);

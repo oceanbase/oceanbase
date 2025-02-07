@@ -15,7 +15,7 @@
 
 #include <mysql.h>
 #include "lib/string/ob_string.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
+// #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase

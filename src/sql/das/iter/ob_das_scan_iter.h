@@ -14,11 +14,21 @@
 #define OBDEV_SRC_SQL_DAS_ITER_OB_DAS_SCAN_ITER_H_
 
 #include "sql/das/iter/ob_das_iter.h"
+#include "sql/das/ob_das_scan_op.h"
 namespace oceanbase
 {
-using namespace common;
+namespace common {
+class ObITabletScan;
+}
+
+namespace storage {
+class ObTableScanParam;
+}
+
 namespace sql
 {
+
+class ObDASScanCtDef;
 
 // DASScanIter is a wrapper class for storage iter, it doesn't require eval_ctx or exprs like other iters.
 struct ObDASScanIterParam : public ObDASIterParam
@@ -31,7 +41,7 @@ public:
   const ObDASScanCtDef *scan_ctdef_;
   virtual bool is_valid() const override
   {
-    return nullptr != scan_ctdef_;
+    return nullptr != scan_ctdef_ && ObDASIterParam::is_valid();
   }
 };
 

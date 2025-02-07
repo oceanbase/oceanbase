@@ -15,10 +15,10 @@
 
 #include "lib/container/ob_array.h"
 #include "share/scn.h"
+#include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/ob_i_table.h"
-
 namespace oceanbase
 {
 namespace storage
@@ -34,7 +34,8 @@ enum ObDDLMacroBlockType
   DDL_MB_DATA_TYPE = 1,
   DDL_MB_INDEX_TYPE = 2,
   DDL_MB_SSTABLE_META_TYPE = 3,
-  DDL_MB_TABLET_META_TYPE = 4
+  DDL_MB_TABLET_META_TYPE = 4,
+  DDL_MB_SS_EMPTY_DATA_TYPE = 5,
 };
 
 class ObDDLMacroHandle
@@ -285,6 +286,14 @@ public:
   blocksstable::MacroBlockId  macro_block_id_;
 };
 #endif
+
+class ObIDirectLoadRowIterator : public ObIStoreRowIterator
+{
+public:
+  ObIDirectLoadRowIterator() {}
+  virtual ~ObIDirectLoadRowIterator() {}
+  virtual int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row) = 0;
+};
 
 }  // end namespace storage
 }  // end namespace oceanbase

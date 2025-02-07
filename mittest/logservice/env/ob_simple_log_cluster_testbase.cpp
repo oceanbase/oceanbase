@@ -31,6 +31,7 @@
 #undef protected
 #undef private
 #include <algorithm>
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 
 namespace oceanbase
 {
@@ -55,6 +56,7 @@ ObTenantIOManager *ObSimpleLogClusterTestBase::tio_manager_ = nullptr;
 void ObSimpleLogClusterTestBase::SetUpTestCase()
 {
   SERVER_LOG(INFO, "SetUpTestCase", K(member_cnt_), K(node_cnt_));
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
   int ret = OB_SUCCESS;
   if (!is_started_) {
     ret = start();
@@ -76,6 +78,9 @@ void ObSimpleLogClusterTestBase::TearDownTestCase()
       ob_delete(svr);
     }
   }
+  ObTimerService::get_instance().stop();
+  ObTimerService::get_instance().wait();
+  ObTimerService::get_instance().destroy();
 }
 
 int ObSimpleLogClusterTestBase::init_log_shared_storage_()
@@ -143,6 +148,9 @@ int ObSimpleLogClusterTestBase::start()
   const uint64_t mittest_memory = 6L * 1024L * 1024L * 1024L;
   ObTenantBase *tmp_base = OB_NEW(ObTenantBase, "mittest", tenant_id_);
   share::ObTenantEnv::set_tenant(tmp_base);
+  const std::string clog_dir = test_name_;
+  const int64_t disk_io_thread_count = 8;
+  const int64_t max_io_depth = 256;
   if (sig_worker_ != nullptr && OB_FAIL(sig_worker_->start())) {
     SERVER_LOG(ERROR, "Start signal worker error", K(ret));
   } else if (signal_handle_ != nullptr && OB_FAIL(signal_handle_->start())) {
@@ -151,6 +159,8 @@ int ObSimpleLogClusterTestBase::start()
       ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE, ObCtxIds::DEFAULT_CTX_ID)))) {
   } else if (OB_FAIL(generate_sorted_server_list_(node_cnt_))) {
     SERVER_LOG(ERROR, "generate_sorted_server_list_ failed", K(ret));
+  } else if (OB_FAIL(G_RES_MGR.init())) {
+    SERVER_LOG(ERROR, "init ObResourceManager failed", K(ret));
   } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
     STORAGE_LOG(WARN, "init device manager failed", KR(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().init(mittest_memory))) {
@@ -166,6 +176,8 @@ int ObSimpleLogClusterTestBase::start()
   } else if (OB_FAIL(tio_manager_->start())) {
     SERVER_LOG(ERROR, "start tenant io manager failed", K(ret));
   } else if (OB_FAIL(init_global_kv_cache_())) {
+  } else if (OB_FAIL(LOG_IO_DEVICE_WRAPPER.init(clog_dir.c_str(), disk_io_thread_count, max_io_depth, &OB_IO_MANAGER, &ObDeviceManager::get_instance()))) {
+    SERVER_LOG(ERROR, "LOG_IO_DEVICE_WRAPPER init failed", K(ret));
   } else {
     ObTenantIOConfig io_config;
     io_config.unit_config_.max_iops_ = 10000000;
@@ -221,11 +233,14 @@ int ObSimpleLogClusterTestBase::close()
       break;
     }
   }
-  ObIOManager::get_instance().stop();
-  ObIOManager::get_instance().destroy();
 
   OB_LOG_KV_CACHE.destroy();
   ObKVGlobalCache::get_instance().destroy();
+
+  LOG_IO_DEVICE_WRAPPER.destroy();
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().destroy();
+  ObDeviceManager::get_instance().destroy();
   return ret;
 }
 

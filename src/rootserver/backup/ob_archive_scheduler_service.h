@@ -80,6 +80,8 @@ private:
   int open_tenant_archive_mode_(const uint64_t tenant_id);
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int close_tenant_archive_mode_(const uint64_t tenant_id);
+  // notify arhicve start/end to tenant's rs
+  void notify_start_archive_(const uint64_t tenant_id);
 
   bool is_inited_;
   uint64_t tenant_id_;

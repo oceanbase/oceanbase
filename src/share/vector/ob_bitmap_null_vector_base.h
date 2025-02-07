@@ -43,6 +43,11 @@ public:
   OB_INLINE void set_nulls(sql::ObBitVector *nulls) { nulls_ = nulls; }
   inline const sql::ObBitVector *get_nulls() const { return nulls_; }
   inline uint16_t get_flag() const { return flag_; }
+  inline void reset_flag()
+  {
+    has_null_ = false;
+    is_batch_ascii_ = UNKNOWN;
+  }
 
   OB_INLINE bool is_null(const int64_t idx) const override final { return nulls_->at(idx); }
   OB_INLINE void set_null(const int64_t idx) override final {

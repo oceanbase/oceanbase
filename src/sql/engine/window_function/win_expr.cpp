@@ -23,6 +23,13 @@ namespace sql
 {
 namespace winfunc
 {
+
+template<VecValueTypeClass vec_tc>
+struct int_trunc
+{
+  static int get(const char *payload, const int32_t len,const ObDatumMeta &meta, int64_t &value);
+};
+
 static int eval_bound_exprs(WinExprEvalCtx &ctx, const int64_t row_start, const int64_t batch_size,
                             const ObBitVector &skip, const bool is_upper);
 
@@ -47,221 +54,6 @@ static int calc_borders_for_sort_expr(WinExprEvalCtx &ctx, const ObExpr *bound_e
                                       const int64_t batch_size, const int64_t row_start,
                                       ObBitVector &eval_skip, const bool is_upper,
                                       int64_t *pos_arr);
-
-static int cmp_prev_row(WinExprEvalCtx &ctx, const int64_t cur_idx, int &cmp_ret);
-
-template<VecValueTypeClass vec_tc>
-struct int_trunc
-{
-  static int get(const char *payload, const int32_t len,const ObDatumMeta &meta, int64_t &value);
-};
-
-// WinExprHelper
-template <typename Derived>
-int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
-                                               const int64_t part_end, const int64_t row_start,
-                                               const int64_t row_end, const ObBitVector &skip)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(part_start > row_start || part_end < row_end)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid partition", K(part_start), K(part_end), K(row_start), K(row_end));
-    } else if (OB_UNLIKELY(part_start >= part_end || row_start >= row_end)) {
-      LOG_DEBUG("empty partition", K(part_start), K(part_end), K(row_start), K(row_end));
-    } else {
-      const ObCompactRow *prev_row = nullptr, *cur_row = nullptr;
-      Frame prev_frame, cur_frame;
-      bool whole_frame = true, valid_frame = true;
-      ObEvalCtx::BatchInfoScopeGuard guard(ctx.win_col_.op_.get_eval_ctx());
-      guard.set_batch_size(row_end - row_start);
-      if (OB_FAIL(eval_bound_exprs(ctx, row_start, row_end - row_start, skip, true))) {
-        LOG_WARN("eval upper bound failed", K(ret));
-      } else if (OB_FAIL(eval_bound_exprs(ctx, row_start, row_end-row_start, skip, false))) {
-        LOG_WARN("eval lower bound failed", K(ret));
-      } else if (is_aggregate_expr()) {
-        AggrExpr *agg_expr = reinterpret_cast<AggrExpr *>(this);
-        prev_frame = agg_expr->last_valid_frame_;
-        if (row_start  > part_start) {
-          ctx.win_col_.agg_ctx_->removal_info_ = agg_expr->last_removal_info_;
-        }
-        // TODO: maybe prefetch agg rows is a good idea
-        int prev_calc_idx = -1;
-        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
-          int32_t batch_idx = row_idx - row_start;
-          if (skip.at(batch_idx)) {
-            continue;
-          }
-          guard.set_batch_idx(batch_idx);
-          aggregate::AggrRowPtr agg_row = ctx.win_col_.aggr_rows_[batch_idx];
-          bool is_null = false; // useless for aggregation function
-          if (OB_FAIL(update_frame(ctx, prev_frame, cur_frame, batch_idx, row_start, whole_frame,
-                                   valid_frame))) {
-            LOG_WARN("update frame failed", K(ret));
-          } else if (OB_UNLIKELY(!valid_frame)) {
-            if (OB_FAIL(AggrExpr::set_result_for_invalid_frame(ctx, agg_row))) {
-              LOG_WARN("set result for invalid frame failed", K(ret));
-            }
-          } else if (prev_frame == cur_frame) {
-            // for aggregate function, same frame means same results
-            // just copy aggr row
-            char *copied_row = (prev_calc_idx == -1 ? agg_expr->last_aggr_row_ :
-                                                      ctx.win_col_.aggr_rows_[prev_calc_idx]);
-            if (OB_FAIL(copy_aggr_row(ctx, copied_row, agg_row))) {
-              LOG_WARN("copy aggr row failed", K(ret));
-            }
-          } else if (whole_frame) {
-            ctx.win_col_.agg_ctx_->removal_info_.reset_for_new_frame();
-            if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx, agg_row, is_null))) {
-              LOG_WARN("eval aggregate function failed", K(ret));
-            }
-          } else if (OB_FAIL(static_cast<Derived *>(this)->accum_process_window(
-                       ctx, cur_frame, prev_frame, row_idx, agg_row, is_null))) {
-            LOG_WARN("increase evaluation function failed", K(ret));
-          }
-          if (OB_FAIL(ret)) {
-          } else {
-            prev_frame = cur_frame;
-            prev_calc_idx = batch_idx;
-          }
-        } // end for
-        if (OB_SUCC(ret) && prev_calc_idx != -1) {
-          agg_expr->last_valid_frame_ = prev_frame;
-          if (row_end < part_end) {
-            agg_expr->last_removal_info_ = ctx.win_col_.agg_ctx_->removal_info_;
-          }
-          int32_t row_size = ctx.win_col_.agg_ctx_->row_meta().row_size_;
-          void *tmp_buf = nullptr;
-          if (agg_expr->last_aggr_row_ != nullptr) {
-            if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], agg_expr->last_aggr_row_))) {
-              LOG_WARN("copy aggr row failed", K(ret));
-            }
-          } else if (OB_ISNULL(tmp_buf = ctx.reserved_buf(row_size))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("allocate memory failed", K(ret));
-          } else if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], (char *)tmp_buf))) {
-            LOG_WARN("copy aggr row failed", K(ret));
-          } else {
-            agg_expr->last_aggr_row_ = (char *)tmp_buf;
-          }
-        }
-      } else {
-        void *extra = nullptr;
-        int32_t non_aggr_row_size = ctx.win_col_.non_aggr_reserved_row_size();
-        bool is_null = false;
-        if (OB_FAIL(static_cast<Derived *>(this)->generate_extra(ctx.allocator_, extra))) {
-          LOG_WARN("generate extra data failed", K(ret));
-        } else {
-          MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
-          ctx.extra_ = extra;
-        }
-        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
-          int32_t batch_idx = row_idx - row_start;
-          if (skip.at(batch_idx)) {
-            continue;
-          }
-          guard.set_batch_idx(batch_idx);
-          is_null = false;
-          char *non_aggr_res = ctx.win_col_.non_aggr_results_ + non_aggr_row_size * batch_idx;
-          if (OB_FAIL(update_frame(ctx, prev_frame, cur_frame, batch_idx, row_start, whole_frame,
-                                   valid_frame))) {
-            LOG_WARN("update frame failed", K(ret));
-          } else if (OB_UNLIKELY(!valid_frame)) {
-            is_null = true;
-          } else if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx,
-                                                                          non_aggr_res, is_null))) {
-            LOG_WARN("process window failed", K(ret));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (is_null) {
-            ctx.win_col_.null_nonaggr_results_->set(batch_idx);
-          }
-        } // end for
-      }
-      // collect partition results
-      if (OB_SUCC(ret)) {
-        ObExpr *wf_expr = ctx.win_col_.wf_info_.expr_;
-        ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(static_cast<Derived *>(this)->collect_part_results(ctx, row_start,
-                                                                              row_end, skip))) {
-          LOG_WARN("collect partition results failed", K(ret));
-        }
-      }
-    }
-  return ret;
-}
-
-template <typename Derived>
-int WinExprWrapper<Derived>::update_frame(WinExprEvalCtx &ctx, const Frame &prev_frame,
-                                          Frame &new_frame, const int64_t idx,
-                                          const int64_t row_start, bool &whole_frame,
-                                          bool &valid_frame)
-{
-  int ret = OB_SUCCESS;
-  int64_t part_first_idx = ctx.win_col_.part_first_row_idx_;
-  int64_t part_end_idx = ctx.win_col_.op_.get_part_end_idx();
-  int64_t *upper_pos_arr = ctx.win_col_.op_.batch_ctx_.upper_pos_arr_;
-  int64_t *lower_pos_arr = ctx.win_col_.op_.batch_ctx_.lower_pos_arr_;
-  Frame part_frame(part_first_idx, part_end_idx);
-  new_frame.head_ = upper_pos_arr[idx];
-  new_frame.tail_ = lower_pos_arr[idx];
-  valid_frame = true;
-  whole_frame = true;
-  const ObWindowFunctionVecSpec &spec = static_cast<const ObWindowFunctionVecSpec &>(ctx.win_col_.op_.get_spec());
-  if (OB_UNLIKELY(new_frame.head_ == INT64_MAX || new_frame.tail_ == INT64_MAX)) {
-    LOG_DEBUG("invalid frame", K(new_frame));
-    valid_frame = false;
-  } else if (FALSE_IT(valid_frame = Frame::valid_frame(part_frame, new_frame))) {
-  } else if (!valid_frame) {
-  } else if (spec.single_part_parallel_) {
-    // whole frame, no need to update
-  } else {
-    Frame::prune_frame(part_frame, new_frame);
-    if (static_cast<Derived *>(this)->is_aggregate_expr()) {
-      bool can_inv = (ctx.win_col_.wf_info_.remove_type_ != common::REMOVE_INVALID);
-      aggregate::Processor *processor  = reinterpret_cast<AggrExpr *>(this)->aggr_processor_;
-      if (prev_frame.is_valid()
-          && !Frame::need_restart_aggr(can_inv, prev_frame, new_frame,
-                                       ctx.win_col_.agg_ctx_->removal_info_,
-                                       ctx.win_col_.wf_info_.remove_type_)) {
-        whole_frame = false;
-      }
-    }
-  }
-  LOG_DEBUG("update frame", K(ret), K(valid_frame), K(prev_frame), K(new_frame), K(idx),
-            K(whole_frame), K(ctx.win_col_.wf_info_.remove_type_));
-  return ret;
-}
-
-template<typename Derived>
-int WinExprWrapper<Derived>::copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row)
-{
-  int ret = OB_SUCCESS;
-  aggregate::RuntimeContext *agg_ctx = ctx.win_col_.agg_ctx_;
-  MEMCPY(dst_row, src_row, ctx.win_col_.agg_ctx_->row_meta().row_size_);
-  if (!agg_ctx->row_meta().is_var_len(0)) {// do nothing
-  } else {
-    int32_t cell_len = agg_ctx->row_meta().get_cell_len(0, dst_row);
-    int64_t &payload_addr =
-      *reinterpret_cast<int64_t *>(agg_ctx->row_meta().locate_cell_payload(0, dst_row));
-    const char *payload = reinterpret_cast<const char *>(payload_addr);
-    bool is_not_null = agg_ctx->row_meta().locate_notnulls_bitmap(dst_row).at(0);
-
-    if (OB_LIKELY(is_not_null && cell_len > 0)) {
-      void *tmp_buf = ctx.reserved_buf(cell_len);
-      if (OB_ISNULL(tmp_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        MEMCPY(tmp_buf, payload, cell_len);
-        payload_addr = reinterpret_cast<int64_t>(tmp_buf);
-      }
-    } else {
-      payload_addr = 0;
-    }
-  }
-  return ret;
-}
 
 int NonAggrWinExpr::eval_param_int_value(ObExpr *param, ObEvalCtx &ctx, const bool need_check_valid,
                                          const bool need_nmb, ParamStatus &status)
@@ -450,100 +242,6 @@ int NonAggrWinExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_
     LOG_WARN("collect part results failed", K(ret));
   } else {
     non_agg_expr->set_evaluated_projected(eval_ctx);
-  }
-  return ret;
-}
-
-template <ObItemType rank_op>
-int RankLikeExpr<rank_op>::process_window(WinExprEvalCtx &ctx, const Frame &frame,
-                                          const int64_t row_idx, char *res, bool &is_null)
-{
-  int ret = OB_SUCCESS;
-  bool equal_with_prev_row = false;
-  is_null = false;
-  if (row_idx != frame.head_) {
-    int cmp_ret = 0;
-    if (OB_FAIL(cmp_prev_row(ctx, row_idx, cmp_ret))) {
-      LOG_WARN("compare previous row failed", K(ret));
-    } else {
-      equal_with_prev_row = (cmp_ret == 0);
-    }
-  } else {
-    // reset rank
-    rank_of_prev_row_ = 0;
-  }
-  if (OB_SUCC(ret)) {
-    int64_t rank = -1;
-    if (equal_with_prev_row) {
-      rank = rank_of_prev_row_;
-    } else if (rank_op == T_WIN_FUN_RANK || rank_op == T_WIN_FUN_PERCENT_RANK) {
-      rank = row_idx - frame.head_ + 1;
-    } else if (rank_op == T_WIN_FUN_DENSE_RANK) {
-      rank = rank_of_prev_row_ + 1;
-    }
-    LOG_DEBUG("calculate rank result", K(rank_op), K(rank), K(frame));
-    if (rank_op == T_WIN_FUN_PERCENT_RANK) {
-      if (ob_is_number_tc(ctx.win_col_.wf_info_.expr_->datum_meta_.type_)) {
-        // in mysql mode, percent rank may return double
-        if (0 == frame.tail_ - frame.head_ - 1) {
-          number::ObNumber zero_nmb;
-          zero_nmb.set_zero();
-          MEMCPY(res, &(zero_nmb.d_), sizeof(ObNumberDesc));
-        } else {
-          number::ObNumber numerator;
-          number::ObNumber denominator;
-          number::ObNumber res_nmb;
-          ObNumStackAllocator<3> tmp_alloc;
-          if (OB_FAIL(numerator.from(rank - 1, tmp_alloc))) {
-            LOG_WARN("failed to build number from int64_t", K(ret));
-          } else if (OB_FAIL(denominator.from(frame.tail_ - frame.head_ - 1, tmp_alloc))) {
-            LOG_WARN("failed to build number from int64_t", K(ret));
-          } else if (OB_FAIL(numerator.div(denominator, res_nmb, tmp_alloc))) {
-            LOG_WARN("failed to div number", K(ret));
-          } else {
-            number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(res);
-            res_cnum->desc_ = res_nmb.d_;
-            MEMCPY(&(res_cnum->digits_[0]), res_nmb.get_digits(), sizeof(uint32_t) * res_nmb.d_.len_);
-          }
-        }
-      } else if (ObDoubleType == ctx.win_col_.wf_info_.expr_->datum_meta_.type_) {
-        if (0 == frame.tail_ - frame.head_ - 1) {
-          *reinterpret_cast<double *>(res) = 0;
-        } else {
-          double numerator = static_cast<double>(rank - 1);
-          double denominator= static_cast<double>(frame.tail_ - frame.head_ - 1);
-          *reinterpret_cast<double *>(res) = (numerator / denominator);
-        }
-      }
-    } else if (lib::is_oracle_mode()) {
-      number::ObNumber res_nmb;
-      ObNumStackAllocator<1> tmp_alloc;
-      if (OB_FAIL(res_nmb.from(rank, tmp_alloc))) {
-        LOG_WARN("failed to build number from int64_t", K(ret));
-      } else {
-        MEMCPY(res, &(res_nmb.d_), sizeof(ObNumberDesc));
-        MEMCPY(res + sizeof(ObNumberDesc), res_nmb.get_digits(),
-               sizeof(uint32_t) * res_nmb.d_.len_);
-      }
-    } else {
-      *reinterpret_cast<int64_t *>(res) = rank;
-    }
-    if (OB_SUCC(ret)) {
-      rank_of_prev_row_ = rank;
-    }
-  }
-  return ret;
-}
-
-template<ObItemType rank_op>
-int RankLikeExpr<rank_op>::generate_extra(ObIAllocator &allocator, void *&extra)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(extra = allocator.alloc(sizeof(int64_t)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else {
-    *reinterpret_cast<int64_t *>(extra) = 0;
   }
   return ret;
 }
@@ -1128,6 +826,12 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       }
     }
   } // end while
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(aggr_processor_->advance_collect_result(eval_ctx.get_batch_idx(),
+                                                        ctx.win_col_.wf_res_row_meta_, agg_row))) {
+      LOG_WARN("advance collect failed", K(ret));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (aggregate::agg_res_not_null(ctx.win_col_.wf_info_.func_type_)) {
     ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).set(0);
@@ -1303,45 +1007,6 @@ int AggrExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
   return ret;
 }
 
-template <typename ColumnFmt>
-int AggrExpr::set_payload(WinExprEvalCtx &ctx, ColumnFmt *columns, const int64_t idx,
-                          const char *payload, int32_t len)
-{
-  int ret = OB_SUCCESS;
-  ObExpr *res_expr = ctx.win_col_.wf_info_.expr_;
-  VecValueTypeClass vec_tc = res_expr->get_vec_value_tc();
-  ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
-  const ObWindowFunctionVecSpec &spec = static_cast<const ObWindowFunctionVecSpec &>(ctx.win_col_.op_.get_spec());
-  // guard used for `get_str_res_mem`
-  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
-  guard.set_batch_idx(idx);
-  // count function in consolidator is T_FUN_COUNT, not T_FUN_COUNT_SUM!!!
-  bool is_count_sum = (T_FUN_COUNT == ctx.win_col_.wf_info_.func_type_ && spec.is_consolidator());
-  if (T_FUN_COUNT != ctx.win_col_.wf_info_.func_type_ || is_count_sum || lib::is_mysql_mode()) {
-    if (is_fixed_length_vec(vec_tc)) {
-      columns->set_payload(idx, payload, len);
-    } else if (vec_tc == VEC_TC_NUMBER) {
-      columns->set_number(idx, *reinterpret_cast<const number::ObCompactNumber *>(payload));
-    } else {
-      char *res_buf = res_expr->get_str_res_mem(eval_ctx, len);
-      if (OB_ISNULL(res_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        MEMCPY(res_buf, payload, len);
-        columns->set_payload_shallow(idx, res_buf, len);
-      }
-    }
-  } else {
-    number::ObNumber res_nmb;
-    if (OB_FAIL(res_nmb.from(*reinterpret_cast<const int64_t *>(payload), ctx.allocator_))) {
-      LOG_WARN("cast to number failed", K(ret));
-    } else {
-      columns->set_number(idx, res_nmb);
-    }
-  }
-  return ret;
-}
 // >>>>>>>> helper functions
 int eval_bound_exprs(WinExprEvalCtx &ctx, const int64_t row_start, const int64_t batch_size,
                      const ObBitVector &skip, const bool is_upper)
@@ -2501,6 +2166,213 @@ struct dec_int_trunc
   }
 };
 
+template <typename Derived>
+int WinExprWrapper<Derived>::update_frame(WinExprEvalCtx &ctx, const Frame &prev_frame,
+                                          Frame &new_frame, const int64_t idx,
+                                          const int64_t row_start, bool &whole_frame,
+                                          bool &valid_frame)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_first_idx = ctx.win_col_.part_first_row_idx_;
+  int64_t part_end_idx = ctx.win_col_.op_.get_part_end_idx();
+  int64_t *upper_pos_arr = ctx.win_col_.op_.batch_ctx_.upper_pos_arr_;
+  int64_t *lower_pos_arr = ctx.win_col_.op_.batch_ctx_.lower_pos_arr_;
+  Frame part_frame(part_first_idx, part_end_idx);
+  new_frame.head_ = upper_pos_arr[idx];
+  new_frame.tail_ = lower_pos_arr[idx];
+  valid_frame = true;
+  whole_frame = true;
+  const ObWindowFunctionVecSpec &spec = static_cast<const ObWindowFunctionVecSpec &>(ctx.win_col_.op_.get_spec());
+  if (OB_UNLIKELY(new_frame.head_ == INT64_MAX || new_frame.tail_ == INT64_MAX)) {
+    LOG_DEBUG("invalid frame", K(new_frame));
+    valid_frame = false;
+  } else if (FALSE_IT(valid_frame = Frame::valid_frame(part_frame, new_frame))) {
+  } else if (!valid_frame) {
+  } else if (spec.single_part_parallel_) {
+    // whole frame, no need to update
+  } else {
+    Frame::prune_frame(part_frame, new_frame);
+    if (static_cast<Derived *>(this)->is_aggregate_expr()) {
+      bool can_inv = (ctx.win_col_.wf_info_.remove_type_ != common::REMOVE_INVALID);
+      aggregate::Processor *processor  = reinterpret_cast<AggrExpr *>(this)->aggr_processor_;
+      if (prev_frame.is_valid()
+          && !Frame::need_restart_aggr(can_inv, prev_frame, new_frame,
+                                       ctx.win_col_.agg_ctx_->removal_info_,
+                                       ctx.win_col_.wf_info_.remove_type_)) {
+        whole_frame = false;
+      }
+    }
+  }
+  LOG_DEBUG("update frame", K(ret), K(valid_frame), K(prev_frame), K(new_frame), K(idx),
+            K(whole_frame), K(ctx.win_col_.wf_info_.remove_type_));
+  return ret;
+}
+
+template<typename Derived>
+int WinExprWrapper<Derived>::copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row)
+{
+  int ret = OB_SUCCESS;
+  aggregate::RuntimeContext *agg_ctx = ctx.win_col_.agg_ctx_;
+  MEMCPY(dst_row, src_row, ctx.win_col_.agg_ctx_->row_meta().row_size_);
+  if (!agg_ctx->row_meta().is_var_len(0)) {// do nothing
+  } else {
+    int32_t cell_len = agg_ctx->row_meta().get_cell_len(0, dst_row);
+    int64_t &payload_addr =
+      *reinterpret_cast<int64_t *>(agg_ctx->row_meta().locate_cell_payload(0, dst_row));
+    const char *payload = reinterpret_cast<const char *>(payload_addr);
+    bool is_not_null = agg_ctx->row_meta().locate_notnulls_bitmap(dst_row).at(0);
+
+    if (OB_LIKELY(is_not_null && cell_len > 0)) {
+      void *tmp_buf = ctx.reserved_buf(cell_len);
+      if (OB_ISNULL(tmp_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMCPY(tmp_buf, payload, cell_len);
+        payload_addr = reinterpret_cast<int64_t>(tmp_buf);
+      }
+    } else {
+      payload_addr = 0;
+    }
+  }
+  return ret;
+}
+
+// WinExprHelper
+template <typename Derived>
+int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
+                                               const int64_t part_end, const int64_t row_start,
+                                               const int64_t row_end, const ObBitVector &skip)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(part_start > row_start || part_end < row_end)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition", K(part_start), K(part_end), K(row_start), K(row_end));
+    } else if (OB_UNLIKELY(part_start >= part_end || row_start >= row_end)) {
+      LOG_DEBUG("empty partition", K(part_start), K(part_end), K(row_start), K(row_end));
+    } else {
+      const ObCompactRow *prev_row = nullptr, *cur_row = nullptr;
+      Frame prev_frame, cur_frame;
+      bool whole_frame = true, valid_frame = true;
+      ObEvalCtx::BatchInfoScopeGuard guard(ctx.win_col_.op_.get_eval_ctx());
+      guard.set_batch_size(row_end - row_start);
+      if (OB_FAIL(eval_bound_exprs(ctx, row_start, row_end - row_start, skip, true))) {
+        LOG_WARN("eval upper bound failed", K(ret));
+      } else if (OB_FAIL(eval_bound_exprs(ctx, row_start, row_end-row_start, skip, false))) {
+        LOG_WARN("eval lower bound failed", K(ret));
+      } else if (is_aggregate_expr()) {
+        AggrExpr *agg_expr = reinterpret_cast<AggrExpr *>(this);
+        prev_frame = agg_expr->last_valid_frame_;
+        if (row_start  > part_start) {
+          ctx.win_col_.agg_ctx_->removal_info_ = agg_expr->last_removal_info_;
+        }
+        // TODO: maybe prefetch agg rows is a good idea
+        int prev_calc_idx = -1;
+        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
+          int32_t batch_idx = row_idx - row_start;
+          if (skip.at(batch_idx)) {
+            continue;
+          }
+          guard.set_batch_idx(batch_idx);
+          aggregate::AggrRowPtr agg_row = ctx.win_col_.aggr_rows_[batch_idx];
+          bool is_null = false; // useless for aggregation function
+          if (OB_FAIL(update_frame(ctx, prev_frame, cur_frame, batch_idx, row_start, whole_frame,
+                                   valid_frame))) {
+            LOG_WARN("update frame failed", K(ret));
+          } else if (OB_UNLIKELY(!valid_frame)) {
+            if (OB_FAIL(AggrExpr::set_result_for_invalid_frame(ctx, agg_row))) {
+              LOG_WARN("set result for invalid frame failed", K(ret));
+            }
+          } else if (prev_frame == cur_frame) {
+            // for aggregate function, same frame means same results
+            // just copy aggr row
+            char *copied_row = (prev_calc_idx == -1 ? agg_expr->last_aggr_row_ :
+                                                      ctx.win_col_.aggr_rows_[prev_calc_idx]);
+            if (OB_FAIL(copy_aggr_row(ctx, copied_row, agg_row))) {
+              LOG_WARN("copy aggr row failed", K(ret));
+            }
+          } else if (whole_frame) {
+            ctx.win_col_.agg_ctx_->removal_info_.reset_for_new_frame();
+            if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx, agg_row, is_null))) {
+              LOG_WARN("eval aggregate function failed", K(ret));
+            }
+          } else if (OB_FAIL(static_cast<Derived *>(this)->accum_process_window(
+                       ctx, cur_frame, prev_frame, row_idx, agg_row, is_null))) {
+            LOG_WARN("increase evaluation function failed", K(ret));
+          }
+          if (OB_FAIL(ret)) {
+          } else {
+            prev_frame = cur_frame;
+            prev_calc_idx = batch_idx;
+          }
+        } // end for
+        if (OB_SUCC(ret) && prev_calc_idx != -1) {
+          agg_expr->last_valid_frame_ = prev_frame;
+          if (row_end < part_end) {
+            agg_expr->last_removal_info_ = ctx.win_col_.agg_ctx_->removal_info_;
+          }
+          int32_t row_size = ctx.win_col_.agg_ctx_->row_meta().row_size_;
+          void *tmp_buf = nullptr;
+          if (agg_expr->last_aggr_row_ != nullptr) {
+            if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], agg_expr->last_aggr_row_))) {
+              LOG_WARN("copy aggr row failed", K(ret));
+            }
+          } else if (OB_ISNULL(tmp_buf = ctx.reserved_buf(row_size))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], (char *)tmp_buf))) {
+            LOG_WARN("copy aggr row failed", K(ret));
+          } else {
+            agg_expr->last_aggr_row_ = (char *)tmp_buf;
+          }
+        }
+      } else {
+        void *extra = nullptr;
+        int32_t non_aggr_row_size = ctx.win_col_.non_aggr_reserved_row_size();
+        bool is_null = false;
+        if (OB_FAIL(static_cast<Derived *>(this)->generate_extra(ctx.allocator_, extra))) {
+          LOG_WARN("generate extra data failed", K(ret));
+        } else {
+          MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
+          ctx.extra_ = extra;
+        }
+        for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
+          int32_t batch_idx = row_idx - row_start;
+          if (skip.at(batch_idx)) {
+            continue;
+          }
+          guard.set_batch_idx(batch_idx);
+          is_null = false;
+          char *non_aggr_res = ctx.win_col_.non_aggr_results_ + non_aggr_row_size * batch_idx;
+          if (OB_FAIL(update_frame(ctx, prev_frame, cur_frame, batch_idx, row_start, whole_frame,
+                                   valid_frame))) {
+            LOG_WARN("update frame failed", K(ret));
+          } else if (OB_UNLIKELY(!valid_frame)) {
+            is_null = true;
+          } else if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx,
+                                                                          non_aggr_res, is_null))) {
+            LOG_WARN("process window failed", K(ret));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (is_null) {
+            ctx.win_col_.null_nonaggr_results_->set(batch_idx);
+          }
+        } // end for
+      }
+      // collect partition results
+      if (OB_SUCC(ret)) {
+        ObExpr *wf_expr = ctx.win_col_.wf_info_.expr_;
+        ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(static_cast<Derived *>(this)->collect_part_results(ctx, row_start,
+                                                                              row_end, skip))) {
+          LOG_WARN("collect partition results failed", K(ret));
+        }
+      }
+    }
+  return ret;
+}
+
 template<>
 struct int_trunc<VEC_TC_DEC_INT32>: public dec_int_trunc<int32_t>{};
 
@@ -2515,6 +2387,52 @@ struct int_trunc<VEC_TC_DEC_INT256>: public dec_int_trunc<int256_t>{};
 
 template<>
 struct int_trunc<VEC_TC_DEC_INT512>: public dec_int_trunc<int512_t>{};
+
+ObObjType RankLikeExpr_process_window_helper(WinExprEvalCtx &ctx)
+{
+  return ctx.win_col_.wf_info_.expr_->datum_meta_.type_;
+}
+
+template <typename ColumnFmt>
+int AggrExpr::set_payload(WinExprEvalCtx &ctx, ColumnFmt *columns, const int64_t idx,
+                          const char *payload, int32_t len)
+{
+  int ret = OB_SUCCESS;
+  ObExpr *res_expr = ctx.win_col_.wf_info_.expr_;
+  VecValueTypeClass vec_tc = res_expr->get_vec_value_tc();
+  ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
+  const ObWindowFunctionVecSpec &spec = static_cast<const ObWindowFunctionVecSpec &>(ctx.win_col_.op_.get_spec());
+  // guard used for `get_str_res_mem`
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
+  guard.set_batch_idx(idx);
+  // count function in consolidator is T_FUN_COUNT, not T_FUN_COUNT_SUM!!!
+  bool is_count_sum = (T_FUN_COUNT == ctx.win_col_.wf_info_.func_type_ && spec.is_consolidator());
+  if (T_FUN_COUNT != ctx.win_col_.wf_info_.func_type_ || is_count_sum || lib::is_mysql_mode()) {
+    if (is_fixed_length_vec(vec_tc)) {
+      columns->set_payload(idx, payload, len);
+    } else if (vec_tc == VEC_TC_NUMBER) {
+      columns->set_number(idx, *reinterpret_cast<const number::ObCompactNumber *>(payload));
+    } else {
+      char *res_buf = res_expr->get_str_res_mem(eval_ctx, len);
+      if (OB_ISNULL(res_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMCPY(res_buf, payload, len);
+        columns->set_payload_shallow(idx, res_buf, len);
+      }
+    }
+  } else {
+    number::ObNumber res_nmb;
+    if (OB_FAIL(res_nmb.from(*reinterpret_cast<const int64_t *>(payload), ctx.allocator_))) {
+      LOG_WARN("cast to number failed", K(ret));
+    } else {
+      columns->set_number(idx, res_nmb);
+    }
+  }
+  return ret;
+}
+
 } // end winfunc
 } // end sql
 } // end oceanbase

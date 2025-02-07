@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
+#include "storage/tx/ob_xa_define.h"
 #include "share/schema/ob_schema_printer.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -158,6 +159,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROFILE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_PROCEDURE_CODE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_FUNCTION_CODE)
+            && OB_UNLIKELY(parse_tree.type_ != T_XA_RECOVER)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_ENGINE)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_OPEN_TABLES)
             && OB_UNLIKELY(parse_tree.type_ != T_SHOW_CREATE_USER)
@@ -1780,6 +1782,41 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }();
         break;
       }
+      case T_XA_RECOVER: {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "xa recover in oracle mode is");
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong",
+                K(ret),
+                K(parse_tree.num_child_),
+                K(parse_tree.children_));
+          } else {
+            if(parse_tree.children_[0] == NULL) {
+                  GEN_SQL_STEP_1(ObShowSqlSet::XA_RECOVER);
+                  GEN_SQL_STEP_2(ObShowSqlSet::XA_RECOVER,
+                                 OB_SYS_DATABASE_NAME,
+                                 OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TNAME,
+                                 transaction::ObXATransState::PREPARED);
+            } else {
+              if(parse_tree.children_[0]->value_ != 0) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("parse tree is wrong",
+                  K(ret),
+                  K(parse_tree.num_child_),
+                  K(parse_tree.children_));
+              } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::XA_RECOVER_CONVERT_XID);
+                  GEN_SQL_STEP_2(ObShowSqlSet::XA_RECOVER_CONVERT_XID,
+                                 OB_SYS_DATABASE_NAME,
+                                 OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TNAME,
+                                 transaction::ObXATransState::PREPARED);
+              }
+            }
+          }
+        break;
+      }
       default:
         /* won't be here */
         ret = OB_NOT_IMPLEMENT;
@@ -2349,7 +2386,9 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
                   LOG_WARN("table not exists", K(ret), K(show_table_name));
                 }
               } else {
-                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(show_database_name), to_cstring(show_table_name));
+                ObCStringHelper helper;
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(show_database_name),
+                    helper.convert(show_table_name));
               }
             }
           } else {
@@ -2435,7 +2474,8 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
     } else if (T_SHOW_CREATE_VIEW == node_type &&
                !table_schema->is_view_table()) {
       ret = OB_ERR_WRONG_OBJECT;
-      LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(show_database_name), to_cstring(show_table_name), "VIEW");
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(show_database_name), helper.convert(show_table_name), "VIEW");
     } else if ((T_SHOW_COLUMNS == node_type) && table_schema->is_materialized_view()) {
       show_table_id = table_schema->get_data_table_id();
     } else {
@@ -3572,7 +3612,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES,
         
 DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, 
                        NULL, 
-                       "SELECT response_time as RESPONSE_TIME, count as COUNT, total as TOTAL FROM %s.%s where tenant_id = %lu", 
+                       "SELECT response_time as RESPONSE_TIME, sum(count) as COUNT, sum(total) as TOTAL FROM %s.%s where tenant_id = %lu group by response_time",
                        NULL, 
                        NULL);
 
@@ -3781,6 +3821,16 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS,
                        "(SELECT R.job_name AS 'job_id', R.database_name AS 'schema_name', CASE WHEN R.status = 'COMPLETED' AND R.message = 'SUCCESS' THEN 'FINISH' WHEN R.status = 'COMPLETED' AND R.message <> 'SUCCESS' THEN 'FAILED' WHEN R.status = 'KILLED' THEN 'CANCELLED' ELSE R.status END as 'status', R.message as 'fail_msg', R.req_start_date as 'create_time', R.time as 'update_time', R.operation AS 'definition' FROM %s.%s R WHERE R.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' %s %s\
                         UNION ALL\
                         SELECT T.job_name AS 'job_id', T.cowner AS 'schema_name', CASE WHEN T.state IS NULL THEN 'SUBMITTED' WHEN T.state = 'SCHEDULED' THEN 'RUNNING' WHEN T.state = 'KILLED' THEN 'CANCELLED' ELSE T.state END as 'status', NULL as fail_msg, T.start_date as 'create_time', T.gmt_modified as 'update_time', T.job_action as 'definition'  FROM %s.%s T WHERE T.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' AND T.TENANT_ID = %d AND T.JOB > 0 %s %s) %s",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(XA_RECOVER,
+                       NULL,
+                       "SELECT format_id as formatID, length(gtrid) as gtrid_length, length(bqual) as bqual_length, concat(gtrid,bqual) as data from %s.%s where state =  %ld",
+                       NULL,
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(XA_RECOVER_CONVERT_XID,
+                       NULL,
+                       "SELECT format_id as formatID, length(gtrid) as gtrid_length, length(bqual) as bqual_length, concat('0x',hex(concat(gtrid,bqual))) as data from %s.%s where state = %ld",
                        NULL,
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_USER,

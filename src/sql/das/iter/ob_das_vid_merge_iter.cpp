@@ -45,6 +45,7 @@ ObDASVIdMergeIterParam::~ObDASVIdMergeIterParam()
 ObDASVIdMergeIter::ObDASVIdMergeIter()
   : ObDASIter(),
     need_filter_rowkey_vid_(true),
+    is_block_sample_(false),
     rowkey_vid_scan_param_(),
     rowkey_vid_iter_(nullptr),
     data_table_iter_(nullptr),
@@ -171,9 +172,6 @@ int ObDASVIdMergeIter::inner_reuse()
       LOG_WARN("fail to reuse rowkey vid iter", K(ret));
     }
   }
-  if (OB_NOT_NULL(merge_memctx_)) {
-    merge_memctx_->reset_remain_one_page();
-  }
   return ret;
 }
 
@@ -190,6 +188,7 @@ int ObDASVIdMergeIter::inner_release()
   data_table_iter_ = nullptr;
   rowkey_vid_iter_ = nullptr;
   need_filter_rowkey_vid_ = true;
+  is_block_sample_ = false;
   return ret;
 }
 
@@ -282,7 +281,9 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.trans_desc_ = trans_desc;
     }
     if (OB_NOT_NULL(snapshot)) {
-      rowkey_vid_scan_param_.snapshot_ = *snapshot;
+      if (OB_FAIL(rowkey_vid_scan_param_.snapshot_.assign(*snapshot))) {
+        LOG_WARN("assign snapshot fail", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null snapshot", K(ret), KPC(ctdef), KPC(rtdef));
@@ -296,11 +297,12 @@ int ObDASVIdMergeIter::init_rowkey_vid_scan_param(
       rowkey_vid_scan_param_.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     rowkey_vid_scan_param_.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (OB_FAIL(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
+    if (FAILEDx(rowkey_vid_scan_param_.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }
     if (rtdef->sample_info_ != nullptr) {
       rowkey_vid_scan_param_.sample_info_ = *rtdef->sample_info_;
+      is_block_sample_ = (rowkey_vid_scan_param_.sample_info_.method_ != common::SampleInfo::NO_SAMPLE);
     }
   }
 
@@ -341,8 +343,15 @@ int ObDASVIdMergeIter::build_rowkey_vid_range()
       need_filter_rowkey_vid_ = true;
     }
     rowkey_vid_scan_param_.sample_info_ = data_table_iter_->get_scan_param().sample_info_;
+    // try to reset sample info to row sample here
+    if (rowkey_vid_scan_param_.sample_info_.method_ == common::SampleInfo::BLOCK_SAMPLE) {
+      data_table_iter_->get_scan_param().sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
+      rowkey_vid_scan_param_.sample_info_.method_ = common::SampleInfo::ROW_SAMPLE;
+    }
+    is_block_sample_ = (rowkey_vid_scan_param_.sample_info_.method_ != common::SampleInfo::NO_SAMPLE);
+    rowkey_vid_scan_param_.scan_flag_.scan_order_ = data_table_iter_->get_scan_param().scan_flag_.scan_order_;
   }
-  LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(rowkey_vid_scan_param_.key_ranges_),
+  LOG_INFO("build rowkey vid range", K(ret), K(need_filter_rowkey_vid_), K(is_block_sample_), K(rowkey_vid_scan_param_.key_ranges_),
       K(rowkey_vid_scan_param_.ss_key_ranges_), K(rowkey_vid_scan_param_.sample_info_));
   return ret;
 }
@@ -351,7 +360,15 @@ int ObDASVIdMergeIter::concat_row()
 {
   int ret = OB_SUCCESS;
   int64_t vid_id;
-  if (OB_FAIL(data_table_iter_->get_next_row())) {
+  if (is_block_sample_) {
+    if (OB_FAIL(data_table_iter_->get_next_row())) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("fail to get next rows", K(ret));
+      }
+    } else if (OB_FAIL(fill_vid_id_in_data_table(vid_id, true))) {
+      LOG_WARN("fail to fill null vid id in data table", K(ret), K(vid_id));
+    }
+  } else if (OB_FAIL(data_table_iter_->get_next_row())) {
     if (OB_ITER_END == ret) {
       if (OB_FAIL(rowkey_vid_iter_->get_next_row())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -365,6 +382,7 @@ int ObDASVIdMergeIter::concat_row()
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row count isn't equal between data table and rowkey doc", K(ret), K(rowkey),
+              K(is_block_sample_),
               K(rowkey_vid_iter_->get_scan_param()), K(data_table_iter_->get_scan_param()));
         }
       }
@@ -394,10 +412,22 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
     }
   }
   if (OB_FAIL(ret) && ret != OB_ITER_END) {
+  } else if (is_block_sample_) {
+    int tmp_ret = ret;
+    ret = OB_SUCCESS;
+    for (int64_t i = 0; i < data_row_cnt && OB_SUCC(ret); i++) {
+      if (OB_FAIL(vid_ids.push_back(0))) {
+        LOG_WARN("fail to push back mock vid into array", K(ret), K(i), K(data_row_cnt));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret; // recover when succ
+    }
   } else { // whatever succ or iter_end, we should get from rowkey_vid_iter
     bool expect_iter_end = (ret == OB_ITER_END);
-    int real_cap = (data_row_cnt > 0 && !expect_iter_end) ? data_row_cnt : capacity;
+    int64_t real_cap = (data_row_cnt > 0 && !expect_iter_end) ? data_row_cnt : capacity;
     ret = OB_SUCCESS; // recover ret from iter end
+    LOG_TRACE("[vec index debug] start to get vid, show real cap", K(real_cap));
     while (OB_SUCC(ret) && (real_cap > 0 || expect_iter_end)) {
       rowkey_vid_row_cnt = 0;
       if (OB_FAIL(rowkey_vid_iter_->get_next_rows(rowkey_vid_row_cnt, real_cap))) {
@@ -406,7 +436,7 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
         }
       }
       if (OB_FAIL(ret) && OB_ITER_END != ret) {
-      } else if (rowkey_vid_row_cnt > 0) {
+      } else if (rowkey_vid_row_cnt > 0 && real_cap > 0) {
         const int tmp_ret = ret;
         if (OB_FAIL(get_vid_ids(rowkey_vid_row_cnt, rowkey_vid_ctdef_, rowkey_vid_rtdef_, vid_ids))) {
           LOG_WARN("fail to get vid ids", K(ret), K(count));
@@ -414,25 +444,32 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
           ret = tmp_ret;
         }
       }
-      real_cap -= rowkey_vid_row_cnt;
+      if (real_cap >= rowkey_vid_row_cnt) {
+        real_cap -= rowkey_vid_row_cnt;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get so much vid from rowkey_vid_iter", K(ret), K(real_cap), K(data_row_cnt), K(rowkey_vid_row_cnt), K(vid_ids.count()));
+      }
+      LOG_TRACE("[vec index debug] finish one round, show real cap", K(real_cap), K(rowkey_vid_row_cnt), K(vid_ids.count()));
     }
+    LOG_TRACE("[vec index debug] finish all read show real cap", K(real_cap), K(vid_ids.count()));
     if (expect_iter_end && ret != OB_ITER_END) {
       int tmp_ret = ret;
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row count isn't equal between data table and rowkey vid",
-                K(ret), K(tmp_ret), K(capacity), K(vid_ids.count()), K(data_row_cnt));
+                K(ret), K(is_block_sample_), K(tmp_ret), K(capacity), K(vid_ids.count()), K(data_row_cnt));
     }
   }
   if (OB_FAIL(ret) && OB_ITER_END != ret) {
   } else if (OB_UNLIKELY(data_row_cnt != vid_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The row count of data table isn't equal to rowkey vid", K(ret), K(data_row_cnt), K(vid_ids),
-        K(data_table_iter_->get_scan_param()), K(rowkey_vid_iter_->get_scan_param()));
+        K(is_block_sample_), K(data_table_iter_->get_scan_param()), K(rowkey_vid_iter_->get_scan_param()));
   } else {
     count = data_row_cnt;
     if (count > 0 && data_table_ctdef_->vec_vid_idx_ != -1) {
       const int tmp_ret = ret;
-      if (OB_FAIL(fill_vid_ids_in_data_table(vid_ids))) {
+      if (OB_FAIL(fill_vid_ids_in_data_table(vid_ids, is_block_sample_))) {
         LOG_WARN("fail to fill vid ids in data table", K(ret), K(tmp_ret), K(vid_ids));
       } else {
         ret = tmp_ret;
@@ -440,7 +477,7 @@ int ObDASVIdMergeIter::concat_rows(int64_t &count, int64_t capacity)
     }
   }
   LOG_TRACE("concat rows in data table and rowkey vid", K(ret), K(data_row_cnt), K(vid_ids), K(count),
-      K(capacity));
+      K(capacity), K(is_block_sample_));
   return ret;
 }
 
@@ -451,6 +488,14 @@ int ObDASVIdMergeIter::sorted_merge_join_row()
   common::ObRowkey data_table_rowkey;
   if (OB_FAIL(data_table_iter_->get_next_row()) && OB_ITER_END != ret) {
     LOG_WARN("fail to get next data table row", K(ret));
+  } else if (is_block_sample_) {
+    if (ret == OB_ITER_END) { // do nothing
+    } else {
+      int64_t vid_id = 0;
+      if (OB_FAIL(fill_vid_id_in_data_table(vid_id, true))) {
+        LOG_WARN("fail to fill null vid id in data table", K(ret), K(vid_id));
+      }
+    }
   } else if (OB_ITER_END == ret) {
     while (OB_SUCC(rowkey_vid_iter_->get_next_row()));
     if (OB_ITER_END != ret) {
@@ -467,7 +512,7 @@ int ObDASVIdMergeIter::sorted_merge_join_row()
         LOG_WARN("fail to get next rowkey vid row", K(ret));
       } else if (OB_FAIL(get_rowkey(allocator, rowkey_vid_ctdef_, rowkey_vid_rtdef_, rowkey_vid_rowkey))) {
         LOG_WARN("fail to get rowkey vid rowkey");
-      } else if (rowkey_vid_rowkey.equal(data_table_rowkey, is_found)) {
+      } else if (OB_FAIL(rowkey_vid_rowkey.equal(data_table_rowkey, is_found))) {
         LOG_WARN("fail to equal rowkey between data table and rowkey", K(ret));
       }
       LOG_TRACE("compare one row in rowkey vid", K(ret), "need_skip=", !is_found, K(data_table_rowkey),
@@ -503,16 +548,29 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, data table row count is 0, but ret code is success", K(ret), KPC(data_table_iter_));
   } else if (OB_ITER_END == ret && FALSE_IT(is_iter_end = true)) {
+  } else if (is_block_sample_) {
+    ret = OB_SUCCESS;
+    for (int64_t i = 0; i < data_table_cnt && OB_SUCC(ret); i++) {
+      if (OB_FAIL(vid_ids.push_back(0))) {
+        LOG_WARN("fail to push back mock vid into array", K(ret), K(i), K(data_table_cnt));
+      }
+    }
+    if (FAILEDx(fill_vid_ids_in_data_table(vid_ids, true))) {
+      LOG_WARN("fail to fill null vid ids in data table", K(ret), K(vid_ids));
+    } else {
+      count = data_table_cnt;
+      ret = is_iter_end ? OB_ITER_END : ret;
+    }
   } else if (OB_FAIL(get_rowkeys(data_table_cnt, allocator, data_table_ctdef_, data_table_rtdef_,
           rowkeys_in_data_table))) {
     LOG_WARN("fail to get data table rowkeys", K(ret), K(data_table_cnt));
   } else {
-    const int64_t batch_size = is_iter_end ? capacity : data_table_cnt;
     int64_t remain_cnt = data_table_cnt;
     int64_t rowkey_vid_cnt = 0;
     while (OB_SUCC(ret) && remain_cnt > 0) {
       common::ObArray<common::ObRowkey> rowkeys_in_rowkey_vid;
       common::ObArray<int64_t> vid_ids_in_rowkey_vid;
+      const int64_t batch_size = remain_cnt;
       if (OB_FAIL(rowkey_vid_iter_->get_next_rows(rowkey_vid_cnt, batch_size)) && OB_ITER_END != ret) {
         LOG_WARN("fail to get next rowkey vid rows", K(ret), K(remain_cnt),  K(batch_size), K(rowkey_vid_iter_));
       } else if (OB_UNLIKELY(OB_ITER_END == ret && (!is_iter_end || 0 == rowkey_vid_cnt))){
@@ -527,9 +585,9 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
              OB_SUCC(ret) && i < data_table_cnt && j < rowkeys_in_rowkey_vid.count();
              ++j) {
           bool is_equal = false;
-          LOG_INFO("compare one row in rowkey vid", K(ret), K(i), K(j), K(rowkeys_in_data_table.at(i)),
+          LOG_DEBUG("compare one row in rowkey vid", K(ret), K(i), K(j), K(rowkeys_in_data_table.at(i)),
               K(rowkeys_in_rowkey_vid.at(j)));
-          if (rowkeys_in_rowkey_vid.at(j).equal(rowkeys_in_data_table.at(i), is_equal)) {
+          if (OB_FAIL(rowkeys_in_rowkey_vid.at(j).equal(rowkeys_in_data_table.at(i), is_equal))) {
             LOG_WARN("fail to equal rowkey between data table and rowkey", K(ret));
           } else if (is_equal) {
             if (OB_FAIL(vid_ids.push_back(vid_ids_in_rowkey_vid.at(j)))) {
@@ -537,7 +595,7 @@ int ObDASVIdMergeIter::sorted_merge_join_rows(int64_t &count, int64_t capacity)
             } else {
               --remain_cnt;
               ++i;
-              LOG_INFO("find vid id in rowkey vid", K(vid_ids_in_rowkey_vid.at(j)), K(remain_cnt), K(i), K(data_table_cnt));
+              LOG_DEBUG("find vid id in rowkey vid", K(vid_ids_in_rowkey_vid.at(j)), K(remain_cnt), K(i), K(data_table_cnt));
             }
           }
         }
@@ -606,7 +664,11 @@ int ObDASVIdMergeIter::get_vid_id(
     const int64_t rowkey_cnt = ctdef->table_param_.get_read_info().get_schema_rowkey_count();
     const int64_t extern_size = ctdef->trans_info_expr_ != nullptr ? 1 : 0;
     ObExpr *expr = nullptr;
-    if (GCONF.enable_strict_defensive_check()) {
+    // When the defensive check level is set to 2 (strict defensive check), the transaction information of the current
+    // row is recorded for 4377 diagnosis. Then, it will add pseudo_trans_info_expr into result output of das scan.
+    //
+    // just skip it if trans info expr in ctdef isn't nullptr.
+    if (OB_NOT_NULL(ctdef->trans_info_expr_)) {
       if (OB_UNLIKELY(ctdef->result_output_.count() != rowkey_cnt + 1 + extern_size)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected result output column count", K(ret), K(rowkey_cnt), K(ctdef->result_output_.count()));
@@ -670,7 +732,7 @@ int ObDASVIdMergeIter::get_vid_ids(
     } else if (OB_FAIL(vid_ids.push_back(vid_id))) {
       LOG_WARN("fail to push back vid id", K(ret), K(vid_id));
     } else {
-      LOG_INFO("[vec index debug]get one vid ", K(vid_id));
+      LOG_TRACE("[vec index debug] get one vid ", K(vid_id), K(vid_ids.count()));
     }
   }
   return ret;
@@ -704,7 +766,7 @@ int ObDASVIdMergeIter::get_rowkeys_and_vid_ids(
   return ret;
 }
 
-int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
+int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id, bool set_null)
 {
   int ret = OB_SUCCESS;
   // if (OB_UNLIKELY(!vid_id.is_valid())) {
@@ -714,6 +776,8 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
   if (OB_ISNULL(data_table_ctdef_) || OB_ISNULL(data_table_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpeted error, data table ctdef is nullptr", K(ret), KP(data_table_ctdef_), KP(data_table_rtdef_));
+  } else if (data_table_ctdef_->vec_vid_idx_ == -1) {
+    LOG_INFO("get invalid vec vid idx, just do nothing", K(ret), KPC(data_table_ctdef_));
   } else {
     const int64_t vid_id_idx = data_table_ctdef_->vec_vid_idx_;
     ObExpr *vid_id_expr = nullptr;
@@ -732,9 +796,13 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
         LOG_WARN("fail to allocate memory", K(ret), KP(buf));
       } else {
         // ObDocId *vid_id_ptr = new (buf) ObDocId(vid_id);
-        datum.set_int(vid_id);
+        if (set_null) {
+          datum.set_null();
+        } else {
+          datum.set_int(vid_id);
+        }
         vid_id_expr->set_evaluated_projected(*data_table_rtdef_->eval_ctx_);
-        LOG_INFO("Doc id merge fill a vidument id", K(vid_id));
+        LOG_DEBUG("Doc id merge fill a vidument id", K(vid_id));
       }
       if (OB_SUCC(ret)) {
       }
@@ -744,7 +812,7 @@ int ObDASVIdMergeIter::fill_vid_id_in_data_table(const int64_t &vid_id)
 
 }
 
-int ObDASVIdMergeIter::fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids)
+int ObDASVIdMergeIter::fill_vid_ids_in_data_table(const common::ObIArray<int64_t> &vid_ids, bool set_null)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 == vid_ids.count())) {
@@ -771,7 +839,11 @@ int ObDASVIdMergeIter::fill_vid_ids_in_data_table(const common::ObIArray<int64_t
       LOG_WARN("unexpected error, datums is nullptr", K(ret), KPC(vid_id_expr));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < vid_ids.count(); ++i) {
-        datums[i].set_int(vid_ids.at(i));
+        if (set_null) {
+          datums[i].set_null();
+        } else {
+          datums[i].set_int(vid_ids.at(i));
+        }
       }
       if (OB_SUCC(ret)) {
         vid_id_expr->set_evaluated_projected(*data_table_rtdef_->eval_ctx_);

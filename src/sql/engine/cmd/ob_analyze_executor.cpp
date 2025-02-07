@@ -113,6 +113,8 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
             ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
             if (OB_FAIL(running_monitor.add_monitor_info(ObOptStatRunningPhase::GATHER_PREPARE))) {
               LOG_WARN("failed to add add monitor info", K(ret));
+            } else if (OB_FAIL(pl::ObDbmsStats::get_stats_consumer_group_id(param))) {
+              LOG_WARN("failed to get stats consumer gourp id");
             } else if (OB_FAIL(running_monitor.add_table_info(param))) {
               LOG_WARN("failed to add table info", K(ret));
             } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {

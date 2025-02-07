@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_
 
 #include "deps/oblib/src/lib/container/ob_se_array.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_pool.h"
@@ -24,6 +24,7 @@ namespace tmp_file
 
 class ObTmpPageValueHandle;
 class ObSNTmpFileInfo;
+class ObTmpFileBlockManager;
 
 struct ObSharedNothingTmpFileMetaItem
 {
@@ -307,7 +308,7 @@ public:
   ~ObSharedNothingTmpFileMetaTree();
   void reset();
 public:
-  int init(const int64_t fd, ObTmpWriteBufferPool *wbp, ObIAllocator *callback_allocator);
+  int init(const int64_t fd, ObTmpWriteBufferPool *wbp, ObIAllocator *callback_allocator, ObTmpFileBlockManager *block_manager);
 
   //append write: We always write the rightmost page of the leaf layer
   //It happens after a tmp file write request:
@@ -524,6 +525,7 @@ private:
   int64_t fd_;
   ObTmpWriteBufferPool *wbp_;
   ObIAllocator *callback_allocator_;
+  ObTmpFileBlockManager *block_manager_;
   int64_t tree_epoch_;
   ObSharedNothingTmpFileMetaItem root_item_;
   //When the tmp file writes less data, we can use an array instead of a tree to store metadata
@@ -547,4 +549,4 @@ public:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_META_TREE_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_META_TREE_H_

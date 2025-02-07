@@ -20,18 +20,15 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_utils.h"
-#include "share/resource_manager/ob_resource_plan_manager.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
-#include "share/resource_manager/ob_resource_manager.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
-#include "share/io/ob_io_manager.h"
 #include "common/ob_timeout_ctx.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "observer/ob_server.h"
+#include "share/resource_manager/ob_resource_manager_proxy.h"
+#include "share/resource_manager/ob_resource_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
@@ -171,24 +168,6 @@ int ObResourceManagerProxy::delete_plan(
                   affected_rows))) {
         trans.reset_last_error();
         LOG_WARN("fail to execute sql", K(sql), K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObResMgrVarcharValue cur_plan;
-    ObResourcePlanManager &plan_mgr = G_RES_MGR.get_plan_mgr();
-    if (OB_FAIL(plan_mgr.get_cur_plan(tenant_id, cur_plan))) {
-      LOG_WARN("get cur plan failed", K(ret), K(tenant_id), K(cur_plan));
-    } else if (cur_plan.get_value() != plan) {
-      //删除非当前使用plan，do nothing
-    } else {
-      //删除当前使用的plan，把当前所有IO资源置空
-      if (OB_FAIL(GCTX.cgroup_ctrl_->reset_all_group_iops(tenant_id))) {
-        LOG_WARN("reset cur plan group directive failed",K(plan), K(ret));
-      } else if (OB_FAIL(reset_all_mapping_rules())) {
-        LOG_WARN("reset hashmap failed when delete using plan");
-      } else {
-        LOG_INFO("reset cur plan group directive success",K(plan), K(ret));
       }
     }
   }
@@ -346,31 +325,6 @@ int ObResourceManagerProxy::delete_consumer_group(
         trans.reset_last_error();
         LOG_WARN("fail to execute sql", K(sql), K(ret));
       }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 在这里inner sql之后就stop io_control的原因是，无法从内部表读到被删除group的信息
-    uint64_t group_id = 0;
-    share::ObGroupName group_name;
-    group_name.set_value(consumer_group);
-    ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("invalid config", K(ret), K(tenant_id));
-    } else if (OB_FAIL(rule_mgr.get_group_id_by_name(tenant_id, group_name, group_id))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        //创建group后立刻删除，可能还没有被刷到存储层或plan未生效，此时不再进行后续操作
-        ret = OB_SUCCESS;
-        LOG_INFO("delete group success with no_releated_io_module", K(consumer_group), K(tenant_id));
-      } else {
-        LOG_WARN("fail get group id", K(ret), K(group_id), K(consumer_group));
-      }
-    } else if (OB_FAIL(GCTX.cgroup_ctrl_->delete_group_iops(tenant_id, consumer_group))) {
-      LOG_WARN("fail to stop cur iops isolation", K(ret), K(tenant_id), K(consumer_group));
-    } else if (OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
-                   tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-      LOG_WARN("fail to remove group cgroup", K(ret), K(tenant_id), K(consumer_group), K(group_id));
     }
   }
   return ret;
@@ -716,29 +670,6 @@ int ObResourceManagerProxy::check_if_user_exist(
   return ret;
 }
 
-int ObResourceManagerProxy::check_if_function_exist(const ObString &function_name, bool &exist)
-{
-  int ret = OB_SUCCESS;
-  if (0 == function_name.compare("COMPACTION_HIGH") ||
-      0 == function_name.compare("HA_HIGH") ||
-      0 == function_name.compare("COMPACTION_MID") ||
-      0 == function_name.compare("HA_MID") ||
-      0 == function_name.compare("COMPACTION_LOW") ||
-      0 == function_name.compare("HA_LOW") ||
-      0 == function_name.compare("DDL_HIGH") ||
-      0 == function_name.compare("DDL") ||
-      0 == function_name.compare("CLOG_LOW")  ||
-      0 == function_name.compare("CLOG_MID")  ||
-      0 == function_name.compare("CLOG_HIGH") ||
-      0 == function_name.compare("OTHER_BACKGROUND")) {
-    exist = true;
-  } else {
-    exist = false;
-    LOG_WARN("invalid function name", K(function_name));
-  }
-  return ret;
-}
-
 int ObResourceManagerProxy::check_if_column_exist(
     uint64_t tenant_id,
     const ObString &db_name,
@@ -960,7 +891,7 @@ int ObResourceManagerProxy::check_iops_validity(
       uint64_t total_min = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
         ObPlanDirective &cur_directive = directives.at(i);
-        if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
+        if (OB_UNLIKELY(!is_resource_manager_group(cur_directive.group_id_))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected group id", K(cur_directive));
         } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
@@ -1076,9 +1007,10 @@ int ObResourceManagerProxy::update_plan_directive(
       LOG_USER_ERROR(OB_ERR_PLAN_DIRECTIVE_NOT_EXIST,
                      plan.length(), plan.ptr(), group.length(), group.ptr());
     } else if (comments.is_null() && mgmt_p1.is_null() && utilization_limit.is_null() &&
-               min_iops.is_null() && max_iops.is_null() && weight_iops.is_null()) {
+               min_iops.is_null() && max_iops.is_null() && weight_iops.is_null() && max_net_bandwidth.is_null() && net_bandwidth_weight.is_null()) {
       // 没有指定任何有效参数，什么都不做，也不报错。兼容 Oracle 行为。
       ret = OB_SUCCESS;
+      LOG_WARN("did not receive any valid parameter", K(ret));
     } else if (OB_FAIL(sql.assign_fmt("UPDATE /* UPDATE_PLAN_DIRECTIVE */ %s SET ", tname))) {
       STORAGE_LOG(WARN, "append table name failed, ", K(ret));
     } else {
@@ -1175,6 +1107,8 @@ int ObResourceManagerProxy::update_plan_directive(
               LOG_WARN("fail get percentage", K(ret));
             } else if (OB_FAIL(sql.append_fmt("%s MAX_NET_BANDWIDTH=%ld", comma, v))) {
               LOG_WARN("fail append value", K(ret));
+            } else {
+              comma = ",";
             }
           }
         }
@@ -1184,6 +1118,8 @@ int ObResourceManagerProxy::update_plan_directive(
               LOG_WARN("fail get percentage", K(ret));
             } else if (OB_FAIL(sql.append_fmt("%s NET_BANDWIDTH_WEIGHT=%ld", comma, v))) {
               LOG_WARN("fail append value", K(ret));
+            } else {
+              comma = ",";
             }
           }
         }
@@ -1246,15 +1182,6 @@ int ObResourceManagerProxy::delete_plan_directive(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected row value not expected", K(affected_rows), K(ret));
       }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // 在这里inner sql之后就stop的原因是， 无法从内部表读到被删除group的信息
-    if (OB_FAIL(GCTX.cgroup_ctrl_->reset_group_iops(
-                     tenant_id,
-                     group))) {
-      LOG_WARN("reset deleted group directive failed", K(ret), K(group));
     }
   }
   return ret;
@@ -1353,7 +1280,7 @@ int ObResourceManagerProxy::replace_mapping_rule(
         LOG_WARN("fail check if consumer group exist", K(tenant_id), K(consumer_group), K(ret));
       } else if (!consumer_group_exist) {
         ret = OB_ERR_CONSUMER_GROUP_NOT_EXIST;
-        LOG_USER_ERROR(OB_ERR_INVALID_PLAN_DIRECTIVE_NAME,
+        LOG_USER_ERROR(OB_ERR_CONSUMER_GROUP_NOT_EXIST,
                        consumer_group.length(), consumer_group.ptr());
       }
     }
@@ -1395,7 +1322,8 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
                                     user_exist))) {
       LOG_WARN("fail check if user exist", K(tenant_id), K(value), K(ret));
     } else if (!user_exist) {
-      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, 0, "");
+      ret = OB_ERR_USER_NOT_EXIST;
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, value.length(), value.ptr());
     }
   }
   if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
@@ -1410,40 +1338,58 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
   if (OB_SUCC(ret) && user_exist) {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
-    } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
       if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                  static_cast<int32_t>(values.length()),
-                                  values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                      sql.ptr(),
-                                      affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
-          }
+        // reset map
+        ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+        if (OB_FAIL(rule_mgr.reset_group_id_by_user(tenant_id, user_id))) {
+          LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(user_id), K(value));
         }
       }
-      if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
-        // reset map
-        if (consumer_group.empty()) {
-          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-          if (OB_FAIL(rule_mgr.reset_group_id_by_user(tenant_id, user_id))) {
-            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(user_id), K(value));
+    } else {
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                    static_cast<int32_t>(values.length()),
+                                    values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                        sql.ptr(),
+                                        affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
+          } else {
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
@@ -1460,51 +1406,70 @@ int ObResourceManagerProxy::replace_function_mapping_rule(ObMySQLTransaction &tr
   bool function_exist = false;
   if (OB_SUCC(ret)) {
     // Same as user rule, the mapping is unsuccessful but no error is thrown
-    if (OB_FAIL(check_if_function_exist(value, function_exist))) {
+    if (OB_FAIL(oceanbase::share::check_if_function_exist(value, function_exist))) {
       LOG_WARN("fail check if function exist", K(tenant_id), K(value), K(ret));
     } else if (OB_UNLIKELY(!function_exist)) {
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid function name, please check");
+      ret = OB_INVALID_CONFIG;
+      LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid function name, please check");
     }
   }
   if (OB_SUCC(ret) && function_exist) {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
-    } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
       if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                  static_cast<int32_t>(values.length()),
-                                  values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                      sql.ptr(),
-                                      affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
-          }
+        // reset map
+        ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+        ObResMgrVarcharValue func;
+        func.set_value(value);
+        if (OB_FAIL(rule_mgr.reset_group_id_by_function(tenant_id, func))) {
+          LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(func), K(value));
         }
       }
-      if (OB_SUCC(ret) && function_exist && consumer_group.empty()) {
-        // reset map
-        if (consumer_group.empty()) {
-          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-          ObResMgrVarcharValue func;
-          func.set_value(value);
-          if (OB_FAIL(rule_mgr.reset_group_id_by_function(tenant_id, func))) {
-            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(func), K(value));
+    } else {
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                    static_cast<int32_t>(values.length()),
+                                    values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                        sql.ptr(),
+                                        affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
+          } else {
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
@@ -1538,31 +1503,51 @@ int ObResourceManagerProxy::replace_column_mapping_rule(ObMySQLTransaction &tran
   } else {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
     } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, formalized_value.ptr(), formalized_value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
-      if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                    static_cast<int32_t>(values.length()),
-                                    values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                        sql.ptr(),
-                                        affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, formalized_value.ptr(), formalized_value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                      static_cast<int32_t>(values.length()),
+                                      values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                          sql.ptr(),
+                                          affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
           } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
@@ -2259,11 +2244,5 @@ int ObResourceManagerProxy::get_iops_config(
       }
     }
   }
-  return ret;
-}
-
-int ObResourceManagerProxy::reset_all_mapping_rules()
-{
-  int ret = G_RES_MGR.get_mapping_rule_mgr().reset_mapping_rules();
   return ret;
 }

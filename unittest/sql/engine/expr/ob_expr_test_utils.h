@@ -700,7 +700,8 @@ case MY_TRUE:                                                           \
                                          ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
                                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
                                          int err = str_op_object.func(r, t1, expr_ctx); \
-                                         _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                         ObCStringHelper helper; \
+                                         _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                          EXPECT_TRUE(OB_SUCCESS == err); \
                                          ASSERT_TRUE(ref.get_type() == r.get_type()); \
                                          if (ref.get_type() != ObNullType) \
@@ -722,7 +723,8 @@ case MY_TRUE:                                                           \
                                          ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
                                          ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
                                          int err = str_op_object.func(r, t1, expr_ctx); \
-                                         _OB_LOG(INFO, "text=%s expect=%s result=%s", to_cstring(t1), to_cstring(ref), to_cstring(r)); \
+                                         ObCStringHelper helper; \
+                                         _OB_LOG(INFO, "text=%s expect=%s result=%s", helper.convert(t1), helper.convert(ref), helper.convert(r)); \
                                          EXPECT_TRUE(OB_SUCCESS == err); \
                                          r.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
                                          ASSERT_TRUE(ref.get_type() == r.get_type()); \
@@ -745,7 +747,8 @@ case MY_TRUE:                                                           \
                                           ref.set_collation_type(ref_ct);\
                                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                           int err = str_op_object.func(r, t1, expr_ctx); \
-                                          _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                          ObCStringHelper helper; \
+                                          _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                           EXPECT_TRUE(OB_SUCCESS == err); \
                                           EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                           if (ref.get_type() != ObNullType) \
@@ -794,7 +797,8 @@ case MY_TRUE:                                                           \
                                           ref.set_##ref_type(); \
                                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
                                           int err = str_op_object.func(r, t1, &t2, expr_ctx); \
-                                          _OB_LOG(INFO, "respect=%s result=%s", to_cstring(ref), to_cstring(r)); \
+                                          ObCStringHelper helper; \
+                                          _OB_LOG(INFO, "respect=%s result=%s", helper.convert(ref), helper.convert(r)); \
                                           EXPECT_TRUE(OB_SUCCESS == err); \
                                           EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                           EXPECT_TRUE(ref.get_type() == ObNullType); \
@@ -818,7 +822,8 @@ case MY_TRUE:                                                           \
                                           str_op_object.set_result_type(res_type);  \
                                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                           int err = str_op_object.func(r, t1, t2, expr_ctx); \
-                                          _OB_LOG(INFO, "ref=%s r=%s, t1=%s, t2=%s", to_cstring(ref), to_cstring(r), to_cstring(t1), to_cstring(t2)); \
+                                          ObCStringHelper helper; \
+                                          _OB_LOG(INFO, "ref=%s r=%s, t1=%s, t2=%s", helper.convert(ref), helper.convert(r), helper.convert(t1), helper.convert(t2)); \
                                           EXPECT_TRUE(OB_SUCCESS == err); \
                                           EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                           if (ref.get_type() != ObNullType) \
@@ -844,7 +849,8 @@ case MY_TRUE:                                                           \
                                           ref.set_collation_type(ref_ct);\
                                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                           int err = str_op_object.func(r, t1, t2, expr_ctx); \
-                                          _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                          ObCStringHelper helper; \
+                                          _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                           EXPECT_TRUE(OB_SUCCESS == err); \
                                           EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                           if (ref.get_type() != ObNullType) \
@@ -892,7 +898,8 @@ case MY_TRUE:                                                           \
                                              res_type.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);   \
                                              str_op_object.set_result_type(res_type);  \
                                              int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
-                                                        _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                             ObCStringHelper helper; \
+                                             _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                              EXPECT_TRUE(OB_SUCCESS == err); \
                                              EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                              r.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
@@ -945,7 +952,8 @@ case MY_TRUE:                                                           \
                                              res_type.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);   \
                                              str_op_object.set_result_type(res_type);  \
                                              int err = str_op_object.func(r, t1, t2, t3, t4, expr_ctx); \
-                                                        _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                             ObCStringHelper helper; \
+                                             _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                              EXPECT_TRUE(OB_SUCCESS == err); \
                                              EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                              r.set_collation_type(CS_TYPE_UTF8MB4_BIN);   \
@@ -963,7 +971,8 @@ case MY_TRUE:                                                           \
                                              ref.set_##ref_type(ref_value);\
                                              ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                              int err = obj.func(res,params, num, expr_ctx); \
-                                             _OB_LOG(INFO, "ref=%s res=%s ret=%d", to_cstring(ref), to_cstring(res),err); \
+                                             ObCStringHelper helper; \
+                                             _OB_LOG(INFO, "ref=%s res=%s ret=%d", helper.convert(ref), helper.convert(res),err); \
                                              _OB_LOG(INFO, "%ld, %ld", ref.get_data_length(), res.get_data_length()); \
                                              EXPECT_TRUE(OB_SUCCESS == err); \
                                              EXPECT_TRUE(ref.get_type() == res.get_type()); \
@@ -984,7 +993,8 @@ case MY_TRUE:                                                           \
                                               ref.set_null();\
                                              ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                              int err = obj.func(res,params, num+1, expr_ctx); \
-                                             _OB_LOG(INFO, "ref=%s res=%s ret=%d", to_cstring(ref), to_cstring(res),err); \
+                                             ObCStringHelper helper; \
+                                             _OB_LOG(INFO, "ref=%s res=%s ret=%d", helper.convert(ref), helper.convert(res),err); \
                                              EXPECT_TRUE(OB_SUCCESS == err); \
                                              EXPECT_TRUE(ref.get_type() == res.get_type()); \
                                              if (ref.get_type() != ObNullType) \
@@ -1058,7 +1068,8 @@ case MY_TRUE:                                                           \
                                                 ObEnumSetInnerValue out_value;\
                                                 pos = 0; \
                                                 ret = out_value.deserialize(res_string.ptr(), res_string.length(), pos);\
-                                                _OB_LOG(INFO, "out_value:%s", to_cstring(out_value)); \
+                                                ObCStringHelper helper; \
+                                                _OB_LOG(INFO, "out_value:%s", helper.convert(out_value)); \
                                                 EXPECT_TRUE(OB_SUCCESS == ret); \
                                                 EXPECT_TRUE(ref.get_type() == res.get_type()); \
                                                 EXPECT_TRUE(ref.get_varchar() == res.get_varchar()); \
@@ -1084,7 +1095,8 @@ case MY_TRUE:                                                           \
                                           ref.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);\
                                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);            \
                                           int err = str_op_object.func(r, t1, t2, expr_ctx); \
-                                          _OB_LOG(INFO, "ref=%s r=%s", to_cstring(ref), to_cstring(r)); \
+                                          ObCStringHelper helper; \
+                                          _OB_LOG(INFO, "ref=%s r=%s", helper.convert(ref), helper.convert(r)); \
                                           EXPECT_TRUE(OB_SUCCESS == err); \
                                           EXPECT_TRUE(ref.get_type() == r.get_type()); \
                                           if (ref.get_type() != ObNullType) \

@@ -400,8 +400,7 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (cond->has_flag(CNT_SUB_QUERY) ||
-                 cond->has_flag(CNT_RAND_FUNC) ||
-                 cond->has_flag(CNT_STATE_FUNC)) {
+                 !cond->is_deterministic()) {
         is_cond_valid = false;
         OPT_TRACE("condition has subquery/rand func/state func");
       } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond,
@@ -431,9 +430,8 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid orderby expr", K(ret));
-      } else if (expr->has_flag(CNT_RAND_FUNC) ||
-                 expr->has_flag(CNT_STATE_FUNC) ||
-                 expr->has_flag(CNT_SUB_QUERY)) {
+      } else if (expr->has_flag(CNT_SUB_QUERY) ||
+                 !expr->is_deterministic()) {
         // avoid pushing down non-deterministic func and subquery
         is_orderby_valid = false;
         OPT_TRACE("order by has subquery or special expr");

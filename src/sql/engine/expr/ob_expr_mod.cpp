@@ -494,7 +494,16 @@ int ObExprMod::mod_decimalint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum
       ObDecimalIntBuilder res_val;
       switch (int_bytes) {
         CALC_DECIMAL_INT_MOD(int32)
-        CALC_DECIMAL_INT_MOD(int64)
+        case sizeof(int64_t): {
+          const int64_t l = *(l_decint->int64_v_);
+          const int64_t r = *(r_decint->int64_v_);
+          if (INT64_MIN == l && -1 == r) {
+            res_val.from(0); //INT64_MIN % -1 --> FPE
+          } else {
+            res_val.from(l % r);
+          }
+          break;
+        }
         CALC_DECIMAL_INT_MOD(int128)
         CALC_DECIMAL_INT_MOD(int256)
         CALC_DECIMAL_INT_MOD(int512)

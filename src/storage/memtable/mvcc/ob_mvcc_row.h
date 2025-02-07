@@ -146,6 +146,10 @@ public:
   {
     return ATOMIC_LOAD(&flag_) & F_ELR;
   }
+  OB_INLINE void clear_elr()
+  {
+    ATOMIC_SUB_TAG(F_ELR);
+  }
   OB_INLINE void set_aborted()
   {
     ATOMIC_ADD_TAG(F_ABORTED);
@@ -280,9 +284,27 @@ struct ObMvccRow
   ObMvccTransNode *latest_compact_node_;
   ObMvccRowIndex *index_;
 
+  // for row lock 4377 problem debug
+#ifdef ENABLE_DEBUG_LOG
+  int64_t lower_lock_scanned_ts_;
+  union {
+    int64_t raw_value_;
+    struct {
+      int32_t lower_lock_scanned_tx_id_ : 32;
+      int16_t lower_lock_scanned_memtable_cnt_ : 16;
+      int16_t lower_lock_scanned_sstable_cnt_ : 16;
+    };
+  } lower_lock_scanned_info_;
+#endif
+
+
   ObMvccRow()
   {
+#ifdef ENABLE_DEBUG_LOG
+    STATIC_ASSERT(sizeof(ObMvccRow) <= 136, "Size of ObMvccRow Overflow.");
+#else
     STATIC_ASSERT(sizeof(ObMvccRow) <= 120, "Size of ObMvccRow Overflow.");
+#endif
     reset();
   }
   void reset();
@@ -406,9 +428,35 @@ struct ObMvccRow
   {
     return ATOMIC_LOAD(&flag_) & F_LOWER_LOCK_SCANED;
   }
-  OB_INLINE void set_lower_lock_scaned()
+  OB_INLINE void set_lower_lock_scaned(const transaction::ObTransID &lower_lock_tx_id,
+                                       const int64_t lower_lock_mem_cnt,
+                                       const int64_t lower_lock_sst_cnt)
   {
+#ifdef ENABLE_DEBUG_LOG
+    while (true) {
+      const uint8_t old = ATOMIC_LOAD(&(flag_));
+      if (old & F_LOWER_LOCK_SCANED) {
+        break;
+      } else {
+        const uint8_t tmp = (old | (F_LOWER_LOCK_SCANED));
+        if (ATOMIC_BCAS(&(flag_), old, tmp)) {
+          lower_lock_scanned_ts_ = ObTimeUtility::current_time();
+          lower_lock_scanned_info_.lower_lock_scanned_tx_id_ =
+            static_cast<int32_t>(lower_lock_tx_id.get_id());
+          lower_lock_scanned_info_.lower_lock_scanned_memtable_cnt_ =
+            static_cast<int16_t>(lower_lock_mem_cnt);
+          lower_lock_scanned_info_.lower_lock_scanned_sstable_cnt_ =
+            static_cast<int16_t>(lower_lock_sst_cnt);
+          break;
+        }
+      }
+    }
+#else
+    UNUSED(lower_lock_tx_id);
+    UNUSED(lower_lock_mem_cnt);
+    UNUSED(lower_lock_sst_cnt);
     ATOMIC_ADD_TAG(F_LOWER_LOCK_SCANED);
+#endif
   }
   // ===================== ObMvccRow Helper Function =====================
   int64_t to_string(char *buf, const int64_t buf_len) const;

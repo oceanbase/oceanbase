@@ -101,10 +101,8 @@ public:
   static int mtl_init(ObTenantCompactionProgressMgr* &progress_mgr);
   int init();
   void destroy();
-
-  int add_progress(const int64_t major_snapshot_version);
   int init_progress(const int64_t major_snapshot_version);
-  int update_progress_status(const int64_t major_snapshot_version, share::ObIDag::ObDagStatus status);
+  int finish_progress(const int64_t major_snapshot_version);
   int update_progress(
       const int64_t major_snapshot_version,
       const int64_t total_data_size_delta,
@@ -113,13 +111,16 @@ public:
       const bool finish_flag,
       const ObCompactionTimeGuard *time_guard = nullptr,
       const bool co_merge = false);
-  int update_unfinish_tablet(const int64_t major_snapshot_version);
+  int update_unfinish_tablet(
+      const int64_t major_snapshot_version,
+      const int64_t reduce_tablet_cnt = 1,
+      const int64_t reduce_data_size = 0);
   int update_compression_ratio(const int64_t major_snapshot_version, compaction::ObSSTableMergeHistory &merge_history);
 
 private:
   int loop_major_sstable_(int64_t version, int64_t &cnt, int64_t &size);
   int finish_progress_(ObTenantCompactionProgress &progress);
-  OB_INLINE int get_pos_(const int64_t major_snapshot_version, int64_t &pos) const;
+  int get_pos_(const int64_t major_snapshot_version, int64_t &pos) const;
 
 private:
   static const int64_t FINISH_TIME_UPDATE_FROM_SCHEDULER_INTERVAL = 10 * 1000 * 1000; // 1 second

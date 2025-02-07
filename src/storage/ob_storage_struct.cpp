@@ -254,16 +254,21 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     error_location_(nullptr),
     snapshot_info_(),
     is_backfill_(false),
-    backfill_scn_()
+    backfill_scn_(),
+    transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ)
 {
 }
 
 bool ObGetMergeTablesResult::is_valid() const
 {
-  return scn_range_.is_valid()
-      && (is_simplified_ || handle_.get_count() >= 1)
-      && merge_version_ >= 0
-      && (!is_backfill_ || backfill_scn_.is_valid());
+  bool valid = scn_range_.is_valid()
+            && (is_simplified_ || handle_.get_count() >= 1)
+            && merge_version_ >= 0
+            && (!is_backfill_ || backfill_scn_.is_valid());
+  if (valid && GCTX.is_shared_storage_mode()) {
+    valid &= (ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ != transfer_seq_);
+  }
+  return valid;
 }
 
 void ObGetMergeTablesResult::reset_handle_and_range()
@@ -291,6 +296,7 @@ void ObGetMergeTablesResult::reset()
   snapshot_info_.reset();
   is_backfill_ = false;
   backfill_scn_.reset();
+  transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -309,6 +315,7 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     is_backfill_ = src.is_backfill_;
     backfill_scn_ = src.backfill_scn_;
     snapshot_info_ = src.snapshot_info_;
+    transfer_seq_ = src.transfer_seq_;
   }
   return ret;
 }
@@ -343,7 +350,7 @@ ObDDLTableStoreParam::ObDDLTableStoreParam()
     data_format_version_(0),
     ddl_redo_callback_(nullptr),
     ddl_finish_callback_(nullptr),
-    ddl_table_type_(ObITable::MAX_TABLE_TYPE)
+    ddl_replay_status_(CS_REPLICA_REPLAY_NONE)
 {
 
 }
@@ -356,7 +363,7 @@ bool ObDDLTableStoreParam::is_valid() const
     && ddl_snapshot_version_ >= 0
     && ddl_execution_id_ >= 0
     && data_format_version_ >= 0
-    && ObITable::is_valid_ddl_table_type(ddl_table_type_);
+    && is_valid_cs_replica_ddl_status(ddl_replay_status_);
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()
@@ -584,7 +591,9 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr),
     restore_status_(ObTabletRestoreStatus::FULL),
-    need_replace_remote_sstable_(false)
+    tablet_split_param_(),
+    need_replace_remote_sstable_(false),
+    release_mds_scn_()
 {
 }
 
@@ -596,13 +605,16 @@ void ObBatchUpdateTableStoreParam::reset()
   start_scn_.set_min();
   tablet_meta_ = nullptr;
   restore_status_ = ObTabletRestoreStatus::FULL;
+  tablet_split_param_.reset();
   need_replace_remote_sstable_ = false;
+  release_mds_scn_.reset();
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
   return rebuild_seq_ > OB_INVALID_VERSION
-      && ObTabletRestoreStatus::is_valid(restore_status_);
+      && ObTabletRestoreStatus::is_valid(restore_status_)
+      && release_mds_scn_.is_valid();
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -621,6 +633,7 @@ int ObBatchUpdateTableStoreParam::assign(
     tablet_meta_ = param.tablet_meta_;
     restore_status_ = param.restore_status_;
     need_replace_remote_sstable_ = param.need_replace_remote_sstable_;
+    release_mds_scn_ = param.release_mds_scn_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;
 #endif
@@ -649,6 +662,34 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_scn(SCN &clog_checkpoi
     }
   }
   return ret;
+}
+
+ObSplitTableStoreParam::ObSplitTableStoreParam()
+  : snapshot_version_(-1),
+    multi_version_start_(-1),
+    merge_type_(INVALID_MERGE_TYPE),
+    skip_split_keys_()
+{
+}
+
+ObSplitTableStoreParam::~ObSplitTableStoreParam()
+{
+  reset();
+}
+
+bool ObSplitTableStoreParam::is_valid() const
+{
+  return snapshot_version_ > -1
+    && multi_version_start_ >= 0
+    && is_valid_merge_type(merge_type_);
+}
+
+void ObSplitTableStoreParam::reset()
+{
+  snapshot_version_ = -1;
+  multi_version_start_ = -1;
+  merge_type_ = INVALID_MERGE_TYPE;
+  skip_split_keys_.reset();
 }
 
 ObPartitionReadableInfo::ObPartitionReadableInfo()
@@ -688,6 +729,43 @@ void ObPartitionReadableInfo::reset()
   generated_ts_ = 0;
   max_readable_ts_ = OB_INVALID_TIMESTAMP;
   force_ = false;
+}
+
+ObTabletSplitTscInfo::ObTabletSplitTscInfo()
+  : start_partkey_(),
+    end_partkey_(),
+    src_tablet_handle_(),
+    split_cnt_(0),
+    split_type_(ObTabletSplitType::MAX_TYPE),
+    partkey_is_rowkey_prefix_(false)
+{
+}
+
+bool ObTabletSplitTscInfo::is_split_dst_with_partkey() const
+{
+  return start_partkey_.is_valid()
+      && end_partkey_.is_valid()
+      && src_tablet_handle_.is_valid()
+      && split_type_ < ObTabletSplitType::MAX_TYPE;
+}
+
+// e.g., lob split dst tablet
+bool ObTabletSplitTscInfo::is_split_dst_without_partkey() const
+{
+  return !start_partkey_.is_valid()
+      && !end_partkey_.is_valid()
+      && src_tablet_handle_.is_valid()
+      && split_type_ < ObTabletSplitType::MAX_TYPE;
+}
+
+void ObTabletSplitTscInfo::reset()
+{
+  start_partkey_.reset();
+  end_partkey_.reset();
+  src_tablet_handle_.reset();
+  split_type_ = ObTabletSplitType::MAX_TYPE;
+  split_cnt_ = 0;
+  partkey_is_rowkey_prefix_ = false;
 }
 
 int ObCreateSSTableParamExtraInfo::assign(const ObCreateSSTableParamExtraInfo &other)

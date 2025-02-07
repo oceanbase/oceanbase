@@ -889,7 +889,6 @@ int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
           eval_flags.set(idx);
         }
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       // 2. calc substr while result is not all null
       int64_t pos = 0;

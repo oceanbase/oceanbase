@@ -1074,7 +1074,7 @@ public:
   {
     exchange_allocated_ = exchange_allocated;
   }
-  bool is_parallel_more_than_part_cnt() const;
+
   virtual bool is_gi_above() const { return false; }
   inline void set_phy_plan_type(ObPhyPlanType phy_plan_type)
   {
@@ -1249,12 +1249,11 @@ public:
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
-  int check_need_pushdown_expr(const bool producer_id,
+  int check_need_pushdown_expr(const uint64_t producer_id,
                                bool &need_pushdown);
   int check_can_pushdown_expr(const ObRawExpr *expr, bool &can_pushdown);
   int get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id);
 
-  int force_pushdown_exprs(ObAllocExprContext &ctx);
   int get_pushdown_producer_id(uint64_t &producer_id);
 
   int extract_shared_exprs(const ObIArray<ObRawExpr*> &exprs,
@@ -1413,9 +1412,9 @@ public:
   int check_exchange_rescan(bool &need_rescan);
 
   /**
-   * Check if has exchange below.
+   * Check if has target op below.
    */
-  int check_has_exchange_below(bool &has_exchange) const;
+  int check_has_op_below(const log_op_def::ObLogOpType target_type, bool &has) const;
   /**
    * Allocate runtime filter operator.
    */
@@ -1544,7 +1543,7 @@ public:
   {
     inherit_sharding_index_ = inherit_sharding_index;
   }
-
+  inline bool need_re_est_child_cost() const { return need_re_est_child_cost_; }
   inline bool need_osg_merge() const { return need_osg_merge_; }
   inline void set_need_osg_merge(bool v)
   {
@@ -1634,6 +1633,8 @@ public:
   int get_part_column_exprs(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             ObIArray<ObRawExpr *> &part_cols) const;
+  bool is_parallel_more_than_part_cnt() const;
+  int64_t get_part_cnt() const;
   inline void set_parallel(int64_t parallel) { parallel_ = parallel; }
   inline int64_t get_parallel() const { return parallel_; }
   inline void set_op_parallel_rule(OpParallelRule op_parallel_rule) { op_parallel_rule_ = op_parallel_rule; }
@@ -1656,7 +1657,6 @@ public:
                             ObIArray<ObRawExpr *> &filters_exprs);
 
   int find_shuffle_join_filter(bool &find) const;
-  int has_window_function_below(bool &has_win_func) const;
   int get_pushdown_op(log_op_def::ObLogOpType op_type, const ObLogicalOperator *&op) const;
 
   virtual int get_plan_item_info(PlanText &plan_text,
@@ -1724,6 +1724,11 @@ public:
 
   inline ObIArray<double> &get_ambient_card() { return ambient_card_; }
 
+  int pre_check_can_px_batch_rescan(bool &find_nested_rescan,
+                                    bool &find_rescan_px,
+                                    bool nested) const;
+  int check_contain_dist_das(const ObIArray<ObAddr> &exec_server_list,
+                             bool &contain_dist_das) const;
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1974,6 +1979,7 @@ protected:
   bool need_osg_merge_;
   int64_t max_px_thread_branch_;
   int64_t max_px_group_branch_;
+  bool need_re_est_child_cost_;
 };
 
 template <typename Allocator>

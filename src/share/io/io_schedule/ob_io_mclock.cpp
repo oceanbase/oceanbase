@@ -16,6 +16,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_calibration.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/restore/ob_object_device.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -249,6 +250,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
   int ret = OB_SUCCESS;
   const int64_t current_ts = ObTimeUtility::fast_current_time();
   bool is_unlimited = false;
+  ObMClock *mclock = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -265,8 +267,9 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
     if (cur_queue_index < 0 || (cur_queue_index >= group_clocks_.count())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("index out of boundary", K(ret), K(cur_queue_index), K(group_clocks_.count()));
+    } else if (OB_FAIL(get_mclock(cur_queue_index, mclock))) {
+      LOG_WARN("get mclock failed", K(ret), K(cur_queue_index), K(group_clocks_.count()));
     } else {
-      ObMClock &mclock = get_mclock(cur_queue_index);
       double iops_scale = 0;
       bool is_io_ability_valid = true;
       ObAtomIOClock* unit_clock = &unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE)];
@@ -281,8 +284,8 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
       }
       // if we want to enable iops_limit without configuration of __all_disk_io_calibration,
       // ignore is_io_ability_valid firstly.
-      if (OB_UNLIKELY(is_io_ability_valid == false || mclock.is_unlimited())) {
-        //unlimited
+      if (OB_UNLIKELY(is_io_ability_valid == false || OB_ISNULL(mclock) || mclock->is_unlimited())) {
+        // unlimited
         is_unlimited = true;
       } else {
         const ObStorageIdMod &storage_info = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod();
@@ -295,12 +298,12 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
           }
         } else {
           // min_iops of group
-          mclock.reservation_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
+          mclock->reservation_clock_.atom_update_reserve(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->reservation_ts_);
         }
         // iops/bandwidth weight of tenant & group, TODO fengshuo.fs: THIS IS NOT CORRECT
-        mclock.proportion_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->proportion_ts_);
+        mclock->proportion_clock_.atom_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->proportion_ts_);
         // max iops/bandwidth of group
-        mclock.limitation_clock_.compare_and_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->limitation_ts_);
+        mclock->limitation_clock_.compare_and_update(current_ts  - PHY_QUEUE_BURST_USEC, iops_scale, phy_queue->limitation_ts_);
         // max iops/bandwidth of tenant
         unit_clock->compare_and_update(current_ts, iops_scale, phy_queue->limitation_ts_);
       }
@@ -379,14 +382,19 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, ObIORequest
 {
   int ret = OB_SUCCESS;
   uint64_t cur_queue_index = phy_queue->queue_index_;
+  ObMClock *mclock = nullptr;
   if(cur_queue_index < 0 || (cur_queue_index >= group_clocks_.count() && cur_queue_index != 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("index out of boundary", K(ret), K(cur_queue_index));
   } else if (OB_ISNULL(req.io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
+  } else if (OB_FAIL(get_mclock(cur_queue_index, mclock))) {
+    LOG_WARN("get mclock failed", K(ret), K(cur_queue_index), K(group_clocks_.count()));
+  } else if (OB_ISNULL(mclock)) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("mclock is null", K(ret), K(cur_queue_index), K(group_clocks_.count()));
   } else {
-    ObMClock &mclock = get_mclock(cur_queue_index);
     double iops_scale = 0;
     bool is_io_ability_valid = true;
     if (req.fd_.device_handle_->is_object_device()) {
@@ -396,7 +404,7 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, ObIORequest
                                                                        iops_scale,
                                                                        is_io_ability_valid))) {
       LOG_WARN("get iops scale failed", K(ret), K(req));
-    } else if (is_io_ability_valid && OB_FAIL(mclock.dial_back_reservation_clock(iops_scale))) {
+    } else if (is_io_ability_valid && OB_FAIL(mclock->dial_back_reservation_clock(iops_scale))) {
       LOG_WARN("dial back reservation clock failed", K(ret), K(iops_scale), K(req), K(mclock));
     }
   }
@@ -525,9 +533,16 @@ int64_t ObTenantIOClock::get_max_proportion_ts()
   return max_proportion_ts;
 }
 
-ObMClock &ObTenantIOClock::get_mclock(const int64_t queue_index)
+int ObTenantIOClock::get_mclock(const int64_t queue_index, ObMClock *&mclock)
 {
-  return group_clocks_.at(queue_index);
+  int ret = OB_SUCCESS;
+  if (queue_index >= group_clocks_.count()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("index out of boundary", K(ret), K(queue_index), K(group_clocks_.count()));
+  } else {
+    mclock = &group_clocks_.at(queue_index);
+  }
+  return ret;
 }
 
 int64_t ObTenantIOClock::calc_iops(const int64_t iops, const int64_t percentage)

@@ -104,7 +104,8 @@ int ObIMicroBlockRowScanner::init(
     LOG_WARN("null columns info", K(ret), K(param), K(context.use_fuse_row_cache_), KPC_(read_info));
   } else if (OB_FAIL(row_.init(allocator_, param.get_buffered_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     param_ = &param;
     context_ = &context;
     sstable_ = sstable;
@@ -279,6 +280,7 @@ int ObIMicroBlockRowScanner::get_next_rows()
     if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
       context_->table_store_stat_.logical_read_cnt_ += (current_ - prev_current);
       context_->table_store_stat_.physical_read_cnt_ += (current_ - prev_current);
+      REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, current_ - prev_current);
     }
   }
   return ret;
@@ -310,24 +312,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
     ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
-  return ret;
-}
-
-int ObIMicroBlockRowScanner::inner_get_row_header(const ObRowHeader *&row_header)
-{
-  int ret = OB_SUCCESS;
-  row_header = nullptr;
-  if (OB_FAIL(end_of_block())) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to judge end of block or not", K(ret));
-    }
-  } else {
-    if (OB_FAIL(reader_->get_row_header(current_, row_header))) {
-      LOG_WARN("micro block reader fail to get row.", K(ret), K_(macro_id));
-    } else {
-      current_ += step_;
-    }
-  }
   return ret;
 }
 
@@ -554,8 +538,9 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
   ObSEArray<ObSqlDatumInfo, 16> datum_infos;
   bool filter_applied_directly = false;
-  if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+  if ((ObIMicroBlockReader::Decoder == reader_->get_type() ||
+      ObIMicroBlockReader::CSDecoder == reader_->get_type()) &&
+      filter.can_pushdown_decoder()) {
     if (decoder_->can_apply_black(col_offsets) &&
         OB_FAIL(decoder_->filter_black_filter_batch(
                 parent,
@@ -819,6 +804,21 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   return ret;
 }
 
+////////////////////////////////// ObMicroBlockRowDirectScanner ////////////////////////////////////////////
+int ObMicroBlockRowDirectScanner::init(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    const blocksstable::ObSSTable *sstable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::init(param, context, sstable))) {
+    LOG_WARN("base init failed", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
 int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilterInfo &pd_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -839,6 +839,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     pd_filter_info.is_pd_to_cg_ = false;
     pd_filter_info.param_ = param_;
     pd_filter_info.context_ = context_;
+    pd_filter_info.disable_bypass_ = block_row_store_->get_where_optimizer() != nullptr ? block_row_store_->get_where_optimizer()->is_disable_bypass() : false;
     if (pd_filter_info.filter_->is_filter_constant()) {
       common::ObBitmap *result = nullptr;
       if (OB_FAIL(pd_filter_info.filter_->init_bitmap(pd_filter_info.count_, result))) {
@@ -849,6 +850,24 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     } else if (OB_FAIL(pd_filter_info.filter_->execute(nullptr, pd_filter_info, this, param_->vectorized_enabled_ && block_row_store_->is_empty()))) {
       LOG_WARN("Fail to filter", K(ret), KPC(pd_filter_info.filter_));
     }
+  }
+  return ret;
+}
+
+int ObMicroBlockRowDirectScanner::open(
+    const MacroBlockId &macro_id,
+    const ObMicroBlockData &block_data,
+    const bool is_left_border,
+    const bool is_right_border)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIMicroBlockRowScanner::open(macro_id, block_data, is_left_border, is_right_border))) {
+    LOG_WARN("base open failed", K(ret));
+  } else if (OB_FAIL(set_base_scan_param(is_left_border, is_right_border))) {
+    LOG_WARN("failed to set base scan param", K(ret), K_(macro_id), K(is_left_border), K(is_right_border));
+  } else if (OB_NOT_NULL(block_row_store_) && block_row_store_->is_valid()) {
+    // Storage pushdown filter is valid and reuse
+    block_row_store_->reset_blockscan();
   }
   return ret;
 }
@@ -948,10 +967,10 @@ int ObIMicroBlockRowScanner::get_next_rows(
 }
 
 int ObIMicroBlockRowScanner::get_aggregate_result(
-    const int32_t col_idx,
+    const int32_t col_offset,
     const int32_t *row_ids,
     const int64_t row_cap,
-    const bool projected,
+    const bool reserve_memory,
     ObAggGroupBase &agg_group)
 {
   int ret = OB_SUCCESS;
@@ -961,7 +980,7 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
   } else if (OB_UNLIKELY(nullptr == row_ids || row_cap < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), KP(row_ids), K(row_cap));
-  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_idx, reader_, row_ids, row_cap, projected))) {
+  } else if (OB_FAIL(agg_group.eval_batch(param_, context_, col_offset, reader_, row_ids, row_cap, reserve_memory))) {
     LOG_WARN("Fail to eval batch rows", K(ret));
   }
   return ret;
@@ -1133,16 +1152,11 @@ int ObMicroBlockRowScanner::estimate_row_count(
       }
       est.logical_row_count_ = est.physical_row_count_;
 
-      if (est.physical_row_count_ > 0 && consider_multi_version) {
-        const ObRowHeader *row_header;
+      ObMicroBlockReader *reader = static_cast<ObMicroBlockReader *>(reader_);
+      if (est.physical_row_count_ > 0 && consider_multi_version && !reader->committed_single_version_rows()) {
         est.logical_row_count_ = 0;
-        while (OB_SUCC(inner_get_row_header(row_header))) {
-          if (row_header->get_row_multi_version_flag().is_first_multi_version_row()) {
-            est.logical_row_count_ += row_header->get_row_flag().get_delta();
-          }
-        }
-        if (OB_ITER_END == ret || OB_BEYOND_THE_RANGE == ret) {
-          ret = OB_SUCCESS;
+        if (OB_FAIL(reader->get_logical_row_cnt(last_, current_, est.logical_row_count_))) {
+          LOG_WARN("failed to get logical row count", K(ret));
         }
       }
     }
@@ -1375,18 +1389,20 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
           }
         }
       }
+      ObCStringHelper helper;
       LOG_DEBUG("do compact", K(ret), K(current_), K(version_fit), K(final_result), K(finish_scanning_cur_rowkey_),
-                "cur_row", is_row_empty(row_) ? "empty" : to_cstring(row_),
-                "multi_version_row", to_cstring(multi_version_row), K_(macro_id));
+                "cur_row", is_row_empty(row_) ? "empty" : helper.convert(row_),
+                "multi_version_row", helper.convert(multi_version_row), K_(macro_id));
 
       if ((OB_SUCC(ret) && final_result) || OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(cache_cur_micro_row(found_first_row, final_result))) {
           LOG_WARN("failed to cache cur micro row", K(ret), K_(macro_id));
         }
+        helper.reset();
         LOG_DEBUG("cache cur micro row", K(ret), K(finish_scanning_cur_rowkey_),
-                  "cur_row", is_row_empty(row_) ? "empty" : to_cstring(row_),
-                  "prev_row", is_row_empty(prev_micro_row_) ? "empty" : to_cstring(prev_micro_row_),
+                  "cur_row", is_row_empty(row_) ? "empty" : helper.convert(row_),
+                  "prev_row", is_row_empty(prev_micro_row_) ? "empty" : helper.convert(prev_micro_row_),
                   K_(macro_id));
         break;
       }
@@ -1881,7 +1897,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg,
                                             can_read,
                                             scn_trans_version))) {
-    LOG_WARN("failed to check transaction status", K(ret));
+    LOG_WARN("failed to check transaction status", K(ret), K(*context_->store_ctx_));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&
@@ -1893,7 +1909,7 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
         "sql_seq", lock_for_read_arg.data_sql_sequence_);
     }
   }
-  if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+  if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
     cost_time = common::ObClockGenerator::getClock() - cost_time;
     if (cost_time > 10 * 1000 /*10ms*/) {
       LOG_INFO("multi-ver row scanner lock for read", K(ret), K(cost_time));
@@ -2135,7 +2151,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state_from_tx_table(
           committed_trans_version_, last_trans_state_, can_read))) {
         LOG_WARN("failed to add minor trans state", K(tmp_ret), K(read_trans_id), K(sql_seq), K(can_read));
       }
-      if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+      if (REACH_THREAD_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
         cost_time = common::ObClockGenerator::getClock() - cost_time;
         if (cost_time > 10 * 1000 /*10ms*/) {
           LOG_INFO("multi-ver minor row scanner check seq", K(ret), K(cost_time));

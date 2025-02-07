@@ -221,7 +221,9 @@ protected:
   virtual int64_t get_max_block_size(int64_t reserved_size) const override;
   virtual int64_t get_max_block_count(int64_t reserved_size) const override;
   virtual int64_t get_reserved_block_count() const override;
-  virtual int check_space_full(const int64_t required_size) const override;
+  virtual int check_space_full(
+    const int64_t required_size,
+    const bool alarm_if_space_full = true) const override;
   virtual int check_write_limited() const override;
 };
 

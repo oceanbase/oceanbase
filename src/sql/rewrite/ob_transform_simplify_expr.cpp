@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "common/ob_smart_call.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
 using namespace oceanbase::sql;
 
@@ -531,7 +532,7 @@ int ObTransformSimplifyExpr::extract_null_expr(ObRawExpr *expr,
                                                           got_result,
                                                           *ctx_->allocator_))) {
       LOG_WARN("failed to calc const or calculable expr", K(ret));
-    } else if (got_result && 
+    } else if (got_result && !result.is_ext() &&
                (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle())))  {
       if (OB_FAIL(null_expr_lists.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -1078,7 +1079,8 @@ int ObTransformSimplifyExpr::adjust_dummy_expr(const ObIArray<int64_t> &true_exp
 {
   int ret = OB_SUCCESS;
   transed_expr = NULL;
-  const bool remove_all = is_and_op ? !false_exprs.empty() : !true_exprs.empty();
+  const bool remove_all = is_and_op ? !false_exprs.empty() // false and ... -> false
+                                    : !true_exprs.empty(); // true or ... -> true
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx_), K(ret));
@@ -1111,9 +1113,11 @@ int ObTransformSimplifyExpr::adjust_dummy_expr(const ObIArray<int64_t> &true_exp
         }
       }
     } else if (adjust_exprs.count() - op_params.count() == 0) {
-      const bool b_value = is_and_op ? false_exprs.empty() : !true_exprs.empty();
-      if (b_value != true) {
-      } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, b_value))) {
+      if (is_and_op && false_exprs.empty() // and(all true) -> true
+          && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, true))) {
+        LOG_WARN("create const bool expr failed", K(ret));
+      } else if (!is_and_op && true_exprs.empty() // or(all false) -> false
+                 && OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, transed_expr, false))) {
         LOG_WARN("create const bool expr failed", K(ret));
       }
     }
@@ -1440,7 +1444,7 @@ int ObTransformSimplifyExpr::do_remove_dummy_nvl(ObDMLStmt *stmt,
                                                                 got_result,
                                                                 *ctx_->allocator_))) {
             LOG_WARN("failed to calc const or caculable expr", K(ret));
-          } else if (got_result && (result.is_null()
+          } else if (got_result && !result.is_ext() && (result.is_null()
                      || (lib::is_oracle_mode() && result.is_null_oracle()))) {
             // NVL(NULL, child_1) -> child_1
             ObExprConstraint expr_cons(child_0, PreCalcExprExpectResult::PRE_CALC_RESULT_NULL);
@@ -1760,7 +1764,7 @@ int ObTransformSimplifyExpr::try_remove_subquery_in_expr(ObDMLStmt* stmt, ObRawE
     bool left_transform_happened = false;
     bool right_transform_happened = false;
     bool is_empty_left = false;
-    bool right_is_empty = false;
+    bool is_empty_right = false;
     if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) && expr->get_param_count() == 2 &&
         NULL != expr->get_param_expr(0) && NULL != expr->get_param_expr(1)) {
       param_expr_left = expr->get_param_expr(0);
@@ -1776,11 +1780,11 @@ int ObTransformSimplifyExpr::try_remove_subquery_in_expr(ObDMLStmt* stmt, ObRawE
                OB_FAIL(do_remove_subquery(stmt, param_expr_left, left_transform_happened, is_empty_left))) {
       LOG_WARN("failed to do_remove_subquery_as_expr", K(ret));
     } else if (NULL != param_expr_right &&
-               OB_FAIL(do_remove_subquery(stmt, param_expr_right, right_transform_happened, right_is_empty))) {
+               OB_FAIL(do_remove_subquery(stmt, param_expr_right, right_transform_happened, is_empty_right))) {
       LOG_WARN("failed to do_remove_subquery_as_expr", K(ret));
     } else if (!left_transform_happened && !right_transform_happened) {
       // do nothing
-    } else if (OB_FAIL(adjust_subquery_comparison_expr(expr, is_empty_left, right_is_empty, param_expr_left, param_expr_right))) {
+    } else if (OB_FAIL(adjust_subquery_comparison_expr(expr, is_empty_left, is_empty_right, param_expr_left, param_expr_right))) {
       LOG_WARN("failed to adjust subquery comparison operator", K(ret));
     } else {
       trans_happened = true;
@@ -1814,29 +1818,43 @@ int ObTransformSimplifyExpr::adjust_subquery_comparison_expr(ObRawExpr*& expr,
                                                              ObRawExpr* param_expr_right)
 {
   int ret = OB_SUCCESS;
-  bool is_empty_cmp_value = (NULL != param_expr_left && NULL != param_expr_right) &&
-                             ((!param_expr_left->is_query_ref_expr() && is_empty_right) ||
-                             (!param_expr_right->is_query_ref_expr() && is_empty_left));
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(param_expr_left)) {
+  bool b_value = false;
+  bool build_bool_expr = true;
+  ObRawExpr *bool_expr = NULL;
+  if (OB_ISNULL(expr)
+      || OB_ISNULL(ctx_)
+      || OB_ISNULL(ctx_->expr_factory_)
+      || OB_ISNULL(param_expr_left)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parameters have null", K(expr), K(ctx_));
-  } else if ((T_OP_NOT_EXISTS == expr->get_expr_type() && is_empty_left) ||
-             (T_OP_EXISTS == expr->get_expr_type() && !is_empty_left) ||
-             (is_empty_left && is_empty_right && T_OP_SQ_NSEQ == expr->get_expr_type()) ||
-             (expr->has_flag(IS_WITH_ALL) && is_empty_right)) {
-    ObRawExpr *bool_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, bool_expr, true))) {
-      LOG_WARN("create const bool expr failed", K(ret));
-    } else {
-      expr = bool_expr;
-    }
-  } else if ((is_empty_cmp_value && T_OP_SQ_NSEQ != expr->get_expr_type()) ||
-             (T_OP_NOT_EXISTS == expr->get_expr_type() && !is_empty_left) ||
-             (T_OP_EXISTS == expr->get_expr_type() && is_empty_left)) {
-    ObRawExpr *bool_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, bool_expr, false))) {
-      LOG_WARN("create const bool expr failed", K(ret));
+    LOG_WARN("unexpected null parameter", K(expr), K(ctx_));
+  } else if (T_OP_NOT_EXISTS == expr->get_expr_type()) {
+    // NOT EXISTS (empty set)     -> true
+    // NOT EXISTS (non-empty set) -> false
+    b_value = is_empty_left;
+  } else if (T_OP_EXISTS == expr->get_expr_type()) {
+    // EXISTS (empty set)         -> false
+    // EXISTS (non-empty set)     -> true
+    b_value = !is_empty_left;
+  } else if (T_OP_SQ_NSEQ == expr->get_expr_type()
+             && is_empty_left
+             && is_empty_right) {
+    // (empty set) SQ_ NSEQ (empty_set) -> true
+    b_value = true;
+  } else if (expr->has_flag(IS_WITH_ANY) && is_empty_right) {
+    // >,>=,<,<=,=any(empty set)  -> false
+    b_value = false;
+  } else if (expr->has_flag(IS_WITH_ALL) && is_empty_right) {
+    // >,>=,<,<=,=all(empty set)  -> true
+    b_value = true;
+  } else {
+    build_bool_expr = false;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (build_bool_expr) {
+    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_,
+                                                      bool_expr,
+                                                      b_value))) {
+      LOG_WARN("failed to build const bool expr", K(ret));
     } else {
       expr = bool_expr;
     }
@@ -1846,9 +1864,10 @@ int ObTransformSimplifyExpr::adjust_subquery_comparison_expr(ObRawExpr*& expr,
     if (OB_ISNULL(param_expr_right)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if ((!param_expr_left->is_query_ref_expr() && !param_expr_right->is_query_ref_expr() &&
-        OB_FAIL(ObTransformUtils::query_cmp_to_value_cmp(expr->get_expr_type(), op_type)))
-        || T_INVALID == op_type) {
+    } else if ((!param_expr_left->is_query_ref_expr()
+                && !param_expr_right->is_query_ref_expr()
+                && OB_FAIL(ObTransformUtils::query_cmp_to_value_cmp(expr->get_expr_type(), op_type)))
+               || T_INVALID == op_type) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get op type", K(ret), K(op_type));
     } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(op_type, new_expr))) {
@@ -1867,10 +1886,9 @@ int ObTransformSimplifyExpr::adjust_subquery_comparison_expr(ObRawExpr*& expr,
       expr = new_expr;
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
   }
   return ret;
 }
@@ -1879,14 +1897,14 @@ int ObTransformSimplifyExpr::is_valid_for_remove_subquery(const ObSelectStmt* st
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  bool has_rand = false;
+  bool is_deterministic = false;
   bool has_rownum = false;
   if (stmt->is_contains_assignment() || stmt->has_subquery() || 0 != stmt->get_window_func_count() ||
       stmt->is_hierarchical_query() || stmt->is_set_stmt() || 0 != stmt->get_pseudo_column_like_exprs().count()) {
     /* do nothing */
-  } else if (OB_FAIL(stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(stmt->is_query_deterministic(is_deterministic))) {
     LOG_WARN("failed to check if stmt has rand", K(ret));
-  } else if (has_rand) {
+  } else if (!is_deterministic) {
     /* do nothing */
   } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
     LOG_WARN("failed to check if stmt has rownum", K(ret));
@@ -2182,7 +2200,8 @@ int ObTransformSimplifyExpr::replace_expr_when_filter_is_false(ObRawExpr*& expr)
     }
   } else if (expr->has_flag(IS_AGG)) {
     ObAggFunRawExpr* aggr_expr = static_cast<ObAggFunRawExpr*>(expr);
-    if (T_FUN_COUNT == aggr_expr->get_expr_type()) {
+    if (T_FUN_COUNT == aggr_expr->get_expr_type() ||
+        T_FUN_SUM_OPNSIZE == aggr_expr->get_expr_type()) {
       ObConstRawExpr* zero_expr = NULL;
       ObRawExpr* cast_expr = NULL;
       if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_, ObIntType, 0, zero_expr))) {
@@ -2945,8 +2964,7 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K_(ctx), K_(ctx_->expr_factory), K(ret));
   } else {
-    ObStmtCompareContext cmp_ctx;
-    cmp_ctx.init(&query_ctx.calculable_items_);
+    ObQuestionmarkEqualCtx cmp_ctx(false);
     for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
       if (OB_ISNULL(exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2959,17 +2977,16 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
         } else if (exprs.at(i)->same_as(*exprs.at(j), &cmp_ctx)) {
           if (OB_FAIL(exprs.remove(i))) {
             LOG_WARN("failed to remove", K(ret));
-          } else if (!cmp_ctx.equal_param_info_.empty()) {
-            if (OB_FAIL(append(ctx_->equal_param_constraints_,
-                               cmp_ctx.equal_param_info_))) {
+          } else if (!cmp_ctx.equal_pairs_.empty()) {
+            if (OB_FAIL(append(ctx_->equal_param_constraints_, cmp_ctx.equal_pairs_))) {
               LOG_WARN("failed to append expr", K(ret));
             } else {
-              cmp_ctx.equal_param_info_.reset();
+              cmp_ctx.equal_pairs_.reset();
             }
           }
           break;
-        } else if (!cmp_ctx.equal_param_info_.empty()) {
-          cmp_ctx.equal_param_info_.reset();
+        } else if (!cmp_ctx.equal_pairs_.empty()) {
+          cmp_ctx.equal_pairs_.reset();
         }
       }
     }

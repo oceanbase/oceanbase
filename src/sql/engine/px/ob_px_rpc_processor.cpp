@@ -60,12 +60,11 @@ void ObInitSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 int ObInitSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_px_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -97,6 +96,9 @@ int ObInitSqcP::process()
     LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(required_px_workers_number_, 1);
+    ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(admitted_px_workers_number_, result_.reserved_thread_count_);
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));
@@ -235,7 +237,7 @@ int ObInitSqcP::after_process(int error_code)
     session->set_session_sleep();
   }
 
-  ObActiveSessionGuard::get_stat().in_px_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = false;
   /**
    * 此处需要清理中断，并把分配的线程数和handler释放.
    * worker正常启动后，此时它的引用计数被更新成了
@@ -386,12 +388,11 @@ void ObInitFastSqcP::destroy()
     int report_ret = OB_SUCCESS;
     ObPxSqcHandler::release_handler(arg_.sqc_handler_, report_ret);
   }
-  ObActiveSessionGuard::setup_default_ash();
 }
 
 int ObInitFastSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -440,7 +441,7 @@ int ObInitFastSqcP::process()
     ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
 
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   if (OB_NOT_NULL(sqc_handler)) {
     // link channel之前或者link过程可能会失败.
     // 如果sqc和qc没有link, 由response将 ret 通知给px.
@@ -607,8 +608,8 @@ int ObPxTenantTargetMonitorP::process()
   const uint64_t tenant_id = arg_.get_tenant_id();
   const uint64_t follower_version = arg_.get_version();
   // server id of the leader that the follower sync with previously.
-  const uint64_t prev_leader_server_id = ObPxTenantTargetMonitor::get_server_id(follower_version);
-  const uint64_t leader_server_id  = GCTX.server_id_;
+  const uint64_t prev_leader_server_index = ObPxTenantTargetMonitor::get_server_index(follower_version);
+  const uint64_t leader_server_index  = GCTX.get_server_index();
   bool is_leader;
   uint64_t leader_version;
   result_.set_tenant_id(tenant_id);
@@ -616,7 +617,7 @@ int ObPxTenantTargetMonitorP::process()
     LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
   } else if (!is_leader) {
     result_.set_status(MONITOR_NOT_MASTER);
-  } else if (arg_.need_refresh_all_ || prev_leader_server_id != leader_server_id) {
+  } else if (arg_.need_refresh_all_ || prev_leader_server_index != leader_server_index) {
     if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
       LOG_ERROR("reset leader statistics failed", K(ret));
     } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
@@ -625,7 +626,7 @@ int ObPxTenantTargetMonitorP::process()
       result_.set_status(MONITOR_VERSION_NOT_MATCH);
       result_.set_version(leader_version);
       LOG_INFO("need refresh all", K(tenant_id), K(arg_.need_refresh_all_),
-               K(follower_version), K(prev_leader_server_id), K(leader_server_id));
+               K(follower_version), K(prev_leader_server_index), K(leader_server_index));
     }
   } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
     LOG_WARN("get master_version failed", K(ret), K(tenant_id));

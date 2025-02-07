@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_WRITE_BUFFER_POOL_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_WRITE_BUFFER_POOL_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_WRITE_BUFFER_POOL_H_
 
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/container/ob_array.h"
@@ -137,11 +137,52 @@ public:
     }
   };
 public:
+  bool is_block_beginning_; // means buf_ points to the beginning of a memory block,
+                            // allocator only free page entry with this flag set to true.
   char *buf_;
   int64_t fd_;
   int32_t state_;
   uint32_t next_page_id_;
   ObTmpFilePageUniqKey page_key_;
+};
+
+struct WBPShrinkContext
+{
+  enum WBP_SHRINK_STATE
+  {
+    INVALID = 0,
+    SHRINKING_SWAP,
+    SHRINKING_RELEASE_BLOCKS,
+    SHRINKING_FINISH
+  };
+public:
+  WBPShrinkContext();
+  ~WBPShrinkContext() { reset(); }
+  int init(uint32_t lower_page_id, uint32_t max_allow_alloc_page_id, uint32_t upper_page_id);
+  void reset();
+  bool is_valid();
+  int64_t get_not_alloc_page_num();
+  bool in_not_alloc_range(uint32_t page_id);
+  bool in_shrinking_range(uint32_t page_id);
+  bool is_higher_than_shrink_end_point(uint32_t page_id)
+  {
+    return is_inited_ && page_id > upper_page_id_;
+  }
+  TO_STRING_KV(K(is_inited_), K(lower_page_id_), K(max_allow_alloc_page_id_), K(upper_page_id_),
+               K(wbp_shrink_state_), K(shrink_list_head_), K(shrink_list_size_));
+public:
+  bool is_inited_;
+  uint32_t max_allow_alloc_page_id_; // in the range between [lower_page_id_ - 1, upper_page_id_].
+                                     // init as upper_page_id_ and will decrease towards lower_page_id_ - 1
+                                     // when free page number increase.
+                                     // the pages in the range [max_allow_alloc_page_id_ + 1, upper_page_id_]
+                                     // are not allowed to be allocated during shrinking.
+  uint32_t lower_page_id_;
+  uint32_t upper_page_id_;
+  uint32_t shrink_list_head_;       // tmp free_page_list when the new free page in the range [lower_page_id, upper_page_id]
+                                    // these pages will not be used by alloc_page()
+  int64_t shrink_list_size_;
+  WBP_SHRINK_STATE wbp_shrink_state_;
 };
 
 // preallocate a set of pages for the tmp file to write data. the pages are divided into data and meta types.
@@ -239,17 +280,40 @@ public:
   int notify_write_back_succ(const int64_t fd, const uint32_t page_id, const ObTmpFilePageUniqKey page_key);
   int notify_write_back_fail(int64_t fd, uint32_t page_id, const ObTmpFilePageUniqKey page_key);
   int64_t get_max_page_num();
+  OB_INLINE int64_t get_used_page_num() { return used_page_num_; }
   int64_t get_data_page_num();
   int64_t get_dirty_page_num();
   int64_t get_write_back_page_num();
   int64_t get_dirty_meta_page_num();
   int64_t get_dirty_data_page_num();
   int64_t get_dirty_page_percentage();
+  int64_t get_cannot_be_evicted_page_num();
   int64_t get_cannot_be_evicted_page_percentage();
   int64_t get_max_data_page_num();
   int64_t get_meta_page_num();
   int64_t get_free_data_page_num();
+  void print_page_entry(const uint32_t page_id);
   void print_statistics();
+public:
+  // for shrinking
+  bool need_to_shrink()
+  {
+    return ATOMIC_LOAD(&capacity_) > get_memory_limit();
+  }
+  int init_shrink_context();
+  int begin_shrinking();
+  int finish_shrinking();
+  int release_blocks_in_shrink_range();
+  int advance_shrink_state();
+  OB_INLINE WBPShrinkContext::WBP_SHRINK_STATE get_wbp_state() const { return shrink_ctx_.wbp_shrink_state_; }
+  OB_INLINE WBPShrinkContext &get_shrink_ctx() { return shrink_ctx_; }
+private:
+  // for shrinking
+  int remove_invalid_page_in_free_list_();
+  bool is_shrink_range_all_free_();
+  void insert_page_entry_to_free_list_(const uint32_t page_id, uint32_t &free_list_head);
+  int64_t get_not_allow_alloc_percent_();
+  uint32_t cal_max_allow_alloc_page_id_(int64_t lower_bound, int64_t upper_bound);
 private:
   static double MAX_DATA_PAGE_USAGE_RATIO; // control data pages ratio, can be preempted by meta pages
   // only for unittest
@@ -272,24 +336,24 @@ private:
                         char *&buf);
   // check if the specified PageEntryType has available space
   bool has_free_page_(PageEntryType type);
-  // ATTENTION! access fat_, needs to be protected by r-lock
   OB_INLINE bool is_valid_page_id_(const uint32_t page_id) const
   {
     return page_id != ObTmpFileGlobal::INVALID_PAGE_ID && page_id >= 0 &&
-           page_id < fat_.count() && OB_NOT_NULL(fat_[page_id].buf_);
+           page_id < fat_.count();
   }
   int expand_();
-  int reduce_();
+  int release_all_blocks_();
   DISALLOW_COPY_AND_ASSIGN(ObTmpWriteBufferPool);
 private:
   common::ObArray<ObPageEntry> fat_;   // file allocation table
-  common::TCRWLock lock_;            // holds w-lock when expanding and shrinking fat_, holds r-lock when reading fat_
+  common::TCRWLock lock_;              // holds w-lock when expanding and shrinking fat_, holds r-lock when reading fat_
+  ObSpinLock free_list_lock_;          // holds lock when updating free page list
   common::ObFIFOAllocator allocator_;
   bool is_inited_;
   int64_t capacity_;                   // in bytes
   int64_t dirty_page_num_;
   int64_t used_page_num_;
-  uint32_t first_free_page_id_;
+  uint32_t first_free_page_id_;        // head of free page list
   int64_t wbp_memory_limit_;           // in bytes
   int64_t default_wbp_memory_limit_;   // if this var is valid, the wbp memory limit will always be it.
                                        // currently, this var is only modified in ut.
@@ -300,6 +364,7 @@ private:
   int64_t dirty_data_page_cnt_;
   int64_t write_back_data_cnt_;
   int64_t write_back_meta_cnt_;
+  WBPShrinkContext shrink_ctx_;
 };
 
 }  // end namespace tmp_file

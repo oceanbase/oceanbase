@@ -11,6 +11,7 @@
  */
 
 #include "sql_parser_base.h"
+#include "ob_parser_charset_utils.h"
 
 #define YY_EXTRA_TYPE void *
 #define yyconst const
@@ -28,6 +29,7 @@ extern YY_BUFFER_STATE obsql_mysql_yy_scan_bytes (yyconst char *bytes,int len ,y
 extern void obsql_mysql_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
 extern void obsql_mysql_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
 #ifdef OB_BUILD_ORACLE_PARSER
+
 extern int obsql_oracle_single_byte_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
 extern int obsql_oracle_single_byte_yyparse(ParseResult *result);
 extern int obsql_oracle_single_byte_multi_fast_parse(ParseResult *p);
@@ -37,6 +39,7 @@ extern int obsql_oracle_single_byte_yylex_destroy (yyscan_t yyscanner );
 extern YY_BUFFER_STATE obsql_oracle_single_byte_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
 extern void obsql_oracle_single_byte_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
 extern void obsql_oracle_single_byte_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+
 extern int obsql_oracle_utf8_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
 extern int obsql_oracle_utf8_yyparse(ParseResult *result);
 extern int obsql_oracle_utf8_multi_fast_parse(ParseResult *p);
@@ -46,6 +49,7 @@ extern int obsql_oracle_utf8_yylex_destroy (yyscan_t yyscanner );
 extern YY_BUFFER_STATE obsql_oracle_utf8_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
 extern void obsql_oracle_utf8_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
 extern void obsql_oracle_utf8_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+
 extern int obsql_oracle_gbk_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
 extern int obsql_oracle_gbk_yyparse(ParseResult *result);
 extern int obsql_oracle_gbk_multi_fast_parse(ParseResult *p);
@@ -55,7 +59,21 @@ extern int obsql_oracle_gbk_yylex_destroy (yyscan_t yyscanner );
 extern YY_BUFFER_STATE obsql_oracle_gbk_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
 extern void obsql_oracle_gbk_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
 extern void obsql_oracle_gbk_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+
+extern int obsql_oracle_hkscs_yylex_init_extra(YY_EXTRA_TYPE yy_user_defined,yyscan_t* ptr_yy_globals );
+extern int obsql_oracle_hkscs_yyparse(ParseResult *result);
+extern int obsql_oracle_hkscs_multi_fast_parse(ParseResult *p);
+extern int obsql_oracle_hkscs_multi_values_parse(ParseResult *p);
+extern int obsql_oracle_hkscs_fast_parse(ParseResult *p);
+extern int obsql_oracle_hkscs_yylex_destroy (yyscan_t yyscanner );
+extern YY_BUFFER_STATE obsql_oracle_hkscs_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obsql_oracle_hkscs_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obsql_oracle_hkscs_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+
+extern int obcharset_get_parser_type_by_coll(const int collation_type, ObCharsetParserType *parser_type);
+
 #endif
+
 int parse_init(ParseResult *p)
 {
   int ret = 0;  // can not include C++ file "ob_define.h"
@@ -71,40 +89,29 @@ int parse_init(ParseResult *p)
   if (OB_LIKELY( 0 == ret)) {
 #ifdef OB_BUILD_ORACLE_PARSER
     if (IS_ORACLE_COMPATIBLE) {
-      switch (p->connection_collation_) {
-        case 28/*CS_TYPE_GBK_CHINESE_CI*/:
-        case 87/*CS_TYPE_GBK_BIN*/:
-        case 216/*CS_TYPE_GB18030_2022_BIN*/:
-        case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
-        case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
-        case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
-        case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
-        case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
-        case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
-        case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
-        case 249/*CS_TYPE_GB18030_BIN*/:
-          ret = obsql_oracle_gbk_yylex_init_extra(p, &(p->yyscan_info_));
-          break;
-        case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
-        case 46/*CS_TYPE_UTF8MB4_BIN*/:
-        case 63/*CS_TYPE_BINARY*/:
-        case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
-        case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
-          ret = obsql_oracle_utf8_yylex_init_extra(p, &(p->yyscan_info_));
-          break;
-        case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-        case 47/*CS_TYPE_LATIN1_BIN*/:
-        case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
-        case 65/*CS_TYPE_ASCII_BIN*/:
-        case 18/*CS_TYPE_TIS620_THAI_CI*/:
-        case 89/*CS_TYPE_TIS620_BIN*/:
-          ret = obsql_oracle_single_byte_yylex_init_extra(p, &(p->yyscan_info_));
-          break;
-        default: {
-          ret = -1;
-          (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support connection collation: %u",
-                                                                          p->connection_collation_);
-          break;
+      ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
+      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+                 0 != ret) {
+        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+                                                    p->connection_collation_);
+      } else {
+        switch(type) {
+          case CHARSET_PARSER_TYPE_GB:
+            ret = obsql_oracle_gbk_yylex_init_extra(p, &(p->yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_SINGLE_BYTE:
+            ret = obsql_oracle_single_byte_yylex_init_extra(p, &(p->yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_UTF8MB4:
+            ret = obsql_oracle_utf8_yylex_init_extra(p, &(p->yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_HKSCS:
+            ret = obsql_oracle_hkscs_yylex_init_extra(p, &(p->yyscan_info_));
+            break;
+          default:
+            ret = -1;
+            (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support connection collation: %u",
+                                                                            p->connection_collation_);
         }
       }
     } else {
@@ -132,40 +139,29 @@ int parse_terminate(ParseResult *p)
   if (OB_LIKELY(NULL != p->yyscan_info_)) {
 #ifdef OB_BUILD_ORACLE_PARSER
     if (IS_ORACLE_COMPATIBLE) {
-      switch (p->connection_collation_) {
-        case 28/*CS_TYPE_GBK_CHINESE_CI*/:
-        case 87/*CS_TYPE_GBK_BIN*/:
-        case 216/*CS_TYPE_GB18030_2022_BIN*/:
-        case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
-        case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
-        case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
-        case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
-        case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
-        case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
-        case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
-        case 249/*CS_TYPE_GB18030_BIN*/:
-          ret = obsql_oracle_gbk_yylex_destroy(p->yyscan_info_);
-          break;
-        case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
-        case 46/*CS_TYPE_UTF8MB4_BIN*/:
-        case 63/*CS_TYPE_BINARY*/:
-        case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
-        case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
-          ret = obsql_oracle_utf8_yylex_destroy(p->yyscan_info_);
-          break;
-        case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-        case 47/*CS_TYPE_LATIN1_BIN*/:
-        case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
-        case 65/*CS_TYPE_ASCII_BIN*/:
-        case 18/*CS_TYPE_TIS620_THAI_CI*/:
-        case 89/*CS_TYPE_TIS620_BIN*/:
-          ret = obsql_oracle_single_byte_yylex_destroy(p->yyscan_info_);
-          break;
-        default: {
-          ret = -1;
-          (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support connection collation: %u",
-                                                                          p->connection_collation_);
-          break;
+      ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
+      if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+                 0 != ret) {
+        (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+                                                    p->connection_collation_);
+      } else {
+        switch(type) {
+          case CHARSET_PARSER_TYPE_GB:
+            ret = obsql_oracle_gbk_yylex_destroy(p->yyscan_info_);
+            break;
+          case CHARSET_PARSER_TYPE_SINGLE_BYTE:
+            ret = obsql_oracle_single_byte_yylex_destroy(p->yyscan_info_);
+            break;
+          case CHARSET_PARSER_TYPE_UTF8MB4:
+            ret = obsql_oracle_utf8_yylex_destroy(p->yyscan_info_);
+            break;
+          case CHARSET_PARSER_TYPE_HKSCS:
+            ret = obsql_oracle_hkscs_yylex_destroy(p->yyscan_info_);
+            break;
+          default:
+            ret = -1;
+            (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support connection collation: %u",
+                                                                            p->connection_collation_);
         }
       }
     } else {
@@ -233,113 +229,125 @@ int parse_sql(ParseResult *p, const char *buf, size_t input_len)
       } else {
 #ifdef OB_BUILD_ORACLE_PARSER
         if (IS_ORACLE_COMPATIBLE) {
-          switch (p->connection_collation_) {
-            case 28/*CS_TYPE_GBK_CHINESE_CI*/:
-            case 87/*CS_TYPE_GBK_BIN*/:
-            case 216/*CS_TYPE_GB18030_2022_BIN*/:
-            case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
-            case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
-            case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
-            case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
-            case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
-            case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
-            case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
-            case 249/*CS_TYPE_GB18030_BIN*/: {
-              YY_BUFFER_STATE bp = obsql_oracle_gbk_yy_scan_bytes(buf, len, p->yyscan_info_);
-              obsql_oracle_gbk_yy_switch_to_buffer(bp, p->yyscan_info_);
-              int tmp_ret = -1;
-              if (p->is_fp_) {
-                tmp_ret = obsql_oracle_gbk_fast_parse(p);
-              } else if (p->is_multi_query_) {
-                tmp_ret = obsql_oracle_gbk_multi_fast_parse(p);
-              } else if (p->is_multi_values_parser_) {
-                tmp_ret = obsql_oracle_gbk_multi_values_parse(p);
-              } else {
-                tmp_ret = obsql_oracle_gbk_yyparse(p);
-              }
-              if (0 == tmp_ret) {
-                ret = OB_PARSER_SUCCESS;
-              } else if (2 == tmp_ret) {
-                ret = OB_PARSER_ERR_NO_MEMORY;
-              } else {
-                if (0 != p->extra_errno_) {
-                  ret = p->extra_errno_;
+          ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
+          if (ret = obcharset_get_parser_type_by_coll(p->connection_collation_, &type),
+                    0 != ret) {
+            (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get charset failed: %u",
+                                                        p->connection_collation_);
+          } else {
+            switch(type) {
+              case CHARSET_PARSER_TYPE_GB: {
+                YY_BUFFER_STATE bp = obsql_oracle_gbk_yy_scan_bytes(buf, len, p->yyscan_info_);
+                obsql_oracle_gbk_yy_switch_to_buffer(bp, p->yyscan_info_);
+                int tmp_ret = -1;
+                if (p->is_fp_) {
+                  tmp_ret = obsql_oracle_gbk_fast_parse(p);
+                } else if (p->is_multi_query_) {
+                  tmp_ret = obsql_oracle_gbk_multi_fast_parse(p);
+                } else if (p->is_multi_values_parser_) {
+                  tmp_ret = obsql_oracle_gbk_multi_values_parse(p);
                 } else {
-                  ret = OB_PARSER_ERR_PARSE_SQL;
+                  tmp_ret = obsql_oracle_gbk_yyparse(p);
                 }
-              }
-              obsql_oracle_gbk_yy_delete_buffer(bp, p->yyscan_info_);
-              break;
-            }
-            case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
-            case 46/*CS_TYPE_UTF8MB4_BIN*/:
-            case 63/*CS_TYPE_BINARY*/:
-            case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
-            case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
-            {
-              YY_BUFFER_STATE bp = obsql_oracle_utf8_yy_scan_bytes(buf, len, p->yyscan_info_);
-              obsql_oracle_utf8_yy_switch_to_buffer(bp, p->yyscan_info_);
-              int tmp_ret = -1;
-              if (p->is_fp_) {
-                tmp_ret = obsql_oracle_utf8_fast_parse(p);
-              } else if (p->is_multi_query_) {
-                tmp_ret = obsql_oracle_utf8_multi_fast_parse(p);
-              } else if (p->is_multi_values_parser_) {
-                tmp_ret = obsql_oracle_utf8_multi_values_parse(p);
-              } else {
-                tmp_ret = obsql_oracle_utf8_yyparse(p);
-              }
-              if (0 == tmp_ret) {
-                ret = OB_PARSER_SUCCESS;
-              } else if (2 == tmp_ret) {
-                ret = OB_PARSER_ERR_NO_MEMORY;
-              } else {
-                if (0 != p->extra_errno_) {
-                  ret = p->extra_errno_;
+                if (0 == tmp_ret) {
+                  ret = OB_PARSER_SUCCESS;
+                } else if (2 == tmp_ret) {
+                  ret = OB_PARSER_ERR_NO_MEMORY;
                 } else {
-                  ret = OB_PARSER_ERR_PARSE_SQL;
+                  if (0 != p->extra_errno_) {
+                    ret = p->extra_errno_;
+                  } else {
+                    ret = OB_PARSER_ERR_PARSE_SQL;
+                  }
                 }
+                obsql_oracle_gbk_yy_delete_buffer(bp, p->yyscan_info_);
+                break;
               }
-              obsql_oracle_utf8_yy_delete_buffer(bp, p->yyscan_info_);
-              break;
-            }
-            case 11/*CS_TYPE_ASCII_GENERAL_CI*/:
-            case 65/*CS_TYPE_ASCII_BIN*/:
-            case 18/*CS_TYPE_TIS620_THAI_CI*/:
-            case 89/*CS_TYPE_TIS620_BIN*/:
-            case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-            case 47/*CS_TYPE_LATIN1_BIN*/:{
-              YY_BUFFER_STATE bp = obsql_oracle_single_byte_yy_scan_bytes(buf, len, p->yyscan_info_);
-              obsql_oracle_single_byte_yy_switch_to_buffer(bp, p->yyscan_info_);
-              int tmp_ret = -1;
-              if (p->is_fp_) {
-                tmp_ret = obsql_oracle_single_byte_fast_parse(p);
-              } else if (p->is_multi_query_) {
-                tmp_ret = obsql_oracle_single_byte_multi_fast_parse(p);
-              } else if (p->is_multi_values_parser_) {
-                tmp_ret = obsql_oracle_single_byte_multi_values_parse(p);
-              } else {
-                tmp_ret = obsql_oracle_single_byte_yyparse(p);
-              }
-              if (0 == tmp_ret) {
-                ret = OB_PARSER_SUCCESS;
-              } else if (2 == tmp_ret) {
-                ret = OB_PARSER_ERR_NO_MEMORY;
-              } else {
-                if (0 != p->extra_errno_) {
-                  ret = p->extra_errno_;
+              case CHARSET_PARSER_TYPE_SINGLE_BYTE: {
+                YY_BUFFER_STATE bp = obsql_oracle_single_byte_yy_scan_bytes(buf, len, p->yyscan_info_);
+                obsql_oracle_single_byte_yy_switch_to_buffer(bp, p->yyscan_info_);
+                int tmp_ret = -1;
+                if (p->is_fp_) {
+                  tmp_ret = obsql_oracle_single_byte_fast_parse(p);
+                } else if (p->is_multi_query_) {
+                  tmp_ret = obsql_oracle_single_byte_multi_fast_parse(p);
+                } else if (p->is_multi_values_parser_) {
+                  tmp_ret = obsql_oracle_single_byte_multi_values_parse(p);
                 } else {
-                  ret = OB_PARSER_ERR_PARSE_SQL;
+                  tmp_ret = obsql_oracle_single_byte_yyparse(p);
                 }
+                if (0 == tmp_ret) {
+                  ret = OB_PARSER_SUCCESS;
+                } else if (2 == tmp_ret) {
+                  ret = OB_PARSER_ERR_NO_MEMORY;
+                } else {
+                  if (0 != p->extra_errno_) {
+                    ret = p->extra_errno_;
+                  } else {
+                    ret = OB_PARSER_ERR_PARSE_SQL;
+                  }
+                }
+                obsql_oracle_single_byte_yy_delete_buffer(bp, p->yyscan_info_);
+                break;
               }
-              obsql_oracle_single_byte_yy_delete_buffer(bp, p->yyscan_info_);
-              break;
-            }
-            default: {
-              ret = OB_PARSER_ERR_UNEXPECTED;
-              (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support conn collation: %u",
-                                                                          p->connection_collation_);
-              break;
+              case CHARSET_PARSER_TYPE_UTF8MB4: {
+                YY_BUFFER_STATE bp = obsql_oracle_utf8_yy_scan_bytes(buf, len, p->yyscan_info_);
+                obsql_oracle_utf8_yy_switch_to_buffer(bp, p->yyscan_info_);
+                int tmp_ret = -1;
+                if (p->is_fp_) {
+                  tmp_ret = obsql_oracle_utf8_fast_parse(p);
+                } else if (p->is_multi_query_) {
+                  tmp_ret = obsql_oracle_utf8_multi_fast_parse(p);
+                } else if (p->is_multi_values_parser_) {
+                  tmp_ret = obsql_oracle_utf8_multi_values_parse(p);
+                } else {
+                  tmp_ret = obsql_oracle_utf8_yyparse(p);
+                }
+                if (0 == tmp_ret) {
+                  ret = OB_PARSER_SUCCESS;
+                } else if (2 == tmp_ret) {
+                  ret = OB_PARSER_ERR_NO_MEMORY;
+                } else {
+                  if (0 != p->extra_errno_) {
+                    ret = p->extra_errno_;
+                  } else {
+                    ret = OB_PARSER_ERR_PARSE_SQL;
+                  }
+                }
+                obsql_oracle_utf8_yy_delete_buffer(bp, p->yyscan_info_);
+                break;
+              }
+              case CHARSET_PARSER_TYPE_HKSCS: {
+                YY_BUFFER_STATE bp = obsql_oracle_hkscs_yy_scan_bytes(buf, len, p->yyscan_info_);
+                obsql_oracle_hkscs_yy_switch_to_buffer(bp, p->yyscan_info_);
+                int tmp_ret = -1;
+                if (p->is_fp_) {
+                  tmp_ret = obsql_oracle_hkscs_fast_parse(p);
+                } else if (p->is_multi_query_) {
+                  tmp_ret = obsql_oracle_hkscs_multi_fast_parse(p);
+                } else if (p->is_multi_values_parser_) {
+                  tmp_ret = obsql_oracle_hkscs_multi_values_parse(p);
+                } else {
+                  tmp_ret = obsql_oracle_hkscs_yyparse(p);
+                }
+                if (0 == tmp_ret) {
+                  ret = OB_PARSER_SUCCESS;
+                } else if (2 == tmp_ret) {
+                  ret = OB_PARSER_ERR_NO_MEMORY;
+                } else {
+                  if (0 != p->extra_errno_) {
+                    ret = p->extra_errno_;
+                  } else {
+                    ret = OB_PARSER_ERR_PARSE_SQL;
+                  }
+                }
+                obsql_oracle_hkscs_yy_delete_buffer(bp, p->yyscan_info_);
+                break;
+              }
+              default:
+                ret = -1;
+                (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "get not support connection collation: %u",
+                                                                                p->connection_collation_);
             }
           }
 #endif

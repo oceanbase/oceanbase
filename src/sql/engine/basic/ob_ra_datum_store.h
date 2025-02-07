@@ -344,7 +344,7 @@ public:
   virtual ~ObRADatumStore() { reset(); }
 
   int init(int64_t mem_limit,
-           uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+           uint64_t tenant_id,
            int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
            const char *label = common::ObModIds::OB_SQL_ROW_STORE,
            uint32_t row_extend_size = 0);

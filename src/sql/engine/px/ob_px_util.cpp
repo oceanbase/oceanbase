@@ -72,7 +72,7 @@ int ObBaseOrderMap::init(int64_t count)
 
 int ObBaseOrderMap::add_base_partition_order(int64_t pwj_group_id,
                                              const TabletIdArray &tablet_id_array,
-                                             const DASTabletLocIArray &dst_locations)
+                                             const DASTabletLocIArray &dst_locations, bool asc)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -84,7 +84,7 @@ int ObBaseOrderMap::add_base_partition_order(int64_t pwj_group_id,
   } else if (FALSE_IT(base_order = new(buf) ObTMArray<int64_t>())) {
   } else if (OB_FAIL(base_order->reserve(dst_locations.count()))) {
     LOG_WARN("fail reserve base order", K(ret), K(dst_locations.count()));
-  } else if (OB_FAIL(map_.set_refactored(pwj_group_id, base_order))) {
+  } else if (OB_FAIL(map_.set_refactored(pwj_group_id, std::make_pair(base_order, asc)))) {
     base_order->destroy();
     LOG_WARN("failed to set", K(pwj_group_id));
   } else {
@@ -107,17 +107,16 @@ int ObBaseOrderMap::reorder_partition_as_base_order(int64_t pwj_group_id,
                                                     DASTabletLocIArray &dst_locations)
 {
   int ret = OB_SUCCESS;
-  ObIArray<int64_t> *base_order = nullptr;
+  std::pair<ObIArray<int64_t> *, bool> base_order;
+  ObIArray<int64_t> *base_order_arr = nullptr;
   if (OB_FAIL(map_.get_refactored(pwj_group_id, base_order))) {
     LOG_WARN("hash not found", K(pwj_group_id));
-  } else if (base_order->count() != dst_locations.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not match count", K(base_order->count()), K(dst_locations.count()));
+  } else if (FALSE_IT(base_order_arr = base_order.first)) {
   } else {
     int index = 0;
-    for (int i = 0; i < base_order->count() && OB_SUCC(ret); ++i) {
+    for (int i = 0; i < base_order_arr->count() && OB_SUCC(ret); ++i) {
       for (int j = 0; j < dst_locations.count() && OB_SUCC(ret); ++j) {
-        if (dst_locations.at(j)->tablet_id_.id() == tablet_id_array.at(base_order->at(i))) {
+        if (dst_locations.at(j)->tablet_id_.id() == tablet_id_array.at(base_order_arr->at(i))) {
           std::swap(dst_locations.at(j), dst_locations.at(index++));
           break;
         }
@@ -204,7 +203,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
     ObExecContext &ctx,
     uint64_t table_id,
     uint64_t ref_table_id,
-    const ObQueryRange &pre_query_range,
+    const ObQueryRangeProvider &pre_query_range,
     ObDfo &dfo,
     ObDASTableLoc *&table_loc)
 {
@@ -289,8 +288,28 @@ int ObPXServerAddrUtil::get_external_table_loc(
         }
       }
     } else {
-      int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
-      if (1 == expected_location_cnt) {
+      bool is_odps_external_table = false;
+      ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+      const ObTableScanSpec *scan_op = nullptr;
+      const ObOpSpec *root_op = NULL;
+      int64_t expected_location_cnt = 0;
+      dfo.get_root(root_op);
+      if (OB_ISNULL(root_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+        LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+      } else if (scan_ops.count() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("empty scan_ops", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                            is_odps_external_table))) {
+        LOG_WARN("failed to check is odps external table or not", K(ret));
+      } else if (FALSE_IT(expected_location_cnt = std::min(dfo.get_dop(),
+                                      ((!ext_file_urls.empty() && is_odps_external_table) ?
+                                        all_locations.count() : dfo.get_external_table_files().count())))) {
+
+      } else if (1 == expected_location_cnt) {
         if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
           LOG_WARN("fail to push push back", K(ret));
         }
@@ -316,11 +335,13 @@ int ObPXServerAddrUtil::get_external_table_loc(
 }
 
 int ObPXServerAddrUtil::assign_external_files_to_sqc(
-    const ObIArray<ObExternalFileInfo> &files,
+    ObDfo &dfo,
     bool is_file_on_disk,
-    ObIArray<ObPxSqcMeta *> &sqcs)
+    ObIArray<ObPxSqcMeta *> &sqcs,
+    int64_t parallel)
 {
   int ret = OB_SUCCESS;
+  const common::ObIArray<share::ObExternalFileInfo> &files = dfo.get_external_table_files();
   if (is_file_on_disk) {
     ObAddr pre_addr;
     ObPxSqcMeta *target_sqc = NULL;
@@ -344,19 +365,41 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     }
   } else {
-    ObArray<int64_t> file_assigned_sqc_ids;
-    OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
-    if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
+    bool is_odps_external_table = false;
+    ObSEArray<const ObTableScanSpec *, 2> scan_ops;
+    const ObTableScanSpec *scan_op = nullptr;
+    const ObOpSpec *root_op = NULL;
+    dfo.get_root(root_op);
+    if (OB_ISNULL(root_op)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
-    }
-    for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
-      int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
-      if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
+      LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
+    } else if (scan_ops.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty scan_ops", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                     is_odps_external_table))) {
+      LOG_WARN("failed to check is odps external table or not", K(ret));
+    } else if (is_odps_external_table) {
+      if (OB_FAIL(ObExternalTableUtils::assign_odps_file_to_sqcs(dfo, sqcs, parallel))) {
+        LOG_WARN("failed to assisn odps file to sqcs", K(files), K(ret));
+      }
+    } else {
+      ObArray<int64_t> file_assigned_sqc_ids;
+      OZ (ObExternalTableUtils::calc_assigned_files_to_sqcs(files, file_assigned_sqc_ids, sqcs.count()));
+      if (OB_SUCC(ret) && file_assigned_sqc_ids.count() != files.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
-      } else {
-        OZ (sqcs.at(assign_sqc_idx)->get_access_external_table_files().push_back(files.at(i)));
+        LOG_WARN("invalid result of assigned sqc", K(file_assigned_sqc_ids.count()), K(files.count()));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < file_assigned_sqc_ids.count(); i++) {
+        int64_t assign_sqc_idx = file_assigned_sqc_ids.at(i);
+        if (OB_UNLIKELY(assign_sqc_idx >= sqcs.count() || assign_sqc_idx < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected file idx", K(file_assigned_sqc_ids.at(i)));
+        } else {
+          OZ (sqcs.at(assign_sqc_idx)->get_access_external_table_files().push_back(files.at(i)));
+        }
       }
     }
   }
@@ -442,7 +485,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
         LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_loc_list()));
       } else if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
-        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
+        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range_provider(), dfo, table_loc));
       }
     }
 
@@ -646,8 +689,8 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && !locations.empty()
         && (*locations.begin())->loc_meta_->is_external_table_) {
-      if (OB_FAIL(assign_external_files_to_sqc(dfo.get_external_table_files(),
-                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs))) {
+      if (OB_FAIL(assign_external_files_to_sqc(dfo,
+                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs, parallel))) {
         LOG_WARN("fail to assign external files to sqc", K(ret));
       }
     }
@@ -1074,6 +1117,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
   ObTableID dml_table_location_key = OB_INVALID_ID;
   ObTableID dml_ref_table_id = OB_INVALID_ID;
   ObBaseOrderMap base_order_map;
+  ObSEArray<std::pair<int64_t, bool>, 18> locations_order;
   if (OB_FAIL(base_order_map.init(max(1, scan_ops.count())))) {
     LOG_WARN("Failed to init base_order_map");
   }
@@ -1109,7 +1153,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table loc is null", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx, base_table_location_key,
-        dfo, base_order_map, table_loc, dml_op))) {
+        dfo, base_order_map, table_loc, dml_op, locations_order))) {
       LOG_WARN("failed to set sqc accessed location", K(ret));
     }
     dml_table_loc = table_loc;
@@ -1133,13 +1177,13 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       LOG_WARN("failed to get phy table location", K(ret));
     } else if (scan_op->is_external_table_
                && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id,
-                                                 scan_op->get_query_range(), dfo, table_loc))) {
+                                                 scan_op->get_query_range_provider(), dfo, table_loc))) {
       LOG_WARN("fail to get external table loc", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,
           // table scan does not need to be set again
           OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
-          dfo, base_order_map, table_loc, scan_op))) {
+          dfo, base_order_map, table_loc, scan_op, locations_order))) {
       LOG_WARN("failed to set sqc accessed location", K(ret), K(table_location_key),
                K(ref_table_id), KPC(table_loc));
     }
@@ -1152,6 +1196,13 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
                K(dml_op), K(dml_op->is_table_location_uncertain()),  K(dml_table_location_key),
                K(dml_ref_table_id), KPC(dml_table_loc));
     }
+  } else {
+    ARRAY_FOREACH_X(dfo.get_sqcs(), sqc_idx, sqc_cnt, OB_SUCC(ret)) {
+      ObPxSqcMeta &sqc_meta = dfo.get_sqcs().at(sqc_idx);
+      if (OB_FAIL(sqc_meta.get_locations_order().assign(locations_order))) {
+        LOG_WARN("assign failed", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1159,7 +1210,8 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
 int ObPXServerAddrUtil::set_sqcs_accessed_location(
     ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
     ObBaseOrderMap &base_order_map,
-    const ObDASTableLoc *table_loc, const ObOpSpec *phy_op)
+    const ObDASTableLoc *table_loc, const ObOpSpec *phy_op,
+    ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcMeta *> sqcs;
@@ -1187,7 +1239,7 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
       LOG_WARN("fail to get table scan partition order", K(ret));
     } else if (OB_FAIL(ObPXServerAddrUtil::reorder_all_partitions(table_location_key,
         table_loc->get_ref_table_id(), locations,
-        temp_locations, asc_order, ctx, base_order_map))) {
+        temp_locations, asc_order, ctx, base_order_map, phy_op->get_id(), locations_order))) {
       // 按照GI要求的访问顺序对当前SQC涉及到的分区进行排序
       // 如果是partition wise join场景, 需要根据partition_wise_join要求结合GI要求做asc/desc排序
       LOG_WARN("fail to reorder all partitions", K(ret));
@@ -1304,7 +1356,8 @@ private:
 int ObPXServerAddrUtil::reorder_all_partitions(
     int64_t table_location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
     DASTabletLocIArray &dst_locations, bool asc, ObExecContext &exec_ctx,
-    ObBaseOrderMap &base_order_map)
+    ObBaseOrderMap &base_order_map, int64_t op_id,
+    ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   int ret = OB_SUCCESS;
   dst_locations.reset();
@@ -1355,11 +1408,11 @@ int ObPXServerAddrUtil::reorder_all_partitions(
         } else {
           // set base order or reorder partition as base order
           uint64_t pwj_group_id = group_pwj_tablet_id_info.group_id_;
-          ObIArray<int64_t> *base_order = nullptr;
+          std::pair<ObIArray<int64_t> *, bool> base_order;
           if (OB_FAIL(base_order_map.get_map().get_refactored(pwj_group_id, base_order))) {
             if (ret == OB_HASH_NOT_EXIST) {
               ret = base_order_map.add_base_partition_order(pwj_group_id, tablet_id_array,
-                                                            dst_locations);
+                                                            dst_locations, asc);
               if (ret != OB_SUCCESS) {
                 LOG_WARN("failed to add_base_partition_order");
               } else {
@@ -1372,6 +1425,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
                   pwj_group_id, tablet_id_array, dst_locations))) {
             LOG_WARN("failed to reorder_partition_as_base_order");
           } else {
+            asc = base_order.second;
             LOG_TRACE("succ to reorder_partition_as_base_order", K(pwj_group_id), K(table_location_key));
           }
         }
@@ -1380,6 +1434,11 @@ int ObPXServerAddrUtil::reorder_all_partitions(
   } else if (1 == src_locations.size() &&
              OB_FAIL(dst_locations.push_back(*src_locations.begin()))) {
     LOG_WARN("fail to push dst locations", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(locations_order.push_back(std::make_pair(op_id, asc)))) {
+      LOG_WARN("push back failed", K(ret));
+    }
   }
   return ret;
 }
@@ -2090,7 +2149,8 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
     LOG_WARN("fail to encode op type", K(ret));
   } else if (OB_FAIL((seri_ctx == NULL ? root.serialize(buf, buf_len, pos) :
       root.serialize(buf, buf_len, pos, *seri_ctx)))) {
-    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", to_cstring(root));
+    ObCStringHelper helper;
+    LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", helper.convert(root));
   } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_)
              && OB_FAIL(serialize_sub_plan(buf, buf_len, pos, root))) {
     LOG_WARN("fail to serialize sub plan", K(ret));

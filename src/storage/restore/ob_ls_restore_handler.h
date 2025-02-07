@@ -39,6 +39,8 @@ public:
       ls_key_(),
       total_tablet_cnt_(0),
       unfinished_tablet_cnt_(0),
+      total_bytes_(0),
+      unfinished_bytes_(0),
       last_report_ts_(0) {}
 
   int init(const share::ObLSRestoreJobPersistKey &ls_key);
@@ -49,7 +51,11 @@ public:
   int report_unfinished_tablet_cnt(const int64_t unfinished_tablet_cnt);
   int load_restore_stat();
   int get_finished_tablet_cnt(int64_t &finished_tablet_cnt) const;
-
+  int set_total_bytes(const int64_t bytes);
+  int increase_total_bytes_by(const int64_t bytes);
+  int decrease_total_bytes_by(const int64_t bytes);
+  int add_finished_bytes(const int64_t bytes);
+  int report_unfinished_bytes(const int64_t bytes);
   void reset();
 
   TO_STRING_KV(K_(is_inited),
@@ -61,13 +67,17 @@ public:
 private:
   static const int64_t REPORT_INTERVAL = 30_s;
   int do_report_finished_tablet_cnt_(const int64_t finished_tablet_cnt);
+  int do_report_finished_bytes_(const int64_t finished_bytes);
   int64_t get_finished_tablet_cnt_() const;
+  int64_t get_finished_bytes() const;
 
 private:
   bool is_inited_;
   share::ObLSRestoreJobPersistKey ls_key_;
   int64_t total_tablet_cnt_;
   int64_t unfinished_tablet_cnt_;
+  int64_t total_bytes_;
+  int64_t unfinished_bytes_;
   int64_t last_report_ts_;
   mutable lib::ObMutex mtx_;
 
@@ -134,10 +144,12 @@ public:
   int safe_to_destroy(bool &is_safe);
   int offline();
   int online();
-  bool is_stop() { return is_stop_; }
+  bool is_stop() { return ATOMIC_LOAD(&is_stop_); }
   int update_rebuild_seq();
   int64_t get_rebuild_seq();
   int fill_restore_arg();
+  void set_is_online(const bool is_online) { ATOMIC_STORE(&is_online_, is_online); }
+  bool is_online() {return ATOMIC_LOAD(&is_online_); }
   const ObTenantRestoreCtx &get_restore_ctx() const { return ls_restore_arg_; }
   const ObLSRestoreStat &get_restore_stat() const { return restore_stat_; }
   ObLSRestoreStat &restore_stat() { return restore_stat_; }
@@ -198,6 +210,9 @@ public:
   int add_finished_tablet_cnt(const int64_t cnt);
   int report_unfinished_tablet_cnt(const int64_t cnt);
 
+  int add_finished_bytes(const int64_t bytes);
+  int report_unfinished_bytes(const int64_t bytes);
+
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
   int leader_fill_tablet_group_restore_arg_(const ObIArray<ObTabletID> &tablet_need_restore,
@@ -251,6 +266,9 @@ protected:
   int check_replay_to_target_scn_(
       const share::SCN &target_scn,
       bool &replayed) const;
+  bool need_notify_rs_restore_finish_(const ObLSRestoreStatus &ls_restore_status);
+
+  void notify_rs_restore_finish_();
 
 protected:
   bool is_inited_;
@@ -406,6 +424,9 @@ private:
   int follower_restore_major_data_();
   int do_restore_major_(
       const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore);
+#ifdef ERRSIM
+  int errsim_rebuild_before_restore_major_();
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreMajorState);
 };
 
@@ -454,7 +475,7 @@ class ObLSRestoreWaitRestoreSysTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitRestoreSysTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS, true /* require multi replica sync */) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS, false /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitRestoreSysTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitRestoreSysTabletState);
@@ -464,7 +485,7 @@ class ObLSRestoreWaitCreateUserTabletState final : public ObLSRestoreWaitState
 {
 public:
   ObLSRestoreWaitCreateUserTabletState()
-    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, false /* require multi replica sync */) {}
+    : ObLSRestoreWaitState(share::ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META, true /* require multi replica sync */) {}
   virtual ~ObLSRestoreWaitCreateUserTabletState() {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitCreateUserTabletState);
@@ -506,6 +527,8 @@ public:
     is_finish = true;
     return OB_SUCCESS;
   }
+protected:
+  int check_can_advance_status_(bool &can) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreWaitQuickRestoreState);
 };

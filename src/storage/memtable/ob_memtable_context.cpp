@@ -48,6 +48,7 @@ ObMemtableCtx::ObMemtableCtx()
       lock_(),
       end_code_(OB_SUCCESS),
       tx_status_(ObTxStatus::NORMAL),
+      elr_state_(ELR_STATE_INIT),
       ref_(0),
       query_allocator_(),
       ctx_cb_allocator_(),
@@ -171,6 +172,7 @@ void ObMemtableCtx::reset()
     is_read_only_ = false;
     end_code_ = OB_SUCCESS;
     tx_status_ = ObTxStatus::NORMAL;
+    elr_state_ = ELR_STATE_INIT;
     // blocked_trans_ids_.reset();
     //FIXME: ObIMemtableCtx don't have resetfunction,
     //thus ObIMvccCtx::reset is called, so resource_link_is not reset
@@ -185,13 +187,22 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   pos += ObIMvccCtx::to_string(buf + pos, buf_len);
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d tx_status=%ld is_readonly=%s "
-                          "ref=%ld trans_id=%s ls_id=%ld "
-                          "row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
+                          "ref=%ld", end_code_, tx_status_, STR_BOOL(is_read_only_), ref_);
+  common::databuff_printf(buf, buf_len, pos, " trans_id=");
+  if (OB_ISNULL(ctx_)) {
+    common::databuff_printf(buf, buf_len, pos, "");
+  } else {
+    common::databuff_printf(buf, buf_len, pos, ctx_->get_trans_id());
+  }
+  common::databuff_printf(buf, buf_len, pos, " ls_id=");
+  if (OB_ISNULL(ctx_)) {
+    common::databuff_printf(buf, buf_len, pos, "-1");
+  } else {
+    common::databuff_printf(buf, buf_len, pos, ctx_->get_ls_id().id());
+  }
+  common::databuff_printf(buf, buf_len, pos, " row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
                           "redo[fill:%ld,sync_succ:%ld, sync_fail:%ld] "
                           "main_list_len=%ld pending_log_size=%ld ",
-                          end_code_, tx_status_, STR_BOOL(is_read_only_), ref_,
-                          NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
-                          NULL == ctx_ ? -1 : ctx_->get_ls_id().id(),
                           callback_alloc_count_, callback_free_count_, unsubmitted_cnt_,
                           log_gen_.get_redo_filled_count(),
                           log_gen_.get_redo_sync_succ_count(),
@@ -493,11 +504,24 @@ int ObMemtableCtx::trans_clear()
 int ObMemtableCtx::elr_trans_preparing()
 {
   RDLockGuard guard(rwlock_);
-  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_) {
-    set_commit_version(static_cast<ObPartTransCtx *>(ctx_)->get_commit_version());
+  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_ && ATOMIC_LOAD(&elr_state_) == ELR_STATE_INIT) {
+    set_commit_version(ctx_->get_commit_version());
     trans_mgr_.elr_trans_preparing();
+    ATOMIC_STORE(&elr_state_, ELR_STATE_DONE);
   }
   return OB_SUCCESS;
+}
+
+void ObMemtableCtx::elr_trans_revoke()
+{
+  WRLockGuard guard(rwlock_); // mutex with elr_trans_preparing
+  if (NULL != ATOMIC_LOAD(&ctx_) && OB_SUCCESS == end_code_) {
+    if (ATOMIC_LOAD(&elr_state_) == ELR_STATE_DONE) {
+      set_commit_version(share::SCN::min_scn());
+      trans_mgr_.elr_trans_revoke();
+    }
+    ATOMIC_STORE(&elr_state_, ELR_STATE_REVOKED);
+  }
 }
 
 int ObMemtableCtx::do_trans_end(

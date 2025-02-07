@@ -573,7 +573,7 @@ int ObMViewRefreshStats::collect_record_ids(ObISQLClient &sql_client, uint64_t t
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     SMART_VAR(ObMySQLProxy::MySQLResult, res)
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString sql;
       ObMViewRefreshStatsRecordId record_id;
       if (OB_FAIL(

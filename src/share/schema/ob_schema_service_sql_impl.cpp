@@ -1785,18 +1785,27 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
         }
       }
 
+      bool non_default_cg_exist = false;
       // get all column_group ids of this table
       ObArray<uint64_t> cg_ids;
       ObTableSchema::const_column_group_iterator it_begin = table_schema->column_group_begin();
       ObTableSchema::const_column_group_iterator it_end = table_schema->column_group_end();
       const ObColumnGroupSchema *column_group = NULL;
-      for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
-        column_group = *it_begin;
-        if (OB_ISNULL(column_group)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column_group schema should not be null", KR(ret));
-        } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
-          LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
+      if (FAILEDx(table_schema->has_non_default_column_group(non_default_cg_exist))) {
+        LOG_WARN("fail to check table schema has non default column group", K(ret), K(table_schema));
+      } else {
+        for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
+          column_group = *it_begin;
+          if (OB_ISNULL(column_group)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column_group schema should not be null", KR(ret));
+          } else if (ObColumnGroupType::DEFAULT_COLUMN_GROUP == column_group->get_column_group_type() && non_default_cg_exist) {
+            LOG_INFO("filter old version default column group", K(non_default_cg_exist), KPC(column_group));
+            // support multi-version column group read for alter column group delayed, filter old version default_cg
+            continue;
+          } else if (OB_FAIL(cg_ids.push_back(column_group->get_column_group_id()))) {
+            LOG_WARN("fail to push back column_group id", KR(ret), KPC(column_group));
+          }
         }
       }
 
@@ -1814,7 +1823,7 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_mapping(
           LOG_WARN("fail to append sql", KR(ret), K(schema_version));
         } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, COLUMN_GROUP_ID ASC, COLUMN_ID ASC"))) {
           LOG_WARN("fail to append sql", KR(ret));
-        } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION DESC"))) {
+        } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION ASC"))) {
           LOG_WARN("fail to append sql", KR(ret));
         } else {
           const bool check_deleted = is_history;
@@ -2900,30 +2909,63 @@ int ObSchemaServiceSQLImpl::fetch_all_table_info(const ObRefreshSchemaStatus &sc
     if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
                                                           table_name,
                                                           schema_service_))) {
-      LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
-                                      table_name,
-                                      fill_extract_tenant_id(schema_status, tenant_id)))) {
-      LOG_WARN("append sql failed", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (NULL != table_ids && table_ids_size > 0) {
-        if (OB_FAIL(sql.append_fmt(" AND table_id IN "))) {
-          LOG_WARN("append sql failed", K(ret));
-        } else if (OB_FAIL(sql_append_pure_ids(schema_status, table_ids, table_ids_size, sql))) {
-          LOG_WARN("sql append table ids failed");
+      LOG_WARN("fail to get all table name", KR(ret), K(exec_tenant_id));
+    } else {
+      if (NULL == table_ids || table_ids_size == 0) {
+        if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
+                                          table_name,
+                                          fill_extract_tenant_id(schema_status, tenant_id)))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, SCHEMA_VERSION DESC"))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+      } else {
+        // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
+          if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_ids_size; i++) {
+            if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, table_ids[i])))) {
+              LOG_WARN("append sql failed", KR(ret));
+            }
+          }
+          if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
+                                            table_name,
+                                            fill_extract_tenant_id(schema_status, tenant_id),
+                                            schema_version))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+            LOG_WARN("append sql failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" AND table_id in"))) {
+            LOG_WARN("append failed", KR(ret));
+          } else if (OB_FAIL(sql_append_pure_ids(schema_status, table_ids, table_ids_size, sql))) {
+            LOG_WARN("sql append table id failed", KR(ret));
+          } else if (OB_FAIL(sql.append_fmt(" ORDER BY tenant_id DESC, table_id DESC, schema_version DESC"))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
-        LOG_WARN("append sql failed", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, SCHEMA_VERSION DESC"))) {
-        LOG_WARN("append sql failed", K(ret));
-      }
-    }
   }
-
   if (OB_SUCC(ret)) {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
@@ -5179,8 +5221,8 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   } else {
     ObTimeoutCtx ctx;
     if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
-                                                                 table_name,
-                                                                 schema_service_))) {
+                                                          table_name,
+                                                          schema_service_))) {
       LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
     } else if (!is_increase_schema) {
       const char *tname = OB_ALL_TABLE_HISTORY_TNAME;
@@ -5194,16 +5236,42 @@ int ObSchemaServiceSQLImpl::fetch_tables(
         LOG_WARN("append sql failed", K(ret));
       }
     } else {
-      if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
-                                 table_name,
-                                 fill_extract_tenant_id(schema_status, tenant_id)))) {
-        LOG_WARN("append sql failed", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
-        LOG_WARN("append sql failed", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" AND table_id in"))) {
-        LOG_WARN("append failed", K(ret));
-      } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
-        LOG_WARN("sql append table id failed", K(ret));
+      // for obcdc compatibility, values table stmt is not supported when cluster version < 4.2.1
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0) {
+        if (OB_FAIL(sql.append("SELECT /*+ no_rewrite */ r.* FROM ("))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append("SELECT column_0 tid FROM ("))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append("SELECT * FROM (VALUES "))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; i++) {
+          if (OB_FAIL(sql.append_fmt("%srow(%lu)", 0 == i ? "" : ", ", fill_extract_schema_id(schema_status, schema_keys[i].table_id_)))) {
+            LOG_WARN("append sql failed", KR(ret));
+          }
+        }
+        if (FAILEDx(sql.append_fmt("))) l JOIN %s r ON r.tenant_id = %lu AND r.table_id = l.tid AND r.schema_version = (",
+                                    table_name,
+                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt("SELECT schema_version FROM %s WHERE tenant_id = %lu AND table_id = l.tid AND schema_version <= %ld ORDER BY schema_version DESC LIMIT 1)",
+                                          table_name,
+                                          fill_extract_tenant_id(schema_status, tenant_id),
+                                          schema_version))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+      } else {
+        if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL3,
+                                  table_name,
+                                  fill_extract_tenant_id(schema_status, tenant_id)))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+          LOG_WARN("append sql failed", KR(ret));
+        } else if (OB_FAIL(sql.append_fmt(" AND table_id in"))) {
+          LOG_WARN("append failed", KR(ret));
+        } else if (OB_FAIL(SQL_APPEND_SCHEMA_ID(table, schema_keys, schema_key_size, sql))) {
+          LOG_WARN("sql append table id failed", KR(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -9278,7 +9346,7 @@ int ObSchemaServiceSQLImpl::fetch_master_key(
         LOG_WARN("fail to get result. ", K(ret));
       } else if (OB_FAIL(result->next())) {
         if (common::OB_ITER_END == ret) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_GET_MASTER_KEY;
           LOG_WARN("select master_key return no row", K(ret), K(master_key_id));
         } else {
           LOG_WARN("failed to get value about master_key", K(ret), K(master_key_id));
@@ -9411,7 +9479,8 @@ int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_s
     LOG_WARN("unexpected null", K(ret), KP(dblink_schema));
   } else if (sql::DblinkGetConnType::DBLINK_POOL == conn_type &&
       OB_FAIL(dblink_proxy_->create_dblink_pool(param_ctx,
-                                                dblink_schema->get_host_addr(),
+                                                dblink_schema->get_host_name(),
+                                                dblink_schema->get_host_port(),
                                                 dblink_schema->get_tenant_name(),
                                                 dblink_schema->get_user_name(),
                                                 dblink_schema->get_plain_password(),
@@ -10040,7 +10109,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
           EXTRACT_INT_FIELD_MYSQL(*result, id_col_name, tmp_schema_id, uint64_t);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, name_col_name, tmp_schema_name);
           if (OB_FAIL(ret)) {
-          } else if (schema_name_is_equal_(
+          } else if (schema_name_is_equal(
                      schema_name, tmp_schema_name,
                      case_compare, compare_with_collation)) {
             schema_id = tmp_schema_id;
@@ -10053,7 +10122,7 @@ int ObSchemaServiceSQLImpl::retrieve_schema_id_with_name_(
   return ret;
 }
 
-bool ObSchemaServiceSQLImpl::schema_name_is_equal_(
+bool ObSchemaServiceSQLImpl::schema_name_is_equal(
        const ObString &src,
        const ObString &dst,
        const bool case_compare,
@@ -10091,7 +10160,8 @@ int ObSchemaServiceSQLImpl::get_tablegroup_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   tablegroup_id = OB_INVALID_ID;
-  const char *tg_name = to_cstring(ObHexEscapeSqlStr(tablegroup_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char *tg_name = helper.convert(ObHexEscapeSqlStr(tablegroup_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10135,7 +10205,8 @@ int ObSchemaServiceSQLImpl::get_database_id(
   ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* db_name = to_cstring(ObHexEscapeSqlStr(database_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* db_name = helper.convert(ObHexEscapeSqlStr(database_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10205,7 +10276,8 @@ int ObSchemaServiceSQLImpl::get_table_id(
   table_id = OB_INVALID_ID;
   table_type = ObTableType::MAX_TABLE_TYPE;
   schema_version = OB_INVALID_VERSION;
-  const char* tb_name = to_cstring(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tb_name = helper.convert(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10300,7 +10372,7 @@ int ObSchemaServiceSQLImpl::get_table_id(
             // try fetch inner table id
             if (is_system_table && OB_INVALID_ID == candidate_inner_table_id) { // case 3.3
               bool tmp_case_compare = is_mysql_sys_database_id(database_id) ? true : case_compare;
-              if (schema_name_is_equal_(
+              if (schema_name_is_equal(
                   table_name, tmp_table_name,
                   case_compare, compare_with_collation)
                   && 0 == tmp_session_id) {
@@ -10310,7 +10382,7 @@ int ObSchemaServiceSQLImpl::get_table_id(
               }
             }
 
-            if (schema_name_is_equal_(
+            if (schema_name_is_equal(
                 table_name, tmp_table_name,
                 case_compare, compare_with_collation)) {
               table_id = tmp_table_id;
@@ -10349,11 +10421,15 @@ int ObSchemaServiceSQLImpl::get_index_id(
   ObSqlString sql;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* idx_name = to_cstring(ObHexEscapeSqlStr(index_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* idx_name = helper.convert(ObHexEscapeSqlStr(index_name, skip_escape, use_oracle_mode));
   bool is_oracle_mode = false;
   bool case_compare = false;
   const bool compare_with_collation = true;
   index_id = OB_INVALID_ID;
+  #define GET_INDEX_ID_SQL "SELECT table_id, table_name FROM %s " \
+                           "WHERE tenant_id = %lu AND database_id = %lu AND table_name = '%s' " \
+                           "AND table_type = %d "
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10370,18 +10446,32 @@ int ObSchemaServiceSQLImpl::get_index_id(
     LOG_WARN("fail to check oracle mode", KR(ret), K(tenant_id));
   } else if (FALSE_IT(case_compare = (!is_oracle_mode
              || is_mysql_sys_database_id(database_id)))) {
-  } else if (OB_FAIL(sql.assign_fmt(
-             "SELECT table_id, table_name FROM %s "
-             "WHERE tenant_id = 0 AND database_id = %lu AND table_name = '%s' "
-             "AND table_type = %d ",
-             OB_ALL_TABLE_TNAME, database_id, idx_name, USER_INDEX))) {
-    LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
-             K(index_name), "idx_name", idx_name);
-  } else if (OB_FAIL(retrieve_schema_id_with_name_(
-             sql_client, tenant_id, sql,
-             "table_id", "table_name",
-             index_name, case_compare,
-             compare_with_collation, index_id))) {
+  } else if (is_oceanbase_sys_database_id(database_id)) {
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT * FROM "
+                "( "
+                GET_INDEX_ID_SQL
+                "UNION ALL "
+                GET_INDEX_ID_SQL
+                ") ",
+                OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id, database_id, idx_name, USER_INDEX,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, idx_name, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
+              K(index_name), "idx_name", idx_name);
+    }
+  } else {
+    if (OB_FAIL(sql.assign_fmt(
+                GET_INDEX_ID_SQL,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, idx_name, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
+              K(index_name), "idx_name", idx_name);
+    }
+  }
+  if (FAILEDx(retrieve_schema_id_with_name_(
+              sql_client, tenant_id, sql,
+              "table_id", "table_name",
+              index_name, case_compare,
+              compare_with_collation, index_id))) {
     LOG_WARN("fail to retrieve schema id with name",
              KR(ret), K(tenant_id), K(database_id),
              K(index_name), "idx_name", idx_name);
@@ -10410,7 +10500,8 @@ int ObSchemaServiceSQLImpl::get_mock_fk_parent_table_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   mock_fk_parent_table_id = OB_INVALID_ID;
-  const char* tb_name = to_cstring(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tb_name = helper.convert(ObHexEscapeSqlStr(table_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10458,7 +10549,8 @@ int ObSchemaServiceSQLImpl::get_synonym_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   synonym_id = OB_INVALID_ID;
-  const char* syn_name = to_cstring(ObHexEscapeSqlStr(synonym_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* syn_name = helper.convert(ObHexEscapeSqlStr(synonym_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10503,7 +10595,8 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   constraint_id = OB_INVALID_ID;
-  const char* cst_name = to_cstring(ObHexEscapeSqlStr(constraint_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* cst_name = helper.convert(ObHexEscapeSqlStr(constraint_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10565,7 +10658,7 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
           // skip
           // (TODO):for mysql tmp table, it may has risk that constraint name duplicated in one table?
           // here just make the logic same with int ObSchemaMgr::add_constraints_in_table().
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    constraint_name, tmp_constraint_name,
                    case_compare, compare_with_collation)) {
           constraint_id = tmp_constraint_id;
@@ -10595,7 +10688,8 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   foreign_key_id = OB_INVALID_ID;
-  const char* fk_name = to_cstring(ObHexEscapeSqlStr(foreign_key_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* fk_name = helper.convert(ObHexEscapeSqlStr(foreign_key_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10654,7 +10748,7 @@ int ObSchemaServiceSQLImpl::get_foreign_key_id(
                    || is_index_table(tmp_table_type)
                    || is_aux_lob_table(tmp_table_type)) {
           // skip
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    foreign_key_name, tmp_foreign_key_name,
                    case_compare, compare_with_collation)) {
           foreign_key_id = tmp_foreign_key_id;
@@ -10685,7 +10779,8 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
   const bool use_oracle_mode = false;
   sequence_id = OB_INVALID_ID;
   is_system_generated = false;
-  const char* seq_name = to_cstring(ObHexEscapeSqlStr(sequence_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* seq_name = helper.convert(ObHexEscapeSqlStr(sequence_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10731,7 +10826,7 @@ int ObSchemaServiceSQLImpl::get_sequence_id(
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sequence_name", tmp_sequence_name);
         EXTRACT_BOOL_FIELD_MYSQL(*result, "is_system_generated", tmp_is_system_generated);
         if (OB_FAIL(ret)) {
-        } else if (schema_name_is_equal_(
+        } else if (schema_name_is_equal(
                    sequence_name, tmp_sequence_name,
                    case_compare, compare_with_collation)) {
           sequence_id = tmp_sequence_id;
@@ -10767,7 +10862,8 @@ int ObSchemaServiceSQLImpl::get_package_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   package_id = OB_INVALID_ID;
-  const char* pkg_name = to_cstring(ObHexEscapeSqlStr(package_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* pkg_name = helper.convert(ObHexEscapeSqlStr(package_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -10824,7 +10920,8 @@ int ObSchemaServiceSQLImpl::get_routine_id(
   bool is_oracle_mode = false;
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
-  const char* rt_name = to_cstring(ObHexEscapeSqlStr(routine_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* rt_name = helper.convert(ObHexEscapeSqlStr(routine_name, skip_escape, use_oracle_mode));
   routine_pairs.reset();
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
@@ -10878,7 +10975,7 @@ int ObSchemaServiceSQLImpl::get_routine_id(
           EXTRACT_INT_FIELD_MYSQL(*result, "routine_type", tmp_routine_type, ObRoutineType);
 
           if (OB_FAIL(ret)) {
-          } else if (schema_name_is_equal_(
+          } else if (schema_name_is_equal(
                      routine_name, tmp_routine_name,
                      case_compare, compare_with_collation)) {
             if (OB_FAIL(routine_pairs.push_back(
@@ -10916,7 +11013,8 @@ int ObSchemaServiceSQLImpl::get_udt_id(
   const bool skip_escape = false;
   const bool use_oracle_mode = false;
   udt_id = OB_INVALID_ID;
-  const char* tmp_udt_name = to_cstring(ObHexEscapeSqlStr(udt_name, skip_escape, use_oracle_mode));
+  ObCStringHelper helper;
+  const char* tmp_udt_name = helper.convert(ObHexEscapeSqlStr(udt_name, skip_escape, use_oracle_mode));
   if (OB_UNLIKELY(!check_inner_stat())) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", KR(ret));
@@ -11162,6 +11260,91 @@ int ObSchemaServiceSQLImpl::get_audits_in_owner(
   }
   return ret;
 }
+
+int ObSchemaServiceSQLImpl::get_table_index_infos(
+    common::ObIAllocator &allocator,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const uint64_t data_table_id,
+    common::ObIArray<ObIndexSchemaInfo> &index_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  index_infos.reset();
+  #define GET_INDEX_INFO_SQL "SELECT table_name, table_id, schema_version, index_type FROM %s " \
+                             "WHERE tenant_id = %lu AND database_id = %lu AND data_table_id = %lu " \
+                             "AND table_type = %d "
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+             || OB_INVALID_ID == database_id
+             || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+  } else if (is_oceanbase_sys_database_id(database_id)) {
+    if (OB_FAIL(sql.assign_fmt(
+                "SELECT * FROM "
+                "( "
+                GET_INDEX_INFO_SQL
+                "UNION ALL "
+                GET_INDEX_INFO_SQL
+                ") ",
+                OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id, database_id, data_table_id, USER_INDEX,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, data_table_id, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+    }
+  } else {
+    if (OB_FAIL(sql.assign_fmt(
+                GET_INDEX_INFO_SQL,
+                OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, database_id, data_table_id, USER_INDEX))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret), K(tenant_id));
+    }
+    ObString tmp_schema_name;
+    uint64_t tmp_index_id = OB_INVALID_ID;
+    int64_t tmp_schema_version = OB_INVALID_VERSION;
+    ObIndexType tmp_index_type = INDEX_TYPE_IS_NOT;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next", KR(ret));
+        }
+      } else {
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", tmp_schema_name);
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_id", tmp_index_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", tmp_schema_version, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "index_type", tmp_index_type, ObIndexType);
+        ObIndexSchemaInfo tmp_index_info;
+        ObString tmp_index_name;
+        if (FAILEDx(ob_write_string(allocator, tmp_schema_name, tmp_index_name, true/*c_style*/))) {
+          LOG_WARN("fail to write string", KR(ret));
+        } else if (OB_FAIL(tmp_index_info.init(tmp_index_name, tmp_index_id, tmp_schema_version, tmp_index_type))) {
+          LOG_WARN("fail to init tmp index info", KR(ret), K(tmp_schema_name), K(tmp_index_id), K(tmp_schema_version));
+        } else if (OB_FAIL(index_infos.push_back(tmp_index_info))) {
+          LOG_WARN("fail to push back tmp index info", KR(ret), K(tenant_id), K(tmp_schema_name));
+        }
+      }
+    }// end while
+    }// end smart_var
+  }
+  LOG_TRACE("get table index name", KR(ret), K(tenant_id), K(database_id), K(data_table_id));
+  return ret;
+}
+
 
 }//namespace schema
 }//namespace share

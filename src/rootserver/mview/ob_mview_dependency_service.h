@@ -34,6 +34,32 @@ namespace schema
 }
 namespace rootserver
 {
+class ObUpdateMViewRefTableOpt
+{
+  friend class ObMViewDependencyService;
+public:
+  ObUpdateMViewRefTableOpt() : need_update_table_flag_(false), need_update_mv_flag_(false) {}
+  ~ObUpdateMViewRefTableOpt() {}
+  void set_table_flag(const share::schema::ObTableReferencedByMVFlag &table_flag)
+  {
+    table_flag_ = table_flag;
+    need_update_table_flag_ = true;
+  }
+  void set_mv_flag(const share::schema::ObTableReferencedByFastLSMMVFlag &mv_flag)
+  {
+    mv_flag_ = mv_flag;
+    need_update_mv_flag_ = true;
+  }
+  TO_STRING_KV("need_update_table_flag_", need_update_table_flag_,
+               "table_flag", table_flag_,
+               "need_update_mv_flag_", need_update_mv_flag_,
+               "mv_flag", mv_flag_);
+private:
+  bool need_update_table_flag_;
+  share::schema::ObTableReferencedByMVFlag table_flag_;
+  bool need_update_mv_flag_;
+  share::schema::ObTableReferencedByFastLSMMVFlag mv_flag_;
+};
 class ObMViewDependencyService
 {
 public:
@@ -53,7 +79,7 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id,
       const ObIArray<uint64_t> &ref_table_ids,
-      enum share::schema::ObTableReferencedByMVFlag table_flags);
+      const ObUpdateMViewRefTableOpt &update_opt);
 private:
   share::schema::ObMultiVersionSchemaService &schema_service_;
 };

@@ -117,6 +117,7 @@ public:
   int check_is_heap_table(ObLogicalOperator &op,
                           uint64_t ref_table_id,
                           bool &is_heap_table);
+  int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
 
 private:
   int generate_dml_column_ids(const ObLogicalOperator &op,
@@ -248,7 +249,6 @@ private:
                             uint64_t tenant_id,
                             ObDASDMLBaseCtDef &das_dml_ctdef);
 
-  int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
   int get_table_schema_version(const ObLogicalOperator &op, uint64_t table_id, int64_t &schema_version);
   int generate_das_dml_ctdef(ObLogDelUpd &op,
                              common::ObTableID index_tid,
@@ -395,10 +395,27 @@ private:
                                  DASInsCtDefArray &ins_ctdefs);
   int generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
                             const ObLogicalOperator &op,
+                            const bool need_doc_id,
+                            const uint64_t doc_id_col_id,
                             const bool need_vec_vid,
                             const uint64_t vec_vid_col_id,
                             common::ObIArray<ObRawExpr*> &access_exprs,
+                            common::ObIArray<ObRawExpr*> &doc_id_expr,
                             common::ObIArray<ObRawExpr*> &vec_vid_expr);
+  int generate_scan_with_doc_id_ctdef_if_need(ObLogInsert &op,
+                                              const IndexDMLInfo &index_dml_info,
+                                              ObDASScanCtDef &scan_ctdef,
+                                              ObDASAttachSpec &attach_spec);
+  int generate_rowkey_doc_ctdef(ObLogInsert &op,
+                                const IndexDMLInfo &index_dml_info,
+                                ObDASAttachSpec &attach_spec,
+                                ObDASScanCtDef *&rowkey_doc_scan_ctdef);
+  int generate_rowkey_doc_access_expr(const common::ObIArray<ObColumnRefRawExpr *> &columns,
+                                      const ObTableSchema &rowkey_doc,
+                                      ObDASScanCtDef *ctdef);
+  int check_need_doc_id_merge_iter(ObLogicalOperator &op,
+                                   const uint64_t ref_table_id,
+                                   bool &need_doc_id_merge_iter);
   int generate_scan_with_vec_vid_ctdef_if_need(ObLogInsert &op,
                                               const IndexDMLInfo &index_dml_info,
                                               ObDASScanCtDef &scan_ctdef,

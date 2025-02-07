@@ -82,6 +82,7 @@ public:
                            const ObBitVector *skip = nullptr, const int64_t start_idx = 0);
   int get_next_unique_hash_table_batch(const common::ObIArray<ObExpr *> &exprs,
                                        const int64_t max_row_cnt, int64_t &read_rows);
+  int init_vector_default(ObEvalCtx &ctx, const int64_t size);
   DECLARE_VIRTUAL_TO_STRING;
 
 private:

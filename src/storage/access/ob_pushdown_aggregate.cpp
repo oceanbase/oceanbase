@@ -367,7 +367,7 @@ int ObAggCell::read_agg_datum(
     skip_index_datum_.reuse();
     skip_index_datum_.set_null();
     blocksstable::ObSkipIndexColMeta meta;
-    // TODO: @luhaopeng.lhp fix col_index in cg, use 0 temporarily
+    // TODO: @baichangmin.bcm fix col_index in cg, use 0 temporarily
     meta.col_idx_ = is_cg ? 0 : static_cast<uint32_t>(basic_info_.col_index_);
     switch (agg_type_) {
       case ObPDAggType::PD_SUM_OP_SIZE:
@@ -2918,7 +2918,8 @@ int ObPDAggFactory::alloc_cell(
     void *buf = nullptr;
     ObAggCell *cell = nullptr;
     switch (basic_info.agg_expr_->type_) {
-      case T_REF_COLUMN: {
+      case T_REF_COLUMN:
+      case T_ORA_ROWSCN: {
         if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObFirstRowAggCell))) ||
             OB_ISNULL(cell = new(buf) ObFirstRowAggCell(basic_info, allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;

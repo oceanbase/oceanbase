@@ -45,7 +45,7 @@ namespace sql
         }                                                                          \
       } else if (OB_UNLIKELY(0 != N % M)) {                                        \
         ret = OB_ERR_UNEXPECTED;                                                   \
-        LOG_WARN("invalid value count", K(ret), "value_count", N, "row_count", M); \
+        LOG_WARN("invalid value count", K(ret), "value_count", N, "row_count", M, K(values)); \
       } else {                                                                     \
         for (int64_t i = 0; OB_SUCC(ret) && i < N / M; i++) {                      \
           if (OB_FAIL(BUF_PRINTF("{"))) {                                          \
@@ -97,8 +97,12 @@ int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr *> &value_
     if (OB_ISNULL(stmt_id_expr = insert_stmt->get_ab_stmt_id_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stmt_id_expr is null", K(ret));
+    } else if (OB_FAIL(append(value_exprs_, get_stmt()->get_query_ctx()->ab_param_exprs_))) {
+      LOG_WARN("assign ab param exprs to value exprs failed", K(ret));
     } else if (OB_FAIL(value_exprs_.push_back(stmt_id_expr))) {
       LOG_WARN("fail to push stmt_id_expr", K(ret));
+    } else {
+      LOG_TRACE("print after add_values_expr", K(get_stmt()->get_query_ctx()->ab_param_exprs_), K(stmt_id_expr));
     }
   }
   return ret;
@@ -296,6 +300,35 @@ int ObLogExprValues::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
+int ObLogExprValues::append_batch_insert_used_exprs(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
+  } else if (get_stmt()->is_insert_stmt()) {
+    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
+    const common::ObIArray<ObRawExpr*> &group_param_exprs = insert_stmt->get_group_param_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_param_exprs.count(); ++i) {
+      ObRawExpr *group_param_expr = group_param_exprs.at(i);
+      if (OB_FAIL(mark_expr_produced(group_param_expr, branch_id_, id_, ctx))) {
+        LOG_WARN("makr expr produced failed", K(ret));
+      } else if (!is_plan_root() && OB_FAIL(output_exprs_.push_back(group_param_expr))) {
+        LOG_WARN("failed to push back exprs", K(ret));
+      } else { /*do nothing*/ }
+    }
+    ObRawExpr *stmt_id_expr = NULL;
+    if (OB_FAIL(ret)) {
+
+    } else if (OB_ISNULL(stmt_id_expr = insert_stmt->get_ab_stmt_id_expr())) {
+      // is not batch_optimization, do nothing
+    } else if (OB_FAIL(output_exprs_.push_back(stmt_id_expr))) {
+      LOG_WARN("fail to push stmt_id_expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -318,6 +351,12 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
       } else if (!is_plan_root() && OB_FAIL(output_exprs_.push_back(value_col))) {
         LOG_WARN("failed to push back exprs", K(ret));
       } else { /*do nothing*/ }
+    }
+
+    if (OB_FAIL(ret)) {
+
+    } else if (OB_FAIL(append_batch_insert_used_exprs(ctx))) {
+      LOG_WARN("failed to append batch insert used exprs", K(ret));
     }
   }
   if (OB_FAIL(ret)) {

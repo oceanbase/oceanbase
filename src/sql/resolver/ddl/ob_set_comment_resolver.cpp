@@ -69,7 +69,7 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
       alter_table_stmt->set_tenant_id(tenant_id);
       alter_table_stmt->set_is_comment_table(true);
     }
-    
+
     // resolve string_value
     if (OB_FAIL(ret)) {
       // do-nothing
@@ -98,10 +98,10 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
       OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
             *allocator_, session_info_->get_dtc_params(), comment_));
     }
-    
+
     if (OB_SUCC(ret)) {
       if (T_SET_TABLE_COMMENT == parse_tree.type_) {
-        // COMMENT ON TABLE 
+        // COMMENT ON TABLE
         bool is_exists = false;
         uint64_t compat_version = OB_INVALID_VERSION;
         if (2 != parse_tree.num_child_) {
@@ -128,11 +128,13 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("get min data_version failed", K(ret), K(session_info_->get_effective_tenant_id()));
         } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version) && table_schema->is_view_table()) {
           ret = OB_ERR_WRONG_OBJECT;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(database_name), to_cstring(table_name),
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(database_name), helper.convert(table_name),
                          "BASE TABLE");
           LOG_WARN("version before 4.3.1 or 4.2.2 not support comment on view", K(ret));
         } else {
           alter_table_stmt->set_table_id(table_schema->get_table_id());
+          alter_table_stmt->set_stmt_type(stmt::T_SET_TABLE_COMMENT);
         }
       } else if (T_SET_COLUMN_COMMENT == parse_tree.type_) {
         // COMMENT ON COLUMN
@@ -189,7 +191,8 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("get min data_version failed", K(ret), K(session_info_->get_effective_tenant_id()));
           } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version) && table_schema->is_view_table()) {
             ret = OB_ERR_WRONG_OBJECT;
-            LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(database_name), to_cstring(table_name),
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(database_name), helper.convert(table_name),
                            "BASE TABLE");
             LOG_WARN("version before 4.3.1 or 4.2.2 not support comment on column of view", K(ret));
           } else if (OB_FAIL(schema_checker_->check_column_exists(tenant_id,
@@ -202,6 +205,7 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
             SQL_RESV_LOG(WARN, "column doesn't exist", K(ret), K(col_name));
           } else {
             alter_table_stmt->set_table_id(table_schema->get_table_id());
+            alter_table_stmt->set_stmt_type(stmt::T_SET_COLUMN_COMMENT);
           }
         }
       } else {
@@ -211,7 +215,7 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
     }
     if (OB_SUCC(ret)) {
       if (T_SET_TABLE_COMMENT == parse_tree.type_) {
-        share::schema::AlterTableSchema &alter_table_schema = 
+        share::schema::AlterTableSchema &alter_table_schema =
           alter_table_stmt->get_alter_table_arg().alter_table_schema_;
         if (OB_FAIL(alter_table_schema.set_comment(comment_))) {
           SQL_RESV_LOG(WARN, "Write comment_ to alter_table_schema failed!", K(ret));
@@ -249,17 +253,17 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           }
-          
+
           if (OB_FAIL(ret)) {
             alter_column_schema.reset();
             SQL_RESV_LOG(WARN, "Set column options error!", K(ret));
           }
-        } 
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "Unkonwn operation type", K(ret), K(parse_tree.type_));
       }
-        
+
       if (OB_SUCC(ret)) {
         if (OB_FAIL(alter_table_stmt->set_origin_database_name(database_name))) {
           SQL_RESV_LOG(WARN, "failed to set origin database name", K(ret));

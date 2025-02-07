@@ -21,7 +21,32 @@ namespace oceanbase
 {
 namespace table
 {
-int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *entity)
+
+int ObTableApiUpdateSpec::init_ctdefs_array(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(udp_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      udp_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiUpdateSpec::~ObTableApiUpdateSpec()
+{
+  for (int64_t i = 0; i < udp_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(udp_ctdefs_.at(i))) {
+      udp_ctdefs_.at(i)->~ObTableUpdCtDef();
+    }
+  }
+  udp_ctdefs_.reset();
+}
+
+int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *entity, bool &is_row_changed)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<ObNewRange> &key_ranges = tb_ctx_.get_key_ranges();
@@ -40,17 +65,21 @@ int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *enti
       LOG_WARN("fail to push back key range", K(ret), K(range));
     } else {
       clear_evaluated_flag();
-      const ObTableUpdCtDef *upd_ctdef = &upd_spec_.get_ctdef();
+      const ObTableUpdCtDef *upd_ctdef = upd_spec_.get_ctdefs().at(0);
+      const ObIArray<ObExpr *> &new_row = tb_ctx_.is_inc_or_append() ? upd_ctdef->delta_row_ : upd_ctdef->new_row_;
       if (OB_FAIL(child_->open())) {
         LOG_WARN("fail to open child executor", K(ret));
       } else if (OB_FAIL(child_->get_next_row())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         }
-      } else if (OB_FAIL(ObTableExprCgService::refresh_update_exprs_frame(tb_ctx_,
-                                                                          upd_ctdef->new_row_,
-                                                                          *entity))) {
+      } else if (OB_FAIL(ObTableExprCgService::refresh_update_exprs_frame(tb_ctx_, new_row, *entity))) {
         LOG_WARN("fail to refresh update exprs frame", K(ret), K(*entity), K(cur_idx_));
+      } else {
+        const ObIArray<ObExpr *> &old_row = upd_ctdef->old_row_;
+        if (OB_FAIL(check_whether_row_change(new_row, old_row, eval_ctx_, *upd_ctdef, is_row_changed))) {
+          LOG_WARN("fail to check whether row change", K(ret));
+        }
       }
     }
   }
@@ -58,14 +87,14 @@ int ObTableApiUpdateExecutor::process_single_operation(const ObTableEntity *enti
   return ret;
 }
 
-int ObTableApiUpdateExecutor::get_next_row_from_child()
+int ObTableApiUpdateExecutor::get_next_row_from_child(bool& is_row_changed)
 {
   int ret = OB_SUCCESS;
   const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
 
   if (cur_idx_ >= 1) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(process_single_operation(entity))) {
+  } else if (OB_FAIL(process_single_operation(entity, is_row_changed))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to process single update operation", K(ret));
     }
@@ -77,18 +106,11 @@ int ObTableApiUpdateExecutor::get_next_row_from_child()
 int ObTableApiUpdateExecutor::update_row_to_das()
 {
   int ret = OB_SUCCESS;
-  const ObTableUpdCtDef &upd_ctdef = upd_spec_.get_ctdef();
-  ObDASTabletLoc *tablet_loc = nullptr;
-  if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
-    LOG_WARN("calc partition key failed", K(ret));
-  } else {
-    clear_evaluated_flag();
-    if (OB_FAIL(ObDMLService::update_row(upd_ctdef.das_ctdef_,
-                                         upd_rtdef_.das_rtdef_,
-                                         tablet_loc,
-                                         dml_rtctx_,
-                                         upd_ctdef.full_row_))) {
-      LOG_WARN("fail to update row to das op", K(ret), K(upd_ctdef), K(upd_rtdef_));
+  for (int64_t i = 0; i < upd_rtdefs_.count() && OB_SUCC(ret); i++) {
+    const ObTableUpdCtDef &upd_ctdef = *upd_spec_.get_ctdefs().at(i);
+    ObTableUpdRtDef &upd_rtdef = upd_rtdefs_.at(i);
+    if (OB_FAIL(ObTableApiModifyExecutor::update_row_to_das(upd_ctdef, upd_rtdef, dml_rtctx_))) {
+      LOG_WARN("fail to update row to das", K(ret));
     }
   }
 
@@ -98,14 +120,32 @@ int ObTableApiUpdateExecutor::update_row_to_das()
 int ObTableApiUpdateExecutor::open()
 {
   int ret = OB_SUCCESS;
-  const ObTableUpdCtDef &ctdef = upd_spec_.get_ctdef();
 
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_upd_rtdef(ctdef, upd_rtdef_))) {
-    LOG_WARN("fail to generate update rtdef", K(ret));
+  } else if (OB_FAIL(inner_open_with_das())) {
+    LOG_WARN("fail to open update executor", K(ret));
   }
 
+  return ret;
+}
+
+int ObTableApiUpdateExecutor::inner_open_with_das()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(upd_rtdefs_.allocate_array(allocator_, upd_spec_.get_ctdefs().count()))) {
+    LOG_WARN("fail to alloc ins rtdefs", K(ret));
+  }
+  for (int64_t i = 0; i < upd_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableUpdRtDef &upd_rtdef = upd_rtdefs_.at(i);
+    const ObTableUpdCtDef *upd_ctdef = nullptr;
+    if (OB_ISNULL(upd_ctdef = upd_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_upd_rtdef(*upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate update rtdef", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -115,7 +155,7 @@ int ObTableApiUpdateExecutor::upd_rows_post_proc()
   if (OB_FAIL(submit_all_dml_task())) {
     LOG_WARN("fail to execute all update das task", K(ret));
   } else {
-    affected_rows_ += upd_rtdef_.das_rtdef_.affected_rows_;
+    affected_rows_ += upd_rtdefs_.at(0).das_rtdef_.affected_rows_;
   }
   return ret;
 }
@@ -124,13 +164,20 @@ int ObTableApiUpdateExecutor::get_next_row()
 {
   int ret = OB_SUCCESS;
 
+  bool has_row_changed = false;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(get_next_row_from_child())) {
+    // wether this row changed
+    bool is_row_changed = false;
+    if (OB_FAIL(get_next_row_from_child(is_row_changed))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next row", K(ret));
       }
+    } else if (!is_row_changed) {
+      LOG_INFO("update row not changed", K(tb_ctx_.get_entity()));
     } else if (OB_FAIL(update_row_to_das())) {
       LOG_WARN("fail tp update row to das", K(ret));
+    } else {
+      has_row_changed = true;
     }
     int tmp_ret = ret;
     if (OB_FAIL(child_->close())) { // 需要写到das后才close child算子，否则扫描的行已经被析构
@@ -140,7 +187,7 @@ int ObTableApiUpdateExecutor::get_next_row()
     cur_idx_++;
   }
 
-  if (OB_ITER_END == ret) {
+  if (has_row_changed && OB_ITER_END == ret) {
     if (OB_FAIL(upd_rows_post_proc())) {
       LOG_WARN("fail to do update rows post process", K(ret));
     } else {

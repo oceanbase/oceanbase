@@ -144,7 +144,7 @@ public:
 
   // for virtual_table iter
   int get_all_target_info(common::ObIArray<ObPxTargetInfo> &target_info_array);
-  static uint64_t get_server_id(uint64_t version);
+  static uint64_t get_server_index(uint64_t version);
 
   TO_STRING_KV(K_(is_init), K_(tenant_id), K_(server), K_(dummy_cache_leader), K_(role));
 

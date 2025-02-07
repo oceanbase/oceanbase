@@ -132,6 +132,7 @@ void ObBackupBaseService::idle()
   if (has_set_stop() || wakeup_cnt_ > 0) {
     wakeup_cnt_ = 0;
   } else {
+    ObBKGDSessInActiveGuard inactive_guard;
     thread_cond_.wait_us(interval_idle_time_us_);
   }
 }

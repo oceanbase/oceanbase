@@ -179,6 +179,8 @@ struct ObIndexBlockRowHeader
   OB_INLINE int64_t get_master_key_id() const { return master_key_id_; }
   OB_INLINE const char *get_encrypt_key() const { return encrypt_key_; }
   OB_INLINE uint64_t get_row_count() const { return row_count_; }
+  OB_INLINE uint64_t get_macro_block_count() const { return macro_block_count_; }
+  OB_INLINE uint64_t get_micro_block_count() const { return micro_block_count_; }
   OB_INLINE uint64_t get_schema_version() const { return schema_version_; }
   OB_INLINE MacroBlockId get_macro_id() const
   {
@@ -407,7 +409,7 @@ public:
       nested_offset_(0),
       cs_row_range_(),
       skipping_filter_results_(),
-      rowkey_col_descs_(nullptr)
+      table_read_info_(nullptr)
   {
   }
   OB_INLINE void reset()
@@ -425,7 +427,7 @@ public:
     nested_offset_ = 0;
     cs_row_range_.reset();
     skipping_filter_results_.reset();
-    rowkey_col_descs_ = nullptr;
+    table_read_info_ = nullptr;
   }
   OB_INLINE bool is_valid() const
   {
@@ -512,6 +514,16 @@ public:
   {
     OB_ASSERT(nullptr != row_header_);
     return row_header_->get_row_count();
+  }
+  OB_INLINE uint64_t get_macro_block_count() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_macro_block_count();
+  }
+  OB_INLINE uint64_t get_micro_block_count() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_micro_block_count();
   }
   OB_INLINE bool is_pre_aggregated() const
   {
@@ -615,6 +627,11 @@ public:
   {
     return sql::ObBoolMaskType::PROBABILISTIC == static_cast<sql::ObBoolMaskType>(filter_constant_type_);
   }
+  OB_INLINE bool is_filter_constant() const
+  {
+    return sql::ObBoolMaskType::ALWAYS_TRUE == static_cast<sql::ObBoolMaskType>(filter_constant_type_) ||
+        sql::ObBoolMaskType::ALWAYS_FALSE == static_cast<sql::ObBoolMaskType>(filter_constant_type_);
+  }
   OB_INLINE void set_filter_constant_type(const sql::ObBoolMaskType type)
   {
     filter_constant_type_ = static_cast<uint16_t>(type);
@@ -692,14 +709,14 @@ public:
       }
     }
   }
-  OB_INLINE const ObIArray<share::schema::ObColDesc> *get_rowkey_col_descs() const
+  OB_INLINE const ObITableReadInfo *get_table_read_info() const
   {
-    return rowkey_col_descs_;
+    return table_read_info_;
   }
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), K_(endkey), KP_(ps_node),
       KP_(agg_row_buf), K_(agg_buf_size), K_(flag), K_(range_idx), K_(parent_macro_id),
       K_(nested_offset), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(cs_row_range),
-      K_(skipping_filter_results), KP_(rowkey_col_descs));
+      K_(skipping_filter_results), KP_(table_read_info));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
@@ -739,7 +756,7 @@ public:
   int64_t rowkey_end_idx_;
   ObCSRange cs_row_range_;
   ObSkippingFilterResults skipping_filter_results_;
-  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
+  const ObITableReadInfo *table_read_info_;
 };
 
 

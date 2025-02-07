@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 
 namespace oceanbase
 {
@@ -243,6 +245,8 @@ int ObTransformMVRewritePrepare::get_base_table_id_string(const ObDMLStmt *stmt,
   } else if (OB_FAIL(visited_id.create(table_id_list.count(), "MvRewrite", "HashNode"))) {
     LOG_WARN("failed to init visited id hash set", K(ret));
   }
+  ObCStringHelper helper;
+  const char* table_id_str = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_id_list.count(); ++i) {
     int tmp_ret = visited_id.exist_refactored(table_id_list.at(i));
     if (OB_HASH_EXIST == tmp_ret) {
@@ -254,7 +258,9 @@ int ObTransformMVRewritePrepare::get_base_table_id_string(const ObDMLStmt *stmt,
       LOG_WARN("failed to push back table ref id", K(ret));
     } else if (i > 0 && OB_FAIL(table_ids.append(","))) {
       LOG_WARN("failed to append comma", K(ret));
-    } else if (OB_FAIL(table_ids.append(to_cstring(table_id_list.at(i))))) {
+    } else if (OB_FAIL(helper.convert(table_id_list.at(i), table_id_str))) {
+      LOG_WARN("failed to convert", K(ret));
+    } else if (OB_FAIL(table_ids.append(table_id_str))) {
       LOG_WARN("failed to append table id", K(ret));
     }
   }

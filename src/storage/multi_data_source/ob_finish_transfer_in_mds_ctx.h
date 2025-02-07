@@ -20,6 +20,14 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class ObLSID;
+}
+namespace common
+{
+class ObTabletID;
+}
 namespace storage
 {
 namespace mds

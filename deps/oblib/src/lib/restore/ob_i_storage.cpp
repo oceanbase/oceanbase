@@ -339,6 +339,25 @@ int record_failed_files_idx(const hash::ObHashMap<ObString, int64_t> &files_to_d
   return ret;
 }
 
+int ob_set_field(const char *value, char *field, const uint32_t field_length)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(value) || OB_ISNULL(field)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(value), KP(field));
+  } else {
+    const int64_t value_len = strlen(value);
+    if (value_len >= field_length) {
+      ret = OB_SIZE_OVERFLOW;
+      OB_LOG(WARN, "value is too long", K(ret), KP(value), K(value_len), K(field_length));
+    } else {
+      MEMCPY(field, value, value_len);
+      field[value_len] = '\0';
+    }
+  }
+  return ret;
+}
+
 int ob_apr_abort_fn(int retcode)
 {
   int ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -846,15 +865,35 @@ ObObjectStorageGuard::ObObjectStorageGuard(
   }
 }
 
-void ObObjectStorageGuard::print_access_storage_log_()
+
+// when accessing the object storage, if the error code returned is OB_BACKUP_PERMISSION_DENIED,
+// it may be due to expired temporary ak/sk
+// attempt to refresh the temporary ak/sk, and if the refresh fails,
+// only log the error message to avoid overriding the original error code.
+static void try_refresh_device_credential(
+    const int ob_errcode, const ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (ob_errcode != OB_OBJECT_STORAGE_PERMISSION_DENIED) {
+    // do nothing
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), K(ob_errcode), KPC(storage_info));
+  } else if (storage_info->is_assume_role_mode()
+      && OB_FAIL(ObDeviceCredentialMgr::get_instance().curl_credential(
+          *storage_info, true /*update_access_time*/))) {
+    OB_LOG(WARN, "failed to refresh credential", K(ret), K(ob_errcode), KPC(storage_info));
+  }
+}
+
+void ObObjectStorageGuard::print_access_storage_log_() const
 {
   const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
   // MB/s
   const double speed = ((double)handled_size_ / 1024 / 1024)
                      / ((double)cost_time_us / 1000 / 1000);
-  const bool is_slow = cost_time_us >= WARN_THRESHOLD_TIME_US * 1000; // 1s
-  if (cost_time_us > WARN_THRESHOLD_TIME_US
-      || (handled_size_ > 0 && speed <= WARN_THRESHOLD_SPEED_MB_S)) {
+  const bool is_slow = is_slow_io_(cost_time_us);
+  if (is_slow) {
     _STORAGE_LOG_RET(WARN, ob_errcode_,
         "access object storage cost too much time: %s (%s:%ld), "
         "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",
@@ -863,9 +902,25 @@ void ObObjectStorageGuard::print_access_storage_log_()
   }
 }
 
+bool ObObjectStorageGuard::is_slow_io_(const int64_t cost_time_us) const
+{
+  bool is_slow = false;
+  if (handled_size_ == 0 && cost_time_us >= UTIL_IO_WARN_THRESHOLD_TIME_US) {
+    is_slow = true;
+  } else if (handled_size_ <= SMALL_IO_SIZE && cost_time_us >= SMALL_IO_WARN_THRESHOLD_TIME_US) {
+    is_slow = true;
+  } else if (handled_size_ <= MEDIUM_IO_SIZE && cost_time_us >= MEDIUM_IO_WARN_THRESHOLD_TIME_US) {
+    is_slow = true;
+  } else if (cost_time_us >= LARGE_IO_WARN_THRESHOLD_TIME_US) {
+    is_slow = true;
+  }
+  return is_slow;
+}
+
 ObObjectStorageGuard::~ObObjectStorageGuard()
 {
   print_access_storage_log_();
+  try_refresh_device_credential(ob_errcode_, storage_info_);
   lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
 }
 

@@ -208,8 +208,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
   int ret = OB_SUCCESS;
   const ParseNode *real_parse_tree = NULL;
+  int64_t questionmark_count = 0;
   UNUSED(if_prepared);
-
   if (OB_ISNULL(params_.allocator_)
       || OB_ISNULL(params_.schema_checker_)
       || OB_ISNULL(params_.session_info_)
@@ -229,7 +229,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
                               *(params_.expr_factory_),
                               NULL,
                               params_.is_prepare_protocol_);
-    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, params_.query_ctx_->question_marks_count_));
+    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, questionmark_count));
+    OX (params_.query_ctx_->set_questionmark_count(questionmark_count));
   } else {
     real_parse_tree = &parse_tree;
   }
@@ -771,6 +772,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_OPEN_TABLES:
       case T_SHOW_SEQUENCES:
       case T_SHOW_OLAP_ASYNC_JOB_STATUS:
+      case T_XA_RECOVER:
       case T_SHOW_CHECK_TABLE:
       case T_SHOW_CREATE_USER: {
         REGISTER_STMT_RESOLVER(Show);
@@ -1146,6 +1148,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(BackupKey);
         break;
       }
+      case T_BACKUP_CLUSTER_PARAMETERS: {
+        REGISTER_STMT_RESOLVER(BackupClusterParam);
+        break;
+      }
       case T_RECOVER_TABLE: {
         REGISTER_STMT_RESOLVER(RecoverTable);
         break;
@@ -1294,6 +1300,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
       }
+      case T_GRANT_PROXY:
+      case T_REVOKE_PROXY: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);
@@ -1326,7 +1337,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       // todo yanli:检查主备库
     }
     
-    if (OB_SUCC(ret) && stmt->is_dml_stmt() && !params_.session_info_->is_varparams_sql_prepare()) {
+    if (OB_SUCC(ret) && stmt->is_dml_stmt() && !params_.session_info_->is_varparams_sql_prepare()
+          && lib::is_mysql_mode()) {
       ObDMLStmt *dml_stmt = static_cast<ObDMLStmt*>(stmt);
       ObRawExprWrapEnumSet enum_set_wrapper(*params_.expr_factory_, params_.session_info_);
       if (OB_FAIL(enum_set_wrapper.wrap_enum_set(*dml_stmt))) {

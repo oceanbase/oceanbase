@@ -109,6 +109,8 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
         type.set_length(max_allowed_packet);
         if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 3))) {
           LOG_WARN("types are not compatible with binary.", K(ret));
+        } else if (OB_FAIL(extract_enum_set_collation_for_args(text, pattern, type_ctx, real_types))) {
+          LOG_WARN("fail to extract enum set meta", K(ret));
         } else {
           ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx);
           is_case_sensitive = ObCharset::is_bin_sort(type.get_collation_type());

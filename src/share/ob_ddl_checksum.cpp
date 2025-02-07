@@ -578,6 +578,7 @@ int ObDDLChecksumOperator::check_column_checksum(
     const uint64_t index_table_id,
     const int64_t ddl_task_id,
     const bool is_unique_index_checking,
+    const ObIArray<int64_t> &ignore_col_ids,
     bool &is_equal,
     common::ObMySQLProxy &sql_proxy)
 {
@@ -602,6 +603,10 @@ int ObDDLChecksumOperator::check_column_checksum(
   } else {
     for (hash::ObHashMap<int64_t, int64_t>::const_iterator iter = index_table_column_checksums.begin();
       OB_SUCC(ret) && iter != index_table_column_checksums.end(); ++iter) {
+      bool skip_check = has_exist_in_array(ignore_col_ids, iter->first);
+      if (skip_check) {
+        continue;
+      }
       int64_t data_table_column_checksum = 0;
       if (OB_FAIL(data_table_column_checksums.get_refactored(iter->first, data_table_column_checksum))) {
         LOG_WARN("fail to get data table column checksum", K(ret), "column_id", iter->first);
@@ -629,6 +634,7 @@ int ObDDLChecksumOperator::check_column_checksum_without_execution_id(
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
       const bool is_unique_index_checking,
+      const ObIArray<int64_t> &ignore_col_ids,
       bool &is_equal,
       common::ObMySQLProxy &sql_proxy)
 {
@@ -654,6 +660,10 @@ int ObDDLChecksumOperator::check_column_checksum_without_execution_id(
     for (hash::ObHashMap<int64_t, int64_t>::const_iterator iter = index_table_column_checksums.begin();
       OB_SUCC(ret) && iter != index_table_column_checksums.end(); ++iter) {
       int64_t data_table_column_checksum = 0;
+      bool skip_check = has_exist_in_array(ignore_col_ids, iter->first);
+      if (skip_check) {
+        continue;
+      }
       if (OB_FAIL(data_table_column_checksums.get_refactored(iter->first, data_table_column_checksum))) {
         LOG_WARN("fail to get data table column checksum", K(ret), "column_id", iter->first);
       } else if (data_table_column_checksum != iter->second) {

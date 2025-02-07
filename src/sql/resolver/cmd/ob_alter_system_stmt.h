@@ -1273,6 +1273,30 @@ private:
   share::ObBackupPathString backup_dest_;
   ObString encrypt_key_;
 };
+
+class ObBackupClusterParamStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupClusterParamStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_CLUSTER_PARAMETERS),
+      backup_dest_() {}
+  virtual ~ObBackupClusterParamStmt() {}
+  const share::ObBackupPathString &get_backup_dest() const { return backup_dest_; }
+  int set_param(const share::ObBackupPathString &backup_dest)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(backup_dest_.assign(backup_dest))) {
+      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(backup_dest));
+
+private:
+  share::ObBackupPathString backup_dest_;
+};
+
 class ObTableTTLStmt : public ObSystemCmdStmt {
 public:
   ObTableTTLStmt()

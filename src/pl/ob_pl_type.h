@@ -31,6 +31,7 @@
 
 #define ObCursorType ObIntType
 #define ObPtrType ObIntType
+#define OB_PL_MOCK_ANONYMOUS_ID 0xFFFFFFFFFFFFFFFE
 
 #define IS_TYPE_FROM_TYPE_OR_ROWTYPE(type_from)  \
       (PL_TYPE_ATTR_ROWTYPE == type_from) ||     \
@@ -233,6 +234,26 @@ struct ObPLExternTypeInfo
   TO_STRING_KV(K_(flag), K_(type_owner), K_(type_name), K_(type_subname), K_(obj_version));
 };
 
+class ObPLEnumSetCtx;
+
+OB_INLINE bool is_mocked_anonymous_array_id(uint64_t udt_id)
+{
+  uint64_t mask = 0xFFFFFFFFFF000000;
+  uint64_t res =  0xFFFFFFFFFE000000;
+  // anonymous_array will use OB_PL_MOCK_ANONYMOUS_ID to generate a mocked id ,
+  // OB_PL_MOCK_ANONYMOUS_ID = (uint64)OB_INVALID_ID - 1.
+  // Why do not use OB_INVALID_ID? Anonymous block has declare local nested type (this package_id is OB_INVALID_ID)
+  // use OB_INVALID_ID - 1 to identify this scenery.
+  // So the first 40 bits of mocked id in hex is: 0xFFFFFFFFFE
+  // We can use (mocked_id & mask) to get the first 40 bits and check if it is mocked.
+  return (udt_id & mask) == res || OB_INVALID_ID == udt_id;
+}
+
+OB_INLINE bool is_invalid_or_mocked_package_id(uint64_t udt_id)
+{
+  return OB_INVALID_ID == extract_package_id(udt_id) || OB_PL_MOCK_ANONYMOUS_ID == extract_package_id(udt_id);
+}
+
 class ObPLDataType
 {
 public:
@@ -244,10 +265,10 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_(),
+      type_info_id_(common::OB_INVALID_ID),
+      enum_set_ctx_(NULL),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
-    type_info_.set_tenant_id(MTL_ID());
   }
   ObPLDataType(ObPLType type)
     : type_(type),
@@ -257,10 +278,10 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_(),
+      type_info_id_(common::OB_INVALID_ID),
+      enum_set_ctx_(NULL),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
-    type_info_.set_tenant_id(MTL_ID());
   }
   ObPLDataType(common::ObObjType type)
     : type_(PL_OBJ_TYPE),
@@ -270,13 +291,13 @@ public:
       user_type_id_(common::OB_INVALID_ID),
       not_null_(false),
       pls_type_(ObPLIntegerType::PL_INTEGER_INVALID),
-      type_info_(),
+      type_info_id_(common::OB_INVALID_ID),
+      enum_set_ctx_(NULL),
       charsetnr_(CS_TYPE_UTF8MB4_GENERAL_CI)
   {
     common::ObDataType data_type;
     data_type.set_obj_type(type);
     set_data_type(data_type);
-    type_info_.set_tenant_id(MTL_ID());
   }
   ObPLDataType(const ObPLDataType &other)
     : type_(other.type_),
@@ -288,12 +309,13 @@ public:
       pls_type_(other.pls_type_),
       charsetnr_(other.charsetnr_)
   {
-    type_info_.set_tenant_id(MTL_ID());
-    type_info_ = other.type_info_;
+    enum_set_ctx_ = other.enum_set_ctx_;
+    type_info_id_ = other.type_info_id_;
   }
 
   virtual ~ObPLDataType() {}
   int deep_copy(common::ObIAllocator &alloc, const ObPLDataType &other);
+  int deep_copy(pl::ObPLEnumSetCtx &enum_set_ctx, const ObPLDataType &other);
   void reset()
   {
     type_ = PL_INVALID_TYPE;
@@ -303,7 +325,8 @@ public:
     user_type_id_ = common::OB_INVALID_ID;
     not_null_ = false;
     pls_type_ = ObPLIntegerType::PL_INTEGER_INVALID;
-    type_info_.reset();
+    type_info_id_ = common::OB_INVALID_ID;
+    enum_set_ctx_ = NULL;
     charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
   }
 
@@ -318,7 +341,7 @@ public:
   {
     type_from_origin_ = type_from_origin;
   }
-
+  inline ObPLTypeFrom get_type_from_origin() const { return type_from_origin_; }
   const common::ObDataType *get_data_type() const { return is_obj_type() ? &obj_type_ : NULL; }
   common::ObDataType *get_data_type() { return is_obj_type() ? &obj_type_ : NULL; }
   const common::ObObjMeta *get_meta_type() const { return  is_obj_type() ? &(obj_type_.meta_) : NULL; }
@@ -355,11 +378,11 @@ public:
   void reset_charset() { charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI; }
   ObCollationType get_charset() const { return charsetnr_; }
 
-  const common::ObIArray<common::ObString>& get_type_info() const { return type_info_; }
-  int set_type_info(const common::ObIArray<common::ObString> &type_info);
-  int set_type_info(const common::ObIArray<common::ObString> *type_info);
-  int deep_copy_type_info(common::ObIAllocator &allocator,
-                          const common::ObIArray<common::ObString>& type_info);
+  uint64_t get_type_info_id() const { return type_info_id_; }
+  int set_type_info(const ObIArray<common::ObString> &type_info);
+  pl::ObPLEnumSetCtx* get_enum_set_ctx() { return enum_set_ctx_; }
+  void set_enum_set_ctx(pl::ObPLEnumSetCtx *enum_set_ctx) { enum_set_ctx_ = enum_set_ctx; }
+  int get_type_info(ObIArray<common::ObString> *&type_info) const;
   int get_external_user_type(const ObPLResolveCtx &resolve_ctx,
                           const ObUserDefinedType *&user_type) const;
 
@@ -460,7 +483,8 @@ public:
   inline bool is_generic_table_type() const { return PL_TABLE_1 == generic_type_; }
   inline bool is_generic_collection_type() const { return PL_COLLECTION_1 == generic_type_; }
   inline bool is_generic_ref_cursor_type() const { return PL_REF_CURSOR_1 == generic_type_; }
-
+  inline bool is_dblink_type() { return common::is_dblink_type_id(user_type_id_); }
+  inline bool is_enum_or_set_type() const { return (is_obj_type() && ob_is_enum_or_set_type(obj_type_.get_obj_type())); }
   /*!
    * ------ new session serialize/deserialize interface -------
    */
@@ -499,7 +523,9 @@ public:
   virtual int generate_default_value(ObPLCodeGenerator &generator,
                                      const ObPLINS &ns,
                                      const pl::ObPLStmt *stmt,
-                                     jit::ObLLVMValue &value) const;
+                                     jit::ObLLVMValue &value,
+                                     jit::ObLLVMValue &allocator,
+                                     bool is_top_level) const;
 
   virtual int generate_copy(ObPLCodeGenerator &generator,
                             const ObPLBlockNS &ns,
@@ -513,10 +539,14 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                        const ObPLINS &ns,
                                        jit::ObLLVMValue &value,
+                                       jit::ObLLVMValue &allocator,
+                                       bool is_top_level,
                                        const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const;
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
@@ -526,8 +556,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
-  virtual int free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
   virtual int add_package_routine_schema_param(const ObPLResolveCtx &resolve_ctx,
                                                const ObPLBlockNS &block_ns,
                                                const common::ObString &package_name,
@@ -604,12 +632,15 @@ public:
                                   share::schema::ObRoutineInfo &routine_info);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
 
+  static int obj_is_null(ObObj &obj, bool &is_null);
+  static int datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null);
+
   DECLARE_TO_STRING;
 
 protected:
   ObPLType type_;
   ObPLTypeFrom type_from_;
-  ObPLTypeFrom type_from_origin_; /* valid if type_from is PL_TYPE_ATTR_ROWTYPE or PL_TYPE_ATTR_TYPE */
+  ObPLTypeFrom type_from_origin_; /* valid if type_from is PL_TYPE_ATTR_ROWTYPE or PL_TYPE_ATTR_TYPE or PL_TYPE_DBLINK*/
   common::ObDataType obj_type_;
   union {
     uint64_t user_type_id_;
@@ -623,7 +654,8 @@ protected:
     ObPLIntegerType pls_type_;
     ObPLGenericType generic_type_;
   };
-  common::ObArray<common::ObString> type_info_;
+  uint64_t type_info_id_;
+  pl::ObPLEnumSetCtx* enum_set_ctx_;
   ObCollationType charsetnr_;
 };
 
@@ -645,6 +677,95 @@ inline void ObPLDataType::set_user_type_id(ObPLType type, uint64_t user_type_id)
   type_ = type;
   user_type_id_ = user_type_id;
 }
+
+class ObPLEnumSetCtx
+{
+public:
+  class ObPLTypeInfoKey
+  {
+  public:
+    ObPLTypeInfoKey() : type_info_(NULL) {}
+    ObPLTypeInfoKey(ObIArray<common::ObString>* type_info) : type_info_(type_info) {}
+    ~ObPLTypeInfoKey() {}
+
+    inline uint64_t hash() const
+    {
+      uint64_t hash_val = 0;
+      if (OB_NOT_NULL(type_info_)) {
+        for (int64_t i = 0; i < type_info_->count(); i++) {
+          hash_val = type_info_->at(i).hash(hash_val);
+        }
+      }
+      return hash_val;
+    }
+
+    inline int hash(uint64_t &res) const
+    {
+      res = hash();
+      return OB_SUCCESS;
+    }
+
+    inline bool operator==(const ObPLTypeInfoKey &other) const
+    {
+      bool eq_ret = true;
+      if (type_info_ == NULL || other.type_info_ == NULL) {
+        eq_ret = (type_info_ == other.type_info_);
+      } else if (type_info_->count() != other.type_info_->count()) {
+        eq_ret = false;
+      } else {
+        for (int64_t i = 0; eq_ret && i < type_info_->count(); i++) {
+          eq_ret = (type_info_->at(i) == other.type_info_->at(i));
+        }
+      }
+      return eq_ret;
+    }
+
+    TO_STRING_KV(KP_(type_info));
+
+    ObIArray<common::ObString>* type_info_;
+  };
+
+  static const uint32_t ENUM_TYPE_INFO_BUCKET_NUM = 64;
+  typedef common::ObSEArray<ObIArray<common::ObString>*, ENUM_TYPE_INFO_BUCKET_NUM> ObEnumTypeInfoArray;
+  typedef common::hash::ObHashMap<ObPLEnumSetCtx::ObPLTypeInfoKey, uint64_t, common::hash::NoPthreadDefendMode> ObEnumTypeInfoReverseMap;
+
+  public:
+  ObPLEnumSetCtx(ObIAllocator &allocator) :
+  is_inited_(false),
+  used_type_info_id_(0),
+  allocator_(allocator) {}
+
+  ~ObPLEnumSetCtx() { reset(); }
+
+  int init();
+  bool is_inited() const { return is_inited_; }
+  void reset();
+  void destroy() { reset(); }
+  int assgin(const ObPLEnumSetCtx &other);
+  int get_new_enum_type_info_id(uint16_t &id);
+  int ensure_array_capacity(const uint16_t count);
+  ObIAllocator &get_allocator() { return allocator_; };
+
+  int get_type_info_id(const ObIArray<common::ObString>* type_info, uint16_t &type_info_id);
+  int set_enum_type_info(uint16_t type_info_id, ObIArray<common::ObString>* type_info);
+  int get_enum_type_info(uint16_t type_info_id, ObIArray<common::ObString>* &type_info) const;
+  ObIArray<common::ObString>* get_enum_type_info(uint16_t type_info_id) const { return enum_type_info_array_.at(type_info_id); };
+  int deep_copy_type_info(common::ObIAllocator &allocator,
+                          common::ObIArray<common::ObString>* &dst_type_info,
+                          const common::ObIArray<common::ObString>& type_info);
+
+  TO_STRING_KV(K(is_inited_),
+               K(used_type_info_id_),
+               K(enum_type_info_array_.count()),
+               K(enum_type_info_reverse_map_.size()));
+
+private:
+  bool is_inited_;
+  uint16_t used_type_info_id_;
+  ObIAllocator &allocator_;
+  ObEnumTypeInfoArray enum_type_info_array_;
+  ObEnumTypeInfoReverseMap enum_type_info_reverse_map_;
+};
 
 class ObObjAccessIdx
 {

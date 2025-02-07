@@ -14,10 +14,12 @@
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_sstable_macro_block_header.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/compaction/ob_compaction_memory_context.h"
 #include "common/ob_tablet_id.h"
 #include "common/ob_store_format.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
+
 namespace oceanbase
 {
 namespace storage {
@@ -54,19 +56,22 @@ public:
     const share::schema::ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
+    const int64_t tablet_transfer_seq,
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
-    const bool need_submit_io = true);
+    const bool need_submit_io = true,
+    const uint64_t encoding_granularity = 0);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
   TO_STRING_KV(
       K_(ls_id),
       K_(tablet_id),
+      K_(tablet_transfer_seq),
       "merge_type", merge_type_to_str(merge_type_),
       K_(snapshot_version),
       K_(end_scn),
@@ -83,7 +88,8 @@ public:
       K_(major_working_cluster_version),
       K_(micro_index_clustered),
       K_(progressive_merge_round),
-      K_(need_submit_io));
+      K_(need_submit_io),
+      K_(encoding_granularity));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -97,6 +103,7 @@ public:
   ObCompressorType compressor_type_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
+  int64_t tablet_transfer_seq_;
   int64_t macro_block_size_;
   int64_t macro_store_size_; //macro_block_size_ * reserved_percent
   int64_t micro_block_size_limit_;
@@ -116,6 +123,7 @@ public:
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
+  uint64_t encoding_granularity_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -267,6 +275,7 @@ public:
   STATIC_DESC_FUNC(compaction::ObMergeType, merge_type);
   STATIC_DESC_FUNC(const share::ObLSID&, ls_id);
   STATIC_DESC_FUNC(const ObTabletID&, tablet_id);
+  STATIC_DESC_FUNC(int64_t, tablet_transfer_seq);
   STATIC_DESC_FUNC(int64_t, progressive_merge_round);
   STATIC_DESC_FUNC(int64_t, schema_version);
   STATIC_DESC_FUNC(int64_t, snapshot_version);
@@ -365,6 +374,7 @@ struct ObWholeDataStoreDesc
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const bool micro_index_clustered,
+    const int64_t tablet_transfer_seq,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,
@@ -372,6 +382,7 @@ struct ObWholeDataStoreDesc
     const bool need_submit_io = true);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
+  int assign(const ObWholeDataStoreDesc &desc);
   ObStaticDataStoreDesc &get_static_desc() { return static_desc_; }
   ObColDataStoreDesc &get_col_desc() {return col_desc_; }
   ObDataStoreDesc &get_desc() { return desc_; }

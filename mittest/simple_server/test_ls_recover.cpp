@@ -1,3 +1,6 @@
+// owner: cxf262476
+// owner group: transaction
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -256,6 +259,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   int64_t ls_epoch = 0;
@@ -269,6 +273,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   ObLSLockGuard lock_ls(ls);
@@ -285,6 +290,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_101(101);
@@ -298,6 +304,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   int64_t ls_epoch = 0;
@@ -321,6 +328,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_102(102);
@@ -334,6 +342,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -359,6 +368,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_103(103);
@@ -372,6 +382,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -399,6 +410,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_104(104);
@@ -413,6 +425,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -445,6 +458,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
 
   ObCreateLSArg arg;
+  ObMajorMVMergeInfo major_mv_merge_info;
   ObLS *ls = NULL;
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_105(105);
@@ -459,6 +473,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 major_mv_merge_info,
                                                  ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;

@@ -15,6 +15,7 @@
 #include "share/config/ob_server_config.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/utility/ob_defer.h"
+#include "lib/utility/ob_sort.h"
 #include "common/ob_record_header.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
@@ -145,7 +146,7 @@ int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_
             ret = OB_INVALID_ARGUMENT;
           }
         } else {
-          (*pp_item)->set_value(value);
+          (*pp_item)->set_value_unsafe(value);
           (*pp_item)->set_version(version);
           if (need_print_config(name)) {
             _LOG_INFO("load config succ, %s=%s", name, value);
@@ -207,8 +208,11 @@ int ObBaseConfig::load_from_file(const char *config_file,
     } else {
       // end with '\0'
       config_file_buf[read_len] = '\0';
-
-      if (OB_FAIL(load_from_buffer(config_file_buf, read_len, version, check_name))) {
+      {
+        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+        ret = load_from_buffer(config_file_buf, read_len, version, check_name);
+      }
+      if (OB_FAIL(ret)) {
         LOG_ERROR("load config fail", KR(ret), K(config_file), K(version), K(check_name),
             K(read_len));
       } else {
@@ -285,9 +289,9 @@ ObCommonConfig::~ObCommonConfig()
 {
 }
 
-int ObCommonConfig::add_extra_config(const char *config_str,
-                                     int64_t version /* = 0 */ ,
-                                     bool check_config /* = true */)
+int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
+                                     int64_t version,
+                                     bool check_config)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -355,7 +359,7 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           }
         }
         if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-        } else if (!(*pp_item)->set_value(value)) {
+        } else if (!(*pp_item)->set_value_unsafe(value)) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
@@ -495,8 +499,11 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
     } else {
       MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
-      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf, 0, false))) {
-        LOG_ERROR("Read server config failed", K(ret));
+      {
+        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
+        if (OB_FAIL(ObCommonConfig::add_extra_config_unsafe(copy_buf, 0, false))) {
+          LOG_ERROR("Read server config failed", K(ret));
+        }
       }
 
       if (nullptr != copy_buf) {

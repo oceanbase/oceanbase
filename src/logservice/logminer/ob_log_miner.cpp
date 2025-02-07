@@ -15,8 +15,10 @@
 #include "ob_log_miner.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log.h"
-#include "ob_log_miner_args.h"
 #include "lib/allocator/ob_malloc.h"
+#include "share/io/ob_io_manager.h"         // ObIOManager
+#include "share/ob_device_manager.h"        // ObDeviceManager
+#include "ob_log_miner_args.h"
 #include "ob_log_miner_file_manager.h"
 #include "ob_log_miner_utils.h"
 #include "ob_log_miner_logger.h"
@@ -58,7 +60,18 @@ int ObLogMiner::init(const ObLogMinerArgs &args)
       LOG_ERROR("oblogminer logger set timezone failed", K(ret), K(args.timezone_));
     }
     if (OB_SUCC(ret)) {
-      if (is_analysis_mode(mode_)) {
+      const int64_t io_mgr_memory_limit = 200 * 1024 * 1024; // 200 MB
+      if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+          LOG_ERROR("init device manager failed", KR(ret));
+      } else if (ObIOManager::get_instance().is_inited()) {
+        // do nothing
+      } else if (OB_FAIL(ObIOManager::get_instance().init(io_mgr_memory_limit))) {
+        LOG_ERROR("init io manager fail", KR(ret));
+      } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+        LOG_ERROR("start io manager fail", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_analysis_mode(mode_)) {
         if (OB_FAIL(init_analyzer_(args))) {
           LOG_ERROR("failed to initialize analyzer for analysis mode", K(args));
         }
@@ -126,6 +139,8 @@ void ObLogMiner::run() {
 
 void ObLogMiner::destroy() {
   if (IS_INIT) {
+    ObDeviceManager::get_instance().destroy();
+    ObIOManager::get_instance().destroy();
     if (is_analysis_mode(mode_)) {
       destroy_component<ObLogMinerAnalyzer>(analyzer_);
       destroy_component<ObLogMinerFileManager>(file_manager_);

@@ -16,16 +16,15 @@
 
 #include "lib/allocator/ob_allocator.h"
 #include "lib/string/ob_string.h"
-#include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_expr.h" // for ObExpr
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+class ObExecContext;
 
 struct ObVectorCastInfo
 {
@@ -53,16 +52,40 @@ public:
   static int set_array_obj_res(ObIArrayType *arr_obj, ObObjCastParams *params, ObObj *obj);
   template <typename ResVec>
   static int set_array_res(ObIArrayType *arr_obj, const ObExpr &expr, ObEvalCtx &ctx,
-                           ResVec *res_vec, int64_t batch_idx);
+                           ResVec *res_vec, int64_t batch_idx)
+  {
+    int ret = OB_SUCCESS;
+    int32_t res_size = arr_obj->get_raw_binary_len();
+    char *res_buf = nullptr;
+    int64_t res_buf_len = 0;
+    ObTextStringVectorResult<ResVec> str_result(expr.datum_meta_.type_, &expr, &ctx, res_vec, batch_idx);
+    if (OB_FAIL(str_result.init_with_batch_idx(res_size, batch_idx))) {
+      SQL_ENG_LOG(WARN, "fail to init result", K(ret), K(res_size));
+    } else if (OB_FAIL(str_result.get_reserved_buffer(res_buf, res_buf_len))) {
+      SQL_ENG_LOG(WARN, "fail to get reserver buffer", K(ret));
+    } else if (res_buf_len < res_size) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "get invalid res buf len", K(ret), K(res_buf_len), K(res_size));
+    } else if (OB_FAIL(arr_obj->get_raw_binary(res_buf, res_buf_len))) {
+      SQL_ENG_LOG(WARN, "get array raw binary failed", K(ret), K(res_buf_len), K(res_size));
+    } else if (OB_FAIL(str_result.lseek(res_size, 0))) {
+      SQL_ENG_LOG(WARN, "failed to lseek res.", K(ret), K(str_result), K(res_size));
+    } else {
+      str_result.set_result();
+    }
+    return ret;
+  }
   static int deduce_array_element_type(ObExecContext *exec_ctx, ObExprResType* types_stack, int64_t param_num, ObDataType &elem_type);
   static int deduce_nested_array_subschema_id(ObExecContext *exec_ctx,  ObDataType &elem_type, uint16_t &subschema_id);
+  static int deduce_array_type(ObExecContext *exec_ctx, ObExprResType &type1, ObExprResType &type2,uint16_t &subschema_id);
   static int check_array_type_compatibility(ObExecContext *exec_ctx, uint16_t l_subid, uint16_t r_subid, bool &is_compatiable);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObObjType &obj_type, uint32_t &depth, bool &is_vec);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObDataType &elem_type, uint32_t &depth, bool &is_vec);
   static int dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObString &array_data, const int64_t row_idx);
-  static int dispatch_array_attrs(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx);
+  static int dispatch_array_attrs_inner(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx, bool is_shallow = true);
   static int batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, int64_t begin, int64_t batch_size, const uint16_t *selector = NULL);
   static int transform_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip);
+  static int get_array_type_by_subschema_id(ObEvalCtx &ctx, const uint16_t subschema_id, ObCollectionArrayType *&arr_type);
   static int construct_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, ObIArrayType *&res, bool read_only = true);
   static int calc_nested_expr_data_size(const ObExpr &expr, ObEvalCtx &ctx, const int64_t batch_idx, int64_t &size);
   static int get_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, const ObString &raw_data, ObIArrayType *&res);
@@ -76,6 +99,12 @@ public:
                                 const int64_t col_offset, const uint64_t row_idx, int64_t &cell_len, const int64_t *remain_size = nullptr);
   static int assemble_array_attrs(ObEvalCtx &ctx, const ObExpr &expr, int64_t row_idx, ObIArrayType *arr_obj);
   static void set_expr_attrs_null(const ObExpr &expr, ObEvalCtx &ctx, const int64_t idx);
+  static int add_elem_to_nested_array(ObIAllocator &tmp_allocator, ObEvalCtx &ctx, uint16_t subschema_id,
+                                      const ObDatum &datum, ObArrayNested *nest_array);
+  static int assign_array_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const ObExpr &dst_expr, int64_t row_idx);
+  static int get_child_subschema_id(ObExecContext *exec_ctx, uint16_t subid, uint16_t &child_subid);
+  static int get_collection_payload(ObIAllocator &allocator, ObEvalCtx &ctx, const ObExpr &expr,
+                                    const int64_t row_idx, const char *&res_data, int32_t &data_len);
 
   // for vector
   static int get_type_vector(const ObExpr &expr,
@@ -94,7 +123,9 @@ public:
   static int collect_vector_cast_info(ObExprResType &type, ObExecContext &exec_ctx, ObVectorCastInfo &info);
 
   // update inplace
-  static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, bool negative = false);
+  static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);
+  static int get_basic_elem_obj(ObIArrayType *src, ObCollectionTypeBase *elem_type, uint32_t idx, ObObj &elem_obj, bool &is_null);
+
 private:
   static const char* DEFAULT_CAST_TYPE_NAME;
   static const ObString DEFAULT_CAST_TYPE_STR;

@@ -54,6 +54,7 @@ public:
   ObRowCache &get_row_cache() { return user_row_cache_; }
   ObBloomFilterCache &get_bf_cache() { return bf_cache_; }
   ObFuseRowCache &get_fuse_row_cache() { return fuse_row_cache_; }
+  ObMultiVersionFuseRowCache &get_multi_version_fuse_row_cache() { return multi_version_fuse_row_cache_; }
   ObStorageMetaCache &get_storage_meta_cache() { return storage_meta_cache_; }
   void destroy();
   inline bool is_inited() const { return is_inited_; }
@@ -67,6 +68,7 @@ private:
   ObBloomFilterCache bf_cache_;
   ObFuseRowCache fuse_row_cache_;
   ObStorageMetaCache storage_meta_cache_;
+  ObMultiVersionFuseRowCache multi_version_fuse_row_cache_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageCacheSuite);

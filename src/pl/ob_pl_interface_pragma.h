@@ -66,8 +66,10 @@
 #include "pl/sys_package/ob_sdo_geom.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
 #endif
+#include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
+#include "pl/sys_package/ob_dbms_space.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
@@ -355,7 +357,6 @@
   INTERFACE_DEF(INTERFACE_DBMS_STATS_ASYNC_GATHER_STATS_JOB_PROC, "ASYNC_GATHER_STATS_JOB_PROC", (ObDbmsStats::async_gather_stats_job_proc))
   //end of dbms_stat
 
-#ifdef OB_BUILD_ORACLE_PL
   //start of dbms xplan
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_ENABLE_OPT_TRACE, "ENABLE_OPT_TRACE", (ObDbmsXplan::enable_opt_trace))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISABLE_OPT_TRACE, "DISABLE_OPT_TRACE", (ObDbmsXplan::disable_opt_trace))
@@ -365,6 +366,8 @@
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_SQL_PLAN_BASELINE, "DISPLAY_SQL_PLAN_BASELINE", (ObDbmsXplan::display_sql_plan_baseline))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_ACTIVE_SESSION_PLAN, "DISPLAY_ACTIVE_SESSION_PLAN", (ObDbmsXplan::display_active_session_plan))
   //end of dbms xplan
+
+#ifdef OB_BUILD_ORACLE_PL
 
   // start of oracle label security
   // sysdba
@@ -478,6 +481,8 @@
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETCLOBVAL, "XML_TYPE_GETCLOBVAL", (ObXmlType::getclobval))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETSTRINGVAL, "XML_TYPE_GETSTRINGVAL", (ObXmlType::getstringval))
+  INTERFACE_DEF(INTERFACE_XML_TYPE_EXISTSNODE, "XML_TYPE_EXISTSNODE", (ObXmlType::existsnode))
+  INTERFACE_DEF(INTERFACE_XML_TYPE_EXTRACT, "XML_TYPE_EXTRACT", (ObXmlType::extract))
   INTERFACE_DEF(INTERFACE_XML_TYPE_CREATEXML, "XML_TYPE_CREATEXML", (ObXmlType::createxml))
   INTERFACE_DEF(INTERFACE_XML_TYPE_CONSTRUCTOR, "XML_TYPE_CONSTRUCTOR", (ObXmlType::constructor))
   //end of xmltype
@@ -538,7 +543,6 @@
 #define DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(symbol, func) \
   INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
 
-  DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_CREATE_JOB, ObDBMSSchedulerMysql::create_job)
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_DISABLE, ObDBMSSchedulerMysql::disable)
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_ENABLE, ObDBMSSchedulerMysql::enable)
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_SET_ATTRIBUTE, ObDBMSSchedulerMysql::set_attribute)
@@ -592,8 +596,14 @@
   INTERFACE_DEF(INTERFACE_DBMS_SPM_CANCEL_EVOLVE_TASK, "CANCEL_EVOLVE_TASK", (ObDBMSSpm::cancel_evolve_task))
   INTERFACE_DEF(INTERFACE_DBMS_SPM_CONFIGURE, "CONFIGURE", (ObDBMSSpm::configure))
   INTERFACE_DEF(INTERFACE_DBMS_SPM_DROP_SQL_PLAN_BASELINE, "DROP_SQL_PLAN_BASELINE", (ObDBMSSpm::drop_baseline))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_BATCH_DROP_SQL_PLAN_BASELINE, "BATCH_DROP_SQL_PLAN_BASELINE", (ObDBMSSpm::batch_drop_baseline))
   INTERFACE_DEF(INTERFACE_DBMS_SPM_LOAD_PLANS_FROM_CURSOR_CACHE, "LOAD_PLANS_FROM_CURSOR_CACHE", (ObDBMSSpm::load_plans_from_cursor_cache))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_BATCH_LOAD_PLANS_FROM_CURSOR_CACHE, "BATCH_LOAD_PLANS_FROM_CURSOR_CACHE", (ObDBMSSpm::batch_load_plans_from_cursor_cache))
   INTERFACE_DEF(INTERFACE_DBMS_SPM_AUTO_PURGE_SQL_PLAN_BASELINE, "AUTO_PURGE_SQL_PLAN_BASELINE", (ObDBMSSpm::auto_purge_sql_plan_baseline))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_UNPACK_STGTAB_BASELINE, "UNPACK_STGTAB_BASELINE", (ObDBMSSpm::unpack_table_baseline))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_PACK_CSV_BASELINE, "PACK_CSV_BASELINE", (ObDBMSSpm::pack_csv_baseline))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_UNPACK_CSV_BASELINE, "UNPACK_CSV_BASELINE", (ObDBMSSpm::unpack_csv_baseline))
+  INTERFACE_DEF(INTERFACE_DBMS_SPM_HANDLE_SPM_STATS_JOB_PROC, "HANDLE_SPM_STATS_JOB_PROC", (ObDBMSSpm::handle_spm_stats_job_proc))
   // end of dbms_spm
 #endif
 
@@ -617,6 +627,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_IDENTIFIER, "SET_IDENTIFIER", (ObDBMSSession::set_identifier))
   INTERFACE_DEF(INTERFACE_DBMS_SESSION_RESET_PACKAGE, "RESET_PACKAGE", (ObDBMSSession::reset_package))
   // end of dbms_session
+
+  // start of dbms_space
+  INTERFACE_DEF(INTERFACE_DBMS_SPACE_CREATE_INDEX_COST, "CREATE_INDEX_COST", (ObDbmsSpace::create_index_cost))
+  // end of dbms_space
 
 #ifdef OB_BUILD_ORACLE_PL
   // start of dbms_rls
@@ -778,6 +792,8 @@
 
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX, ObDBMSVectorMySql::refresh_index)
   DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX, ObDBMSVectorMySql::rebuild_index)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REFRESH_INDEX_INNER, ObDBMSVectorMySql::refresh_index_inner)
+  DEFINE_DBMS_VECTOR_MYSQL_INTERFACE(DBMS_VECTOR_MYSQL_REBUILD_INDEX_INNER, ObDBMSVectorMySql::rebuild_index_inner)
 
 #undef DEFINE_DBMS_VECTOR_MYSQL_INTERFACE
   // end of dbms_vector_mysql

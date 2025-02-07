@@ -18,6 +18,7 @@
 #include "sql/plan_cache/ob_i_lib_cache_object.h"
 #include "sql/plan_cache/ob_i_lib_cache_node.h"
 #include "sql/plan_cache/ob_i_lib_cache_context.h"
+#include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "pl/ob_pl.h"
@@ -43,6 +44,7 @@ struct ObPLTableColumnInfo
   common::ObCharsetType charset_type_;
   common::ObString column_name_;
   common::ObArray<common::ObString> type_info_;//used for enum and set
+  bool is_invisible_col_;
 
   ObPLTableColumnInfo():
     inner_alloc_(nullptr),
@@ -51,7 +53,8 @@ struct ObPLTableColumnInfo
     accuracy_(),
     charset_type_(CHARSET_INVALID),
     column_name_(),
-    type_info_()
+    type_info_(),
+    is_invisible_col_()
     {}
 
   explicit ObPLTableColumnInfo(ObIAllocator *alloc):
@@ -61,7 +64,8 @@ struct ObPLTableColumnInfo
     accuracy_(),
     charset_type_(CHARSET_INVALID),
     column_name_(),
-    type_info_()
+    type_info_(),
+    is_invisible_col_()
     {}
 
   bool operator==(const ObPLTableColumnInfo &other) const
@@ -78,7 +82,8 @@ struct ObPLTableColumnInfo
                 meta_type_ == other.meta_type_ &&
                 accuracy_ == other.accuracy_ &&
                 charset_type_ == other.charset_type_ &&
-                column_name_ == other.column_name_;
+                column_name_ == other.column_name_ &&
+                is_invisible_col_ == other.is_invisible_col_;
     }
     return is_same;
   }
@@ -99,7 +104,8 @@ struct ObPLTableColumnInfo
                K_(meta_type),
                K_(accuracy),
                K_(charset_type),
-               K_(column_name));
+               K_(column_name),
+               K_(is_invisible_col));
 };
 
 //todo:when PCVSchemaObj has been moved to appropriate header file, use PCVSchemaObj to instead of PCVPlSchemaObj
@@ -313,6 +319,12 @@ public:
   int match_params_info(const ParamStore *params,
                                  bool &is_same);
 
+  OB_INLINE void copy_obj_schema_version(ObSchemaObjVersion& dest, const PCVPlSchemaObj *src)
+  {
+    dest.object_id_ = src->schema_id_;
+    dest.version_ = src->schema_version_;
+  }
+
   void reset();
   int64_t get_mem_size();
 
@@ -375,6 +387,7 @@ struct ObPLCacheCtx : public ObILibCacheCtx
   ParamStore *cache_params_;
   ObString raw_sql_;
   int64_t compile_time_; // pl object cost time of compile
+  int adjust_definer_database_id();
 };
 
 
@@ -399,6 +412,7 @@ public:
                                   ObILibCacheKey *key,
                                   ObILibCacheObject *cache_obj) override;
 
+  virtual int before_cache_evicted();
   void destroy();
 
   common::ObString &get_sql_id() { return sql_id_; }

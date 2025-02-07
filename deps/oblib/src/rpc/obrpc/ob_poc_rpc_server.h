@@ -33,7 +33,7 @@ public:
     OBCG_ELECTION = 2
   }; // same as src/share/resource_manager/ob_group_list.h
   ObPocServerHandleContext(ObRpcMemPool& pool, uint64_t resp_id, int64_t resp_expired_abs_us):
-      pool_(pool), resp_id_(resp_id), resp_expired_abs_us_(resp_expired_abs_us), peer_()
+      pool_(pool), resp_id_(resp_id), resp_expired_abs_us_(resp_expired_abs_us), peer_(), resp_ptr_(NULL)
   {}
   ~ObPocServerHandleContext() {
     destroy();
@@ -44,7 +44,7 @@ public:
   static int resp_error(uint64_t resp_id, int err_code, const char* b, const int64_t sz);
   ObAddr get_peer();
   void set_peer_unsafe(); // This function can only be called from the pnio thread.
-  void* alloc(int64_t sz) { return pool_.alloc(sz); }
+  void* alloc(int64_t sz);
   void set_resp_expired_time(int64_t ts) { resp_expired_abs_us_ = ts; }
   int64_t get_resp_expired_time() { return resp_expired_abs_us_; }
 private:
@@ -52,6 +52,7 @@ private:
   uint64_t resp_id_;
   int64_t resp_expired_abs_us_;
   ObAddr peer_;
+  void* resp_ptr_;
 };
 
 

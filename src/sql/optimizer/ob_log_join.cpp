@@ -416,9 +416,9 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
   ObLogicalOperator *left_child = get_child(ObLogicalOperator::first_child);
   ObLogicalOperator *right_child = get_child(ObLogicalOperator::second_child);
   const int64_t parallel = param.need_parallel_;
-  if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
+  if (OB_ISNULL(left_child) || OB_ISNULL(right_child) || OB_UNLIKELY(param.need_batch_rescan_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null join path", K(ret));
+    LOG_WARN("unexpected params", K(ret), K(left_child), K(right_child), K(param));
   } else if (OB_ISNULL(join_path_)) {
     card = get_card();
     op_cost = get_op_cost();
@@ -432,14 +432,10 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
                                               left_output_rows,
                                               left_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(true))) {
-    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(right_param,
                                               right_output_rows,
                                               right_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(false))) {
-    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(param.join_filter_infos_,
                                                   left_output_rows,
                                                   right_output_rows,
@@ -777,7 +773,7 @@ int ObLogJoin::append_used_join_hint(ObIArray<const ObHint*> &used_hints)
       if (OB_ISNULL(join_hint = log_join_hint->dist_method_hints_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(join_hint));
-      } else if (get_dist_method() != join_hint->get_dist_algo()) {
+      } else if (0 == (get_dist_method() & join_hint->get_dist_algo())) {
         /* do nothing */
       } else if (OB_FAIL(used_hints.push_back(join_hint))) {
         LOG_WARN("failed to append pq distribute hint", K(ret));
@@ -1277,192 +1273,6 @@ int ObLogJoin::allocate_startup_expr_post()
   return ret;
 }
 
-int ObLogJoin::set_use_batch(ObLogicalOperator* root)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid input", K(ret));
-  } else if (root->is_table_scan()) {
-    ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
-    // dblink can not support batch nlj
-    bool has_param = false;
-    ObSEArray<int64_t, 1> idx_array;
-    if (OB_FAIL(ts->extract_bnlj_param_idxs(idx_array))) {
-      LOG_WARN("extract param indexes failed", KR(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !has_param && i < nl_params_.count(); i++) {
-      int64_t param_idx = nl_params_.at(i)->get_param_index();
-      for (int64_t j = 0; OB_SUCC(ret) && j < idx_array.count(); j++) {
-        if (param_idx == idx_array.at(j)) {
-          has_param = true;
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-        // For the global index lookup, if there is a pushdown filter when scanning the index,
-        // batch cannot be used.
-        ts->set_use_batch(false);
-      } else {
-        ts->set_use_batch(ts->use_batch() || (can_use_batch_nlj_ && has_param));
-      }
-    }
-  } else if (root->get_num_of_child() == 1) {
-    if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(set_use_batch(child)))) {
-        LOG_WARN("failed to check use batch nlj", K(ret));
-      }
-    }
-  } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *join = NULL;
-    ObLogicalOperator *left_child = NULL;
-    ObLogicalOperator *rigtht_child = NULL;
-    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))
-        || OB_ISNULL(left_child = join->get_child(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid input", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(left_child)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    } else if (!join->can_use_batch_nlj()) {
-      // do nothing
-    } else if (OB_ISNULL(rigtht_child = join->get_child(1))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid child", K(ret));
-    } else if (OB_FAIL(SMART_CALL(set_use_batch(rigtht_child)))) {
-      LOG_WARN("failed to check use batch nlj", K(ret));
-    }
-  } else { /*do nothing*/ }
-  return ret;
-}
-
-int ObLogJoin::check_and_set_use_batch()
-{
-  int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
-  ObLogPlan *plan = NULL;
-  ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(plan = get_plan())
-      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())
-      || OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(plan), K(session_info), K(query_ctx));
-  } else if (!can_use_batch_nlj_) {
-    // do nothing
-  } else if (OB_FALSE_IT(can_use_batch_nlj_ = plan->get_optimizer_context().get_nlj_batching_enabled())) {
-  } else if (NESTED_LOOP_JOIN != get_join_algo()) {
-    can_use_batch_nlj_ = false;
-  }
-  // check use batch
-  if (OB_SUCC(ret) && can_use_batch_nlj_) {
-    bool contains_invalid_startup = false;
-    bool contains_limit = false;
-    bool enable_group_rescan_test_mode = false;
-    enable_group_rescan_test_mode = (OB_SUCCESS != (OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS));
-    if (get_child(1)->get_type() == log_op_def::LOG_GRANULE_ITERATOR && !enable_group_rescan_test_mode) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(plan->contains_startup_with_exec_param(get_child(1),
-                                                              contains_invalid_startup))) {
-      LOG_WARN("failed to check contains invalid startup", K(ret));
-    } else if (contains_invalid_startup) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(plan->contains_limit_or_pushdown_limit(get_child(1), contains_limit))) {
-      LOG_WARN("failed to check contains limit", K(ret));
-    } else if (contains_limit) {
-      can_use_batch_nlj_ = false;
-    } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
-      LOG_WARN("failed to check if disable batch", K(ret));
-    } else if (can_use_batch_nlj_ && OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, can_use_batch_nlj_))) {
-      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
-    }
-  }
-  // set use batch
-  if (OB_SUCC(ret) && can_use_batch_nlj_) {
-    if (OB_FAIL(set_use_batch(get_child(1)))) {
-      LOG_WARN("failed to set use batch nlj", K(ret));
-    }
-  }
-  return ret;
-}
-
-
-int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (!can_use_batch_nlj) {
-    // do nothing
-  } else if (root->is_table_scan()) {
-    ObLogTableScan *ts = NULL;
-    ObLogPlan *plan = NULL;
-    ObTablePartitionInfo *info = NULL;
-    if (OB_ISNULL(ts = static_cast<ObLogTableScan *>(root)) ||
-        OB_ISNULL(plan = get_plan()) ||
-        OB_ISNULL(info = ts->get_table_partition_info())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid input", K(ret));
-    } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-      // For the global index lookup, if there is a pushdown filter when scanning the index,
-      // batch cannot be used.
-      can_use_batch_nlj = false;
-    } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
-      can_use_batch_nlj = false;
-    } else {
-      SMART_VAR(ObTablePartitionInfo, tmp_info) {
-        ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
-        if (OB_FAIL(plan->gen_das_table_location_info(ts, tmp_info_ptr))) {
-          LOG_WARN("failed to gen das table location info", K(ret));
-        } else {
-          if (tmp_info.get_table_location().use_das() &&
-              tmp_info.get_table_location().get_has_dynamic_exec_param()) {
-            // dynamic partition pruning, no need to check
-          } else if (10 < info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
-            can_use_batch_nlj = false;
-          }
-        }
-      }
-    }
-  } else if (1 == root->get_num_of_child()) {
-    if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0), can_use_batch_nlj)))) {
-      LOG_WARN("failed to check if disable batch", K(ret));
-    }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
-    ObLogSet *log_set = static_cast<ObLogSet *>(root);
-    if (log_set->get_set_op() != ObSelectStmt::UNION) {
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
-        // if the min cluster version is less than 4.3.1.0, don't uses NLJ group-rescan because the old version don't adaptive group-rescan
-        can_use_batch_nlj = false;
-        LOG_TRACE("updrade stage don't support group-rescan if the min cluster version is less than 4.3.1.0 for distinct and except operator");
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(child, can_use_batch_nlj)))) {
-        LOG_WARN("failed to check if disable batch", K(ret));
-      }
-    }
-  } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    // multi level nlj use batch is disabled
-    can_use_batch_nlj = false;
-  } else {
-    can_use_batch_nlj = false;
-  }
-  return ret;
-}
-
 bool ObLogJoin::is_my_exec_expr(const ObRawExpr *expr)
 {
   return ObOptimizerUtil::find_item(nl_params_, expr);
@@ -1548,6 +1358,37 @@ int ObLogJoin::check_use_child_ordering(bool &used, int64_t &inherit_child_order
   } else if (MERGE_JOIN == get_join_algo()) {
     used = true;
     inherit_child_ordering_index = first_child;
+  }
+  return ret;
+}
+
+int ObLogJoin::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *left_child = NULL;
+  ObLogicalOperator *right_child = NULL;
+  is_fixed = false;
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(left_child = get_child(first_child)) ||
+      OB_ISNULL(right_child = get_child(second_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (LEFT_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(right_child->get_table_set());
+  } else if (RIGHT_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(left_child->get_table_set());
+  } else if (FULL_OUTER_JOIN == join_type_) {
+    is_fixed = expr->get_relation_ids().overlap(left_child->get_table_set()) ||
+               expr->get_relation_ids().overlap(right_child->get_table_set());
+  } else if (CONNECT_BY_JOIN == join_type_) {
+    is_fixed = ObOptimizerUtil::find_item(connect_by_root_exprs_, expr) ||
+               ObOptimizerUtil::find_item(sys_connect_by_path_exprs_, expr) ||
+               ObOptimizerUtil::find_item(prior_exprs_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_pseudo_columns_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_prior_exprs_, expr) ||
+               ObOptimizerUtil::find_item(connect_by_extra_exprs_, expr);
+  } else {
+    // do nothing for inner/semi/anti join
   }
   return ret;
 }

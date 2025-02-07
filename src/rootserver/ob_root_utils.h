@@ -132,10 +132,11 @@ public:
           } else {
             const double factor = assigned / capacity;
             weights[res_type] += factor;
+            ObCStringHelper helper;
             _RS_LOG(INFO, "server resource weight factor: "
                 "[%ld/%ld] server=%s, resource=%s, assigned=%.6g, capacity=%.6g, factor=%.6g, weight=%.6g",
                 i, servers.count(),
-                to_cstring(server_resource.get_server()),
+                helper.convert(server_resource.get_server()),
                 resource_type_to_str(res_type),
                 assigned,
                 capacity,

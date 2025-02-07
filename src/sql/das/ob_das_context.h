@@ -52,7 +52,6 @@ public:
   int64_t param_idx_;
   ObSqlArrayObj *gr_param_; //group rescan param
 };
-
 typedef common::ObArrayWrap<GroupRescanParam> GroupParamArray;
 class ObDASCtx
 {
@@ -76,6 +75,8 @@ public:
       skip_scan_group_id_(-1),
       group_rescan_cnt_(-1),
       same_tablet_addr_(),
+      real_das_dop_(0),
+      use_gts_opt_(false),
       flags_(0)
   {
     is_fk_cascading_ = 0;
@@ -160,13 +161,18 @@ public:
 
   int find_group_param_by_param_idx(int64_t param_idx,
                                     bool &exist, uint64_t &array_idx);
+  int64_t get_real_das_dop() { return real_das_dop_; }
+  void set_real_das_dop(int64_t v) { real_das_dop_ = v; }
+  void set_use_gts_opt(bool v) { use_gts_opt_ = v; }
+  bool get_use_gts_opt() { return use_gts_opt_; }
 
   TO_STRING_KV(K_(table_locs),
                K_(external_table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
                K_(savepoint),
-               K_(write_branch_id));
+               K_(write_branch_id),
+               K_(real_das_dop));
 private:
   int check_same_server(const ObDASTabletLoc *tablet_loc);
 private:
@@ -194,6 +200,8 @@ private:
   int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
   int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
   ObAddr same_tablet_addr_;
+  int64_t real_das_dop_;
+  bool use_gts_opt_; // without get gts
 public:
   union {
     uint64_t flags_;

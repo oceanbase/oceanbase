@@ -79,6 +79,7 @@ ObQueryRange::ObQueryRange()
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -104,6 +105,7 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       ss_range_exprs_(allocator_),
+      unprecise_range_exprs_(allocator_),
       mbr_filters_(allocator_),
       has_exec_param_(false),
       is_equal_and_(false),
@@ -147,6 +149,7 @@ void ObQueryRange::reset()
   table_graph_.reset();
   range_exprs_.reset();
   ss_range_exprs_.reset();
+  unprecise_range_exprs_.reset();
   inner_allocator_.reset();
   has_exec_param_ = false;
   is_equal_and_ = false;
@@ -790,7 +793,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
         // ignore the condition from which we can not extract query range
       } else if (cur_expr->has_flag(CNT_DYNAMIC_PARAM) &&
                   OB_FALSE_IT(has_exec_param_ = true)) {
-      } else if (is_contain_geo_filters()) {
+      } else if (is_contain_geo_filters() && is_single_domain_op(cur_expr)) {
         // or connect with spatial filters for functional correctness
         has_geo_expr = true;
         if (OB_FAIL(add_or_item(geo_ranges, temp_result))) {
@@ -1302,6 +1305,7 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
   } else {
     ObSEArray<ObRawExpr*, 4> range_exprs;
     ObSEArray<ObRawExpr*, 4> ss_range_exprs;
+    ObSEArray<ObRawExpr*, 4> unprecise_range_exprs;
     bool precise = true;
     bool ss_precise = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < query_range_ctx_->precise_range_exprs_.count(); ++i) {
@@ -1330,6 +1334,8 @@ int ObQueryRange::fill_range_exprs(const int64_t max_precise_pos,
       LOG_WARN("failed to assign range exprs", K(ret));
     } else if (OB_FAIL(ss_range_exprs_.assign(ss_range_exprs))) {
       LOG_WARN("failed to assign skip scan range exprs", K(ret));
+    } else if (OB_FAIL(unprecise_range_exprs_.assign(unprecise_range_exprs))) {
+      LOG_WARN("failed to assign unprecise range exprs", K(ret));
     } else {
       LOG_DEBUG("finish fill range exprs", K(max_precise_pos), K(range_exprs));
       LOG_DEBUG("finish fill skip scan range exprs", K(ss_offset), K(ss_max_precise_pos), K(ss_range_exprs));
@@ -2093,6 +2099,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
             LOG_WARN("and basic query key part failed", K(ret));
           } else {
             b_flag = true;
+            row_is_precise = (row_is_precise && query_range_ctx_->cur_expr_is_precise_);
           }
         }
       } else if (tmp_key_part->is_always_true()) {
@@ -5758,6 +5765,7 @@ int ObQueryRange::and_single_gt_head_graphs(
               //经过向量的合并后，为了正确性考虑，都保守不再去filter
               //清空精确条件的记录
               query_range_ctx_->precise_range_exprs_.reset();
+              query_range_ctx_->cur_expr_is_precise_ = false;
             }
           } else { // normal case
             // 1. do and of the first general item
@@ -6015,7 +6023,8 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
   ObKeyPart *last_gt_tail = NULL;
   if (OB_UNLIKELY(storage.get_size() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Or storage is empty", K(ret), "query range", to_cstring(*this));
+    ObCStringHelper helper;
+    LOG_WARN("Or storage is empty", K(ret), "query range", helper.convert(*this));
   } else {
     ObKeyPart *first_key_part = storage.get_first();
     bool b_flag  = false;
@@ -7251,7 +7260,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
                                    const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(THIS_WORKER.check_status())) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status fail", K(ret));
   } else if (OB_ISNULL(search_state.start_) || OB_ISNULL(search_state.end_)
       || OB_ISNULL(search_state.include_start_) || OB_ISNULL(search_state.include_end_)
@@ -7516,6 +7525,25 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
+                                    ObExecContext &exec_ctx,
+                                    ObQueryRangeArray &ranges,
+                                    bool &all_single_value_ranges,
+                                    const common::ObDataTypeCastParams &dtc_params,
+                                    ObIArray<common::ObSpatialMBR> &mbr_filters) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(mbr_filters);
+  if (OB_FAIL(get_tablet_ranges(allocator,
+                                exec_ctx,
+                                ranges,
+                                all_single_value_ranges,
+                                dtc_params))) {
+    LOG_WARN("failed to get tablet ranges", K(ret));
+  }
+  return ret;
+}
+
 int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &ss_ranges,
@@ -7538,6 +7566,26 @@ int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
   } else {
     LOG_DEBUG("get skip range success", K(ss_ranges));
   }
+  return ret;
+}
+
+int ObQueryRange::get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                             common::ObIAllocator &allocator,
+                                             ObExecContext &exec_ctx,
+                                             const ParamStore &param_store,
+                                             void *range_buffer,
+                                             ObQueryRangeArray &ranges,
+                                             const common::ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(fast_nlj_range_ctx);
+  UNUSED(allocator);
+  UNUSED(exec_ctx);
+  UNUSED(param_store);
+  UNUSED(range_buffer);
+  UNUSED(ranges);
+  UNUSED(dtc_params);
+  LOG_WARN("old qeury range not support this interface");
   return ret;
 }
 
@@ -8376,6 +8424,9 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
   void *max_str_buf = NULL;
   int32_t col_len = out_key_part.pos_.column_type_.get_accuracy().get_length();
   ObCollationType cs_type = out_key_part.pos_.column_type_.get_collation_type();
+  int32_t pattern_prefix_len = 0;
+  int32_t range_str_len = 0;
+  size_t prefix_len = 0;
   size_t min_str_len = 0;
   size_t max_str_len = 0;
   ObObj pattern_buf_obj;
@@ -8426,6 +8477,7 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
     } else if (escape_str.empty()) {
       escape_str.assign_ptr("\\", 1);
     } else { /* do nothing */ }
+
     if (OB_FAIL(ret)) {
       // do nothing;
     } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
@@ -8437,13 +8489,26 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to check escape length", K(escape_str), K(escape_str.length()));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
-    } else { }
+    } else if (OB_FAIL(get_pattern_prefix_len(cs_type,
+                                              escape_str,
+                                              pattern_str,
+                                              pattern_prefix_len))) {
+      LOG_WARN("failed to get pattern prefix len", K(ret), K(pattern_str), K(escape_str));
+    }
 
     if (OB_SUCC(ret)) {
+      // For a pattern like 'aaa%' that ends with `%`, we will extract a precise range with some special handling:
+      // We need to fill the end key of the like range with the maximum character
+      // up to the target column's length to match the semantics of `%`.
+      // However, when the target column length is less than the effective prefix length of the pattern,
+      // the pattern gets truncated, resulting in an imprecise range and incorrect results.
+      // So, we need to ensure that the effective prefix of the pattern is not truncated
+      // to guarantee that the range is always precise.
+      range_str_len = col_len;
       //convert character counts to len in bytes
-      col_len = static_cast<int32_t>(col_len * mbmaxlen);
-      min_str_len = col_len;
-      max_str_len = col_len;
+      range_str_len = static_cast<int32_t>(range_str_len * mbmaxlen);
+      min_str_len = range_str_len;
+      max_str_len = range_str_len;
       if (OB_ISNULL(min_str_buf = allocator_.alloc(min_str_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc memory failed", K(min_str_len));
@@ -8456,7 +8521,8 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
                                                static_cast<char*>(min_str_buf),
                                                &min_str_len,
                                                static_cast<char*>(max_str_buf),
-                                               &max_str_len))) {
+                                               &max_str_len,
+                                               &prefix_len))) {
         //set whole range
         out_key_part.normal_keypart_->start_.set_min_value();
         out_key_part.normal_keypart_->end_.set_max_value();
@@ -8466,25 +8532,57 @@ int ObQueryRange::get_like_range(const ObObj &pattern,
         out_key_part.normal_keypart_->always_true_ = true;
         ret = OB_SUCCESS;
       } else {
-        ObObj &start = out_key_part.normal_keypart_->start_;
-        ObObj &end = out_key_part.normal_keypart_->end_;
-        start.set_collation_type(out_key_part.pos_.column_type_.get_collation_type());
-        start.set_string(out_key_part.pos_.column_type_.get_type(),
-                         static_cast<char*>(min_str_buf), static_cast<int32_t>(min_str_len));
-        end.set_collation_type(out_key_part.pos_.column_type_.get_collation_type());
-        end.set_string(out_key_part.pos_.column_type_.get_type(),
-                       static_cast<char*>(max_str_buf), static_cast<int32_t>(max_str_len));
-        out_key_part.normal_keypart_->include_start_ = true;
-        out_key_part.normal_keypart_->include_end_ = true;
-        out_key_part.normal_keypart_->always_false_ = false;
-        out_key_part.normal_keypart_->always_true_ = false;
+        if (prefix_len >= col_len && ObCharset::strlen_char(cs_type, static_cast<char*>(min_str_buf), prefix_len) >= col_len) {
+          int32_t pattern_prefix_len = 0; // strlen_char of prefix
+          if (OB_FAIL(get_pattern_prefix_len(cs_type,
+                                             escape_str,
+                                             pattern_str,
+                                             pattern_prefix_len))) {
+            LOG_WARN("failed to get pattern prefix len", K(ret), K(pattern_str), K(escape_str));
+          } else {
+            range_str_len = max(col_len, pattern_prefix_len);
+            range_str_len = static_cast<int32_t>(range_str_len * mbmaxlen);
+            min_str_len = range_str_len;
+            max_str_len = range_str_len;
+            if (OB_ISNULL(min_str_buf = allocator_.alloc(min_str_len))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(min_str_len));
+            } else if (OB_ISNULL(max_str_buf = allocator_.alloc(max_str_len))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(max_str_len));
+            } else if (OB_FAIL(ObCharset::like_range(cs_type,
+                                                     pattern_str,
+                                                     *(escape_str.ptr()),
+                                                     static_cast<char*>(min_str_buf),
+                                                     &min_str_len,
+                                                     static_cast<char*>(max_str_buf),
+                                                     &max_str_len))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("calc like range failed", K(ret), K(pattern_str), K(escape_str), K(cs_type));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObObj &start = out_key_part.normal_keypart_->start_;
+          ObObj &end = out_key_part.normal_keypart_->end_;
+          start.set_collation_type(out_key_part.pos_.column_type_.get_collation_type());
+          start.set_string(out_key_part.pos_.column_type_.get_type(),
+                          static_cast<char*>(min_str_buf), static_cast<int32_t>(min_str_len));
+          end.set_collation_type(out_key_part.pos_.column_type_.get_collation_type());
+          end.set_string(out_key_part.pos_.column_type_.get_type(),
+                        static_cast<char*>(max_str_buf), static_cast<int32_t>(max_str_len));
+          out_key_part.normal_keypart_->include_start_ = true;
+          out_key_part.normal_keypart_->include_end_ = true;
+          out_key_part.normal_keypart_->always_false_ = false;
+          out_key_part.normal_keypart_->always_true_ = false;
 
-        /// check if is precise
-        if (NULL != query_range_ctx_) {
-          query_range_ctx_->cur_expr_is_precise_ =
-                                            ObQueryRange::check_like_range_precise(pattern_str,
-                                                              static_cast<char *>(max_str_buf),
-                                                             max_str_len, *(escape_str.ptr()));
+          /// check if is precise
+          if (NULL != query_range_ctx_) {
+            query_range_ctx_->cur_expr_is_precise_ =
+                                              ObQueryRange::check_like_range_precise(pattern_str,
+                                                                static_cast<char *>(max_str_buf),
+                                                              max_str_len, *(escape_str.ptr()));
+          }
         }
       }
       if (NULL != min_str_buf) {
@@ -9119,6 +9217,8 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
     LOG_WARN("assign range exprs failed", K(ret));
   } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));
+  } else if (OB_FAIL(unprecise_range_exprs_.assign(other.unprecise_range_exprs_))) {
+    LOG_WARN("assign unprecise range exprs failed", K(ret));
   } else if (OB_FAIL(table_graph_.assign(other_graph))) {
     LOG_WARN("Deep copy range columns failed", K(ret));
   } else if (OB_FAIL(equal_offs_.assign(other.equal_offs_))) {
@@ -9561,7 +9661,8 @@ int ObQueryRange::is_precise_like_range(const ObObjParam &pattern, char escape, 
   if (pattern.is_string_type()) {
     ObString pattern_str = pattern.get_string();
     if (cs_type == CS_TYPE_INVALID || cs_type >= CS_TYPE_MAX) {
-    }else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
+    } else if (ObCharset::is_cs_uca(cs_type)) {
+    } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
       LOG_WARN("fail to get mbmaxlen", K(ret), K(cs_type), K(escape));
     } else {
       ObArenaAllocator allocator;
@@ -9593,6 +9694,47 @@ int ObQueryRange::is_precise_like_range(const ObObjParam &pattern, char escape, 
     }
   }
 
+  return ret;
+}
+
+int ObQueryRange::get_pattern_prefix_len(const ObCollationType &cs_type,
+                                         const ObString &escape_str,
+                                         const ObString &pattern_str,
+                                         int32_t &pattern_prefix_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t mbmaxlen = 1;
+  pattern_prefix_len = 0;
+  if (OB_NOT_NULL(pattern_str.ptr()) && OB_NOT_NULL(escape_str.ptr()) && escape_str.length() == 1 &&
+      cs_type != CS_TYPE_INVALID && cs_type < CS_TYPE_MAX) {
+    if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
+      LOG_WARN("fail to get mbmaxlen", K(ret), K(cs_type));
+    } else {
+      ObArenaAllocator allocator;
+      size_t pattern_len = pattern_str.length();
+      pattern_len = static_cast<int32_t>(pattern_len * mbmaxlen);
+      size_t prefix_len = pattern_len;
+      size_t min_str_len = pattern_len;
+      size_t max_str_len = pattern_len;
+      char *min_str_buf = NULL;
+      char *max_str_buf = NULL;
+      if (OB_ISNULL(min_str_buf = (char *)allocator.alloc(min_str_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no enough memory", K(ret), K(pattern_len));
+      } else if (OB_ISNULL(max_str_buf = (char *)allocator.alloc(max_str_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no enough memory", K(ret), K(pattern_len));
+      } else if (OB_FAIL(ObCharset::like_range(cs_type, pattern_str, *(escape_str.ptr()),
+                                       min_str_buf, &min_str_len,
+                                       max_str_buf, &max_str_len,
+                                       &prefix_len))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to retrive like range", K(ret));
+      } else {
+        pattern_prefix_len = ObCharset::strlen_char(cs_type, min_str_buf, prefix_len);
+      }
+    }
+  }
   return ret;
 }
 
@@ -9735,7 +9877,7 @@ DEF_TO_STRING(ObQueryRange::ObRangeExprItem)
   return pos;
 }
 
-common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
+common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type)
 {
   common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
   switch (type) {
@@ -9758,6 +9900,14 @@ common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
       rel_type = common::ObDomainOpType::T_GEO_COVEREDBY;
       break;
     }
+    case T_FUN_SYS_ST_CROSSES : {
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
+      break;
+    }
+    case T_FUN_SYS_ST_OVERLAPS : {
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
+      break;
+    }
     case T_FUN_SYS_SDO_RELATE : {
       rel_type = common::ObDomainOpType::T_GEO_RELATE;
       break;
@@ -9768,7 +9918,7 @@ common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
   return rel_type;
 }
 
-common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type) const
+common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type)
 {
   common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
   switch (type) {
@@ -10269,7 +10419,6 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomain
       }
     }
   }
-
   return ret;
 }
 
@@ -10290,6 +10439,58 @@ int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &col
     LOG_WARN("set columnId map failed", K(ret), K(columnId));
   }
   return ret;
+}
+
+int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
+                                  int64_t &range_prefix_count,
+                                  bool &contain_always_false) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_table_grapth().key_part_head_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));
+  } else {
+    inner_get_prefix_info(get_table_grapth().key_part_head_,
+                          equal_prefix_count,
+                          range_prefix_count,
+                          contain_always_false);
+  }
+  return ret;
+}
+
+void ObQueryRange::inner_get_prefix_info(const ObKeyPart *key_part,
+                                         int64_t &equal_prefix_count,
+                                         int64_t &range_prefix_count,
+                                         bool &contain_always_false) const
+{
+  if (OB_NOT_NULL(key_part)) {
+    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
+      int64_t cur_equal_prefix_count = 0;
+      int64_t cur_range_prefix_count = 0;
+      if (key_part->is_equal_condition()) {
+        inner_get_prefix_info(key_part->and_next_,
+                              cur_equal_prefix_count,
+                              cur_range_prefix_count,
+                              contain_always_false);
+        ++cur_equal_prefix_count;
+        ++cur_range_prefix_count;
+      } else if (key_part->is_range_condition()) {
+        ++cur_range_prefix_count;
+      } else if (key_part->is_always_false()) {
+        contain_always_false = true;
+      }
+      equal_prefix_count = std::min(cur_equal_prefix_count, equal_prefix_count);
+      range_prefix_count = std::min(cur_range_prefix_count, range_prefix_count);
+    }
+  }
+}
+
+int ObQueryRange::get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const
+{
+  UNUSED(total_range_sizes);
+  return OB_SUCCESS;
 }
 
 }  // namespace sql

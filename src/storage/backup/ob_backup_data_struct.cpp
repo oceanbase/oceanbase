@@ -752,6 +752,13 @@ int ObBackupMetaKey::get_backup_index_file_type(ObBackupFileType &backup_file_ty
   return ret;
 }
 
+uint64_t ObBackupMetaKey::calc_hash(uint64_t seed) const {
+  uint64_t hash_code = 0;
+  hash_code = murmurhash(&tablet_id_, sizeof(tablet_id_), seed);
+  hash_code = murmurhash(&meta_type_, sizeof(meta_type_), hash_code);
+  return hash_code;
+}
+
 /* ObBackupTabletMeta */
 
 OB_SERIALIZE_MEMBER(ObBackupTabletMeta, tablet_id_, tablet_meta_);
@@ -771,14 +778,8 @@ void ObBackupTabletMeta::reset()
 }
 
 /* ObBackupSSTableMeta */
-
-OB_SERIALIZE_MEMBER(ObBackupSSTableMeta, tablet_id_, sstable_meta_, logic_id_list_,
-    entry_block_addr_for_other_block_, // FARM COMPAT WHITELIST
-    total_other_block_count_           // FARM COMPAT WHITELIST
-    );
-
 ObBackupSSTableMeta::ObBackupSSTableMeta() : tablet_id_(), sstable_meta_(), logic_id_list_(),
-    entry_block_addr_for_other_block_(), total_other_block_count_(0)
+    entry_block_addr_for_other_block_(), total_other_block_count_(0), is_major_compaction_mview_dep_(false)
 {}
 
 bool ObBackupSSTableMeta::is_valid() const
@@ -793,6 +794,7 @@ void ObBackupSSTableMeta::reset()
   logic_id_list_.reset();
   entry_block_addr_for_other_block_.reset();
   total_other_block_count_ = 0;
+  is_major_compaction_mview_dep_ = false;
 }
 
 int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
@@ -809,8 +811,140 @@ int ObBackupSSTableMeta::assign(const ObBackupSSTableMeta &backup_sstable_meta)
     entry_block_addr_for_other_block_ = backup_sstable_meta.entry_block_addr_for_other_block_;
     total_other_block_count_ = backup_sstable_meta.total_other_block_count_;
     tablet_id_ = backup_sstable_meta.tablet_id_;
+    is_major_compaction_mview_dep_ = backup_sstable_meta.is_major_compaction_mview_dep_;
   }
   return ret;
+}
+
+int ObBackupSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize_", KR(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(ObBackupSSTableMeta, serial_size);
+      ret = serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObBackupSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tablet_id_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(sstable_meta_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(logic_id_list_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(entry_block_addr_for_other_block_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, total_other_block_count_))) {
+    LOG_WARN("fail to encode", KR(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, is_major_compaction_mview_dep_))) {
+    LOG_WARN("fail to encode", KR(ret), KP(buf), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+int ObBackupSSTableMeta::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t version = 0;
+  int64_t len = 0;
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(version);
+    OB_UNIS_DECODE(len);
+    if (OB_BACKUP_SSTABLE_META_V1 != version && OB_BACKUP_SSTABLE_META_V2 != version) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("version not match", K(ret), K(version));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t pos_orig = pos;
+    pos = 0;
+    if (OB_BACKUP_SSTABLE_META_V1 == version) {
+      if (OB_FAIL(deserialize_v1(buf + pos_orig, len, pos))) {
+        LOG_WARN("fail to deserialize_v1", KR(ret), K(len), K(pos));
+      }
+    } else if (OB_BACKUP_SSTABLE_META_V2 == version) {
+      if (OB_FAIL(deserialize_v2(buf + pos_orig, len, pos))) {
+        LOG_WARN("fail to deserialize_v2", KR(ret), K(len), K(pos));
+      }
+    }
+
+    pos = pos_orig + len;
+  }
+  return ret;
+}
+
+int ObBackupSSTableMeta::deserialize_v2(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (pos < data_len && OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(sstable_meta_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(logic_id_list_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(entry_block_addr_for_other_block_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode(buf, data_len, pos, total_other_block_count_))) {
+    LOG_WARN("fail to decode", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode(buf, data_len, pos, is_major_compaction_mview_dep_))) {
+    LOG_WARN("fail to decode", KR(ret), KP(buf), K(data_len), K(pos));
+  }
+  return ret;
+}
+
+int ObBackupSSTableMeta::deserialize_v1(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPhysicalID physical_id;
+  entry_block_addr_for_other_block_.reset();
+  if (pos < data_len && OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(sstable_meta_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(logic_id_list_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(physical_id.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode(buf, data_len, pos, total_other_block_count_))) {
+    LOG_WARN("fail to decode", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode(buf, data_len, pos, is_major_compaction_mview_dep_))) {
+    LOG_WARN("fail to decode", KR(ret), KP(buf), K(data_len), K(pos));
+  }
+  return ret;
+}
+
+int64_t ObBackupSSTableMeta::get_serialize_size(void) const
+{
+  int64_t len = get_serialize_size_();
+  OB_UNIS_ADD_LEN(UNIS_VERSION);
+  len += NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+  return len;
+}
+
+int64_t ObBackupSSTableMeta::get_serialize_size_(void) const
+{
+  int64_t len = serialization::encoded_length(tablet_id_);
+  len += serialization::encoded_length(sstable_meta_);
+  len += serialization::encoded_length(logic_id_list_);
+  len += serialization::encoded_length(entry_block_addr_for_other_block_);
+  len += serialization::encoded_length(total_other_block_count_);
+  len += serialization::encoded_length(is_major_compaction_mview_dep_);
+  return len;
 }
 
 /* ObBackupMacroBlockIDPair */
@@ -1154,6 +1288,20 @@ bool ObBackupMetaIndex::operator==(const ObBackupMetaIndex &other) const
   return meta_key_ == other.meta_key_ && backup_set_id_ == other.backup_set_id_ && ls_id_ == other.ls_id_ &&
          turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && file_id_ == other.file_id_ &&
          offset_ == other.offset_ && length_ == other.length_;
+}
+
+uint64_t ObBackupMetaIndex::calc_hash(uint64_t seed) const
+{
+  uint64_t hash_code = 0;
+  hash_code = meta_key_.calc_hash(seed);
+  hash_code = murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_code);
+  hash_code = murmurhash(&ls_id_, sizeof(ls_id_), hash_code);
+  hash_code = murmurhash(&turn_id_, sizeof(turn_id_), hash_code);
+  hash_code = murmurhash(&retry_id_, sizeof(retry_id_), hash_code);
+  hash_code = murmurhash(&file_id_, sizeof(file_id_), hash_code);
+  hash_code = murmurhash(&offset_, sizeof(offset_), hash_code);
+  hash_code = murmurhash(&length_, sizeof(length_), hash_code);
+  return hash_code;
 }
 
 /* ObBackupMetaIndexIndex */
@@ -1573,7 +1721,7 @@ bool ObBackupDeviceMacroBlockId::is_valid() const
       && static_cast<uint64_t>(blocksstable::ObMacroBlockIdMode::ID_MODE_BACKUP) == id_mode_;
 }
 
-int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+int ObBackupDeviceMacroBlockId::get_backup_macro_block_index(
     const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const
 {
   int ret = OB_SUCCESS;

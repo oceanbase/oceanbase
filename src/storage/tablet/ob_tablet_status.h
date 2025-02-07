@@ -33,6 +33,9 @@ public:
     TRANSFER_IN  = 5,
     TRANSFER_OUT_DELETED = 6,
     NONE = 7,
+    SPLIT_SRC = 8,
+    SPLIT_DST = 9,
+    SPLIT_SRC_DELETED = 10,
     MAX,
   };
 public:
@@ -50,6 +53,9 @@ public:
   Status &get_status() { return status_; }
   const Status &get_status() const { return status_; }
 
+  bool is_deleted_for_gc() const;
+  bool is_writable_for_dml() const;
+
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
@@ -66,6 +72,9 @@ private:
     "TRANSFER_IN",
     "TRANSFER_OUT_DELETED",
     "NONE",
+    "SPLIT_SRC",
+    "SPLIT_DST",
+    "SPLIT_SRC_DELETED",
     "MAX"
   };
 

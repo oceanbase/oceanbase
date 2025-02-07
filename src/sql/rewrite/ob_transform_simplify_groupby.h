@@ -63,6 +63,17 @@ private:
   int check_stmt_group_by_can_be_removed(ObSelectStmt *select_stmt, bool &can_be);
   int inner_remove_stmt_group_by(ObSelectStmt *select_stmt, bool &trans_happened);
   int remove_group_by_duplicates(ObDMLStmt *&stmt, bool &trans_happened);
+  int remove_redundant_aggr(ObDMLStmt *stmt, bool &trans_happened);
+  int inner_remove_redundant_aggr(ObSelectStmt &select_stmt,
+                                  ObIArray<ObRawExpr *> &aggrs_to_remove,
+                                  ObIArray<ObRawExpr *> &new_exprs,
+                                  bool &trans_happened);
+  int check_can_remove_redundant_aggr(ObSelectStmt &select_stmt,
+                                      ObAggFunRawExpr &aggr_expr,
+                                      bool &can_remove);
+  int simplify_redundant_aggr(ObSelectStmt &select_stmt,
+                              ObAggFunRawExpr &aggr_expr,
+                              ObRawExpr *&new_expr);
   int remove_aggr_distinct(ObDMLStmt *stmt, bool &trans_happened);
   int remove_aggr_duplicates(ObSelectStmt *select_stmt);
   int remove_win_func_duplicates(ObSelectStmt *select_stmt);
@@ -110,6 +121,39 @@ private:
                                           ObIArray<ObRawExpr *> &vaild_having_exprs);
   int convert_group_by_to_distinct(ObDMLStmt *stmt, bool &trans_happened);
   int check_can_convert_to_distinct(ObSelectStmt *stmt, bool &can_convert);
+
+  /**
+  * @brief: this function is for rewrite a bench mark scenario:
+  *    select sum(2 * c1 + 4) from t1;
+  *    to:
+  *    select 2 * sum(c1) + 4 * count(c1) from t1;
+  */
+  int split_const_in_aggr_func(ObDMLStmt * stmt, bool &trans_happened);
+  bool is_numeric(ObObjType type);
+  bool is_column_or_cast_column_expr(ObRawExpr &expr);
+  int check_aggr_validity(ObAggFunRawExpr &agg_expr,
+                          ObRawExpr *&column_expr,
+                          ObRawExpr *&const_expr,
+                          bool &is_valid);
+  int get_column_and_const_expr(ObRawExpr *expr,
+                                ObRawExpr *&column_expr,
+                                ObRawExpr *&const_expr,
+                                bool &is_add,
+                                bool &column_is_left);
+  int get_split_result_expr(ObSelectStmt &select_stmt,
+                            ObAggFunRawExpr *aggr_expr,
+                            ObAggFunRawExpr *&sum_expr,
+                            ObAggFunRawExpr *&count_expr,
+                            ObRawExpr *&result_expr);
+  int get_valid_column_exprs(ObSelectStmt &select_stmt,
+                             common::ObIArray<ObRawExpr *> &valid_column_exprs,
+                             common::ObIArray<ObAggFunRawExpr *> &existed_sum_exprs,
+                             common::ObIArray<ObAggFunRawExpr *> &existed_count_exprs);
+  int transform_split_const(ObSelectStmt &select_stmt,
+                            common::ObIArray<ObRawExpr *> &valid_column_exprs,
+                            common::ObIArray<ObAggFunRawExpr *> &sum_exprs,
+                            common::ObIArray<ObAggFunRawExpr *> &count_exprs,
+                            bool &trans_happened);
 };
 
 }

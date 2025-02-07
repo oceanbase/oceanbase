@@ -115,4 +115,22 @@ static void ob_zstd_free(void *opaque, void *address)
   }
 }
 
+static void *ob_zlib_alloc(void *opaque, unsigned int items, unsigned int size)
+{
+  void *ret = NULL;
+  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+  if (OB_NOT_NULL(allocator)) {
+    ret = allocator->alloc(items * size);
+  }
+  return ret;
+}
+
+static void ob_zlib_free(void *opaque, void *address)
+{
+  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+  if (OB_NOT_NULL(allocator)) {
+    allocator->free(address);
+  }
+}
+
 #endif /* OB_COMPRESSOR_UTIL_H_ */

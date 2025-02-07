@@ -53,6 +53,9 @@ namespace oceanbase
 namespace observer {
 class ObSMConnection;
 }
+namespace common {
+class ObDiagnosticInfo;
+}
 using sql::FLTControlInfo;
 namespace sql
 {
@@ -221,6 +224,7 @@ public:
     }
     inline void set_stmt_type(stmt::StmtType stmt_type)
     {
+      GET_DIAGNOSTIC_INFO->get_ash_stat().stmt_type_ = stmt_type;
       stmt_type_ = stmt_type;
     }
     TO_STRING_KV(K(table_id_),
@@ -443,6 +447,7 @@ public:
   int update_max_packet_size();
   int64_t get_thread_id() const { return thread_id_; }
   void set_thread_id(int64_t t) { thread_id_ = t; }
+  const char* get_thread_name() const { return thread_name_; }
   void set_valid(const bool valid) {is_valid_ = valid;};
   int set_client_version(const common::ObString &client_version);
   int set_driver_version(const common::ObString &driver_version);
@@ -570,6 +575,7 @@ public:
   const common::ObIArray<uint64_t>& get_enable_role_ids() const { return enable_role_ids_; }
   int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
   int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const;
+  int get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const;
   int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
@@ -882,6 +888,9 @@ public:
   bool get_is_in_retry() {
     return SESS_NOT_IN_RETRY != thread_data_.is_in_retry_;
   }
+  bool get_is_in_retry() const {
+    return SESS_NOT_IN_RETRY != thread_data_.is_in_retry_;
+  }
   bool get_is_in_retry_for_dup_tbl() {
     return SESS_IN_RETRY_FOR_DUP_TBL == thread_data_.is_in_retry_;
   }
@@ -912,6 +921,7 @@ public:
   // for remote / px task
   int set_session_active(const ObString &label,
                          obmysql::ObMySQLCmd cmd);
+  int set_session_active();
   const common::ObString get_current_query_string() const;
   const common::ObString get_top_query_string() const;
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
@@ -990,6 +1000,7 @@ public:
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, common::ObString &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, int64_t &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, uint64_t &val) const;
+  int get_sys_variable(const share::ObSysVarClassType sys_var_id, bool &val) const;
   int get_sys_variable(const share::ObSysVarClassType sys_var_id, share::ObBasicSysVar *&val) const;
   /// @note get system variables by id is prefered
   int get_sys_variable_by_name(const common::ObString &var, common::ObObj &val) const;
@@ -1034,7 +1045,9 @@ public:
   const ObString get_cur_sql_id() const { return ObString(sql_id_); }
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
+  void reset_cur_sql_id() {sql_id_[0] = '\0';}
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
+  virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
 
   void get_flt_span_id(ObString &span_id) const;
@@ -1073,6 +1086,7 @@ public:
   int get_name_case_mode(common::ObNameCaseMode &case_mode) const;
   int get_init_connect(common::ObString &str) const;
   int get_locale_name(common::ObString &str) const;
+  int get_optimizer_cost_based_transformation(int64_t &cbqt_policy) const;
   /// @}
 
   ///@{ user variables related:
@@ -1258,6 +1272,10 @@ public:
   void set_tx_isolation(transaction::ObTxIsolationLevel isolation);
   bool get_tx_read_only() const;
   void set_tx_read_only(const bool last_tx_read_only, const bool cur_tx_read_only);
+  bool enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
+  void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
+    enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
+  }
   int reset_tx_variable_if_remote_trans(const ObPhyPlanType& type);
   int check_tx_read_only_privilege(const ObSqlTraits &sql_traits);
   int get_group_concat_max_len(uint64_t &group_concat_max_len) const;
@@ -1297,6 +1315,17 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
+  void reset_current_plan_id()
+  {
+    plan_id_ = 0;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_id_ = 0;
+  }
+  uint64_t get_current_plan_hash() const { return plan_hash_; }
+  void reset_current_plan_hash()
+  {
+    plan_hash_ = 0;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_hash_ = 0;
+  }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
@@ -1307,13 +1336,7 @@ public:
       last_trace_id_ = *trace_id;
     }
   }
-  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
-  {
-    if (OB_ISNULL(trace_id)) {
-    } else {
-      curr_trace_id_ = *trace_id;
-    }
-  }
+  void set_current_trace_id(common::ObCurTraceId::TraceId *trace_id);
   // forbid use jit
   int get_jit_enabled_mode(ObJITEnableMode &jit_mode) const
   {
@@ -1331,6 +1354,7 @@ public:
   int64_t get_runtime_filter_max_in_num() const { return sys_vars_cache_.get_runtime_filter_max_in_num(); }
   int64_t get_runtime_bloom_filter_max_size() const { return sys_vars_cache_.get_runtime_bloom_filter_max_size(); }
 
+  bool get_enable_sql_plan_monitor() const { return sys_vars_cache_.get_enable_sql_plan_monitor(); }
 
   const ObString &get_app_trace_id() const { return app_trace_id_; }
   void set_app_trace_id(common::ObString trace_id) {
@@ -1441,7 +1465,6 @@ public:
   int set_session_temp_table_used(const bool is_used);
   int get_session_temp_table_used(bool &is_used) const;
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
-  common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
   int get_compatibility_control(share::ObCompatType &compat_type) const;
@@ -1450,6 +1473,8 @@ public:
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   void trace_all_sys_vars() const;
   void reuse_labels() { labels_.reuse(); }
+  bool is_real_inner_session() const { return is_real_inner_session_; }
+  void set_real_inner_session(bool value) { is_real_inner_session_ = value; }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -1725,7 +1750,8 @@ public:
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
         enable_sql_plan_monitor_(false),
-        ob_enable_parameter_anonymous_block_(false)
+        ob_enable_parameter_anonymous_block_(false),
+        current_default_catalog_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2030,6 +2056,7 @@ public:
     // No use. Placeholder.
     bool enable_sql_plan_monitor_;
     bool ob_enable_parameter_anonymous_block_;
+    uint64_t current_default_catalog_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2334,6 +2361,7 @@ private:
   ObTimeZoneInfoWrap tz_info_wrap_;
   int64_t next_tx_read_only_;
   transaction::ObTxIsolationLevel next_tx_isolation_;
+  bool enable_mysql_compatible_dates_;
   //===============================================================
 
   //==============系统变量相关的变量，不需序列化到远端==============
@@ -2347,6 +2375,7 @@ private:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
   uint64_t last_plan_id_;
+  uint64_t plan_hash_;
 
   ObFLTVars flt_vars_;
   //=======================ObProxy && OCJ related============================
@@ -2458,7 +2487,6 @@ private:
   // 构造当前 session 的线程 id，用于 all_virtual_processlist 中的 THREAD_ID 字段
   // 通过本 id 可以快速对 worker 做 `pstack THREADID` 操作
   int64_t thread_id_;
-  common::ActiveSessionStat ash_stat_;
   // indicate whether user password is expired, is set when session is established.
   // will not be changed during whole session lifetime unless user changes password
   // in this session.
@@ -2480,6 +2508,11 @@ private:
 
   common::ObSEArray<uint64_t, 4> enable_role_ids_;
   uint64_t sys_var_config_hash_val_;
+  char thread_name_[OB_THREAD_NAME_BUF_LEN];
+  bool is_real_inner_session_;
+  // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
+  // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
+  // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
 public:
   bool get_enable_hyperscan_regexp_engine() const;
 };

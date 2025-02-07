@@ -18,7 +18,6 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "share/vector/ob_uniform_base.h"
 #include "share/vector/ob_discrete_base.h"
-#include "ob_expr_add.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase
@@ -710,8 +709,8 @@ int def_nested_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
         FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Const, Uniform, ArithOp);
         FORMAT_DISPATCH_BRANCH(VEC_DISCRETE, Discrete, Const, Discrete, ArithOp);
         default:
-          ret = OB_NOT_SUPPORTED;
-          SQL_LOG(WARN, "not supported format", K(ret), K(left_format), K(right_format), K(res_format));
+          ret = ObDoArithVectorBaseEval<ObVectorBase, ObVectorBase, ObVectorBase, ArithOp>()(
+            VEC_ARG_LIST, args...);
       }
     }
     if (OB_SUCC(ret)) {
@@ -971,11 +970,11 @@ struct ObNestedVectorArithOpFunc : public Base
       SQL_ENG_LOG(WARN, "exec calculate func failed", K(ret));
     } else if (OB_FAIL(res_obj->init())) {
       SQL_ENG_LOG(WARN, "init nested obj failed", K(ret));
-    } else if (std::is_same<ResVector, ObUniformFormat<false>>::value || std::is_same<ResVector, ObUniformFormat<true>>::value) {
+    } else if (res_vec.get_format() == VEC_UNIFORM || res_vec.get_format() == VEC_UNIFORM_CONST) {
       if (OB_FAIL(Base::get_res_batch(ctx, res_obj, expr, idx, &res_vec))) {
         SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
       }
-    } else if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+    } else {
       if (OB_FAIL(Base::distribute_expr_attrs(expr, ctx, idx, *res_obj))) {
         SQL_ENG_LOG(WARN, "get array binary string failed", K(ret));
       }

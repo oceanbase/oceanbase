@@ -308,6 +308,7 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     is_first_dml_op_(false),
     table_location_uncertain_(false),
     is_pdml_update_split_(false),
+    das_dop_(0),
     pdml_partition_id_expr_(NULL),
     ddl_slice_id_expr_(NULL),
     pdml_is_returning_(false),
@@ -867,7 +868,7 @@ int ObLogDelUpd::compute_sharding_info()
   } else if (OB_ISNULL(get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!is_pdml()) {
+  } else if (!(is_pdml() || get_das_dop() > 0)) {
     is_partition_wise_ = !is_multi_part_dml_ && !child->is_exchange_allocated() &&
                          get_sharding()->is_distributed() &&
                          NULL != get_sharding()->get_phy_table_location_info();
@@ -910,12 +911,16 @@ int ObLogDelUpd::build_rowid_expr(uint64_t table_id,
   ObSchemaGetterGuard *schema_guard = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObTableSchema *tbl_schema = NULL;
-  if (OB_ISNULL(get_plan()) ||
+  ObRawExpr *part_expr = NULL;
+  ObRawExpr *subpart_expr = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard()) ||
       OB_ISNULL(get_plan()->get_optimizer_context().get_session_info()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid params", K(ret), KP(schema_guard), KP(get_plan()));
+  } else if (OB_FALSE_IT(part_expr = get_stmt()->get_part_expr(table_id, table_ref_id))) {
+  } else if (OB_FALSE_IT(subpart_expr = get_stmt()->get_subpart_expr(table_id, table_ref_id))) {
   } else if (OB_FAIL(schema_guard->get_table_schema(
              session_info->get_effective_tenant_id(),
              table_ref_id, tbl_schema))) {
@@ -923,13 +928,13 @@ int ObLogDelUpd::build_rowid_expr(uint64_t table_id,
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(get_stmt(),
-                                                      get_plan()->get_optimizer_context().get_expr_factory(),
+  } else if (OB_FAIL(ObRawExprUtils::build_rowid_expr(get_plan()->get_optimizer_context().get_expr_factory(),
                                                       get_plan()->get_optimizer_context().get_allocator(),
                                                       *(get_plan()->get_optimizer_context().get_session_info()),
                                                       *tbl_schema,
-                                                      table_id,
                                                       rowkeys,
+                                                      part_expr,
+                                                      subpart_expr,
                                                       rowid_sysfun_expr))) {
     LOG_WARN("failed to build rowid col expr", K(ret));
   } else if (OB_ISNULL(rowid_sysfun_expr)) {
@@ -1660,7 +1665,9 @@ int ObLogDelUpd::replace_dml_info_exprs(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->column_old_values_exprs_.count(); ++i) {
       ObRawExpr *&expr = index_dml_info->column_old_values_exprs_.at(i);
-      if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
+      if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_doc_id_column()) {
+        // just skip, nothing to do.
+      } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_vid_column()) {
         // just skip, nothing to do.
       } else if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
         LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
@@ -1694,16 +1701,24 @@ int ObLogDelUpd::print_used_hint(PlanText &plan_text)
   return ret;
 }
 
-int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+int ObLogDelUpd::is_dml_fixed_expr(const ObRawExpr *expr,
+                                   const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                   bool &is_fixed)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<IndexDMLInfo *> &index_dml_infos = get_index_dml_infos();
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < index_dml_infos.count(); ++i) {
-    if (OB_ISNULL(index_dml_infos.at(i))) {
+    const IndexDMLInfo *index_dml_info = index_dml_infos.at(i);
+    if (OB_ISNULL(index_dml_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index dml info is null", K(ret));
-    } else if (OB_FAIL(index_dml_infos.at(i)->is_new_row_expr(expr, is_fixed))) {
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(index_dml_info->is_new_row_expr(expr, is_fixed))) {
       LOG_WARN("failed to check is new row expr", K(ret));
+    } else if (!is_fixed) {
+      is_fixed = ObOptimizerUtil::find_item(index_dml_info->column_exprs_, expr);
     }
   }
   return ret;

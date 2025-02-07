@@ -28,21 +28,10 @@ namespace oceanbase
 using namespace common;
 namespace lib
 {
-ObTenantMemoryMgr::ObTenantMemoryMgr()
-  : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
-    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
-    cache_item_count_(0)
-{
-  for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
-    ATOMIC_STORE(&(hold_bytes_[i]), 0);
-    ATOMIC_STORE(&(limit_bytes_[i]), INT64_MAX);
-  }
-}
-
 ObTenantMemoryMgr::ObTenantMemoryMgr(const uint64_t tenant_id)
   : cache_washer_(NULL), tenant_id_(tenant_id),
-    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
-    cache_item_count_(0)
+    limit_(INT64_MAX), limiter_(INT64_MAX, 0),
+    cache_hold_(0), cache_item_count_(0)
 {
   for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
     ATOMIC_STORE(&(hold_bytes_[i]), 0);
@@ -213,31 +202,19 @@ void ObTenantMemoryMgr::update_cache_hold(const int64_t size)
 bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
                                     const lib::ObLabel &label, bool &reach_ctx_limit)
 {
-  bool updated = false;
+  bool updated = true;
   reach_ctx_limit = false;
-  if (size <= 0) {
-    ATOMIC_AAF(&sum_hold_, size);
-    updated = true;
-  } else {
-    if (sum_hold_ + size <= limit_) {
-      const int64_t nvalue = ATOMIC_AAF(&sum_hold_, size);
-      if (nvalue > limit_) {
-        ATOMIC_AAF(&sum_hold_, -size);
-      } else {
-        updated = true;
-      }
-    }
-  }
-  if (!updated) {
+  if (!limiter_.acquire(size)) {
+    updated = false;
     auto &afc = g_alloc_failed_ctx();
     afc.reason_ = TENANT_HOLD_REACH_LIMIT;
     afc.alloc_size_ = size;
     afc.tenant_id_ = tenant_id_;
-    afc.tenant_hold_ = sum_hold_;
+    afc.tenant_hold_ = get_sum_hold();
     afc.tenant_limit_ = limit_;
   } else if (label != ObNewModIds::OB_KVSTORE_CACHE_MB) {
     if (!update_ctx_hold(ctx_id, size)) {
-      ATOMIC_AAF(&sum_hold_, -size);
+      limiter_.acquire(-size);
       updated = false;
       reach_ctx_limit = true;
     }

@@ -27,6 +27,7 @@
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
 #include "storage/tablet/ob_tablet.h"
+#include "share/scheduler/ob_tenant_dag_scheduler.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -38,7 +39,7 @@ using namespace oceanbase::share;
 
 namespace storage
 {
-
+ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_GET_MIN_SCN);
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
   int ret = OB_SUCCESS;
@@ -678,13 +679,13 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_READABLE_COMMITED);
   ObMigrationStatus migration_status;
   share::ObLSRestoreStatus restore_status;
   ObTimeGuard tg("get recycle scn", 10L * 1000L * 1000L /* 10 seconds */);
   SCN min_end_scn = SCN::max_scn();
   SCN min_end_scn_from_old_tablets = SCN::max_scn();
   SCN min_end_scn_from_latest_tablets = SCN::max_scn();
+  SCN min_end_scn_from_major_dag = SCN::max_scn();
 
   // set recycle_scn = SCN::min_scn() as default which means clear nothing
   recycle_scn.set_min();
@@ -692,6 +693,9 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table has not been inited", KR(ret));
+  } else if (OB_UNLIKELY(EN_COMPACTION_TX_DATA_GET_MIN_SCN)) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(INFO, "EN_COMPACTION_TX_DATA_GET_MIN_SCN", KR(ret));
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
@@ -706,9 +710,12 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_scn(min_end_scn_from_latest_tablets,
                                                         min_end_scn_from_old_tablets))) {
     STORAGE_LOG(WARN, "fail to get ls min end log ts", KR(ret));
+  } else if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->get_min_end_scn_from_major_dag(ls_->get_ls_id(), min_end_scn_from_major_dag))) {
+    STORAGE_LOG(WARN, "fail to get ls min end log ts from major dag", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (FALSE_IT(tg.click("iterate tablets finish"))) {
   } else {
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
+    min_end_scn = std::min(min_end_scn, min_end_scn_from_major_dag);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
       //Regardless of whether the primary or standby tenant is unified, refer to GTS.
@@ -732,7 +739,8 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
             "ls_id", ls_->get_ls_id(),
             K(recycle_scn),
             K(min_end_scn_from_old_tablets),
-            K(min_end_scn_from_latest_tablets));
+            K(min_end_scn_from_latest_tablets),
+            K(min_end_scn_from_major_dag));
 
   return ret;
 }

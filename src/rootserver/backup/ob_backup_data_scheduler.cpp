@@ -27,6 +27,8 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/restore/ob_restore_util.h"
+#include "share/ob_global_stat_proxy.h"
+#include "share/schema/ob_mview_info.h"
 
 namespace oceanbase
 {
@@ -1152,7 +1154,9 @@ int ObUserTenantBackupJobMgr::process()
     ObBackupStatus::Status status = job_attr_->status_.status_;
     switch (status) {
       case ObBackupStatus::Status::INIT: {
-        if (OB_FAIL(check_dest_validity_())) {
+        if (OB_FAIL(select_mview_for_update_(gen_user_tenant_id(tenant_id_)))) {
+          LOG_WARN("failed to select mview for update", K(ret), K_(tenant_id));
+        } else if (OB_FAIL(check_dest_validity_())) {
           LOG_WARN("[DATA_BACKUP]fail to check dest validity", K(ret));
         } else if (OB_FAIL(persist_set_task_())) {
           LOG_WARN("[DATA_BACKUP]failed to persist log stream task", K(ret), KPC(job_attr_));
@@ -1602,6 +1606,57 @@ int ObUserTenantBackupJobMgr::advance_job_status(
   } else if (OB_FAIL(ObBackupJobOperator::advance_job_status(trans, *job_attr_, next_status, result, end_ts))) {
     LOG_WARN("[DATA_BACKUP]failed to advance job status", K(ret), KPC(job_attr_), K(next_status), K(result), K(end_ts));
   } 
+  return ret;
+}
+
+int ObUserTenantBackupJobMgr::select_mview_for_update_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObAllTenantInfo tenant_info;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, false/*for update*/, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+  } else if (!tenant_info.is_primary()) {
+    LOG_INFO("tenant is not primary", K(tenant_id), K(tenant_info));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
+    LOG_WARN("failed to start trans", K(ret), K(tenant_id));
+  } else {
+    share::ObGlobalStatProxy stat_proxy(trans, tenant_id);
+    share::SCN major_refresh_mv_merge_scn;
+    const bool select_for_update = true;
+    bool mview_in_creation = false;
+    if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(select_for_update,
+                                                          major_refresh_mv_merge_scn))) {
+      if (OB_ERR_NULL_VALUE == ret) {
+        LOG_INFO("major_refresh_mv_merge_scn has not been set", K(tenant_id));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id));
+      }
+    } else if (OB_UNLIKELY(!major_refresh_mv_merge_scn.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("major_refresh_mv_merge_scn is invalid", K(ret), K(tenant_id), K(major_refresh_mv_merge_scn));
+    } else if (OB_FAIL(ObMViewInfo::contains_major_refresh_mview_in_creation(trans, tenant_id, mview_in_creation))) {
+      LOG_WARN("fail to check if mv is in creation", K(ret), K(tenant_id));
+    } else if (mview_in_creation) {
+      ret = OB_EAGAIN;
+      // when a mview is being created, its snapshot may be added but the dependency is not
+      // added yet, which can cause cleaning the snapshot by mistake. so we just skip this round.
+      LOG_INFO("mview is being created, skip clean task", K(ret), K(tenant_id));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      } else {
+        LOG_INFO("no mview is being created", K(ret), K(tenant_id));
+      }
+    }
+  }
   return ret;
 }
 

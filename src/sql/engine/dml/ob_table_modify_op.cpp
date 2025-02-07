@@ -737,6 +737,33 @@ void ObTableModifyOp::clear_dml_evaluated_flag()
   }
 }
 
+ObDasParallelType ObTableModifyOp::check_das_parallel_type()
+{
+  ObDasParallelType type = DAS_SERIALIZATION;
+  ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+  if (MY_SPEC.is_pdml_) {
+    type = DAS_SERIALIZATION;
+  } else if (!is_user_tenant(MTL_ID())) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("not user tenant, can't submit task parallel", K(MTL_ID()));
+  } else if (execute_single_row_) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("execute_single_row is true, can't submit task parallel", K(execute_single_row_));
+  } else if (session->is_inner()) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("session is inner, can't submit task parallel", K(session->is_inner()));
+  } else if (MY_SPEC.plan_->has_nested_sql()) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("has nested sql, can't submit task parallel", K(MY_SPEC.plan_->has_nested_sql()));
+  } else if (MY_SPEC.plan_->get_das_dop() > 1 && MY_SPEC.das_dop_ > 1) {
+    type = DAS_STREAMING_PARALLEL;
+  } else {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("das dop not larger than 1", K(MY_SPEC.plan_->get_das_dop()), K(MY_SPEC.das_dop_));
+  }
+  return type;
+}
+
 OB_INLINE int ObTableModifyOp::init_das_dml_ctx()
 {
   ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
@@ -764,44 +791,83 @@ OB_INLINE int ObTableModifyOp::init_das_dml_ctx()
                                         : &MY_SPEC.plan_->get_expr_frame_info());
   dml_rtctx_.das_ref_.set_mem_attr(memattr);
   dml_rtctx_.das_ref_.set_execute_directly(!MY_SPEC.use_dist_das_);
+  dml_rtctx_.das_ref_.get_das_parallel_ctx().set_das_parallel_type(check_das_parallel_type());
+  dml_rtctx_.das_ref_.get_das_parallel_ctx().set_das_dop(ctx_.get_das_ctx().get_real_das_dop());
+  if (check_das_parallel_type() != DAS_SERIALIZATION) {
+    LOG_TRACE("this sql use das parallel submit", K(check_das_parallel_type()));
+  }
   return OB_SUCCESS;
 }
 
-int ObTableModifyOp::merge_implict_cursor(int64_t insert_rows,
-                                          int64_t update_rows,
-                                          int64_t delete_rows,
-                                          int64_t found_rows)
+int ObTableModifyOp::replace_implict_cursor(int64_t affected_rows,
+                                            int64_t found_rows,
+                                            int64_t matched_rows,
+                                            int64_t duplicated_rows)
 {
   int ret = OB_SUCCESS;
   bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
     ObDatum *stmt_id_datum = nullptr;
-    if (OB_FAIL(MY_SPEC.ab_stmt_id_->eval(eval_ctx_, stmt_id_datum))) {
-      LOG_WARN("eval ab stmt id failed", K(ret));
-    } else {
-      ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-      int64_t stmt_id = stmt_id_datum->get_int();
-      ObImplicitCursorInfo implicit_cursor;
-      implicit_cursor.stmt_id_ = stmt_id;
-      implicit_cursor.found_rows_ += found_rows;
-      implicit_cursor.matched_rows_ += found_rows;
-      implicit_cursor.last_insert_id_ = plan_ctx->get_autoinc_col_value();
-      if (insert_rows > 0) {
-        implicit_cursor.affected_rows_ += insert_rows;
-      }
-      if (update_rows > 0) {
-        ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
-        bool client_found_rows = session->get_capability().cap_flags_.OB_CLIENT_FOUND_ROWS;
-        implicit_cursor.duplicated_rows_ += update_rows;
-        implicit_cursor.affected_rows_ += client_found_rows ? found_rows : update_rows;
-      }
-      if (delete_rows > 0) {
-        implicit_cursor.affected_rows_ += delete_rows;
-      }
-      if (OB_FAIL(plan_ctx->merge_implicit_cursor_info(implicit_cursor))) {
-        LOG_WARN("merge implicit cursor info to plan ctx failed", K(ret), K(implicit_cursor));
-      }
-      LOG_DEBUG("merge implicit cursor", K(ret), K(implicit_cursor));
+    ObImplicitCursorInfo implicit_cursor;
+    if (OB_FAIL(prepare_implict_cursor(affected_rows,
+                                       found_rows,
+                                       matched_rows,
+                                       duplicated_rows,
+                                       implicit_cursor))) {
+      LOG_WARN("prepare implict cursor failed", K(ret),
+          K(affected_rows), K(found_rows), K(matched_rows), K(duplicated_rows));
+    } else if (OB_FAIL(plan_ctx->replace_implicit_cursor_info(implicit_cursor))) {
+      LOG_WARN("merge implicit cursor info to plan ctx failed", K(ret), K(implicit_cursor));
+    }
+  }
+  return ret;
+}
+
+int ObTableModifyOp::prepare_implict_cursor(int64_t affected_rows,
+                                            int64_t found_rows,
+                                            int64_t matched_rows,
+                                            int64_t duplicated_rows,
+                                            ObImplicitCursorInfo &implicit_cursor)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *stmt_id_datum = nullptr;
+  if (OB_FAIL(MY_SPEC.ab_stmt_id_->eval(eval_ctx_, stmt_id_datum))) {
+    LOG_WARN("eval ab stmt id failed", K(ret));
+  } else {
+    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+    int64_t stmt_id = stmt_id_datum->get_int();
+    implicit_cursor.stmt_id_ = stmt_id;
+    implicit_cursor.found_rows_ += found_rows;
+    implicit_cursor.matched_rows_ += matched_rows;
+    implicit_cursor.affected_rows_ += affected_rows;
+    implicit_cursor.duplicated_rows_ += duplicated_rows;
+    implicit_cursor.last_insert_id_ = plan_ctx->get_autoinc_col_value();
+    LOG_DEBUG("merge implicit cursor", K(ret), K(implicit_cursor));
+  }
+  return ret;
+}
+
+int ObTableModifyOp::merge_implict_cursor(int64_t affected_rows,
+                                          int64_t found_rows,
+                                          int64_t matched_rows,
+                                          int64_t duplicated_rows)
+{
+  int ret = OB_SUCCESS;
+  bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
+    ObDatum *stmt_id_datum = nullptr;
+    ObImplicitCursorInfo implicit_cursor;
+    if (OB_FAIL(prepare_implict_cursor(affected_rows,
+                                       found_rows,
+                                       matched_rows,
+                                       duplicated_rows,
+                                       implicit_cursor))) {
+      LOG_WARN("prepare implict cursor failed", K(ret),
+          K(affected_rows), K(found_rows), K(matched_rows), K(duplicated_rows));
+    } else if (OB_FAIL(plan_ctx->merge_implicit_cursor_info(implicit_cursor))) {
+      LOG_WARN("merge implicit cursor info to plan ctx failed", K(ret), K(implicit_cursor));
     }
   }
   return ret;
@@ -1130,16 +1196,10 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  int64_t simulate_buffer_size = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
-  int64_t buffer_size_limit = is_meta_tenant(tenant_id_) ? das::OB_DAS_MAX_META_TENANT_PACKET_SIZE : das::OB_DAS_MAX_TOTAL_PACKET_SIZE;
-  if (OB_UNLIKELY(simulate_buffer_size > 0)) {
-    buffer_size_limit = simulate_buffer_size;
-  }
-  if (dml_rtctx_.get_row_buffer_size() >= buffer_size_limit) {
-    if (REACH_COUNT_INTERVAL(100)) {
-      LOG_INFO("DASWriteBuffer full, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(dml_rtctx_.get_row_buffer_size()));
-    }
+  if (dml_rtctx_.need_submit_all_tasks()) {
+    LOG_INFO("DASWriteBuffer full, now to write storage",
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(),
+             K(dml_rtctx_.get_das_task_memory_size()), K(dml_rtctx_.get_das_parallel_task_size()));
     ret = submit_all_dml_task();
   } else if (execute_single_row_) {
     if (REACH_COUNT_INTERVAL(100)) { // print log per 100 times.

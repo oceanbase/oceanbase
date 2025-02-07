@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_global.h"
+#include "lib/oblog/ob_log_module.h"
+#include "lib/oblog/ob_log_print_kv.h"
+#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -26,5 +29,56 @@ const int64_t ObTmpFileGlobal::INVALID_TMP_FILE_BLOCK_INDEX = -1;
 const uint32_t ObTmpFileGlobal::INVALID_PAGE_ID = UINT32_MAX;
 const int64_t ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID = -1;
 
+int ObTmpFileGlobal::advance_flush_ctx_state(const FlushCtxState cur_stage, FlushCtxState &next_stage)
+{
+  int ret = OB_SUCCESS;
+  switch (cur_stage) {
+    case FlushCtxState::FSM_F1:
+      next_stage = FlushCtxState::FSM_F2;
+      break;
+    case FlushCtxState::FSM_F2:
+      next_stage = FlushCtxState::FSM_F3;
+      break;
+    case FlushCtxState::FSM_F3:
+      next_stage = FlushCtxState::FSM_F4;
+      break;
+    case FlushCtxState::FSM_F4:
+      next_stage = FlushCtxState::FSM_F5;
+      break;
+    case FlushCtxState::FSM_F5:
+      next_stage = FlushCtxState::FSM_FINISHED;
+      break;
+    default:
+      next_stage = FlushCtxState::FSM_FINISHED;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid flush ctx state", K(ret), K(cur_stage));
+      break;
+  }
+  return ret;
+}
+
+int ObTmpFileGlobal::switch_data_list_level_to_flush_state(const FileList file_list, FlushCtxState &flush_state)
+{
+  int ret = OB_SUCCESS;
+  switch (file_list) {
+    case FileList::L1:
+      flush_state = FlushCtxState::FSM_F1;
+      break;
+    case FileList::L2:
+    case FileList::L3:
+    case FileList::L4:
+      flush_state = FlushCtxState::FSM_F2;
+      break;
+    case FileList::L5:
+      flush_state = FlushCtxState::FSM_F3;
+      break;
+    default:
+      flush_state = FlushCtxState::FSM_FINISHED;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid flush ctx state", K(ret), K(file_list));
+      break;
+  }
+  return ret;
+}
 } // end namespace tmp_file
 } // end namespace oceanbase

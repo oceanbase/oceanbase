@@ -29,7 +29,6 @@ namespace oceanbase
 namespace sql
 {
   class ObExecContext;
-  class ObDesExecContext;
 }
 
 namespace observer
@@ -54,6 +53,8 @@ enum class ObDirectLoadControlCommandType
   INSERT_TRANS = 13,
 
   HEART_BEAT = 14,
+
+  INIT_EMPTY_TABLETS = 15,
 
   MAX_TYPE
 };
@@ -181,6 +182,8 @@ public:
                K_(compressor_type),
                K_(online_sample_percent));
 
+  int set_exec_ctx_serialized_str(const sql::ObExecContext &exec_ctx);
+
 public:
   uint64_t table_id_;
   table::ObTableLoadConfig config_;
@@ -202,9 +205,8 @@ public:
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
   double online_sample_percent_;
-  sql::ObExecContext *exec_ctx_;
   common::ObArenaAllocator allocator_;
-  sql::ObDesExecContext *des_exec_ctx_;
+  common::ObString exec_ctx_serialized_str_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final
@@ -463,6 +465,26 @@ public:
   int32_t session_id_; // 从1开始
   uint64_t sequence_no_; // 从1开始
   ObString payload_; //里面包的是ObTableLoadObjArray
+};
+
+class ObDirectLoadControlInitEmptyTabletsArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDirectLoadControlInitEmptyTabletsArg()
+  : table_id_(common::OB_INVALID_ID)
+  {
+  }
+  ~ObDirectLoadControlInitEmptyTabletsArg() {}
+  TO_STRING_KV(K_(table_id),
+               K_(ddl_param),
+               K_(partition_id_array),
+               K_(target_partition_id_array));
+public:
+  uint64_t table_id_;
+  ObTableLoadDDLParam ddl_param_;
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> partition_id_array_; // origin table
+  ObSArray<table::ObTableLoadLSIdAndPartitionId> target_partition_id_array_; // target table
 };
 
 } // namespace observer

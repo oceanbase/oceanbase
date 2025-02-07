@@ -439,7 +439,7 @@ void print_all_thread(const char* desc, uint64_t tenant_id)
   MPRINT("============= [%s] finish to show unstopped thread =============", desc);
 }
 
-int main(int argc, char *argv[])
+int inner_main(int argc, char *argv[])
 {
   // temporarily unlimited memory before init config
   set_memory_limit(INT_MAX64);
@@ -510,7 +510,8 @@ int main(int argc, char *argv[])
   int64_t pos = 0;
 
   print_args(argc, argv);
-
+  // no diagnostic info attach to main thread.
+  ObDisableDiagnoseGuard disable_guard;
   setlocale(LC_ALL, "");
   // Set character classification type to C to avoid printf large string too
   // slow.
@@ -615,5 +616,27 @@ int main(int argc, char *argv[])
 
   LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
   print_all_thread("AFTER_DESTROY", OB_SERVER_TENANT_ID);
+  return ret;
+}
+
+int main(int argc, char *argv[])
+{
+  int ret = OB_SUCCESS;
+  size_t stack_size = 16<<20;
+  struct rlimit limit;
+  if (0 == getrlimit(RLIMIT_STACK, &limit)) {
+    if (RLIM_INFINITY != limit.rlim_cur) {
+      stack_size = limit.rlim_cur;
+    }
+  }
+  void *stack_addr = ::mmap(nullptr, stack_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (MAP_FAILED == stack_addr) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = CALL_WITH_NEW_STACK(inner_main(argc, argv), stack_addr, stack_size);
+    if (-1 == ::munmap(stack_addr, stack_size)) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
   return ret;
 }

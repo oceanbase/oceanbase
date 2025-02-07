@@ -40,6 +40,7 @@ public:
   uint64_t get_origin_table_id() const { return flashback_table_arg_.origin_table_id_; }
   common::ObString get_origin_db_name() const { return flashback_table_arg_.origin_db_name_; };
   common::ObString get_origin_table_name() const { return flashback_table_arg_.origin_table_name_; };
+  common::ObString get_new_db_name() const { return flashback_table_arg_.new_db_name_; };
   void set_origin_table_name(const common::ObString &origin_table_name);
   void set_origin_db_name(const common::ObString &origin_db_name);
   void set_new_table_name(const common::ObString &new_table_name);

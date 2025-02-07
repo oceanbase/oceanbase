@@ -21,6 +21,12 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase {
+
+namespace common
+{
+class ObTimerService;
+}
+
 namespace lib {
 class ObPThread;
 
@@ -41,6 +47,7 @@ public:
     return ret;
   }
   virtual uint64_t id() const = 0;
+  virtual common::ObTimerService *get_timer_service() = 0;
 };
 
 /// \class
@@ -59,6 +66,7 @@ public:
   void destroy();
   void dump_pth();
   pthread_t get_pthread() { return pth_; }
+  int try_wait();
 
   /// \brief Get current thread object.
   ///
@@ -165,7 +173,6 @@ public:
   static thread_local uint8_t wait_event_;
 private:
   static void* __th_start(void *th);
-  int try_wait();
   void destroy_stack();
   static thread_local Thread* current_thread_;
 

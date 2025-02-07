@@ -277,7 +277,8 @@ void TestUnitPlacement::output_result(const char* filename,
 
   for (int64_t i = 0; i < servers.count(); ++i) {
     const ObUnitPlacementStrategy::ObServerResource &s = servers.at(i);
-    fprintf(fp, "Server: %s\n", S(s.addr_));
+    ObCStringHelper helper;
+    fprintf(fp, "Server: %s\n", helper.convert(s.addr_));
     fprintf(fp, "CPU: %f\n", s.assigned_[RES_CPU]/s.capacity_[RES_CPU]);
     fprintf(fp, "MEM: %f\n", s.assigned_[RES_MEM]/s.capacity_[RES_MEM]);
     fprintf(fp, "UNITS: ");

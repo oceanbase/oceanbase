@@ -104,7 +104,7 @@ int ObDirectLoadExternalTableBuilder::append_row(const ObTabletID &tablet_id,
   } else {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_append_row_time_us);
     if (OB_FAIL(external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                          build_param_.table_data_desc_.rowkey_column_num_, seq_no))) {
+                                          build_param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
       LOG_WARN("fail to from datums", KR(ret));
     } else if (OB_FAIL(external_writer_.write_item(external_row_))) {
       LOG_WARN("fail to write item", KR(ret));

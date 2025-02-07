@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet_meta.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
+#include "lib/hash/ob_hashmap.h"
 
 namespace oceanbase
 {
@@ -38,9 +39,7 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferOutInfo &start_transfer_out_info);
   bool empty_tx() { return filter_tx_need_transfer_ && move_tx_ids_.count() == 0; }
-
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id), K_(data_end_scn), K_(transfer_epoch), K_(data_version),
-      K_(filter_tx_need_transfer), K_(move_tx_ids));
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
@@ -48,7 +47,7 @@ public:
   share::ObTransferTaskID task_id_;
   share::SCN data_end_scn_;
   int64_t transfer_epoch_;
-  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholder
+  uint64_t data_version_;
   bool filter_tx_need_transfer_;
   common::ObSEArray<transaction::ObTransID, 1> move_tx_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferOutInfo);
@@ -64,14 +63,15 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferInInfo &start_transfer_in_info);
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_meta_list), K_(task_id), K_(data_version));
+  int get_tablet_id_list(common::ObIArray<common::ObTabletID> &tablet_id_list) const;
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN start_scn_;
   common::ObSArray<ObMigrationTabletParam> tablet_meta_list_;
   share::ObTransferTaskID task_id_;
-  uint64_t data_version_; //transfer_dml_ctrl_42x # placeholder
+  uint64_t data_version_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferInInfo);
 };
@@ -85,14 +85,14 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXFinishTransferOutInfo &finish_transfer_out_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(finish_scn), K_(tablet_list), K_(task_id), K_(data_version));
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN finish_scn_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   share::ObTransferTaskID task_id_;
-  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholder
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTXFinishTransferOutInfo);
 };
 
@@ -105,15 +105,32 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTXFinishTransferInInfo &finish_transfer_in_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(start_scn), K_(tablet_list), K_(task_id), K_(data_version));
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN start_scn_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
   share::ObTransferTaskID task_id_;
-  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholder
+  uint64_t data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTXFinishTransferInInfo);
+};
+
+struct ObTXTransferInAbortedInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTXTransferInAbortedInfo();
+  ~ObTXTransferInAbortedInfo() = default;
+  void reset();
+  bool is_valid() const;
+  int assign(const ObTXTransferInAbortedInfo &transfer_in_info);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+
+  share::ObLSID dest_ls_id_;
+  common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
+  uint64_t data_version_;
+  DISALLOW_COPY_AND_ASSIGN(ObTXTransferInAbortedInfo);
 };
 
 struct ObTransferEventRecorder final
@@ -165,6 +182,9 @@ struct ObTXTransferUtils
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &table_handle);
   static int set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *tablet);
+  static int traverse_trans_to_submit_redo_log_with_retry(
+    storage::ObLS &ls,
+    const int64_t timeout);
 
 private:
   static int get_tablet_status_(
@@ -186,7 +206,7 @@ public:
   {
     START = 0,
     DOING = 1,
-    ABORTED = 2, //transfer_dml_ctrl_42x # placeholder
+    ABORTED = 2,
     MAX_STATUS
   };
 public:
@@ -312,6 +332,109 @@ private:
 
   DISALLOW_COPY_AND_ASSIGN(ObTransferRelatedInfo);
 };
+
+struct ObTransferBuildTabletInfoCtx final
+{
+public:
+  ObTransferBuildTabletInfoCtx();
+  ~ObTransferBuildTabletInfoCtx();
+  int build_transfer_tablet_info(
+      const share::ObLSID &dest_ls_id,
+      const common::ObIArray<share::ObTransferTabletInfo> &tablet_info_array,
+      const common::ObCurTraceId::TraceId &task_id,
+      const uint64_t data_version);
+  void reuse();
+  int get_next_tablet_info(share::ObTransferTabletInfo &tablet_info);
+  bool is_valid() const;
+  void inc_child_task_num();
+  void dec_child_task_num();
+  int64_t get_child_task_num();
+  int64_t get_total_tablet_count();
+  bool is_build_tablet_finish() const;
+  common::ObCurTraceId::TraceId &get_task_id() { return task_id_; }
+  bool is_failed() const;
+  void set_result(const int32_t result);
+  share::ObLSID &get_dest_ls_id() { return dest_ls_id_; }
+  uint64_t get_data_version() { return data_version_; }
+  int32_t get_result();
+
+  int add_tablet_info(const ObMigrationTabletParam &param);
+  int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+  int64_t get_tablet_info_num() const;
+  int build_storage_schema_info(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  TO_STRING_KV(K_(index), K_(tablet_info_array), K_(child_task_num), K_(total_tablet_count),
+      K_(result), K_(data_version), K_(task_id));
+private:
+  bool is_valid_() const;
+
+private:
+  class ObTransferStorageSchemaMgr final
+  {
+  public:
+    ObTransferStorageSchemaMgr();
+    ~ObTransferStorageSchemaMgr();
+    int init(const int64_t bucket_num);
+    int build_storage_schema(
+        const share::ObTransferTaskInfo &task_info,
+        ObTimeoutCtx &timeout_ctx);
+    int get_storage_schema(
+        const ObTabletID &tablet_id,
+        ObStorageSchema *&storage_schema);
+    void reset();
+  private:
+    int build_latest_storage_schema_(
+        const share::ObTransferTaskInfo &task_info,
+        ObTimeoutCtx &timeout_ctx);
+    int build_tablet_storage_schema_(
+        const share::ObTransferTaskInfo &task_info,
+        const ObTabletID &tablet_id,
+        const int64_t schema_version,
+        ObLS *ls,
+        ObMultiVersionSchemaService &schema_service);
+  private:
+    bool is_inited_;
+    common::ObArenaAllocator allocator_;
+    hash::ObHashMap<ObTabletID, ObStorageSchema *> storage_schema_map_;
+    DISALLOW_COPY_AND_ASSIGN(ObTransferStorageSchemaMgr);
+  };
+
+  struct ObTransferTabletInfoMgr final
+  {
+  public:
+    ObTransferTabletInfoMgr();
+    ~ObTransferTabletInfoMgr();
+    int add_tablet_info(const ObMigrationTabletParam &param);
+    int64_t get_tablet_info_num() const;
+    int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+    void reuse();
+    int build_storage_schema(
+        const share::ObTransferTaskInfo &task_info,
+        ObTimeoutCtx &timeout_ctx);
+    TO_STRING_KV(K_(tablet_info_array));
+  private:
+    common::SpinRWLock lock_;
+    common::ObArray<ObMigrationTabletParam> tablet_info_array_;
+    ObTransferStorageSchemaMgr storage_schema_mgr_;
+    DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoMgr);
+  };
+private:
+  common::SpinRWLock lock_;
+  share::ObLSID dest_ls_id_;
+  int64_t index_;
+  common::ObArray<share::ObTransferTabletInfo> tablet_info_array_;
+  int64_t child_task_num_;
+  int64_t total_tablet_count_;
+  int32_t result_;
+  uint64_t data_version_;
+  common::ObCurTraceId::TraceId task_id_;
+  ObTransferTabletInfoMgr mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObTransferBuildTabletInfoCtx);
+};
+
+
+
 
 }
 }

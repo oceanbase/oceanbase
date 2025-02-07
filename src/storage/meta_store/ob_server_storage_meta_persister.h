@@ -60,14 +60,14 @@ private:
   int write_update_tenant_unit_slog_(const share::ObUnitInfoGetter::ObTenantConfig &unit);
 
 #ifdef OB_BUILD_SHARED_STORAGE
-  int s2_prepare_create_tenant_(const omt::ObTenantMeta &meta, int64_t &epoch);
-  int s2_commit_create_tenant_(const uint64_t tenant_id, const int64_t epoch);
-  int s2_abort_create_tenant_(const uint64_t tenant_id, const int64_t epoch);
-  int s2_prepare_delete_tenant_(const uint64_t tenant_id, const int64_t epoch);
-  int s2_commit_delete_tenant_(const uint64_t tenant_id, const int64_t epoch);
+  int ss_prepare_create_tenant_(const omt::ObTenantMeta &meta, int64_t &epoch);
+  int ss_commit_create_tenant_(const uint64_t tenant_id, const int64_t epoch);
+  int ss_abort_create_tenant_(const uint64_t tenant_id, const int64_t epoch);
+  int ss_prepare_delete_tenant_(const uint64_t tenant_id, const int64_t epoch);
+  int ss_commit_delete_tenant_(const uint64_t tenant_id, const int64_t epoch);
 
   int ss_write_tenant_super_block_(const int64_t tenant_epoch, const ObTenantSuperBlock &tenant_super_block);
-  int s2_write_unit_config_(
+  int ss_write_unit_config_(
       const int64_t tenant_epoch,
       const share::ObUnitInfoGetter::ObTenantConfig &unit_config);
 

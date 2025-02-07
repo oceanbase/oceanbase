@@ -494,6 +494,7 @@ public:
   // NB: no handle_retire_parent and retire_children
   virtual int handle_retire_child(const LogLearner &parent);
   virtual int handle_learner_keepalive_req(const LogLearner &parent);
+  int retire_parent();
   // failure detector
   int check_parent_health();
   // ==================== Child ========================

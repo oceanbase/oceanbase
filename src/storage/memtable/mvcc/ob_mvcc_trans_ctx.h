@@ -235,6 +235,7 @@ public:
   void print_callbacks();
   int get_callback_list_stat(ObIArray<ObTxCallbackListStat> &stats);
   void elr_trans_preparing();
+  void elr_trans_revoke();
   int trans_end(const bool commit);
   void replay_begin(const bool parallel_replay, share::SCN ccn);
 public:
@@ -529,6 +530,7 @@ private:
   virtual int calc_checksum(const share::SCN checksum_scn,
                             TxChecksum *checksumer) override;
   virtual int elr_trans_preparing() override;
+  virtual void elr_trans_revoke() override;
 private:
   int link_and_get_next_node(ObMvccTransNode *&next);
   int row_delete();

@@ -267,8 +267,10 @@ struct ObMdsEventBuffer {
                 const char *func) {
       if (OB_NOT_NULL(file) && OB_UNLIKELY(line != 0) && OB_NOT_NULL(func) && OB_NOT_NULL(event.event_)) {
         share::ObTaskController::get().allow_next_syslog();
-        ::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
-                                      event.event_, LOG_KVS(K(key), K(event), KPC(mds_table)));
+        if (OB_UNLIKELY(OB_LOGGER.need_to_print(::oceanbase::common::OB_LOG_ROOT::M_MDS, OB_LOG_LEVEL_INFO))) {
+          ::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
+                                        event.event_, LOG_KVS(K(key), K(event), KPC(mds_table)));
+        }
       }
       if (is_inited_) {
         (void) mds_event_cache_.append(key, event, file, line, func);

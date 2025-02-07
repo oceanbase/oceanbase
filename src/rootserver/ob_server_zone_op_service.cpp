@@ -143,8 +143,9 @@ int ObServerZoneOpService::check_storage_infos_not_changed_(common::ObISQLClient
       int tmp_ret = OB_SUCCESS; \
       const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 100; \
       char non_empty_server_err_msg[ERR_MSG_BUF_LEN] = ""; \
-      if (OB_TMP_FAIL(databuff_printf(non_empty_server_err_msg, ERR_MSG_BUF_LEN, \
-          "add non-empty server %s", to_cstring(addr)))) { \
+      int64_t pos = 0; \
+      if (OB_TMP_FAIL(databuff_print_multi_objs(non_empty_server_err_msg, ERR_MSG_BUF_LEN, pos, \
+          "add non-empty server ", addr))) { \
         LOG_WARN("fail to execute databuff_printf", KR(tmp_ret), K(addr)); \
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add non-empty server"); \
       } else { \
@@ -297,7 +298,8 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
     // the retry may increase max_used_server_id which is meaningless
     ret = OB_SERVER_CONNECTION_ERROR;
     LOG_WARN("fail to connect to server and set server_id", KR(ret), K(server));
-    LOG_USER_ERROR(OB_SERVER_CONNECTION_ERROR, to_cstring(server));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_SERVER_CONNECTION_ERROR, helper.convert(server));
     // in bootstrap mode, server_id is set in prepare_bootstrap, the server is not empty here
   } else if (!is_bootstrap && !rpc_result.get_is_server_empty()) {
     ret = OB_OP_NOT_ALLOW;
@@ -528,12 +530,12 @@ int ObServerZoneOpService::start_servers(
         if (OB_UNLIKELY(timeout <= 0)) {
           ret = OB_TIMEOUT;
           LOG_WARN("ctx time out", KR(ret), K(timeout));
-        } else if (OB_FAIL(databuff_printf(
+        } else if (OB_FAIL(databuff_print_multi_objs(
             disk_error_server_err_msg,
             ERR_MSG_BUF_LEN,
             pos,
-            "The target server %s may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is",
-            to_cstring(server)))) {
+            "The target server ",
+            server, " may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is"))) {
           LOG_WARN("fail to execute databuff_printf", KR(ret), K(server));
         } else if (OB_FAIL(rpc_arg.init(GCONF.self_addr_, server))) {
           LOG_WARN("fail to init rpc arg", KR(ret), K(GCONF.self_addr_), K(server));
@@ -739,6 +741,7 @@ int ObServerZoneOpService::add_server_(
   bool is_active = false;
   const int64_t now = ObTimeUtility::current_time();
   ObServerInfoInTable server_info_in_table;
+  ObArray<uint64_t> server_id_in_cluster;
   ObMySQLTransaction trans;
   DEBUG_SYNC(BEFORE_ADD_SERVER_TRANS);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -781,7 +784,13 @@ int ObServerZoneOpService::add_server_(
     ret = OB_ENTRY_EXIST;
     LOG_WARN("server exists", KR(ret), K(server_info_in_table));
   }
-  if (FAILEDx(server_info_in_table.init(
+  if (FAILEDx(ObServerTableOperator::get_clusters_server_id(trans, server_id_in_cluster))) {
+    LOG_WARN("fail to get servers' id in the cluster", KR(ret));
+  } else if (OB_UNLIKELY(!check_server_index_(server_id, server_id_in_cluster))) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("server index is outdated due to concurrent operations", KR(ret), K(server_id), K(server_id_in_cluster));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "server index is outdated due to concurrent operations, ADD_SERVER is");
+  } else if (OB_FAIL(server_info_in_table.init(
       server,
       server_id,
       zone,
@@ -985,25 +994,67 @@ int ObServerZoneOpService::construct_rs_list_arg(ObRsListArg &rs_list_arg)
 int ObServerZoneOpService::fetch_new_server_id_(uint64_t &server_id)
 {
   int ret = OB_SUCCESS;
+  ObArray<uint64_t> server_id_in_cluster;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sql proxy", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(ObServerTableOperator::get_clusters_server_id(*sql_proxy_, server_id_in_cluster))) {
+    LOG_WARN("fail to get server_ids in the cluster", KR(ret), KP(sql_proxy_));
+  } else if (OB_UNLIKELY(server_id_in_cluster.count() >= MAX_SERVER_COUNT)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("server count reaches the limit", KR(ret), K(server_id_in_cluster.count()));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "server count reaches the limit, ADD_SERVER is");
   } else {
-    uint64_t new_max_id = OB_INVALID_ID;
+    uint64_t candidate_server_id = OB_INVALID_ID;
     ObMaxIdFetcher id_fetcher(*sql_proxy_);
     if (OB_FAIL(id_fetcher.fetch_new_max_id(
         OB_SYS_TENANT_ID,
         OB_MAX_USED_SERVER_ID_TYPE,
-        new_max_id))) {
+        candidate_server_id))) {
       LOG_WARN("fetch_new_max_id failed", KR(ret));
     } else {
-      server_id = new_max_id;
+      uint64_t new_candidate_server_id = candidate_server_id;
+      while (!check_server_index_(new_candidate_server_id, server_id_in_cluster)) {
+        if (new_candidate_server_id % 10 == 0) {
+          LOG_INFO("[FETCH NEW SERVER ID] periodical log", K(new_candidate_server_id), K(server_id_in_cluster));
+        }
+        ++new_candidate_server_id;
+      }
+      if (new_candidate_server_id != candidate_server_id
+          && OB_FAIL(id_fetcher.update_server_max_id(candidate_server_id, new_candidate_server_id))) {
+        LOG_WARN("fail to update server max id", KR(ret), K(candidate_server_id), K(new_candidate_server_id),
+            K(server_id_in_cluster));
+      }
+      if (OB_SUCC(ret)) {
+        server_id = new_candidate_server_id;
+        LOG_INFO("[FETCH NEW SERVER ID] new candidate server id", K(server_id), K(server_id_in_cluster));
+      }
     }
   }
   return ret;
+}
+bool ObServerZoneOpService::check_server_index_(
+    const uint64_t candidate_server_id,
+    const common::ObIArray<uint64_t> &server_id_in_cluster) const
+{
+  // server_index = server_id % 4096
+  // server_index cannot be zero and must be unique in the cluster
+  bool is_good_candidate = true;
+  const uint64_t candidate_index = ObShareUtil::compute_server_index(candidate_server_id);
+  if (0 == candidate_index) {
+    is_good_candidate = false;
+  } else {
+    for (int64_t i = 0; i < server_id_in_cluster.count() && is_good_candidate; ++i) {
+      const uint64_t server_index = ObShareUtil::compute_server_index(server_id_in_cluster.at(i));
+      if (candidate_index == server_index) {
+        is_good_candidate = false;
+      }
+    }
+  }
+  return is_good_candidate;
 }
 int ObServerZoneOpService::check_server_have_enough_resource_for_delete_server_(
     const ObIArray<ObAddr> &servers,

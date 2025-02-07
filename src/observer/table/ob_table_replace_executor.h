@@ -23,19 +23,22 @@ namespace table
 class ObTableApiReplaceSpec : public ObTableApiModifySpec
 {
 public:
+  typedef common::ObArrayWrap<ObTableReplaceCtDef*> ObTableReplaceCtDefArray;
   ObTableApiReplaceSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
-        replace_ctdef_(alloc),
+        replace_ctdefs_(),
         conflict_checker_ctdef_(alloc)
   {
   }
+  int init_ctdefs_array(int64_t size);
+  virtual ~ObTableApiReplaceSpec();
 public:
-  OB_INLINE const ObTableReplaceCtDef& get_ctdef() const { return replace_ctdef_; }
-  OB_INLINE ObTableReplaceCtDef& get_ctdef() { return replace_ctdef_; }
+  OB_INLINE const ObTableReplaceCtDefArray& get_ctdefs() const { return replace_ctdefs_; }
+  OB_INLINE ObTableReplaceCtDefArray& get_ctdefs() { return replace_ctdefs_; }
   OB_INLINE const sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() const { return conflict_checker_ctdef_; }
   OB_INLINE sql::ObConflictCheckerCtdef& get_conflict_checker_ctdef() { return conflict_checker_ctdef_; }
 private:
-  ObTableReplaceCtDef replace_ctdef_;
+  ObTableReplaceCtDefArray replace_ctdefs_;
   sql::ObConflictCheckerCtdef conflict_checker_ctdef_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiReplaceSpec);
@@ -44,9 +47,9 @@ private:
 class ObTableApiReplaceExecutor : public ObTableApiModifyExecutor
 {
 public:
+  typedef common::ObArrayWrap<ObTableReplaceRtDef> ObTableReplaceRtDefArray;
   ObTableApiReplaceExecutor(ObTableCtx &ctx, const ObTableApiReplaceSpec &replace_spec)
       : ObTableApiModifyExecutor(ctx),
-        allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         replace_spec_(replace_spec),
         insert_row_(NULL),
         insert_rows_(0),
@@ -66,6 +69,7 @@ public:
   virtual void destroy()
   {
     // destroy
+    replace_rtdefs_.release_array();
     conflict_checker_.destroy();
     ObTableApiModifyExecutor::destroy();
   }
@@ -73,22 +77,20 @@ private:
   const static int64_t DEFAULT_REPLACE_BATCH_ROW_COUNT = 1000L;
   OB_INLINE const common::ObIArray<sql::ObExpr *>& get_primary_table_new_row()
   {
-    return replace_spec_.get_ctdef().ins_ctdef_.new_row_;
+    return replace_spec_.get_ctdefs().at(0)->ins_ctdef_.new_row_;
   }
   OB_INLINE const common::ObIArray<sql::ObExpr *>& get_primary_table_old_row()
   {
-    return replace_spec_.get_ctdef().del_ctdef_.old_row_;
+    return replace_spec_.get_ctdefs().at(0)->del_ctdef_.old_row_;
   }
-  OB_INLINE bool is_duplicated()
-  {
-    return replace_rtdef_.ins_rtdef_.das_rtdef_.is_duplicated_;
-  }
-  int generate_replace_rtdef(const ObTableReplaceCtDef &ctdef,
-                             ObTableReplaceRtDef &rtdef);
+  bool is_duplicated();
+  int generate_replace_rtdefs();
   int refresh_exprs_frame(const ObTableEntity *entity);
   void set_need_fetch_conflict();
   int load_replace_rows(bool &is_iter_end);
   int get_next_row_from_child();
+  int insert_row_to_das();
+  int delete_row_to_das();
   int post_das_task();
   int check_values(bool &is_equal,
                    const ObChunkDatumStore::StoredRow *replace_row,
@@ -98,10 +100,10 @@ private:
   int do_delete(ObConflictRowMap *primary_map);
   int do_insert();
   int reuse();
+  int reset_das_env();
 private:
-  common::ObArenaAllocator allocator_;
   const ObTableApiReplaceSpec &replace_spec_;
-  ObTableReplaceRtDef replace_rtdef_;
+  ObTableReplaceRtDefArray replace_rtdefs_;
   ObChunkDatumStore::StoredRow *insert_row_;
   int64_t insert_rows_;
   int64_t delete_rows_;

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_
 
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_block_manager.h"
@@ -167,7 +167,7 @@ class ObTmpFileBlockManager final
 public:
   ObTmpFileBlockManager();
   ~ObTmpFileBlockManager();
-  int init(const uint64_t tenant_id, const int64_t block_mem_limit);
+  int init(const uint64_t tenant_id);
   void destroy();
   int create_tmp_file_block(const int64_t begin_page_id, const int64_t page_num,
                             int64_t &block_index);
@@ -217,4 +217,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_MANAGER_H_

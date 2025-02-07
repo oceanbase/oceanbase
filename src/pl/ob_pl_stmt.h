@@ -1178,7 +1178,13 @@ public:
                       uint64_t &parent_id,
                       int64_t &var_idx,
                       const ObString &synonym_name,
-                      const uint64_t cur_db_id) const;
+                      const uint64_t cur_db_id,
+                      const pl::ObPLDependencyTable *&dep_table) const;
+  int add_dependency_obj(const ObSchemaType schema_type,
+                        const uint64_t schema_id,
+                        const ObDependencyTableType table_type,
+                        bool is_db_expilicit,
+                        const pl::ObPLDependencyTable *&dep_table) const;
   int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
                               uint64_t &parent_id, int64_t &var_idx) const;
   int resolve_external_type_by_name(const ObString &db_name,
@@ -1581,6 +1587,7 @@ public:
        body_(NULL),
        obj_access_exprs_(allocator),
        exprs_(allocator),
+       continue_handler_desc_bodys_(allocator),
        simple_calc_bitset_(),
        sql_stmts_(allocator),
        expr_factory_(allocator),
@@ -1592,6 +1599,7 @@ public:
        cursor_table_(allocator),
        routine_table_(allocator),
        dependency_table_(),
+       enum_set_ctx_(allocator),
        compile_flag_(),
        can_cached_(true),
        priv_user_(),
@@ -1625,6 +1633,7 @@ public:
   int add_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);
   inline void set_expr(sql::ObRawExpr* expr, int64_t i) { exprs_.at(i) = expr; }
   inline int64_t get_expr_count() const { return exprs_.count(); }
+  inline common::ObIArray<ObPLStmtBlock*> &get_continue_handler_desc_bodys() { return continue_handler_desc_bodys_; }
   inline int add_simple_calc(int64_t i) { return simple_calc_bitset_.add_member(i); }
   inline int add_simple_calcs(const ObBitSet<> &simple_calc) { return simple_calc_bitset_.add_members(simple_calc); }
   inline const ObBitSet<> & get_simple_calcs() const { return simple_calc_bitset_; }
@@ -1644,6 +1653,7 @@ public:
   inline const ObPLRoutineTable &get_routine_table() const { return routine_table_; }
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
+  inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
   int add_dependency_objects(
                   const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
@@ -1718,6 +1728,7 @@ protected:
   ObPLStmtBlock *body_;
   ObPLSEArray<sql::ObRawExpr*> obj_access_exprs_; //使用的ObjAccessRawExpr
   ObPLSEArray<sql::ObRawExpr*> exprs_; //使用的表达式，在AST里是ObRawExpr，在ObPLFunction里是ObISqlExpression
+  ObPLSEArray<ObPLStmtBlock*> continue_handler_desc_bodys_;
   ObBitSet<> simple_calc_bitset_; //可以使用LLVM进行计算的表达式下标
   ObPLSEArray<ObPLSqlStmt*> sql_stmts_;
   sql::ObRawExprFactory expr_factory_;
@@ -1729,6 +1740,7 @@ protected:
   ObPLCursorTable cursor_table_;
   ObPLRoutineTable routine_table_;
   ObPLDependencyTable dependency_table_;
+  ObPLEnumSetCtx enum_set_ctx_;
   ObPLCompileFlag compile_flag_;
   bool can_cached_;
   ObString priv_user_;
@@ -2260,6 +2272,12 @@ public:
                            const ObPLBlockNS &ns,
                            bool &flag,
                            ObPLIntegerRange &pl_integer_range) const;
+  virtual int replace_questionmark_variable_type(ObPLFunctionAST &func,
+                                  ObPLStmtBlock *&current_block,
+                                  common::ObIAllocator* allocator,
+                                  int64_t questionmark_idx,
+                                  int32_t into_nums,
+                                  int64_t cur_idx) const { return OB_SUCCESS; }
 
   TO_STRING_KV(K_(into), K_(not_null_flags), K_(pl_integer_ranges), K_(data_type), K_(bulk));
 
@@ -2842,7 +2860,12 @@ public:
     public:
       HandlerDesc(common::ObIAllocator &allocator)
         : action_(INVALID), conditions_(allocator), body_(NULL) {}
-      virtual ~HandlerDesc() {}
+      virtual ~HandlerDesc()
+      {
+        if(OB_NOT_NULL(body_)) {
+          body_->~ObPLStmtBlock();
+        }
+      }
 
       inline Action get_action() const { return action_; }
       inline void set_action(Action action) { action_ = action; }
@@ -2851,6 +2874,7 @@ public:
       inline const ObPLConditionValue &get_condition(int64_t i) const { return conditions_.at(i); }
       inline int add_condition(ObPLConditionValue &value) { return conditions_.push_back(value); }
       inline const ObPLStmtBlock *get_body() const { return body_; }
+      inline ObPLStmtBlock *get_body() { return body_; }
       inline void set_body(ObPLStmtBlock *body) { body_ = body; }
       inline bool is_exit() const { return EXIT == action_; }
       inline bool is_continue() const { return CONTINUE == action_; }
@@ -2883,14 +2907,12 @@ public:
 
 public:
   ObPLDeclareHandlerStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_HANDLER), handlers_(allocator) {}
-  virtual ~ObPLDeclareHandlerStmt()
-  {
-    for (int64_t i = 0; i < get_child_size(); ++i) {
-      if (NULL != get_child_stmt(i)) {
-        (const_cast<ObPLStmt *>(get_child_stmt(i)))->~ObPLStmt();
+  virtual ~ObPLDeclareHandlerStmt() {
+    for (int64_t i = 0; i < handlers_.count(); ++i) {
+      if (NULL != handlers_.at(i).get_desc() && !handlers_.at(i).get_desc()->is_continue()) {
+        handlers_.at(i).get_desc()->~HandlerDesc();
       }
     }
-    handlers_.reset();
   }
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3209,7 +3231,12 @@ public:
   virtual ~ObPLFetchStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
-
+  int replace_questionmark_variable_type(ObPLFunctionAST &func,
+                                    ObPLStmtBlock *&current_block,
+                                    common::ObIAllocator* allocator,
+                                    int64_t questionmark_idx,
+                                    int32_t into_nums,
+                                    int64_t cur_idx) const override;
   inline uint64_t get_package_id() const { return pkg_id_; }
   inline uint64_t get_routine_id() const { return routine_id_; }
   inline int64_t get_index() const { return idx_; }

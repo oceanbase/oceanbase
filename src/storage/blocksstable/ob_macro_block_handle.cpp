@@ -18,6 +18,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_force_print_log.h"
 #include "share/io/ob_io_manager.h"
+#include "share/ob_io_device_helper.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_force_print_log.h"
@@ -141,21 +142,23 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
     io_info.fd_.first_id_ = read_info.macro_block_id_.first_id();
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
     io_info.fd_.third_id_ = read_info.macro_block_id_.third_id();
-    io_info.fd_.device_handle_ = THE_IO_DEVICE;
+    io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
     io_info.user_data_buf_ = read_info.buf_;
     io_info.buf_ = read_info.buf_; // for sync io
     // resource manager level is higher than default
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_read();
     if (io_info.fd_.is_backup_block_file()) {
+      ObStorageIdMod mod;
+      mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
       if (OB_FAIL(backup::ObBackupDeviceHelper::get_device_and_fd(io_info.tenant_id_,
                                                                   io_info.fd_.first_id_,
                                                                   io_info.fd_.second_id_,
                                                                   io_info.fd_.third_id_,
+                                                                  mod,
                                                                   backup_device,
                                                                   io_info.fd_))) {
         LOG_WARN("failed to get backup device and fd", K(ret), K(read_info));
@@ -197,13 +200,12 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     io_info.fd_.first_id_ = macro_id_.first_id();
     io_info.fd_.second_id_ = macro_id_.second_id();
     io_info.fd_.third_id_ = macro_id_.third_id();
-    io_info.fd_.device_handle_ = THE_IO_DEVICE;
+    io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
     if (OB_FAIL(write_info.fill_io_info_for_backup(macro_id_, io_info))) {
       LOG_WARN("failed to fill io info for backup", K(ret), K_(macro_id));
     }
     const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(write_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_write();

@@ -64,6 +64,7 @@ inline void TestTabletHelper::prepare_sstable_param(
     const share::schema::ObTableSchema &table_schema,
     ObTabletCreateSSTableParam &param)
 {
+  param.set_init_value_for_column_store_();
   const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.tablet_id_ = tablet_id;
@@ -91,12 +92,19 @@ inline void TestTabletHelper::prepare_sstable_param(
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.row_count_ = 0;
+  param.sstable_logic_seq_ = 0;
+  param.nested_offset_ = 0;
+  param.nested_size_ = 0;
 }
 
 inline int TestTabletHelper::create_tablet(
@@ -119,7 +127,7 @@ inline int TestTabletHelper::create_tablet(
   prepare_sstable_param(tablet_id, table_schema, param);
   void *buff = nullptr;
   if (OB_FAIL(create_tablet_schema.init(schema_allocator, table_schema, compat_mode,
-      false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+      false/*skip_column_info*/, DATA_VERSION_4_3_0_0))) {
     STORAGE_LOG(WARN, "failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
     STORAGE_LOG(WARN, "fill column checksum failed", K(ret), K(param));
@@ -138,15 +146,16 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, create_tablet_schema, need_create_empty_major_sstable,
-        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, freezer))){
+        snapshot_version, create_tablet_schema, need_create_empty_major_sstable, share::SCN::invalid_scn()/*clog_checkpoint_scn*/,
+        share::SCN::invalid_scn()/*mds_checkpoint_scn*/, false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/,
+        false/*micro_index_clustered*/, need_generate_cs_replica_cg_array, false/*has_cs_replica*/, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
       data.tablet_status_ = tablet_status;
       data.create_commit_scn_ = create_commit_scn;
-      data.create_commit_version_ = data.create_commit_scn_.get_val_for_tx();
-      if (tablet_status == ObTabletStatus::Status::DELETED) {
+      data.create_commit_version_ = create_commit_scn.get_val_for_tx();
+      if (tablet_status == ObTabletStatus::Status::DELETED || tablet_status == ObTabletStatus::Status::TRANSFER_OUT_DELETED) {
         data.delete_commit_scn_ = share::SCN::plus(create_commit_scn, 100);
         data.delete_commit_version_ = data.delete_commit_scn_.get_val_for_tx();
       }

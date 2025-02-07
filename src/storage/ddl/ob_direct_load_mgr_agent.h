@@ -45,11 +45,20 @@ public:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,
@@ -58,7 +67,7 @@ public:
       const ObDirectLoadSliceInfo &slice_info,
       ObInsertMonitor *insert_monitor,
       blocksstable::ObMacroDataSeq &next_seq);
-  int calc_range(const int64_t thread_cnt);
+  int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int fill_column_group(
       const int64_t thread_cnt,
       const int64_t thread_id);
@@ -67,7 +76,7 @@ public:
   inline ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
   int get_lob_meta_tablet_id(ObTabletID &lob_meta_tablet_id);
   int update_max_lob_id(const int64_t lob_id);
-  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), KPC(mgr_handle_.get_obj()));
+  TO_STRING_KV(K_(is_inited), K_(direct_load_type), K_(start_scn), K_(execution_id), K_(cgs_count), KPC(mgr_handle_.get_obj()));
 private:
   int init_for_sn(
       const share::ObLSID &ls_id,
@@ -81,11 +90,20 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice_for_ss(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice_for_ss(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice_for_ss(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice_for_ss(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,
@@ -103,11 +121,20 @@ private:
       ObIStoreRowIterator *iter,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = nullptr);
+  int fill_sstable_slice_for_sn(
+      const ObDirectLoadSliceInfo &slice_info,
+      const blocksstable::ObBatchDatumRows &datum_rows,
+      ObInsertMonitor *insert_monitor = nullptr);
   int fill_lob_sstable_slice_for_sn(
       ObIAllocator &allocator,
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       share::ObTabletCacheInterval &pk_interval,
       blocksstable::ObDatumRow &datum_row);
+  int fill_lob_sstable_slice_for_sn(
+      ObIAllocator &allocator,
+      const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
+      share::ObTabletCacheInterval &pk_interval,
+      blocksstable::ObBatchDatumRows &datum_rows);
   int fill_lob_meta_sstable_slice_for_sn(
       const ObDirectLoadSliceInfo &slice_info /*contains data_tablet_id, lob_slice_id, start_seq*/,
       ObIStoreRowIterator *iter,
@@ -122,6 +149,7 @@ private:
   share::SCN start_scn_; // start scn in the context.
   int64_t execution_id_; // execution_id in the context.
   ObTabletDirectLoadMgrHandle mgr_handle_;
+  int64_t cgs_count_; // count of the column groups, used for the sn's statistics when retry after committed.
 DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMgrAgent);
 };
 

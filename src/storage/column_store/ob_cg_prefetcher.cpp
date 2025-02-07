@@ -31,6 +31,8 @@ void ObCGPrefetcher::reset()
   micro_data_prewarm_idx_ = 0;
   cur_micro_data_read_idx_ = -1;
   agg_group_ = nullptr;
+  filter_constant_type_.set_uncertain();
+  max_filter_constant_id_ = OB_INVALID_CS_ROW_ID;
   ObIndexTreeMultiPassPrefetcher::reset();
 }
 
@@ -44,6 +46,8 @@ void ObCGPrefetcher::reuse()
   filter_bitmap_ = nullptr;
   micro_data_prewarm_idx_ = 0;
   cur_micro_data_read_idx_ = -1;
+  filter_constant_type_.set_uncertain();
+  max_filter_constant_id_ = OB_INVALID_CS_ROW_ID;
   ObIndexTreeMultiPassPrefetcher::reuse();
 }
 
@@ -209,10 +213,21 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
 {
   int ret = OB_SUCCESS;
   found = false;
-  const ObCSRowId start_row_idx = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
-  int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
-  if (max_data_prefetched_idx > 0 && max_data_prefetched_idx > cur_micro_data_read_idx_) {
+  if (filter_constant_type_.is_constant() &&
+      ((is_reverse_scan_ && max_filter_constant_id_ <= query_index_range_.end_row_id_) ||
+       (!is_reverse_scan_ && max_filter_constant_id_ >= query_index_range_.start_row_id_))) {
+    found = true;
+    is_prefetch_end_ =
+        (is_reverse_scan_ && max_filter_constant_id_ <= query_index_range_.start_row_id_) ||
+        (!is_reverse_scan_ && max_filter_constant_id_ >= query_index_range_.end_row_id_);
+  } else {
+    filter_constant_type_.set_uncertain();
+    max_filter_constant_id_ = is_reverse_scan_ ? query_index_range_.end_row_id_ + 1 : query_index_range_.start_row_id_ - 1;
+  }
+  if (!found || !is_prefetch_end_) {
     int cmp_ret = -1;
+    int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
+    const ObCSRowId start_row_idx = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
     for (int64_t micro_data_idx = MAX(0, cur_micro_data_read_idx_); OB_SUCC(ret) && cmp_ret < 0 && micro_data_idx < max_data_prefetched_idx; micro_data_idx++) {
       ObMicroIndexInfo &micro_info = micro_data_infos_[micro_data_idx % max_micro_handle_cnt_];
       const ObCSRange &micro_range = micro_info.get_row_range();
@@ -220,7 +235,10 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
       if (is_reverse_scan_) {
         cmp_ret = -cmp_ret;
       }
-      if (0 == cmp_ret) {
+      if (cmp_ret < 0) {
+        cur_micro_data_fetch_idx_ = micro_data_idx;
+        cur_micro_data_read_idx_ = cur_micro_data_fetch_idx_;
+      } else if (cmp_ret == 0) {
         cur_micro_data_fetch_idx_ = micro_data_idx - 1;
         cur_micro_data_read_idx_ = cur_micro_data_fetch_idx_;
         if (is_reverse_scan_) {
@@ -231,10 +249,12 @@ int ObCGPrefetcher::locate_in_prefetched_data(bool &found)
         found = true;
       }
     }
+  }
 
-    if (OB_SUCC(ret) && found) {
-      cmp_ret = 1;
-      is_prefetch_end_ = false;
+  if (OB_SUCC(ret) && found) {
+    if (!is_prefetch_end_) {
+      int cmp_ret = 1;
+      int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
       micro_data_prefetch_idx_ = max_data_prefetched_idx;
       const ObCSRowId end_row_id = is_reverse_scan_ ? query_index_range_.start_row_id_ : query_index_range_.end_row_id_;
       for (int64_t micro_data_idx = max_data_prefetched_idx - 1; OB_SUCC(ret) && cmp_ret > 0 && micro_data_idx > cur_micro_data_fetch_idx_; micro_data_idx--) {
@@ -296,11 +316,19 @@ bool ObCGPrefetcher::locate_back(const ObCSRange &locate_range)
 {
   bool is_locate_back = false;
   if (0 < query_index_range_.end_row_id_) {
-    int micro_index = MAX(0, cur_micro_data_read_idx_);
-    if (is_reverse_scan_) {
-      is_locate_back = locate_range.end_row_id_ > micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().end_row_id_;
+    if (filter_constant_type_.is_constant()) {
+      if (is_reverse_scan_) {
+        is_locate_back = locate_range.end_row_id_ > query_index_range_.end_row_id_;
+      } else {
+        is_locate_back = locate_range.start_row_id_ < query_index_range_.start_row_id_;
+      }
     } else {
-      is_locate_back = locate_range.start_row_id_ < micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().start_row_id_;
+      int micro_index = MAX(0, cur_micro_data_read_idx_);
+      if (is_reverse_scan_) {
+        is_locate_back = locate_range.end_row_id_ > micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().end_row_id_;
+      } else {
+        is_locate_back = locate_range.start_row_id_ < micro_data_infos_[micro_index % max_micro_handle_cnt_].get_row_range().start_row_id_;
+      }
     }
   }
   return is_locate_back;
@@ -323,7 +351,10 @@ int ObCGPrefetcher::locate(const ObCSRange &range, const ObCGBitmap *bitmap)
     ObIndexTreeMultiPassPrefetcher::reuse();
     micro_data_prewarm_idx_ = 0;
     cur_micro_data_read_idx_ = -1;
+    filter_constant_type_.set_uncertain();
+    max_filter_constant_id_ = is_reverse_scan_ ? query_index_range_.end_row_id_ + 1 : query_index_range_.start_row_id_ - 1;
     update_query_range(range);
+    cur_level_ = 0;
     read_handles_[0].row_state_ = ObSSTableRowState::IN_BLOCK;
     if (OB_FAIL(open_index_root())) {
       LOG_WARN("Fail to open index root", K(ret));
@@ -343,6 +374,48 @@ int ObCGPrefetcher::locate(const ObCSRange &range, const ObCGBitmap *bitmap)
       }
     } else if (OB_FAIL(refresh_index_tree())) {
       LOG_WARN("Fail to refresh index tree", K(ret), K_(query_index_range));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(refresh_constant_filter_info())) {
+    LOG_WARN("Fail to refresh constant filter info", K(ret));
+  }
+  return ret;
+}
+
+// update filter_constant_type_ and max_filter_constant_id_
+int ObCGPrefetcher::refresh_constant_filter_info()
+{
+  int ret = OB_SUCCESS;
+  if (!is_cg_scanner() || nullptr == sstable_index_filter_ || filter_constant_type_.is_constant()) {
+    // skip check when filter_constant_type_ is constant
+  } else {
+    // update max row id for constant filtered result
+    bool need_check = true;
+    if (need_check && cur_level_ == index_tree_height_ - 1) {
+      int64_t max_data_prefetched_idx = MAX(micro_data_prewarm_idx_, micro_data_prefetch_idx_);
+      for (int64_t micro_data_idx = cur_micro_data_fetch_idx_ + 1; need_check && micro_data_idx < max_data_prefetched_idx; micro_data_idx++) {
+        const ObMicroIndexInfo &index_info = micro_data_infos_[micro_data_idx % max_micro_handle_cnt_];
+        if (!check_and_update_constant_filter(index_info)) {
+          need_check = false;
+        }
+      }
+    }
+
+    for (int64_t level = 0; need_check && level <= cur_level_; level++) {
+      ObIndexTreeLevelHandle &tree_handle = tree_handles_[level];
+      for (int64_t idx = tree_handle.read_idx_; need_check && idx <= tree_handle.prefetch_idx_; idx++) {
+        const ObMicroIndexInfo &index_info = tree_handle.index_block_read_handles_[idx % INDEX_TREE_PREFETCH_DEPTH].index_info_;
+        if (is_constant_filter_continuous(index_info)) {
+          if (filter_constant_type_.is_uncertain() ||
+              index_info.get_filter_constant_type() == filter_constant_type_.bmt_) {
+            filter_constant_type_.set(index_info.get_filter_constant_type());
+            max_filter_constant_id_ = is_reverse_scan_ ? index_info.get_row_range().start_row_id_ : index_info.get_row_range().end_row_id_;
+          } else {
+            need_check = false;
+          }
+        }
+      }
     }
   }
   return ret;
@@ -396,7 +469,9 @@ int ObCGPrefetcher::prefetch_micro_data()
         break;
       } else {
         // read index leaf and prefetch micro data
-        while (OB_SUCC(ret) && !is_prefetch_end_ && prefetched_cnt < prefetch_depth) {
+        bool hit_constant_filter = false;
+        while (OB_SUCC(ret) && (!is_prefetch_end_ || hit_constant_filter) && prefetched_cnt < prefetch_depth) {
+          hit_constant_filter = false;
           prefetch_micro_idx = micro_data_prefetch_idx_ % max_micro_handle_cnt_;
           ObMicroIndexInfo &block_info = micro_data_infos_[prefetch_micro_idx];
           bool can_agg = false;
@@ -415,9 +490,6 @@ int ObCGPrefetcher::prefetch_micro_data()
               ret = OB_SUCCESS;
               break;
             }
-          } else if (compare_range(block_info.get_row_range()) > 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("Unexpected prefetch index info", K(ret), K(block_info), KPC(this));
           } else if (!contain_rows(block_info.get_row_range())) {
             // continue if no rows contained
           } else if (nullptr != sstable_index_filter_
@@ -426,12 +498,33 @@ int ObCGPrefetcher::prefetch_micro_data()
                              iter_param_->read_info_, block_info,
                              *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
-          } else if (nullptr != sstable_index_filter_
-                     && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {
-            // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
-            prefetched_cnt++;
-            micro_data_prefetch_idx_++;
-            tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
+          // exist only in filter iter
+          } else if (nullptr != sstable_index_filter_ && block_info.is_filter_constant()) {
+            if (check_and_update_constant_filter(block_info)) {
+              hit_constant_filter = true;
+            } else {
+              prefetched_cnt++;
+              tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
+              if (0 < compare_range(block_info.get_row_range())) {
+                micro_data_prewarm_idx_ = micro_data_prefetch_idx_ + 1;
+              } else {
+                micro_data_prefetch_idx_++;
+              }
+            }
+          } else if (0 < compare_range(block_info.get_row_range())) {
+            if (!is_cg_scanner() || nullptr == sstable_index_filter_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Unexpected prefetch range", K(ret), K_(cg_iter_type), K_(query_index_range), K(block_info.get_row_range()));
+            } else if (OB_FAIL(prefetch_data_block(
+                        micro_data_prefetch_idx_,
+                        block_info,
+                        micro_data_handles_[prefetch_micro_idx]))) {
+              LOG_WARN("fail to prefetch_block_data", K(ret), K(block_info));
+            } else {
+              prefetched_cnt++;
+              micro_data_prewarm_idx_ = micro_data_prefetch_idx_ + 1;
+              tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
+            }
           } else if (OB_FAIL(can_agg_micro_index(block_info, can_agg))) {
             LOG_WARN("fail to check can agg index info", K(ret), K(block_info), KPC_(agg_group));
           } else if (can_agg) {
@@ -451,7 +544,7 @@ int ObCGPrefetcher::prefetch_micro_data()
             tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
           }
 
-          if (OB_SUCC(ret) && (0 == compare_range(block_info.get_row_range()))) {
+          if (OB_SUCC(ret) && (0 <= compare_range(block_info.get_row_range()))) {
             is_prefetch_end_ = true;
           }
         }
@@ -506,7 +599,7 @@ int ObCGPrefetcher::can_agg_micro_index(const blocksstable::ObMicroIndexInfo &in
             index_range.start_row_id_ >= query_index_range_.start_row_id_ &&
             index_range.end_row_id_ <= query_index_range_.end_row_id_ &&
             (nullptr == filter_bitmap_ || filter_bitmap_->is_all_true(index_range));
-  if (can_agg && OB_FAIL(agg_group_->can_use_index_info(index_info, can_agg))) {
+  if (can_agg && OB_FAIL(agg_group_->can_use_index_info(index_info, 0/*col_idx*/, can_agg))) {
     LOG_WARN("fail to check index info", K(ret), K(index_info), KPC_(agg_group));
   }
   return ret;
@@ -561,7 +654,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
                          *(prefetcher.access_ctx_->allocator_),
                          prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
-        // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
+      } else if (prefetcher.check_and_update_constant_filter(index_info)) {
       } else if (OB_FAIL(prefetcher.can_agg_micro_index(index_info, can_agg))) {
         LOG_WARN("fail to check index info", K(ret), K(index_info), KPC(prefetcher.agg_group_));
       } else if (can_agg) {
@@ -584,7 +677,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
           }
         }
       }
-      if (OB_SUCC(ret) && !is_prefetch_end_ && 0 == prefetcher.compare_range(index_info.get_row_range())) {
+      if (OB_SUCC(ret) && !is_prefetch_end_ && 0 <= prefetcher.compare_range(index_info.get_row_range())) {
         is_prefetch_end_ = true;
       }
      }
@@ -764,12 +857,14 @@ int ObCGPrefetcher::prewarm()
                            iter_param_->read_info_, block_info,
                            *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
           LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
-        } else if (nullptr != sstable_index_filter_
-                   && (block_info.is_filter_always_false() || block_info.is_filter_always_true())) {
-          // TODO: skip data block which is always_false/always_true and record the result in filter bitmap
-          prefetched_cnt++;
-          micro_data_prewarm_idx_++;
-          tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
+        } else if (nullptr != sstable_index_filter_ && block_info.is_filter_constant()) {
+          if (check_and_update_constant_filter(block_info)) {
+            prefetched_cnt++;
+          } else {
+            prefetched_cnt++;
+            micro_data_prewarm_idx_++;
+            tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
+          }
         } else if (OB_FAIL(prefetch_data_block(
                     micro_data_prewarm_idx_,
                     block_info,

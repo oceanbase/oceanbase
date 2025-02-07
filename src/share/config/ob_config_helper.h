@@ -301,6 +301,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSyslogFileUncompressedCountChecker);
 };
 
+// Used to check the format of STS credential
+class ObConfigSTScredentialChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSTScredentialChecker() {}
+  virtual ~ObConfigSTScredentialChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSTScredentialChecker);
+};
+
 class ObConfigUseLargePagesChecker
   : public ObConfigChecker
 {
@@ -636,6 +648,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObMySQLVersionLengthChecker : public ObConfigChecker {
+public:
+  ObMySQLVersionLengthChecker()
+  {}
+  virtual ~ObMySQLVersionLengthChecker(){};
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMySQLVersionLengthChecker);
+};
+
 class ObConfigPublishSchemaModeChecker
   : public ObConfigChecker
 {
@@ -824,6 +846,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlPlanManagementModeChecker);
 };
 
+class ObDefaultLoadModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObDefaultLoadModeChecker() {}
+  virtual ~ObDefaultLoadModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDefaultLoadModeChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:
@@ -875,6 +908,13 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
+class ObConfigDDLNoLoggingChecker: public ObConfigChecker {
+  public:
+    static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObConfigDDLNoLoggingChecker);
+};
+
 class ObConfigArchiveLagTargetChecker {
 public:
   ObConfigArchiveLagTargetChecker(){}
@@ -910,6 +950,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
 
+class ObConfigKvGroupCommitRWModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigKvGroupCommitRWModeChecker() {}
+  virtual ~ObConfigKvGroupCommitRWModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigKvGroupCommitRWModeChecker);
+};
 
 class ObConfigRegexpEngineChecker
   : public ObConfigChecker
@@ -920,6 +970,36 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigRegexpEngineChecker);
+};
+
+class ObConfigS3URLEncodeTypeChecker : public ObConfigChecker
+{
+public:
+  ObConfigS3URLEncodeTypeChecker() {}
+  virtual ~ObConfigS3URLEncodeTypeChecker() {}
+  virtual bool check(const ObConfigItem &t) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigS3URLEncodeTypeChecker);
+};
+
+class ObConfigReplicaParallelMigrationChecker : public ObConfigChecker
+{
+public:
+  ObConfigReplicaParallelMigrationChecker() {}
+  virtual ~ObConfigReplicaParallelMigrationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigReplicaParallelMigrationChecker);
+};
+
+class ObConfigDegradationPolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigDegradationPolicyChecker() {}
+  virtual ~ObConfigDegradationPolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDegradationPolicyChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,
@@ -934,6 +1014,38 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigVectorMemoryChecker);
 };
 
+class ObConfigEnableHashRollupChecker: public ObConfigChecker
+{
+public:
+  ObConfigEnableHashRollupChecker()
+  {}
+  virtual ~ObConfigEnableHashRollupChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
+};
+
+class ObConfigJavaParamsChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigJavaParamsChecker() {}
+  virtual ~ObConfigJavaParamsChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
+};
+
+class ObConfigDefaultOrganizationChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultOrganizationChecker() {}
+  virtual ~ObConfigDefaultOrganizationChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultOrganizationChecker);
+};
 } // namespace common
 } // namespace oceanbase
 

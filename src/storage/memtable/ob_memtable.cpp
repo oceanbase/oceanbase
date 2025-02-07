@@ -583,8 +583,13 @@ int ObMemtable::set(
                 context,
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
-      TRANS_LOG(WARN, "[xuanxi] set row", K(ret), K(row), K(check_exist), K(memtable_key_generator.get_memtable_key()));
       guard.set_memtable(this);
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;
@@ -594,7 +599,7 @@ int ObMemtable::set(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
     const ObIArray<ObColDesc> &columns,
-    const ObIArray<int64_t> &update_idx,
+    const ObIArray<int64_t> *update_idx,
     const blocksstable::ObDatumRow &old_row,
     blocksstable::ObDatumRow &new_row,
     const share::ObEncryptMeta *encrypt_meta)
@@ -635,12 +640,19 @@ int ObMemtable::set(
                 columns,
                 new_row,
                 &old_row,
-                &update_idx,
+                update_idx,
                 false/*check_exist*/,
                 context,
                 memtable_key_generator,
                 nullptr /*mvcc_row*/);
       guard.set_memtable(this);
+    }
+
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
+        TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
+      }
     }
   }
   return ret;
@@ -1309,15 +1321,27 @@ int ObMemtable::lock_row_on_frozen_stores_(
   } else {
     ObRowState row_state;
     common::ObSEArray<ObITable *, 4> iter_tables;
+    ObMvccWriteDebugInfo debug_info;
     if (OB_FAIL(get_all_tables_(ctx, iter_tables))) {
       TRANS_LOG(WARN, "get all tables from table iter failed", KR(ret));
-    } else if (OB_FAIL(internal_lock_row_on_frozen_stores_(
-                   check_exist, key, param, iter_tables, context, res, row_state))) {
+    } else if (OB_FAIL(internal_lock_row_on_frozen_stores_(check_exist,
+                                                           key,
+                                                           param,
+                                                           iter_tables,
+                                                           context,
+                                                           debug_info,
+                                                           res,
+                                                           row_state))) {
       TRANS_LOG(WARN, "internal lock row failed", KR(ret));
     } else {
       lock_state.trans_version_ = MAX(lock_state.trans_version_, row_state.get_max_trans_version());
-      if (OB_FAIL(lock_row_on_frozen_stores_on_success(lock_state.is_locked_, arg.data_->dml_flag_,
-                                                       lock_state.trans_version_, context, value, res))) {
+      if (OB_FAIL(lock_row_on_frozen_stores_on_success(lock_state.is_locked_,
+                                                       arg.data_->dml_flag_,
+                                                       lock_state.trans_version_,
+                                                       context,
+                                                       debug_info,
+                                                       value,
+                                                       res))) {
         if (OB_UNLIKELY(OB_TRANSACTION_SET_VIOLATION != ret)) {
           TRANS_LOG(WARN, "Failed to call on success callback after lock row on frozen stores", K(ret));
         }
@@ -1355,6 +1379,7 @@ int ObMemtable::internal_lock_row_on_frozen_stores_(const bool check_exist,
                                                     const storage::ObTableIterParam &param,
                                                     const ObIArray<ObITable *> &iter_tables,
                                                     storage::ObTableAccessContext &context,
+                                                    ObMvccWriteDebugInfo &debug_info,
                                                     ObMvccWriteResult &res,
                                                     ObRowState &row_state)
 
@@ -1382,6 +1407,8 @@ int ObMemtable::internal_lock_row_on_frozen_stores_(const bool check_exist,
       // FIXME(handora.qc): two active memtable in transfer
       if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, tmp_lock_state, row_state))) {
         TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(lock_state), K(tmp_lock_state));
+      } else {
+        debug_info.memtable_iterate_cnt_++;
       }
     } else if (iter_tables.at(i)->is_sstable()) {
       blocksstable::ObDatumRowkeyHelper rowkey_converter;
@@ -1400,6 +1427,8 @@ int ObMemtable::internal_lock_row_on_frozen_stores_(const bool check_exist,
                   K(lock_state),
                   K(tmp_lock_state),
                   K(row_state));
+      } else {
+        debug_info.sstable_iterate_cnt_++;
       }
       TRANS_LOG(DEBUG,
                 "sstable check row lock debug",
@@ -1428,6 +1457,8 @@ int ObMemtable::internal_lock_row_on_frozen_stores_(const bool check_exist,
                   K(lock_state),
                   K(tmp_lock_state),
                   K(row_state));
+      } else {
+        debug_info.sstable_iterate_cnt_++;
       }
       TRANS_LOG(DEBUG,
                 "direct load memtable check row lock debug",
@@ -1477,6 +1508,7 @@ int ObMemtable::lock_row_on_frozen_stores_on_success(
     const blocksstable::ObDmlFlag writer_dml_flag,
     const share::SCN &max_trans_version,
     storage::ObTableAccessContext &context,
+    ObMvccWriteDebugInfo &debug_info,
     ObMvccRow *value,
     ObMvccWriteResult &res)
 {
@@ -1495,7 +1527,9 @@ int ObMemtable::lock_row_on_frozen_stores_on_success(
       ret = OB_TRANSACTION_SET_VIOLATION;
       TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx);
     }
-    value->set_lower_lock_scaned();
+    value->set_lower_lock_scaned(my_tx_id,
+                                 debug_info.memtable_iterate_cnt_,
+                                 debug_info.sstable_iterate_cnt_);
     TRANS_LOG(DEBUG, "lower lock check finish", K(*value));
   } else {
     // There is the lock on frozen stores by my self
@@ -1604,12 +1638,18 @@ int ObMemtable::lock_rows_on_frozen_stores_(
     // so there is no need to check transaction conflict again.
   } else {
     common::ObSEArray<ObITable *, 4> iter_tables;
+    ObMvccWriteDebugInfo debug_info;
     if (OB_FAIL(get_all_tables_(ctx, iter_tables))) {
       TRANS_LOG(WARN, "get all tables from table iter failed", KR(ret));
     } else {
       share::SCN max_trans_version = SCN::min_scn();
-      if (OB_FAIL(internal_lock_rows_on_frozen_stores_(check_exist, iter_tables, param, context,
-                                                       max_trans_version, rows_info))) {
+      if (OB_FAIL(internal_lock_rows_on_frozen_stores_(check_exist,
+                                                       iter_tables,
+                                                       param,
+                                                       context,
+                                                       debug_info,
+                                                       max_trans_version,
+                                                       rows_info))) {
         TRANS_LOG(WARN, "Failed to lock rows on frozen stores", K(ret), K(check_exist), K(iter_tables));
       } else if (!rows_info.have_conflict()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < mvcc_rows.count(); ++i) {
@@ -1622,8 +1662,11 @@ int ObMemtable::lock_rows_on_frozen_stores_(
           row_lock_state.trans_version_ = MAX(row_lock_state.trans_version_, max_trans_version);
           if (OB_FAIL(lock_row_on_frozen_stores_on_success(row_lock_state.is_locked_,
                                                            blocksstable::ObDmlFlag::DF_INSERT,
-                                                           row_lock_state.trans_version_, context,
-                                                           mvcc_row, write_result))) {
+                                                           row_lock_state.trans_version_,
+                                                           context,
+                                                           debug_info,
+                                                           mvcc_row,
+                                                           write_result))) {
             TRANS_LOG(WARN, "Failed to lock rows on frozen stores", K(ret), K(check_exist), K(iter_tables));
             // The upper layer determines whether to call lock_row_on_frozen_stores_on_failure based on whether rows_info has a conflict.
             // Therefore, here we convert the error code to success and store the error code in rows_info.
@@ -1645,6 +1688,7 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
     const ObIArray<ObITable *> &iter_tables,
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
+    ObMvccWriteDebugInfo &debug_info,
     share::SCN &max_trans_version,
     ObRowsInfo &rows_info)
 {
@@ -1656,6 +1700,8 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
       if (OB_FAIL(memtable->check_rows_locked(check_exist, param, context, rows_info))) {
         TRANS_LOG(WARN, "Failed to check rows locked and duplication in memtable", K(ret), K(i),
                   K(iter_tables));
+      } else {
+        debug_info.memtable_iterate_cnt_++;
       }
     } else if (i_table->is_sstable()) {
       ObSSTable *sstable = static_cast<ObSSTable *>(i_table);
@@ -1666,6 +1712,8 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
                                                            context,
                                                            rows_info))) {
           TRANS_LOG(WARN, "Failed to check rows locked for sstable", K(ret), K(i), K(iter_tables));
+        } else {
+          debug_info.sstable_iterate_cnt_++;
         }
       } else {
         if (OB_FAIL(sstable->check_rows_locked(check_exist,
@@ -1673,6 +1721,8 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
                                                max_trans_version,
                                                rows_info))) {
           TRANS_LOG(WARN, "Failed to check rows locked for sstable", K(ret), K(i), K(iter_tables));
+        } else {
+          debug_info.sstable_iterate_cnt_++;
         }
       }
     } else if (i_table->is_direct_load_memtable()) {
@@ -1684,6 +1734,8 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
         } else {
           ret = OB_SUCCESS;
         }
+      } else {
+        debug_info.sstable_iterate_cnt_++;
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -2365,12 +2417,18 @@ int ObMemtable::dump2text(const char *fname)
     ret = OB_IO_ERROR;
     TRANS_LOG(WARN, "open file fail:", K(fname));
   } else {
-    fprintf(fd, "memtable: key=%s\n", S(key_));
-    fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
-            get_hash_item_count(), get_hash_alloc_memory());
-    fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
-            get_btree_item_count(), get_btree_alloc_memory());
-    query_engine_.dump2text(fd);
+    ObCStringHelper helper;
+    const char *key_ptr = NULL;
+    if (OB_FAIL(helper.convert(key_, key_ptr))) {
+      TRANS_LOG(WARN, "convert key fail", K_(key), K(ret));
+    } else {
+      fprintf(fd, "memtable: key=%s\n", key_ptr);
+      fprintf(fd, "hash_item_count=%ld, hash_alloc_size=%ld\n",
+              get_hash_item_count(), get_hash_alloc_memory());
+      fprintf(fd, "btree_item_count=%ld, btree_alloc_size=%ld\n",
+              get_btree_item_count(), get_btree_alloc_memory());
+      query_engine_.dump2text(fd);
+    }
   }
   if (NULL != fd) {
     fprintf(fd, "end of memtable\n");
@@ -2678,15 +2736,16 @@ int ObMemtable::set_(
           TRANS_LOG(WARN, "mvcc write fail", K(memtable_key_generator.get_memtable_key()), K(ret));
         }
       } else {
+        ObCStringHelper helper;
         TRANS_LOG(DEBUG, "set end, success",
                   "ret", ret,
                   "tablet_id_", key_.tablet_id_,
                   "dml_flag", new_row.row_flag_.get_dml_flag(),
                   "columns", strarray<ObColDesc>(columns),
-                  "old_row", to_cstring(old_row),
-                  "new_row", to_cstring(new_row),
-                  "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-                  "mtd", to_cstring(mtd),
+                  "old_row", helper.convert(old_row),
+                  "new_row", helper.convert(new_row),
+                  "update_idx", (update_idx == NULL ? "" : helper.convert(update_idx)),
+                  "mtd", helper.convert(mtd),
                   K(arg),
                   KPC(mvcc_row));
       }
@@ -2710,8 +2769,8 @@ int ObMemtable::set_(
         "ret", ret,
         "tablet_id_", key_.tablet_id_,
         "columns", strarray<ObColDesc>(columns),
-        "new_row", to_cstring(new_row),
-        "mem_ctx", STR_PTR(mem_ctx),
+        K(new_row),
+        K(mem_ctx),
         "store_ctx", ctx);
   }
 
@@ -2768,6 +2827,10 @@ int ObMemtable::lock_(
                             nullptr /*mvcc_row*/))) {
     } else if (OB_UNLIKELY(!is_new_locked)) {
       TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node");
+    }
+    if (OB_SUCC(ret)) {
+      // for elr optimization
+      mem_ctx->set_row_updated();
     }
   }
 
@@ -2938,6 +3001,12 @@ int ObMemtable::mvcc_write_(
     } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
       ++mt_stat_.delete_row_count_;
     }
+
+    // TODO(handora.qc): after finishing the cherrypick of batch_dml_opt_425 to
+    // the master, integrate the event into mvcc_write_statistic_.
+    EVENT_ADD(ObStatEventIds::MEMSTORE_WRITE_BYTES,
+              key.get_rowkey()->get_deep_copy_size() +
+              arg.data_->dup_size());
   }
   return ret;
 }

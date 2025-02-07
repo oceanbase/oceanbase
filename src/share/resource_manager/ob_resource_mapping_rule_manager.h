@@ -41,8 +41,95 @@ public:
   virtual ~ObResourceMappingRuleManager() = default;
   int init();
   int refresh_group_mapping_rule(const uint64_t tenant_id, const common::ObString &plan);
+  int clear_deleted_group(const uint64_t tenant_id, const ObResourceUserMappingRuleSet &rules);
   int refresh_resource_mapping_rule(const uint64_t tenant_id, const common::ObString &plan);
   int reset_mapping_rules();
+  common::hash::ObHashMap<ObTenantGroupIdKey, ObGroupName> &get_group_id_name_map() { return group_id_name_map_; }
+
+  class GetTenantGroupIdNameFunctor final
+  {
+  public:
+    GetTenantGroupIdNameFunctor(uint64_t tenant_id, common::ObIArray<share::ObTenantGroupIdKey> &group_id_keys,
+        common::ObIArray<ObGroupName> &group_names)
+        : tenant_id_(tenant_id), group_id_keys_(group_id_keys), group_names_(group_names)
+    {}
+    ~GetTenantGroupIdNameFunctor() = default;
+
+    int operator()(hash::HashMapPair<share::ObTenantGroupIdKey, ObGroupName> &kv)
+    {
+      int ret = OB_SUCCESS;
+      if (kv.first.tenant_id_ == tenant_id_) {
+        if (OB_FAIL(group_id_keys_.push_back(kv.first))) {
+          LOG_WARN("fail to push back function keys", K(ret), K(kv.first));
+        } else if (OB_FAIL(group_names_.push_back(kv.second))) {
+          LOG_WARN("fail to push back group names", K(ret), K(kv.second));
+        }
+      }
+      return ret;
+    }
+
+  private:
+    uint64_t tenant_id_;
+    common::ObIArray<share::ObTenantGroupIdKey> &group_id_keys_;
+    common::ObIArray<ObGroupName> &group_names_;
+  };
+
+  class GetTenantFunctionRuleFunctor final
+  {
+  public:
+    GetTenantFunctionRuleFunctor(uint64_t tenant_id, common::ObIArray<share::ObTenantFunctionKey> &func_keys,
+        common::ObIArray<uint64_t> &group_ids)
+        : tenant_id_(tenant_id), func_keys_(func_keys), group_ids_(group_ids)
+    {}
+    ~GetTenantFunctionRuleFunctor() = default;
+
+    int operator()(hash::HashMapPair<share::ObTenantFunctionKey, uint64_t> &kv)
+    {
+      int ret = OB_SUCCESS;
+      if (kv.first.tenant_id_ == tenant_id_) {
+        if (OB_FAIL(func_keys_.push_back(kv.first))) {
+          LOG_WARN("fail to push back function keys", K(ret), K(kv.first));
+        } else if (OB_FAIL(group_ids_.push_back(kv.second))) {
+          LOG_WARN("fail to push back group ids", K(ret), K(kv.second));
+        }
+      }
+      return ret;
+    }
+
+  private:
+    int64_t tenant_id_;
+    common::ObIArray<share::ObTenantFunctionKey> &func_keys_;
+    common::ObIArray<uint64_t> &group_ids_;
+  };
+
+  class GetTenantUserRuleFunctor final
+  {
+  public:
+    GetTenantUserRuleFunctor(
+        uint64_t tenant_id, common::ObIArray<sql::ObTenantUserKey> &user_keys, common::ObIArray<uint64_t> &group_ids)
+        : tenant_id_(tenant_id), user_keys_(user_keys), group_ids_(group_ids)
+    {}
+    ~GetTenantUserRuleFunctor() = default;
+
+    int operator()(hash::HashMapPair<sql::ObTenantUserKey, uint64_t> &kv)
+    {
+      int ret = OB_SUCCESS;
+      if (kv.first.tenant_id_ == tenant_id_ && kv.second > 0) {
+        if (OB_FAIL(user_keys_.push_back(kv.first))) {
+          LOG_WARN("fail to push back user keys", K(ret), K(kv.first));
+        } else if (OB_FAIL(group_ids_.push_back(kv.second))) {
+          LOG_WARN("fail to push back group ids", K(ret), K(kv.second));
+        }
+      }
+      return ret;
+    }
+
+  private:
+    uint64_t tenant_id_;
+    common::ObIArray<sql::ObTenantUserKey> &user_keys_;
+    common::ObIArray<uint64_t> &group_ids_;
+  };
+
   inline int get_group_id_by_user(const uint64_t tenant_id, uint64_t user_id, uint64_t &group_id)
   {
     int ret = common::OB_SUCCESS;
@@ -103,7 +190,7 @@ public:
                                   const uint64_t group_id,
                                   ObGroupName &group_name)
   {
-    int ret = group_id_name_map_.get_refactored(common::combine_two_ids(tenant_id, group_id), group_name);
+    int ret = group_id_name_map_.get_refactored(share::ObTenantGroupIdKey(tenant_id, group_id), group_name);
     return ret;
   }
 
@@ -126,7 +213,7 @@ public:
     int ret = function_rule_map_.set_refactored(share::ObTenantFunctionKey(tenant_id, func), 0, 1/*overwrite*/);
     return ret;
   }
-
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   int refresh_resource_function_mapping_rule(
       ObResourceManagerProxy &proxy,
@@ -145,7 +232,7 @@ private:
   // 将 function 映射到 group id，用于后台线程快速确定后台 session 所属 cgroup
   common::hash::ObHashMap<share::ObTenantFunctionKey, uint64_t> function_rule_map_;
   // 将 group_id 映射到 group_name, 用于快速更新 cgroup fs 目录(包括user和function使用的group)
-  common::hash::ObHashMap<uint64_t, ObGroupName> group_id_name_map_;
+  common::hash::ObHashMap<ObTenantGroupIdKey, ObGroupName> group_id_name_map_;
   // 将 group_name 映射到 group_id, 用于快速根据group_name找到id(主要是用于io控制)
   common::hash::ObHashMap<share::ObTenantGroupKey, uint64_t> group_name_id_map_;
   DISALLOW_COPY_AND_ASSIGN(ObResourceMappingRuleManager);

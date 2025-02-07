@@ -108,10 +108,6 @@ ObIndexSkylineDim *ObSkylinePrunningTest::create_skyline_index_dim(
   ObArray<uint64_t> filter_array;
   to_array(filter_ids, filter_cnt, filter_array);
   t->add_index_back_dim(index_back,
-                        interest_cnt > 0,
-                        range_cnt > 0,
-                        index_column_cnt,
-                        filter_array,
                         allocator_);
   ObArray<uint64_t> interest_array;
   ObArray<uint64_t> rowkey_array;
@@ -161,25 +157,10 @@ void ObSkylinePrunningTest::check_index_back_dim(const bool left_index_back,
 {
   ObIndexBackDim left_dim;
   left_dim.set_index_back(left_index_back);
-  left_dim.set_interesting_order(left_has_interesting_order);
-  left_dim.set_extract_range(left_can_extract_range);
-  left_dim.set_index_column_cnt(left_index_column_cnt);
-  if (left_cnt > 0) {
-    ObArray<uint64_t> left_ids;
-    to_array(left, left_cnt, left_ids);
-    left_dim.add_filter_column_ids(left_ids);
-  }
 
   ObIndexBackDim right_dim;
   right_dim.set_index_back(right_index_back);
-  right_dim.set_interesting_order(right_has_interesting_order);
-  right_dim.set_extract_range(right_can_extract_range);
-  right_dim.set_index_column_cnt(right_index_column_cnt);
-  if (right_cnt > 0) {
-    ObArray<uint64_t> right_ids;
-    to_array(right, right_cnt, right_ids);
-    right_dim.add_filter_column_ids(right_ids);
-  }
+
   check(&left_dim, &right_dim, status, reverse_status);
 }
 
@@ -358,8 +339,8 @@ TEST_F(ObSkylinePrunningTest, index_dim)
                          right_index_column_cnt,
                          right_filter_columns,
                          right_filter_column_cnt,
-                         ObSkylineDim::UNCOMPARABLE,
-                         ObSkylineDim::UNCOMPARABLE);
+                         ObSkylineDim::LEFT_DOMINATED,
+                         ObSkylineDim::RIGHT_DOMINATED);
   }
 
   {
@@ -442,8 +423,8 @@ TEST_F(ObSkylinePrunningTest, index_dim)
                          right_index_column_cnt,
                          right_filter_columns,
                          right_filter_column_cnt,
-                         ObSkylineDim::UNCOMPARABLE,
-                         ObSkylineDim::UNCOMPARABLE);
+                         ObSkylineDim::LEFT_DOMINATED,
+                         ObSkylineDim::RIGHT_DOMINATED);
   }
 
   {

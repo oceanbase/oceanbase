@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX PALF
 #include "palf_env_impl.h"
 #include <string.h>
 #include "lib/lock/ob_spin_lock.h"
@@ -30,6 +31,9 @@
 #include "log_rpc.h"
 #include "log_block_pool_interface.h"
 #include "log_io_utils.h"
+#include "share/ob_local_device.h"                            // ObLocalDevice
+#include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "share/io/ob_io_manager.h"                           // ObIOManager
 
 namespace oceanbase
 {
@@ -196,6 +200,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              enable_log_cache_(false),
                              diskspace_enough_(true),
                              tenant_id_(0),
+                             io_adapter_(),
                              is_inited_(false),
                              is_running_(false)
 {
@@ -217,7 +222,10 @@ int PalfEnvImpl::init(
     obrpc::ObBatchRpc *batch_rpc,
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
-    PalfMonitorCb *monitor)
+    PalfMonitorCb *monitor,
+    ObLocalDevice *log_local_device,
+    ObResourceManager *resource_manager,
+    ObIOManager *io_manager)
 {
   int ret = OB_SUCCESS;
   int pret = 0;
@@ -226,10 +234,11 @@ int PalfEnvImpl::init(
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "PalfEnvImpl is inited twiced", K(ret));
   } else if (OB_ISNULL(base_dir) || !self.is_valid() || NULL == transport || NULL == batch_rpc
-             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor)) {
+             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor)
+             || OB_ISNULL(log_local_device) || OB_ISNULL(resource_manager) || OB_ISNULL(io_manager)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), KP(batch_rpc), K(base_dir), K(self), KP(transport),
-             KP(log_alloc_mgr), KP(log_block_pool), KP(monitor));
+             KP(log_alloc_mgr), KP(log_block_pool), KP(monitor), KP(log_local_device), KP(resource_manager), KP(io_manager));
   } else if (OB_FAIL(init_log_io_worker_config_(options.disk_options_.log_writer_parallelism_,
                                                 tenant_id,
                                                 log_io_worker_config_))) {
@@ -270,6 +279,8 @@ int PalfEnvImpl::init(
     PALF_LOG(ERROR, "disk_options_wrapper_ init failed", K(ret));
   } else if (OB_FAIL(log_updater_.init(this))) {
     PALF_LOG(ERROR, "LogUpdater init failed", K(ret));
+  } else if (OB_FAIL(io_adapter_.init(tenant_id, log_local_device, resource_manager, io_manager))) {
+    PALF_LOG(ERROR, "LogIOAdapter init failed", K(ret));
   } else {
     log_alloc_mgr_ = log_alloc_mgr;
     log_block_pool_ = log_block_pool;
@@ -369,6 +380,7 @@ void PalfEnvImpl::destroy()
   disk_options_wrapper_.reset();
   rebuild_replica_log_lag_threshold_ = 0;
   enable_log_cache_ = false;
+  io_adapter_.destroy();
 }
 
 // NB: not thread safe
@@ -431,7 +443,7 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
   } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_,
       log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_, this,
-      self_, &election_timer_, palf_epoch))) {
+      self_, &election_timer_, palf_epoch, &io_adapter_))) {
     PALF_LOG(ERROR, "IPalfHandleImpl init failed", K(ret), K(palf_id));
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
@@ -607,7 +619,7 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
       }
       if (OB_FAIL(ret) && true == result) {
         PALF_LOG(WARN, "remove directory failed, may be physical disk full", K(ret), KPC(this));
-        usleep(100*1000);
+        ob_usleep(100*1000);
       }
     } while (OB_FAIL(ret));
   }
@@ -1075,7 +1087,7 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
     PALF_LOG(WARN, "alloc ipalf_handle_impl failed", K(ret));
   } else if (OB_FAIL(tmp_palf_handle_impl->load(palf_id, &fetch_log_engine_, base_dir, log_alloc_mgr_,
           log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_,
-          this, self_, &election_timer_, palf_epoch, is_integrity))) {
+          this, self_, &election_timer_, palf_epoch, &io_adapter_, is_integrity))) {
     PALF_LOG(ERROR, "PalfHandleImpl init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));

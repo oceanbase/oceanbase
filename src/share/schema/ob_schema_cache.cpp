@@ -459,37 +459,6 @@ const ObTableSchema *ObSchemaCache::get_all_core_table() const
   return &all_core_table_;
 }
 
-int ObSchemaCache::init_gts_tenant_schema()
-{
-  int ret = OB_SUCCESS;
-
-  simple_gts_tenant_.set_tenant_id(OB_GTS_TENANT_ID);
-  simple_gts_tenant_.set_name_case_mode(OB_ORIGIN_AND_INSENSITIVE);
-  simple_gts_tenant_.set_schema_version(OB_CORE_SCHEMA_VERSION);
-
-  full_gts_tenant_.set_tenant_id(OB_GTS_TENANT_ID);
-  full_gts_tenant_.set_name_case_mode(OB_ORIGIN_AND_INSENSITIVE);
-  full_gts_tenant_.set_schema_version(OB_CORE_SCHEMA_VERSION);
-
-  if (OB_FAIL(simple_gts_tenant_.set_tenant_name(OB_GTS_TENANT_NAME))) {
-    LOG_WARN("fail to set simple gts tenant name", KR(ret));
-  } else if (OB_FAIL(full_gts_tenant_.set_tenant_name(OB_GTS_TENANT_NAME))) {
-    LOG_WARN("fail to set simple gts tenant name", KR(ret));
-  }
-
-  return ret;
-}
-
-const ObSimpleTenantSchema *ObSchemaCache::get_simple_gts_tenant() const
-{
-  return &simple_gts_tenant_;
-}
-
-const ObTenantSchema *ObSchemaCache::get_full_gts_tenant() const
-{
-  return &full_gts_tenant_;
-}
-
 int ObSchemaCache::init()
 {
   int ret = OB_SUCCESS;
@@ -506,8 +475,6 @@ int ObSchemaCache::init()
     LOG_WARN("init sys cache failed", K(ret));
   } else if (OB_FAIL(init_all_core_table())) {
     LOG_WARN("init all_core_table cache failed", K(ret));
-  } else if (OB_FAIL(init_gts_tenant_schema())) {
-    LOG_WARN("init gts tenant schema cache failed", K(ret));
   } else {
     lib::ContextParam param;
     param.set_mem_attr(OB_SERVER_TENANT_ID, "SchemaSysCache", ObCtxIds::SCHEMA_SERVICE)
@@ -555,8 +522,7 @@ bool ObSchemaCache::need_use_sys_cache(const ObSchemaCacheKey &cache_key) const
 {
   bool is_need = false;
   if (TENANT_SCHEMA == cache_key.schema_type_
-      && (is_sys_tenant(cache_key.schema_id_)
-          || OB_GTS_TENANT_ID == cache_key.schema_id_)) {
+      && is_sys_tenant(cache_key.schema_id_)) {
     is_need = true;
   } else if (USER_SCHEMA == cache_key.schema_type_
              && is_sys_tenant(cache_key.tenant_id_)) {

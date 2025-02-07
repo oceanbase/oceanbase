@@ -116,6 +116,7 @@ public:
   static int do_estimate_block_count_and_row_count(ObExecContext &ctx,
                                                    const uint64_t tenant_id,
                                                    const uint64_t table_id,
+                                                   bool force_leader,
                                                    const ObIArray<ObTabletID> &tablet_ids,
                                                    const ObIArray<ObObjectID> &partition_ids,
                                                    const ObIArray<uint64_t> &column_group_ids,
@@ -153,12 +154,27 @@ public:
                ObIArray<ObOptStat> &dst_opt_stats);
 
   template <class T>
-  int add_stat_item(const T &item);
+  int add_stat_item(const T &item) {
+    int ret = OB_SUCCESS;
+    ObStatItem *cpy = NULL;
+    if (!item.is_needed()) {
+      // do nothing
+    } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to copy stat item", K(ret));
+    } else if (OB_FAIL(stat_items_.push_back(cpy))) {
+      LOG_WARN("failed to push back stat item", K(ret));
+    }
+    return ret;
+  }
 
   int fill_hints(common::ObIAllocator &alloc,
                  const ObString &table_name,
                  int64_t gather_vectorize,
                  bool use_column_store);
+
+  static int set_partition_stat_no_regather(const int64_t partition_id,
+                                            ObIArray<ObPartitionStatInfo> &partition_stat_infos);
 
 private:
 
@@ -188,7 +204,6 @@ private:
 
   static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
 };
-
 }
 }
 

@@ -256,6 +256,8 @@ struct ObTableStoreUtil
 
   static bool check_include_by_scn_range(const ObITable &ltable, const ObITable &rtable);
   static bool check_intersect_by_scn_range(const ObITable &ltable, const ObITable &rtable);
+
+  static int check_has_backup_macro_block(const ObITable *table, bool &has_backup_macro);
 };
 
 } // storage

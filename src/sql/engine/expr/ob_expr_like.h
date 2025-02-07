@@ -223,10 +223,10 @@ private:
                                 ObExecContext *exec_ctx, const uint64_t like_id,
                                 const bool check_optimization);
   template <bool is_static_engine>
-  OB_INLINE static void record_last_check(ObExprLikeContext &like_ctx,
-                                          const common::ObString pattern_val,
-                                          const common::ObString escape_val,
-                                          common::ObIAllocator *buf_alloc);
+  OB_INLINE static int record_last_check(ObExprLikeContext &like_ctx,
+                                         const common::ObString pattern_val,
+                                         const common::ObString escape_val,
+                                         common::ObIAllocator *buf_alloc);
   template <bool is_static_engine>
   OB_INLINE static bool checked_already(const ObExprLikeContext &like_ctx, bool null_pattern,
                                         const common::ObString pattern_val, bool null_escape,

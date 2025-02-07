@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table.h"
@@ -26,6 +27,7 @@
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/direct_load/ob_direct_load_sstable.h"
 
 namespace oceanbase
 {
@@ -61,7 +63,8 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr),
-    file_mgr_(nullptr)
+    file_mgr_(nullptr),
+    merge_with_conflict_check_(false)
 {
 }
 
@@ -311,7 +314,7 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
                                                   ObMDSGetTabletMode::READ_ALL_COMMITED))) {
         LOG_WARN("get tablet handle failed", K(ret));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(SCN::max_scn(), ddl_data))) {
         LOG_WARN("get ddl data failed", K(ret));
       } else {
         lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
@@ -418,8 +421,7 @@ int ObDirectLoadTabletMergeCtx::build_merge_task(
       }
     } else if (!param_.is_heap_table_) {
       if (!is_multiple_mode) {
-        // 有主键表不排序也写成multiple sstable
-        if (OB_FAIL(build_pk_table_multiple_merge_task(table_array, col_descs, max_parallel_degree))) {
+        if (OB_FAIL(build_pk_table_merge_task(table_array, col_descs, max_parallel_degree))) {
           LOG_WARN("fail to build pk table merge task", KR(ret));
         }
       } else {
@@ -441,6 +443,36 @@ int ObDirectLoadTabletMergeCtx::build_merge_task(
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (task_array_.empty()) {
+        if (OB_FAIL(build_empty_merge_task())) {
+          LOG_WARN("fail to build empty merge task", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadTabletMergeCtx::build_empty_merge_task()
+{
+  int ret = OB_SUCCESS;
+  // construct empty task for close tablet
+  ObDirectLoadPartitionEmptyMergeTask *merge_task = nullptr;
+  if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionEmptyMergeTask, (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObDirectLoadPartitionEmptyMergeTask", KR(ret));
+  } else if (OB_FAIL(merge_task->init(ctx_, param_, this))) {
+    LOG_WARN("fail to init merge task", KR(ret));
+  } else if (OB_FAIL(task_array_.push_back(merge_task))) {
+    LOG_WARN("fail to push back merge task", KR(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != merge_task) {
+      merge_task->~ObDirectLoadPartitionEmptyMergeTask();
+      allocator_.free(merge_task);
+      merge_task = nullptr;
+    }
   }
   return ret;
 }
@@ -449,44 +481,51 @@ int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(const ObIArray<ObCol
                                                             int64_t max_parallel_degree)
 {
   int ret = OB_SUCCESS;
-  // only existing data, construct task by split range
-  ObDirectLoadMergeRangeSplitter range_splitter;
-  if (OB_FAIL(range_splitter.init(
-      (merge_with_origin_data() ? &origin_table_ : nullptr),
-      sstable_array_,
-      param_.datum_utils_,
-      col_descs))) {
-    LOG_WARN("fail to init range splitter", KR(ret));
-  } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
-    LOG_WARN("fail to split range", KR(ret));
-  } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected range count", KR(ret), K(max_parallel_degree), K(range_array_.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < range_array_.count(); ++i) {
-    const ObDatumRange &range = range_array_.at(i);
-    ObDirectLoadPartitionRangeMergeTask *merge_task = nullptr;
-    if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range, i))) {
-      LOG_WARN("fail to init merge task", KR(ret));
-    } else if (OB_FAIL(task_array_.push_back(merge_task))) {
-      LOG_WARN("fail to push back merge task", KR(ret));
+  if (!merge_with_origin_data()) {
+    if (OB_FAIL(build_empty_merge_task())) {
+      LOG_WARN("fail to build empty merge task", KR(ret));
     }
-    if (OB_FAIL(ret)) {
-      if (nullptr != merge_task) {
-        merge_task->~ObDirectLoadPartitionRangeMergeTask();
-        allocator_.free(merge_task);
-        merge_task = nullptr;
+  } else {
+    // only origin data, construct task by split range
+    ObDirectLoadMergeRangeSplitter range_splitter;
+    if (OB_FAIL(range_splitter.init(tablet_id_,
+                                    &origin_table_,
+                                    multiple_sstable_array_,
+                                    param_.table_data_desc_,
+                                    param_.datum_utils_,
+                                    col_descs))) {
+      LOG_WARN("fail to init range splitter", KR(ret));
+    } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
+      LOG_WARN("fail to split range", KR(ret));
+    } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected range count", KR(ret), K(max_parallel_degree), K(range_array_.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_array_.count(); ++i) {
+      const ObDatumRange &range = range_array_.at(i);
+      ObDirectLoadPartitionOriginDataMergeTask *merge_task = nullptr;
+      if (OB_ISNULL(merge_task =
+                      OB_NEWx(ObDirectLoadPartitionOriginDataMergeTask, (&allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadPartitionOriginDataMergeTask", KR(ret));
+      } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, range, i))) {
+        LOG_WARN("fail to init merge task", KR(ret));
+      } else if (OB_FAIL(task_array_.push_back(merge_task))) {
+        LOG_WARN("fail to push back merge task", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != merge_task) {
+          merge_task->~ObDirectLoadPartitionOriginDataMergeTask();
+          allocator_.free(merge_task);
+          merge_task = nullptr;
+        }
       }
     }
   }
-
   return ret;
 }
 
-int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
+int ObDirectLoadTabletMergeCtx::build_pk_table_merge_task(
   const ObIArray<ObIDirectLoadPartitionTable *> &table_array,
   const ObIArray<ObColDesc> &col_descs,
   int64_t max_parallel_degree)
@@ -495,9 +534,16 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
   if (OB_FAIL(init_multiple_sstable_array(table_array))) {
     LOG_WARN("fail to init multiple sstable array", KR(ret));
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < multiple_sstable_array_.count(); ++i) {
+    ObDirectLoadMultipleSSTable *sstable = multiple_sstable_array_.at(i);
+    if (OB_UNLIKELY(sstable->get_tablet_id() != tablet_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected sstable is multiple mode", KR(ret), K(tablet_id_), KPC(sstable));
+    }
+  }
   // split range
   if (OB_SUCC(ret)) {
-    ObDirectLoadMultipleMergeTabletRangeSplitter range_splitter;
+    ObDirectLoadMergeRangeSplitter range_splitter;
     if (OB_FAIL(range_splitter.init(
           tablet_id_,
           (merge_with_origin_data() ? &origin_table_ : nullptr),
@@ -586,6 +632,13 @@ int ObDirectLoadTabletMergeCtx::build_merge_task_for_multiple_pk_table(
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(task_array_.empty())) {
+        if (OB_FAIL(build_empty_merge_task())) {
+          LOG_WARN("fail to build empty merge task", KR(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -600,14 +653,15 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
   if (OB_FAIL(init_multiple_heap_table_array(table_array))) {
     LOG_WARN("fail to init multiple heap table array", KR(ret));
   }
-  // for existing data, construct task by split range
-  if (OB_SUCC(ret)) {
+  // for origin data, construct task by split range
+  if (OB_SUCC(ret) && merge_with_origin_data()) {
     ObDirectLoadMergeRangeSplitter range_splitter;
-    if (OB_FAIL(range_splitter.init(
-        (merge_with_origin_data() ? &origin_table_ : nullptr),
-        sstable_array_,
-        param_.datum_utils_,
-        col_descs))) {
+    if (OB_FAIL(range_splitter.init(tablet_id_,
+                                    &origin_table_,
+                                    multiple_sstable_array_,
+                                    param_.table_data_desc_,
+                                    param_.datum_utils_,
+                                    col_descs))) {
       LOG_WARN("fail to init range splitter", KR(ret));
     } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
       LOG_WARN("fail to split range", KR(ret));
@@ -615,24 +669,24 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected range count", KR(ret), K(max_parallel_degree), K(range_array_.count()));
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < range_array_.count(); ++i) {
-    const ObDatumRange &range = range_array_.at(i);
-    ObDirectLoadPartitionRangeMergeTask *merge_task = nullptr;
-    if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range,
-                                        parallel_idx++))) {
-      LOG_WARN("fail to init merge task", KR(ret));
-    } else if (OB_FAIL(task_array_.push_back(merge_task))) {
-      LOG_WARN("fail to push back merge task", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != merge_task) {
-        merge_task->~ObDirectLoadPartitionRangeMergeTask();
-        allocator_.free(merge_task);
-        merge_task = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_array_.count(); ++i) {
+      const ObDatumRange &range = range_array_.at(i);
+      ObDirectLoadPartitionOriginDataMergeTask *merge_task = nullptr;
+      if (OB_ISNULL(merge_task =
+                      OB_NEWx(ObDirectLoadPartitionOriginDataMergeTask, (&allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadPartitionOriginDataMergeTask", KR(ret));
+      } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, range, parallel_idx++))) {
+        LOG_WARN("fail to init merge task", KR(ret));
+      } else if (OB_FAIL(task_array_.push_back(merge_task))) {
+        LOG_WARN("fail to push back merge task", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != merge_task) {
+          merge_task->~ObDirectLoadPartitionOriginDataMergeTask();
+          allocator_.free(merge_task);
+          merge_task = nullptr;
+        }
       }
     }
   }
@@ -708,6 +762,12 @@ int ObDirectLoadTabletMergeCtx::build_aggregate_merge_task_for_multiple_heap_tab
       merge_task->~ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask();
       allocator_.free(merge_task);
       merge_task = nullptr;
+    }
+  } else {
+    if (OB_UNLIKELY(task_array_.empty())) {
+      if (OB_FAIL(build_empty_merge_task())) {
+        LOG_WARN("fail to build empty merge task", KR(ret));
+      }
     }
   }
   return ret;

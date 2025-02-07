@@ -26,8 +26,8 @@
 </p>
 
 <p align="center">
-    <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
-        <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
+    <a href="https://discord.gg/74cF8vbNEs">
+        <img alt="Support" src="https://img.shields.io/badge/Disord-Join%20Oceanbase-brightgreen?logo=discord" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
         <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
@@ -91,7 +91,7 @@ obd demo
     docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # Connect to the root user of the sys tenant.
     ```
 
-See also [Docker Readme](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce) for more details.
+See also [Docker Readme](https://github.com/oceanbase/docker-images/blob/main/oceanbase-ce/README.md) for more details.
 
 ## ☸️ Start with Kubernetes
 
@@ -106,7 +106,7 @@ For future plans, see [Product Iteration Progress](https://github.com/oceanbase/
 
 # Case study
 
-OceanBase has been serving more than 1000 customers and upgraded their database from different industries, including Financial Services, Telecom, Retail, Internet, and more.
+OceanBase has been serving more than 2000 customers and upgraded their database from different industries, including Financial Services, Telecom, Retail, Internet, and more.
 
 See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
 
@@ -126,8 +126,8 @@ OceanBase Database is licensed under the Mulan Public License, Version 2. See th
 
 Join the OceanBase community via:
 
-* [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
+* [Discord](https://discord.gg/74cF8vbNEs)
 * [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
 * [Chinese User Forum](https://ask.oceanbase.com/)
-* DingTalk Group: 33254054 ([QR code](images/dingtalk.svg))
+* DingTalk Group: [33254054](images/dingtalk.png)
 * WeChat Group (Add the assistant with WeChat ID: OBCE666)

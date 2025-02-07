@@ -35,7 +35,7 @@ int ObExprDocLength::calc_result_typeN(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for fulltext expr", K(ret), K(param_num), KP(types));
   } else {
-    types[0].set_uint64();
+    type.set_uint64();
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
     type.set_result_flag(NOT_NULL_FLAG);

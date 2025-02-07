@@ -36,8 +36,14 @@ public:
   int get_result_string(ObString &buffer);
 
   int append(const char *str);
-  int append(const char *str, const uint64_t len, int8_t index = -1);
-  int append(const ObString &str);
+
+  // Append data later
+  // @param [in] flag reserves flag bits for other subsequent expansions
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  // When the flag is the default value -1, the size of len_*2 + len is used each time to expand the memory.
+  // If the data is large, the default value is not used, and the memory application size is len_ + len.
+  int append(const char *str, const uint64_t len, int8_t flag = -1);
+  int append(const ObString &str, int8_t flag = -1);
   int reserve(const uint64_t len);
   int extend(const uint64_t len);
 

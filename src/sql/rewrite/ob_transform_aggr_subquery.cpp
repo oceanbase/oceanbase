@@ -180,8 +180,6 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid params", K(ret), K(stmt));
   } else if (stmt->is_hierarchical_query() || stmt->is_set_stmt() || !stmt->is_sel_del_upd()) {
     OPT_TRACE("hierarchical/set/insert/merge query can not transform");
   } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {
@@ -227,7 +225,7 @@ int ObTransformAggrSubquery::check_need_spj(ObDMLStmt *stmt, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *sel_stmt = NULL;
-  bool has_rand = false;
+  bool is_deterministic = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -239,9 +237,9 @@ int ObTransformAggrSubquery::check_need_spj(ObDMLStmt *stmt, bool &is_valid)
   } else if (sel_stmt->get_having_exprs().count() == 0 ||
              sel_stmt->has_rollup()) {
     is_valid = false;
-  } else if (OB_FAIL(sel_stmt->has_rand(has_rand))) {
+  } else if (OB_FAIL(sel_stmt->is_query_deterministic(is_deterministic))) {
     LOG_WARN("sel stmt has rand failed", K(ret));
-  } else if (has_rand) {
+  } else if (!is_deterministic) {
     is_valid = false;
   } else {
     bool exist_valid_subquery = false;
@@ -466,8 +464,7 @@ int ObTransformAggrSubquery::check_ja_query_ref_param_validity(ObQueryRefRawExpr
       LOG_WARN("outer expr is null", K(ret));
     } else if (outer_expr->has_flag(CNT_WINDOW_FUNC) ||
                outer_expr->has_flag(CNT_ROWNUM) ||
-               outer_expr->has_flag(CNT_RAND_FUNC) ||
-               outer_expr->has_flag(CNT_STATE_FUNC)) {
+               !outer_expr->is_deterministic()) {
       is_valid = false;
     }
   }

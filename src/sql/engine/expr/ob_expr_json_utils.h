@@ -209,6 +209,9 @@ public:
   static int datetime_scale_check(const common::ObAccuracy &accuracy,
                                   int64_t &value,
                                   bool strict = false);
+  static int mdatetime_scale_check(const common::ObAccuracy &accuracy,
+                                  ObMySQLDateTime &value,
+                                  bool strict = false);
   static ObJsonUtil::ObItemMethodValid get_item_method_cast_res_func(ObJsonPath* j_path,
                                           ObIJsonBase* j_base);
   static ObJsonUtil::ObJsonCastSqlObj get_json_obj_cast_func(ObObjType dst_type);
@@ -218,11 +221,11 @@ public:
                           ObEvalCtx &ctx,
                           bool &is_null_result,
                           ObJsonParamCacheCtx *&param_ctx,
-                          common::ObIAllocator &temp_allocator,
+                          MultimodeAlloctor &temp_allocator,
                           bool &is_cover_by_error);
   static int get_json_doc(ObExpr *expr,
                           ObEvalCtx &ctx,
-                          common::ObIAllocator &allocator,
+                          MultimodeAlloctor &allocator,
                           ObIJsonBase*& j_base,
                           bool &is_null, bool & is_cover_by_error,
                           bool relax = false);

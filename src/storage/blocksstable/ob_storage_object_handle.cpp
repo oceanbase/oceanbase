@@ -229,22 +229,23 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
     io_info.fd_.third_id_ = read_info.macro_block_id_.third_id();
     io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
     io_info.user_data_buf_ = read_info.buf_;
     io_info.buf_ = read_info.buf_; // for sync io
     // resource manager level is higher than default
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(read_info.io_desc_.get_sys_module_id());
 
     io_info.flag_.set_read();
     if (io_info.fd_.is_backup_block_file()) {
+      ObStorageIdMod mod;
+      mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
       if (OB_FAIL(backup::ObBackupDeviceHelper::get_device_and_fd(io_info.tenant_id_,
                                                                   io_info.fd_.first_id_,
                                                                   io_info.fd_.second_id_,
                                                                   io_info.fd_.third_id_,
+                                                                  mod,
                                                                   backup_device,
                                                                   io_info.fd_))) {
         LOG_WARN("failed to get backup device and fd", K(ret), K(read_info));
@@ -291,7 +292,6 @@ int ObStorageObjectHandle::sn_async_write(const ObStorageObjectWriteInfo &write_
     if (OB_FAIL(write_info.fill_io_info_for_backup(macro_id_, io_info))) {
       LOG_WARN("failed to fill io info for backup", K(ret), K_(macro_id));
     }
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(write_info.io_desc_.get_sys_module_id());
     const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
@@ -301,7 +301,7 @@ int ObStorageObjectHandle::sn_async_write(const ObStorageObjectWriteInfo &write_
       LOG_WARN("Fail to aio_write", K(ret), K_(macro_id), K(write_info));
     } else {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
+      if (macro_id_.is_id_mode_local() && OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
         LOG_WARN("fail to update write time for macro block", K(tmp_ret), K(macro_id_));
       }
       FLOG_INFO("Async write macro block", K(macro_id_));
@@ -381,21 +381,6 @@ int ObStorageObjectHandle::wait()
       LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
     }
     io_handle_.reset();
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (macro_id_.is_id_mode_share()
-             && (ObStorageObjectType::TMP_FILE == macro_id_.storage_object_type())) {
-    ObIOFlag flag;
-    if (OB_FAIL(io_handle_.get_io_flag(flag))) {
-      LOG_WARN("fail to get io flag", KR(ret));
-    }
-    // the io that flush sealed tmp file from local cache to object storage is sync io,
-    // no need to seal in this case
-     else if (flag.is_write() && !flag.is_sync() && flag.is_sealed()) {
-      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.seal_object(macro_id_, 0/*ls_epoch_id*/))) {
-        LOG_WARN("fail to seal object", KR(ret), K_(macro_id));
-      }
-    }
-#endif
   }
   return ret;
 }

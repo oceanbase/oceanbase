@@ -664,7 +664,7 @@ int ObTriggerInfo::fill_package_spec_source(const ObTriggerInfo &trigger_info,
   int64_t buf_len = spec_size;
   int64_t pos = 0;
   bool is_ora = lib::is_oracle_mode();
-  OV (OB_NOT_NULL(buf));
+  OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
   OZ (BUF_PRINTF(is_ora ? SPEC_BEGIN : SPEC_BEGIN_MYSQL,
                  delimiter, trigger_name.length(), trigger_name.ptr(), delimiter));
   if (is_ora) {
@@ -704,7 +704,7 @@ int ObTriggerInfo::fill_package_body_source(const ObTriggerInfo &trigger_info,
   int64_t buf_len = body_size;
   int64_t pos = 0;
   bool is_ora = lib::is_oracle_mode();
-  OV (OB_NOT_NULL(buf));
+  OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
   OZ (BUF_PRINTF(is_ora ? BODY_BEGIN : BODY_BEGIN_MYSQL,
                  delimiter, trigger_name.length(), trigger_name.ptr(), delimiter));
   if (is_ora) {
@@ -969,7 +969,7 @@ int ObTriggerInfo::gen_procedure_source(const common::ObString &base_object_data
     proc_size = proc_params_size + tg_body.length() + STRLEN(TRIGGER_PROCEDURE_MYSQL);
     buf = static_cast<char *>(alloc->alloc(proc_size));
     buf_len = proc_size;
-    OV (OB_NOT_NULL(buf));
+    OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
     OZ (BUF_PRINTF(TRIGGER_PROCEDURE_MYSQL,
                    delimiter, get_trigger_name().length(), get_trigger_name().ptr(), delimiter,
                    delimiter, base_object_database.length(), base_object_database.ptr(), delimiter,

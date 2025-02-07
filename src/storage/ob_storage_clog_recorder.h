@@ -15,11 +15,18 @@
 //#include "storage/meta_mem/ob_tablet_handle.h"
 namespace oceanbase
 {
+namespace common
+{
+class ObTabletID;
+}
 namespace logservice
 {
 class ObLogHandler;
 } // namespace palf
-
+namespace share
+{
+class ObLSID;
+}
 namespace storage
 {
 class ObTabletHandle;
@@ -132,12 +139,13 @@ protected:
       ObTabletHandle &tablet_handle);
 
 protected:
-  bool lock_;
-  bool logcb_finish_flag_;
+  common::ObLatch concurrent_lock_;
   ObStorageCLogCb *logcb_ptr_;
   logservice::ObLogHandler *log_handler_;
   int64_t max_saved_version_;
   share::SCN clog_scn_;
+  bool lock_; // lock to protect write clog by multi thread
+  bool logcb_finish_flag_;
 };
 
 } // storage

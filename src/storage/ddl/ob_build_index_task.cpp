@@ -179,7 +179,9 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
                                                                                ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                                                                                param.snapshot_version_,
                                                                                param.snapshot_version_,
-                                                                               iterator, allow_not_ready))) {
+                                                                               iterator, allow_not_ready,
+                                                                               false/*need_split_src_table*/,
+                                                                               false/*need_split_dst_table*/))) {
         if (OB_REPLICA_NOT_READABLE == ret) {
           ret = OB_EAGAIN;
         } else {
@@ -572,6 +574,9 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
         } else {
           LOG_INFO("get task id failed, but retry to get it", K(ret), K(tmp_ret), KPC(index_schema_));
         }
+      } else if (OB_UNLIKELY(task_id_ != info.task_id_)) {
+        keep_report_err_msg = false;
+        LOG_INFO("get task id mismatched, check whether index building task is cancled", K(ret), K(task_id_), K(info.task_id_));
       } else if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(
           ret, *index_schema_, info.trace_id_str_, info.task_id_, info.parent_task_id_, tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
         LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
@@ -827,8 +832,13 @@ int ObUniqueCheckingDag::fill_dag_key(char *buf, const int64_t buf_len) const
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, "tablet_id=%s index_id=%ld", to_cstring(tablet_id_), index_id))) {
-    STORAGE_LOG(WARN, "failed to fill dag key", K(ret), K(tablet_id_), K(index_id));
+  }
+  else {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_print_multi_objs(buf, buf_len, pos,
+        "tablet_id=", tablet_id_, " index_id=", index_id))) {
+      STORAGE_LOG(WARN, "failed to fill dag key", K(ret), K(tablet_id_), K(index_id), K(pos));
+    }
   }
   return ret;
 }

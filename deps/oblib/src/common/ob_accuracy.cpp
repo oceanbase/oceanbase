@@ -423,8 +423,8 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // user defined type in sql
   ObAccuracy(),              // decimal int
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // collection type in sql
-  ObAccuracy(0, 6),         // mysql date.
-  ObAccuracy(0, 0),         // mysql datetime.
+  ObAccuracy(0, 0),         // mysql date.
+  ObAccuracy(0, 6),         // mysql datetime.
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // roaringbitmap
 };
 

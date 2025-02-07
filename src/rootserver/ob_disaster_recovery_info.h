@@ -20,6 +20,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_status_operator.h"
+#include "share/ob_unit_table_operator.h"
 namespace oceanbase
 {
 

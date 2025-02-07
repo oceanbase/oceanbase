@@ -158,8 +158,6 @@ namespace sql
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
-    int check_and_set_use_batch();
-    int check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj);
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);
@@ -185,7 +183,6 @@ namespace sql
     }
 
   private:
-    int set_use_batch(ObLogicalOperator* root);
     inline bool can_enable_gi_partition_pruning()
     {
       return (NESTED_LOOP_JOIN == join_algo_)
@@ -197,6 +194,7 @@ namespace sql
     // 左侧的 GI 看到这个 partition id 后会以 producer 的身份生成列
     int generate_join_partition_id_expr();
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     int get_connect_by_exprs(ObIArray<ObRawExpr*> &all_exprs);
     virtual int allocate_granule_post(AllocGIContext &ctx) override;
     virtual int allocate_granule_pre(AllocGIContext &ctx) override;

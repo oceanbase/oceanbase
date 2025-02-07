@@ -41,8 +41,10 @@ bool ObSortVecOpProvider::is_basic_cmp_type(VecValueTypeClass vec_tc)
     case VEC_TC_INTEGER:
     case VEC_TC_UINTEGER:
     case VEC_TC_DATE:
+    case VEC_TC_MYSQL_DATE:
     case VEC_TC_TIME:
     case VEC_TC_DATETIME:
+    case VEC_TC_MYSQL_DATETIME:
     case VEC_TC_YEAR:
     case VEC_TC_BIT:
     case VEC_TC_ENUM_SET:

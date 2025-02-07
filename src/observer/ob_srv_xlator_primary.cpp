@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#define USING_LOG_PREFIX SERVER
 
 #include "share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "observer/ob_srv_xlator.h"
@@ -118,6 +119,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   //dbms_scheduler
   RPC_PROCESSOR(ObRpcRunDBMSSchedJobP, gctx_);
   RPC_PROCESSOR(ObRpcStopDBMSSchedJobP, gctx_);
+  RPC_PROCESSOR(ObRpcDBMSSchedPurgeP, gctx_);
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
   RPC_PROCESSOR(ObRpcReverseKeepaliveP, gctx_);
@@ -203,9 +205,12 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 #endif
   RPC_PROCESSOR(logservice::LogChangeAccessModeP);
   RPC_PROCESSOR(logservice::LogFlashbackMsgP);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_PROCESSOR(logservice::LogProbeRsP);
+#endif
   RPC_PROCESSOR(logservice::LogGetCkptReqP);
-  RPC_PROCESSOR(logservice::LogSyncBaseLSNReqP);
 #ifdef OB_BUILD_SHARED_STORAGE
+  RPC_PROCESSOR(logservice::LogSyncBaseLSNReqP);
   RPC_PROCESSOR(logservice::LogAcquireRebuildInfoP);
 #endif
 }

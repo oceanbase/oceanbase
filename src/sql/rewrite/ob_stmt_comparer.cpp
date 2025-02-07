@@ -1384,18 +1384,15 @@ int ObStmtComparer::compute_tables_map(const ObDMLStmt *first,
 }
 
 
-int ObStmtComparer::compare_basic_table_item(const ObDMLStmt *first,
-                                            const TableItem *first_table,
-                                            const ObDMLStmt *second,
-                                            const TableItem *second_table,
-                                            QueryRelation &relation)
+int ObStmtComparer::compare_basic_table_item(const TableItem *first_table,
+                                             const TableItem *second_table,
+                                             QueryRelation &relation)
 {
   int ret = OB_SUCCESS;
   relation = QueryRelation::QUERY_UNCOMPARABLE;
-  if (OB_ISNULL(first) || OB_ISNULL(first_table)
-     || OB_ISNULL(second) || OB_ISNULL(second_table)) {
+  if (OB_ISNULL(first_table) || OB_ISNULL(second_table)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param has null", K(first), K(first_table), K(second), K(second_table));
+    LOG_WARN("param has null", K(first_table), K(second_table));
   } else if ((first_table->is_basic_table() || first_table->is_link_table())
              && (second_table->is_basic_table() || second_table->is_link_table())
              && first_table->ref_id_ == second_table->ref_id_
@@ -1568,11 +1565,9 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
     }
   } else if ((first_table->is_basic_table() || first_table->is_link_table()) &&
             (second_table->is_basic_table() || second_table->is_link_table())) {
-    if (OB_FAIL(compare_basic_table_item(first, 
-                                        first_table, 
-                                        second, 
-                                        second_table, 
-                                        relation))) {
+    if (OB_FAIL(compare_basic_table_item(first_table,
+                                         second_table,
+                                         relation))) {
       LOG_WARN("compare table part failed",K(ret), K(first_table), K(second_table));
     } else if (QueryRelation::QUERY_UNCOMPARABLE != relation) {
       const int32_t first_table_index = first->get_table_bit_index(first_table->table_id_);

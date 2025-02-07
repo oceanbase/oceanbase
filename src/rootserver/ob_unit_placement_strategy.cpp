@@ -137,10 +137,11 @@ int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::
       for (int j = RES_CPU; j < RES_MAX; ++j) {
         double dp = weight[j] * demands[j] * remaining[j];
         dot_product += dp;
+        ObCStringHelper helper;
         _LOG_INFO("[%s] [CHOOSE_SERVER_FOR_UNIT] calc dot-product: server=%s, resource=%s, "
             "demands=%.6g, remain=%.6g, weight=%.6g, dp=%.6g sum=%.6g",
             module,
-            to_cstring(server_resource.get_server()),
+            helper.convert(server_resource.get_server()),
             resource_type_to_str((ObResourceType)j),
             demands[j], remaining[j], weight[j], dp, dot_product);
       }

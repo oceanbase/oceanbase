@@ -207,6 +207,7 @@ public:
   virtual ~ObDynamicParamSetter() {}
 
   int set_dynamic_param(ObEvalCtx &eval_ctx) const;
+  int set_dynamic_param_vec2(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit) const;
   int set_dynamic_param(ObEvalCtx &eval_ctx, common::ObObjParam *&param) const;
   int update_dynamic_param(ObEvalCtx &eval_ctx, common::ObDatum &datum) const;
 
@@ -301,7 +302,6 @@ private:
   int create_op_input_recursive(ObExecContext &exec_ctx) const;
   // assign spec ptr to ObOpKitStore
   int assign_spec_ptr_recursive(ObExecContext &exec_ctx) const;
-  int link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMonitorNode *&pre_node) const;
   int create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const;
   // Data members are accessed in ObOperator class, exposed for convenience.
 public:
@@ -485,10 +485,12 @@ public:
   // Drain exchange in data for PX, or producer DFO will be blocked.
   int drain_exch();
   void set_pushdown_param_null(const common::ObIArray<ObDynamicParamSetter> &rescan_params);
+  void set_pushdown_param_null_vec2(const ObIArray<ObDynamicParamSetter> &rescan_params);
   void set_feedback_node_idx(int64_t idx)
   { fb_node_idx_ = idx; }
 
   bool is_operator_end() { return batch_reach_end_ ||  row_reach_end_ ; }
+  TO_STRING_KV(K(spec_));
 protected:
   virtual int do_drain_exch();
   int init_skip_vector();
@@ -577,6 +579,8 @@ private:
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
   virtual int inner_drain_exch() { return common::OB_SUCCESS; };
+
+  bool enable_get_next_row() const;
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -619,32 +623,46 @@ protected:
 
   inline void begin_cpu_time_counting()
   {
-    cpu_begin_time_ = rdtsc();
+    if (cpu_begin_level_ == 0) {
+      cpu_begin_time_ = rdtsc();
+    }
+    ++cpu_begin_level_;
   }
   inline void end_cpu_time_counting()
   {
-    total_time_ += (rdtsc() - cpu_begin_time_);
+    --cpu_begin_level_;
+    if (cpu_begin_level_ == 0) {
+      total_time_ += (rdtsc() - cpu_begin_time_);
+    }
   }
   inline void begin_ash_line_id_reg()
   {
     // begin with current operator
-    ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
+    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
   }
-  inline void end_ash_line_id_reg()
+  inline void end_ash_line_id_reg(int ret)
   {
-    // move back to parent operator
-    // known issue: when switch from batch to row in same op,
-    // we shift line id to parent op un-intently. but we tolerate this inaccuracy
-    if (OB_LIKELY(spec_.get_parent())) {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
-    } else {
-      common::ObActiveSessionGuard::get_stat().plan_line_id_ = -1;
+    ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      // move back to parent operator
+      // known issue: when switch from batch to row in same op,
+      // we shift line id to parent op un-intently. but we tolerate this inaccuracy
+      if (OB_LIKELY(spec_.get_parent())) {
+        di->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
+      } else {
+        di->get_ash_stat().plan_line_id_ = -1;
+      }
+      if (OB_FAIL(ret) && -1 == di->get_ash_stat().retry_plan_line_id_) {
+        di->get_ash_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
+      }
     }
   }
   #ifdef ENABLE_DEBUG_LOG
   inline int init_dummy_mem_context(uint64_t tenant_id);
   #endif
+public:
   uint64_t cpu_begin_time_; // start of counting cpu time
+  uint64_t cpu_begin_level_; // level of counting cpu time
   uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:
   bool batch_reach_end_;

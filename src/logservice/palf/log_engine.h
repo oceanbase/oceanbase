@@ -20,6 +20,7 @@
 #include "log_net_service.h"                           // LogNetService
 #include "log_meta.h"                                  // LogMeta
 #include "log_define.h"
+#include "log_shared_queue_thread.h"
 
 namespace oceanbase
 {
@@ -110,7 +111,8 @@ public:
            LogPlugins *plugins,
            const int64_t palf_epoch,
            const int64_t log_storage_block_size,
-           const int64_t log_meta_storage_block_size);
+           const int64_t log_meta_storage_block_size,
+           LogIOAdapter *io_adapter);
   void destroy();
 
   int load(const int64_t palf_id,
@@ -124,9 +126,10 @@ public:
            LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
            const int64_t palf_epoch,
-           bool &is_integrity,
            const int64_t log_storage_size,
-           const int64_t log_meta_storage_size);
+           const int64_t log_meta_storage_size,
+           LogIOAdapter *io_adapter,
+           bool &is_integrity);
 
   // ==================== Submit async task start ================
   //
@@ -186,7 +189,7 @@ public:
                const bool need_read_block_header,
                ReadBuf &read_buf,
                int64_t &out_read_size,
-               palf::LogIOContext &io_ctx);
+               LogIOContext &io_ctx);
   //
   // ====================== LogStorage end =======================
 

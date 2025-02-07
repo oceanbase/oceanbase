@@ -1,0 +1,62 @@
+[target-default]
+os=8
+arch=aarch64
+repo=https://mirrors.aliyun.com/oceanbase/development-kit/al/8/aarch64/
+
+
+[target-community]
+os=8
+arch=aarch64
+repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/aarch64/
+
+[deps]
+devdeps-gtest-1.8.0-192024092714.al8.aarch64.rpm
+devdeps-isa-l-static-2.22.0-52024092714.al8.aarch64.rpm
+devdeps-libcurl-static-8.2.1-202024102810.al8.aarch64.rpm
+devdeps-mariadb-connector-c-3.1.12-42024100814.al8.aarch64.rpm
+devdeps-libaio-0.3.112-42024092715.al8.aarch64.rpm
+devdeps-relaxed-rapidjson-1.0.0-132024092715.al8.aarch64.rpm
+devdeps-openssl-static-1.1.1u-132024092718.al8.aarch64.rpm
+devdeps-libxml2-2.10.4-52024102517.al8.aarch64.rpm
+devdeps-mxml-2.12.0-52024092715.al8.aarch64.rpm
+devdeps-apr-1.6.5-342024100911.al8.aarch64.rpm
+devdeps-xz-5.2.2-112024092715.al8.aarch64.rpm
+devdeps-lua-5.4.3-162024092718.al8.aarch64.rpm
+devdeps-oss-c-sdk-3.11.2-42024100915.al8.aarch64.rpm
+devdeps-zlib-static-1.2.13-82024102414.al8.aarch64.rpm
+devdeps-ncurses-static-6.2-112024092810.al8.aarch64.rpm
+devdeps-boost-1.74.0-72024092811.al8.aarch64.rpm
+devdeps-abseil-cpp-20211102.0-62024122014.al8.aarch64.rpm
+devdeps-s2geometry-0.10.0-122024122617.al8.aarch64.rpm
+devdeps-icu-69.1-232024120517.al8.aarch64.rpm
+devdeps-cos-c-sdk-5.0.21-282024102810.al8.aarch64.rpm
+devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.aarch64.rpm
+devdeps-protobuf-c-1.4.1-100000132024092815.al8.aarch64.rpm
+devdeps-roaringbitmap-croaring-3.0.0-92024092815.al8.aarch64.rpm
+devdeps-apache-arrow-9.0.0-562024092815.al8.aarch64.rpm
+devdeps-apache-orc-1.8.3-412024092817.al8.aarch64.rpm
+devdeps-vsag-1.0.0-392024120610.al8.aarch64.rpm
+devdeps-fast-float-6.1.3-42024112122.al8.aarch64.rpm
+devdeps-hdfs-sdk-3.3.6-72024112119.al8.aarch64.rpm
+
+[tools]
+obdevtools-binutils-2.30-82024092619.al8.aarch64.rpm
+obdevtools-bison-2.4.1-42024092621.al8.aarch64.rpm
+obdevtools-ccache-3.7.12-52024092621.al8.aarch64.rpm
+obdevtools-cmake-3.22.1-122024092710.al8.aarch64.rpm
+obdevtools-flex-2.5.35-42024092621.al8.aarch64.rpm
+obdevtools-gcc9-9.3.0-152024092711.al8.aarch64.rpm cpp_standard=11
+obdevtools-gcc-12.3.0-32024122017.al8.aarch64.rpm cpp_standard=20
+obdevtools-llvm-11.0.1-662024092811.al8.aarch64.rpm cpp_standard=11
+obdevtools-llvm-17.0.3-232024111415.al8.aarch64.rpm cpp_standard=20
+
+[tools-deps]
+devdeps-oblogmsg-1.1-122024093010.al8.aarch64.rpm
+obdevtools-obstack-2.0.4-42024101017.al8.aarch64.rpm
+devdeps-rocksdb-6.22.1-32024123015.al8.aarch64.rpm
+obshell-4.2.5.1-12025010214.al8.aarch64.rpm target=community
+
+[test-utils]
+ob-deploy-3.0.1-1.al8.aarch64.rpm target=community
+obclient-2.2.3-202024102217.al8.aarch64.rpm target=community
+libobclient-2.2.3-152024102213.al8.aarch64.rpm target=community

@@ -202,17 +202,20 @@ private:
     int64_t unmaps_;
     AChunkList free_list_;
   };
+  static constexpr int LARGE_ACHUNK_SIZE_MAP[] = {
+    4, 6, 8, 10, 12, 14, 16, 18, 20 /*MB*/
+  };
   static constexpr int64_t DEFAULT_LIMIT = 4L << 30;  // 4GB
   static constexpr int64_t ACHUNK_ALIGN_SIZE = INTACT_ACHUNK_SIZE;
   static constexpr int64_t NORMAL_ACHUNK_SIZE = INTACT_ACHUNK_SIZE;
-  static constexpr int32_t MAX_ACHUNK_INDEX = 10;
-  static constexpr int32_t NORMAL_ACHUNK_INDEX = 0;
-  static constexpr int32_t MIN_LARGE_ACHUNK_INDEX = NORMAL_ACHUNK_INDEX + 1;
-  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX - 1;
-  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_ACHUNK_INDEX;
+  static constexpr int32_t MAX_LARGE_ACHUNK_SIZE = 20<<20;
+  static constexpr int32_t NORMAL_ACHUNK_NWAY = 8;
+  static constexpr int32_t MAX_NORMAL_ACHUNK_INDEX = NORMAL_ACHUNK_NWAY - 1;
+  static constexpr int32_t MIN_LARGE_ACHUNK_INDEX = MAX_NORMAL_ACHUNK_INDEX + 1;
+  static constexpr int32_t MAX_LARGE_ACHUNK_INDEX = MIN_LARGE_ACHUNK_INDEX + ARRAYSIZEOF(LARGE_ACHUNK_SIZE_MAP) - 1;
+  static constexpr int32_t HUGE_ACHUNK_INDEX = MAX_LARGE_ACHUNK_INDEX + 1;
 public:
   static AChunkMgr &instance();
-
 public:
   AChunkMgr();
 
@@ -246,12 +249,10 @@ public:
   inline int64_t get_total_hold() const { return ATOMIC_LOAD(&total_hold_); }
   inline int64_t get_used() const;
   inline int64_t get_freelist_hold() const;
-  inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
 
   int64_t sync_wash();
 
 private:
-  typedef ABitSet ChunkBitMap;
 
 private:
   void *direct_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
@@ -259,75 +260,97 @@ private:
   // wrap for mmap
   void *low_alloc(const uint64_t size, const bool can_use_huge_page, bool &huge_page_used, const bool alloc_shadow);
   void low_free(const void *ptr, const uint64_t size);
-  int32_t get_chunk_index(const uint64_t size)
+  int32_t slot_idx(const uint64_t size)
   {
-    return MIN(HUGE_ACHUNK_INDEX, (size - 1) / INTACT_ACHUNK_SIZE);
+    static int global_index = 0;
+    static thread_local int tl_index = ATOMIC_FAA(&global_index, 1);
+    if (NORMAL_ACHUNK_SIZE == size) {
+      return tl_index % NORMAL_ACHUNK_NWAY;
+    } else if (size > MAX_LARGE_ACHUNK_SIZE) {
+      return HUGE_ACHUNK_INDEX;
+    } else {
+      return (int32_t)((size - 1) / INTACT_ACHUNK_SIZE) - 1 + MIN_LARGE_ACHUNK_INDEX;
+    }
   }
   void inc_maps(const uint64_t size)
   {
-    int32_t chunk_index = get_chunk_index(size);
-    ATOMIC_FAA(&slots_[chunk_index].maps_, 1);
+    int32_t idx = slot_idx(size);
+    ATOMIC_FAA(&slots_[idx].maps_, 1);
   }
   void inc_unmaps(const uint64_t size)
   {
-    int32_t chunk_index = get_chunk_index(size);
-    ATOMIC_FAA(&slots_[chunk_index].unmaps_, 1);
+    int32_t idx = slot_idx(size);
+    ATOMIC_FAA(&slots_[idx].unmaps_, 1);
   }
-  bool push_chunk(AChunk* chunk)
+  bool push_chunk(AChunk* chunk, const uint64_t all_size, const uint64_t hold_size)
   {
-    bool bret = true;
-    if (OB_NOT_NULL(chunk)) {
-      int64_t hold = chunk->hold();
-      int32_t chunk_index = get_chunk_index(chunk->aligned());
-      bret = slots_[chunk_index]->push(chunk);
-      if (bret) {
-        ATOMIC_FAA(&cache_hold_, hold);
+    int32_t idx = slot_idx(all_size);
+    bool bret = slots_[idx]->push(chunk);
+    if (bret) {
+      if (idx >= MIN_LARGE_ACHUNK_INDEX) {
+        ATOMIC_FAA(&large_cache_hold_, hold_size);
       }
+      ATOMIC_FAA(&cache_hold_, hold_size);
     }
     return bret;
   }
-  AChunk* pop_chunk_with_index(int32_t chunk_index)
+  AChunk* pop_chunk_with_index(int32_t idx)
   {
-    AChunk *chunk = slots_[chunk_index]->pop();
-    if (OB_NOT_NULL(chunk)) {
-      ATOMIC_FAA(&cache_hold_, -chunk->hold());
+    AChunk *chunk = slots_[idx]->pop();
+    if (NULL != chunk) {
+      int64_t hold_size = chunk->hold();
+      if (idx >= MIN_LARGE_ACHUNK_INDEX) {
+        ATOMIC_FAA(&large_cache_hold_, -hold_size);
+      }
+      ATOMIC_FAA(&cache_hold_, -hold_size);
     }
     return chunk;
   }
-
   AChunk* pop_chunk_with_size(const uint64_t size)
   {
-    int32_t chunk_index = get_chunk_index(size);
-    return pop_chunk_with_index(chunk_index);
+    AChunk* chunk = NULL;
+    int32_t idx = slot_idx(size);
+    if (NORMAL_ACHUNK_SIZE == size) {
+      for (int i = 0; NULL == chunk && i < NORMAL_ACHUNK_NWAY; ++i) {
+        chunk = pop_chunk_with_index((i + idx) % NORMAL_ACHUNK_NWAY);
+      }
+    } else {
+      chunk = pop_chunk_with_index(idx);
+    }
+    return chunk;
   }
-
-  AChunk* popall_with_index(int32_t chunk_index, int64_t &hold)
+  AChunk* popall_with_index(int32_t idx, int64_t &hold)
   {
-    return slots_[chunk_index]->popall(hold);
+    AChunk *head = slots_[idx]->popall(hold);
+    if (NULL != head) {
+      if (idx >= MIN_LARGE_ACHUNK_INDEX) {
+        ATOMIC_FAA(&large_cache_hold_, -hold);
+      }
+      ATOMIC_FAA(&cache_hold_, -hold);
+    }
+    return head;
   }
-
-  int64_t get_maps(int32_t chunk_index) const
+  int64_t get_maps(int32_t idx) const
   {
-    return slots_[chunk_index].maps_;
+    return slots_[idx].maps_;
   }
-  int64_t get_unmaps(int32_t chunk_index) const
+  int64_t get_unmaps(int32_t idx) const
   {
-    return slots_[chunk_index].unmaps_;
+    return slots_[idx].unmaps_;
   }
-  const AChunkList& get_freelist(int32_t chunk_index) const
+  const AChunkList& get_freelist(int32_t idx) const
   {
-    return slots_[chunk_index].free_list_;
+    return slots_[idx].free_list_;
   }
-
 protected:
   int64_t limit_;
   int64_t urgent_;
   int64_t hold_; // Including the memory occupied by free_list, limited by memory_limit
   int64_t total_hold_; // Including virtual memory, just for statifics.
   int64_t cache_hold_;
-  int64_t shadow_hold_;
+  int64_t large_cache_hold_;
   int64_t max_chunk_cache_size_;
-  Slot slots_[MAX_ACHUNK_INDEX + 1];
+  Slot slots_[HUGE_ACHUNK_INDEX + 1];
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)

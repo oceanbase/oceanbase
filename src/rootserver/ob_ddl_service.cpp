@@ -119,13 +119,21 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
+#include "rootserver/ob_split_partition_helper.h"
 #include "rootserver/mview/ob_mview_dependency_service.h"
+#include "rootserver/parallel_ddl/ob_ddl_helper.h"
+#include "storage/ddl/ob_ddl_alter_auto_part_attr.h"
+#include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "share/tablet/ob_tablet_to_table_history_operator.h"
 #include "src/share/ob_vec_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
 {
@@ -598,6 +606,7 @@ int ObDDLService::create_index_table(
   ObSchemaService *schema_service = NULL;
   const ObDatabaseSchema *database_schema = NULL;
   ObSchemaGetterGuard schema_guard;
+
   if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(check_inner_stat())) {
@@ -1134,7 +1143,6 @@ int ObDDLService::generate_object_id_for_partition_schema(
         }
       } // end for
     }
-
     // 2. generate object_id for subpartitions
     if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == part_level) {
       for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
@@ -1559,6 +1567,12 @@ int ObDDLService::generate_schema(
         schema.get_view_schema().set_mv_refresh_info(&(arg.mv_ainfo_.at(0).mv_refresh_info_));
       }
     }
+  }
+
+  // check auto_partition validity
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema.check_validity_for_auto_partition())) {
+    LOG_WARN("fail to check auto partition setting", KR(ret), K(schema), K(arg));
   }
 
   if (OB_SUCC(ret)) {
@@ -2277,7 +2291,8 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
-  } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
+  } else if (OB_FAIL(frozen_scn.convert_for_tx(
+                 compaction::ObBasicMergeScheduler::INIT_COMPACTION_SCN))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
     ObTableCreator table_creator(
@@ -2320,10 +2335,21 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
     }
     if (OB_SUCC(ret)) {
       const ObTableSchema &container_table = table_schemas.at(1);
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, container_table))) {
-        LOG_WARN("fail to prepare ls for index schema tablets");
-      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
-          ls_id_array))) {
+      const ObTablegroupSchema *container_tablegroup_schema = NULL; // keep NULL if no tablegroup
+      if (OB_INVALID_ID != container_table.get_tablegroup_id()) {
+        if (OB_FAIL(schema_guard.get_tablegroup_schema(
+            container_table.get_tenant_id(),
+            container_table.get_tablegroup_id(),
+            container_tablegroup_schema))) {
+          LOG_WARN("get tablegroup schema failed", KR(ret), K(container_table));
+        } else if (OB_ISNULL(container_tablegroup_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("container_tablegroup_schema is null", KR(ret), K(container_table));
+        }
+      }
+      if (FAILEDx(new_table_tablet_allocator.prepare(trans, container_table, container_tablegroup_schema))) {
+        LOG_WARN("fail to prepare ls for container table schema tablets", KR(ret));
+      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
       } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
           tablet_schemas,
@@ -2368,6 +2394,9 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
   } else if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root service is null", KR(ret));
+  } else if (OB_ISNULL(first_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first_table is null", KR(ret));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
   } else {
@@ -2380,10 +2409,21 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_INVALID_ID != first_table->get_tablegroup_id()) {
+      if (OB_FAIL(schema_guard.get_tablegroup_schema(
+          first_table->get_tenant_id(),
+          first_table->get_tablegroup_id(),
+          data_tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(first_table));
+      } else if (OB_ISNULL(data_tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_tablegroup_schema is null", KR(ret), KPC(first_table));
+      }
     }
 
     ObArray<const ObTableSchema*> schemas;
@@ -2398,8 +2438,8 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
           LOG_WARN("failed to push_back", KR(ret), K(this_table));
         }
       } else {
-        if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table))) {
-          LOG_WARN("fail to prepare ls for index schema tablets");
+        if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table, data_tablegroup_schema))) {
+          LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
             ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
@@ -2426,8 +2466,8 @@ int ObDDLService::create_tablets_in_trans_(ObIArray<ObTableSchema> &table_schema
     if (OB_FAIL(ret)) {
     } else if (schemas.count() <= 0) {
       // virtual tablet and view skip
-    } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *first_table))) {
-      LOG_WARN("fail to prepare ls for index schema tablets");
+    } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *first_table, data_tablegroup_schema))) {
+      LOG_WARN("fail to prepare ls for first table", KR(ret), KPC(first_table));
     } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
             ls_id_array))) {
       LOG_WARN("fail to get ls id array", KR(ret));
@@ -2756,6 +2796,7 @@ int ObDDLService::start_mview_complete_refresh_task(
   int ret = OB_SUCCESS;
   int64_t max_dependency_version = 0;
   uint64_t tenant_id = mview_schema.get_tenant_id();
+  uint64_t compat_version = 0;
   const ObMVRefreshInfo *mv_refresh_info = mview_schema.get_view_schema().get_mv_refresh_info();
   ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> time_zone;
   const ObSysVarSchema *data_format_schema = nullptr;
@@ -2770,6 +2811,8 @@ int ObDDLService::start_mview_complete_refresh_task(
   if (OB_UNLIKELY(nullptr == dep_infos || nullptr == mv_refresh_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dep_infos is nullptr", KR(ret) , KP(dep_infos), KP(mv_refresh_info));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(arg.last_refresh_scn_.convert_for_inner_table_field(mview_info.get_last_refresh_scn()))) {
     LOG_WARN("fail to covert for inner table field", KR(ret), K(mview_info));
   } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(tenant_id,
@@ -2801,10 +2844,16 @@ int ObDDLService::start_mview_complete_refresh_task(
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_infos->count(); ++i) {
     const ObDependencyInfo &dep = dep_infos->at(i);
     const ObSimpleTableSchemaV2 *base_table_schema = nullptr;
-    if (OB_UNLIKELY(ObObjectType::TABLE != dep.get_ref_obj_type())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("ref obj type is not table, not supported", KR(ret), K(dep));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table is");
+    if ((compat_version < DATA_VERSION_4_3_5_0) && OB_UNLIKELY(ObObjectType::TABLE != dep.get_ref_obj_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("ref obj type is not table, not supported", KR(ret), K(dep));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table is");
+    } else if ((compat_version >= DATA_VERSION_4_3_5_0)
+        && OB_UNLIKELY((ObObjectType::TABLE != dep.get_ref_obj_type())
+                        && ObObjectType::VIEW != dep.get_ref_obj_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("ref obj type is not table or mview, not supported", KR(ret), K(dep));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table or mview is");
     } else if (OB_FAIL(
           schema_guard.get_simple_table_schema(tenant_id, dep.get_ref_obj_id(), base_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(dep));
@@ -3213,8 +3262,8 @@ int ObDDLService::set_raw_table_options(
         case ObAlterTableArg::TABLEGROUP_NAME: {
           const ObString &tablegroup_name = alter_table_schema.get_tablegroup_name();
           if (!tablegroup_name.empty()) {
-          uint64_t tablegroup_id = OB_INVALID_ID;
-          uint64_t tenant_id = alter_table_schema.get_tenant_id();
+            uint64_t tablegroup_id = OB_INVALID_ID;
+            uint64_t tenant_id = alter_table_schema.get_tenant_id();
             //tablegroup_id not set in resolver, only record tablegroup name
             if (OB_FAIL(schema_guard.get_tablegroup_id(tenant_id,
                                                        tablegroup_name,
@@ -3296,7 +3345,9 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::DUPLICATE_SCOPE: {
-          new_table_schema.set_duplicate_scope(alter_table_schema.get_duplicate_scope());
+          // alter table duplicate scope not allowed in master now
+          new_table_schema.set_duplicate_attribute(alter_table_schema.get_duplicate_scope(),
+                                                   alter_table_schema.get_duplicate_read_consistency());
           break;
         }
         case ObAlterTableArg::ENABLE_ROW_MOVEMENT: {
@@ -3423,8 +3474,6 @@ int ObDDLService::check_locality_compatible_(
   } else if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(
                        tenant_id, is_compatible_with_columnstore_replica))) {
     LOG_WARN("fail to check compatible with columnstore replica", KR(ret), K(schema));
-  } else if (is_compatible_with_readonly_replica && is_compatible_with_columnstore_replica) {
-    // check pass
   } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
     LOG_WARN("fail to get locality from schema", K(ret), K(schema));
   } else {
@@ -3443,6 +3492,11 @@ int ObDDLService::check_locality_compatible_(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
+      } else if (GCTX.is_shared_storage_mode()
+                  && 0 != this_set.get_columnstore_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with column-store replica in shared-storage mode", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, C-replica is");
       }
     }
   }
@@ -3624,6 +3678,51 @@ int ObDDLService::check_index_table_exist(const uint64_t tenant_id,
   return ret;
 }
 
+int ObDDLService::check_hidden_index_exist(
+    const uint64 tenant_id,
+    const uint64_t database_id,
+    const ObTableSchema &hidden_table_schema,
+    const ObString &index_name,
+    ObSchemaGetterGuard &schema_guard,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  is_exist = false;
+  ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
+  if (OB_FAIL(hidden_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check if oracle mode failed", K(ret), K(hidden_table_schema));
+  } else if (is_oracle_mode) {
+    // in oracle mode, we need iterate hidden table map within database
+    if (OB_FAIL(schema_guard.get_table_schemas_in_database(tenant_id, database_id, table_schemas))) {
+      LOG_WARN("get table schemas in database", K(ret));
+    }
+  } else {
+    // is mysql mode, just check index_name exists in hidden_table_schema
+    if (OB_FAIL(schema_guard.get_index_schemas_with_data_table_id(tenant_id, hidden_table_schema.get_table_id(), table_schemas))) {
+      LOG_WARN("get index schemas failed", K(ret));
+    }
+  }
+
+  // check if the index name exist in index_schemas array
+  if (OB_SUCC(ret)) {
+    ObString tmp_index_name;
+    ObCompareNameWithTenantID column_name_cmp(hidden_table_schema.get_tenant_id());
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count() && !is_exist; ++i) {
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, index schema must not be nullptr", K(ret));
+      } else if (table_schema->is_index_table() && OB_FAIL(table_schema->get_index_name(tmp_index_name))) {
+        LOG_WARN("get index name failed", K(ret));
+      } else {
+        is_exist = 0 == column_name_cmp.compare(tmp_index_name, index_name);
+      }
+    }
+  }
+  return ret;
+}
+
 // Used for alter table xxx drop primary key.
 // reset origin rowkey info and add heap table hidden pk column.
 int ObDDLService::drop_primary_key(
@@ -3753,6 +3852,60 @@ int ObDDLService::create_hidden_table_with_pk_changed(
     LOG_WARN("invalid argument", K(ret), K(index_action_type), K(index_columns));
   } else if (is_add_or_alter_pk && OB_FAIL(add_primary_key(index_columns, new_table_schema))) {
     LOG_WARN("failed to add pk", K(ret), K(index_columns), K(new_table_schema));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (new_table_schema.is_auto_partitioned_table()) {
+    bool is_match_rowkey_prefix = true;
+    if (is_drop_pk) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop primary keys of auto-partitioned table", KR(ret), K(index_action_type),
+                                                                             K(new_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop primary keys of auto-partitioning table is");
+    } else if (new_table_schema.get_part_level() == PARTITION_LEVEL_ZERO) {
+      if (OB_FAIL(new_table_schema.is_presetting_partition_key_match_rowkey_prefix(is_match_rowkey_prefix))){
+        LOG_WARN("fail to check whether presetting partition key matches rowkey prefix", KR(ret), K(new_table_schema));
+      }
+    } else if (OB_FAIL(new_table_schema.is_partition_key_match_rowkey_prefix(is_match_rowkey_prefix))) {
+      LOG_WARN("fail to check whether partition key matches rowkey prefix", KR(ret), K(new_table_schema));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!is_match_rowkey_prefix) {
+      // auto-partitioning require that partition key must be equal to primary key prefix.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("mismatching between primary key prefix and partition key", KR(ret), K(index_action_type),
+                                                                           K(new_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between primary key prefix and partition key is");
+    } else if (!new_table_schema.is_partitioned_table() &&
+               origin_table_schema.get_part_option().get_part_func_expr_str().empty()) {
+      // for auto-partitioned non-partitioned table, empty part_func_expr means the presetting partition key
+      // of the data_table will always be "current" primary key.
+      // thus, when modify primary key, we need to check whether the part_func_type is need to be modified
+      const bool is_single_pk_column_new = new_table_schema.get_rowkey_column_num() == 1;
+      ObPartitionFuncType part_func_type = PARTITION_FUNC_TYPE_RANGE;
+      if (is_single_pk_column_new) {
+        ObObjMeta type;
+        ObRowkeyColumn row_key_col;
+        const common::ObRowkeyInfo &row_key_info = new_table_schema.get_rowkey_info();
+        if (OB_FAIL(row_key_info.get_column(0/*since there is only one row key, we only need to check the first one*/, row_key_col))) {
+          LOG_WARN("get row key column failed", K(ret), K(row_key_info));
+        } else {
+          type = row_key_col.get_meta_type();
+        }
+        if (ObResolverUtils::is_partition_range_column_type(type.get_type())) {
+          part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+        }
+      } else {
+        part_func_type = PARTITION_FUNC_TYPE_RANGE_COLUMNS;
+      }
+      if (OB_SUCC(ret)) {
+        new_table_schema.get_part_option().set_part_func_type(part_func_type);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (is_drop_pk && OB_FAIL(drop_primary_key(new_table_schema))) {
     LOG_WARN("failed to add hidden pk column for heap table", K(ret));
   } else if (!create_user_hidden_table_now) {
@@ -3974,26 +4127,97 @@ int ObDDLService::check_exist_stored_gen_col(
   return ret;
 }
 
-int ObDDLService::check_is_add_column_online(const ObTableSchema &table_schema,
-                                             const AlterColumnSchema &alter_column_schema,
-                                             ObDDLType &tmp_ddl_type)
+int ObDDLService::check_can_add_column_use_instant_(const bool is_oracle_mode,
+                                                    const uint64_t tenant_data_version,
+                                                    bool &can_add_column_instant)
+{
+  int ret = OB_SUCCESS;
+  can_add_column_instant = false;
+  if (is_oracle_mode) {
+    // oracle mode can not do add column instant
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in oracle mode not supported to add column instant", KR(ret), K(tenant_data_version));
+  } else {
+    if (OB_UNLIKELY(tenant_data_version < MOCK_DATA_VERSION_4_2_5_0)) {
+      // mysql mode less than 4.2.5 not support add column instant
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+    } else if (OB_UNLIKELY(tenant_data_version >= DATA_VERSION_4_3_0_0
+                            && tenant_data_version < DATA_VERSION_4_3_5_0)) {
+      // [4.3.0, 4.3.5) mysql mode not support instant algorithm
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("in mysql mode not supported instant algorithm under this version", KR(ret), K(tenant_data_version));
+    } else {
+      can_add_column_instant = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_is_add_column_online_(const AlterTableSchema &alter_table_schema,
+                                              const ObTableSchema &table_schema,
+                                              const AlterColumnSchema &alter_column_schema,
+                                              const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                              const bool is_oracle_mode,
+                                              const uint64_t tenant_data_version,
+                                              ObDDLType &tmp_ddl_type)
 {
   int ret = OB_SUCCESS;
   tmp_ddl_type = ObDDLType::DDL_INVALID;
+  bool can_add_column_instant = false;
   bool is_change_column_order = false;
   if (OB_DDL_ADD_COLUMN != alter_column_schema.alter_type_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(alter_column_schema));
-  } else if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
-    tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-  } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
-    tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-  } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
-    LOG_WARN("fail to check is change column order", K(ret));
-  } else if (is_change_column_order || alter_column_schema.is_stored_generated_column()) {
-    tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
-  } else {
-    tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    LOG_WARN("alter_type is not add column", KR(ret), K(alter_column_schema));
+  } else if (algorithm == obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT) {
+    if (OB_FAIL(check_can_add_column_use_instant_(is_oracle_mode,
+                                                  tenant_data_version,
+                                                  can_add_column_instant))) {
+      LOG_WARN("fail to check can add column use instant algorithm", KR(ret), K(is_oracle_mode), K(table_schema));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
+      tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
+      ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+      ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+      for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+        const AlterColumnSchema *column_schema = nullptr;
+        if (OB_ISNULL(column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("*it_begin is NULL", K(ret));
+        } else if (ObSchemaOperationType::OB_DDL_DROP_COLUMN == column_schema->alter_type_) {
+          lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
+          lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+          lib::CompatModeGuard guard(compat_mode);
+          const ObString &drop_column_name = column_schema->get_origin_column_name();
+          const ObString &add_column_name = alter_column_schema.get_column_name();
+          if (ObColumnNameHashWrapper(drop_column_name) == ObColumnNameHashWrapper(add_column_name)) {
+            tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (ObDDLType::DDL_INVALID != tmp_ddl_type) {
+    } else if (alter_column_schema.is_stored_generated_column()) {
+      tmp_ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
+    } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
+      LOG_WARN("fail to check is change column order", KR(ret));
+    } else if (!can_add_column_instant) {
+      // before update to 435, we use DDL_ADD_COLUMN_OFFLINE when change column order
+      tmp_ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_OFFLINE : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    } else {
+      // After update to 435
+      //We still use DDL_ADD_COLUMN_ONLINE to represent add column online when not change column order
+      //To distinguish, we use DDL_ADD_COLUMN_INSTANT to represent add column online when change column order
+      tmp_ddl_type = is_change_column_order ? ObDDLType::DDL_ADD_COLUMN_INSTANT : ObDDLType::DDL_ADD_COLUMN_ONLINE;
+    }
   }
   return ret;
 }
@@ -4075,6 +4299,94 @@ int ObDDLService::check_is_alter_decimal_int_offline(const share::ObDDLType &ddl
   return ret;
 }
 
+int ObDDLService::check_can_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                                const AlterTableSchema &alter_table_schema,
+                                                const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
+                                                const uint64_t tenant_data_version,
+                                                const bool is_oracle_mode,
+                                                ObSchemaGetterGuard &schema_guard,
+                                                ObDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  bool add_column_instant = false;
+  ddl_type = ObDDLType::DDL_INVALID;
+  bool has_other_ddl_type = false;
+  AlterColumnSchema *alter_column_schema = NULL;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  // 1.add column instant only under mysql
+  // 2.add column instant except modify column, with other ddl should be offline
+  for (; OB_SUCC(ret) && !is_oracle_mode && !(add_column_instant && has_other_ddl_type) && it_begin != it_end; it_begin++) {
+    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter_column_schema is NULL", KR(ret), K(alter_table_schema));
+    } else {
+      const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
+      switch (op_type) {
+        case OB_DDL_ADD_COLUMN: {
+          ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
+          if (!add_column_instant && OB_FAIL(check_is_add_column_online_(alter_table_schema, orig_table_schema, *alter_column_schema, algorithm,
+                                                                         is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
+            LOG_WARN("fail to check is add column online", KR(ret));
+          } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == tmp_ddl_type) {
+            add_column_instant = true;
+          }
+          break;
+        }
+        case OB_DDL_MODIFY_COLUMN: {
+          // do nothing
+          break;
+        }
+        case OB_DDL_DROP_COLUMN:
+        case OB_DDL_CHANGE_COLUMN:
+        case OB_DDL_ALTER_COLUMN: {
+          has_other_ddl_type = true;
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("unhandled operator type!", KR(ret), K(op_type));
+          break;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && add_column_instant && has_other_ddl_type) {
+    ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    LOG_INFO("add column instant with other ddl except modify column, set ddl type to DDL_TABLE_REDEFINITION", K(ddl_type));
+  }
+  return ret;
+}
+
+int is_list_part_val_changed(const ObBasePartition &orig_part, const ObBasePartition &new_part)
+{
+  int ret = OB_SUCCESS;
+  if (!orig_part.is_valid() || !new_part.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(orig_part), K(new_part));
+  } else {
+    const ObIArray<common::ObNewRow>* orig_list_values = &(orig_part.get_list_row_values());
+    const ObIArray<common::ObNewRow>* new_list_values   = &(new_part.get_list_row_values());
+    if (OB_ISNULL(orig_list_values) && OB_ISNULL(new_list_values)) {
+      /* both empty, skip */
+    } else if ((OB_ISNULL(orig_list_values) ^ OB_ISNULL(new_list_values))
+             ||(orig_list_values->count() != new_list_values->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, val list changed", K(ret), KPC(orig_list_values), KPC(new_list_values));
+    } else {
+      for (int64_t i = 0; i < orig_list_values->count() && OB_SUCC(ret); i++) {
+        if (orig_list_values->at(i) == new_list_values->at(i)) {
+          /* skip */
+        } else {
+          ret = OB_ERR_PARTITION_CONST_DOMAIN_ERROR;
+          LOG_WARN("partition list val have been changed", K(ret), K(orig_list_values->at(i)), K(new_list_values->at(i)));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_arg,
                                            const ObTableSchema &orig_table_schema,
                                            ObSchemaGetterGuard &schema_guard,
@@ -4092,6 +4404,12 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
   ddl_need_retry_at_executor = false;
+  const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm = alter_table_arg.alter_algorithm_;
+
+  if (OB_FAIL(check_can_add_column_instant_(orig_table_schema, alter_table_schema, algorithm,
+                                            is_oracle_mode, tenant_data_version, schema_guard, ddl_type))) {
+    LOG_WARN("fail to check can add column instant", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  }
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4103,14 +4421,38 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       switch (op_type) {
         case OB_DDL_ADD_COLUMN: {
           ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
-          if (OB_FAIL(check_is_add_column_online(orig_table_schema, *alter_column_schema, tmp_ddl_type))) {
+          if (OB_FAIL(check_is_add_column_online_(alter_table_schema, orig_table_schema, *alter_column_schema, algorithm,
+                                                  is_oracle_mode, tenant_data_version, tmp_ddl_type))) {
             LOG_WARN("fail to check is add column online", K(ret));
           } else if (tmp_ddl_type == ObDDLType::DDL_ADD_COLUMN_ONLINE) {
             if (ObDDLType::DDL_INVALID == ddl_type
                 || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type) {
               ddl_type = ObDDLType::DDL_ADD_COLUMN_ONLINE;
+            } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type) {
+              // ddl_type = ObDDLType::DDL_ADD_COLUMN_INSTANT;
+            } else if (ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+              // ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
             } else if (ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
               // ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+            } else if (ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type) {
+              // ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
+            } else if (ObDDLType::DDL_DROP_COLUMN == ddl_type
+                    || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
+              ddl_type = ObDDLType::DDL_COLUMN_REDEFINITION;
+            } else {
+              ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+            }
+          } else if (tmp_ddl_type == ObDDLType::DDL_ADD_COLUMN_INSTANT) {
+            if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type) {
+              ddl_type = ObDDLType::DDL_ADD_COLUMN_INSTANT;
+            // 1.there is no new type to represent modify column online, we use DDL_NORMAL_TYPE to represent it
+            // 2. after check_can_add_column_instant_, add column instant except modify column compund with other ddl will be DDL_TABLE_REDEFINITION,
+            // so only modify column online can be DDL_NORMAL_TYPE here
+            } else if (ObDDLType::DDL_NORMAL_TYPE == ddl_type
+                    || ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+              ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
             } else if (ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type) {
               // ddl_type = ObDDLType::DDL_ADD_COLUMN_OFFLINE;
             } else if (ObDDLType::DDL_DROP_COLUMN == ddl_type
@@ -4152,7 +4494,47 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
         case OB_DDL_MODIFY_COLUMN: {
           bool is_offline = false;
           bool add_pk = false;
-          if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
+
+          // check is partition list val changed
+          bool is_partition_key = orig_column_schema->is_part_key_column();
+          bool is_sub_partition_key = orig_column_schema->is_subpart_key_column();
+          if (!is_partition_key && !is_sub_partition_key) {
+          } else if (!ob_is_integer_type(orig_column_schema->get_data_type())
+                    || !ob_is_integer_type(alter_column_schema->get_data_type())) {
+          } else if (orig_column_schema->get_data_type() != alter_column_schema->get_data_type()) {
+            if (orig_table_schema.get_partition_num() != alter_table_schema.get_partition_num()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition num have been changed when change column type", K(ret), K(orig_table_schema), K(alter_table_arg));
+            }
+            for (int64_t i = 0; i < orig_table_schema.get_partition_num() && OB_SUCC(ret); i++) {
+              const ObPartition *orig_part = orig_table_schema.get_part_array()[i];
+              const ObPartition *new_part  = alter_table_schema.get_part_array()[i];
+              if (OB_ISNULL(orig_part) || OB_ISNULL(new_part)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid part", K(ret), KPC(orig_part), K(new_part));
+              } else if (is_partition_key && OB_FAIL(is_list_part_val_changed(*orig_part, *new_part))) {
+                LOG_WARN("failed to check new part valid", K(ret), K(orig_table_schema), K(alter_table_arg));
+              } else if (is_sub_partition_key) {
+                if (orig_part->get_sub_part_num() != new_part->get_sub_part_num()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid part num", K(ret), KPC(orig_part), KPC(new_part), K(orig_table_schema), K(alter_table_arg));
+                }
+                for (int64_t j = 0; OB_SUCC(ret) && j < orig_part->get_sub_part_num(); j++) {
+                  ObSubPartition *orig_sub_part = orig_part->get_subpart_array()[j];
+                  ObSubPartition *new_sub_part  = new_part->get_subpart_array()[j];
+                  if (OB_ISNULL(orig_sub_part) || OB_ISNULL(new_sub_part)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid part", K(ret), KPC(orig_part), KPC(new_part));
+                  } else if (OB_FAIL(is_list_part_val_changed(*orig_sub_part, *new_sub_part))) {
+                    LOG_WARN("failed to check sub part changed", K(ret), KPC(orig_sub_part), K(new_sub_part), K(orig_table_schema), K(alter_table_arg));
+                  }
+                }
+              }
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(fill_column_collation(alter_table_schema.get_sql_mode(),
                                             is_oracle_mode,
                                             orig_table_schema,
                                             allocator,
@@ -4218,12 +4600,25 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                 ret = OB_ERR_WRONG_AUTO_KEY;
                 LOG_USER_ERROR(OB_ERR_WRONG_AUTO_KEY);
               }
-            } else if (ObDDLType::DDL_INVALID == ddl_type
-                    || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
-                    || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
-              ddl_type = ObDDLType::DDL_NORMAL_TYPE;
-            } else {
-              ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+            } else if (OB_DDL_CHANGE_COLUMN == op_type) {
+              if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
+                ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+              } else {
+                ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+              }
+            } else if (OB_DDL_MODIFY_COLUMN == op_type) {
+              if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                || ObDDLType::DDL_NORMAL_TYPE == ddl_type) {
+                ddl_type = ObDDLType::DDL_NORMAL_TYPE;
+              } else if (ObDDLType::DDL_ADD_COLUMN_INSTANT == ddl_type
+                      || ObDDLType::DDL_COMPOUND_INSTANT == ddl_type) {
+                ddl_type = ObDDLType::DDL_COMPOUND_INSTANT;
+              } else {
+                ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+              }
             }
           }
           break;
@@ -4244,6 +4639,17 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           break;
         }
       }
+      if (OB_SUCC(ret)
+          && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
+          && alter_column_schema->is_identity_column()
+          && OB_DDL_DROP_COLUMN != op_type) {
+        if (nullptr == orig_column_schema) {
+          ddl_need_retry_at_executor = true;
+        } else if (orig_column_schema->is_nullable()) {
+          // only nullable column need generate value from sequence
+          ddl_need_retry_at_executor = true;
+        }
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -4252,6 +4658,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
     bool is_exist_stored_gen_col = false; // whether the target table contain stored generated column.
     bool is_column_group_store = false;
+    bool need_process_cs_replica = false;
     if (OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
       LOG_WARN("fail to check schema is column group store", K(ret));
     } else if (is_column_group_store) {
@@ -4262,6 +4669,10 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       LOG_WARN("fail to check exist stored generated column", K(ret));
     } else if (is_exist_stored_gen_col) {
       // column redefinition cannot handle stored gen column, use table redefinition instead
+      ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+    } else if (OB_FAIL(ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(orig_table_schema, need_process_cs_replica))) {
+      LOG_WARN("fail to check need process cs replica", K(ret));
+    } else if (need_process_cs_replica) {
       ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
     } else {/* do nothing. */}
   }
@@ -4313,19 +4724,27 @@ int ObDDLService::check_support_alter_pk_and_columns(
 }
 
 int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
-                                          ObDDLType &ddl_type)
+                                          ObDDLType &ddl_type,
+                                          bool &has_drop_and_add_index)
 {
   int ret = OB_SUCCESS;
   char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
   ObIndexArg::IndexActionType last_type = ObIndexArg::INVALID_ACTION;
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
+  bool has_drop_index = false;
+  bool has_create_index = false;
+  bool is_add_many_fts_indexes = false;
+  has_drop_and_add_index = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
-    if (OB_ISNULL(index_arg)) {
+    ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+    if (OB_ISNULL(index_arg) || OB_ISNULL(create_index_arg)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("index arg should not be null", K(ret));
     } else {
       const ObIndexArg::IndexActionType type = index_arg->index_action_type_;
+      bool is_add_fts_or_multivalue_index = share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_)
+                                            &&  ObIndexArg::ADD_INDEX == type;
       switch(type) {
         case ObIndexArg::DROP_PRIMARY_KEY: {
           if (!is_invalid_ddl_type(ddl_type)) {
@@ -4379,7 +4798,8 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         case ObIndexArg::ALTER_INDEX_TABLESPACE: {
           // offline ddl cannot appear at the same time with other ddl
           if ((DDL_MODIFY_COLUMN == ddl_type || DDL_ADD_COLUMN_OFFLINE == ddl_type
-              || DDL_ADD_COLUMN_ONLINE == ddl_type || DDL_TABLE_REDEFINITION == ddl_type)
+              || DDL_ADD_COLUMN_ONLINE == ddl_type || DDL_TABLE_REDEFINITION == ddl_type
+              || DDL_ADD_COLUMN_INSTANT == ddl_type)
               && ObIndexArg::ADD_INDEX == type) {
             // TODO(shuangcan): distinguish simple table and double table ddl
             ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
@@ -4412,6 +4832,25 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unknown index action type!", K(type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!has_drop_index) {
+          has_drop_index = ObIndexArg::DROP_INDEX == type;
+        }
+        if (!has_create_index) {
+          has_create_index = ObIndexArg::ADD_INDEX == type;
+        }
+        if (!has_drop_and_add_index) {
+          has_drop_and_add_index = has_drop_index && has_create_index;
+        }
+        if (!is_add_many_fts_indexes) {
+          is_add_many_fts_indexes =  is_add_fts_or_multivalue_index;
+        } else if (is_add_fts_or_multivalue_index) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("adding many fulltext or multivalue indexes at the same time is a high-risk operation, which is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+              "adding many fulltext or multivalue indexes at the same time is a high-risk operation, which is");
         }
       }
     }
@@ -4608,13 +5047,8 @@ int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      /* note must alter rowkey cg first, else will affect default cg*/
-      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
-        LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter default column group", K(ret));
-      }
+    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
+      LOG_WARN("fail to adjust cg for offline", KR(ret));
     }
   }
   return ret;
@@ -4669,13 +5103,8 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         LOG_WARN("fail to remove column group from new table schema", K(ret));
       }
     }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter rowkey column group", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
-        LOG_WARN("fail to alter default column group", K(ret));
-      }
+    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
+      LOG_WARN("fail to adjust cg for offline", KR(ret));
     }
   }
   return ret;
@@ -4728,6 +5157,28 @@ int ObDDLService::alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
                  K(alter_table_arg.alter_table_schema_.alter_type_));
       }
     }
+    LOG_DEBUG("ddl service alter column group finish", K(ret), K(orig_table_schema), K(new_table_schema));
+  }
+  return ret;
+}
+
+int ObDDLService::update_column_group_table_inplace(const share::schema::ObTableSchema &origin_table_schema,
+                                                    const share::schema::ObTableSchema &new_table_schema,
+                                                    ObDDLOperator &ddl_operator,
+                                                    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!origin_table_schema.is_valid()
+                  || !new_table_schema.is_valid()
+                  || !new_table_schema.is_column_store_supported())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_origin_column_group_with_new_schema(trans,
+                                                                             origin_table_schema,
+                                                                             new_table_schema))) {
+    LOG_WARN("fail to clear origin table schema and insert new schema", K(ret),
+                                                                        K(origin_table_schema),
+                                                                        K(new_table_schema));
   }
   return ret;
 }
@@ -4759,21 +5210,20 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       } else if (col->is_virtual_generated_column()) {
         /* skip virtual column group*/
       } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema, col, new_table_schema.get_tenant_id(),
-                                                                  new_table_schema.get_max_used_column_group_id() +1,
+                                                                  new_table_schema.get_next_single_column_group_id(),
                                                                   new_single_cg))) {
         LOG_WARN("fail to build single column group", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_single_cg))) {
         LOG_WARN("fail to add new column group to table schema", K(ret));
       }
     }
-
     /* add all column group*/
-    if (OB_SUCC(ret) &&is_all_cg_exist) {
+    if (OB_SUCC(ret) && is_all_cg_exist) {
       ObColumnGroupSchema new_cg;
       new_cg.reset();
       if (OB_FAIL(ObSchemaUtils::build_all_column_group(
                                    new_table_schema, new_table_schema.get_tenant_id(),
-                                   new_table_schema.get_max_used_column_group_id() +1, new_cg))) {
+                                   ALL_COLUMN_GROUP_ID, new_cg))) {
         LOG_WARN("fail to build new all column group schema", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_cg))) {
         LOG_WARN("fail to add new column group to table schema", K(ret));
@@ -4797,11 +5247,16 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
         LOG_WARN("fail to alter default column grouop schema", K(ret));
       }
     }
+    // adjust column group array order
+    if (FAILEDx(new_table_schema.adjust_column_group_array())) {
+      LOG_WARN("fail to adjust column group array", K(ret), K(new_table_schema));
+    }
   }
   return ret;
 }
 
 int ObDDLService::gen_alter_partition_new_table_schema_offline(
+    obrpc::ObAlterTableArg &alter_table_arg,
     const AlterTableSchema & alter_table_schema,
     const ObTableSchema &orig_table_schema,
     ObTableSchema &new_table_schema)
@@ -4828,6 +5283,11 @@ int ObDDLService::gen_alter_partition_new_table_schema_offline(
     }
   }
   OZ (fill_interval_info_for_offline(alter_table_schema, new_table_schema), new_table_schema);
+  if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_) {
+    // In the alter table partition by range(xxx) (partitions...) case,
+    // it is necessary to reset attributes of old table related to automatic partitioning here
+    new_table_schema.get_part_option().assign_auto_partition_attr(orig_table_schema.get_part_option());
+  }
   return ret;
 }
 
@@ -4861,7 +5321,10 @@ int ObDDLService::alter_table_partition_by(
   const bool bind_tablets = false;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   OZ (gen_alter_partition_new_table_schema_offline(
-      alter_table_schema, orig_table_schema, new_table_schema));
+      alter_table_arg, alter_table_schema, orig_table_schema, new_table_schema));
+  if (FAILEDx(new_table_schema.check_validity_for_auto_partition())) {
+    LOG_WARN("fail to check enable auto partitioning", KR(ret), K(new_table_schema));
+  }
   OZ (create_user_hidden_table(orig_table_schema,
                               new_table_schema,
                               &alter_table_arg.sequence_ddl_arg_,
@@ -5017,7 +5480,6 @@ int ObDDLService::convert_to_character(
         LOG_WARN("convert collation type for partition failed", K(ret));
       }
     }
-
     OZ (create_user_hidden_table(orig_table_schema,
                                 new_table_schema,
                                 &alter_table_arg.sequence_ddl_arg_,
@@ -5102,7 +5564,8 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
                                           const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  int64_t index_count = new_table_schema.get_index_tid_count();
+  int64_t index_count = new_table_schema.get_index_count();
+  int64_t index_aux_count = new_table_schema.get_index_tid_count();
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
@@ -5138,10 +5601,11 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
         case ObIndexArg::ADD_PRIMARY_KEY:
         case ObIndexArg::ALTER_PRIMARY_KEY: {
           if (ObIndexArg::ADD_PRIMARY_KEY == type) {
-            if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+            if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
               ret = OB_ERR_TOO_MANY_KEYS;
               LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-              LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+              LOG_WARN("too many index or index aux for table!",
+                       K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
             } else if (!new_table_schema.is_heap_table()) {
               ret = OB_ERR_MULTIPLE_PRI_KEY;
               LOG_WARN("multiple primary key defined", K(ret));
@@ -5380,10 +5844,8 @@ int ObDDLService::check_can_drop_column(
       LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, orig_column_name.length(), orig_column_name.ptr());
       LOG_WARN("Dropping column has functional index column deps", K(ret), K(orig_column_name));
     }
-  } else if (orig_column_schema->is_tbl_part_key_column()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop partitioning column is");
-    LOG_WARN("partitioning column is not allowed to be dropped", K(ret), K(orig_column_schema->get_column_name_str()));
+  } else if (OB_FAIL(check_is_drop_partition_key(orig_table_schema, *orig_column_schema, schema_guard))) {
+    LOG_WARN("check drop partition column failed", K(ret));
   } else if ((!new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_PK_TABLE)
       || (new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_HEAP_TABLE)) {
     ret = OB_CANT_REMOVE_ALL_FIELDS;
@@ -5393,6 +5855,53 @@ int ObDDLService::check_can_drop_column(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop rowkey column is");
     LOG_WARN("rowkey column is not allowed to be dropped", K(ret), K(orig_column_schema->get_column_name_str()));
+  }
+  return ret;
+}
+
+int ObDDLService::check_is_drop_partition_key(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const ObColumnSchemaV2 &to_drop_column,
+    ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  bool is_tbl_partition_key = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t to_drop_column_id = to_drop_column.get_column_id();
+  const ObPartitionOption &part_option = orig_table_schema.get_part_option();
+  const ObString &part_func_str = part_option.get_part_func_expr_str();
+  if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get index infos failed", K(ret));
+  } else if (!part_func_str.empty()/*nonempty means user-defined part key*/ && OB_FAIL(orig_table_schema.is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key,
+                                                           false /* ignore_presetting_key */))) {
+    LOG_WARN("fail to check tbl partition key", K(ret), K(to_drop_column), K(orig_table_schema));
+  } else {
+    // to check whether the column is the partition key of the global index.
+    for (int64_t idx = 0; OB_SUCC(ret) && !is_tbl_partition_key && idx < simple_index_infos.count(); idx++) {
+      const ObTableSchema *index_schema = nullptr;
+      const uint64_t index_tid = simple_index_infos.at(idx).table_id_;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_tid, index_schema))) {
+        LOG_WARN("get index schema failed", K(ret), K(tenant_id), K(index_tid));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index not exist", K(ret), K(tenant_id), K(index_tid));
+      } else if (index_schema->is_global_index_table()) {
+        const ObPartitionOption &part_option = index_schema->get_part_option();
+        const ObString &part_func_str = part_option.get_part_func_expr_str();
+        if (!part_func_str.empty()/*nonempty means user-defined part key*/
+            && OB_FAIL(index_schema->is_tbl_partition_key(to_drop_column_id, is_tbl_partition_key, false /* ignore_presetting_key */))) {
+          LOG_WARN("check column in part key failed", K(ret), K(index_tid));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_tbl_partition_key) {
+    ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+    LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                  to_drop_column.get_column_name_str().length(),
+                  to_drop_column.get_column_name_str().ptr());
+    LOG_WARN("drop column has table part key deps", K(ret), "column_name", to_drop_column.get_column_name_str());
   }
   return ret;
 }
@@ -5965,6 +6474,7 @@ int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlte
       ObString new_domain_index_name = new_table_schema->get_table_name_str();
       ObArray<ObString> new_table_names;
       ObArray<ObString> old_table_names;
+      const int64_t unused_id = 1;    // not set OB_INVALID_ID for sava check
 
       SMART_VAR(ObSArray<ObTableSchema>, table_schemas) {
       // ObSArray<ObTableSchema> table_schemas;
@@ -6298,7 +6808,7 @@ int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schem
   return ret;
 }
 
-int ObDDLService::check_aux_index_schema_exist_(
+int ObDDLService::check_aux_index_schema_exist(
     const uint64_t tenant_id,
     const obrpc::ObCreateIndexArg &arg,
     ObSchemaGetterGuard &schema_guard,
@@ -6324,6 +6834,7 @@ int ObDDLService::check_aux_index_schema_exist_(
     LOG_WARN("failed to construct index table name", K(ret),
         K(arg.index_name_));
   } else if (share::schema::is_fts_index(index_type)) {
+    /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                               data_schema->get_database_id(),
                                               index_table_name,
@@ -6361,6 +6872,27 @@ int ObDDLService::check_aux_index_schema_exist_(
     } else if (OB_NOT_NULL(index_schema)) {
       is_exist = true;
       LOG_INFO("vec index aux table already exist, no need to generate",
+        K(index_table_name));
+    }
+  } else if (share::schema::is_multivalue_index_aux(index_type)) {
+    /* only multivalue index 3rd table run here */
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                              data_schema->get_database_id(),
+                                              index_table_name,
+                                              true/*is_index*/,
+                                              index_schema,
+                                              false/*with_hidden_flag*/,
+                                              share::schema::is_built_in_multivalue_index(index_type)))) {
+      if (OB_TABLE_NOT_EXIST == ret) {
+        is_exist = false;
+        index_schema = nullptr;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get index schema", K(ret), K(tenant_id), K(index_table_name));
+      }
+    } else if (OB_NOT_NULL(index_schema)) {
+      is_exist = true;
+      LOG_INFO("multivalue index aux table already exist, no need to generate",
         K(index_table_name));
     }
   } else {
@@ -6438,7 +6970,8 @@ int ObDDLService::create_aux_index_task_(
     const int64_t parent_task_id,
     const uint64_t tenant_data_version,
     ObDDLSQLTransaction &trans,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(data_schema) ||
@@ -6467,9 +7000,11 @@ int ObDDLService::create_aux_index_task_(
                                &create_index_arg,
                                parent_task_id);
     param.tenant_data_version_ = tenant_data_version;
+    param.fts_snapshot_version_ = snapshot_version;
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
         create_ddl_task(param, trans, task_record))) {
       if (OB_ENTRY_EXIST == ret) {
+        trans.reset_last_error();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("submit create index ddl task failed", K(ret));
@@ -6531,12 +7066,19 @@ int ObDDLService::create_aux_index(
       LOG_WARN("failed to assign to nonconst data schema", K(ret));
     } else if (OB_FAIL(create_index_arg.assign(arg.create_index_arg_))) {
       LOG_WARN("fail to assign create index arg", K(ret));
+    /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
     } else if (share::schema::is_fts_index(create_index_arg.index_type_)
-              && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,
-                                                              nonconst_data_schema,
-                                                              allocator,
-                                                              gen_columns))) {
-      LOG_WARN("fail to adjust expr index args", K(ret));
+      && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,
+                                                        nonconst_data_schema,
+                                                        allocator,
+                                                        gen_columns))) {
+      LOG_WARN("fail to adjust create index args", K(ret), K(create_index_arg));
+    } else if (share::schema::is_multivalue_index_aux(create_index_arg.index_type_) /* only multivalue index 3rd table run here */
+      && OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(create_index_arg,
+                                                                        nonconst_data_schema,
+                                                                        allocator,
+                                                                        gen_columns))) {
+      LOG_WARN("fail to adjust create index args", K(ret), K(create_index_arg));
     } else if (!create_index_arg.is_rebuild_index_
               && share::schema::is_vec_index(create_index_arg.index_type_)
               && OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(create_index_arg,
@@ -6544,7 +7086,12 @@ int ObDDLService::create_aux_index(
                                                                 allocator,
                                                                 gen_columns))) {
       LOG_WARN("fail to adjust expr index args", K(ret));
-    } else if (OB_FAIL(check_aux_index_schema_exist_(tenant_id,
+    } else if (!(share::schema::is_fts_index(create_index_arg.index_type_) ||
+                share::schema::is_multivalue_index_aux(create_index_arg.index_type_) ||
+                share::schema::is_vec_index(create_index_arg.index_type_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to create aux index, index type invalid", K(ret), K(create_index_arg));
+    } else if (OB_FAIL(check_aux_index_schema_exist(tenant_id,
                                                      arg.create_index_arg_,
                                                      schema_guard,
                                                      data_schema,
@@ -6572,10 +7119,16 @@ int ObDDLService::create_aux_index(
                                            arg.task_id_/*parent fts*/,
                                            tenant_data_version,
                                            trans,
-                                           task_record))) {
+                                           task_record,
+                                           arg.snapshot_version_))) {
           LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
         } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
+          arg.task_id_, *idx_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+        LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(idx_schema));
       }
     } else { // 3. index scheme not exist, generate schema && create ddl task
       ObTableSchema index_schema;
@@ -6601,6 +7154,9 @@ int ObDDLService::create_aux_index(
                                                 task_record))) {
         LOG_WARN("failed to create aux index ddl task", K(ret), K(create_index_arg));
       } else if (FALSE_IT(result.ddl_task_id_ = task_record.task_id_)) {
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
+          arg.task_id_, index_schema, result.aux_table_id_, result.ddl_task_id_, ObDDLUpdateParentTaskIDType::UPDATE_CREATE_INDEX_ID, allocator, trans))) {
+        LOG_WARN("fail to update parent task message", K(ret), K(arg.task_id_), K(index_schema));
       }
     }
     if (trans.is_started()) {
@@ -6614,9 +7170,12 @@ int ObDDLService::create_aux_index(
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("fail to publish schema", K(ret), K(tenant_id));
       } else if (OB_INVALID_ID == result.ddl_task_id_) { // no need to schedule
-      } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
+      } else {
+        DEBUG_SYNC(CREATE_AUX_INDEX_TABLE);
+        if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().
                          schedule_ddl_task(task_record))) {
-        LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+          LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+        }
       }
     }
   }
@@ -6711,13 +7270,31 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
                               schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const uint64_t data_table_id = index_schema.get_data_table_id();
+    const ObTableSchema *data_table_schema = NULL;
+    const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("data table schema not exists", KR(ret), K(data_table_id));
+    } else if (OB_INVALID_ID != data_table_schema->get_tablegroup_id()) {
+      if (OB_FAIL(schema_guard.get_tablegroup_schema(
+          data_table_schema->get_tenant_id(),
+          data_table_schema->get_tablegroup_id(),
+          data_tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(data_table_schema));
+      } else if (OB_ISNULL(data_tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data_tablegroup_schema is null", KR(ret), KPC(data_table_schema));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (index_schema.is_index_local_storage()) {
-      const ObTableSchema *data_table_schema = NULL;
-      const uint64_t data_table_id = index_schema.get_data_table_id();
       ObSEArray<const share::schema::ObTableSchema*, 1> schemas;
       ObSEArray<bool, 1> need_create_empty_majors;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
@@ -6728,7 +7305,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
       } else if (OB_FAIL(schemas.push_back(&index_schema))
         || OB_FAIL(need_create_empty_majors.push_back(false))) {
         LOG_WARN("failed to push_back", KR(ret), K(index_schema));
-      } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
+      } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -6742,7 +7319,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     } else {
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
+      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets");
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -6805,22 +7382,25 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                     ObArenaAllocator &allocator,
                                     const uint64_t tenant_data_version,
                                     obrpc::ObAlterTableRes &res,
-                                    ObIArray<ObDDLTaskRecord> &ddl_tasks)
+                                    ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                    int64_t &new_fetched_snapshot)
 {
   int ret = OB_SUCCESS;
   ObIndexBuilder index_builder(*this);
   ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   common::ObArray<const ObForeignKeyInfo *> drop_parent_table_mock_foreign_key_infos_array;
   ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+  new_fetched_snapshot = 0;
   // To many hashset will fill up the stack, construct them on heap instead
   HEAP_VAR(AddIndexNameHashSet, add_index_name_set) {
   HEAP_VAR(DropIndexNameHashSet, drop_index_name_set) {
   HEAP_VAR(RenameIndexNameHashSet, rename_ori_index_name_set) {
   HEAP_VAR(RenameIndexNameHashSet, rename_new_index_name_set) {
   HEAP_VAR(AlterIndexNameHashSet, alter_index_name_set) {
-    int64_t index_count = new_table_schema.get_index_tid_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
       ObIndexArg *index_arg = index_arg_list.at(i);
+      int64_t index_count = new_table_schema.get_index_count();
+      int64_t index_aux_count = new_table_schema.get_index_tid_count();
       if (OB_ISNULL(index_arg)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("index arg should not be null", K(ret));
@@ -6828,14 +7408,21 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
         if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
           ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
           uint64_t tenant_data_version = 0;
-          if (OB_FAIL(GET_MIN_DATA_VERSION(create_index_arg->tenant_id_, tenant_data_version))) {
+          const bool is_check_fts_index_conflict = !create_index_arg->is_inner_ && share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_);
+          if (is_check_fts_index_conflict && OB_FAIL(check_fts_index_conflict(origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id()))) {
+            if (OB_EAGAIN != ret) {
+              LOG_WARN("failed to check fts index ", K(ret));
+            }
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(create_index_arg->tenant_id_, tenant_data_version))) {
             LOG_WARN("get min data version failed", K(ret), KPC(create_index_arg));
-          } else if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+          } else if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
             ret = OB_ERR_TOO_MANY_KEYS;
             LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-            LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+            LOG_WARN("too many index or index aux for table!",
+                     K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
           }
           if (!new_table_schema.is_partitioned_table()
+              && !new_table_schema.is_auto_partitioned_table()
               && !create_index_arg->index_schema_.is_partitioned_table()) {
             if (INDEX_TYPE_NORMAL_GLOBAL == create_index_arg->index_type_) {
               create_index_arg->index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
@@ -6858,6 +7445,11 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               }
               continue;
             }
+          }
+          if (OB_SUCC(ret) && new_table_schema.mv_major_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to add index on mv", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "add index on major refresh materialized view is");
           }
           if (OB_FAIL(ret)) {
           } else if (create_index_arg->index_name_.empty()) {
@@ -6890,7 +7482,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                   //alter table t1 rename index ori_idx to new_idx, add index new_idx // MySQL supports this behavior
                   is_exist = true;
                 }
-
               } else {
                 if (OB_HASH_EXIST == drop_index_name_set.exist_refactored(index_key)) {
                   //alter table t1 drop index c1, add index c1
@@ -6908,7 +7499,9 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
             }
           }
           if (OB_SUCC(ret)) {
-            HEAP_VAR(ObTableSchema, index_schema) {
+            HEAP_VARS_3((ObTableSchema, index_schema),
+                        (obrpc::ObCreateIndexArg, my_arg),
+                        (obrpc::ObCreateIndexArg, tmp_arg)){
               ObArray<ObColumnSchemaV2*> gen_columns;
               bool global_storage = INDEX_TYPE_NORMAL_GLOBAL == create_index_arg->index_type_
                                     || INDEX_TYPE_UNIQUE_GLOBAL == create_index_arg->index_type_
@@ -6930,12 +7523,50 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                 } else if (FALSE_IT(index_schema.set_tenant_id(origin_table_schema.get_tenant_id()))) {
                 }
               }
-              bool global_index_without_column_info = create_index_arg->index_schema_.is_partitioned_table() ? false : true;
+              bool global_index_without_column_info = (create_index_arg->index_schema_.is_partitioned_table() ||
+                                                       create_index_arg->index_schema_.is_auto_partitioned_table()) ?
+                                                       false : true;
+              bool rowkey_doc_exist = false;
+              bool is_generate_rowkey_doc = false;
               if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(my_arg.assign(*create_index_arg))) {
+                LOG_WARN("fail to assign arg", K(ret));
+              } else if (share::schema::is_fts_or_multivalue_index(my_arg.index_type_)) {
+                const ObTableSchema *rowkey_doc_schema = nullptr;
+                if (OB_FAIL(tmp_arg.assign(my_arg))) {
+                  LOG_WARN("fail to assign arg", K(ret));
+                } else if (!tmp_arg.is_valid()) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("fail to copy create index arg", K(ret));
+                } else if (FALSE_IT(tmp_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
+                } else if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(tmp_arg, &allocator))) {
+                  LOG_WARN("failed to adjust fts index name", K(ret));
+                } else if (OB_FAIL(check_aux_index_schema_exist(origin_table_schema.get_tenant_id(),
+                                                                tmp_arg,
+                                                                schema_guard,
+                                                                &new_table_schema,
+                                                                rowkey_doc_exist,
+                                                                rowkey_doc_schema))) {
+                  LOG_WARN("fail to check rowkey doc schema existence", K(ret));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (share::schema::is_fts_or_multivalue_index(my_arg.index_type_) &&
+                         !rowkey_doc_exist &&
+                         (FALSE_IT(my_arg.index_type_ = INDEX_TYPE_ROWKEY_DOC_ID_LOCAL) ||
+                          FALSE_IT(is_generate_rowkey_doc = true))) {
+                // 1. generate rowkey doc schema if not exist
+                // 2. otherwise generate fts index aux schema
+              } else if (share::schema::is_fts_index(my_arg.index_type_) &&
+                  OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(my_arg, &allocator))) {
+                LOG_WARN("failed to adjust fts index name", K(ret));
               } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(
-                      *create_index_arg, new_table_schema, allocator, gen_columns))) {
+                      my_arg, new_table_schema, allocator, gen_columns))) {
                 LOG_WARN("adjust fulltext args failed", K(ret));
-              } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
+              } else if (is_generate_rowkey_doc &&
+                         OB_FAIL(ObDDLLock::lock_table_in_trans(new_table_schema, transaction::tablelock::EXCLUSIVE, trans))) {
+                LOG_WARN("fail to lock for offline ddl", K(ret), K(new_table_schema));
+              } else if (OB_FAIL(index_builder.generate_schema(my_arg,
                                                         new_table_schema,
                                                         global_index_without_column_info,
                                                         true, /*generate_id*/
@@ -6953,6 +7584,13 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                     && OB_FAIL(create_index_tablet(index_schema, trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version))) {
                   LOG_WARN("fail to create_index_tablet", KR(ret), K(index_schema));
                 }
+                if (OB_SUCC(ret) && is_generate_rowkey_doc) {
+                  if (new_fetched_snapshot <= 0 &&
+                      OB_FAIL(ObDDLUtil::obtain_snapshot(trans, new_table_schema, index_schema, new_fetched_snapshot))) {
+                    LOG_WARN("fail to obtain snapshot",
+                        K(ret), K(new_table_schema), K(index_schema), K(new_fetched_snapshot));
+                  }
+                }
                 if (OB_SUCC(ret)) {
                   ObIndexNameHashWrapper index_key(create_index_arg->index_name_);
                   if (OB_FAIL(create_index_arg->index_schema_.assign(index_schema))) {
@@ -6960,8 +7598,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                   } else if (OB_FAIL(add_index_name_set.set_refactored(index_key))) {
                     LOG_WARN("set index name to hash set failed",
                           K(create_index_arg->index_name_), K(ret));
-                  } else {
-                    ++index_count;
                   }
                 }
               }
@@ -7014,57 +7650,10 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
             } else if (drop_index_arg->is_add_to_scheduler_) {
-              ObDDLRes ddl_res;
-              ObDDLTaskRecord task_record;
-              const bool is_fts_or_multivalue_or_vec_index = (index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index());
-              const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && is_fts_or_multivalue_or_vec_index;
-              bool has_index_task = false;
-              typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
-              SMART_VAR(TableSchemaArray, new_index_schemas) {
-                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
-                    trans, *index_table_schema, origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id(), has_index_task))) {
-                  LOG_WARN("failed to check ddl conflict", K(ret));
-                } else if (has_index_task) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("not support to drop a building or dropping index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
-                } else if (OB_FAIL(rename_dropping_index_name(origin_table_schema.get_table_id(),
-                                                        origin_table_schema.get_database_id(),
-                                                        is_inner_and_domain_index,
-                                                        *drop_index_arg,
-                                                        schema_guard,
-                                                        ddl_operator,
-                                                        trans,
-                                                        new_index_schemas))) {
-                  LOG_WARN("submit drop index arg failed", K(ret));
-                } else if (OB_UNLIKELY(!is_fts_or_multivalue_or_vec_index && new_index_schemas.count() != 1)
-                        || OB_UNLIKELY(!drop_index_arg->is_inner_ && index_table_schema->is_vec_delta_buffer_type() && new_index_schemas.count() != 5)
-                        || OB_UNLIKELY(index_table_schema->is_fts_index_aux() && new_index_schemas.count() != 4)
-                        || OB_UNLIKELY(index_table_schema->is_multivalue_index_aux() && new_index_schemas.count() != 3)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected error, invalid new index schema count", K(ret),
-                      "count", new_index_schemas.count(),
-                      "is fts index", index_table_schema->is_fts_index_aux(),
-                      "is multivalue index", index_table_schema->is_multivalue_index_aux(),
-                      "is vector index", index_table_schema->is_vec_delta_buffer_type(),
-                      K(new_index_schemas));
-                } else {
-                  const ObTableSchema &new_index_schema = new_index_schemas.at(new_index_schemas.count() - 1);
-                  bool has_exist = false;
-                  if (OB_FAIL(index_builder.submit_drop_index_task(trans, origin_table_schema, new_index_schemas,
-                      *drop_index_arg, allocator, has_exist, task_record))) {
-                    LOG_WARN("failed to submit drop index task", K(ret));
-                  } else {
-                    ddl_res.task_id_ = task_record.task_id_;
-                    ddl_res.tenant_id_ = new_index_schema.get_tenant_id();
-                    ddl_res.schema_id_ = new_index_schema.get_table_id();
-                    if (OB_FAIL(ddl_tasks.push_back(task_record))) {
-                      LOG_WARN("push back ddl task failed", K(ret));
-                    } else if (OB_FAIL(ddl_res_array.push_back(ddl_res))) {
-                      LOG_WARN("push back ddl res array failed", K(ret));
-                    }
-                  }
-                }
+              if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_, origin_table_schema,
+                                                   nullptr /*inc_tablet_ids*/, nullptr /*del_tablet_ids*/, drop_index_arg,
+                                                   ddl_operator, res, ddl_tasks))) {
+                LOG_WARN("fail to drop index to scheduler", KR(ret), K(drop_index_arg));
               }
             } else {
               if (OB_FAIL(ddl_operator.alter_table_drop_index(
@@ -7072,8 +7661,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                   new_table_schema,
                   trans))) {
                 LOG_WARN("failed to alter table drop index", K(*drop_index_arg), K(ret));
-              } else {
-                --index_count;
               }
             }
           }
@@ -7083,7 +7670,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
           const ObString &index_name = alter_index_arg->index_name_;
           ObIndexNameHashWrapper index_key(index_name);
           bool is_exist = false;
-
           if (OB_FAIL(check_index_table_exist(origin_table_schema.get_tenant_id(),
                                               origin_table_schema.get_database_id(),
                                               origin_table_schema.get_table_id(),
@@ -7867,6 +8453,7 @@ int ObDDLService::get_index_schema_by_name(
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
   const ObString &index_name = drop_index_arg.index_name_;
   const bool is_mlog = (obrpc::ObIndexArg::DROP_MLOG == drop_index_arg.index_action_type_);
+  index_table_schema = nullptr;
 
   //build index name and get index schema
   if (is_mlog) {
@@ -7890,6 +8477,12 @@ int ObDDLService::get_index_schema_by_name(
       LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name.length(), index_name.ptr());
       LOG_WARN("get index table schema failed", K(tenant_id),
           K(database_id), K(index_table_name), K(ret));
+    } else if (is_index && data_table_id != index_table_schema->get_data_table_id()) {
+      ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+      LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name.length(), index_name.ptr());
+      LOG_WARN("get index table schema failed", K(ret), K(tenant_id),
+          K(database_id), K(index_table_name), K(index_table_schema->get_table_id()), K(ret));
+      index_table_schema = nullptr;
     } else if (index_table_schema->is_in_recyclebin()) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("index table is in recyclebin", K(ret));
@@ -7977,7 +8570,7 @@ int ObDDLService::rename_dropping_index_name(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, index table schema is nullptr", K(ret), KP(index_table_schema), K(data_table_id),
         K(drop_index_arg));
-  } else if (!drop_index_arg.is_inner_ && index_table_schema->is_fts_index_aux()) {
+  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_parent_task_dropping_fts_index_) && index_table_schema->is_fts_index_aux()) {
     // This task is the parent task of drop fts index, no need to rename.
     if (OB_FAIL(get_dropping_domain_index_invisiable_aux_table_schema(index_table_schema->get_tenant_id(), data_table_id,
        index_table_schema->get_table_id(), true, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
@@ -7986,7 +8579,7 @@ int ObDDLService::rename_dropping_index_name(
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
     }
-  } else if (!drop_index_arg.is_inner_ && index_table_schema->is_multivalue_index_aux()) {
+  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_parent_task_dropping_multivalue_index_) && index_table_schema->is_multivalue_index_aux()) {
     if (OB_FAIL(get_dropping_domain_index_invisiable_aux_table_schema(index_table_schema->get_tenant_id(), data_table_id,
        index_table_schema->get_table_id(), false, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
        trans, new_index_schemas))) {
@@ -7994,7 +8587,7 @@ int ObDDLService::rename_dropping_index_name(
     } else if (OB_FAIL(new_index_schemas.push_back(*index_table_schema))) {
       LOG_WARN("fail to push back index schema", K(ret), KPC(index_table_schema));
     }
-  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_vec_inner_drop_)&& index_table_schema->is_vec_delta_buffer_type()) {
+  } else if ((!drop_index_arg.is_inner_ || drop_index_arg.is_vec_inner_drop_) && index_table_schema->is_vec_delta_buffer_type()) {
     // This task is the parent task of drop vec index, no need to rename.
     if (OB_FAIL(get_dropping_vec_index_invisiable_table_schema_(index_table_schema->get_tenant_id(), data_table_id,
        index_table_schema->get_table_id(), drop_index_arg.is_vec_inner_drop_, index_table_schema->get_table_name_str(), schema_guard, ddl_operator,
@@ -8054,7 +8647,7 @@ int ObDDLService::get_dropping_domain_index_invisiable_aux_table_schema(
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *data_table_schema = nullptr;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   if (OB_UNLIKELY(OB_INVALID_ID == data_table_id
         || OB_INVALID_ID == index_table_id
         || OB_INVALID_TENANT_ID == tenant_id
@@ -8131,7 +8724,7 @@ int ObDDLService::get_dropping_vec_index_invisiable_table_schema_(
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *data_table_schema = nullptr;
-  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_INDEX_PER_TABLE> indexs;
+  ObSEArray<const ObSimpleTableSchemaV2 *, OB_MAX_AUX_TABLE_PER_MAIN_TABLE> indexs;
   if (OB_UNLIKELY(OB_INVALID_ID == data_table_id
         || OB_INVALID_ID == index_table_id
         || OB_INVALID_TENANT_ID == tenant_id
@@ -8336,7 +8929,7 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
   } else {
     ObObj default_value;
     default_value.set_type(alter_column_schema.get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision()))) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type()))) {
       LOG_WARN("failed to build not strict default value", K(ret));
     } else if (OB_FAIL(alter_column_schema.set_orig_default_value(default_value))) {
       LOG_WARN("failed to set orig default value", K(ret));
@@ -8398,6 +8991,14 @@ int ObDDLService::resolve_timestamp_column(AlterColumnSchema *alter_column_schem
           }
           found = true;
         }
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      // 1.add new column will add to the end of table schema
+      // 2.new table schema not contain new column now
+      if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_
+          && ObTimestampType == new_column_schema.get_data_type()) {
+        is_first_timestamp = true;
       }
     }
     if (OB_SUCC(ret)) {
@@ -8877,6 +9478,41 @@ int ObDDLService::modify_depend_column_type(sql::ObRawExpr *expr,
   return ret;
 }
 
+int ObDDLService::modify_part_func_expr(const share::schema::ObTableSchema &orig_table_schema,
+                                        const share::schema::ObColumnSchemaV2 &orig_column_schema,
+                                        const share::schema::AlterColumnSchema &alter_column_schema,
+                                        share::schema::ObTableSchema &new_table_schema,
+                                        const common::ObTimeZoneInfo &tz_info,
+                                        common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  bool is_partition_key = false;
+  if (OB_FAIL(orig_table_schema.is_tbl_partition_key(orig_column_schema,
+                                                     is_partition_key,
+                                                     false /* ignore_presetting_key */))) {
+    LOG_WARN("fail to check is tbl partition key", KR(ret), K(orig_table_schema), K(orig_column_schema));
+  } else if (is_partition_key) {
+    if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT != orig_table_schema.get_part_option().get_part_func_type()
+        && orig_table_schema.get_part_option().get_part_func_expr_str().empty()) {
+      if (orig_table_schema.is_auto_partitioned_table()) {
+        // when part_func_expr is empty,
+        // auto-partitioned non-partitioned table will choose rowkey for data table and
+        // choose index columns for global index as presetting partition key.
+        // in this case, it is no need to modify part_func_expr
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("a partitioned table doesn't have part_fun_expr", KR(ret), K(orig_table_schema));
+      }
+    } else if (OB_FAIL(modify_part_func_expr(orig_column_schema.get_column_name_str(),
+                                             alter_column_schema.get_column_name_str(),
+                                             new_table_schema, tz_info, allocator))) {
+      LOG_WARN("modify part func expr failed", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLService::modify_part_func_expr(
     const ObString &orig_column_name,
     const ObString &alter_column_name,
@@ -8886,10 +9522,16 @@ int ObDDLService::modify_part_func_expr(
 {
   int ret = OB_SUCCESS;
 
-  if (!table_schema.is_partitioned_table()) {
+  if (!table_schema.is_partitioned_table() && !table_schema.is_auto_partitioned_table()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid part level", K(ret), K(table_schema.get_part_level()));
-  } else if (PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
+    LOG_WARN("invalid part level", KR(ret), K(table_schema.get_part_level()),
+                                   K(table_schema.get_part_option()));
+  } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT != table_schema.get_part_option().get_part_func_type()
+          && table_schema.get_part_option().get_part_func_expr_str().empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", KR(ret), K(table_schema));
+  } else if (PARTITION_LEVEL_ZERO == table_schema.get_part_level()
+             || PARTITION_LEVEL_ONE == table_schema.get_part_level()) {
     if (OB_FAIL(modify_func_expr_column_name(
                 orig_column_name, alter_column_name, table_schema, tz_info, allocator, false))) {
       LOG_WARN("fail to modify func expr column name",
@@ -9653,6 +10295,8 @@ int ObDDLService::alter_shadow_column_for_index(
               LOG_WARN("fail to assgin new_aux_column_schema", K(ret), KPC(origin_shadow_column_schema));
             } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema, new_aux_column_schema))) {
               LOG_WARN("failed to fill new column attributes", K(ret), KPC(alter_column_schema), K(new_aux_column_schema));
+            } else if (FALSE_IT(new_aux_column_schema.set_autoincrement(false))) {
+              // shadow column of index table should not be auto_increment
             } else if (OB_FAIL(ObIndexBuilderUtil::set_shadow_column_info(origin_shadow_column_schema->get_column_name(), origin_shadow_column_schema->get_column_id(), new_aux_column_schema))) {
               LOG_WARN("fail to set shadow_column_info", K(ret), K(new_aux_column_schema), K(origin_shadow_column_schema->get_column_name()));
             } else if (OB_FAIL(ddl_operator.update_single_column(trans,
@@ -9828,6 +10472,25 @@ int ObDDLService::alter_table_update_aux_column(
                 "table schema", *aux_table_schema, K(ret));
           } else if (OB_FAIL(ddl_operator.update_single_column_group(trans, *aux_table_schema, new_aux_column_schema))) {
             RS_LOG(WARN, "fail to update column group schema name ", K(ret));
+          }
+
+          //  update relevant shadow pk when column changed
+          const ObColumnSchemaV2 *shadow_column = nullptr;
+          if (OB_FAIL(ret)) {
+          } else if (!aux_table_schema->is_global_index_table()) {
+            /* skip */
+          } else if (OB_ISNULL(shadow_column = aux_table_schema->get_column_schema(origin_column_schema->get_column_id() + common::OB_MIN_SHADOW_COLUMN_ID))) {
+            /* skip */
+          } else {
+            ObColumnSchemaV2 new_shadow_column;
+            new_shadow_column.assign(*shadow_column);
+            new_shadow_column.set_data_type(new_column_schema.get_data_type());
+            if (OB_FAIL(ddl_operator.update_single_column(trans, *aux_table_schema, *aux_table_schema, new_shadow_column))) {
+              LOG_WARN("failed to update global index shadow column", K(ret));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
                   trans,
                   *aux_table_schema))) {
@@ -9888,8 +10551,10 @@ int ObDDLService::redistribute_column_ids(
     LOG_WARN("failed to generate new column id map", K(ret));
   } else if (OB_FAIL(new_table_schema.convert_column_ids_for_ddl(column_id_map))) {
     LOG_WARN("failed to convert new table schema column id", K(ret));
-  } else {
-    // do nothing
+  } else if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
+    LOG_WARN("failed to sort column", KR(ret), K(new_table_schema));
+  } else if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+    LOG_WARN("failed to adjust cg after redistribute_column_ids", KR(ret));
   }
   return ret;
 }
@@ -10164,24 +10829,24 @@ int ObDDLService::add_new_column_to_table_schema(
   }
   if (OB_SUCC(ret)) {
     const ObColumnSchemaV2 *mem_col = NULL;
-    if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
+    if (OB_FAIL(resolve_timestamp_column(&alter_column_schema,
+                                         new_table_schema,
+                                         alter_column_schema,
+                                         tz_info_wrap,
+                                         &nls_formats,
+                                         allocator))) {
+      LOG_WARN("fail to resolve timestamp column", K(ret));
+    } else if (OB_FAIL(deal_default_value_padding(alter_column_schema, allocator))) {
+      LOG_WARN("fail to deal default value padding", K(alter_column_schema), K(ret));
+    } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+      LOG_WARN("fail to check primary key cover partition column", K(ret));
+    } else if (OB_FAIL(new_table_schema.add_column(alter_column_schema))) {
       if (OB_ERR_COLUMN_DUPLICATE == ret) {
         const ObString &column_name = alter_column_schema.get_column_name_str();
         LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
         LOG_WARN("duplicate column name", K(column_name), K(ret));
       }
       LOG_WARN("failed to add new column", K(ret));
-    } else if (OB_FAIL(resolve_timestamp_column(&alter_column_schema,
-                                                new_table_schema,
-                                                alter_column_schema,
-                                                tz_info_wrap,
-                                                &nls_formats,
-                                                allocator))) {
-      LOG_WARN("fail to resolve timestamp column", K(ret));
-    } else if (OB_FAIL(deal_default_value_padding(alter_column_schema, allocator))) {
-      LOG_WARN("fail to deal default value padding", K(alter_column_schema), K(ret));
-    } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
-      LOG_WARN("fail to check primary key cover partition column", K(ret));
     } else if (OB_ISNULL(mem_col = new_table_schema.get_column_schema(
                                     alter_column_schema.get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -10207,7 +10872,7 @@ int ObDDLService::add_column_to_column_group(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  uint64_t cur_column_group_id = origin_table_schema.get_max_used_column_group_id();
+  uint64_t cur_column_group_id = origin_table_schema.get_next_single_column_group_id();
   ObArray<uint64_t> column_ids;
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
@@ -10262,7 +10927,7 @@ int ObDDLService::add_column_to_column_group(
           if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema,
                                                    new_table_schema.get_column_schema(column_ids.at(i)),
                                                    new_table_schema.get_tenant_id(),
-                                                   ++cur_column_group_id,
+                                                   cur_column_group_id++,
                                                    cg_schema))) {
             LOG_WARN("fail to build single column group", K(ret), K(new_table_schema), K(column_ids.at(i)));
           } else if (OB_FAIL(new_table_schema.add_column_group(cg_schema))) {
@@ -10548,11 +11213,9 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                              new_table_schema, *alter_column_schema, is_change_column_order))) {
                   LOG_WARN("failed to check is change column order", K(ret));
                 } else if (is_change_column_order) {
-                  if (alter_column_schema->get_column_id() != orig_column_schema->get_column_id()) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schema),
-                             K(*orig_column_schema));
-                  } else if (OB_FAIL(new_table_schema.reorder_column(
+                  //in add column instant, same column name's column id is not the same
+                  //no need to check column schema's column id
+                  if (OB_FAIL(new_table_schema.reorder_column(
                                new_column_schema.get_column_name_str(),
                                alter_column_schema->is_first_,
                                alter_column_schema->get_prev_column_name(),
@@ -11202,6 +11865,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
       LOG_WARN("fail to add_column_to_column_group", K(ret), K(alter_table_schema), K(new_table_schema));
     } else if (OB_FAIL(new_table_schema.check_skip_index_valid())) {
       LOG_WARN("failed to check new table schema skip index", K(ret));
+    } else if (OB_FAIL(new_table_schema.check_row_length(is_oracle_mode))) {
+      LOG_WARN("failed to check_row_length", K(ret), K(new_table_schema));
     } else if (!is_origin_table_has_lob_column) {
       if (OB_FAIL(create_aux_lob_table_if_need(
           new_table_schema, schema_guard, ddl_operator, trans,
@@ -12186,6 +12851,10 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "add column offline";
   } else if (DDL_ADD_COLUMN_ONLINE == ddl_type) {
     str = "add column online";
+  } else if (DDL_ADD_COLUMN_INSTANT == ddl_type) {
+    str = "add column instant";
+  } else if (DDL_COMPOUND_INSTANT == ddl_type) {
+    str = "ddl compound instant";
   } else if (DDL_COLUMN_REDEFINITION == ddl_type) {
     str = "column redefinition";
   } else if (DDL_TABLE_REDEFINITION == ddl_type) {
@@ -12218,6 +12887,8 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "manual split by range";
   } else if (DDL_MANUAL_SPLIT_NON_RANGE == ddl_type) {
     str = "manual split non range";
+  } else if (DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION == ddl_type) {
+    str = "partition split recovery table redefinition";
   }
 
   return str;
@@ -12240,16 +12911,268 @@ int ObDDLService::get_part_by_part_id(
   return ret;
 }
 
+int ObDDLService::old_update_global_index_schema_(const obrpc::ObAlterTableArg &arg,
+                                                  ObMySQLTransaction &trans,
+                                                  ObDDLOperator &ddl_operator,
+                                                  ObSchemaGetterGuard &schema_guard,
+                                                  const ObTableSchema &orig_table_schema,
+                                                  const ObTableSchema &index_table_schema,
+                                                  ObTableSchema &new_index_table_schema,
+                                                  const int64_t tenant_data_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!index_table_schema.is_valid()) || OB_UNLIKELY(!orig_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(index_table_schema), K(orig_table_schema));
+  } else if (!arg.is_update_global_indexes_) {
+    if (OB_FAIL(ddl_operator.update_index_status(
+                             index_table_schema.get_tenant_id(),
+                             index_table_schema.get_data_table_id(),
+                             index_table_schema.get_table_id(),
+                             INDEX_STATUS_UNUSABLE,
+                             orig_table_schema.get_in_offline_ddl_white_list(),
+                             trans,
+                             nullptr /* ddl_stmt_str */))) {
+      LOG_WARN("update_index_status failed", KR(ret), K(index_table_schema.get_data_table_id()));
+    }
+  } else {
+    if (OB_FAIL(drop_directly_and_create_index_schema_(schema_guard, orig_table_schema, new_index_table_schema,
+                                                       nullptr /* ddl_stmt */, &trans, tenant_data_version))) {
+      LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::make_index_unusable_(common::ObIAllocator &allocator,
+                                       ObMySQLTransaction &trans,
+                                       ObDDLOperator &ddl_operator,
+                                       const ObTableSchema &orig_table_schema,
+                                       const ObTableSchema &index_table_schema,
+                                       ObTableSchema &new_index_table_schema,
+                                       ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                       ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!index_table_schema.is_valid()) || OB_UNLIKELY(!orig_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(index_table_schema), K(orig_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_index_status(
+                                  index_table_schema.get_tenant_id(),
+                                  index_table_schema.get_data_table_id(),
+                                  index_table_schema.get_table_id(),
+                                  INDEX_STATUS_UNAVAILABLE,
+                                  orig_table_schema.get_in_offline_ddl_white_list(),
+                                  trans,
+                                  nullptr /* ddl_stmt_str */))) {
+    LOG_WARN("update_index_status failed", KR(ret), K(index_table_schema.get_data_table_id()));
+  }
+  if (OB_SUCC(ret)) {
+    bool has_index_task = false;
+    obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+    typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
+    SMART_VAR(TableSchemaArray, drop_index_schemas) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+                trans, index_table_schema, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(),
+                has_index_task))) {
+      LOG_WARN("fail to check has index task", KR(ret), K(orig_table_schema.get_tenant_id()),
+                K(orig_table_schema.get_table_id()), K(index_table_schema.get_table_id()));
+    } else if (has_index_task) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop a building or dropping index", KR(ret));
+    } else if (OB_FAIL(drop_index_schemas.push_back(new_index_table_schema))) {
+      LOG_WARN("fail to push back new index table schema", KR(ret));
+    } else if (OB_FAIL(prepare_drop_index_arg_(allocator, new_index_table_schema, true/*only_set_status*/,
+                                              true/*is_add_to_scheduler*/, true/*is_inner*/, drop_index_arg))) {
+      LOG_WARN("fail to prepare drop index arg", KR(ret));
+    } else if (OB_ISNULL(drop_index_arg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("drop index arg is nullptr", KR(ret));
+    } else if (OB_FAIL(submit_drop_index_task_and_fill_ddl_result_(allocator, trans, drop_index_schemas, orig_table_schema,
+                       drop_index_arg, nullptr /*inc_data_tablet_ids*/, nullptr /*del_data_tablet_ids*/, has_index_task,
+                                                                   ddl_tasks, ddl_res_array))) {
+      LOG_WARN("fail to submit drop index task", KR(ret));
+    }
+    } // end smart var
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_drop_index_arg_(common::ObIAllocator &allocator,
+                                          ObTableSchema &index_table_schema,
+                                          const bool only_set_status,
+                                          const bool is_add_to_scheduler,
+                                          const bool is_inner,
+                                          obrpc::ObDropIndexArg *&drop_index_arg)
+{
+  int ret = OB_SUCCESS;
+  drop_index_arg = nullptr;
+  void *tmp_ptr = nullptr;
+  if (OB_UNLIKELY(!index_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index table schema's origin index name is nullptr", KR(ret), K(index_table_schema));
+  } else if (OB_FAIL(index_table_schema.generate_origin_index_name())) {
+    LOG_WARN("fail to generate origin index name", KR(ret));
+  } else if (nullptr == (tmp_ptr = (ObDropIndexArg*)allocator.alloc(sizeof(ObDropIndexArg)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
+  } else {
+    drop_index_arg = new (tmp_ptr)ObDropIndexArg();
+    drop_index_arg->index_action_type_ = ObIndexArg::DROP_INDEX;
+    drop_index_arg->is_add_to_scheduler_ = is_add_to_scheduler;
+    drop_index_arg->is_inner_ = is_inner;
+    drop_index_arg->tenant_id_ = index_table_schema.get_tenant_id();
+    if (OB_FAIL(ob_write_string(allocator, index_table_schema.get_origin_index_name_str(),drop_index_arg->index_name_))) {
+      LOG_WARN("fail to write index name", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::submit_drop_index_task_and_fill_ddl_result_(common::ObIAllocator &allocator,
+                                                              ObMySQLTransaction &trans,
+                                                              const common::ObIArray<share::schema::ObTableSchema> &drop_index_schemas,
+                                                              const ObTableSchema &orig_table_schema,
+                                                              const obrpc::ObDropIndexArg *drop_index_arg,
+                                                              const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                                              const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                                                              bool &has_index_task,
+                                                              ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                                              ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  ObIndexBuilder index_builder(*this);
+  ObDDLRes ddl_res;
+  ObDDLTaskRecord task_record;
+  if (0 >= drop_index_schemas.count() || OB_ISNULL(drop_index_arg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("drop index shemas count should larger than 0 or drop_index_arg is null",
+             KR(ret), K(drop_index_schemas.count()), KP(drop_index_arg));
+  } else if (OB_FAIL(index_builder.submit_drop_index_task(trans, orig_table_schema, drop_index_schemas,
+                                                          *drop_index_arg, inc_data_tablet_ids, del_data_tablet_ids,
+                                                          allocator, has_index_task, task_record))) {
+    LOG_WARN("failed to submit drop index task", KR(ret));
+  } else {
+    const ObTableSchema &drop_index_schema = drop_index_schemas.at(0);
+    ddl_res.task_id_ = task_record.task_id_;
+    ddl_res.tenant_id_ = drop_index_schema.get_tenant_id();
+    ddl_res.schema_id_ = drop_index_schema.get_table_id();
+    if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+      LOG_WARN("push back ddl task failed", KR(ret));
+    } else if (OB_FAIL(ddl_res_array.push_back(ddl_res))) {
+      LOG_WARN("push back ddl res array failed", KR(ret));
+    }
+  }
+  return ret;
+}
+int ObDDLService::drop_and_create_index_schema_(obrpc::ObAlterTableArg &arg,
+                                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                                ObMySQLTransaction &trans,
+                                                ObDDLOperator &ddl_operator,
+                                                const ObTableSchema &orig_table_schema,
+                                                const ObTableSchema &index_table_schema,
+                                                const int64_t tenant_data_version,
+                                                ObTableSchema &new_index_table_schema,
+                                                ObIArray<ObDDLTaskRecord> &ddl_tasks,
+                                                ObIArray<obrpc::ObDDLRes> &ddl_res_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(!orig_table_schema.is_valid() || !index_table_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(orig_table_schema), K(index_table_schema));
+  } else if (OB_FAIL(ddl_operator.update_index_status(
+                                  index_table_schema.get_tenant_id(),
+                                  index_table_schema.get_data_table_id(),
+                                  index_table_schema.get_table_id(),
+                                  INDEX_STATUS_UNAVAILABLE,
+                                  orig_table_schema.get_in_offline_ddl_white_list(),
+                                  trans,
+                                  nullptr /* ddl_stmt_str */))) {
+    LOG_WARN("update_index_status failed", KR(ret), K(index_table_schema.get_data_table_id()));
+  }
+  if (OB_SUCC(ret)) {
+    obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+    bool has_index_task = false;
+    bool is_inner_and_domain_index = index_table_schema.is_fts_or_multivalue_index();
+    ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
+    if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+                trans, index_table_schema, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(), has_index_task))) {
+      LOG_WARN("fail to check has index task", KR(ret), K(orig_table_schema.get_tenant_id()),
+                K(orig_table_schema.get_table_id()), K(index_table_schema.get_table_id()));
+    } else if (has_index_task) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop a building or dropping index", KR(ret));
+    } else if (OB_FAIL(prepare_drop_index_arg_(arg.allocator_, new_index_table_schema, true/*only_set_status*/,
+                                              true/*is_add_to_scheduler*/, true/*is_inner*/, drop_index_arg))) {
+      LOG_WARN("fail to prepare drop index arg", KR(ret));
+    } else if (OB_ISNULL(drop_index_arg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("drop index arg is nullptr", KR(ret));
+    } else if (OB_FAIL(index_arg_list.push_back(drop_index_arg))) {
+      LOG_WARN("push back to index_arg_list failed", KR(ret), KP(drop_index_arg));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t new_table_id = OB_INVALID_ID;
+    ObSchemaService *schema_service = schema_service_->get_schema_service();
+    if (OB_ISNULL(schema_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is null", KR(ret));
+    } else if (OB_FAIL(schema_service->fetch_new_table_id(
+                       new_index_table_schema.get_tenant_id(), new_table_id))) {
+      LOG_WARN("fail to fetch new table id", KR(ret));
+    } else {
+      new_index_table_schema.set_table_id(new_table_id);
+      new_index_table_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
+      if (OB_FAIL(generate_tablet_id(new_index_table_schema))) {
+        LOG_WARN("failed to generate tablet id", KR(ret));
+      } else if (OB_FAIL(create_index_or_mlog_table_in_trans(new_index_table_schema,
+                         nullptr /* ddl_stmt */, &trans, schema_guard,
+                         false/*need_check_tablet_cnt*/, tenant_data_version))) {
+        LOG_WARN("create_index_in_trans failed", KR(ret), K(new_index_table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_create_index_arg_(common::ObIAllocator &allocator,
+                                            const ObTableSchema &new_index_table_schema,
+                                            const obrpc::ObIndexArg::IndexActionType index_action_type,
+                                            obrpc::ObCreateIndexArg *&create_index_arg)
+{
+  int ret = OB_SUCCESS;
+  void *tmp_ptr = nullptr;
+  create_index_arg = nullptr;
+  if (nullptr == (tmp_ptr = (ObCreateIndexArg*)allocator.alloc(sizeof(ObCreateIndexArg)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
+  } else {
+    create_index_arg = new (tmp_ptr)ObCreateIndexArg();
+    create_index_arg->index_action_type_ = index_action_type;
+    create_index_arg->index_type_ = new_index_table_schema.get_index_type();
+    if (OB_FAIL(create_index_arg->index_schema_.assign(new_index_table_schema))) {
+      LOG_WARN("fail to assign index schema", KR(ret), K(new_index_table_schema));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::update_global_index(ObAlterTableArg &arg,
                                       const uint64_t tenant_id,
                                       const ObTableSchema &orig_table_schema,
                                       ObDDLOperator &ddl_operator,
                                       ObMySQLTransaction &trans,
-                                      const uint64_t tenant_data_version)
+                                      const uint64_t tenant_data_version,
+                                      obrpc::ObAlterTableRes &res,
+                                      ObIArray<ObDDLTaskRecord> &ddl_tasks)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSchemaGetterGuard schema_guard;
+  bool is_oracle_mode = false;
   if (obrpc::ObAlterTableArg::DROP_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == arg.alter_part_type_
       || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == arg.alter_part_type_
@@ -12261,9 +13184,13 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
       LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
     } else if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get_index_tid_array failed", K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to get compat mode", KR(ret), K(tenant_id));
     } else {
+      SMART_VAR(ObTableSchema, new_index_table_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-        const ObTableSchema *index_table_schema = NULL;
+        const ObTableSchema *index_table_schema = nullptr;
+        new_index_table_schema.reset();
         if (OB_FAIL(schema_guard.get_table_schema(
                     tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
           LOG_WARN("get_table_schema failed", K(tenant_id),
@@ -12277,46 +13204,49 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop/truncate partition before finishing index build ");
         } else if (!index_table_schema->can_read_index()) {
           // If the index is not available, the partition operation will not do any intervention
-        } else if (index_table_schema->is_global_index_table()) {
-          if (!arg.is_update_global_indexes_) {
-            if (OB_FAIL(ddl_operator.update_index_status(
-                  tenant_id,
-                  index_table_schema->get_data_table_id(),
-                  index_table_schema->get_table_id(),
-                  INDEX_STATUS_UNUSABLE,
-                  orig_table_schema.get_in_offline_ddl_white_list(),
-                  trans,
-                  nullptr /* ddl_stmt_str */))) {
-              LOG_WARN("update_index_status failed", K(index_table_schema->get_data_table_id()));
+        } else if (!index_table_schema->is_global_index_table()) {
+          // do nothing
+        } else if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
+          LOG_WARN("fail to assign schema", KR(ret));
+        } else {
+          if (tenant_data_version < DATA_VERSION_4_3_3_0
+              || is_oracle_mode) {
+            if (OB_FAIL(old_update_global_index_schema_(arg, trans, ddl_operator, schema_guard,
+                                                        orig_table_schema, *index_table_schema,
+                                                        new_index_table_schema,tenant_data_version))) {
+              LOG_WARN("fail to update global index schema", KR(ret), K(arg));
             }
           } else {
-            ObTableSchema new_table_schema;
-            if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
-              LOG_WARN("fail to assign schema", K(ret));
-            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard, orig_table_schema, new_table_schema,
-                                                      NULL, &trans, tenant_data_version))) {
-              LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
-            } else {
-              ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
-              void *tmp_ptr = NULL;
-              obrpc::ObCreateIndexArg *create_index_arg = NULL;
-              if (NULL == (tmp_ptr = (ObCreateIndexArg*)arg.allocator_.alloc(sizeof(ObCreateIndexArg)))) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                SHARE_LOG(ERROR, "failed to alloc memory!", KR(ret));
-              } else {
-                create_index_arg = new (tmp_ptr)ObCreateIndexArg();
-                create_index_arg->index_action_type_ = ObIndexArg::REBUILD_INDEX;
-                create_index_arg->index_type_ = new_table_schema.get_index_type();
-                if (OB_FAIL(create_index_arg->index_schema_.assign(new_table_schema))) {
-                  LOG_WARN("fail to assign index schema", KR(ret), K(new_table_schema));
-                } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
-                  LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
-                }
+            ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+            if (arg.is_update_global_indexes_) {
+              if(OB_FAIL(drop_and_create_index_schema_(arg, schema_guard, trans, ddl_operator, orig_table_schema,
+                                                       *index_table_schema, tenant_data_version, new_index_table_schema,
+                                                       ddl_tasks, ddl_res_array))) {
+                LOG_WARN("fail to drop and create index schema", KR(ret), K(arg));
               }
+            } else {
+              if (OB_FAIL(make_index_unusable_(arg.allocator_, trans, ddl_operator, orig_table_schema, *index_table_schema,
+                                               new_index_table_schema, ddl_tasks, ddl_res_array))) {
+                LOG_WARN("fail to make index unusable", KR(ret), K(arg));
+              }
+            }
+          }
+          if (OB_FAIL(ret)
+              || !arg.is_update_global_indexes_) {
+            // do nothing
+          } else {
+            ObSArray<obrpc::ObIndexArg *> &index_arg_list = arg.index_arg_list_;
+            obrpc::ObCreateIndexArg *create_index_arg = nullptr;
+            if (OB_FAIL(prepare_create_index_arg_(arg.allocator_, new_index_table_schema,
+                                                  ObIndexArg::REBUILD_INDEX, create_index_arg))) {
+              LOG_WARN("fail to prepare create index arg", KR(ret));
+            } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
+              LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
             }
           }
         }
       }
+      }// end smart var
     }
   }
   return ret;
@@ -12381,11 +13311,14 @@ int ObDDLService::fill_interval_info_for_offline(const ObTableSchema &orig_table
 
 //For truncate part/subpart, inc_table_schema and del_table_schema should be different in the later process.
 //For other situations, del_table_schema is useless and equal to inc_table_schema.
-int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionType op_type,
+//For split partition, upd_table_schema records the partition information which need to be changed.
+//For other situations, upd_table_schema is useless and equal to new_table_schema.
+int ObDDLService::generate_tables_array(const obrpc::ObAlterTableArg &alter_table_arg,
                                         ObIArray<const ObTableSchema*> &orig_table_schemas,
                                         ObIArray<ObTableSchema*> &new_table_schemas,
                                         ObIArray<AlterTableSchema*> &inc_table_schemas,
                                         ObIArray<AlterTableSchema*> &del_table_schemas,
+                                        common::ObIArray<ObTableSchema*> &upd_table_schemas,
                                         const ObTableSchema &orig_table_schema,
                                         ObTableSchema &new_table_schema,
                                         AlterTableSchema &inc_table_schema,
@@ -12393,21 +13326,24 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
                                         ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  const ObAlterTableArg::AlterPartitionType op_type = alter_table_arg.alter_part_type_;
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   ObSEArray<uint64_t, 20> aux_table_ids;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   AlterTableSchema tmp_inc_table_schema;
   bool modify_sub_part_template_flags = false;
   if (PARTITION_LEVEL_TWO == orig_table_schema.get_part_level()
-      && orig_table_schema.sub_part_template_def_valid()
-      && (obrpc::ObAlterTableArg::ADD_PARTITION == op_type
-          || obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
-          || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type)) {
+      && orig_table_schema.sub_part_template_def_valid()) {
     // sub_part_template_def_valid() is only used for schema printer.
     // To simplify relate logic, we consider that add partition/subpartition or add subpartition
     // make cause partitions different.
-    modify_sub_part_template_flags = true;
-    new_table_schema.unset_sub_part_template_def_valid();
+    if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type
+        || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type
+        || (obrpc::ObAlterTableArg::ADD_PARTITION == op_type && !alter_table_schema.sub_part_template_def_valid())) {
+      modify_sub_part_template_flags = true;
+      new_table_schema.unset_sub_part_template_def_valid();
+    }
   }
   const ObString new_part_name = inc_table_schema.get_new_part_name();
   if ((!orig_table_schema.has_tablet() && !orig_table_schema.is_external_table())
@@ -12502,7 +13438,7 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
                  && FALSE_IT(new_aux_table_schema->unset_sub_part_template_def_valid())) {
       } else if (OB_FAIL(inc_aux_table_schema->assign(*new_aux_table_schema))) {
         LOG_WARN("failed to push back table_schema", KR(ret), KPC(new_aux_table_schema));
-      } else if (OB_FAIL(inc_aux_table_schema->assign_partition_schema(inc_table_schema))) {
+      } else if (OB_FAIL(inc_aux_table_schema->assign_partition_schema_without_auto_part_attr(inc_table_schema))) {
         LOG_WARN("fail to assign partition schema", K(inc_table_schema), KR(ret));
       } else if (OB_FAIL(inc_aux_table_schema->set_transition_point(inc_table_schema.get_transition_point()))) {
         LOG_WARN("fail to set transition point", K(ret));
@@ -12517,6 +13453,37 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
       }
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (obrpc::ObAlterTableArg::REORGANIZE_PARTITION == op_type ||
+             obrpc::ObAlterTableArg::SPLIT_PARTITION == op_type ||
+             obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == op_type) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_table_schemas.count(); i++) {
+      ObTableSchema *upd_table_schema = NULL;
+      void *upd_schema_ptr = allocator.alloc(sizeof(ObTableSchema));
+      if (OB_ISNULL(upd_schema_ptr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail alloc memory", KR(ret));
+      } else if (FALSE_IT(upd_table_schema = new (upd_schema_ptr)ObTableSchema(&allocator))) {
+      } else if (OB_FAIL(upd_table_schema->assign(*new_table_schemas.at(i)))) {
+        LOG_WARN("fail to assign partition schema", K(new_table_schemas), KR(ret));
+      } else if (FALSE_IT(upd_table_schema->reset_partition_array())) {
+      } else if (FALSE_IT(upd_table_schema->reset_hidden_partition_array())) {
+      } else if (OB_FAIL(upd_table_schemas.push_back(upd_table_schema))) {
+        LOG_WARN("failed to push back table_schema", KR(ret), KPC(upd_table_schema));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generate_split_info_for_schemas_(op_type,
+                                                        orig_table_schemas, inc_table_schemas,
+                                                        new_table_schemas, upd_table_schemas))) {
+      LOG_WARN("fail to generate split info for schema", KR(ret));
+    }
+  } else if (OB_FAIL(upd_table_schemas.assign(new_table_schemas))) {
+    LOG_WARN("failed to assign new_table_schemas", KR(ret), K(new_table_schemas));
+  }
+
   if (OB_FAIL(ret)) {
   } else if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == op_type
              || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == op_type) {
@@ -12559,11 +13526,155 @@ int ObDDLService::reset_interval_info_for_interval_to_range(ObTableSchema &new_t
   return ret;
 }
 
+int ObDDLService::split_global_index_partitions(obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  AlterTableSchema &alter_table_schema = arg.alter_table_schema_;
+  const uint64_t tenant_id = alter_table_schema.get_tenant_id();
+  const ObTableSchema *orig_index_schema =  NULL;
+  int64_t refreshed_schema_version = 0;
+  uint64_t tenant_data_version = 0;
+  ObDDLSQLTransaction trans(schema_service_);
+  ObSchemaGetterGuard schema_guard;
+  schema_guard.set_session_id(arg.session_id_);
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root service is null", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_UNLIKELY(obrpc::ObAlterTableArg::AlterPartitionType::AUTO_SPLIT_PARTITION != arg.alter_part_type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid alter partition type", KR(ret), K(arg.alter_part_type_), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id,
+                                                                         schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   alter_table_schema.get_origin_database_name(),
+                                                   alter_table_schema.get_origin_table_name(),
+                                                   true /*is_index*/,
+                                                   orig_index_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(alter_table_schema));
+  } else if (OB_ISNULL(orig_index_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("NULL ptr", KR(ret), K(alter_table_schema));
+  } else if (OB_UNLIKELY(!orig_index_schema->is_global_index_table() ||
+                         is_sys_index_table(orig_index_schema->get_table_id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index type", KR(ret), KPC(orig_index_schema));
+  } else if (OB_FAIL(fill_part_name(*orig_index_schema, arg.alter_table_schema_))) {
+    LOG_WARN("failed to fill part name", KR(ret), K(orig_index_schema), K(arg));
+  } else if (OB_FAIL(check_split_global_index_partition_(schema_guard, arg, *orig_index_schema))) {
+    LOG_WARN("fail to check split global idnex partition", KR(ret), KPC(orig_index_schema), K(arg));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+    LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else {
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObArray<const ObTableSchema*> orig_index_schemas;
+    ObArray<ObTableSchema*> new_index_schemas;
+    ObArray<AlterTableSchema*> inc_index_schemas;
+    ObArray<const ObTableSchema *> inc_index_schema_ptrs;
+    ObArray<AlterTableSchema*> del_index_schemas;
+    ObArray<ObTableSchema*> upd_index_schemas;
+    ObArenaAllocator allocator("ModifyPart");
+    obrpc::ObAlterTableRes res;
+
+    HEAP_VAR(ObArray<ObDDLTaskRecord>, ddl_tasks) {
+    HEAP_VAR(ObTableSchema, new_table_schema) {
+    if (OB_FAIL(new_table_schema.assign(*orig_index_schema))) {
+      LOG_WARN("fail to assign schema", KR(ret));
+    } else if (OB_FAIL(generate_tables_array(arg,
+                                             orig_index_schemas,
+                                             new_index_schemas,
+                                             inc_index_schemas,
+                                             del_index_schemas,
+                                             upd_index_schemas,
+                                             *orig_index_schema,
+                                             new_table_schema,
+                                             alter_table_schema,
+                                             schema_guard,
+                                             allocator))) {
+      LOG_WARN("generate tables array failed", KR(ret), K(arg));
+    } else if (OB_FAIL(alter_tables_partitions(arg,
+                                               orig_index_schemas,
+                                               new_index_schemas,
+                                               inc_index_schemas,
+                                               del_index_schemas,
+                                               upd_index_schemas,
+                                               ddl_operator,
+                                               schema_guard,
+                                               trans))) {
+      LOG_WARN("alter table partitions failed", KR(ret), K(arg));
+    } else if (OB_FAIL(ddl_operator.inc_table_schema_version(trans, tenant_id,
+                                                             orig_index_schema->get_data_table_id()))) {
+      LOG_WARN("fail to inc data table schema version", KR(ret), KPC(orig_index_schema));
+    } else if (OB_UNLIKELY(inc_index_schemas.count() != 1) ||
+               OB_UNLIKELY(new_index_schemas.count() != 1) ||
+               OB_ISNULL(inc_index_schemas.at(0)) ||
+               OB_ISNULL(new_index_schemas.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid schema arr", KR(ret), K(inc_index_schemas.count()), KP(inc_index_schemas.at(0)),
+                                     K(new_index_schemas.count()), KP(new_index_schemas.at(0)));
+    } else if (FALSE_IT(inc_index_schemas.at(0)->set_schema_version(
+                                          new_index_schemas.at(0)->get_schema_version()))) {
+    } else if (OB_FAIL(inc_index_schema_ptrs.push_back(inc_index_schemas.at(0)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else {
+      const ObDDLType ddl_type = ObDDLType::DDL_AUTO_SPLIT_BY_RANGE;
+      ObSplitPartitionHelper split_partition_helper(trans, schema_guard, arg.allocator_, tenant_id,
+          tenant_data_version, ddl_type, new_index_schemas, upd_index_schemas, inc_index_schema_ptrs, arg.parallelism_);
+      ObDDLTaskRecord task_record;
+      if (OB_FAIL(split_partition_helper.execute(task_record))) {
+        LOG_WARN("failed to execute split partition helper", KR(ret));
+      } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+        LOG_WARN("failed to push back", KR(ret));
+      } else {
+        res.ddl_type_ = ddl_type;
+        res.task_id_ = task_record.task_id_;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(ddl_tasks.count() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid task number", KR(ret), K(arg), K(ddl_tasks));
+    }
+
+    const bool is_commit = OB_SUCC(ret);
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
+        LOG_WARN("trans end failed", K(is_commit), K(temp_ret));
+        ret = is_commit ? temp_ret : ret;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish_schema failed", KR(ret));
+      } else if (OB_TMP_FAIL(GCTX.root_service_->get_ddl_scheduler().schedule_ddl_task(ddl_tasks.at(0)))) {
+        LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(ddl_tasks.at(0)));
+      }
+    }
+    } // end HEAP_VAR(ObTableSchema, new_table_schema)
+    } // end HEAP_VAR(ObArray<ObDDLTaskRecord>, ddl_tasks)
+  }
+
+  return ret;
+}
+
 int ObDDLService::alter_tables_partitions(const obrpc::ObAlterTableArg &alter_table_arg,
                                           ObIArray<const ObTableSchema*> &orig_table_schemas,
                                           ObIArray<ObTableSchema*> &new_table_schemas,
                                           ObIArray<AlterTableSchema*> &inc_table_schemas,
                                           ObIArray<AlterTableSchema*> &del_table_schemas,
+                                          ObIArray<ObTableSchema*> &upd_table_schemas,
                                           ObDDLOperator &ddl_operator,
                                           ObSchemaGetterGuard &schema_guard,
                                           ObMySQLTransaction &trans)
@@ -12595,6 +13706,7 @@ int ObDDLService::alter_tables_partitions(const obrpc::ObAlterTableArg &alter_ta
                                               *orig_table_schemas.at(i),
                                               *inc_table_schemas.at(i),
                                               *del_table_schemas.at(i),
+                                              *upd_table_schemas.at(i),
                                               *new_table_schemas.at(i),
                                               ddl_operator,
                                               schema_guard,
@@ -12620,6 +13732,7 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                                          const ObTableSchema &orig_table_schema,
                                          AlterTableSchema &inc_table_schema,
                                          AlterTableSchema &del_table_schema,
+                                         ObTableSchema &upd_table_schema,
                                          ObTableSchema &new_table_schema,
                                          ObDDLOperator &ddl_operator,
                                          ObSchemaGetterGuard &schema_guard,
@@ -12635,12 +13748,18 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("valid schema service", K(ret));
-  } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == op_type
-             || obrpc::ObAlterTableArg::REORGANIZE_PARTITION == op_type
-             || obrpc::ObAlterTableArg::SPLIT_PARTITION == op_type) {
+  } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == op_type) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("split table partitions is not supported", KR(ret), K(orig_table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "split table partitions is");
+  } else if (alter_table_arg.is_split_partition()) {
+    if (OB_FAIL(ddl_operator.split_table_partitions(orig_table_schema,
+                                                    inc_table_schema,
+                                                    new_table_schema,
+                                                    upd_table_schema,
+                                                    trans))) {
+      LOG_WARN("failed to add table partitions", KR(ret));
+    }
   } else if (obrpc::ObAlterTableArg::ADD_PARTITION == op_type) {
     if (OB_FAIL(ObDDLLock::lock_for_add_partition_in_trans(orig_table_schema, trans))) {
       LOG_WARN("failed to lock for add drop partition", K(ret));
@@ -12786,8 +13905,7 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                K(orig_table_schema), K(inc_table_schema));
     }
   }
-
-  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type)) {
+  if (OB_SUCC(ret) && !is_add_and_drop_partition(op_type) && !alter_table_arg.is_split_partition()) {
     if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, new_table_schema, schema_guard))) {
       LOG_WARN("fail to check alter partition with tablegroup", KR(ret), K(orig_table_schema), K(new_table_schema));
     }
@@ -12894,14 +14012,11 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
             } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
               LOG_INFO("skip table schema in recyclebin", K(*table_schema));
             } else {
-              uint64_t tenant_data_version = 0;
               const uint64_t tenant_id = table_schema->get_tenant_id();
               alter_table_schema.set_origin_database_name(database_schema->get_database_name());
               alter_table_schema.set_origin_table_name(table_schema->get_table_name());
               alter_table_schema.set_tenant_id(tenant_id);
-              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-                LOG_WARN("get min data version failed", K(ret), K(tenant_id));
-              } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
+              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, tenant_data_version, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
                 LOG_WARN("failed to to check is offline ddl", K(ret));
               } else {
                 // offline ddl cannot appear at the same time with other ddl types
@@ -12947,6 +14062,42 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
                                                     operation_type,
                                                     0 == i ? &ddl_stmt_str : NULL))) {
       LOG_WARN("failed to update data table schema version and max used column is!", KR(ret), KPC(new_table_schemas.at(i)));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_need_add_progressive_round(
+  const uint64_t tenant_data_version,
+  const ObTableSchema &table_schema,
+  const AlterTableSchema &alter_table_schema,
+  bool &need_add_progressive_round)
+{
+  int ret = OB_SUCCESS;
+  need_add_progressive_round = true;
+  bool is_column_store_schema = false;
+  bool has_all_column_group = false;
+  if (tenant_data_version < DATA_VERSION_4_3_4_0) {
+    // do nothing
+  } else if (OB_FAIL(table_schema.get_is_column_store(is_column_store_schema))) {
+    LOG_WARN("failed to get is column store", KR(ret));
+  } else if (!is_column_store_schema) {
+  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+    LOG_WARN("failed to check has all column group", KR(ret));
+  } else if (!has_all_column_group) {
+    // for pure column store table
+    AlterColumnSchema *alter_column_schema = nullptr;
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    need_add_progressive_round = false;
+    for (;OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("*it_begin is NULL", K(ret));
+      } else if (OB_DDL_ADD_COLUMN != alter_column_schema->alter_type_) {
+        need_add_progressive_round = true;
+        break;
+      }
     }
   }
   return ret;
@@ -13064,20 +14215,31 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
     } else {
       bool need_update_index_table = false;
       AlterLocalityOp alter_locality_op = ALTER_LOCALITY_OP_INVALID;
-      if (alter_table_arg.is_alter_columns_
-          || (alter_table_arg.is_alter_options_
-          && alter_table_arg.need_progressive_merge())) {
+      bool need_progressive_merge = false;
+      if (alter_table_arg.is_alter_columns_) {
+        if (OB_FAIL(check_need_add_progressive_round(
+            tenant_data_version,
+            *orig_table_schema,
+            alter_table_arg.alter_table_schema_,
+            need_progressive_merge))) {
+          LOG_WARN("failed to check need progressive round", KR(ret));
+        }
+      } else if (alter_table_arg.is_alter_options_
+          && alter_table_arg.need_progressive_merge()) {
         if (alter_table_arg.alter_table_schema_.alter_option_bitset_.
             has_member(ObAlterTableArg::ENCRYPTION) &&
             alter_table_arg.alter_table_schema_.is_equal_encryption(*orig_table_schema)) {
           // If the values before and after changing the encryption algorithm in the table are the same,
           // the merge is not marked
         } else {
-          alter_table_arg.is_alter_options_ = true;
-          alter_table_arg.alter_table_schema_.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
-          if (OB_FAIL(alter_table_arg.alter_table_schema_.alter_option_bitset_.add_member(ObAlterTableArg::PROGRESSIVE_MERGE_ROUND))) {
-            LOG_WARN("fail to add member progressive merge round", K(ret));
-          }
+          need_progressive_merge = true;
+        }
+      }
+      if (OB_SUCC(ret) && need_progressive_merge) {
+        alter_table_arg.is_alter_options_ = true;
+        alter_table_arg.alter_table_schema_.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
+        if (OB_FAIL(alter_table_arg.alter_table_schema_.alter_option_bitset_.add_member(ObAlterTableArg::PROGRESSIVE_MERGE_ROUND))) {
+          LOG_WARN("fail to add member progressive merge round", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -13135,8 +14297,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         //table columns
         if (OB_SUCC(ret) && alter_table_arg.is_alter_columns_) {
           if (OB_FAIL(check_can_alter_column(tenant_id,
-                                              alter_table_schema,
-                                              *orig_table_schema))) {
+                                             alter_table_schema,
+                                             *orig_table_schema))) {
             LOG_WARN("fail to can alter column", K(ret), K(alter_table_arg));
           } else if (OB_FAIL(alter_table_column(*orig_table_schema,
                                                 alter_table_schema,
@@ -13201,6 +14363,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         //table indexs
+        int64_t new_fetched_snapshot = 0;
         if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_) {
           if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
             LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
@@ -13213,7 +14376,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                alter_table_arg.allocator_,
                                                tenant_data_version,
                                                res,
-                                               ddl_tasks))) {
+                                               ddl_tasks,
+                                               new_fetched_snapshot))) {
             LOG_WARN("failed to alter table index!", K(ret));
           }
         }
@@ -13231,6 +14395,21 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("alter table constraints failed", K(ret));
           }
         }
+        // alter auto table attr
+        if (OB_SUCC(ret) && alter_table_arg.alter_auto_partition_attr_) {
+          ObAlterAutoPartAttrOp alter_auto_part(*this);
+          if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
+            LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
+          } else if (OB_FAIL(alter_auto_part.alter_table_auto_part_attr_if_need(
+              alter_table_arg,
+              ddl_type,
+              schema_guard,
+              new_table_schema,
+              ddl_operator,
+              trans))) {
+            LOG_WARN("fail to alter table part attr.", K(ret));
+          }
+        }
         //table partitions
         // the first element is data_table_schema
         // the others element are local_index_schemas
@@ -13238,8 +14417,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         ObArray<ObTableSchema*> new_table_schemas;
         // 1. truncate part/subpart: del_table_schemas will be deleted and inc_table_schemas will be added
         // 2. others: inc_table_schemas and del_table_schemas is pointed same partitions
+        // 3. split partition: upd_table_schemas record the partition information which need to be changed.
+        // 4. other situations, upd_table_schemas are useless and point to same partition with new_table_schemas.
         ObArray<AlterTableSchema*> inc_table_schemas;
         ObArray<AlterTableSchema*> del_table_schemas;
+        ObArray<ObTableSchema*> upd_table_schemas;
         ObArenaAllocator allocator("ModifyPart");
         //table partitions
         ObArray<int64_t> new_partition_ids;
@@ -13251,23 +14433,28 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                  *orig_table_schema,
                                                  ddl_operator,
                                                  trans,
-                                                 tenant_data_version))) {
+                                                 tenant_data_version,
+                                                 res,
+                                                 ddl_tasks))) {
             LOG_WARN("update_global_index failed", K(ret));
-          } else if (OB_FAIL(generate_tables_array(alter_table_arg.alter_part_type_,
+          } else if (OB_FAIL(generate_tables_array(alter_table_arg,
                                                    orig_table_schemas,
                                                    new_table_schemas,
                                                    inc_table_schemas,
                                                    del_table_schemas,
+                                                   upd_table_schemas,
                                                    *orig_table_schema,
                                                    new_table_schema,
                                                    alter_table_schema,
                                                    schema_guard,
                                                    allocator))) {
+            LOG_WARN("failed to generate tables array", KR(ret));
           } else if (OB_FAIL(alter_tables_partitions(alter_table_arg,
                                                      orig_table_schemas,
                                                      new_table_schemas,
                                                      inc_table_schemas,
                                                      del_table_schemas,
+                                                     upd_table_schemas,
                                                      ddl_operator,
                                                      schema_guard,
                                                      trans))) {
@@ -13320,12 +14507,40 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
         }
 
+        // alter column group delayed
+        if (OB_SUCC(ret) && (ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED == ddl_type)) {
+          if (tenant_data_version < DATA_VERSION_4_3_5_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("compat version not support", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5, alter column group delayed");
+          } else if (GCTX.is_shared_storage_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "alter column group delayed does not support shared storage mode", K(ret));
+          } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
+            LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));
+          } else if (OB_FAIL(alter_column_group(alter_table_arg,
+                                                *orig_table_schema,
+                                                new_table_schema,
+                                                schema_guard,
+                                                ddl_operator,
+                                                trans))) {
+            LOG_WARN("failed to alter table column group", K(ret));
+          } else if (OB_FAIL(update_column_group_table_inplace(*orig_table_schema,
+                                                      new_table_schema,
+                                                      ddl_operator,
+                                                      trans))) {
+            LOG_WARN("failed to alter table column group table", K(ret));
+          } else {
+            // only change schemas here, leave data reshaping in major merge
+            LOG_INFO("alter column group delayed", K(ret), KPC(orig_table_schema), K(new_table_schema));
+          }
+        }
+
         if (OB_SUCC(ret)) {
           ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
           if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_table_arg.alter_part_type_) {
             operation_type = OB_DDL_PARTITIONED_TABLE;
-          } else if (obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_table_arg.alter_part_type_
-                      || obrpc::ObAlterTableArg::REORGANIZE_PARTITION == alter_table_arg.alter_part_type_) {
+          } else if (alter_table_arg.is_split_partition()) {
             operation_type = OB_DDL_SPLIT_PARTITION;
           } else if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_) {
             operation_type = OB_DDL_TRUNCATE_PARTITION;
@@ -13346,7 +14561,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
 
           if (!alter_table_arg.is_alter_partitions_) {
-            if (OB_FAIL(ddl_operator.update_table_attribute(
+            if (alter_table_arg.alter_auto_partition_attr_) {
+              // do nothing
+            } else if (OB_FAIL(ddl_operator.update_table_attribute(
                         new_table_schema,
                         trans,
                         operation_type,
@@ -13437,6 +14654,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         if (OB_SUCC(ret)) {
+          const bool need_create_empty_major_sstable = !alter_table_arg.is_split_partition();
           common::ObArray<bool> need_create_empty_majors;
           common::ObArray<const ObTableSchema*> inc_table_schema_ptrs;
           common::ObArray<const ObTableSchema*> del_table_schema_ptrs;
@@ -13447,7 +14665,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               LOG_WARN("table_schemas is NULL", KR(ret), K(i), K(tmp_table_schema));
             } else if (FALSE_IT(inc_table_schemas.at(i)->set_schema_version(new_table_schemas.at(i)->get_schema_version()))) {
             } else if (OB_FAIL(inc_table_schema_ptrs.push_back(tmp_table_schema))
-              || OB_FAIL(need_create_empty_majors.push_back(true))) {
+              || OB_FAIL(need_create_empty_majors.push_back(need_create_empty_major_sstable))) {
               LOG_WARN("fail to push back", KR(ret), KPC(tmp_table_schema));
             }
           }
@@ -13502,15 +14720,28 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            trans);
               common::ObArray<share::ObLSID> ls_id_array;
               const ObTableSchema *tmp_table_schema = inc_table_schema_ptrs.at(0);
+              const ObTablegroupSchema *tablegroup_schema = NULL; // keep NULL if no tablegroup
               ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id, schema_guard, sql_proxy_);
               if (OB_ISNULL(tmp_table_schema)) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("table schem is null", KR(ret), K(inc_table_schema_ptrs));
+                LOG_WARN("table schema is null", KR(ret), K(inc_table_schema_ptrs));
               } else if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
                 LOG_WARN("fail to init table creator", KR(ret));
               } else if (OB_FAIL(new_table_tablet_allocator.init())) {
                 LOG_WARN("fail to init new table tablet allocator", KR(ret));
-              } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, true))) {
+              } else if (OB_INVALID_ID != tmp_table_schema->get_tablegroup_id()) {
+                if (OB_FAIL(schema_guard.get_tablegroup_schema(
+                    tmp_table_schema->get_tenant_id(),
+                    tmp_table_schema->get_tablegroup_id(),
+                    tablegroup_schema))) {
+                  LOG_WARN("get tablegroup_schema failed", KR(ret), KPC(tmp_table_schema));
+                } else if (OB_ISNULL(tablegroup_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("tablegroup_schema is null", KR(ret), KPC(tmp_table_schema));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *tmp_table_schema, tablegroup_schema, true))) {
                 LOG_WARN("failed to prepare tablet allocator", KR(ret), KPC(tmp_table_schema));
               } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
                 LOG_WARN("fail to get ls id array", KR(ret));
@@ -13518,24 +14749,39 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                       inc_table_schema_ptrs,
                       ls_id_array,
                       tenant_data_version,
-                      need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+                      need_create_empty_majors/*need_create_empty_majors*/))) {
                 LOG_WARN("create table partitions failed", KR(ret), K(alter_table_schema),
-                         K(inc_table_schema_ptrs));
+                                                           K(inc_table_schema_ptrs));
               } else if (OB_FAIL(table_creator.execute())) {
                 LOG_WARN("execute create partition failed", KR(ret));
               }
             }
           }
+
+          if (OB_SUCC(ret) && alter_table_arg.is_split_partition()) {
+            // TODO(zhenhan.gzh): modify ddl_type based on split type(auto/manual) and part_type
+            const ObDDLType ddl_type = alter_table_arg.is_auto_split_partition() ? ObDDLType::DDL_AUTO_SPLIT_BY_RANGE : ObDDLType::DDL_MANUAL_SPLIT_BY_RANGE;
+            ObSplitPartitionHelper split_partition_helper(trans, schema_guard, alter_table_arg.allocator_, tenant_id,
+                tenant_data_version, ddl_type, new_table_schemas, upd_table_schemas, inc_table_schema_ptrs, alter_table_arg.parallelism_);
+            ObDDLTaskRecord task_record;
+            if (OB_FAIL(split_partition_helper.execute(task_record))) {
+              LOG_WARN("failed to execute split partition helper", KR(ret));
+            } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+              LOG_WARN("failed to push back", KR(ret));
+            } else {
+              res.ddl_type_ = ddl_type;
+              res.task_id_ = task_record.task_id_;
+            }
+          }
         }
 
         if (OB_FAIL(ret)) {
-        } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_table_arg.alter_part_type_
-                   || obrpc::ObAlterTableArg::REORGANIZE_PARTITION == alter_table_arg.alter_part_type_
-                   || obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_table_arg.alter_part_type_) {
+        } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_table_arg.alter_part_type_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("split partition is not supported", KR(ret), K(alter_table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition is");
         }
+
         if (OB_SUCC(ret) &&
              alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::INCREMENT_MODE) &&
              0 != orig_table_schema->get_autoinc_column_id()) {
@@ -13553,81 +14799,79 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
+          const int64_t new_table_id = new_table_schema.get_table_id();
+          ObArray<ObTabletID> inc_tablet_ids;
+          ObArray<ObTabletID> del_tablet_ids;
+          if (index_arg_list.count() > 0) {
+            if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (OB_FAIL(get_tablets_with_table_id_(inc_table_schemas, new_table_id, inc_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
+              }
+            }
+            if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
+                || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+              if (FAILEDx(get_tablets_with_table_id_(del_table_schemas, new_table_id, del_tablet_ids))) {
+                LOG_WARN("fail to get tablets with table id", KR(ret), K(inc_table_schemas), K(new_table_id));
+              }
+            }
+
+          }
           for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
             ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
             ObDDLTaskRecord task_record;
             if (OB_ISNULL(index_arg)) {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("index arg should not be null", K(ret));
+              LOG_WARN("index arg should not be null", KR(ret));
             } else if (ObIndexArg::ADD_INDEX == index_arg->index_action_type_
-                      || ObIndexArg::REBUILD_INDEX == index_arg->index_action_type_) {
+                       || ObIndexArg::REBUILD_INDEX == index_arg->index_action_type_) {
               ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
               ObTableSchema &index_schema = create_index_arg->index_schema_;
               if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_ ||
-                  is_fts_index(create_index_arg->index_type_) ||
-                  is_multivalue_index(create_index_arg->index_type_) ||
                   is_vec_index(create_index_arg->index_type_)) {
-                // TODO hanxuan tempory bypass sumbit build fulltext index task
-                // TODO yunyi tempory bypass sumbit build multi value index task
+              } else if (OB_FAIL(index_builder.submit_build_index_task(trans,
+                                                                  *create_index_arg,
+                                                                  orig_table_schema,
+                                                                  &inc_tablet_ids,
+                                                                  &del_tablet_ids,
+                                                                  &index_schema,
+                                                                  alter_table_arg.parallelism_,
+                                                                  const_alter_table_arg.consumer_group_id_,
+                                                                  tenant_data_version,
+                                                                  alter_table_arg.allocator_,
+                                                                  task_record,
+                                                                  new_fetched_snapshot))) {
+                LOG_WARN("fail to submit build index task", KR(ret), "type", create_index_arg->index_type_);
+              } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
+                LOG_WARN("fail to push ddl task", KR(ret), K(task_record));
               } else {
-                ObArray<ObTabletID> inc_tablet_ids;
-                ObArray<ObTabletID> del_tablet_ids;
-                if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-                  for (int64_t i = 0; OB_SUCC(ret) && i < inc_table_schemas.count(); i++) {
-                    ObTableSchema *inc_table_schema = inc_table_schemas[i];
-                    if (inc_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                      if (OB_FAIL(inc_table_schema->get_tablet_ids(inc_tablet_ids))) {
-                        LOG_WARN("failed to get del tablet ids", K(ret));
-                      }
-                      break;
-                    }
-                  }
+                res.task_id_ = task_record.task_id_;
+                ObDDLRes ddl_res;
+                ddl_res.tenant_id_ = tenant_id;
+                ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
+                ddl_res.task_id_ = task_record.task_id_;
+                obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,
+                                              create_index_arg->index_schema_.get_table_id(),
+                                              create_index_arg->index_schema_.get_schema_version());
+                if (OB_FAIL(res.res_arg_array_.push_back(arg))) {
+                  LOG_WARN("push back to res_arg_array failed", KR(ret), K(arg));
+                } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
+                  LOG_WARN("failed to push back ddl res array", KR(ret));
                 }
-                if (obrpc::ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-                    || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
-                  for (int64_t i = 0; OB_SUCC(ret) && i < del_table_schemas.count(); i++) {
-                    ObTableSchema *del_table_schema = del_table_schemas[i];
-                    if (del_table_schema->get_table_id() == new_table_schema.get_table_id()) {
-                      if (OB_FAIL(del_table_schema->get_tablet_ids(del_tablet_ids))) {
-                        LOG_WARN("failed to get del tablet ids", K(ret));
-                      }
-                      break;
-                    }
-                  }
-                }
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(index_builder.submit_build_index_task(trans,
-                                                                    *create_index_arg,
-                                                                    orig_table_schema,
-                                                                    &inc_tablet_ids,
-                                                                    &del_tablet_ids,
-                                                                    &index_schema,
-                                                                    alter_table_arg.parallelism_,
-                                                                    const_alter_table_arg.consumer_group_id_,
-                                                                    tenant_data_version,
-                                                                    alter_table_arg.allocator_,
-                                                                    task_record))) {
-                  LOG_WARN("fail to submit build index task", K(ret), "type", create_index_arg->index_type_);
-                } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
-                  LOG_WARN("fail to push ddl task", K(ret), K(task_record));
-                } else {
-                  res.task_id_ = task_record.task_id_;
-                  ObDDLRes ddl_res;
-                  ddl_res.tenant_id_ = tenant_id;
-                  ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
-                  ddl_res.task_id_ = task_record.task_id_;
-                  obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,
-                                                create_index_arg->index_schema_.get_table_id(),
-                                                create_index_arg->index_schema_.get_schema_version());
-                  if (OB_FAIL(res.res_arg_array_.push_back(arg))) {
-                    LOG_WARN("push back to res_arg_array failed", K(ret), K(arg));
-                  } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
-                    LOG_WARN("failed to push back ddl res array", K(ret));
-                  }
-                }
+              }
+            // TODO @wenyu alter table drop index submit drop index task in alter_table_index() now.
+            //             should be unified here
+            } else if (ObIndexArg::DROP_INDEX == index_arg->index_action_type_ && !alter_table_arg.is_alter_indexs_) {
+              ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
+              if (OB_ISNULL(drop_index_arg)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("drop index arg is null", KR(ret));
+              } else if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_ , *orig_table_schema,
+                                                          &inc_tablet_ids, &del_tablet_ids, drop_index_arg,
+                                                          ddl_operator, res, ddl_tasks))) {
+                LOG_WARN("fail to drop index to scheduler", KR(ret), KPC(drop_index_arg));
               }
             }
           }
@@ -13765,6 +15009,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             ret = is_commit ? temp_ret : ret;
           }
         }
+
+        DEBUG_SYNC(AFTER_CREATE_SPLIT_TASK);
+
         if (OB_SUCC(ret)) {
           int tmp_ret = OB_SUCCESS;
           if (OB_FAIL(publish_schema(tenant_id))) {
@@ -13800,7 +15047,11 @@ int ObDDLService::check_alter_column_group(const obrpc::ObAlterTableArg &alter_t
   int ret = OB_SUCCESS;
   if (OB_DDL_ADD_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_ ||
       OB_DDL_DROP_COLUMN_GROUP == alter_table_arg.alter_table_schema_.alter_type_) {
-    ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
+    if (true == alter_table_arg.is_alter_column_group_delayed_) {
+      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP_DELAYED;
+    } else  {
+      ddl_type = ObDDLType::DDL_ALTER_COLUMN_GROUP;
+    }
     if (alter_table_arg.alter_table_schema_.get_column_group_count() <= 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument, alter table arg don't have any column group when alter column group",
@@ -13830,6 +15081,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else {
+    bool has_drop_and_add_index = false;
     char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
     const ObTableSchema *orig_table_schema = NULL;
     if (OB_FAIL(get_and_check_table_schema(alter_table_arg,
@@ -13850,8 +15102,9 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                             ddl_need_retry_at_executor))) {
       LOG_WARN("fail to check alter table column", K(ret));
     }
+    const ObDDLType alter_table_ddl_type = ddl_type;
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
-        && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type))) {
+        && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type, has_drop_and_add_index))) {
       LOG_WARN("fail to check alter table index", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_
@@ -13860,6 +15113,15 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                                is_oracle_mode,
                                                ddl_type))) {
       LOG_WARN("fail to check alter table partition", K(ret));
+    }
+    if (OB_SUCC(ret) && alter_table_arg.alter_auto_partition_attr_) {
+      ObAlterAutoPartAttrOp alter_auto_table(*this);
+      if (OB_FAIL(alter_auto_table.check_alter_table_partition_attr(alter_table_arg,
+                                                                    *orig_table_schema,
+                                                                    is_oracle_mode,
+                                                                    ddl_type))) {
+        LOG_WARN("fail to check alter table partition", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(check_alter_column_group(alter_table_arg, ddl_type))) {
@@ -13879,8 +15141,30 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       ddl_type = ObDDLType::DDL_NORMAL_TYPE;
     }
 
+    bool is_dec_lob_inrow_threshold = false;
+    if (OB_SUCC(ret) && OB_FAIL(check_alter_lob_inrow_threshold(
+          alter_table_arg, alter_table_schema, orig_table_schema,
+          is_dec_lob_inrow_threshold, ddl_type))) {
+      LOG_WARN("fail to check alter lob_inrow_threshold", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      // add column instant except modify column with other ddl will get in offline
+      if (ObDDLType::DDL_ADD_COLUMN_INSTANT == alter_table_ddl_type
+            || ObDDLType::DDL_COMPOUND_INSTANT == alter_table_ddl_type) {
+        if (alter_table_ddl_type != ddl_type
+            // add foreign key with add column instant should be offline
+            || alter_table_arg.foreign_key_arg_list_.count() > 0) {
+          ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          FLOG_INFO("add column instant with other ddl, rewrite ddl_type to DDL_TABLE_REDEFINITION",
+                    K(alter_table_ddl_type), K(ddl_type));
+        }
+      }
+    }
+
     if (OB_SUCC(ret)
         && is_long_running_ddl(ddl_type)
+        && ! is_dec_lob_inrow_threshold
         && (alter_table_arg.is_alter_options_
         || !alter_table_arg.alter_table_schema_.get_foreign_key_infos().empty())) {
       if (alter_table_arg.is_alter_options_) {// alter options
@@ -13912,14 +15196,20 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
     if (OB_SUCC(ret) && is_double_table_long_running_ddl(ddl_type)) {
       bool has_index_operation = false;
-      bool has_fts_or_multivalue_or_vec_index = false;
+      bool will_be_having_domain_index_operation = false;
+      bool has_fts_or_multivalue_index = false;
+      bool has_vec_index = false;
       bool is_adding_constraint = false;
       bool is_column_store = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
-      if (orig_table_schema->has_mlog_table()) {
+      if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("double table long running ddl on table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "double table long running ddl on table with materialized view log is");
+        LOG_WARN("double table long running ddl on table required by materialized view refresh is "
+                 "not supported",
+                 KR(ret));
+        LOG_USER_ERROR(
+            OB_NOT_SUPPORTED,
+            "double table long running ddl on table required by materialized view refresh is");
       } else if (orig_table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("double table long running ddl on materialized view log is not supported", KR(ret));
@@ -13929,17 +15219,30 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                           table_id,
                                           has_index_operation))) {
         LOG_WARN("check has index operation failed", K(ret));
+      } else if (OB_FAIL(check_alter_domain_column_allowed(alter_table_arg, orig_table_schema))) {
+        LOG_WARN("failed to check domain operate column constraint", K(ret));
       } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                              tenant_id,
                                              table_id,
-                                             has_fts_or_multivalue_or_vec_index))) {
+                                             has_fts_or_multivalue_index))) {
         LOG_WARN("check has fts index failed", K(ret));
+      } else if (OB_FAIL(check_has_vec_domain_index(schema_guard,
+                                             tenant_id,
+                                             table_id,
+                                             has_vec_index))) {
+        LOG_WARN("fail to check has vec domain index", K(ret));
+      } else if (OB_FAIL(check_will_be_having_domain_index_operation(alter_table_arg,
+                                                                     will_be_having_domain_index_operation))) {
+        LOG_WARN("check will be having domain index operation failed", K(ret));
       } else if (OB_FAIL(check_is_adding_constraint(tenant_id, table_id, is_adding_constraint))) {
         LOG_WARN("failed to call check_is_adding_constraint", K(ret));
       } else if (has_index_operation) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with creating index.");
-      } else if (has_fts_or_multivalue_or_vec_index) {
+      } else if (will_be_having_domain_index_operation) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run, as creating/dropping fulltext/multivalue/vector index.");
+      } else if (has_fts_or_multivalue_index || has_vec_index) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext/multivalue/vector index.");
       } else if (is_adding_constraint) {
@@ -13947,7 +15250,47 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with adding constraint.");
       }
     }
+    if (OB_SUCC(ret) && DDL_NORMAL_TYPE == ddl_type && has_drop_and_add_index) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+      } else if (!tenant_config->_enable_drop_and_add_index) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dropping and adding indexes at the same time is a high-risk operation, which is");
+      }
+    }
   }
+  return ret;
+}
+
+int ObDDLService::check_alter_domain_column_allowed(
+  obrpc::ObAlterTableArg &alter_table_arg,
+  const ObTableSchema *orig_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  AlterColumnSchema *alter_column_schema = NULL;
+
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("*it_begin is NULL", K(ret));
+    } else {
+      const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
+      const ObColumnSchemaV2 *orig_column_schema = orig_table_schema->get_column_schema(orig_column_name);
+      const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
+      if (op_type == OB_DDL_DROP_COLUMN &&
+          OB_NOT_NULL(orig_column_schema) &&
+          orig_column_schema->is_multivalue_generated_array_column()) {
+        ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "user direct multivalue index generated budy column");
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -13975,14 +15318,71 @@ int ObDDLService::check_has_domain_index(
     if (index_infos.count() > 0) {
       // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
-        if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_) ||
-            share::schema::is_vec_vid_rowkey_type(index_infos.at(i).index_type_) ||
+        if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_)) {
+          domain_index_exist = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_has_vec_domain_index(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    bool &domain_index_exist)
+{
+  int ret = OB_SUCCESS;
+  domain_index_exist = false;
+  ObRootService *root_service = GCTX.root_service_;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(data_table_id));
+  } else {
+    const common::ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
+    if (index_infos.count() > 0) {
+      // if there is indexes in new tables, if so, the indexes is already rebuilt in new table
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+        if (share::schema::is_vec_vid_rowkey_type(index_infos.at(i).index_type_) ||
             share::schema::is_vec_rowkey_vid_type(index_infos.at(i).index_type_)) {
           domain_index_exist = true;
           break;
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::check_will_be_having_domain_index_operation(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    bool &will_be_having_domain_index_operation/*false*/)
+{
+  int ret = OB_SUCCESS;
+  will_be_having_domain_index_operation = false;
+  const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
+      ObIndexArg *index_arg = index_arg_list.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index arg should not be null", K(ret));
+      } else {
+        ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+        if (share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_) ||
+            share::schema::is_vec_index(create_index_arg->index_type_)) {
+          will_be_having_domain_index_operation = true;
+          break;
+        }
+      }
   }
   return ret;
 }
@@ -14198,6 +15598,24 @@ int ObDDLService::check_ddl_with_primary_key_operation(
   return ret;
 }
 
+int ObDDLService::reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
+                                                           ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> add_instant_column_ids;
+  bool add_column_instant = false;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_FAIL(orig_table_schema.has_add_column_instant(add_column_instant))) {
+    LOG_WARN("failed to get add instant column ids", KR(ret), K(orig_table_schema));
+  } else if (add_column_instant) {
+    if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
+      LOG_WARN("redistribute column id failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                           const uint64_t tenant_data_version,
                                           obrpc::ObAlterTableRes &res)
@@ -14235,6 +15653,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {
       LOG_WARN("fail to mock default cg", K(ret), K(orig_table_schema), K(new_table_schema));
+    } else if (OB_FAIL(reorder_column_after_add_column_instant_(*orig_table_schema, new_table_schema))) {
+      LOG_WARN("fail to reorder column id after add column instant", KR(ret));
     } else {
       ObDDLSQLTransaction trans(schema_service_);
       ObDDLTaskRecord task_record;
@@ -14348,6 +15768,30 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to alter table partition by", K(ret));
         }
       }
+      if (OB_SUCC(ret) && alter_table_arg.alter_auto_partition_attr_) {
+        const bool bind_tablets = false;
+        ObAlterAutoPartAttrOp alter_auto_part(*this);
+        // In the alter table partition by range(xxx) size(xxx) (partitions...) case,
+        // it is necessary to modify attributes related to automatic partitioning here.
+        if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
+          LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id),
+          K(orig_table_schema->get_table_id()));
+        } else if (OB_FAIL(alter_auto_part.alter_table_partition_attr(
+            alter_table_arg, *orig_table_schema, new_table_schema))) {
+          LOG_WARN("failed to alter table partition by", K(ret));
+        } else if (OB_FAIL(create_user_hidden_table(*orig_table_schema,
+                                                    new_table_schema,
+                                                    &alter_table_arg.sequence_ddl_arg_,
+                                                    bind_tablets,
+                                                    schema_guard,
+                                                    schema_guard,
+                                                    ddl_operator,
+                                                    trans,
+                                                    alter_table_arg.allocator_,
+                                                    tenant_data_version))) {
+          LOG_WARN("fail to create user_hidden table", K(ret));
+        }
+      }
       // table constraints
       if (OB_SUCC(ret) &&  alter_table_arg.alter_constraint_type_ !=
           obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION) {
@@ -14376,6 +15820,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to convert to character", K(ret));
         }
       }
+
       if (OB_SUCC(ret) && ddl_type == ObDDLType::DDL_ALTER_COLUMN_GROUP) {
         if (OB_FAIL(alter_column_group(alter_table_arg,
                                        *orig_table_schema,
@@ -14394,8 +15839,23 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     trans,
                                                     alter_table_arg.allocator_,
                                                     tenant_data_version))) {
-          LOG_WARN("fail to create user_hidden table", K(ret));
+          LOG_WARN("fail to create user_hidden table", K(ret), KPC(orig_table_schema), K(new_table_schema));
         }
+      }
+
+      if (OB_SUCC(ret) && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
+          && is_dec_table_lob_inrow_threshold(alter_table_arg, alter_table_schema, orig_table_schema)) {
+        new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
+        OZ (create_user_hidden_table(*orig_table_schema,
+                                    new_table_schema,
+                                    &alter_table_arg.sequence_ddl_arg_,
+                                    false/*bind_tablets*/,
+                                    schema_guard,
+                                    schema_guard,
+                                    ddl_operator,
+                                    trans,
+                                    alter_table_arg.allocator_,
+                                    tenant_data_version));
       }
 
       if (OB_SUCC(ret) && need_redistribute_column_id) {
@@ -14423,6 +15883,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           }
         }
       }
+
       // submit async build index task
       if (OB_FAIL(ret)) {
       } else if (is_double_table_long_running_ddl(ddl_type)) {
@@ -14827,7 +16288,8 @@ int ObDDLService::create_hidden_table(
                                    orig_database_schema->get_database_name_str(),
                                    create_hidden_table_arg.get_tz_info(),
                                    create_hidden_table_arg.get_tz_info_wrap(),
-                                   create_hidden_table_arg.get_nls_formats()))) {
+                                   create_hidden_table_arg.get_nls_formats(),
+                                   create_hidden_table_arg.get_foreign_key_checks()))) {
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
@@ -15045,7 +16507,8 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                           database_schema->get_database_name_str(),
                                           arg.tz_info_,
                                           arg.tz_info_wrap_,
-                                          arg.nls_formats_))) {
+                                          arg.nls_formats_,
+                                          true/*foreign key checks*/))) {
             LOG_WARN("prepare param init failed", KR(ret));
           } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(prepare_param, &new_container_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg fail", KR(ret));
@@ -15162,6 +16625,7 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else {
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         bool is_dest_table_column_store = false;
+        ObString index_name("");
         if (OB_FAIL(dst_tenant_trans.start(sql_proxy_, dst_tenant_id, refreshed_dst_tenant_version))) {
           LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id), K(refreshed_dst_tenant_version));
         } else if (OB_FAIL(dst_table_schema.assign(arg.target_schema_))) {
@@ -15173,26 +16637,28 @@ int ObDDLService::recover_restore_table_ddl_task(
           LOG_WARN("not supported to retore table with column store", K(ret), K(arg));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator,
-          dst_tenant_trans, allocator, tenant_data_version))) {
+          dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
         } else {
           ObPrepareAlterTableArgParam param;
           if (OB_FAIL(param.init(arg.consumer_group_id_, session_id, 0/*sql_mode, unused*/, arg.ddl_stmt_str_,
               src_table_schema->get_table_name_str(), src_db_schema->get_database_name_str(),
-              dst_db_schema->get_database_name_str(), arg.tz_info_, arg.tz_info_wrap_, arg.nls_formats_))) {
+              dst_db_schema->get_database_name_str(), arg.tz_info_, arg.tz_info_wrap_, arg.nls_formats_, true/*foreign_key_checks*/))) {
             LOG_WARN("fail to prepare alter table arg param", K(ret), K(arg));
           } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &dst_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg failed", K(ret), K(param));
           } else {
             alter_table_arg.alter_table_schema_.set_schema_version(dst_table_schema.get_schema_version());
             alter_table_arg.alter_table_schema_.set_table_name(arg.target_schema_.get_table_name_str());
+            alter_table_arg.parallelism_ = arg.parallelism_;
+            alter_table_arg.consumer_group_id_ = arg.consumer_group_id_;
             ObCreateDDLTaskParam param(dst_table_schema.get_tenant_id(),
                                       ObDDLType::DDL_TABLE_RESTORE,
                                       src_table_schema,
                                       &dst_table_schema,
                                       src_table_schema->get_table_id()/*object_id*/,
                                       src_table_schema->get_schema_version(),
-                                      arg.parallelism_,
+                                      MAX(1, arg.parallelism_),
                                       arg.consumer_group_id_,
                                       &allocator,
                                       &alter_table_arg,
@@ -15291,6 +16757,15 @@ int ObDDLService::get_and_check_table_schema(
         }
         if (OB_SUCC(ret) && !is_alter_pk) {
           allow_alter_mview = true;
+        }
+      } else {
+        // only allow for alter tablegroup
+        if (!alter_table_arg.is_alter_indexs_ && !alter_table_arg.is_alter_columns_ && !alter_table_arg.is_alter_partitions_ &&
+            !alter_table_arg.is_update_global_indexes_ && !alter_table_arg.is_convert_to_character_ && alter_table_arg.is_alter_options_) {
+          if (1 == alter_table_arg.alter_table_schema_.alter_option_bitset_.num_members() &&
+              alter_table_arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLEGROUP_NAME)) {
+            allow_alter_mview = true;
+          }
         }
       }
       if (OB_SUCC(ret) && !allow_alter_mview) {
@@ -15521,14 +16996,13 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   } else if (OB_FAIL(orig_table_schema.check_has_local_index(schema_guard, has_local_index))) {
     LOG_WARN("fail to check_has_local_index", K(ret), K(has_local_index));
   } else if (obrpc::ObAlterTableArg::PARTITIONED_TABLE == alter_part_type
-             && obrpc::ObAlterTableArg::SPLIT_PARTITION == alter_part_type
              && obrpc::ObAlterTableArg::REPARTITION_TABLE == alter_part_type
              && obrpc::ObAlterTableArg::PARTITIONED_PARTITION == alter_part_type) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("split partition in 4.0 not allowed", K(ret), K(tablegroup_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "split partition in 4.0");
   }
-  bool has_fts_or_multivalue_or_vec_index = false;
+  bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
   if (OB_FAIL(ret) ||
     alter_part_type == obrpc::ObAlterTableArg::DROP_PARTITION ||
@@ -15536,12 +17010,12 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                          tenant_id,
                                          table_id,
-                                         has_fts_or_multivalue_or_vec_index))) {
+                                         has_fts_or_multivalue_index))) {
     LOG_WARN("failed to check if have fts index", K(ret), K(table_id));
-  } else if (has_fts_or_multivalue_or_vec_index) {
+  } else if (has_fts_or_multivalue_index) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("alter partition operation on table with fulltext/multivalue/vector index not supported", K(ret), K(orig_table_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext/multivalue/vector index");
+    LOG_WARN("alter partition operation on table with fulltext/multivalue index not supported", K(ret), K(orig_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext/multivalue index");
   }
 
   if (OB_FAIL(ret)) {
@@ -15567,6 +17041,10 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
       LOG_WARN("failed to check drop partition", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
     is_drop_or_truncate = true;
+  } else if (alter_table_arg.is_split_partition()) {
+    if (OB_FAIL(check_alter_split_partitions(orig_table_schema, alter_table_arg))) {
+      LOG_WARN("failed to check split paritions", K(ret), K(orig_table_schema), K(alter_table_arg));
+    }
   } else if (obrpc::ObAlterTableArg::RENAME_PARTITION == alter_part_type) {
     if (OB_FAIL(check_alter_rename_partitions_(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check rename partition", KR(ret), K(orig_table_schema), K(alter_table_arg));
@@ -16059,6 +17537,379 @@ int ObDDLService::check_alter_add_partitions(const share::schema::ObTableSchema 
   return ret;
 }
 
+int ObDDLService::check_alter_split_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                               obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  ObPartitionLevel target_part_level = alter_table_arg.is_auto_split_partition() ?
+                                       orig_table_schema.get_target_part_level_for_auto_partitioned_table() :
+                                       orig_table_schema.get_part_level();
+
+  if (alter_table_arg.is_auto_split_partition() && !orig_table_schema.is_auto_partitioned_table()) {
+    // the table might be disabled auto-partition after trigger auto splitting partition
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("attempt to auto split partition for non-auto-partitioned table", KR(ret),
+                                                                               K(alter_table_arg),
+                                                                               K(orig_table_schema));
+  } else if (OB_FAIL(orig_table_schema.check_enable_split_partition(alter_table_arg.is_auto_split_partition()))) {
+    LOG_WARN("fail to check enable split partition", KR(ret), K(orig_table_schema));
+  } else if (OB_FAIL(check_split_partition_val_(orig_table_schema, alter_table_schema,
+                                                target_part_level, alter_table_arg.alter_part_type_))) {
+    LOG_WARN("fail to check split partition val", KR(ret), K(orig_table_schema), K(alter_table_arg));
+  } else if (OB_FAIL(check_split_partition_name_(orig_table_schema, alter_table_schema, target_part_level))) {
+    LOG_WARN("fail to check split partition name", KR(ret), K(orig_table_schema), K(alter_table_arg));
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_split_partition_val_(const share::schema::ObTableSchema &orig_table_schema,
+                                             const AlterTableSchema &alter_table_schema,
+                                             const ObPartitionLevel target_part_level,
+                                             const obrpc::ObAlterTableArg::AlterPartitionType type)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel ori_part_level = orig_table_schema.get_part_level();
+  ObPartition **split_part_array = alter_table_schema.get_part_array();
+  const int64_t split_part_num = alter_table_schema.get_partition_num();
+
+  if (OB_ISNULL(split_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("split_part_array is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (PARTITION_LEVEL_ONE == target_part_level) {
+    if (PARTITION_LEVEL_ZERO == ori_part_level) {
+      // only auto partitioning could run here, user could not manual split non-partitioned table
+      if (obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION != type) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("invalid operate", KR(ret), K(orig_table_schema), K(alter_table_schema), K(type));
+      } else if (OB_FAIL(check_split_partitions_from_same_source_(split_part_array, split_part_num,
+                                                                  0, split_part_num,
+                                                                  orig_table_schema,
+                                                                  target_part_level,
+                                                                  type))) {
+        LOG_WARN("fail to check split partitions from same source partition", KR(ret),
+                                                                              K(target_part_level),
+                                                                              K(orig_table_schema),
+                                                                              K(alter_table_schema));
+      }
+    } else if (PARTITION_LEVEL_ONE == ori_part_level) {
+      // in future, we need to support to split multiple partitions, which means the split_part_array
+      // might include various set of split partitions from different source partitions.
+      // thus, we need to:
+      // 1. divide split partitions into different sets based on split_source_tablet_id
+      // 2. check whether each set is valid.
+      // moreover, we assume that the split partitions from same source is continued in the split_part_array.
+      common::hash::ObHashSet<uint64_t> traversed_source_ids;
+
+      if (OB_ISNULL(split_part_array[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret));
+      } else if (OB_FAIL(traversed_source_ids.create(hash::cal_next_prime(split_part_num)))) {
+        LOG_WARN("fail to create hashset", KR(ret));
+      } else if (OB_FAIL(traversed_source_ids.set_refactored(split_part_array[0]->get_split_source_tablet_id().id(), 0 /*flag*/))) {
+        LOG_WARN("fail to set tablet_id", KR(ret), KPC(split_part_array[0]));
+      } else {
+        int64_t start_idx = 0; // the first idx of a set of same source splitting partitions
+        bool traverse_same_source_over = false; // traverse a set of same source splitting partitions over
+
+        for (int64_t i = 0; OB_SUCC(ret) && i < split_part_num; ++i) {
+          ObPartition *split_part = split_part_array[i];
+          if (!split_part->get_split_source_tablet_id().is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid source_tablet_id", KR(ret), KPC(split_part));
+          } else if (i == split_part_num - 1) {
+            traverse_same_source_over = true;
+          } else if (OB_ISNULL(split_part_array[i+1])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL ptr", KR(ret), K(alter_table_schema));
+          } else if (split_part_array[i+1]->get_split_source_tablet_id() != split_part->get_split_source_tablet_id()) {
+            traverse_same_source_over = true;
+            // TODO:
+            // we don't support to split multiple source partitions from same table in the meanwhile now.
+            // when we support the online ddl lock, we need to delete the following error code
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to split multiple source partitions", KR(ret), K(alter_table_schema));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (traverse_same_source_over)  {
+            if (OB_FAIL(check_split_partitions_from_same_source_(split_part_array, split_part_num,
+                                                                 start_idx, i+1,
+                                                                 orig_table_schema,
+                                                                 target_part_level,
+                                                                 type))) {
+              LOG_WARN("fail to check split partitions from same source partition", KR(ret),
+                                                                                    K(target_part_level),
+                                                                                    K(orig_table_schema),
+                                                                                    K(alter_table_schema));
+            } else if (i != split_part_num - 1) {
+              ObTabletID curr_source_tablet_id = split_part_array[i+1]->get_split_source_tablet_id();
+              start_idx = i + 1;
+              traverse_same_source_over = false;
+              if (OB_FAIL(traversed_source_ids.set_refactored(curr_source_tablet_id.id(), 0 /*flag*/))) {
+                // it means the split parts from same source part are not continuous in array
+                if (ret == OB_HASH_EXIST) {
+                  LOG_WARN("split part array should be sorted by source_tablet_id", KR(ret), K(curr_source_tablet_id.id()),
+                                                                                    K(alter_table_schema));
+                } else {
+                  LOG_WARN("fail to set tablet_id", KR(ret), K(curr_source_tablet_id));
+                }
+              }
+            }
+          } // end if (traverse_same_source_over)
+        } // end for
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid part level", KR(ret), K(ori_part_level), K(target_part_level),
+                                     K(alter_table_schema), K(orig_table_schema));
+    }
+  } else if (PARTITION_LEVEL_TWO == target_part_level) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to split subpartition", KR(ret), K(alter_table_schema), K(orig_table_schema));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part level", KR(ret), K(ori_part_level),
+                                   K(alter_table_schema), K(orig_table_schema));
+  }
+
+  return ret;
+}
+
+// 1. the number of a set of split partition must be between [2, SPLIT_NUM_LIMIT]
+// 2. source_tablet_id must exist in origin table schema
+// 3. split partition array should be sorted by high_bound_val
+// 4. if the table is range partition, the high_bound_val range of split partitions should be equal to that of source partition
+int ObDDLService::check_split_partitions_from_same_source_(ObPartition **split_part_array,
+                                                           const int64_t part_array_size,
+                                                           const int64_t start, const int64_t end,
+                                                           const share::schema::ObTableSchema &orig_table_schema,
+                                                           const ObPartitionLevel target_part_level,
+                                                           const obrpc::ObAlterTableArg::AlterPartitionType type)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel ori_part_level = orig_table_schema.get_part_level();
+  const ObPartitionOption &part_option = orig_table_schema.get_part_option();
+  ObPartition **orig_part_array = orig_table_schema.get_part_array();
+  const int64_t orig_part_num = orig_table_schema.get_partition_num();
+  const int64_t split_part_num = end - start;
+  static const int64_t MANUAL_SPLIT_NUM_LIMIT = INT64_MAX; // not limit the number of manual splitting partition
+  static const int64_t AUTO_SPLIT_NUM_LIMIT = 2;
+  const int64_t SPLIT_NUM_LIMIT = obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == type ?
+                                  AUTO_SPLIT_NUM_LIMIT : MANUAL_SPLIT_NUM_LIMIT;
+
+  if (end > part_array_size || end <= start || start < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid interval", KR(ret), K(start), K(end), K(part_array_size));
+  } else if (split_part_num < 2) {
+    ret = OB_ERR_SPLIT_INTO_ONE_PARTITION;
+    LOG_WARN("split partition number is invalid", KR(ret), K(split_part_num));
+  } else if (split_part_num > SPLIT_NUM_LIMIT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid splitting partition number", KR(ret), K(split_part_num), K(SPLIT_NUM_LIMIT), K(type));
+    char buffer[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+    (void)snprintf(buffer, sizeof(buffer), "%s splitting partition number more than %ld is",
+                                            obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == type ? "auto" : "manual",
+                                            SPLIT_NUM_LIMIT);
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, buffer);
+  } else if (orig_table_schema.is_partitioned_table()
+              && !orig_table_schema.is_valid_split_part_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support to split range part", KR(ret), K(orig_table_schema));
+  } else {
+    // check sorting by value
+    for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+      ObPartition *split_part = split_part_array[i];
+      if (OB_ISNULL(split_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret));
+      } else if (i > 0 && !ObBasePartition::range_like_func_less_than(split_part_array[i-1], split_part)) {
+        ret = OB_ERR_RANGE_NOT_INCREASING_ERROR;
+        LOG_WARN("range values should increasing", KR(ret), K(split_part_array[i-1]->get_high_bound_val()),
+                                                   K(split_part_array[i]->get_high_bound_val()));
+      }
+    }
+  }
+
+  // check existence of source_tablet_id and value validity of split partitions
+  if (OB_FAIL(ret)) {
+  } else if (PARTITION_LEVEL_ONE == target_part_level) {
+    if (PARTITION_LEVEL_ZERO == ori_part_level) {
+      for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
+        const ObPartition *split_part = split_part_array[i];
+        if (split_part->get_split_source_tablet_id() != orig_table_schema.get_tablet_id()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("source_tablet_id is invalid", KR(ret), K(split_part->get_split_source_tablet_id()),
+                                                  K(orig_table_schema.get_table_id()));
+        }
+      }
+    } else if (PARTITION_LEVEL_ONE == ori_part_level) {
+      const ObTabletID source_tablet_id = split_part_array[start]->get_split_source_tablet_id();
+      const ObPartition *part = NULL;
+      bool find = false;
+
+      for (int64_t j = 0; !find && OB_SUCC(ret) && j < orig_part_num; ++j) {
+        part = orig_part_array[j];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KR(ret));
+        } else if (part->get_tablet_id() == source_tablet_id) { // check existence
+          find = true;
+          // check boundary
+          const ObRowkey& min_val = split_part_array[start]->get_high_bound_val();
+          const ObRowkey& max_val = split_part_array[end - 1]->get_high_bound_val();
+          if (max_val != part->get_high_bound_val()) {
+            ret = OB_ERR_RANGE_NOT_INCREASING_ERROR;
+            LOG_WARN("the value of last partition is not equal the origin range", KR(ret), K(max_val), KPC(part));
+          } else if (j != 0 && min_val <= orig_part_array[j - 1]->get_high_bound_val()) {
+            ret = OB_ERR_RANGE_NOT_INCREASING_ERROR;
+            LOG_WARN("the value of split partition conflicts with existent partition", KR(ret), K(min_val),
+                                                                                       KPC(orig_part_array[j - 1]));
+          }
+        }
+      } // end for
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(!find)) {
+        ret = OB_UNKNOWN_PARTITION;
+        LOG_WARN("source_tablet_id not exists in origin table", KR(ret), K(source_tablet_id), K(orig_table_schema));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid part level", KR(ret), K(target_part_level), K(ori_part_level));
+    }
+  } else if (PARTITION_LEVEL_TWO == target_part_level) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported the part level", KR(ret), K(target_part_level), K(ori_part_level));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part level", KR(ret), K(target_part_level), K(ori_part_level));
+  }
+
+  return ret;
+}
+
+// the name of split patitions should be different with other partitions' name
+// except that of its source partition
+int ObDDLService::check_split_partition_name_(const share::schema::ObTableSchema &orig_table_schema,
+                                              const AlterTableSchema &alter_table_schema,
+                                              const ObPartitionLevel target_part_level)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel ori_part_level = orig_table_schema.get_part_level();
+  ObPartition **split_part_array = alter_table_schema.get_part_array();
+  const int64_t split_part_num = alter_table_schema.get_partition_num();
+
+  if (OB_ISNULL(split_part_array)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(alter_table_schema));
+  } else if (split_part_num < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(split_part_num));
+  } else {
+    ObArenaAllocator allocator;
+    ObPartition** sorted_part_array;
+    if (OB_ISNULL(sorted_part_array = static_cast<ObPartition**>(allocator.alloc(
+                                            sizeof(ObPartition*) * (split_part_num))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc", KR(ret), K(split_part_num));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < split_part_num; ++i) {
+        sorted_part_array[i] = split_part_array[i];
+      }
+      ob_sort(sorted_part_array, sorted_part_array + split_part_num, ObPartitionNameCmp(CS_TYPE_UTF8MB4_GENERAL_CI));
+    }
+
+    ObString last_split_part_name;
+    const ObPartition *ori_part = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < split_part_num; ++i) {
+      ObPartition *split_part = sorted_part_array[i];
+      if (OB_ISNULL(split_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret));
+      } else if (split_part->is_empty_partition_name()) {
+        // will be generated part name in fill_part_name() of ObDDLService
+      } else if (!last_split_part_name.empty()
+                  && ObCharset::case_insensitive_equal(split_part->get_part_name(),
+                                                       last_split_part_name)) {
+        ret = OB_ERR_SAME_NAME_PARTITION;
+        LOG_WARN("duplicate partition name in split part array", KR(ret), "part name", split_part->get_part_name());
+        LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION, split_part->get_part_name().length(),
+                                                   split_part->get_part_name().ptr());
+      } else if (PARTITION_LEVEL_ONE == target_part_level) {
+        if (PARTITION_LEVEL_ZERO == ori_part_level) {
+        } else if (PARTITION_LEVEL_ONE != ori_part_level) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid part level", KR(ret), K(ori_part_level), K(target_part_level));
+        } else if (OB_FAIL(orig_table_schema.get_partition_by_name(split_part->get_part_name(),
+                                                                   ori_part))) {
+          if (OB_UNLIKELY(ret != OB_UNKNOWN_PARTITION)) {
+            LOG_WARN("fail to get partition by name", KR(ret), KPC(split_part));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        } else if (OB_ISNULL(ori_part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KR(ret));
+        } else if (ori_part->get_tablet_id() != split_part->get_split_source_tablet_id()) {
+          ret = OB_ERR_SAME_NAME_PARTITION;
+          LOG_WARN("duplicate partition name with orign part array", KR(ret),
+                   "part name", split_part->get_part_name());
+          LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION, split_part->get_part_name().length(),
+                                                     split_part->get_part_name().ptr());
+        }
+        if (OB_SUCC(ret)) {
+          last_split_part_name = split_part->get_part_name();
+        }
+      } else if (PARTITION_LEVEL_TWO == target_part_level) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to split subpartition", KR(ret), K(ori_part_level), K(target_part_level),
+                                                      K(orig_table_schema), K(alter_table_schema));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid part level", KR(ret), K(ori_part_level), K(target_part_level),
+                                       K(orig_table_schema), K(alter_table_schema));
+      }
+    } // end for
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_split_global_index_partition_(ObSchemaGetterGuard &schema_guard,
+																					            obrpc::ObAlterTableArg &arg,
+																					            const share::schema::ObTableSchema &orig_index_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_db_in_recyclebin = false;
+  uint64_t tenant_id = orig_index_schema.get_tenant_id();
+
+  if (OB_FAIL(schema_guard.check_database_in_recyclebin(
+                     tenant_id,
+                     orig_index_schema.get_database_id(),
+                     is_db_in_recyclebin))) {
+    LOG_WARN("check database in recyclebin failed", KR(ret), K(tenant_id), K(orig_index_schema));
+  } else if (OB_UNLIKELY(is_db_in_recyclebin)) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("database is in recyclebin", KR(ret), K(orig_index_schema));
+  } else if (OB_UNLIKELY(orig_index_schema.is_in_recyclebin())) {
+    // when drop data table, the related index of it will be moved to recyclebin;
+    // when drop index, the index will be removed directly
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("index table is in recyclebin", KR(ret), K(orig_index_schema));
+  } else if (!orig_index_schema.check_can_do_ddl()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), K(orig_index_schema));
+  } else if (OB_FAIL(check_restore_point_allow(tenant_id, orig_index_schema))) {
+    LOG_WARN("check restore point allow failed,", KR(ret), K(tenant_id), K(orig_index_schema.get_table_id()));
+  } else if (OB_FAIL(check_alter_partitions(orig_index_schema, arg))) {
+    LOG_WARN("check alter partitions failed", KR(ret), K(orig_index_schema), K(arg));
+  }
+  return ret;
+}
+
 int ObDDLService::check_alter_add_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
                                              const obrpc::ObAlterTableArg &alter_table_arg)
 {
@@ -16361,9 +18212,11 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   ObDDLType &ddl_type = res.ddl_type_;
   bool &ddl_need_retry_at_executor = res.ddl_need_retry_at_executor_;
   ddl_type = DDL_INVALID;
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   }
+
   ObSimpleTableSchemaV2 orig_table;
   if (OB_SUCC(ret)) {
     AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -16451,7 +18304,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
       } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, data_version, ddl_type, ddl_need_retry_at_executor))) {
-        LOG_WARN("failed to check is offline ddl", K(ret));
+        LOG_WARN("failed to check is offline ddl", K(ret), K(alter_table_arg));
       } else if (((MOCK_DATA_VERSION_4_2_1_3 <= data_version && DATA_VERSION_4_3_0_0 > data_version)
                || (DATA_VERSION_4_3_2_0 <= data_version)) // [4213, 430) & [4320, )
                  && OB_FAIL(check_is_oracle_mode_add_column_not_null_ddl(alter_table_arg,
@@ -16618,14 +18471,13 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
               LOG_WARN("rename materialized view log is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename materialized view log is");
-            } else if (table_schema->has_mlog_table()) {
+            } else if (table_schema->required_by_mview_refresh()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("rename table with materialized view log is not supported",
+              LOG_WARN("rename table required by materialized view refresh is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table with materialized view log is");
-            } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
-                                                                      table_schema->get_table_id(),
-                                                                      trans, all_dep_objs))) {
+            } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(
+                           tenant_id, table_schema->get_table_id(), trans, all_dep_objs))) {
               LOG_WARN("failed to collect dep info", K(ret));
             }
           }
@@ -17280,7 +19132,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       }
 
       bool is_truncate_table = false;
-      bool recycle_cnt = 0;
+      int recycle_cnt = 0;
       for (int64_t i = 0; i < table_schemas.count() && OB_SUCC(ret); i++) {
         if (0 == i) {
           is_truncate_table = true; //record create table with opertion type TRUNCATE_TABLE_CREATE
@@ -17478,11 +19330,23 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                                   schema_guard,
                                   sql_proxy_);
         common::ObArray<share::ObLSID> ls_id_array;
+        const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
+        const ObTableSchema &data_table_schema = table_schemas.at(0);
 
         if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
           LOG_WARN("fail to init table creator", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.init())) {
           LOG_WARN("fail to init new table tablet allocator", KR(ret));
+        } else if (OB_INVALID_ID != data_table_schema.get_tablegroup_id()) {
+          if (OB_FAIL(schema_guard.get_tablegroup_schema(
+              data_table_schema.get_tenant_id(),
+              data_table_schema.get_tablegroup_id(),
+              data_tablegroup_schema))) {
+            LOG_WARN("get tablegroup_schema failed", KR(ret), K(data_table_schema));
+          } else if (OB_ISNULL(data_tablegroup_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("data_tablegroup_schema is null", KR(ret), K(data_table_schema));
+          }
         }
 
         ObArray<const ObTableSchema*> schemas;
@@ -17498,7 +19362,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
               LOG_WARN("failed to push_back", KR(ret), K(this_table));
             }
           } else {
-            if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table))) {
+            if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table, data_tablegroup_schema))) {
               LOG_WARN("fail to prepare ls for index schema tablets");
             } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
                 ls_id_array))) {
@@ -17526,7 +19390,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
         }
         // virtual table and view skip
         else if (schemas.count() <= 0) {
-        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *schemas.at(0)))) {
+        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, *schemas.at(0), data_tablegroup_schema))) {
           LOG_WARN("new table tablet allocator prepared failed", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
@@ -17917,6 +19781,12 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(hidden_table_schema));
     } else if (OB_FAIL(generate_tablet_id(hidden_table_schema))) {
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(hidden_table_schema));
+    } else if (orig_table_schema.is_ctas_tmp_table() &&
+               OB_FAIL(clear_ctas_hidden_table_session_id_(hidden_table_schema))) {
+      // for CTAS table, clear its session id, otherwise this table schema will not be visble
+      // to the index rebuiding phase.
+      LOG_WARN("fail to clear ctas hidden table session id", K(ret), K(orig_table_schema),
+               K(hidden_table_schema));
     } else {
       // offline ddl change table_id, so we need to reset truncate_version
       hidden_table_schema.set_truncate_version(OB_INVALID_VERSION);
@@ -17966,6 +19836,54 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       }
     }
   }
+  return ret;
+}
+
+int ObDDLService::clear_ctas_hidden_table_session_id_(share::schema::ObTableSchema &hidden_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (!hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hidden table is not a CTAS tmp table", K(ret), K(hidden_table_schema));
+  } else {
+    hidden_table_schema.set_session_id(0);
+    hidden_table_schema.set_create_host("");
+    LOG_INFO("clear session_id of hidden table copied from CTAS table", K(hidden_table_schema));
+  }
+
+  return ret;
+}
+
+int ObDDLService::swap_ctas_hidden_table_session_id_(
+    const share::schema::ObTableSchema &orig_table_schema,
+    const share::schema::ObTableSchema &hidden_table_schema,
+    share::schema::ObTableSchema &new_orig_table_schema,
+    share::schema::ObTableSchema &new_hidden_table_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (!orig_table_schema.is_ctas_tmp_table() || hidden_table_schema.is_ctas_tmp_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("origin table or hidden table state is not valid", K(ret), K(orig_table_schema),
+             K(hidden_table_schema));
+  } else {
+    new_orig_table_schema.set_session_id(hidden_table_schema.get_session_id());
+    new_hidden_table_schema.set_session_id(orig_table_schema.get_session_id());
+    new_orig_table_schema.set_create_host(hidden_table_schema.get_create_host());
+    new_hidden_table_schema.set_create_host(orig_table_schema.get_create_host());
+    // since the session id is cleared when we create the hidden table, the temp table info
+    // won't be added at the creation time, so we should add it here
+    new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+    if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, new_hidden_table_schema))) {
+      LOG_WARN("failed to insert temp table info", K(ret), K(new_hidden_table_schema));
+    }
+    LOG_INFO("restore session_id of hidden table copied from CTAS table",
+             K(new_hidden_table_schema), K(new_orig_table_schema));
+  }
+
   return ret;
 }
 
@@ -18068,7 +19986,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObMySQLTransaction &trans,
                                            ObIAllocator &allocator,
                                            const uint64_t tenant_data_version,
-                                           const ObString &index_name/*default ""*/)
+                                           const ObString &index_name/*default ""*/,
+                                           const bool ignore_cs_replica/*= false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
@@ -18159,11 +20078,21 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                               dst_tenant_schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
-
+    const ObTablegroupSchema *tablegroup_schema = NULL; // keep NULL if no tablegroup
     if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
+    } else if (OB_INVALID_ID != hidden_table_schema.get_tablegroup_id()) {
+      if (OB_FAIL(dst_tenant_schema_guard.get_tablegroup_schema(
+          hidden_table_schema.get_tenant_id(),
+          hidden_table_schema.get_tablegroup_id(),
+          tablegroup_schema))) {
+        LOG_WARN("get tablegroup_schema failed", KR(ret), K(hidden_table_schema));
+      } else if (OB_ISNULL(tablegroup_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablegroup_schema is null", KR(ret), K(hidden_table_schema));
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); i++) {
       share::schema::ObTableSchema *table_schema = const_cast<ObTableSchema*>(schemas.at(i));
@@ -18204,7 +20133,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     if (OB_SUCC(ret) && hidden_table_schema.has_tablet()) {
       if (bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare_like(orig_table_schema))) {
           LOG_WARN("fail to prepare like", KR(ret), K(orig_table_schema));
-      } else if (!bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema))) {
+      } else if (!bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema, tablegroup_schema))) {
         LOG_WARN("fail to prepare", KR(ret), K(hidden_table_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
@@ -18212,7 +20141,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
               schemas,
               ls_id_array,
               tenant_data_version,
-              need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+              need_create_empty_majors/*need_create_empty_major_sstable*/,
+              ignore_cs_replica))) {
         LOG_WARN("create table tablets failed", K(ret), K(hidden_table_schema));
       } else if (bind_tablets && OB_FAIL(table_creator.add_create_bind_tablets_of_hidden_table_arg(
               orig_table_schema,
@@ -18465,21 +20395,24 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
     HEAP_VAR(AddIndexNameHashSet, add_index_name_set) {
     HEAP_VAR(DropIndexNameHashSet, drop_index_name_set) {
       const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
-      int64_t index_count = new_table_schema.get_index_tid_count();
       for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
         ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
+        int64_t index_count = new_table_schema.get_index_count();
+        int64_t index_aux_count = new_table_schema.get_index_tid_count();
         if (OB_ISNULL(index_arg)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("index arg should not be null", K(ret));
         } else {
           if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
-            if (OB_MAX_INDEX_PER_TABLE <= index_count) {
+            if (OB_MAX_AUX_TABLE_PER_MAIN_TABLE <= index_aux_count || OB_MAX_INDEX_PER_TABLE <= index_count) {
               ret = OB_ERR_TOO_MANY_KEYS;
               LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-              LOG_WARN("too many index for table!", K(index_count), K(OB_MAX_INDEX_PER_TABLE));
+              LOG_WARN("too many index or index aux for table!",
+                       K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
             }
             ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
             if (!new_table_schema.is_partitioned_table()
+                && !new_table_schema.is_auto_partitioned_table()
                 && !create_index_arg->index_schema_.is_partitioned_table()) {
               if (INDEX_TYPE_NORMAL_GLOBAL == create_index_arg->index_type_) {
                 create_index_arg->index_type_ = INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE;
@@ -18530,7 +20463,6 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                     //alter table t1 add index c1, add index c1
                     is_exist = true;
                   }
-
                 } else {
                   if (OB_HASH_EXIST == drop_index_name_set.exist_refactored(index_key)) {
                     //alter table t1 drop index c1, add index c1
@@ -18567,49 +20499,38 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                                                           index_schema))) {
                   LOG_WARN("failed to generate index schema!", K(ret));
                 } else {
-                  uint64_t new_idx_tid = OB_INVALID_ID;
-                  if (OB_FAIL(schema_service->fetch_new_table_id(
-                                     new_table_schema.get_tenant_id(),
-                                     new_idx_tid))) {
-                    LOG_WARN("failed to fetch_new_table_id", K(ret));
-                  } else if (OB_FAIL(generate_object_id_for_partition_schema(index_schema))) {
-                    LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(index_schema));
-                  } else if (OB_FAIL(generate_tablet_id(index_schema))) {
-                    LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(index_schema));
+                  bool is_exist = false;
+                  ObString final_index_name;
+                  if (OB_FAIL(build_hidden_table_index_and_mlog_schema_(
+                      hidden_table_schema, index_schema))) {
+                    LOG_WARN("failed to build hidden table index and mlog schema",
+                        KR(ret), K(hidden_table_schema), K(index_schema));
+                  } else if (OB_FAIL(index_schema.get_index_name(final_index_name))) {
+                    LOG_WARN("get index name failed", K(ret));
+                  } else if (OB_FAIL(check_hidden_index_exist(index_schema.get_tenant_id(),
+                      index_schema.get_database_id(),
+                      orig_table_schema,
+                      final_index_name,
+                      dest_schema_guard,
+                      is_exist))) {
+                    LOG_WARN("failed to check hidden index exist", K(ret));
+                  } else if (is_exist) {
+                    ret = OB_EAGAIN;
+                    LOG_WARN("index name conflict, need retry", K(index_schema.get_table_id()), K(index_schema.get_table_name_str()));
+                  } else if (OB_FAIL(new_table_schemas.push_back(index_schema))) {
+                    LOG_WARN("failed to add table schema!", K(ret));
+                  } else if (OB_FAIL(index_ids.push_back(index_schema.get_table_id()))) {
+                    LOG_WARN("failed to add new index id!", K(ret));
                   } else {
-                    bool is_exist = false;
-                    index_schema.set_table_id(new_idx_tid);
-                    index_schema.set_data_table_id(new_table_schema.get_table_id());
-                    index_schema.set_tenant_id(hidden_table_schema.get_tenant_id());
-                    index_schema.set_database_id(hidden_table_schema.get_database_id());
-                    index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
-                    // set the hidden attributes of the table
-                    index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
-                    if (OB_FAIL(ret)) {
-                    } else if (OB_FAIL(dest_schema_guard.check_table_exist(index_schema.get_tenant_id(),
-                                                                      index_schema.get_database_id(),
-                                                                      index_schema.get_table_name_str(),
-                                                                      true/*is_index*/,
-                                                                      ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
-                                                                      is_exist))) {
-                      LOG_WARN("failed to check table exist", K(ret));
-                    } else if (is_exist) {
-                      LOG_INFO("index already rebuilt, skip", K(index_schema.get_table_id()), K(index_schema.get_table_name_str()));
-                    } else if (OB_FAIL(new_table_schemas.push_back(index_schema))) {
-                      LOG_WARN("failed to add table schema!", K(ret));
-                    } else if (OB_FAIL(index_ids.push_back(index_schema.get_table_id()))) {
-                      LOG_WARN("failed to add new index id!", K(ret));
-                    } else {
-                      // add new function index should add additional SYS_NC column into data table.
-                      new_table_schema.set_in_offline_ddl_white_list(true);
-                      for (int64_t i = 0; OB_SUCC(ret) && i < gen_columns.count(); ++i) {
-                        ObColumnSchemaV2 *new_column_schema = gen_columns.at(i);
-                        if (OB_ISNULL(new_column_schema)) {
-                          ret = OB_ERR_UNEXPECTED;
-                          LOG_WARN("new column schema is null");
-                        } else if (OB_FAIL(ddl_operator.insert_single_column(trans, new_table_schema, *new_column_schema))) {
-                          LOG_WARN("failed to create table schema, ", K(ret));
-                        }
+                    // add new function index should add additional SYS_NC column into data table.
+                    new_table_schema.set_in_offline_ddl_white_list(true);
+                    for (int64_t i = 0; OB_SUCC(ret) && i < gen_columns.count(); ++i) {
+                      ObColumnSchemaV2 *new_column_schema = gen_columns.at(i);
+                      if (OB_ISNULL(new_column_schema)) {
+                        ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("new column schema is null");
+                      } else if (OB_FAIL(ddl_operator.insert_single_column(trans, new_table_schema, *new_column_schema))) {
+                        LOG_WARN("failed to create table schema, ", K(ret));
                       }
                     }
                   }
@@ -18621,8 +20542,6 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                       LOG_WARN("set index name to hash set failed",
                             K(create_index_arg->index_name_), K(ret));
 
-                    } else {
-                      ++index_count;
                     }
                   }
                 }
@@ -18640,6 +20559,37 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
       } //end for
     } // end add_index_name_set
     } // end drop_index_name_set
+  }
+  return ret;
+}
+
+int ObDDLService::build_hidden_table_index_and_mlog_schema_(
+    const ObTableSchema &hidden_table_schema,
+    ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t new_idx_tid = OB_INVALID_ID;
+  ObSchemaService *schema_service = nullptr;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_ISNULL(schema_service = schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), KP(schema_service));
+  } else if (OB_FAIL(schema_service->fetch_new_table_id(hidden_table_schema.get_tenant_id(),
+                                                        new_idx_tid))) {
+    LOG_WARN("failed to fetch_new_table_id", KR(ret));
+  } else if (OB_FAIL(generate_object_id_for_partition_schema(index_schema))) {
+    LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(index_schema));
+  } else if (OB_FAIL(generate_tablet_id(index_schema))) {
+    LOG_WARN("fail to generate tablet id for hidden table", KR(ret), K(index_schema));
+  } else {
+    index_schema.set_table_id(new_idx_tid);
+    index_schema.set_data_table_id(hidden_table_schema.get_table_id());
+    index_schema.set_tenant_id(hidden_table_schema.get_tenant_id());
+    index_schema.set_database_id(hidden_table_schema.get_database_id());
+    index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
+    // set the hidden attributes of the table
+    index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
   }
   return ret;
 }
@@ -18726,6 +20676,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
   const uint64_t dst_tenant_id = hidden_table_schema.get_tenant_id();
   bool is_oracle_mode = false;
   ObSchemaService *schema_service = schema_service_->get_schema_service();
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_ISNULL(schema_service)) {
@@ -18777,9 +20728,29 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       } else if (need_rebuild) {
         ObString new_index_table_name;
         HEAP_VAR(ObTableSchema, new_index_schema) {
+          int64_t rebuild_index_arg_schema_id = OB_INVALID_ID;
           // No need to convert hidden table column id since indexes are rebuilt based on column names.
-          if (OB_FAIL(new_index_schema.assign(*index_table_schema))) {
-            LOG_WARN("fail to assign schema", K(ret));
+          for (int64_t i = 0; OB_SUCC(ret) && rebuild_index_arg_schema_id == OB_INVALID_ID
+              && i < alter_table_arg.rebuild_index_arg_list_.count(); ++i) {
+            const int64_t tmp_index_id = alter_table_arg.rebuild_index_arg_list_.at(i).get_table_id();
+            if (tmp_index_id == index_table_schema->get_table_id()) {
+              rebuild_index_arg_schema_id = i;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (rebuild_index_arg_schema_id != OB_INVALID_ID) {
+            if (OB_FAIL(new_index_schema.assign(alter_table_arg.rebuild_index_arg_list_.at(rebuild_index_arg_schema_id)))) {
+              LOG_WARN("fail to assign schema", K(ret));
+            } else {
+              // set rebuild index arg schema as old index_table_schema
+              index_table_schema = &alter_table_arg.rebuild_index_arg_list_.at(rebuild_index_arg_schema_id);
+            }
+          } else {
+            if (OB_FAIL(new_index_schema.assign(*index_table_schema))) {
+              LOG_WARN("fail to assign schema", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else if (FALSE_IT(new_index_schema.set_tenant_id(hidden_table_schema.get_tenant_id()))) {
           } else if (OB_FAIL(gen_new_index_table_name(
                              index_table_schema->get_table_name_str(),
@@ -18826,12 +20797,17 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
           } else if (OB_FAIL(gen_hidden_index_schema_columns(
                      *index_table_schema, drop_cols_id_arr, col_name_map, new_table_schema, new_index_schema))) {
             LOG_WARN("failed to gen hidden index schema", K(ret));
-          } else if (hidden_table_schema.get_part_level() > 0 && new_index_schema.is_index_local_storage()
-                     && OB_FAIL(new_index_schema.assign_partition_schema(hidden_table_schema))) {
+          } else if ((hidden_table_schema.get_part_level() > 0 || hidden_table_schema.is_auto_partitioned_table())
+                     && new_index_schema.is_index_local_storage()
+                     && OB_FAIL(new_index_schema.assign_partition_schema_without_auto_part_attr(hidden_table_schema))) {
             LOG_WARN("fail to assign partition schema", K(ret), K(new_index_schema));
           } else {
             uint64_t new_idx_tid = OB_INVALID_ID;
-            if (OB_FAIL(schema_service->fetch_new_table_id(
+            ObAlterAutoPartAttrOp alter_auto_part(*this);
+            if (new_index_schema.is_global_index_table()
+                && OB_FAIL(alter_auto_part.alter_global_indexes_auto_part_attribute_offline(alter_table_arg, new_index_schema))) {
+              LOG_WARN("fail to alter global index auto split perproty", K(ret), K(new_index_schema));
+            } else if (OB_FAIL(schema_service->fetch_new_table_id(
                         dst_tenant_id, new_idx_tid))) {
               LOG_WARN("failed to fetch_new_table_id", K(ret));
             } else if (OB_FAIL(generate_object_id_for_partition_schema(new_index_schema))) {
@@ -18887,7 +20863,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
   return ret;
 }
 
-int ObDDLService::rebuild_hidden_table_index(
+int ObDDLService::rebuild_hidden_table_index_and_mlog(
                   const uint64_t tenant_id,
                   ObSchemaGetterGuard &schema_guard,
                   ObDDLOperator &ddl_operator,
@@ -18920,6 +20896,11 @@ int ObDDLService::rebuild_hidden_table_index(
           has_tablet = is_system_table(table_id);
         }
         if (!has_tablet) {
+        } else if (this_table.is_mlog_table()) {
+          if (OB_FAIL(create_mlog_tablet(trans, schema_guard, this_table,
+              false/*need_check_tablet_cnt*/, tenant_data_version))) {
+            LOG_WARN("failed to create mlog tablet", KR(ret), K(this_table));
+          }
         } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard, false/*need_check_tablet_cnt*/, tenant_data_version))) {
           LOG_WARN("create table tablets failed", K(ret), K(this_table));
         } else {}
@@ -18933,6 +20914,80 @@ int ObDDLService::rebuild_hidden_table_index(
                      K(ret), K(tenant_id), K(table_id), K(last_schema_version));
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::add_new_mlog_schema(
+    const uint64_t tenant_id,
+    const share::schema::ObTableSchema &orig_table_schema,
+    const share::schema::ObTableSchema &hidden_table_schema,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    share::schema::ObSchemaGetterGuard &dest_schema_guard,
+    common::ObMySQLTransaction &trans,
+    ObIAllocator &allocator,
+    ObSArray<ObTableSchema> &new_table_schemas,
+    ObSArray<uint64_t> &index_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = nullptr;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_ISNULL(schema_service = schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", K(ret), KP(schema_service));
+  } else {
+    // generate mlog schema
+    const ObTableSchema *orig_mlog_schema = nullptr;
+    ObTableSchema new_mlog_schema;
+    const uint64_t orig_mlog_tid = orig_table_schema.get_mlog_tid();
+    ObString new_mlog_name;
+    bool is_exist = false;
+    bool is_oracle_mode = false;
+    if (OB_FAIL(schema_guard.get_table_schema(
+        tenant_id, orig_mlog_tid, orig_mlog_schema))) {
+      LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), "table id", orig_mlog_tid);
+    } else if (OB_ISNULL(orig_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema should not be null", KR(ret));
+    } else if (OB_FAIL(new_mlog_schema.assign(*orig_mlog_schema))) {
+      LOG_WARN("failed to assign schema", KR(ret));
+    } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("failed to check if oracle compat mode", KR(ret));
+    } else if (OB_FAIL(ObTableSchema::build_mlog_table_name(allocator,
+        hidden_table_schema.get_table_name_str(), new_mlog_name, is_oracle_mode))) {
+      LOG_WARN("failed to build mlog table name", KR(ret), K(hidden_table_schema.get_table_name_str()));
+    } else if (OB_FAIL(new_mlog_schema.set_table_name(new_mlog_name))) {
+      LOG_WARN("failed to set table name", KR(ret), K(new_mlog_name));
+    } else if (OB_FAIL(build_hidden_table_index_and_mlog_schema_(
+        hidden_table_schema, new_mlog_schema))) {
+      LOG_WARN("failed to build hidden table index and mlog schema",
+          KR(ret), K(hidden_table_schema), K(new_mlog_schema));
+    } else if (OB_FAIL(dest_schema_guard.check_table_exist(new_mlog_schema.get_tenant_id(),
+                                                           new_mlog_schema.get_database_id(),
+                                                           new_mlog_schema.get_table_name_str(),
+                                                           false/*is_index*/,
+                                                           ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
+                                                           is_exist))) {
+      LOG_WARN("failed to check table exist", KR(ret), K(new_mlog_schema));
+    } else if (is_exist) {
+      LOG_INFO("mlog already rebuilt, skip",
+          K(new_mlog_schema.get_table_id()), K(new_mlog_schema.get_table_name_str()));
+    } else if (OB_FAIL(new_table_schemas.push_back(new_mlog_schema))) {
+      LOG_WARN("failed to add table schema!", KR(ret), K(new_mlog_schema));
+    } else if (OB_FAIL(index_ids.push_back(new_mlog_schema.get_table_id()))) {
+      LOG_WARN("failed to add new index id!", KR(ret), K(new_mlog_schema));
+    } else { // insert new mlog_info to all_mlog
+      ObMLogInfo mlog_info;
+      uint64_t new_mlog_tid = new_mlog_schema.get_table_id();
+      if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans,
+          tenant_id, orig_mlog_tid, mlog_info, false/*for_update*/))) {
+        LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id), K(orig_mlog_tid));
+      } else if (OB_FALSE_IT(mlog_info.set_mlog_id(new_mlog_tid))) {
+      } else if (OB_FAIL(ObMLogInfo::insert_mlog_info(trans, mlog_info))) {
+        LOG_WARN("fail to insert mlog info", KR(ret), K(mlog_info));
       }
     }
   }
@@ -18966,6 +21021,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
     const ObTableSchema *hidden_table_schema = nullptr;
     int64_t refreshed_schema_version = 0;
     ObArray<int64_t> drop_cols_id_arr;
+    bool has_mlog_table = false;
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(src_tenant_id, dst_tenant_id,
          hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
          src_tenant_schema_guard, dst_tenant_schema_guard))) {
@@ -18981,12 +21037,19 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
                                                         orig_table_schema,
                                                         hidden_table_schema))) {
       LOG_WARN("failed to get orig and hidden table schema", K(ret));
-    } else if (hidden_table_schema->get_simple_index_infos().count() > 0) {
+    } else if (OB_FALSE_IT(has_mlog_table = orig_table_schema->has_mlog_table())) {
+    } else if (hidden_table_schema->get_simple_index_infos().count() > 0
+        || hidden_table_schema->has_mlog_table()) {
       // if there is any index in the hidden table, all indexes are already rebuilt because the rebuild is wrap in a transaction
       const common::ObIArray<ObAuxTableMetaInfo> &index_infos = hidden_table_schema->get_simple_index_infos();
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         if (OB_FAIL(index_ids.push_back(index_infos.at(i).table_id_))) {
           LOG_WARN("push back index id failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && hidden_table_schema->has_mlog_table()) {
+        if (OB_FAIL(index_ids.push_back(hidden_table_schema->get_mlog_tid()))) {
+          LOG_WARN("failed to push back mlog tid", KR(ret), K(hidden_table_schema->get_mlog_tid()));
         }
       }
     } else {
@@ -19017,12 +21080,23 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
                                               new_table_schemas,
                                               index_ids))) {
         LOG_WARN("failed to add new index schema", K(ret));
-      } else if (OB_FAIL(rebuild_hidden_table_index(dst_tenant_id,
+      } else if (has_mlog_table && OB_FAIL(add_new_mlog_schema(
+                                              dst_tenant_id,
+                                              *orig_table_schema,
+                                              *hidden_table_schema,
+                                              *src_tenant_schema_guard,
+                                              *dst_tenant_schema_guard,
+                                              trans,
+                                              alter_table_arg.allocator_,
+                                              new_table_schemas,
+                                              index_ids))) {
+        LOG_WARN("failed to add new mlog schema", KR(ret));
+      } else if (OB_FAIL(rebuild_hidden_table_index_and_mlog(dst_tenant_id,
                                                     *dst_tenant_schema_guard,
                                                     ddl_operator,
                                                     trans,
                                                     new_table_schemas))) {
-        LOG_WARN("failed to rebuild hidden table index", K(ret));
+        LOG_WARN("failed to rebuild hidden table index and mlog", K(ret));
       }
     }
     if (trans.is_started()) {
@@ -19520,7 +21594,7 @@ int ObDDLService::swap_all_child_table_fk_name(
                                            ddl_operator,
                                            trans,
                                            allocator))) {
-        LOG_WARN("fail to swap child table fk name", K(ret));;
+        LOG_WARN("fail to swap child table fk name", K(ret));
       }
     }
   }
@@ -19781,7 +21855,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
               LOG_WARN("failed to convert child column ids of foreign key", K(ret));
           }
         }
-        if (OB_SUCC(ret) && foreign_key_info.validate_flag_) {
+        if (OB_SUCC(ret) && foreign_key_info.validate_flag_ && alter_table_arg.foreign_key_checks_) {
           if (OB_FAIL(cst_ids.push_back(foreign_key_info.foreign_key_id_))) {
             LOG_WARN("failed to add new foreign key id!", K(ret));
           }
@@ -20251,14 +22325,35 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               }
             }
           }
+          // materialized view log
+          if (OB_SUCC(ret) && alter_table_arg.mview_refresh_info_.is_mview_complete_refresh_) {
+            if (orig_table_schema->has_mlog_table() && hidden_table_schema->has_mlog_table()) {
+              if (OB_FAIL(swap_orig_and_hidden_table_mlog_state_(schema_guard,
+                                                                 tenant_id,
+                                                                 orig_table_schema->get_mlog_tid(),
+                                                                 hidden_table_schema->get_mlog_tid(),
+                                                                 table_schemas))) {
+                LOG_WARN("failed to swap orig and hidden table mlog state", KR(ret));
+              }
+            }
+          }
         }
         if (OB_SUCC(ret)) {
           new_orig_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
           new_hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
           new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str());
           new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str());
-          if (OB_FAIL(table_schemas.push_back(new_orig_table_schema))
-              || OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
+          // in prepare_hidden_table_schema, we clear the session id for hidden table of
+          // CTAS tmp table. now, data loading stage is finished, we are ready to swap hidden table
+          // with CTAS tmp table. we should exchange the session id(and create_host) property to
+          // ensure the new CTAS tmp table has correct state.
+          if (orig_table_schema->is_ctas_tmp_table() &&
+              OB_FAIL(swap_ctas_hidden_table_session_id_(
+                  *orig_table_schema, *hidden_table_schema, new_orig_table_schema,
+                  new_hidden_table_schema, ddl_operator, trans))) {
+            LOG_WARN("failed to swap ctas hidden table session id", K(ret));
+          } else if (OB_FAIL(table_schemas.push_back(new_orig_table_schema)) ||
+                     OB_FAIL(table_schemas.push_back(new_hidden_table_schema))) {
             LOG_WARN("failed to add table schema!", K(ret));
           }
         }
@@ -20279,7 +22374,11 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
         }
         if (OB_SUCC(ret)) {
           int64_t schema_version = table_schemas[table_schemas.count()-1].get_schema_version();
-          if (OB_FAIL(unbind_hidden_tablets(*orig_table_schema, *hidden_table_schema,
+          if (orig_table_schema->mv_major_refresh()) {
+            // for major refresh mv skip modify ddl_info
+            // because of we read majoar mv data by specified snapshot
+            // last_refresh_scn may less then ddl snapshot
+          } else if (OB_FAIL(unbind_hidden_tablets(*orig_table_schema, *hidden_table_schema,
               schema_version, trans))) {
             LOG_WARN("failed to unbind hidden tablets", K(ret));
           }
@@ -20321,6 +22420,10 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
             } else {
               max_dependency_version = MAX(max_dependency_version, based_info.schema_version_);
             }
+          }
+          if (OB_SUCC(ret) && !is_based_schema_version_consistent && orig_table_schema->mv_major_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("change base table during major refresh materialized view creation is not supported", KR(ret));
           }
           if (OB_SUCC(ret)) {
             HEAP_VAR(ObTableSchema, new_mview_table_schema) {
@@ -20393,6 +22496,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               LOG_WARN("mview version is old", KR(ret), K(alter_table_arg.mview_refresh_info_),
                        K(mview_info));
             } else {
+              DEBUG_SYNC(BEFORE_MV_FINISH_COMPLETE_REFRESH);
               mview_info.set_last_refresh_scn(refresh_scn_val);
               mview_info.set_last_refresh_type(share::schema::ObMVRefreshType::COMPLETE);
               mview_info.set_last_refresh_date(start_time);
@@ -20409,9 +22513,10 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, alter_table_arg.task_id_))) {
             LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
           } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                               orig_table_schema->get_table_id(),
-                                                               owner_id,
-                                                               trans))) {
+                                                        orig_table_schema->get_table_id(),
+                                                        nullptr/*hidden_tablet_ids_alone*/,
+                                                        owner_id,
+                                                        trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -20543,6 +22648,7 @@ int ObDDLService::swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &
           LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
         } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
                                                               orig_table_schema->get_table_id(),
+                                                              nullptr/*hidden_tablet_ids_alone*/,
                                                               owner_id,
                                                               trans))) {
           LOG_WARN("failed to unlock ddl", K(ret));
@@ -20570,7 +22676,46 @@ int ObDDLService::swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &
   if (OB_NO_NEED_UPDATE == ret) {
     ret = OB_SUCCESS;
   }
+  return ret;
+}
 
+int ObDDLService::swap_orig_and_hidden_table_mlog_state_(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t orig_table_mlog_tid,
+    const uint64_t hidden_table_mlog_tid,
+    ObIArray<ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *orig_table_mlog_schema = nullptr;
+  const ObTableSchema *hidden_table_mlog_schema = nullptr;
+  HEAP_VARS_2((ObTableSchema, new_orig_table_mlog_schema),
+              (ObTableSchema, new_hidden_table_mlog_schema)) {
+    if (OB_FAIL(schema_guard.get_table_schema(
+        tenant_id, orig_table_mlog_tid, orig_table_mlog_schema))) {
+      LOG_WARN("failed to get orig table mlog schema", K(ret), K(orig_table_mlog_tid));
+    } else if (OB_FAIL(schema_guard.get_table_schema(
+        tenant_id, hidden_table_mlog_tid, hidden_table_mlog_schema))) {
+      LOG_WARN("failed to get hidden table mlog schema", K(ret), K(hidden_table_mlog_tid));
+    } else if (OB_ISNULL(orig_table_mlog_schema) || OB_ISNULL(hidden_table_mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog table schema should not be null",
+          KR(ret), KP(orig_table_mlog_schema), KP(hidden_table_mlog_schema));
+    } else if (OB_FAIL(new_orig_table_mlog_schema.assign(*orig_table_mlog_schema))) {
+      LOG_WARN("failed to assign schema", KR(ret));
+    } else if (OB_FAIL(new_hidden_table_mlog_schema.assign(*hidden_table_mlog_schema))) {
+      LOG_WARN("failed to assign schema", KR(ret));
+    } else {
+      new_orig_table_mlog_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
+      new_hidden_table_mlog_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
+      new_orig_table_mlog_schema.set_table_name(hidden_table_mlog_schema->get_table_name_str());
+      new_hidden_table_mlog_schema.set_table_name(orig_table_mlog_schema->get_table_name_str());
+      if (OB_FAIL(table_schemas.push_back(new_orig_table_mlog_schema))
+          || OB_FAIL(table_schemas.push_back(new_hidden_table_mlog_schema))) {
+        LOG_WARN("failed to add table schemas", KR(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -21122,8 +23267,8 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
   return ret;
 }
 
- int ObDDLService::modify_hidden_table_not_null_column_state(const obrpc::ObAlterTableArg &alter_table_arg)
- {
+int ObDDLService::modify_hidden_table_not_null_column_state(const obrpc::ObAlterTableArg &alter_table_arg)
+{
   int ret = OB_SUCCESS;
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
@@ -21230,6 +23375,215 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
   return ret;
 }
 
+int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+  const uint64_t dest_tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+  const int64_t data_table_id = alter_table_arg.table_id_;
+  int64_t new_task_id = 0;
+  uint64_t tenant_data_version = 0;
+  int64_t refreshed_schema_version = 0;
+  ObDDLTaskRecord task_record;
+  ObRootService *root_service = GCTX.root_service_;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *orig_data_table_schema = nullptr;
+  const ObDatabaseSchema *orig_database_schema = nullptr;
+  ObSEArray<int64_t, 10> task_ids;
+  ObSEArray<uint64_t, 10> table_ids;
+  ObTableLockOwnerID new_owner_id;
+  ObDDLSQLTransaction trans(schema_service_);
+  if (OB_UNLIKELY(!alter_table_arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("alter_table_arg is invalid", K(ret), K(alter_table_arg));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, orig_data_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(orig_data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("orig data table schema is null", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_UNLIKELY(orig_data_table_schema->is_aux_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig data table schema is aux table", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_INVALID_ID != orig_data_table_schema->get_association_table_id()) {
+    LOG_INFO("the two tables offline ddl are being executed.", K(ret), K(orig_data_table_schema->get_association_table_id()), K(orig_data_table_schema->get_table_id()));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, orig_data_table_schema->get_database_id(), orig_database_schema))) {
+    LOG_WARN("fail to get orig database schema", K(ret), K(tenant_id), K(orig_data_table_schema->get_database_id()));
+  } else if (OB_ISNULL(orig_database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_database_schema is null", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+    LOG_WARN("start transaction failed", K(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, new_task_id))) {
+    LOG_WARN("fetch new task id failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(new_owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, new_task_id))) {
+    LOG_WARN("failed to get new owner id", K(ret), K(new_task_id));
+  } else if (OB_FAIL(ObDDLUtil::get_global_index_table_ids(*orig_data_table_schema, table_ids, schema_guard))) {
+    LOG_WARN("fail to get global index table ids", K(ret), K(orig_data_table_schema));
+  } else if (OB_FAIL(table_ids.push_back(orig_data_table_schema->get_table_id()))) {
+    LOG_WARN("fail to push back", K(ret), K(orig_data_table_schema->get_table_id()));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_partition_split_task_ids(trans, tenant_id, table_ids, task_ids))) {
+    LOG_WARN("failed to get partition split task ids", K(ret), K(tenant_id), K(table_ids));
+  } else {
+    //1、设置当前table的处于DDL_PARTITION_SPLIT状态的task任务状态设置为WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH, 等待新表完成补数据任务
+    //2、依次根据task_id获取task_record, 根据record在ObPartitionSplitTask中初始化, 解除相应ddl锁, 并且替换掉表级锁
+    common::ObArenaAllocator allocator;
+    ObTableLockOwnerID old_owner_id;
+    ObDDLTaskStatus new_status = WAIT_PARTITION_SPLIT_RECOVERY_TASK_FINISH;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); i++) {
+      int64_t task_id = task_ids.at(i);
+      if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, dest_tenant_id, task_id, static_cast<int64_t>(new_status)))) {
+        LOG_WARN("update task status failed", K(ret), K(dest_tenant_id), K(task_id), K(new_status));
+      }
+    }
+
+    ObSEArray<ObTabletID, 10> src_tablet_ids;
+    ObSEArray<ObTabletID, 10> dst_tablet_ids;
+    ObSEArray<ObTabletID, 10> tablet_ids;
+    ObSEArray<ObTableLockOwnerID, 10> global_split_owner_ids;
+    ObSEArray<ObTableLockOwnerID, 10> main_split_owner_ids;
+    const ObTableSchema *table_schema = nullptr;
+    ObDDLTaskRecord old_split_task_record;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); i++) {
+      src_tablet_ids.reuse();
+      dst_tablet_ids.reuse();
+      tablet_ids.reuse();
+      old_owner_id.reset();
+      old_split_task_record.reset();
+      int64_t task_id = task_ids.at(i);
+      bool is_global_idx = false;
+      HEAP_VAR(ObPartitionSplitTask, split_task) {
+        if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id,
+                                                                 task_id,
+                                                                 root_service->get_sql_proxy(),
+                                                                 allocator,
+                                                                 old_split_task_record))) {
+          LOG_WARN("get ddl task record failed", K(ret), K(tenant_id), K(task_id));
+        } else if (OB_FAIL(split_task.init(old_split_task_record))) {
+          LOG_WARN("init partition split task failed", K(ret), K(old_split_task_record));
+        } else if (OB_FAIL(split_task.get_src_tablet_ids(src_tablet_ids))) {
+          LOG_WARN("fail to get all src tablet ids", K(ret));
+        } else if (OB_FAIL(split_task.get_dest_tablet_ids(dst_tablet_ids))) {
+          LOG_WARN("fail to get all dest tablet ids", K(ret));
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, split_task.get_object_id(), table_schema))) {
+          LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(split_task.get_object_id()));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_schema));
+        } else if (OB_FALSE_IT(is_global_idx = table_schema->is_global_index_table())) {
+        } else if (OB_FAIL(old_owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id))) {
+          LOG_WARN("failed to get old owner id", K(ret), K(task_id));
+        } else if (OB_FAIL(append(tablet_ids, src_tablet_ids))) {
+          LOG_WARN("failed to append", K(ret));
+        } else if (OB_FAIL(append(tablet_ids, dst_tablet_ids))) {
+          LOG_WARN("failed to append", K(ret));
+        } else if OB_FAIL(ObDDLLock::replace_tablet_lock_for_split(tenant_id, *table_schema, tablet_ids, old_owner_id, new_owner_id, is_global_idx, trans)) {
+          LOG_WARN("failed to replace online lock for split partition", K(ret));
+        } else if (!is_global_idx) {
+          if (OB_FAIL(main_split_owner_ids.push_back(old_owner_id))) {
+            LOG_WARN("failed to push back main_split_owner_ids", K(ret), K(i));
+          }
+        } else if (OB_FAIL(global_split_owner_ids.push_back(old_owner_id))) {
+          LOG_WARN("failed to push bakc global_idx_owner_id", K(ret), K(global_split_owner_ids));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(orig_data_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected", K(ret), K(orig_data_table_schema));
+    } else if (OB_FAIL(ObDDLLock::replace_table_lock_for_split(*orig_data_table_schema,
+                                                               global_split_owner_ids,
+                                                               main_split_owner_ids,
+                                                               new_owner_id,
+                                                               trans))) {
+      LOG_WARN("fail to replace lock for split partition", K(ret), K(global_split_owner_ids), K(main_split_owner_ids), K(new_owner_id));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      HEAP_VAR(ObTableSchema, new_table_schema) {
+        if (OB_FAIL(new_table_schema.assign(*orig_data_table_schema))) {
+          LOG_WARN("fail to assign schema", K(ret));
+        } else {
+          new_table_schema.set_tenant_id(dest_tenant_id);
+          new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
+          new_table_schema.reset_hidden_partition_array();
+          bool bind_tablets = true;
+          ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+          if (OB_FAIL(create_user_hidden_table(
+                              *orig_data_table_schema,
+                              new_table_schema,
+                              nullptr,
+                              bind_tablets,
+                              schema_guard,
+                              schema_guard,
+                              ddl_operator,
+                              trans,
+                              allocator,
+                              tenant_data_version))) {
+            LOG_WARN("fail to create hidden table", K(ret));
+          } else {
+            LOG_INFO("create hidden table success!", K(ret));
+            common::ObArenaAllocator allocator_for_restore(lib::ObLabel("RestoreSplit"));
+            alter_table_arg.task_id_ = new_task_id;
+            ObCreateDDLTaskParam param(tenant_id,
+                                      ObDDLType::DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION,
+                                      orig_data_table_schema,
+                                      &new_table_schema,
+                                      data_table_id,
+                                      new_table_schema.get_schema_version(),
+                                      alter_table_arg.parallelism_,
+                                      alter_table_arg.consumer_group_id_,
+                                      &allocator_for_restore,
+                                      &alter_table_arg,
+                                      0,
+                                      new_task_id);
+            param.tenant_data_version_ = tenant_data_version;
+            if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
+              LOG_WARN("submit ddl task failed", K(ret));
+            } else if (ObTableStateFlag::TABLE_STATE_OFFLINE_DDL == orig_data_table_schema->get_table_state_flag()) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("offline ddl is being executed, other ddl operations are not allowed, create hidden table fail", K(ret), K(alter_table_arg));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (trans.is_started()) {
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+      ret = (OB_SUCC(ret)) ? temp_ret : ret;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(publish_schema(tenant_id))) {
+      LOG_WARN("publish_schema failed", K(ret));
+    } else if (OB_TMP_FAIL(root_service->get_ddl_scheduler().schedule_ddl_task(task_record))) {
+      LOG_WARN("fail to schedule ddl task", K(tmp_ret), K(task_record));
+    } else {
+      LOG_INFO("schedule ddl task success");
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
@@ -21301,7 +23655,9 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
         // if the previous step fails, the newly created hidden table should be deleted.
         // if the previous steps are successful, the original table is changed to a hidden table
         // so regardless of success or failure, only need to delete the hidden table
-        new_hidden_table_schema.set_association_table_id(OB_INVALID_ID);
+        if (share::PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK != alter_table_arg.ddl_task_type_) {
+          new_hidden_table_schema.set_association_table_id(OB_INVALID_ID);
+        }
         new_hidden_table_schema.set_in_offline_ddl_white_list(true);
         if (!ddl_succ) {
           if (OB_FAIL(unbind_hidden_tablets(*orig_table_schema, *hidden_table_schema,
@@ -21342,10 +23698,55 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
           if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                   alter_table_arg.task_id_))) {
             LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
+          } else if (share::PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK == alter_table_arg.ddl_task_type_) {
+            ObArray<ObTabletID> tablet_ids;
+            const ObPartitionLevel part_level = orig_table_schema->get_part_level();
+            const int64_t part_num = orig_table_schema->get_hidden_partition_num();
+            ObPartition **part_array = orig_table_schema->get_hidden_part_array();
+            if (OB_ISNULL(part_array)) {
+                //do nothing
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+                if (OB_ISNULL(part_array[i])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("NULL ptr", K(ret), K(i), KPC(orig_table_schema));
+                } else if (PARTITION_LEVEL_ONE == part_level) {
+                  if (OB_FAIL(tablet_ids.push_back(part_array[i]->get_tablet_id()))) {
+                    LOG_WARN("fail to push back tablet id", K(ret), K(i), K(part_array[i]->get_tablet_id()));
+                  }
+                } else if (PARTITION_LEVEL_TWO == part_level) {
+                  ObSubPartition **sub_part_array = part_array[i]->get_hidden_subpart_array();
+                  int64_t sub_part_num = part_array[i]->get_hidden_subpartition_num();
+                  if (OB_ISNULL(sub_part_array)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("part array is null", K(ret), KPC(orig_table_schema));
+                  } else {
+                    for (int64_t j = 0; OB_SUCC(ret) && j < sub_part_num; j++) {
+                      if (OB_ISNULL(sub_part_array[j])) {
+                        ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("NULL ptr", K(ret), K(j), KPC(orig_table_schema));
+                      } else if (OB_FAIL(tablet_ids.push_back(sub_part_array[j]->get_tablet_id()))) {
+                        LOG_WARN("fail to push back tablet id", K(ret), K(j), K(sub_part_array[j]->get_tablet_id()));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if (OB_SUCC(ret) && !tablet_ids.empty()) {
+              if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
+                                                            orig_table_schema->get_table_id(),
+                                                            &tablet_ids,
+                                                            owner_id,
+                                                            trans))) {
+                LOG_WARN("failed to unlock ddl", K(ret));
+              }
+            }
           } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                               orig_table_schema->get_table_id(),
-                                                               owner_id,
-                                                               trans))) {
+                                                              orig_table_schema->get_table_id(),
+                                                              nullptr/*hidden_tablet_ids_alone*/,
+                                                              owner_id,
+                                                              trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -21758,7 +24159,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     if (OB_ISNULL(orig_table_schemas.at(0))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("orig table schema first element is NULL", KR(ret));;
+      LOG_WARN("orig table schema first element is NULL", KR(ret));
     } else {
       tenant_id = orig_table_schemas.at(0)->get_tenant_id();
       table_name = orig_table_schemas.at(0)->get_table_name();
@@ -22032,27 +24433,37 @@ int ObDDLService::check_is_foreign_key_parent_table(const ObTableSchema &table_s
   return ret;
 }
 
-int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_schema,
+int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &arg,
+                                              const ObDatabaseSchema & database_schema,
                                               const ObTableSchema &table_schema,
                                               const bool check_foreign_key,
                                               ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  int64_t table_id = table_schema.get_table_id();
+  const int64_t table_id = table_schema.get_table_id();
   ObString table_name = table_schema.get_table_name();
   ObString database_name = database_schema.get_database_name();
 
-  if (table_schema.is_in_recyclebin() || database_schema.is_in_recyclebin()) {
+  if (OB_UNLIKELY(table_schema.get_database_id() != database_schema.get_database_id())) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("table databse id not equal to database schema", KR(ret),
+                                                              K(table_schema.get_database_id()),
+                                                              K(database_schema.get_database_id()));
+  } else if (OB_UNLIKELY(database_schema.get_database_name_str() != arg.database_name_)) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("database_schema's database name not equal to arg", KR(ret), K(database_schema.get_database_name_str()), K_(arg.database_name));
+  } else if (table_schema.is_in_recyclebin() || database_schema.is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
   } else if (table_schema.is_user_table() || table_schema.is_mysql_tmp_table()) {
-    if (table_schema.has_mlog_table()) {
+    if (table_schema.required_by_mview_refresh()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("truncate table with materialized view log is not supported",
+      LOG_WARN("truncate table required by materialized view refresh is not supported",
           KR(ret), K(table_schema), K(table_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
-    } else if (check_foreign_key && OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))){
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view refresh is");
+    } else if (check_foreign_key &&
+               OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))) {
       LOG_WARN("failed to check table is foreign key's parent table", KR(ret), K(table_name), K(table_id));
     }
   } else if (0 != table_schema.get_autoinc_column_id()) {
@@ -22152,8 +24563,14 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trans conn is NULL", KR(ret), K(arg));
   // To verify the existence of database and table
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_database_name(trans, tenant_id, arg.database_name_, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to lock database name", KR(ret), K(tenant_id), K_(arg.database_name));
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_obj_name(trans, tenant_id, arg.database_name_, arg.table_name_, transaction::tablelock::EXCLUSIVE))) {
+    LOG_WARN("fail to lock table name", KR(ret), K(tenant_id), K_(arg.database_name), K_(arg.table_name));
   } else if (OB_FAIL(check_db_and_table_is_exist(arg, trans, database_id, table_id))) {
     LOG_WARN("failed to check database and table exist", KR(ret), K(arg.database_name_), K(arg.table_name_));
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_obj_id(trans, tenant_id, database_id, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to lock databse id", KR(ret), K(tenant_id), K(database_id));
   } else {
     // table lock
     ObTableSchema orig_table_schema;
@@ -22164,9 +24581,11 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     schema_status.tenant_id_ = tenant_id;
     int64_t before_table_lock = ObTimeUtility::current_time();
     bool lock_table_not_allow = false;
-    LOG_INFO("truncate cost after trans start and check_db_table_is_exist", KR(ret), "cost_ts", before_table_lock - start_time);
+    LOG_INFO("truncate cost after trans start, lock database name, lock table name, and check_db_table_is_exist", KR(ret), "cost_ts", before_table_lock - start_time);
     // try lock
-    if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
+    if (OB_FAIL(ObDDLHelper::obj_lock_obj_id(trans, tenant_id, table_id, transaction::tablelock::EXCLUSIVE))) {
+      LOG_WARN("fail to lock table id", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
                                                       table_id,
                                                       EXCLUSIVE,
                                                       0,
@@ -22178,29 +24597,14 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
         lock_table_not_allow = true;
       }
     }
-    uint64_t compat_version = 0;
     int64_t after_table_lock = ObTimeUtility::current_time();
-    LOG_INFO("truncate cost after lock table", KR(ret), "cost_ts", after_table_lock - before_table_lock);
+    LOG_INFO("truncate cost after lock table id and lock table", KR(ret), "cost_ts", after_table_lock - before_table_lock);
     if (FAILEDx(schema_service->get_db_schema_from_inner_table(schema_status, database_id, database_schema_array, trans))){
       LOG_WARN("fail to get database schema", KR(ret), K(arg.database_name_), K(database_id));
     // get table full scehma
     } else if (OB_FAIL(schema_service->get_full_table_schema_from_inner_table(schema_status, table_id, orig_table_schema, allocator, trans))) {
       LOG_WARN("fail to get table schema", KR(ret), K(arg.table_name_), K(table_id));
-    // in upgrade, check the data_version to prevent from executing wrong logical
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_1_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("server state is not suppported when tenant's data version is below 4.1.0.0", KR(ret), K(compat_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.1.0.0, truncate table is ");
-    } else if (orig_table_schema.get_autoinc_column_id() != 0
-              && compat_version < DATA_VERSION_4_2_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("server state is not suppported to use_parallel_truncate when tenant's data version is below 4.2.0.0 "
-                "and table has autoinc column", KR(ret), K(compat_version), K(tenant_id), K(arg.table_name_));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.2.0.0, truncate table with autoinc column is ");
-    // To verify the args are legal
-    } else if (OB_FAIL(check_table_schema_is_legal(database_schema_array.at(0), orig_table_schema, arg.foreign_key_checks_, trans))) {
+    } else if (OB_FAIL(check_table_schema_is_legal(arg, database_schema_array.at(0), orig_table_schema, arg.foreign_key_checks_, trans))) {
       LOG_WARN("failed to check table schema is legal",
               KR(ret), K(arg.table_name_), K(table_id), K(orig_table_schema.get_schema_version()));
     } else if (lock_table_not_allow) {
@@ -22298,9 +24702,9 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         }
       } else if (OB_FAIL(check_enable_sys_table_ddl(*orig_table_schema, OB_DDL_TRUNCATE_TABLE_CREATE))) {
         LOG_WARN("ddl is not allowed on system table", K(ret));
-      } else if (orig_table_schema->has_mlog_table()) {
+      } else if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("truncate table with materialized view log is not supported",
+        LOG_WARN("truncate table required by materialized view refresh is not supported",
             KR(ret), KPC(orig_table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
       } else if (!orig_table_schema->check_can_do_ddl()) {
@@ -22936,15 +25340,15 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg)
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.origin_db_name_), to_cstring(arg.origin_table_name_),
                        "BASE TABLE");
         LOG_WARN("create table like inner table not allowed", K(ret), K(arg));
-      } else if (orig_table_schema->has_mlog_table()) {
+      } else if (orig_table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("create table like on table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create table like on table with materialized view log is");
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-              arg.new_db_name_,
-              arg.new_table_name_,
-              false,
-              new_table_schema))) {
+        LOG_WARN(
+            "create table like on table required by materialized view refresh is not supported",
+            KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "create table like on table required by materialized view refresh is");
+      } else if (OB_FAIL(schema_guard.get_table_schema(
+                     tenant_id, arg.new_db_name_, arg.new_table_name_, false, new_table_schema))) {
       } else if (NULL != new_table_schema) {
         ret = OB_ERR_TABLE_EXIST;
         LOG_WARN("target table already exist", K(arg), K(tenant_id), K(ret));
@@ -23102,6 +25506,10 @@ int ObDDLService::drop_table_in_trans(
     } else if (!table_schema.is_aux_table()) {
       if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
           table_schema, USER_INDEX, to_recyclebin)))) {
+        LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
+      } else if (table_schema.mv_container_table()
+          && OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
+                          table_schema, MATERIALIZED_VIEW_LOG, to_recyclebin)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
       } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
           table_schema, AUX_VERTIAL_PARTITION_TABLE, to_recyclebin)))) {
@@ -23268,6 +25676,10 @@ int ObDDLService::drop_aux_table_in_drop_table(
   } else if (MATERIALIZED_VIEW == table_type) {
     if (OB_FAIL(aux_tid_array.push_back(table_schema.get_data_table_id()))) {
       LOG_WARN("push container table id failed", KR(ret));
+    }
+  } else if (MATERIALIZED_VIEW_LOG == table_type) {
+    if (table_schema.has_mlog_table() && OB_FAIL(aux_tid_array.push_back(table_schema.get_mlog_tid()))) {
+      LOG_WARN("push materialized view log table id failed", KR(ret));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -23710,6 +26122,7 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
     uint64_t new_db_id = OB_INVALID_ID;
     uint64_t synonym_id = OB_INVALID_ID;
     lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+
     if (OB_FAIL(schema_guard.get_tenant_compat_mode(arg.tenant_id_, compat_mode))) {
       LOG_WARN("fail to get tenant compat mode", K(ret), K(tenant_id), K(compat_mode));
     } else if (!arg.new_db_name_.empty() && !arg.new_table_name_.empty()) {
@@ -24946,10 +27359,17 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (!drop_table_arg.force_drop_ && table_schema->is_in_recyclebin()) {
           ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
           LOG_WARN("can not drop table in recyclebin, use purge instead", K(ret), K(table_item));
-        } else if (table_schema->has_mlog_table()) {
+        } else if (table_schema->is_materialized_view() && OB_FAIL(schema_guard.get_table_schema(
+              tenant_id, table_schema->get_data_table_id(), data_table_schema))) {
+          LOG_WARN("failed to get mview container table schema", KR(ret), KPC(table_schema));
+        } else if (table_schema->is_materialized_view() && OB_ISNULL(data_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("data_table_schema should not be null", KR(ret));
+        } else if ((table_schema->required_by_mview_refresh() && !table_schema->is_index_table()) ||
+                   (table_schema->is_materialized_view() && data_table_schema->required_by_mview_refresh())) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("drop table with materialized view log is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table with materialized view log is");
+          LOG_WARN("drop table required by materialized view refresh is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view refresh is");
         } else if (OB_FAIL(tmp_table_schema.assign(*table_schema))) {
           LOG_WARN("fail to assign table schema", K(ret));
         } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(
@@ -25354,6 +27774,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
   bool is_db_in_recyclebin = false;
   int64_t refreshed_schema_version = 0;
   schema_guard.set_session_id(arg.session_id_);
+
   if (check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat error", K(is_inited()), KR(ret));
@@ -25414,7 +27835,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
           LOG_WARN("fail to start trans", K(ret));
         } else if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
           LOG_WARN("fail to assign schema", KR(ret));
-        } else if (OB_FAIL(rebuild_index_in_trans(schema_guard,
+        } else if (OB_FAIL(drop_directly_and_create_index_schema_(schema_guard,
                                                   *table_schema,
                                                   new_table_schema,
                                                   &ddl_stmt_str,
@@ -25471,9 +27892,277 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
   return ret;
 }
 
+int ObDDLService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  ObArenaAllocator allocator;
+  ObArray<const share::schema::ObTableSchema*> splitting_table_schemas;
+  ObArray<share::schema::ObTableSchema*> del_table_schemas;
+  ObDDLSQLTransaction trans(schema_service_);
+  ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+  int64_t refreshed_schema_version = 0;
+  ObSEArray<ObTabletID, 1> src_data_tablet_id;
+  ObSchemaGetterGuard schema_guard;
+  if (check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("check_inner_stat error", K(is_inited()), KR(ret));
+  } else if (OB_FAIL(generate_splitted_schema_array(arg,
+                                                    schema_guard,
+                                                    allocator,
+                                                    splitting_table_schemas,
+                                                    del_table_schemas,
+                                                    refreshed_schema_version))) {
+    LOG_WARN("fail to generate splitted schema array", KR(ret), K(arg));
+  } else if (OB_UNLIKELY(splitting_table_schemas.count() != del_table_schemas.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema's number is different", KR(ret),
+                                             K(splitting_table_schemas.count()),
+                                             K(del_table_schemas.count()));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+    LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else {
+    // modify schema
+    for (int64_t i = 0; OB_SUCC(ret) && i < splitting_table_schemas.count(); i++) {
+      if (OB_ISNULL(splitting_table_schemas.at(i)) || OB_ISNULL(del_table_schemas.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", KR(ret), KPC(splitting_table_schemas.at(i)),
+                                    KPC(del_table_schemas.at(i)));
+      } else if (OB_FAIL(ddl_operator.drop_table_splitted_partitions(*splitting_table_schemas.at(i),
+                                                                     *del_table_schemas.at(i),
+                                                                     trans))) {
+        LOG_WARN("failed to drop split source partitions", KR(ret),
+                                                           KPC(splitting_table_schemas.at(i)),
+                                                           KPC(del_table_schemas.at(i)));
+      }
+    }
+    // inc data_table's schema version when index or lob schema has been updated
+    if (OB_SUCC(ret)) {
+      if (splitting_table_schemas.empty() || OB_ISNULL(splitting_table_schemas.at(0))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid array", K(splitting_table_schemas.count()), KPC(splitting_table_schemas.at(0)));
+      } else if (splitting_table_schemas.count() > 1 || splitting_table_schemas.at(0)->is_global_index_table()) {
+        uint64_t data_table_id = splitting_table_schemas.at(0)->is_global_index_table() ?
+                                 splitting_table_schemas.at(0)->get_data_table_id() :
+                                 splitting_table_schemas.at(0)->get_table_id();
+        if (OB_FAIL(ddl_operator.inc_table_schema_version(trans, tenant_id, data_table_id))) {
+          LOG_WARN("fail to inc data table schema version", KR(ret), K(arg), K(data_table_id),
+                                                            KPC(splitting_table_schemas.at(0)));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTableLockOwnerID owner_id;
+    owner_id.convert_from_value(arg.task_id_);
+    if (OB_FAIL(src_data_tablet_id.push_back(arg.src_table_tablet_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(ObDDLLock::unlock_for_split_partition(*splitting_table_schemas.at(0), src_data_tablet_id, arg.dest_tablet_ids_, owner_id, trans))) {
+      LOG_WARN("failed to unlock for split partition", K(ret));
+    }
+  }
+
+  // drop tablets
+  if (OB_SUCC(ret)) {
+    int64_t new_schema_version = 0;
+    if (OB_FAIL(schema_service_->get_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("failed to get new schema_version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObSplitPartitionHelper::clean_split_src_and_dst_tablet(arg, splitting_table_schemas.at(0)->get_auto_part_size(), new_schema_version, trans))) {
+      LOG_WARN("failed to clean split dst tablet mds", K(ret));
+    }
+  }
+
+  const bool is_commit = OB_SUCC(ret);
+  if (trans.is_started()) {
+    int temp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (temp_ret = trans.end(is_commit))) {
+      LOG_WARN("trans end failed", K(is_commit), K(temp_ret));
+      ret = is_commit ? temp_ret : ret;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(publish_schema(tenant_id))) {
+      LOG_WARN("publish_schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+// "splitting_table_schemas" records the current table_schema.
+// the first table_schema in the array is of data_table/global_index and the others are local_index schema or lob schema.
+// "del_table_schemas" records the deleting partition of table_schemas.
+int ObDDLService::generate_splitted_schema_array(
+                                       const obrpc::ObCleanSplittedTabletArg &arg,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       ObArenaAllocator& allocator,
+                                       common::ObIArray<const share::schema::ObTableSchema*> &splitting_table_schemas,
+                                       common::ObIArray<share::schema::ObTableSchema*> &del_table_schemas,
+                                       int64_t &refreshed_schema_version)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t table_id = arg.table_id_;
+  const ObTableSchema *splitting_table_schema = NULL;
+  bool is_db_in_recyclebin = false;
+  bool is_index = false;
+  int64_t del_table_schema_num = 1 + arg.local_index_table_ids_.count() + arg.lob_table_ids_.count();
+  splitting_table_schemas.reset();
+  del_table_schemas.reset();
+  refreshed_schema_version = 0;
+
+  if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("get_schema_guard failed", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, splitting_table_schema))) {
+    LOG_WARN("failed to get table schema", K(arg), KR(ret));
+  } else if (OB_ISNULL(splitting_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not found", K(arg), KR(ret));
+  } else if (splitting_table_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("the table is in recyclebin.", KR(ret), K(arg), KPC(splitting_table_schema));
+  } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id,
+                                                               splitting_table_schema->get_database_id(),
+                                                               is_db_in_recyclebin))) {
+    LOG_WARN("check database in recyclebin failed", KR(ret), K(tenant_id), KPC(splitting_table_schema));
+  } else if (is_db_in_recyclebin) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("the database in recyclebin", KR(ret), K(arg), KPC(splitting_table_schema));
+  } else if (OB_UNLIKELY(splitting_table_schema->get_part_level() == PARTITION_LEVEL_TWO)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("split subpartition is not supported", KR(ret), KPC(splitting_table_schema));
+  } else if (OB_UNLIKELY(splitting_table_schema->get_part_level() == PARTITION_LEVEL_ZERO)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the splitting table is non-partitioned", KR(ret), KPC(splitting_table_schema));
+  } else if (!splitting_table_schema->is_user_table() && !splitting_table_schema->is_global_index_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table type", K(ret), KPC(splitting_table_schema));
+  } else if (splitting_table_schema->is_global_index_table() && del_table_schema_num > 1 ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global index should not have aux tables", KR(ret), K(arg), KPC(splitting_table_schema));
+  }
+
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < del_table_schema_num; ++i) {
+      int64_t index = 0;
+      ObTabletID splitted_tablet_id;
+      const ObTableSchema *splitting_schema = nullptr;
+
+      if (i == 0) {
+        // data table or global index
+        splitting_schema = splitting_table_schema;
+        splitted_tablet_id = arg.src_table_tablet_id_;
+      } else if (i < arg.local_index_table_ids_.count() + 1) {
+        index = i - 1;
+        splitted_tablet_id = arg.src_local_index_tablet_ids_.at(index);
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                  arg.local_index_table_ids_.at(index),
+                                                  splitting_schema))) {
+          LOG_WARN("get_table_schema failed", K(tenant_id), K(splitted_tablet_id), KR(ret));
+        }
+      } else {
+        index = i - arg.local_index_table_ids_.count() - 1;
+        splitted_tablet_id = arg.src_lob_tablet_ids_.at(index);
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                  arg.lob_table_ids_.at(index),
+                                                  splitting_schema))) {
+          LOG_WARN("get_table_schema failed", K(tenant_id), K(splitted_tablet_id), KR(ret));
+        }
+      }
+
+      ObTableSchema *del_schema = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(splitting_schema) || !splitted_tablet_id.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid argument", KR(ret), K(splitted_tablet_id), KPC(splitting_schema));
+      } else if (OB_FAIL(splitting_table_schemas.push_back(splitting_schema))) {
+        LOG_WARN("fail to push back", KR(ret), KPC(splitting_schema));
+      } else if (OB_FAIL(generate_splitted_schema_from_partitioned_table(
+                                                 allocator, splitted_tablet_id,
+                                                 *splitting_schema, del_schema))) {
+        LOG_WARN("fail to generate splitted schema from partitioned table", KR(ret), K(splitted_tablet_id),
+                                                                            KPC(splitting_schema));
+      } else if (OB_ISNULL(del_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", KR(ret), K(splitted_tablet_id), KPC(splitting_schema));
+      } else if (OB_FAIL(del_table_schemas.push_back(del_schema))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::generate_splitted_schema_from_partitioned_table(
+                                          ObArenaAllocator& allocator,
+                                          const ObTabletID splitted_tablet_id,
+                                          const share::schema::ObTableSchema &splitting_table_schema,
+                                          share::schema::ObTableSchema *&del_table_schema)
+{
+  int ret = OB_SUCCESS;
+  del_table_schema = NULL;
+  ObPartition** hidden_part_array = splitting_table_schema.get_hidden_part_array();
+  const ObPartition* splitted_part = nullptr;
+
+  if (OB_UNLIKELY(splitting_table_schema.get_part_level() != PARTITION_LEVEL_ONE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the splitting table is not partitioned table", KR(ret), K(splitting_table_schema));
+  } else if (OB_ISNULL(hidden_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && splitted_part == nullptr
+                        && i < splitting_table_schema.get_hidden_partition_num(); i++) {
+      if (OB_ISNULL(hidden_part_array[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", KR(ret));
+      } else if (hidden_part_array[i]->get_tablet_id() == splitted_tablet_id) {
+        splitted_part = hidden_part_array[i];
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(splitted_part)) {
+      ret = OB_UNKNOWN_PARTITION;
+      LOG_WARN("fail to find splitted partition in hidden part array", KR(ret), K(splitted_tablet_id),
+                                                                       K(splitting_table_schema));
+    } else if (splitted_part->get_partition_type() != PARTITION_TYPE_SPLIT_SOURCE) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the partition is not split source partition", KR(ret), KPC(splitted_part), K(splitting_table_schema));
+    }
+  }
+
+  void *del_schema_ptr = allocator.alloc(sizeof(ObTableSchema));
+  ObPartition mock_part;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(del_schema_ptr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail alloc memory", KR(ret));
+  } else if (FALSE_IT(del_table_schema = new (del_schema_ptr)ObTableSchema(&allocator))) {
+  } else if (OB_FAIL(del_table_schema->assign(splitting_table_schema))) {
+    LOG_WARN("failed to push back table_schema", KR(ret), K(splitting_table_schema));
+  } else if (FALSE_IT(del_table_schema->reset_partition_array())) {
+  } else if (FALSE_IT(del_table_schema->reset_hidden_partition_array())) {
+  } else if (FALSE_IT(del_table_schema->get_part_option().set_part_num(1))) {
+  } else if (OB_FAIL(mock_part.assign(*splitted_part))) {
+    LOG_WARN("fail to assign partition", KR(ret), KPC(splitted_part));
+  } else if (FALSE_IT(mock_part.set_partition_type(PARTITION_TYPE_NORMAL))) {
+    // we mock the hidden source partition as a normal partition for adapting to
+    // the function of dropping partitions in inner_table and dropping tablets which
+    // will traverse all "normal" partitions and drop them based on identifier.
+  } else if (OB_FAIL(del_table_schema->add_partition(mock_part))) {
+    LOG_WARN("fail to add hidden partition", KR(ret), K(mock_part));
+  }
+
+  return ret;
+}
+
 // Rebuild index information is written to the internal table within a transaction
 // If sql_trans is NULL, you need to create a transaction inside the function
-int ObDDLService::rebuild_index_in_trans(
+int ObDDLService::drop_directly_and_create_index_schema_(
     ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &data_table_schema,
     ObTableSchema &index_schema,
@@ -25488,6 +28177,7 @@ int ObDDLService::rebuild_index_in_trans(
   ObMySQLTransaction &trans = OB_ISNULL(sql_trans) ? tmp_trans : *sql_trans;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   int64_t refreshed_schema_version = 0;
+
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service must not null", KR(ret));
@@ -25497,7 +28187,7 @@ int ObDDLService::rebuild_index_in_trans(
       && OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
   } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index_in_trans(data_table_schema, index_schema, trans))) {
-    LOG_WARN("failed to lock for drop index", K(ret));
+    LOG_WARN("failed to lock for drop index", KR(ret));
   } else if (OB_FAIL(drop_table_in_trans(
                               schema_guard, index_schema, true, true,
                               false, ddl_stmt_str, &trans, NULL, NULL))) {
@@ -25519,7 +28209,6 @@ int ObDDLService::rebuild_index_in_trans(
                               false/*need_check_tablet_cnt*/, tenant_data_version))) {
     LOG_WARN("create_table_in_trans failed", K(index_schema), KR(ret), K(ddl_stmt_str));
   }
-
   if (OB_ISNULL(sql_trans) && trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -25893,6 +28582,9 @@ int ObDDLService::alter_system_table_column_(
         }
       } // end for
 
+      // increase progressive_merge_round to update schema in sstable
+      new_table_schema.set_progressive_merge_round(orig_table_schema->get_progressive_merge_round() + 1);
+
       if (FAILEDx(ddl_operator.batch_update_system_table_columns(trans,
           *orig_table_schema, new_table_schema, add_column_ids, alter_column_ids, NULL))) {
         LOG_WARN("fail to batch update columns", KR(ret), K(new_table_schema));
@@ -26174,11 +28866,6 @@ int ObDDLService::generate_tenant_schema(
              || OB_ISNULL(schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP_(schema_service));
-  } else if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tenant_id(user_tenant_id))) {
-    LOG_WARN("fetch_new_tenant_id failed", KR(ret));
-  } else if (OB_INVALID_ID == user_tenant_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant id is invalid", KR(ret), K(user_tenant_id));
   } else if (OB_FAIL(user_tenant_schema.assign(arg.tenant_schema_))) {
     LOG_WARN("fail to assign user tenant schema", KR(ret), K(arg));
   } else if (OB_FAIL(meta_tenant_schema.assign(user_tenant_schema))) {
@@ -26189,6 +28876,11 @@ int ObDDLService::generate_tenant_schema(
   } else if (OB_FAIL(check_create_tenant_schema(
           arg.pool_list_, user_tenant_schema, schema_guard))) {
     LOG_WARN("check tenant schema failed", KR(ret), K(user_tenant_schema), K(arg));
+  } else if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tenant_id(user_tenant_id))) {
+    LOG_WARN("fetch_new_tenant_id failed", KR(ret));
+  } else if (OB_INVALID_ID == user_tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant id is invalid", KR(ret), K(user_tenant_id));
   } else {
     // user tenant
     if (OB_SUCC(ret)) {
@@ -27298,6 +29990,7 @@ int ObDDLService::create_tenant_sys_tablets(
                               dummy_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
+    const ObTablegroupSchema *dummy_tablegroup_schema = NULL;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
     ObArray<uint64_t> index_tids;
     ObArray<bool> need_create_empty_majors;
@@ -27378,8 +30071,8 @@ int ObDDLService::create_tenant_sys_tablets(
         }
         if (OB_FAIL(ret)) {
           // failed, bypass
-        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, data_table))) {
-          LOG_WARN("fail to prepare ls for index schema tablets");
+        } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, data_table, dummy_tablegroup_schema))) {
+          LOG_WARN("fail to prepare ls for sys table tablets");
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
                 ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
@@ -28619,9 +31312,6 @@ int ObDDLService::check_grant_pools_permitted(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    // gts tenant, pass
-    is_permitted = true;
   } else {
     if (OB_UNLIKELY(nullptr == unit_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -28644,32 +31334,12 @@ int ObDDLService::check_revoke_pools_permitted(
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
-  } else if (OB_GTS_TENANT_ID == tenant_id) {
-    if (OB_FAIL(check_gts_tenant_revoke_pools_permitted(
-            schema_guard, new_pool_name_list, tenant_schema, is_permitted))) {
-      LOG_WARN("fail to check gts tenant revoke pools permitted", K(ret));
-    }
   } else {
     if (OB_FAIL(check_normal_tenant_revoke_pools_permitted(
             schema_guard, new_pool_name_list, tenant_schema, is_permitted))) {
       LOG_WARN("fail to check normal tenant revoke pools permitted", K(ret));
     }
   }
-  return ret;
-}
-
-int ObDDLService::check_gts_tenant_revoke_pools_permitted(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,
-    const share::schema::ObTenantSchema &tenant_schema,
-    bool &is_permitted)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(schema_guard);
-  UNUSED(new_pool_name_list);
-  UNUSED(tenant_schema);
-  UNUSED(is_permitted);
-  is_permitted = false; // TODO: wenduo
   return ret;
 }
 
@@ -28862,11 +31532,7 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg &arg)
 int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const ObTenantSchema *orig_tenant_schema, ObSchemaGetterGuard &schema_guard, bool is_restore)
 {
   int ret = OB_SUCCESS;
-  if (OB_GTS_TENANT_ID == orig_tenant_schema->get_tenant_id()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("modify gts tenant not supported", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter gts tenant");
-  } else if (0 != arg.sys_var_list_.count()) {
+  if (0 != arg.sys_var_list_.count()) {
     // modify system variable
     const ObSysVariableSchema *orig_sys_variable = NULL;
     const uint64_t tenant_id = orig_tenant_schema->get_tenant_id();
@@ -30723,7 +33389,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
           LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
                         "msg", "refresh schema failed", KR(ret), K(refresh_count));
         }
-        ob_usleep(REFRESH_SCHEMA_INTERVAL_US);
+        ob_usleep<ObWaitEventIds::WAIT_REFRESH_SCHEMA>(REFRESH_SCHEMA_INTERVAL_US);
       }
     } // end while
     if (OB_SUCC(ret) && !stopped_) {
@@ -33173,6 +35839,13 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0 or DATA_VERSION_4_3_3_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke references/create role/drop role/trigger");
+    } else if (!((MOCK_DATA_VERSION_4_2_5_1 <= compat_version && compat_version < DATA_VERSION_4_3_0_0) || compat_version >= DATA_VERSION_4_3_5_1)
+               && !is_ora_mode
+               && (0 != (priv_set & OB_PRIV_ENCRYPT) ||
+                   0 != (priv_set & OB_PRIV_DECRYPT))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below MOCK_DATA_VERSION_4_2_5_1 or DATA_VERSION_4_3_5_1", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke encrypt/decrypt privilege");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
@@ -34302,9 +36975,12 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
   } else if (OB_UNLIKELY(OB_INVALID_ID == outline_info.get_tenant_id()
                          || OB_INVALID_ID == outline_info.get_database_id()
                          || outline_info.get_name_str().empty()
-                         || (outline_info.get_signature_str().empty() && !ObOutlineInfo::is_sql_id_valid(outline_info.get_sql_id_str())))) {
+                         || (!outline_info.is_format() && outline_info.get_signature_str().empty() &&
+                            !ObOutlineInfo::is_sql_id_valid(outline_info.get_sql_id_str()))
+                         || (outline_info.is_format() && outline_info.get_format_sql_text_str().empty() &&
+                            !ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(outline_info), K(ret));
+    LOG_WARN("invalid argument", K(outline_info.is_format()), K(outline_info.get_format_sql_text_str().empty()), K(ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())), K(outline_info), K(ret));
   } else {
     is_update = false;
     bool is_outline_exist_with_name = false;
@@ -34315,6 +36991,7 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                 outline_info.get_database_id(),
                 outline_info.get_name_str(),
                 outline_id,
+                outline_info.is_format(),
                 is_outline_exist_with_name))) {
       LOG_WARN("failed to check if outline_name exists", K(outline_info), K(ret));
     } else {
@@ -34323,6 +37000,7 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                  outline_info.get_tenant_id(),
                  outline_info.get_database_id(),
                  outline_info.get_signature_str(),
+                 outline_info.is_format(),
                  is_outline_exist_with_signature_or_sql_id))) {
           LOG_WARN("failed to check if signature exist", K(outline_info), K(ret));
         }
@@ -34330,7 +37008,8 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
         if (OB_FAIL(schema_service_->check_outline_exist_with_sql_id(
                  outline_info.get_tenant_id(),
                  outline_info.get_database_id(),
-                 outline_info.get_sql_id_str(),
+                 (outline_info.is_format() ? outline_info.get_format_sql_id_str() : outline_info.get_sql_id_str()),
+                 outline_info.is_format(),
                  is_outline_exist_with_signature_or_sql_id))) {
           LOG_WARN("failed to check if sql id exist", K(outline_info), K(ret));
         }
@@ -34347,6 +37026,7 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                   outline_info.get_tenant_id(),
                   outline_info.get_database_id(),
                   outline_info.get_name_str(),
+                  outline_info.is_format(),
                   orig_outline))) {
         LOG_WARN("failed to get origin outline info", K(outline_info), K(ret));
       } else if (OB_ISNULL(orig_outline)) {
@@ -34364,9 +37044,11 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
       ret = OB_ERR_OUTLINE_EXIST;
       LOG_USER_ERROR(OB_ERR_OUTLINE_EXIST, outline_info.get_name_str().length(), outline_info.get_name_str().ptr());
     } else if (is_outline_exist_with_signature_or_sql_id) {
+      ObString outline_name;
+      outline_name = outline_info.is_format() ? outline_info.get_format_sql_text_str() : outline_info.get_sql_text_str();
       ret = OB_ERR_OUTLINE_EXIST;
-      LOG_USER_ERROR(OB_ERR_OUTLINE_EXIST, outline_info.get_sql_text_str().length(),
-                     outline_info.get_sql_text_str().ptr());
+      LOG_USER_ERROR(OB_ERR_OUTLINE_EXIST, outline_name.length(),
+                     outline_name.ptr());
     } else {/*do nothing*/}
   }
   return ret;
@@ -34440,6 +37122,7 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
       const ObString &database_name = arg.db_name_;
       const ObString &outline_name = alter_outline_info.get_name_str();
       const ObOutlineInfo *orig_outline_info = NULL;
+      bool is_format = alter_outline_info.is_format();
       if (database_name.empty() || outline_name.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("database name or outline name is empty", K(alter_outline_info),
@@ -34447,6 +37130,7 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
       } else if (OB_FAIL(schema_guard.get_outline_info_with_name(tenant_id,
                                                                  database_name,
                                                                  outline_name,
+                                                                 is_format,
                                                                  orig_outline_info))) {
         LOG_WARN("failed to get_outline_info_with_name", K(tenant_id),
                  K(database_name), K(outline_name), K(ret));
@@ -34614,7 +37298,7 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
       //do nothing
     } else if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, database_id,
                                                                       outline_name, outline_id,
-                                                                      outline_exist))) {
+                                                                      arg.is_format_, outline_exist))) {
       LOG_WARN("check_outline_exist failed", K(tenant_id), K(database_name), K(outline_name), K(ret));
     } else if (!outline_exist) {
       ret = OB_OUTLINE_NOT_EXIST;
@@ -34846,18 +37530,25 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
           LOG_WARN("sys variable schema is null", KR(ret));
         } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
           LOG_WARN("fail to get charset var value", K(ret));
-        } else {
-          bool revoke_priv = val.get_bool();
-          if (revoke_priv) {
-            int64_t db_id = routine_info.get_database_id();
-            const ObDatabaseSchema* database_schema = NULL;
-            if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
-              LOG_WARN("get database schema failed", K(ret));
-            } else if (OB_ISNULL(database_schema)) {
+        } else if (val.get_bool()) {
+          int64_t db_id = routine_info.get_database_id();
+          const ObDatabaseSchema* database_schema = NULL;
+          ObSEArray<const ObUserInfo*, 10> user_infos;
+          if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+            LOG_WARN("get database schema failed", K(ret));
+          } else if (OB_ISNULL(database_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database schema is null", K(ret));
+          } else if (OB_FAIL(schema_guard.get_user_infos_with_tenant_id(tenant_id, user_infos))) {
+            LOG_WARN("fail to get all user in tenant", K(ret));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < user_infos.count(); ++i) {
+            const ObUserInfo *user_info = user_infos.at(i);
+            if (OB_ISNULL(user_info)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("database schema is null", K(ret));
+              LOG_WARN("unexpected null", K(ret));
             } else {
-              ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(),
+              ObRoutinePrivSortKey routine_key(tenant_id, user_info->get_user_id(),
                                             database_schema->get_database_name_str(),
                                             routine_info.get_routine_name(), routine_info.is_procedure() ?
                                             ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
@@ -36918,10 +39609,10 @@ int ObDDLService::check_and_set_primary_zone(
   } else if (OB_FAIL(construct_zone_region_list(zone_region_list, zone_list))) {
     LOG_WARN("fail to construct zone region list", K(ret));
   } else {
-    char primary_zone_str[MAX_ZONE_LENGTH];
+    SMART_VARS_2((char[MAX_ZONE_LIST_LENGTH], primary_zone_str),
+                 (ObPrimaryZoneUtil, primary_zone_util,
+                  schema.get_primary_zone(), &zone_region_list)) {
     int64_t pos = 0;
-    ObPrimaryZoneUtil primary_zone_util(schema.get_primary_zone(),
-                                        &zone_region_list);
     if (OB_FAIL(primary_zone_util.init(zone_list))) {
       LOG_WARN("fail to init primary zone util", K(ret));
     } else if (OB_FAIL(primary_zone_util.check_and_parse_primary_zone())) {
@@ -36929,7 +39620,7 @@ int ObDDLService::check_and_set_primary_zone(
       LOG_WARN("invalid primary zone", K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "primary zone");
     } else if (OB_FAIL(primary_zone_util.output_normalized_primary_zone(
-                primary_zone_str, MAX_ZONE_LENGTH, pos))) {
+                primary_zone_str, MAX_ZONE_LIST_LENGTH, pos))) {
       LOG_WARN("fail to output normalized primary zone", K(ret));
     } else if (OB_FAIL(schema.set_primary_zone(primary_zone_str))) {
       LOG_WARN("fail to set primary zone", K(ret));
@@ -36939,6 +39630,7 @@ int ObDDLService::check_and_set_primary_zone(
             schema, zone_list, zone_region_list, schema_guard))) {
       LOG_WARN("fail to check primary zone region condition", K(ret));
     } else {} // no more to do
+    } // end smart var
   }
   return ret;
 }
@@ -37098,15 +39790,16 @@ int ObDDLService::trim_and_set_primary_zone(
     } else {} // no more to do
   } else {
     lib::ob_sort(new_zone_score_array.begin(), new_zone_score_array.end());
-    char primary_zone_str[MAX_ZONE_LENGTH];
+    SMART_VAR(char[MAX_ZONE_LIST_LENGTH], primary_zone_str) {
     if (OB_FAIL(format_primary_zone_from_zone_score_array(
-            new_zone_score_array, primary_zone_str, MAX_ZONE_LENGTH))) {
+            new_zone_score_array, primary_zone_str, MAX_ZONE_LIST_LENGTH))) {
       LOG_WARN("fail to construct primary zone from zone score array", K(ret));
     } else if (OB_FAIL(new_schema.set_primary_zone(ObString::make_string(primary_zone_str)))) {
       LOG_WARN("fail to set primary zone", K(ret));
     } else if (OB_FAIL(check_and_set_primary_zone(new_schema, zone_list, schema_guard))) {
       LOG_WARN("fail to check and set primary zone", K(ret));
     } else {} // no more to do
+    } // end smart var
   }
   return ret;
 }
@@ -38319,6 +41012,21 @@ int ObDDLService::reset_parallel_cache(const uint64_t tenant_id)
   if (OB_TMP_FAIL(non_partitioned_tablet_allocator_.reset_cache(tenant_id))) {
     ret = OB_FAIL(ret) ? ret : tmp_ret;
     LOG_ERROR("reset cache failed", KR(tmp_ret), KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDDLService::set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,
+                                        ObTableSchema& vidx_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(!vidx_table_schema.is_vec_delta_buffer_type())) {
+    // do nothing
+  } else if (OB_UNLIKELY(create_index_arg.index_type_ != INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index arg type is not INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL", K(ret), K(create_index_arg.index_type_));
+  } else if (OB_FAIL(vidx_table_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_))) {
+    LOG_WARN("fail to set exec env", K(ret));
   }
   return ret;
 }
@@ -40336,11 +43044,12 @@ int ObDDLService::prepare_change_modify_column_online(AlterColumnSchema &alter_c
   }
   if (OB_SUCC(ret)
       && orig_column_schema->get_column_name_str() != alter_column_schema.get_column_name_str()) {
-    if (orig_column_schema->is_tbl_part_key_column()
-        && OB_FAIL(modify_part_func_expr(orig_column_schema->get_column_name_str(),
-                                         alter_column_schema.get_column_name_str(),
-                                         new_table_schema,
-                                         *tz_info_wrap.get_time_zone_info(), allocator))) {
+     if (OB_FAIL(modify_part_func_expr(origin_table_schema,
+                                       *orig_column_schema,
+                                       alter_column_schema,
+                                       new_table_schema,
+                                       *tz_info_wrap.get_time_zone_info(),
+                                       allocator))) {
       LOG_WARN("modify part func expr failed", K(ret));
     } else if (OB_FAIL(modify_part_func_expr_for_global_index(
                  *orig_column_schema, alter_column_schema, new_table_schema,
@@ -40369,6 +43078,130 @@ int ObDDLService::prepare_change_modify_column_online(AlterColumnSchema &alter_c
                                                 new_column_schema, tz_info_wrap, nls_formats,
                                                 allocator))) {
       LOG_WARN("failed to resolve timestamp column", K(ret));
+    }
+  }
+  return ret;
+}
+
+// in generate_tables_array(), inc_aux_table_schema is copied from inc_table_schema which leads to partitions of inc_aux_table_schema
+// recored the split_source_tablet_id of data table's partition rathan than that of aux table.
+// thus, we need to correct split_source_tablet_id of inc_aux_table_schema's partition based on partition name.
+int ObDDLService::correct_source_tablet_id_for_inc_aux_table_schema_(
+                                                  const obrpc::ObAlterTableArg::AlterPartitionType op_type,
+                                                  const ObPartitionLevel target_part_level,
+                                                  const ObTableSchema &table_schema,
+                                                  const ObTableSchema &aux_table_schema,
+                                                  const AlterTableSchema &inc_table_schema,
+                                                  ObTableSchema &inc_aux_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel ori_part_level = table_schema.get_part_level();
+  int orig_table_part_num = table_schema.get_partition_num();
+  int orig_aux_table_part_num = aux_table_schema.get_partition_num();
+  int inc_aux_table_part_num = inc_aux_table_schema.get_partition_num();
+  ObPartition **orig_table_parts = table_schema.get_part_array();
+  ObPartition **orig_aux_table_parts = aux_table_schema.get_part_array();
+  ObPartition **inc_aux_table_parts = inc_aux_table_schema.get_part_array();
+
+  if (obrpc::ObAlterTableArg::SPLIT_PARTITION != op_type
+      && obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION != op_type
+      && obrpc::ObAlterTableArg::REORGANIZE_PARTITION != op_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", KR(ret), K(op_type));
+  } else if (OB_UNLIKELY(orig_table_part_num != orig_aux_table_part_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid partition num", KR(ret), K(orig_table_part_num), K(orig_aux_table_part_num));
+  } else if (target_part_level == PARTITION_LEVEL_TWO) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to build part schema for aux table with subpartition", KR(ret));
+  } else if (target_part_level != PARTITION_LEVEL_ONE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part level", KR(ret), K(ori_part_level), K(target_part_level));
+  } else { // target_part_level == PARTITION_LEVEL_ONE
+    if (ori_part_level == PARTITION_LEVEL_ZERO) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < inc_aux_table_part_num; i++) {
+        ObPartition *inc_aux_part = inc_aux_table_parts[i];
+
+        if (OB_ISNULL(inc_aux_part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is NULL", KR(ret), K(inc_aux_table_schema));
+        } else if (!aux_table_schema.get_tablet_id().is_valid()) { // never run here
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("src_aux_table_tablet_id is invalid", KR(ret), K(aux_table_schema.get_tablet_id()));
+        } else {
+          inc_aux_part->set_split_source_tablet_id(aux_table_schema.get_tablet_id());
+        }
+      }
+    } else if (ori_part_level == PARTITION_LEVEL_ONE) {
+      if (OB_UNLIKELY(!table_schema.is_valid_split_part_type())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("only support to split range or range column part", KR(ret), K(table_schema));
+      } else {
+        hash::ObHashMap<ObTabletID, int64_t> source_tablet_id_map;
+
+        if (OB_FAIL(source_tablet_id_map.create(orig_table_part_num, lib::ObLabel("SourceIdMap")))) {
+          LOG_WARN("failed to create source tablet id map", KR(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_part_num; i++) {
+            ObPartition *orig_table_part = orig_table_parts[i];
+            if (OB_ISNULL(orig_table_part)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition is NULL", KR(ret));
+            } else if (OB_FAIL(source_tablet_id_map.set_refactored(orig_table_part->get_tablet_id(), i))) {
+              LOG_WARN("fail to set map", KR(ret), KPC(orig_table_part));
+            }
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          ObTabletID src_table_tablet_id;
+          ObTabletID src_aux_table_tablet_id;
+
+          for (int64_t i = 0; OB_SUCC(ret) && i < inc_aux_table_part_num; i++) {
+            ObPartition *inc_aux_part = inc_aux_table_parts[i];
+            int64_t ori_part_index = 0;
+            if (OB_ISNULL(inc_aux_part)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition is NULL", KR(ret));
+            } else if (inc_aux_part->get_split_source_tablet_id() != src_table_tablet_id) {
+              src_table_tablet_id = inc_aux_part->get_split_source_tablet_id();
+              if (OB_FAIL(source_tablet_id_map.get_refactored(src_table_tablet_id, ori_part_index))) {
+                LOG_WARN("fail to get part idx", KR(ret), K(src_table_tablet_id), K(table_schema));
+              } else if (OB_ISNULL(orig_aux_table_parts[ori_part_index])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("partition is NULL", KR(ret), K(inc_aux_table_schema));
+              } else if (orig_table_parts[ori_part_index]->get_high_bound_val() !=
+                         orig_aux_table_parts[ori_part_index]->get_high_bound_val()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to find source partition in aux table",
+                                                      KR(ret), KPC(inc_aux_part),
+                                                      KPC(orig_table_parts[ori_part_index]),
+                                                      KPC(orig_aux_table_parts[ori_part_index]),
+                                                      K(table_schema),
+                                                      K(aux_table_schema));
+              } else {
+                src_aux_table_tablet_id = orig_aux_table_parts[ori_part_index]->get_tablet_id();
+              }
+            } /* else {
+              the inc_aux_part is split from the same tablet with previous inc_aux_part,
+              no need to update src_aux_table_tablet_id
+            } */
+
+            if (OB_SUCC(ret)) {
+              if (!src_aux_table_tablet_id.is_valid()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("src_aux_table_tablet_id is invalid", KR(ret), K(src_table_tablet_id),
+                                                               K(inc_aux_part->get_split_source_tablet_id()));
+              } else {
+                inc_aux_part->set_split_source_tablet_id(src_aux_table_tablet_id);
+              }
+            }
+          } // end for
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid part level", KR(ret), K(target_part_level), K(ori_part_level));
     }
   }
   return ret;
@@ -40472,9 +43305,13 @@ int ObDDLService::prepare_change_modify_column_offline(AlterColumnSchema &alter_
                    origin_table_schema.get_table_name_str().length(),
                    origin_table_schema.get_table_name_str().ptr());
     LOG_WARN("unknown column", K(ret), K(orig_column_name), K(new_table_schema));
-  } else if (orig_column_schema->is_tbl_part_key_column() && !is_contain_part_key) {
-    is_contain_part_key = true;
-    if (OB_FAIL(new_table_schema.assign_partition_schema(alter_table_schema))) {
+  } else if (!is_contain_part_key) {
+    if (OB_FAIL(origin_table_schema.is_tbl_partition_key(*orig_column_schema, is_contain_part_key,
+                                                         false /* ignore_presetting_key */))) {
+      LOG_WARN("fail to check is partition key", KR(ret), K(origin_table_schema), KPC(orig_column_schema));
+    } else if (is_contain_part_key
+                && OB_FAIL(new_table_schema.assign_partition_schema_without_auto_part_attr(alter_table_schema))) {
+      // the auto_part_attr of alter_table_schema is default value, no need to assign invalid attributes
       LOG_WARN("failed to assign partition schema", K(ret));
     }
   }
@@ -40513,13 +43350,12 @@ int ObDDLService::prepare_change_modify_column_offline(AlterColumnSchema &alter_
   }
   if (OB_SUCC(ret)
       && orig_column_schema->get_column_name_str() != alter_column_schema.get_column_name_str()) {
-    if (orig_column_schema->is_tbl_part_key_column()
-        && OB_FAIL(modify_part_func_expr(
-                     orig_column_schema->get_column_name_str(),
-                     alter_column_schema.get_column_name_str(),
-                     new_table_schema,
-                     *tz_info_wrap.get_time_zone_info(),
-                     allocator))) {
+     if (OB_FAIL(modify_part_func_expr(origin_table_schema,
+                                       *orig_column_schema,
+                                       alter_column_schema,
+                                       new_table_schema,
+                                       *tz_info_wrap.get_time_zone_info(),
+                                       allocator))) {
       LOG_WARN("modify part func expr failed", K(ret));
     } else if (OB_FAIL(modify_part_func_expr_for_global_index(
                          *orig_column_schema,
@@ -40564,6 +43400,397 @@ int ObDDLService::prepare_change_modify_column_offline(AlterColumnSchema &alter_
                                                 new_column_schema, tz_info_wrap, nls_formats,
                                                 allocator))) {
       LOG_WARN("resolve timestamp column failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::generate_split_info_for_schemas_(const obrpc::ObAlterTableArg::AlterPartitionType type,
+                                                   ObIArray<const ObTableSchema*>& ori_table_schemas,
+                                                   ObIArray<AlterTableSchema*>& inc_table_schemas,
+                                                   ObIArray<ObTableSchema*>& new_table_schemas,
+                                                   ObIArray<ObTableSchema*>& upd_table_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObPartitionLevel target_part_level = ObPartitionLevel::PARTITION_LEVEL_MAX;
+
+  if (OB_UNLIKELY(ori_table_schemas.count() != inc_table_schemas.count() ||
+                  ori_table_schemas.count() != new_table_schemas.count() ||
+                  ori_table_schemas.count() != upd_table_schemas.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schemas' number is different", KR(ret), K(ori_table_schemas.count()), K(inc_table_schemas.count()),
+                                             K(new_table_schemas.count()), K(upd_table_schemas.count()));
+  } else if (OB_UNLIKELY(ori_table_schemas.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("empty schemas", KR(ret));
+  } else if (OB_ISNULL(ori_table_schemas.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KR(ret));
+  } else if (OB_UNLIKELY(ori_table_schemas.at(0)->is_global_index_table() && ori_table_schemas.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global index should not have aux table", KR(ret), KPC(ori_table_schemas.at(0)), K(ori_table_schemas.count()));
+  } else if (FALSE_IT(target_part_level = obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == type ?
+                                          ori_table_schemas.at(0)->get_target_part_level_for_auto_partitioned_table() :
+                                          ori_table_schemas.at(0)->get_part_level())) {
+  } else if (target_part_level == PARTITION_LEVEL_TWO) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to split subpartition", KR(ret), K(type), K(target_part_level),
+                                                  K(ori_table_schemas.at(0)->get_part_level()));
+  } else if (target_part_level != PARTITION_LEVEL_ONE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part level", KR(ret), K(type), K(target_part_level),
+                                   K(ori_table_schemas.at(0)->get_part_level()),
+                                   KPC(ori_table_schemas.at(0)));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_table_schemas.count(); ++i) {
+      if (OB_ISNULL(new_table_schemas.at(i)) || OB_ISNULL(inc_table_schemas.at(i))
+          || OB_ISNULL(ori_table_schemas.at(i)) || OB_ISNULL(upd_table_schemas.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema ptr is NULL", KR(ret), K(new_table_schemas.at(i)), K(inc_table_schemas.at(i)),
+                                       K(ori_table_schemas.at(i)), K(upd_table_schemas.at(i)));
+      } else if (i > 0 && OB_FAIL(correct_source_tablet_id_for_inc_aux_table_schema_(type,
+                                                                                     target_part_level,
+                                                                                     *ori_table_schemas.at(0),
+                                                                                     *ori_table_schemas.at(i),
+                                                                                     *inc_table_schemas.at(0),
+                                                                                     *inc_table_schemas.at(i)))) {
+        LOG_WARN("fail to correct source tablet id", KR(ret),
+                                                     KPC(ori_table_schemas.at(0)),
+                                                     KPC(ori_table_schemas.at(i)),
+                                                     KPC(inc_table_schemas.at(0)),
+                                                     KPC(inc_table_schemas.at(i)));
+      } else if (OB_FAIL(generate_split_info_for_schema_(target_part_level,
+                                                         *ori_table_schemas.at(i),
+                                                         *inc_table_schemas.at(i),
+                                                         *new_table_schemas.at(i),
+                                                         *upd_table_schemas.at(i)))) {
+        LOG_WARN("generate split info failed", KR(ret),
+                                               KPC(ori_table_schemas.at(i)),
+                                               KPC(inc_table_schemas.at(i)),
+                                               KPC(new_table_schemas.at(i)),
+                                               KPC(upd_table_schemas.at(i)));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (new_table_schemas.count() > 1) {
+      // keep partition setting of aux table be same with data table
+      ObTableSchema* new_table_schema = new_table_schemas.at(0);
+      if (OB_ISNULL(new_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", KR(ret));
+      } else {
+        ObPartitionOption& new_table_option = new_table_schema->get_part_option();
+
+        for (int64_t i = 1; OB_SUCC(ret) && i < new_table_schemas.count(); ++i) {
+          ObTableSchema* new_aux_table_schema = new_table_schemas.at(i);
+          if (OB_ISNULL(new_aux_table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", KR(ret));
+          } else {
+            ObPartitionOption& new_aux_table_option = new_aux_table_schema->get_part_option();
+            new_aux_table_option.set_part_func_type(new_table_option.get_part_func_type());
+            const ObString& part_func_expr = new_table_option.get_part_func_expr_str();
+            if (OB_FAIL(new_aux_table_option.set_part_expr(part_func_expr))) {
+              LOG_WARN("fail to set part expr", KR(ret), K(part_func_expr));
+            }
+          }
+        } // end for
+      }
+    }
+  }
+  return ret;
+}
+
+// 1. new_table_schema records the setting of table,
+//    1.1 set part_num
+//    1.2 set part_level
+//    1.3 for auto-partitioned non-partitioned data_table/glbal_index, set part_func_expr and partition key
+// 2. inc_table_schema records the setting of split partitions,
+//    2.1 set part_idx of inc_table_schema, part_idx should keep partial order based on the value of partition key
+//    2.2 generate part_id and tablet_id
+//    2.3 for auto-partitioned non-partitioned data_table/glbal_index, genarate hidden part to mock a part with source tablet
+// 3. upd_table_schema records the setting of changed origin partitions
+//    (only partitioned table has upd_table_schema)
+//    3.1 set part_idx (need to be sorted with inc_table_schema)
+//    3.2 set partition_type for source tablet (to be hidden part)
+int ObDDLService::generate_split_info_for_schema_(const ObPartitionLevel target_part_level,
+                                                  const ObTableSchema& ori_table_schema,
+                                                  ObTableSchema& inc_table_schema,
+                                                  ObTableSchema& new_table_schema,
+                                                  ObTableSchema& upd_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = ori_table_schema.get_part_level();
+  const int64_t ori_part_num = ori_table_schema.get_part_option().get_part_num();
+  const int64_t inc_part_num = inc_table_schema.get_part_option().get_part_num();
+  const int64_t all_part_num = ori_part_num + inc_part_num - 1;
+  new_table_schema.get_part_option().set_part_num(all_part_num);
+  new_table_schema.set_part_level(target_part_level);
+
+  if (target_part_level== PARTITION_LEVEL_ONE) {
+    if (part_level == PARTITION_LEVEL_ZERO) {
+      if (OB_FAIL(generate_partition_info_from_non_partitioned_table_(ori_table_schema,
+                                                                      inc_table_schema,
+                                                                      new_table_schema))) {
+        LOG_WARN("fail to generate split partition info from non-partitioned table", KR(ret),
+                                                                                     K(ori_table_schema),
+                                                                                     K(inc_table_schema),
+                                                                                     K(new_table_schema));
+      }
+    } else if (part_level == PARTITION_LEVEL_ONE) {
+      if (OB_FAIL(generate_partition_info_from_partitioned_table_(ori_table_schema, inc_table_schema,
+                                                                  upd_table_schema))) {
+        LOG_WARN("fail to generate split partition info from non-partitioned table", KR(ret),
+                                                                                     K(ori_table_schema),
+                                                                                     K(inc_table_schema),
+                                                                                     K(upd_table_schema));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid part level", KR(ret), K(part_level), K(target_part_level));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid part level", KR(ret), K(part_level), K(target_part_level), K(ori_table_schema));
+  }
+
+  // generate part id and tablet id for new splitting partitions
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(generate_object_id_for_partition_schema(inc_table_schema))) {
+    LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
+  } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
+    LOG_WARN("fail to fetch new table id", K(inc_table_schema), KR(ret));
+  }
+
+  return ret;
+}
+
+// for inc_table_schema:
+//    1. add a mock hidden partition for origin tablet. it seems that we are splitting a "partitioned" table
+//    2. set part_idx for all additional splitting partitions
+// for new_table_schema:
+//    1. set tablet_id as invalid (partitioned table don't record tablet id in table-level)
+//    2. set partition key and part_func_expr based on presetting-partition-key
+int ObDDLService::generate_partition_info_from_non_partitioned_table_(const ObTableSchema& ori_table_schema,
+                                                                      ObTableSchema& inc_table_schema,
+                                                                      ObTableSchema& new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t inc_part_num = inc_table_schema.get_part_option().get_part_num();
+  ObPartition **inc_part_array = nullptr;
+
+  if (OB_ISNULL(inc_part_array = inc_table_schema.get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part array is null", KR(ret), K(inc_table_schema));
+  } else if (OB_FAIL(mock_hidden_partition_for_non_partitioned_table_(ori_table_schema,
+                                                                      inc_table_schema,
+                                                                      new_table_schema))) {
+    LOG_WARN("fail to mock hidden source partition for non-partitioned table", KR(ret),
+                                                                               K(ori_table_schema),
+                                                                               K(inc_table_schema));
+  } else if (ori_table_schema.is_user_table() || ori_table_schema.is_global_index_table()) {
+    ObArray<uint64_t> presetting_partition_keys;
+    if (OB_FAIL(ori_table_schema.get_presetting_partition_keys(presetting_partition_keys))) {
+      LOG_WARN("fail to get presetting partition key columns", KR(ret), K(ori_table_schema));
+    } else if (presetting_partition_keys.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid schema for auto partitioning", KR(ret), K(ori_table_schema));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < presetting_partition_keys.count(); i++) {
+        uint64_t column_id = presetting_partition_keys.at(i);
+        if (OB_FAIL(new_table_schema.add_partition_key(column_id))){
+          LOG_WARN("fail to add partition keu", KR(ret), K(new_table_schema), K(column_id));
+        }
+      } // end for
+
+      const bool need_set_part_expr = ori_table_schema.get_part_option().get_part_func_expr_str().empty();
+      if (OB_FAIL(ret)) {
+      } else if (need_set_part_expr) {
+        ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+        int64_t buf_len = OB_MAX_TEXT_LENGTH;
+        int64_t pos = 0;
+        char* buf = static_cast<char *>(allocator.alloc(buf_len));
+
+        if (OB_ISNULL(buf)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to alloc", KR(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < presetting_partition_keys.count(); i++) {
+          ObColumnSchemaV2* column_schema = new_table_schema.get_column_schema(presetting_partition_keys.at(i));
+          if (OB_ISNULL(column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column_schema is null", KR(ret));
+          } else if (FALSE_IT(pos += column_schema->get_column_name_str().to_string(buf + pos, buf_len - pos))) {
+          } else if (i != presetting_partition_keys.count() - 1) {
+            J_COMMA();
+          }
+        } // end for
+
+        if (OB_SUCC(ret)) {
+          ObString part_func_expr(pos, buf);
+          if (OB_FAIL(new_table_schema.get_part_option().set_part_expr(part_func_expr))) {
+            LOG_WARN("fail to set part expr", KR(ret));
+          }
+        }
+      } // end if (need_set_part_expr)
+    }
+  } else if (ori_table_schema.is_aux_lob_table() || ori_table_schema.is_index_local_storage()) {
+    // the partition info of local index and lob is same to data_table, no need to modify schema
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table type", KR(ret), K(ori_table_schema));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
+    ObPartition* inc_part = inc_part_array[i];
+    if (OB_ISNULL(inc_part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("split partition is null", KR(ret));
+    } else {
+      inc_part->set_part_idx(i);
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::mock_hidden_partition_for_non_partitioned_table_(const ObTableSchema& ori_table_schema,
+                                                                   ObTableSchema& inc_table_schema,
+                                                                   ObTableSchema& new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t object_cnt = 1;
+  const uint64_t tenant_id = ori_table_schema.get_tenant_id();
+  share::schema::ObPartition mock_part;
+  ObObjectID object_id = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is empty", KR(ret), KP_(schema_service));
+  } else if (OB_FAIL(schema_service_->get_schema_service()
+                      ->fetch_new_partition_ids(tenant_id, object_cnt, object_id))) {
+    LOG_WARN("fail to get max object id", KR(ret), K(tenant_id), K(object_cnt));
+  } else if (OB_FAIL(mock_part.set_part_name(ObString::make_string("mock_part")))) {
+    LOG_WARN("failed to set part_name", KR(ret));
+  } else if (OB_FAIL(mock_part.set_high_bound_val(ObRowkey::MAX_ROWKEY))) {
+    LOG_WARN("failed to set high_bound_val", KR(ret));
+  } else {
+    mock_part.set_part_idx(0);
+    mock_part.set_tenant_id(ori_table_schema.get_tenant_id());
+    mock_part.set_table_id(ori_table_schema.get_table_id());
+    mock_part.set_tablet_id(ori_table_schema.get_tablet_id());
+    mock_part.set_partition_type(PartitionType::PARTITION_TYPE_SPLIT_SOURCE);
+    mock_part.set_part_id(object_id);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(inc_table_schema.add_partition(mock_part))) {
+      LOG_WARN("fail to add partition", KR(ret), K(mock_part));
+    } else {
+      new_table_schema.set_tablet_id(ObTabletID::INVALID_TABLET_ID);
+    }
+  }
+
+  return ret;
+}
+
+// inc_table_schema records the additional splitting partition,
+// upd_table_schema records the modification of origin partition:
+// 1. reorganize the part_idx of partition of inc_table_schema and upd_table_schema in partial order
+//    based on the value of partition key
+// 2. set partition_type for source partition of upd_table_schema (to be hidden part)
+int ObDDLService::generate_partition_info_from_partitioned_table_(const ObTableSchema& ori_table_schema,
+                                                                  ObTableSchema& inc_table_schema,
+                                                                  ObTableSchema& upd_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **ori_part_array = nullptr;
+  ObPartition **inc_part_array = nullptr;
+  const int64_t ori_part_num = ori_table_schema.get_part_option().get_part_num();
+  const int64_t inc_part_num = inc_table_schema.get_part_option().get_part_num();
+
+  // set part_idx and partition type
+  if (OB_ISNULL(inc_part_array = inc_table_schema.get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part array is null", KR(ret), K(inc_table_schema));
+  } else if (OB_ISNULL(ori_part_array = ori_table_schema.get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part array is null", KR(ret), K(ori_table_schema));
+  } else if (OB_UNLIKELY(!ori_table_schema.is_valid_split_part_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support to split range or range column part", KR(ret), K(ori_table_schema));
+  } else {
+    common::hash::ObHashSet<uint64_t> source_tablet_id_set;
+    if (OB_FAIL(source_tablet_id_set.create(32))) {
+      LOG_WARN("failed to create source part id set", KR(ret));
+    } else {
+      // check ori_part_array
+      for (int64_t i = 0; OB_SUCC(ret) && i < ori_part_num; ++i) {
+        ObPartition* ori_part = ori_part_array[i];
+        if (OB_ISNULL(ori_part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("origin partition is null", KR(ret));
+        } else if (OB_UNLIKELY(ori_part->get_split_source_tablet_id().is_valid())){
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("only split part could have split_source_tablet_id", KR(ret), KPC(ori_part));
+        }
+      } // end for
+
+      // build upd_part of upd_table_schema to update the partition_type of source split part
+      for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
+        ObPartition* inc_part = inc_part_array[i];
+        if (OB_ISNULL(inc_part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split partition is null", KR(ret));
+        } else {
+          ObTabletID source_tablet_id = inc_part->get_split_source_tablet_id();
+          if (OB_FAIL(source_tablet_id_set.set_refactored(source_tablet_id.id(), 0 /*flag*/))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("set_refactored from source_tablet_id_set failed", KR(ret), K(source_tablet_id));
+            }
+          } else {
+            ObPartition* source_split_part = nullptr;
+            for (int64_t j = 0; source_split_part == nullptr && OB_SUCC(ret) && j < ori_part_num; ++j) {
+              ObPartition* ori_part = ori_part_array[j];
+              if (OB_ISNULL(ori_part)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("source split part is null", KR(ret), K(j), K(ori_table_schema));
+              } else if (ori_part->get_tablet_id() == source_tablet_id) {
+                source_split_part = ori_part;
+              }
+            } // end for
+
+            ObPartition upd_part;
+            if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(source_split_part)) {
+              ret = OB_UNKNOWN_PARTITION;
+              LOG_WARN("source split part is not existed", KR(ret), K(source_tablet_id), KPC(inc_part), K(ori_table_schema));
+            } else if (OB_FAIL(upd_part.assign(*source_split_part))) {
+              LOG_WARN("fail to assign part", KR(ret), KPC(source_split_part));
+            } else if (FALSE_IT(upd_part.set_partition_type(PartitionType::PARTITION_TYPE_SPLIT_SOURCE))) {
+            } else if (OB_FAIL(upd_table_schema.add_partition(upd_part))) {
+              LOG_WARN("add partition fail", KR(ret), K(upd_part));
+            }
+          }
+        }
+      } // end for
+    }
+
+    // the part_idx is deprecated, so we need to set it to a invalid value
+    if (OB_FAIL(ret)) {
+    } else {
+      const int64_t deprecated_part_idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; ++i) {
+        ObPartition *part = inc_part_array[i];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("split partition is null", KR(ret));
+        } else {
+            part->set_part_idx(deprecated_part_idx);
+        }
+      }
     }
   }
   return ret;
@@ -40647,12 +43874,9 @@ int ObDDLService::pre_rename_mysql_columns_offline(
     if (OB_FAIL(check_is_change_column_order(new_table_schema, *alter_column_schemas.at(i), is_change_column_order))) {
       LOG_WARN("failed to check is change column order", K(ret));
     } else if (is_change_column_order) {
-      if (alter_column_schemas.at(i)->get_column_id()
-          != orig_column_schemas.at(i)->get_column_id()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schemas.at(i)),
-                 K(*orig_column_schemas.at(i)));
-      } else if (OB_FAIL(new_table_schema.reorder_column(
+      //in add column instant, same column name's column id is not the same
+      //no need to check column schema's column id
+      if (OB_FAIL(new_table_schema.reorder_column(
                    alter_column_schemas.at(i)->get_column_name_str(),
                    alter_column_schemas.at(i)->is_first_,
                    alter_column_schemas.at(i)->get_prev_column_name(),
@@ -41124,6 +44348,8 @@ int ObDDLService::add_extra_tenant_init_config_(
   bool find = false;
   ObString config_name("_parallel_ddl_control");
   ObSqlString config_value;
+  ObString config_name_mysql_compatible_dates("_enable_mysql_compatible_dates");
+  ObString config_value_mysql_compatible_dates("true");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -41133,6 +44359,8 @@ int ObDDLService::add_extra_tenant_init_config_(
       common::ObConfigPairs &parallel_table_config = init_configs.at(index);
       if (OB_FAIL(parallel_table_config.add_config(config_name, config_value.string()))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
+      } else if (OB_FAIL(parallel_table_config.add_config(config_name_mysql_compatible_dates, config_value_mysql_compatible_dates))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_mysql_compatible_dates), K(config_value_mysql_compatible_dates));
       }
     }
   }
@@ -41141,6 +44369,228 @@ int ObDDLService::add_extra_tenant_init_config_(
   if (OB_SUCC(ret) && !find) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("no matched tenant config", KR(ret), K(tenant_id), K(init_configs));
+  }
+  return ret;
+}
+
+bool ObDDLService::is_dec_table_lob_inrow_threshold(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const AlterTableSchema &alter_table_schema,
+    const ObTableSchema *orig_table_schema) const
+{
+  return OB_NOT_NULL(orig_table_schema)
+        && alter_table_arg.is_alter_options_
+        && alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::LOB_INROW_THRESHOLD)
+        && alter_table_schema.get_lob_inrow_threshold() < orig_table_schema->get_lob_inrow_threshold();
+}
+
+int ObDDLService::check_alter_lob_inrow_threshold(
+    obrpc::ObAlterTableArg &alter_table_arg,
+    const AlterTableSchema &alter_table_schema,
+    const ObTableSchema *orig_table_schema,
+    bool &is_dec_lob_inrow_threshold,
+    share::ObDDLType &ddl_type) const
+{
+  int ret = OB_SUCCESS;
+  if (! is_dec_table_lob_inrow_threshold(alter_table_arg, alter_table_schema, orig_table_schema)) {
+    // inc or not change lob inrow threshold is online
+  } else if (ddl_type != ObDDLType::DDL_INVALID) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("There are several mutually exclusive DDL in single statement", K(ret), K(ddl_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "There are several mutually exclusive DDL in single statement");
+  } else {
+    ObTableSchema::const_column_iterator tmp_begin = orig_table_schema->column_begin();
+    ObTableSchema::const_column_iterator tmp_end = orig_table_schema->column_end();
+    bool is_origin_table_has_lob_column = false;
+
+    for (int32_t i = ObAlterTableArg::AUTO_INCREMENT;
+        OB_SUCC(ret) && i < ObAlterTableArg::MAX_OPTION; ++i) {
+      if (alter_table_schema.alter_option_bitset_.has_member(i) && i != ObAlterTableArg::LOB_INROW_THRESHOLD) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("There are several mutually exclusive DDL in single statement", K(ret), K(ddl_type), K(alter_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "There are several mutually exclusive DDL in single statement");
+      }
+    }
+
+    for (; OB_SUCC(ret) && tmp_begin != tmp_end && ! is_origin_table_has_lob_column; tmp_begin++) {
+      ObColumnSchemaV2 *column = (*tmp_begin);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is NULL", K(ret));
+      } else if (is_lob_storage(column->get_data_type())) {
+        is_origin_table_has_lob_column = true;
+      }
+    }
+
+    // online if no lob storage column in origin table
+    // offline if has lob storage column and dec lob inrow threshold
+    if (OB_SUCC(ret) && is_origin_table_has_lob_column) {
+      ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+      is_dec_lob_inrow_threshold = true;
+    }
+    LOG_TRACE("alter lob inrow threahold", K(ret), K(is_origin_table_has_lob_column), K(ddl_type),
+        "old_value", alter_table_schema.get_lob_inrow_threshold(), "new_value", orig_table_schema->get_lob_inrow_threshold());
+  }
+  return ret;
+}
+
+int ObDDLService::check_fts_index_conflict(const uint64_t tenant_id, const uint64_t table_id) {
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
+  ObArray<ObDDLTaskRecord> task_records;
+  if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(tenant_id, table_id, get_sql_proxy(), allocator, task_records))) {
+    LOG_WARN("get task record failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
+      const ObDDLTaskRecord &cur_record = task_records.at(i);
+      if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_CREATE_MULTIVALUE_INDEX
+          || cur_record.ddl_type_ == ObDDLType::DDL_DROP_MULVALUE_INDEX) {
+        LOG_INFO("cur_record.ddl_type is: ", K(cur_record.ddl_type_));
+        ret = OB_EAGAIN;
+        LOG_WARN("fts index is building, will retry later", K(ret), K(table_id), K(cur_record));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_vec_index_conflict(const uint64_t tenant_id, const uint64_t table_id) {
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(lib::ObLabel("DdlTasRecord"));
+  ObArray<ObDDLTaskRecord> task_records;
+  if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(tenant_id, table_id, get_sql_proxy(), allocator, task_records))) {
+    LOG_WARN("get task record failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
+      const ObDDLTaskRecord &cur_record = task_records.at(i);
+      if (cur_record.ddl_type_ == ObDDLType::DDL_CREATE_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_DROP_VEC_INDEX ||
+          cur_record.ddl_type_ == ObDDLType::DDL_REBUILD_INDEX) {
+        ret = OB_EAGAIN;
+        LOG_WARN("vector index is building, will retry later", K(ret), K(table_id), K(cur_record));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
+                                           ObSchemaGetterGuard &schema_guard,
+                                           ObArenaAllocator &allocator,
+                                           const ObTableSchema &orig_table_schema,
+                                           const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                           const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
+                                           obrpc::ObDropIndexArg *drop_index_arg,
+                                           ObDDLOperator &ddl_operator,
+                                           obrpc::ObAlterTableRes &res,
+                                           ObIArray<ObDDLTaskRecord> &ddl_tasks)
+{
+  int ret = OB_SUCCESS;
+  ObDDLRes ddl_res;
+  ObDDLTaskRecord task_record;
+  const ObTableSchema *index_table_schema = nullptr;
+  ObIndexBuilder index_builder(*this);
+  ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+  if (OB_ISNULL(drop_index_arg)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("drop index arg is nullptr", KR(ret));
+  } else if (drop_index_arg->index_name_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index name is empty", KR(ret), K(drop_index_arg->index_name_));
+  } else {
+    const ObString &index_name = drop_index_arg->index_name_;
+    if (OB_FAIL(get_index_schema_by_name(
+                orig_table_schema.get_table_id(),
+                orig_table_schema.get_database_id(),
+                *drop_index_arg,
+                schema_guard,
+                index_table_schema))) {
+      LOG_WARN("get index schema by name failed", KR(ret), K(orig_table_schema.get_table_id()),
+                                                  K(orig_table_schema.get_database_id()), KPC(drop_index_arg));
+    } else if (OB_ISNULL(index_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index not exist", KR(ret), K(orig_table_schema.get_table_id()), K(drop_index_arg->index_name_));
+    } else {
+      const bool is_fts_or_multivalue_or_vec_index = (index_table_schema->is_fts_or_multivalue_index() || index_table_schema->is_vec_index());
+      const bool is_inner_and_domain_index = drop_index_arg->is_inner_ && is_fts_or_multivalue_or_vec_index;
+      const bool need_check_fts_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_fts_or_multivalue_index();
+      const bool need_check_vec_index_conflict = !drop_index_arg->is_inner_ && index_table_schema->is_vec_index();
+      bool has_index_task = false;
+      typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
+      SMART_VAR(TableSchemaArray, new_index_schemas) {
+      if (need_check_fts_index_conflict && OB_FAIL(check_fts_index_conflict(orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id()))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to check fts index ", K(ret));
+        }
+      } else if (need_check_vec_index_conflict && OB_FAIL(check_vec_index_conflict(orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id()))) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to check vec index ", K(ret));
+        }
+      } else if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+          trans, *index_table_schema, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(), has_index_task))) {
+        LOG_WARN("failed to check ddl conflict", KR(ret));
+      } else if (has_index_task) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to drop a building or dropping index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
+      } else if (OB_FAIL(rename_dropping_index_name(orig_table_schema.get_table_id(),
+                                                    orig_table_schema.get_database_id(),
+                                                    is_inner_and_domain_index,
+                                                    *drop_index_arg,
+                                                    schema_guard,
+                                                    ddl_operator,
+                                                    trans,
+                                                    new_index_schemas))) {
+        LOG_WARN("submit drop index arg failed", KR(ret));
+      } else if (OB_UNLIKELY(!is_fts_or_multivalue_or_vec_index && new_index_schemas.count() != 1)
+              || OB_UNLIKELY(!drop_index_arg->is_inner_ && index_table_schema->is_vec_delta_buffer_type() && new_index_schemas.count() != 5)
+              || OB_UNLIKELY(index_table_schema->is_fts_index_aux() && new_index_schemas.count() != 4)
+              || OB_UNLIKELY(index_table_schema->is_multivalue_index_aux() && new_index_schemas.count() != 3)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, invalid new index schema count", KR(ret),
+            "count", new_index_schemas.count(),
+            "is fts index", index_table_schema->is_fts_index_aux(),
+            "is multivalue index", index_table_schema->is_multivalue_index_aux(),
+            "is vector index", index_table_schema->is_vec_delta_buffer_type(),
+            K(new_index_schemas));
+      } else {
+        const ObTableSchema &new_index_schema = new_index_schemas.at(new_index_schemas.count() - 1);
+        drop_index_arg->index_table_id_ = new_index_schema.get_table_id();
+        if (OB_FAIL(submit_drop_index_task_and_fill_ddl_result_(allocator, trans, new_index_schemas,
+                                                                orig_table_schema, drop_index_arg,
+                                                                inc_data_tablet_ids, del_data_tablet_ids, has_index_task,
+                                                                ddl_tasks, ddl_res_array))) {
+          LOG_WARN("fail to submit drop index task", KR(ret), KPC(drop_index_arg));
+        }
+      }
+      } // end smart var
+    }
+  }
+  return ret;
+}
+
+template <class TTableSchema>
+int ObDDLService:: get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,
+                                              const int table_id,
+                                              ObArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    ObTableSchema *table_schema = table_schemas[i];
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table schema is null ptr", KR(ret));
+    } else if (table_schema->get_table_id() == table_id) {
+      // some table types don't have tablet like external table
+      if (table_schema->has_tablet()
+          && OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("failed to get table tablet ids", KR(ret), KPC(table_schema));
+      }
+      break;
+    }
   }
   return ret;
 }

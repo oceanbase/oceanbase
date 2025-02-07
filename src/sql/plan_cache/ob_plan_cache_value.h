@@ -170,6 +170,7 @@ public:
                              const ObBitSet<> &neg_param_index,
                              const ObBitSet<> &not_param_index,
                              const ObBitSet<> &must_be_positive_idx,
+                             const ObBitSet<> &formalize_prec_idx,
                              ObIArray<ObPCParam *> &raw_params,
                              ParamStore *obj_params);
 
@@ -183,6 +184,7 @@ public:
                                          const ObBitSet<> &neg_param_index_,
                                          const ObBitSet<> &not_param_index,
                                          const ObBitSet<> &must_be_positive_idx,
+                                         const ObBitSet<> &formalize_prec_idx,
                                          ParamStore &param_store);
 
   static int resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
@@ -191,6 +193,7 @@ public:
                                                const ObBitSet<> &neg_param_index_,
                                                const ObBitSet<> &not_param_index,
                                                const ObBitSet<> &must_be_positive_idx,
+                                               const ObBitSet<> &formalize_prec_idx,
                                                int64_t params_num,
                                                ParamStore &param_store);
 
@@ -385,6 +388,7 @@ private:
   //*************************
   //not param回填后的sql序列化结果, 主要是用于outline 的signature
   common::ObString outline_signature_;
+  common::ObString outline_format_signature_;
   common::ObString constructed_sql_;
   ObPCVSet *pcv_set_;
   common::ObIAllocator *pc_alloc_;
@@ -400,6 +404,7 @@ private:
   ObOutlineState outline_state_;
   share::schema::ObOutlineParamsWrapper outline_params_wrapper_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
+  char format_sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 
   // session id for temporary table
   uint64_t sessid_;
@@ -450,6 +455,8 @@ private:
   TplSqlConstCons tpl_sql_const_cons_;
   //***********  end user-defined rules **************
   bool enable_rich_vector_format_;
+  common::ObBitSet<> formalize_prec_idx_;
+  int64_t switchover_epoch_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

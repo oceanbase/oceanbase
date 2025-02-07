@@ -171,6 +171,8 @@ union ObProxyCapabilityFlags
   bool is_feedback_proxy_info_support() const { return 1 == cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT
                                                         && is_ob_protocol_v2_support(); }
 
+  bool is_ob_protocol_v2_compress() const { return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS
+                                                        && is_ob_protocol_v2_support(); }
   uint64_t capability_;
   struct CapabilityFlags
   {

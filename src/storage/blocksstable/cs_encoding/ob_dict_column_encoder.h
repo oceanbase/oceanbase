@@ -15,7 +15,7 @@
 
 #include "ob_icolumn_cs_encoder.h"
 #include "ob_stream_encoding_struct.h"
-#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
+#include "ob_dict_encoding_hash_table.h"
 #include "ob_integer_stream_encoder.h"
 
 namespace oceanbase
@@ -30,16 +30,6 @@ public:
 
   ObDictColumnEncoder();
   virtual ~ObDictColumnEncoder();
-
-  struct DictCmp
-  {
-    explicit DictCmp(int &ret, const ObCmpFunc &cmp_func) : ret_(ret), cmp_func_(cmp_func) { }
-    bool operator()(const ObEncodingHashNodeList &left, const ObEncodingHashNodeList &right);
-
-  private:
-    int &ret_;
-    const ObCmpFunc &cmp_func_;
-  };
   void reuse() override;
   int get_identifier_and_stream_types(
       ObColumnEncodingIdentifier &identifier, const ObIntegerStream::EncodingType *&types) const override;
@@ -66,7 +56,7 @@ protected:
   int64_t max_ref_;
   int64_t ref_stream_max_value_;
   int32_t int_stream_idx_;
-  ObEncodingHashNode *const_list_header_;
+  ObDictHashNode const_node_;
   uint16_t ref_exception_cnt_; // total non-const ref
   common::ObCompressor *compressor_;
 };
@@ -79,26 +69,27 @@ int ObDictColumnEncoder::do_store_dict_ref_(ObMicroBufferWriter &buf_writer)
   int ret = OB_SUCCESS;
   T *ref_arr = nullptr;
   int64_t ref_arr_size = sizeof(T) * dict_encoding_meta_.ref_row_cnt_;
+  const int32_t *row_refs = ctx_->ht_->get_row_refs();
   if (OB_ISNULL(ref_arr = static_cast<T*>(ctx_->allocator_->alloc(ref_arr_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc", K(ret), K(ref_arr_size), K_(dict_encoding_meta));
   } else if (dict_encoding_meta_.is_const_encoding_ref()) {
-    const ObEncodingHashNode *node_list = ctx_->ht_->get_node_list();
     ref_arr[0] = ref_exception_cnt_;
-    ref_arr[1] = const_list_header_->dict_ref_;
+    ref_arr[1] = const_node_.dict_ref_;
     if (dict_encoding_meta_.ref_row_cnt_ > 2) {
       T *row_id_arr = ref_arr + 2;
       T *ref_exception_arr = ref_arr + 2 + ref_exception_cnt_;
       int64_t idx = 0;
       for (int64_t row_id = 0; OB_SUCC(ret) && row_id < row_count_; ++row_id) {
-        const ObEncodingHashNode &node = node_list[row_id];
-        if (const_list_header_->dict_ref_ != node.dict_ref_) {
+        const int32_t dict_ref = row_refs[row_id];
+        if (const_node_.dict_ref_ != dict_ref) {
           if (OB_UNLIKELY(idx >= ref_exception_cnt_)) {
             ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "unexpected idx", K(ret), K(idx), K_(ref_exception_cnt));
+            STORAGE_LOG(WARN, "unexpected idx", K(ret), K(idx), K_(ref_exception_cnt),
+                        K_(const_node), K(row_id), K(row_count_), K(dict_ref));
           } else {
             row_id_arr[idx] = row_id;
-            ref_exception_arr[idx] = node.dict_ref_;
+            ref_exception_arr[idx] = dict_ref;
             ++idx;
           }
         }
@@ -106,7 +97,7 @@ int ObDictColumnEncoder::do_store_dict_ref_(ObMicroBufferWriter &buf_writer)
     }
   } else {
     for (int64_t i = 0; i < row_count_; i++) {
-      ref_arr[i] = ctx_->ht_->get_node_list()[i].dict_ref_;
+      ref_arr[i] = row_refs[i];
     }
   }
   ObIntegerStreamEncoder integer_encoder;

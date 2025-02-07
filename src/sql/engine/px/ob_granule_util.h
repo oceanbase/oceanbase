@@ -106,7 +106,7 @@ struct ObParallelBlockRangeTaskParams
     expected_task_load_(sql::OB_EXPECTED_TASK_LOAD),
     min_task_count_per_thread_(sql::OB_MIN_PARALLEL_TASK_COUNT),
     max_task_count_per_thread_(sql::OB_MAX_PARALLEL_TASK_COUNT),
-    min_task_access_size_(GCONF.px_task_size >> 20),
+    min_task_access_size_(GCONF.px_task_size >> 10),
     marcos_count_(0)
   { }
   virtual ~ObParallelBlockRangeTaskParams()
@@ -117,8 +117,8 @@ struct ObParallelBlockRangeTaskParams
   /* 并行度 */
   int64_t parallelism_;
   /**
-   * 单位为MB
-   * 默认100，意味期待一个任务从磁盘读取100M的数据。
+   * 单位为KB
+   * 默认102400，意味期待一个任务从磁盘读取100M的数据。
    * 目前使用时都使用tablet size，而不是使用默认值。
    */
   int64_t expected_task_load_;
@@ -133,8 +133,8 @@ struct ObParallelBlockRangeTaskParams
    */
   int64_t max_task_count_per_thread_;
   /**
-   * 单位为MB
-   * 每个任务最小的负责数据量，默认为一个微块，2M。
+   * 单位为KB
+   * 每个任务最小的负责数据量，默认为一个宏块，2M。
    * 可以通过系统项来改变这个值。
    */
   int64_t min_task_access_size_;
@@ -273,7 +273,7 @@ public:
                                 bool range_independent);
 
 
-  static int split_granule_for_external_table(common::ObIAllocator &allocator,
+  static int split_granule_for_external_table(ObIAllocator &allocator,
                                               const ObTableScanSpec *tsc,
                                               const common::ObIArray<common::ObNewRange> &input_ranges,
                                               const common::ObIArray<ObDASTabletLoc*> &tablet_array,

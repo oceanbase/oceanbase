@@ -16,9 +16,14 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "sql/engine/ob_operator.h"
+#include "src/sql/plan_cache/ob_cache_object_factory.h"
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObILibCacheObject;
+}
 namespace observer
 {
 class ObExpVisitor
@@ -104,9 +109,9 @@ class ObCacheObjIterator
     plan_id_array_()
     {}
 
-    int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry);
+    int operator()(common::hash::HashMapPair<sql::ObCacheObjID, sql::ObILibCacheObject *> &entry);
 
-    int next(int64_t &tenant_id, ObCacheObjGuard &guard);
+    int next(int64_t &tenant_id, sql::ObCacheObjGuard &guard);
 
     common::ObSEArray<uint64_t, 16> &tenant_id_array_;
     int64_t tenant_id_array_idx_;

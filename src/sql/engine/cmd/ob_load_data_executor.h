@@ -23,10 +23,7 @@ class ObLoadDataExecutor
 public:
   ObLoadDataExecutor() {}
   virtual ~ObLoadDataExecutor() {}
-
   int execute(ObExecContext &ctx, ObLoadDataStmt &stmt);
-private:
-  int check_is_direct_load(ObTableDirectInsertCtx &ctx, const ObLoadDataHint &load_hint);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataExecutor);

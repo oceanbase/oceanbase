@@ -93,7 +93,8 @@ void ObExprRpadTest::TearDown()
                           str_op_object.set_result_type(res_type);  \
                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
 	                        int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
-	                        _OB_LOG(INFO, "respect=%s result=%s", to_cstring(ref), to_cstring(r)); \
+                          ObCStringHelper helper; \
+	                        _OB_LOG(INFO, "respect=%s result=%s", helper.convert(ref), helper.convert(r)); \
 	                        EXPECT_TRUE(OB_SUCCESS == err); \
 	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
                            } while(0)
@@ -120,7 +121,8 @@ void ObExprRpadTest::TearDown()
                           str_op_object.set_result_type(res_type);  \
                           int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
                           ref.set_collation_type(CS_TYPE_UTF8MB4_BIN);  \
-                           _OB_LOG(INFO, "respect=%s result=%s, err=%d", to_cstring(ref), to_cstring(r), err); \
+                          ObCStringHelper helper; \
+                          _OB_LOG(INFO, "respect=%s result=%s, err=%d", helper.convert(ref), helper.convert(r), err); \
                           EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err); \
 	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
                            } while(0)
@@ -146,7 +148,8 @@ void ObExprRpadTest::TearDown()
                           str_op_object.set_result_type(res_type);  \
                           ObExprCtx expr_ctx(NULL, NULL, NULL, str_buf);\
                                  int err = str_op_object.func(r, t1, t2, t3, expr_ctx); \
-	                        _OB_LOG(INFO, "respect=%s result=%s, ret=%d", to_cstring(ref), to_cstring(r), err); \
+                          ObCStringHelper helper; \
+	                        _OB_LOG(INFO, "respect=%s result=%s, ret=%d", helper.convert(ref), helper.convert(r), err); \
 	                        EXPECT_TRUE(OB_ALLOCATE_MEMORY_FAILED == err); \
 	                        EXPECT_TRUE(ref.get_type() == ObNullType); \
                            } while(0)

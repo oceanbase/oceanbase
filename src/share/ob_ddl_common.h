@@ -18,6 +18,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/location_cache/ob_location_struct.h"
+#include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
@@ -25,6 +26,7 @@ namespace oceanbase
 namespace obrpc
 {
 class ObSrvRpcProxy;
+struct ObPartitionSplitArg;
 struct ObAlterTableArg;
 struct ObDropDatabaseArg;
 struct ObDropTableArg;
@@ -80,6 +82,12 @@ enum ObDDLType
   DDL_CREATE_VEC_INDEX = 15,
   DDL_CREATE_MULTIVALUE_INDEX = 16,
   DDL_REBUILD_INDEX = 17,
+  DDL_CREATE_VEC_IVFFLAT_INDEX = 18,
+  DDL_CREATE_VEC_IVFSQ8_INDEX = 19,
+  DDL_CREATE_VEC_IVFPQ_INDEX = 20,
+  DDL_DROP_VEC_IVFFLAT_INDEX = 21,
+  DDL_DROP_VEC_IVFSQ8_INDEX = 22,
+  DDL_DROP_VEC_IVFPQ_INDEX = 23,
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -195,6 +203,14 @@ enum ObDDLTaskStatus {
   WRITE_SPLIT_START_LOG = 37,
   DROP_AUX_INDEX_TABLE = 38,
   DROP_LOB_META_ROW = 39,
+  GENERATE_SQ_META_TABLE_SCHEMA = 40,
+  WAIT_SQ_META_TABLE_COMPLEMENT = 41,
+  GENERATE_CENTROID_TABLE_SCHEMA = 42,
+  WAIT_CENTROID_TABLE_COMPLEMENT = 43,
+  GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
+  WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
+  LOAD_DICTIONARY = 46,
+
   FAIL = 99,
   SUCCESS = 100
 };
@@ -308,6 +324,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
       str = "GENERATE_DOC_AUX_SCHEMA";
       break;
+    case ObDDLTaskStatus::LOAD_DICTIONARY:
+      str = "LOAD_DICTIONARY";
+      break;
     case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT:
       str = "WAIT_ROWKEY_DOC_TABLE_COMPLEMENT";
       break;
@@ -347,6 +366,24 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::DROP_LOB_META_ROW:
       str = "DROP_LOB_META_ROW";
       break;
+    case ObDDLTaskStatus::GENERATE_SQ_META_TABLE_SCHEMA:
+      str = "GENERATE_SQ_META_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_SQ_META_TABLE_COMPLEMENT:
+      str = "WAIT_SQ_META_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_CENTROID_TABLE_SCHEMA:
+      str = "GENERATE_CENTROID_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_CENTROID_TABLE_COMPLEMENT:
+      str = "WAIT_CENTROID_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_PQ_CENTROID_TABLE_SCHEMA:
+      str = "GENERATE_PQ_CENTROID_TABLE_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
+      str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -355,6 +392,22 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
   }
   return str;
+}
+
+static bool is_partition_split_recovery_table_redefinition(const ObDDLType ddl_type) {
+  return ddl_type == DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION;
+}
+
+static bool is_tablet_split(const ObDDLType ddl_type) {
+  return ddl_type >= DDL_AUTO_SPLIT_BY_RANGE && ddl_type <= DDL_MANUAL_SPLIT_NON_RANGE;
+}
+
+static bool is_range_split(const ObDDLType ddl_type) {
+  return DDL_AUTO_SPLIT_BY_RANGE == ddl_type || DDL_MANUAL_SPLIT_BY_RANGE == ddl_type;
+}
+
+static bool is_auto_split(const ObDDLType ddl_type) {
+  return DDL_AUTO_SPLIT_BY_RANGE == ddl_type || DDL_AUTO_SPLIT_NON_RANGE == ddl_type;
 }
 
 static inline bool is_simple_table_long_running_ddl(const ObDDLType type)
@@ -426,7 +479,19 @@ static inline bool is_direct_load_retry_err(const int ret)
     || ret == OB_SCHEMA_NOT_UPTODATE
     || ret == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
     || ret == OB_ERR_REMOTE_SCHEMA_NOT_FULL
+    || ret == OB_SQL_RETRY_SPM
     ;
+}
+
+static inline bool is_supported_pre_split_ddl_type(const ObDDLType type)
+{
+  return DDL_MODIFY_COLUMN == type
+      || DDL_ADD_PRIMARY_KEY == type
+      || DDL_DROP_PRIMARY_KEY == type
+      || DDL_ALTER_PRIMARY_KEY == type
+      || DDL_CONVERT_TO_CHARACTER == type
+      || DDL_TABLE_REDEFINITION == type
+      || DDL_ALTER_PARTITION_BY == type;
 }
 
 static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_status)
@@ -545,7 +610,10 @@ public:
                                                  ObArray<ObColumnNameInfo> &insert_column_names,
                                                  ObArray<ObColumnNameInfo> &column_names,
                                                  ObArray<int64_t> &select_column_ids);
-
+  static int append_multivalue_extra_column(const share::schema::ObTableSchema &dest_table_schema,
+                                            const share::schema::ObTableSchema &source_table_schema,
+                                            ObArray<ObColumnNameInfo> &column_names,
+                                            ObArray<int64_t> &select_column_ids);
   static int generate_build_replica_sql(
       const uint64_t tenant_id,
       const int64_t data_table_id,
@@ -606,7 +674,7 @@ public:
                                              ObSqlString &rowkey_column_sql_string);
 
   static int ddl_get_tablet(
-      storage::ObLSHandle &ls_handle,
+      const storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
       const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);
@@ -635,7 +703,17 @@ public:
   static int get_tablet_replica_location(
     const uint64_t tenant_id,
     const common::ObTabletID &tablet_id,
+    ObLSID &ls_id,
     ObLSLocation &location);
+  static int get_split_replicas_addrs(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    ObIArray<ObAddr> &member_addrs_array,
+    ObIArray<ObAddr> &learner_addrs_array);
+  static int get_split_replicas_addrs(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    ObIArray<ObAddr> &replica_addr_array);
   static int construct_ls_tablet_id_map(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
@@ -664,15 +742,19 @@ public:
     const common::ObAddr &leader_addr,
     uint64_t &left_space_size);
   static int generate_partition_names(
-   const ObIArray<ObString> &partition_names_array,
-   common::ObIAllocator &allocator,
-   ObString &partition_names);
+    const ObIArray<ObString> &partition_names_array,
+    const bool is_oracle_mode,
+    common::ObIAllocator &allocator,
+    ObString &partition_names);
   static int check_target_partition_is_running(
    const ObString &running_sql_info,
    const ObString &partition_name,
    common::ObIAllocator &allocator,
    bool &is_running_status);
-
+  static int get_tablet_leader(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    common::ObAddr &leader_addr);
   static int check_table_exist(
      const uint64_t tenant_id,
      const uint64_t table_id,
@@ -685,6 +767,8 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
+  static int get_task_tablet_slice_count(const int64_t tenant_id, const int64_t task_id, bool &is_partition_table, common::hash::ObHashMap<int64_t, int64_t> &tablet_slice_count_map);
+
   static int get_data_information(
      const uint64_t tenant_id,
      const uint64_t task_id,
@@ -692,6 +776,7 @@ public:
      int64_t &snapshot_version,
      share::ObDDLTaskStatus &task_status);
 
+  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObPartitionSplitArg &split_arg);
   static int get_data_information(
      const uint64_t tenant_id,
      const uint64_t task_id,
@@ -699,7 +784,8 @@ public:
      int64_t &snapshot_version,
      share::ObDDLTaskStatus &task_status,
      uint64_t &target_object_id,
-     int64_t &schema_version);
+     int64_t &schema_version,
+     bool &is_no_logging);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
@@ -762,13 +848,17 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
-
+  static int get_tablet_physical_row_cnt(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const bool calc_sstable,
+      const bool calc_memtable,
+      int64_t &physical_row_count /*OUT*/);
   static int check_table_empty_in_oracle_mode(
       const uint64_t tenant_id,
       const uint64_t table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       bool &is_table_empty);
-
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
       const uint64_t check_tenant_id);
@@ -786,6 +876,9 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id);
   static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
+  static int get_temp_store_compress_type(const share::schema::ObTableSchema *table_schema,
                                           const int64_t parallel,
                                           ObCompressorType &compr_type);
   static inline bool is_verifying_checksum_error_needed(share::ObDDLType type)
@@ -826,7 +919,9 @@ public:
     }
     return res;
   }
+  static int get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, share::schema::ObSchemaGetterGuard &schema_guard);
   static bool use_idempotent_mode(const int64_t data_format_version);
+  static int init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
   static int obtain_snapshot(
@@ -834,8 +929,8 @@ public:
       const uint64_t table_id,
       const uint64_t target_table_id,
       int64_t &snapshot_version,
-      bool &snapshot_held,
-      rootserver::ObDDLTask* task);
+      rootserver::ObDDLTask* task,
+      const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids = NULL);
   static int release_snapshot(
       rootserver::ObDDLTask* task,
       const uint64_t table_id,
@@ -849,18 +944,41 @@ public:
       int64_t &check_dag_exit_retry_cnt,
       bool is_complement_data_dag,
       bool &all_dag_exit);
-private:
-  static int hold_snapshot(
-      rootserver::ObDDLTask* task,
-      const uint64_t table_id,
-      const uint64_t target_table_id,
-      rootserver::ObRootService *root_service,
-      const int64_t snapshot_version);
+  static int get_no_logging_param(const int64_t tenant_id, bool &is_no_logging);
   static int batch_check_tablet_checksum(
       const uint64_t tenant_id,
       const int64_t start_idx,
       const int64_t end_idx,
-      const ObArray<ObTabletID> &tablet_ids);
+      const ObIArray<ObTabletID> &tablet_ids);
+  static int hold_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t snapshot);
+  static int check_need_acquire_lob_snapshot(
+      const ObTableSchema *data_table_schema,
+      const ObTableSchema *index_table_schema,
+      bool &need_acquire);
+  static int obtain_snapshot(
+      common::ObMySQLTransaction &trans,
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      int64_t &new_fetched_snapshot);
+  static int calc_snapshot_with_gts(
+      int64_t &snapshot,
+      const uint64_t tenant_id,
+      const int64_t ddl_task_id = 0,
+      const int64_t trans_end_snapshot = 0,
+      const int64_t index_snapshot_version_diff = 0);
+private:
+  static int hold_snapshot(
+      common::ObMySQLTransaction &trans,
+      rootserver::ObDDLTask* task,
+      const uint64_t table_id,
+      const uint64_t target_table_id,
+      rootserver::ObRootService *root_service,
+      const int64_t snapshot_version,
+      const common::ObIArray<common::ObTabletID> *extra_mv_tablet_ids);
 
   static int check_table_column_checksum_error(
       const uint64_t tenant_id,
@@ -878,7 +996,7 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 
-private:
+public:
   const static int64_t MAX_BATCH_COUNT = 128;
 };
 
@@ -986,6 +1104,38 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
+};
+
+class ObSplitUtil
+{
+public:
+  static int deserializ_parallel_datum_rowkey(
+      common::ObIAllocator &rowkey_allocator,
+      const char *buf, const int64_t data_len, int64_t &pos,
+      ObIArray<blocksstable::ObDatumRowkey> &parallel_datum_rowkey_list);
+};
+
+class ObSplitTabletInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSplitTabletInfo() : split_info_(0), split_src_tablet_id_() { }
+  ~ObSplitTabletInfo() { reset(); }
+  void reset() { split_info_ = 0; split_src_tablet_id_.reset(); }
+  void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
+  bool is_data_incomplete() const { return is_data_incomplete_; }
+  const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }
+  TO_STRING_KV(K_(split_info), K_(split_src_tablet_id));
+private:
+  union {
+    uint32_t split_info_;
+    struct {
+      uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
+      uint32_t reserved: 31;
+    };
+  };
+  ObTabletID split_src_tablet_id_;
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

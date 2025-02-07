@@ -19,6 +19,22 @@ using namespace storage;
 namespace compaction
 {
 /*
+ *  ----------------------------------------ObBatchFreezeTabletsDag--------------------------------------------
+ */
+int ObBatchFreezeTabletsDag::inner_init()
+{
+  int ret = OB_SUCCESS;
+  const ObBatchFreezeTabletsParam &param = get_param();
+  if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param", K(ret), K(param));
+  } else {
+    (void) set_max_concurrent_task_cnt(MAX_CONCURRENT_FREEZE_TASK_CNT);
+  }
+  return ret;
+}
+
+/*
  *  ----------------------------------------ObBatchFreezeTabletsTask--------------------------------------------
  */
 ObBatchFreezeTabletsTask::ObBatchFreezeTabletsTask()
@@ -65,7 +81,12 @@ int ObBatchFreezeTabletsTask::inner_process()
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_, true/*is_sync*/, max_retry_time_us, true/*need_rewrite_meta*/))) {
+    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(param.ls_id_,
+                                                                 cur_pair.tablet_id_,
+                                                                 true/*is_sync*/,
+                                                                 max_retry_time_us,
+                                                                 true,/*need_rewrite_meta*/
+                                                                 ObFreezeSourceFlag::MAJOR_FREEZE))) {
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++cnt_.failure_cnt_;
     } else if (FALSE_IT(++cnt_.success_cnt_)) {
@@ -78,7 +99,7 @@ int ObBatchFreezeTabletsTask::inner_process()
     if (FAILEDx(share::dag_yield())) {
       LOG_WARN("failed to dag yield", K(ret));
     }
-    if (REACH_TENANT_TIME_INTERVAL(5_s)) {
+    if (REACH_THREAD_TIME_INTERVAL(5_s)) {
       weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
     }
   } // end for
@@ -110,7 +131,7 @@ int ObBatchFreezeTabletsTask::schedule_tablet_major_after_freeze(
     // no need to schedule merge
   } else if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(
                  ls.get_ls_id(), *tablet, MEDIUM_MERGE,
-                 cur_pair.schedule_merge_scn_, EXEC_MODE_LOCAL))) {
+                 cur_pair.schedule_merge_scn_, EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, cur_pair.co_major_merge_type_))) {
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("failed to schedule medium merge dag", K(ret), "ls_id", ls.get_ls_id(), K(cur_pair));
     }

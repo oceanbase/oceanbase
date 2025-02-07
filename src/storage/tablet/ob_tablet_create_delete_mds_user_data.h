@@ -42,6 +42,14 @@ enum class ObTabletMdsUserDataType : int64_t
   FINISH_TRANSFER_IN = 6,
   // for start tranfer out prepare
   START_TRANSFER_OUT_PREPARE = 7,
+  // for start split src
+  START_SPLIT_SRC = 8,
+  // for start split dst
+  START_SPLIT_DST = 9,
+  // for finish split src
+  FINISH_SPLIT_SRC = 10,
+  // for finish split dst
+  FINISH_SPLIT_DST = 11,
 
   MAX_TYPE,
 };
@@ -52,7 +60,7 @@ class ObTabletCreateDeleteMdsUserData
 public:
   ObTabletCreateDeleteMdsUserData();
   ~ObTabletCreateDeleteMdsUserData() = default;
-  ObTabletCreateDeleteMdsUserData(const ObTabletStatus::Status &status, const ObTabletMdsUserDataType type);
+  ObTabletCreateDeleteMdsUserData(const ObTabletStatus::Status &status, const ObTabletMdsUserDataType &type, const int64_t create_commit_version);
   ObTabletCreateDeleteMdsUserData(const ObTabletCreateDeleteMdsUserData &) = delete;
   ObTabletCreateDeleteMdsUserData &operator=(const ObTabletCreateDeleteMdsUserData &) = delete;
 public:
@@ -71,16 +79,20 @@ public:
   TO_STRING_KV(K_(tablet_status), K_(transfer_scn),
       K_(transfer_ls_id), K_(data_type),
       K_(create_commit_scn), K_(create_commit_version),
-      K_(delete_commit_scn), K_(delete_commit_version), K_(transfer_out_commit_version));
+      K_(delete_commit_scn), K_(delete_commit_version),
+      K_(start_transfer_commit_version), K_(start_split_commit_version));
 private:
   void start_transfer_out_on_redo_(const share::SCN &redo_scn);
   void finish_transfer_in_on_redo_(const share::SCN &redo_scn);
   void create_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-  void start_transfer_in_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-
   void delete_tablet_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
-  void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
+  void start_transfer_in_on_commit_(const share::SCN &commit_version);
   void start_transfer_out_on_commit_(const share::SCN &commit_version);
+  void finish_transfer_out_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
+
+  void start_split_src_on_commit_(const share::SCN &commit_version);
+  void start_split_dst_on_commit_(const share::SCN &commit_version);
+  void finish_split_src_on_commit_(const share::SCN &commit_version, const share::SCN &commit_scn);
 public:
   ObTabletStatus tablet_status_;
   share::SCN transfer_scn_;
@@ -92,7 +104,8 @@ public:
   int64_t create_commit_version_; // create tx commit trans version
   share::SCN delete_commit_scn_; // delete tx commit log scn
   int64_t delete_commit_version_; // delete tx commit trans version
-  int64_t transfer_out_commit_version_; //transfer out commit trans version
+  int64_t start_transfer_commit_version_; // start transfer commit trans version(transfer in/transfer out)
+  int64_t start_split_commit_version_; // start split commit trans version
 };
 
 inline bool ObTabletCreateDeleteMdsUserData::is_valid() const

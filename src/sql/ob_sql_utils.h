@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OB_SQL_UTILS_H
 
 #include "common/ob_range.h"
+#include "sql/rewrite/ob_query_range_provider.h"
 #include "common/object/ob_object.h"
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
@@ -23,6 +24,7 @@
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
+#include "share/ob_simple_batch.h"
 #include "sql/ob_phy_table_location.h"
 #include "sql/ob_sql_define.h"
 #include "sql/parser/parse_node.h"
@@ -31,6 +33,8 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "share/ob_compatibility_control.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+
 namespace oceanbase
 {
 namespace share {
@@ -203,7 +207,8 @@ public:
                                           const ObRawExpr *raw_expr,
                                           common::ObObj &result,
                                           const ParamStore *params,
-                                          common::ObIAllocator &allocator);
+                                          common::ObIAllocator &allocator,
+                                          bool force_copy_extend_type = false);
   static int calc_raw_expr_without_row(ObExecContext &exec_ctx,
                                        const ObRawExpr *raw_expr,
                                        ObObj &result,
@@ -302,7 +307,8 @@ public:
                              ObObj &result,
                              ObIAllocator &allocator,
                              const ParamStore &params_array,
-                             ObExecContext* exec_ctx = NULL);
+                             ObExecContext* exec_ctx = NULL,
+                             bool force_copy_extend_type = false);
 
   // Calc const expr value under static engine.
   static int se_calc_const_expr(ObSQLSessionInfo *session,
@@ -310,7 +316,8 @@ public:
                                 const ParamStore &params,
                                 ObIAllocator &allocator,
                                 ObExecContext *exec_ctx,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                bool force_copy_extend_type = false);
 
   static int make_generated_expression_from_str(const common::ObString &expr_str,
                                                 const share::schema::ObTableSchema &schema,
@@ -417,7 +424,8 @@ public:
                               common::ObString &outline_key,
                               share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                               ParseMode mode,
-                              bool &has_questionmark_in_sql);
+                              bool &has_questionmark_in_sql,
+                              bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,
@@ -452,7 +460,7 @@ public:
                            common::ObExprCtx &expr_ctx);
 
   // use get_tablet_ranges instead.
-  static int extract_pre_query_range(const ObQueryRange &pre_query_range,
+  static int extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
@@ -462,7 +470,7 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
-  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+  static int extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
                                        ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
@@ -601,6 +609,7 @@ public:
                                  ObString &out);
   //检查参数是否为Oracle模式下的''
   static bool is_oracle_empty_string(const common::ObObjParam &param);
+  static bool is_oracle_null_with_normal_type(const common::ObObjParam &param);
   static int convert_sql_text_from_schema_for_resolve(common::ObIAllocator &allocator,
                                                     const common::ObDataTypeCastParams &dtc_params,
                                                     ObString &sql_text,
@@ -748,8 +757,21 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
+  static int get_external_table_type(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObTableSchema *table_schema,
+                                     ObExternalFileFormat::FormatType &type);
+  static int get_external_table_type(const ObString &table_format_or_properties,
+                                     ObExternalFileFormat::FormatType &type);
+  static int is_odps_external_table(const uint64_t tenant_id,
+                                    const uint64_t table_id,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObTableSchema *table_schema,
+                                    bool &is_odps_external_table);
+  static int is_odps_external_table(const ObString &table_format_or_properties,
+                                    bool &is_odps_external_table);
   static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
-  static int is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
 
@@ -758,12 +780,20 @@ public:
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_432(uint64_t data_version);
   static bool is_data_version_ge_424_or_433(uint64_t data_version);
+  static bool is_min_cluster_version_ge_425_or_435();
+  static bool is_opt_feature_version_ge_425_or_435(uint64_t opt_feature_version);
 
   static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
                                             const ObIArray<uint64_t> &role_id_option_array,
                                             const ObProxyInfo &proxied_info,
                                             ObIArray<uint64_t> &new_role_id_array,
                                             ObIArray<uint64_t> &new_role_id_option_array);
+  static int check_enable_mysql_compatible_dates(const sql::ObSQLSessionInfo *session,
+                                                 const bool is_ddl_scenario,
+                                                 bool &enabled);
+
+  static int get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_part_loc_info,
+                                               ObAddr &selected_addr);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);
@@ -1054,6 +1084,7 @@ public:
     last_insert_id_(0) {}
 
   int merge_cursor(const ObImplicitCursorInfo &other);
+  int replace_cursor(const ObImplicitCursorInfo &other);
   TO_STRING_KV(K_(stmt_id),
                K_(affected_rows),
                K_(found_rows),
@@ -1223,7 +1254,9 @@ struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstra
     {
     }
     virtual int assign(const ObPreCalcExprConstraint &other, common::ObIAllocator &allocator);
-    virtual int check_is_match(const ObObjParam &obj_param, bool &is_match) const;
+    virtual int check_is_match(ObDatumObjParam &datum_param,
+                               ObExecContext &exec_ctx,
+                               bool &is_match) const;
     ObPreCalcExprFrameInfo pre_calc_expr_info_;
     PreCalcExprExpectResult expect_result_;
 };
@@ -1239,7 +1272,9 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
     }
     virtual int assign(const ObPreCalcExprConstraint &other,
                        common::ObIAllocator &allocator) override;
-    virtual int check_is_match(const ObObjParam &obj_param, bool &is_match) const override;
+    virtual int check_is_match(ObDatumObjParam &datum_param,
+                               ObExecContext &exec_ctx,
+                               bool &is_match) const override;
     uint8_t rowid_version_;
     ObFixedArray<ObObjType, common::ObIAllocator> rowid_type_array_;
 };

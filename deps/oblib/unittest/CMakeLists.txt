@@ -4,11 +4,13 @@ target_link_libraries(oblib_testbase INTERFACE -lgmock -lgtest)
 file(COPY run_tests.sh DESTINATION .)
 enable_testing()
 
+add_definitions(-DOB_UNITTEST)
+
 function(oblib_addtest mainfile)
   get_filename_component(testname ${mainfile} NAME_WE)
-  add_executable(${testname} ${ARGV})
+  add_executable(${testname} ${mainfile})
   add_test(${testname} ${testname})
-  target_link_libraries(${testname} PRIVATE oblib oblib_testbase -static-libgcc -static-libstdc++
+  target_link_libraries(${testname} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oblib oblib_testbase -static-libgcc -static-libstdc++ ${ARGN}
       ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 endfunction()
 

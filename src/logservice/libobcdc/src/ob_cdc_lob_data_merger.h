@@ -122,11 +122,19 @@ private:
       ObLobDataGetCtx &lob_data_get_ctx,
       ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
       const ObString &src_data,
-      ObString &format_data);
+      ObString &format_data,
+      bool &is_progress_done,
+      volatile bool &stop_flag);
   int handle_json_diff_ext_info_log_(
       ObIAllocator &allocator,
       const char *buf, uint64_t len, int64_t pos,
       ObString &format_data);
+  int handle_outrow_lob_locator_ext_info_log_(
+      ObIAllocator &allocator,
+      const char *buf, uint64_t len, int64_t pos,
+      ObLobDataGetCtx &lob_data_get_ctx,
+      ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
+      volatile bool &stop_flag);
 
   bool is_in_stop_status(volatile bool stop_flag) const { return stop_flag || LobDataMergerThread::is_stoped(); }
   // TODO

@@ -13,7 +13,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_bin.h"
-
 namespace oceanbase {
 namespace common {
 
@@ -178,11 +177,19 @@ ObWkbGeomInnerPoint::ObWkbGeomInnerPoint(const ObWkbGeomInnerPoint& p)
 bool ObWkbGeomInnerPoint::equals(const ObWkbGeomInnerPoint& p) const
 {
   bool bret = false;
-  if ((fabs(this->get<0>() - p.get<0>()) <= 1e-12) &&
-      (fabs(this->get<1>() - p.get<1>()) <= 1e-12)) {
+  if ((fabs(this->get<0>() - p.get<0>()) <= OB_GEO_TOLERANCE) &&
+      (fabs(this->get<1>() - p.get<1>()) <= OB_GEO_TOLERANCE)) {
     bret = true;
   }
   return bret;
+}
+
+bool ObWkbGeomInnerPoint::operator==(const ObWkbGeomInnerPoint& p) const {
+  return (fabs(x_ - p.get<0>()) <= OB_GEO_TOLERANCE) && (fabs(y_ - p.get<1>()) <= OB_GEO_TOLERANCE);
+}
+
+bool ObWkbGeomInnerPoint::operator!=(const ObWkbGeomInnerPoint& p) const {
+  return !((fabs(x_ - p.get<0>()) <= OB_GEO_TOLERANCE) && (fabs(y_ - p.get<1>()) <= OB_GEO_TOLERANCE));
 }
 
 // Cartesian linestring
@@ -203,7 +210,7 @@ ObWkbGeomLineString::size_type ObWkbGeomLineString::length() const
 
 // iter adaptor
 void ObWkbGeomLineString::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -230,7 +237,7 @@ ObWkbGeomLinearRing::size_type ObWkbGeomLinearRing::length(ObGeoWkbByteOrder bo 
 
 // iter adaptor
 void ObWkbGeomLinearRing::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -259,7 +266,7 @@ ObWkbGeomPolygonInnerRings::size_type ObWkbGeomPolygonInnerRings::length() const
 
 // iter adaptor
 void ObWkbGeomPolygonInnerRings::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray *&offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -328,7 +335,7 @@ ObWkbGeomMultiPoint::size_type ObWkbGeomMultiPoint::length() const
 
 // iter adaptor
 void ObWkbGeomMultiPoint::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -360,7 +367,7 @@ ObWkbGeomMultiLineString::size_type ObWkbGeomMultiLineString::length() const
 
 // iter adaptor
 void ObWkbGeomMultiLineString::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -384,7 +391,7 @@ ObWkbGeomMultiPolygon::size_type ObWkbGeomMultiPolygon::length() const
 
 // iter adaptor
 void ObWkbGeomMultiPolygon::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -408,7 +415,7 @@ ObWkbGeomCollection::size_type ObWkbGeomCollection::length() const
 
 // iter adaptor
 void ObWkbGeomCollection::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -595,6 +602,14 @@ ObWkbGeogInnerPoint& ObWkbGeogInnerPoint::operator=(const ObWkbGeogInnerPoint& p
   return *this;
 }
 
+bool ObWkbGeogInnerPoint::operator==(const ObWkbGeogInnerPoint& p) const {
+  return (fabs(x_ - p.get<0>()) <= OB_GEO_TOLERANCE) && (fabs(y_ - p.get<1>()) <= OB_GEO_TOLERANCE);
+}
+
+bool ObWkbGeogInnerPoint::operator!=(const ObWkbGeogInnerPoint& p) const {
+  return !((fabs(x_ - p.get<0>()) <= OB_GEO_TOLERANCE) && (fabs(y_ - p.get<1>()) <= OB_GEO_TOLERANCE));
+}
+
 // Geograph linestring
 uint32_t ObWkbGeogLineString::size() const
 {
@@ -613,7 +628,7 @@ ObWkbGeogLineString::size_type ObWkbGeogLineString::length() const
 
 // iter adaptor
 void ObWkbGeogLineString::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -640,7 +655,7 @@ ObWkbGeogLinearRing::size_type ObWkbGeogLinearRing::length(ObGeoWkbByteOrder bo 
 
 // iter adaptor
 void ObWkbGeogLinearRing::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -669,7 +684,7 @@ ObWkbGeogPolygonInnerRings::size_type ObWkbGeogPolygonInnerRings::length() const
 
 // iter adaptor
 void ObWkbGeogPolygonInnerRings::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -738,7 +753,7 @@ ObWkbGeogMultiPoint::size_type ObWkbGeogMultiPoint::length() const
 
 // iter adaptor
 void ObWkbGeogMultiPoint::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   UNUSED(last_addr);
   UNUSED(last_idx);
@@ -770,7 +785,7 @@ ObWkbGeogMultiLineString::size_type ObWkbGeogMultiLineString::length() const
 
 // iter adaptor
 void ObWkbGeogMultiLineString::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -793,7 +808,7 @@ ObWkbGeogMultiPolygon::size_type ObWkbGeogMultiPolygon::length() const
 
 // iter adaptor
 void ObWkbGeogMultiPolygon::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }
@@ -817,7 +832,7 @@ ObWkbGeogCollection::size_type ObWkbGeogCollection::length() const
 
 // iter adaptor
 void ObWkbGeogCollection::get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
-  ObWkbIterOffsetArray* offsets, pointer& data)
+  ObWkbIterOffsetArray*& offsets, pointer& data)
 {
   ObWkbUtils::get_sub_addr_common(*this, last_addr, last_idx, cur_idx, offsets, data);
 }

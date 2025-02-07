@@ -309,7 +309,7 @@ public:
   // @param [in] is_pretty  Whether from JSON_PRETTY function or not.
   // @param [in]  depth      The depth of json tree.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  virtual int print(ObJsonBuffer &j_buf, bool is_quoted,
+  virtual int print(ObJsonBuffer &j_buf, bool is_quoted, uint64_t reserve_len = 0,
                     bool is_pretty = false, uint64_t depth = 0) const;
   
   // calculate json hash value
@@ -330,7 +330,7 @@ public:
   // Get depth of current json document.
   //
   // @return uint32_t.
-  virtual uint32_t depth();
+  virtual uint32_t depth() const = 0;
 
   // Returns a string in json path form from the root node to the current location.
   //
@@ -391,7 +391,9 @@ public:
   int to_double(double &value) const;
   int to_number(ObIAllocator *allocator, number::ObNumber &number) const;
   int to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
+  int to_mdatetime(ObMySQLDateTime &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
   int to_date(int32_t &value) const;
+  int to_mdate(ObMySQLDate &value, const ObDateSqlMode date_sql_mode) const;
   int to_otimestamp(common::ObOTimestampData &value, ObTimeConvertCtx *cvrt_ctx = nullptr) const;
   int to_time(int64_t &value) const;
   int to_bit(uint64_t &value) const;
@@ -900,6 +902,8 @@ private:
   int trans_to_boolean(ObIAllocator* allocator, ObString num_str, ObIJsonBase* &origin) const;
   int trans_to_date_timestamp(ObIAllocator* allocator, ObString num_str,
                               ObIJsonBase* &origin, bool is_date) const;
+  int trans_to_mdate(ObIAllocator* allocator, ObString num_str,
+                              ObIJsonBase* &origin) const;
   int trans_json_node (ObIAllocator* allocator, ObIJsonBase* &left, ObIJsonBase* &right) const;
   // Used to compare with multiple right_arg, when left_arg is the results found by the sub_path
   //
@@ -1072,12 +1076,14 @@ public:
   virtual ~ObJsonBaseFactory() {};
   static int get_json_base(ObIAllocator *allocator, const ObString &buf,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out, uint32_t parse_flag = 0);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0,
+                           uint32_t max_depth_config = 100);
   static int get_json_tree(ObIAllocator *allocator, const ObString &str,
                            ObJsonInType in_type, ObJsonNode *&out, uint32_t parse_flag = 0);
   static int get_json_base(ObIAllocator *allocator, const char *ptr, uint64_t length,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out, uint32_t parse_flag = 0);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0,
+                           uint32_t max_depth_config = 100);
   static int transform(ObIAllocator *allocator, ObIJsonBase *src,
                        ObJsonInType expect_type, ObIJsonBase *&out);
 private:

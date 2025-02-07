@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "gtest/gtest.h"
+#include <thread>
 #define private public
 #define protected public
 
@@ -108,12 +109,11 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   ASSERT_EQ(1, phy_block.reuse_version_);
   ASSERT_EQ(1, phy_block.gc_reuse_version_);
   ASSERT_EQ(0, phy_block.valid_len_);
-  ASSERT_EQ(false, phy_block.is_internal_);
   ASSERT_EQ(false, phy_block.is_sealed_);
   ASSERT_EQ(true, phy_block.is_free_);
   ASSERT_EQ(0, phy_block.alloc_time_us_);
 
-  ASSERT_EQ(OB_SUCCESS, phy_block.set_first_used(false/*is_internal*/));
+  ASSERT_EQ(OB_SUCCESS, phy_block.set_first_used(ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   ASSERT_EQ(2, phy_block.get_next_reuse_version());
   ASSERT_EQ(false, phy_block.can_reuse());
   phy_block.set_sealed(100/*valid_len*/);
@@ -136,9 +136,9 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   ASSERT_EQ(true, reuse_info.reach_gc_reuse_version());
 
   phy_block.reuse_version_ = 5;
-  phy_block.update_gc_reuse_version();
+  phy_block.update_gc_reuse_version(phy_block.reuse_version_);
   ASSERT_EQ(5, phy_block.gc_reuse_version_);
-  phy_block.update_valid_len(100);
+  phy_block.set_valid_len(100);
   ASSERT_EQ(100, phy_block.get_valid_len());
   phy_block.valid_len_ -= 50;
   ASSERT_EQ(50, phy_block.get_valid_len());
@@ -146,7 +146,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block)
   phy_block.inc_ref_count();
   ASSERT_EQ(2, phy_block.get_ref_count());
 
-  ASSERT_NE(OB_SUCCESS, phy_block.set_first_used(false/*is_internal*/));
+  ASSERT_NE(OB_SUCCESS, phy_block.set_first_used(ObSSPhyBlockType::SS_CACHE_DATA_BLK));
   bool succ_free = false;
   phy_block.try_free(succ_free);
   ASSERT_EQ(false, succ_free);
@@ -192,7 +192,7 @@ TEST_F(TestSSMicroCacheCommonMeta, physical_block_common_header)
   ASSERT_EQ(ObSSPhyBlockCommonHeader::get_serialize_size(), common_header.header_size_);
   common_header.payload_size_ = 201;
   common_header.payload_checksum_ = 505;
-  common_header.set_block_type(ObSSPhyBlkType::SS_CACHE_DATA_BLK);
+  common_header.set_block_type(ObSSPhyBlockType::SS_CACHE_DATA_BLK);
   ASSERT_EQ(true, common_header.is_valid());
 
   const int64_t buf_size = sizeof(ObSSPhyBlockCommonHeader);
@@ -394,7 +394,7 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   // serialize & deserialize
   const int64_t buf_len = 1024;
   char buf[buf_len];
-  MEMSET(buf, buf_len, '\0');
+  MEMSET(buf, '\0', buf_len);
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, super_block.serialize(buf, buf_len, pos));
   ASSERT_NE(0, pos);
@@ -649,14 +649,21 @@ TEST_F(TestSSMicroCacheCommonMeta, mem_block_base_info)
   ASSERT_EQ(index_buf, mem_block.index_buf_);
   ASSERT_EQ(index_buf_size, mem_block.index_buf_size_);
 
-  mem_block.update_valid_val(0);
-  mem_block.update_valid_val(100);
+  mem_block.add_valid_micro_block(50);
+  mem_block.inc_handled_count();
+  mem_block.add_valid_micro_block(100);
+  mem_block.inc_handled_count();
   mem_block.micro_count_ = 3;
-  ASSERT_EQ(100, mem_block.get_valid_length());
+  ASSERT_EQ(150, mem_block.valid_val_);
+  ASSERT_EQ(2, mem_block.valid_count_);
+  ASSERT_EQ(2, mem_block.handled_count_);
   ASSERT_EQ(false, mem_block.is_completed());
-  mem_block.update_valid_val(50);
+  mem_block.add_valid_micro_block(50);
+  mem_block.inc_handled_count();
+  ASSERT_EQ(3, mem_block.valid_count_);
+  ASSERT_EQ(3, mem_block.handled_count_);
   ASSERT_EQ(true, mem_block.is_completed());
-  ASSERT_EQ(150, mem_block.get_valid_length());
+  ASSERT_EQ(200, mem_block.valid_val_);
 
   int64_t cur_reuse_version = mem_block.reuse_version_;
   ASSERT_EQ(false, mem_block.is_reuse_version_match(cur_reuse_version + 1));

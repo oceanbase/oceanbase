@@ -241,8 +241,61 @@ struct VectorCasterUtil
 };
 } // end sql
 } // end oceanbase
+
+// 出现错误时,处理如下：
+// 如果只设置了WARN_ON_FAIL，会覆盖错误码
+// 如果设置了WARN_ON_FAIL和ZERO_ON_WARN,会覆盖错误码，且结果被置为0
+// 如果设置了WARN_ON_FAIL和NULL_ON_WARN,会覆盖错误码，且结果被置为null
+#define SET_RES_OBJ(cast_mode, func_val, zero_value, value, idx)       \
+  do {                                                            \
+    if (OB_SUCC(ret)) {                                           \
+      if (OB_SUCCESS == warning                                   \
+          || OB_ERR_TRUNCATED_WRONG_VALUE == warning              \
+          || OB_DATA_OUT_OF_RANGE == warning                      \
+          || OB_ERR_DATA_TRUNCATED == warning                     \
+          || OB_ERR_DOUBLE_TRUNCATED == warning                   \
+          || OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == warning) { \
+        res_vec_->set_##func_val(idx, value);                      \
+      } else if (CM_IS_ZERO_ON_WARN(cast_mode)) {                 \
+        res_vec_->set_##func_val(idx, zero_value);                 \
+      } else {                                                    \
+        res_vec_->set_null(idx);                                   \
+      }                                                           \
+    } else {                                                      \
+      res_vec_->set_##func_val(idx, value);                        \
+    }                                                             \
+  } while (0)
+#define SET_RES_INT(idx, value)         \
+  SET_RES_OBJ(expr.extra_, int, 0, value, idx)
+#define SET_RES_UINT(idx, value)        \
+  SET_RES_OBJ(expr.extra_, uint,0, value, idx)
+
+#define EVAL_COMMON_ARG()                                                                   \
+  int ret = OB_SUCCESS;                                                                     \
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);                                  \
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));                  \
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));                            \
+  ObObjType in_type = expr.args_[0]->datum_meta_.type_;                                     \
+  ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;                         \
+  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;                                     \
+  ObPrecision in_prec = expr.args_[0]->datum_meta_.precision_;                              \
+  ObObjType out_type = expr.datum_meta_.type_;                                              \
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;                                  \
+  ObScale out_scale = expr.datum_meta_.scale_;                                              \
+  ObPrecision out_prec = expr.datum_meta_.precision_;                                       \
+  if (eval_flags.accumulate_bit_cnt(bound) == bound.range_size()) {                         \
+  } else
+
+#include "sql/engine/expr/vector_cast/cast_impl_helper.ipp"
 #include "sql/engine/expr/vector_cast/decimal_int.ipp"
+#include "sql/engine/expr/vector_cast/string_float.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_decimalint.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_int.ipp"
 
 #undef DEF_VECTOR_IMPLICIT_CAST_FUNC
 #undef CAST_FAIL
+#undef EVAL_COMMON_ARG
+#undef SET_RES_OBJ
+#undef SET_RES_INT
+#undef SET_RES_UINT
 #endif // OCEANBASE_SQL_ENG_EXPR_VECTOR_CAST_H_

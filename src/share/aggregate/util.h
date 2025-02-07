@@ -122,6 +122,64 @@ struct add_param_batch<T, false>
 };
 
 template <typename T, typename = std::void_t<>>
+struct defined_add_row : std::false_type
+{};
+
+template <typename T>
+struct defined_add_row<T, std::void_t<decltype(&T::template add_row<ObVectorBase>)>>
+  : std::true_type
+{};
+
+template <typename T, bool defined = defined_add_row<T>::value>
+struct AddRow
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return v.template add_row(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct AddRow<T, false>
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
+struct defined_add_nullable_row : std::false_type
+{};
+
+template <typename T>
+struct defined_add_nullable_row<
+  T, std::void_t<decltype(&T::template add_nullable_row<ObVectorBase>)>> : std::true_type
+{};
+
+template <typename T, bool defined = defined_add_nullable_row<T>::value>
+struct AddNullableRow
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return v.template add_nullable_row(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct AddNullableRow<T, false>
+{
+  template <typename... Args>
+  OB_INLINE static int do_op(T &v, Args &&... args)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+template <typename T, typename = std::void_t<>>
 struct defined_removal_func: std::false_type {};
 
 template <typename T>
@@ -594,7 +652,7 @@ struct AggBitVector: sql::ObTinyBitVector
 
 using NotNullBitVector = AggBitVector;
 
-inline bool supported_aggregate_function(const ObItemType agg_op)
+inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_rollup = false)
 {
   switch (agg_op) {
   case T_FUN_COUNT:
@@ -609,6 +667,13 @@ inline bool supported_aggregate_function(const ObItemType agg_op)
   case T_FUN_SYS_BIT_AND:
   case T_FUN_SYS_BIT_XOR: {
     return true;
+  }
+  case T_FUN_GROUPING:
+  case T_FUN_GROUPING_ID: {
+    return use_hash_rollup;
+  }
+  case T_FUN_SYS_RB_BUILD_AGG: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
   }
   default:
     return false;
@@ -652,7 +717,9 @@ inline bool agg_res_not_null(const ObItemType agg_op)
   VEC_TC_DEC_INT64,           \
   VEC_TC_DEC_INT128,          \
   VEC_TC_DEC_INT256,          \
-  VEC_TC_DEC_INT512
+  VEC_TC_DEC_INT512,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE           \
 
 #define AGG_VEC_TC_LIST       \
   VEC_TC_NULL,                \
@@ -687,6 +754,8 @@ inline bool agg_res_not_null(const ObItemType agg_op)
   VEC_TC_DEC_INT256,          \
   VEC_TC_DEC_INT512,          \
   VEC_TC_COLLECTION,          \
+  VEC_TC_MYSQL_DATETIME,      \
+  VEC_TC_MYSQL_DATE,          \
   VEC_TC_ROARINGBITMAP
 
 } // end namespace aggregate

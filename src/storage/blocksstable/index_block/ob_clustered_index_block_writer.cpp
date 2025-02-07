@@ -70,7 +70,8 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
                                       const blocksstable::ObMacroSeqParam &macro_seq_param,
                                       const share::ObPreWarmerParam &pre_warm_param,
                                       ObIndexTreeRootCtx *root_ctx,
-                                      common::ObIAllocator &task_allocator)
+                                      common::ObIAllocator &task_allocator,
+                                      ObIMacroBlockFlushCallback *ddl_callback)
 {
   int ret = OB_SUCCESS;
   // Shallow copy desc (let micro block size to 2MB and builder pointer to null).
@@ -98,16 +99,18 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
   ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
   if (OB_SUCC(ret)) {
     abort_unless(macro_writer_ == nullptr);
-    if (OB_ISNULL(macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
+    if (OB_ISNULL(macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_, true /* use double buffer */))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate and construct macro writer in clustered index block writer", K(ret));
-    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
-                                                            leaf_block_desc, object_cleaner))) {
+    } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(leaf_block_desc,
+                                                                                       object_cleaner))) {
       LOG_WARN("fail to get cleaner from data store desc", K(ret), K(leaf_block_desc), KP(object_cleaner));
-    } else if (OB_FAIL(macro_writer_->open(
-                   clustered_index_store_desc_, 0 /* parallel_idx */,
-                   macro_seq_param, pre_warm_param, *object_cleaner,
-                   nullptr /* callback */))) {
+    } else if (OB_FAIL(macro_writer_->open(clustered_index_store_desc_,
+                                           0 /* parallel_idx */,
+                                           macro_seq_param,
+                                           pre_warm_param,
+                                           *object_cleaner,
+                                           ddl_callback))) {
       LOG_WARN("fail to open macro writer in clustered index block writer",
                K(ret), K(leaf_block_desc), KPC(object_cleaner));
     }
@@ -290,7 +293,6 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
     read_info.size_ = micro_size;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.mtl_tenant_id_ = MTL_ID();
@@ -309,6 +311,7 @@ int ObClusteredIndexBlockWriter::rewrite_and_append_clustered_index_micro_block(
     LOG_DEBUG("succeed to make clustered index micro block in rebuilder",
               K(ret), K(macro_meta));
   }
+  object_handle.reset();
   // Recycle buffer.
   if (OB_NOT_NULL(micro_buf)) {
     macro_block_io_allocator_.free(micro_buf);
@@ -458,13 +461,23 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
       } else if (OB_FAIL(idx_row_parser.init(rowkey_column_count, row))) {
         LOG_WARN("fail to init idx row parser", K(ret), K(rowkey_column_count));
       } else {
-        // TODO(baichangmin): data_store_desc or other ObDataStoreDesc?
-        ObIndexBlockRowDesc clustered_row_desc(*data_store_desc_);
+        // Actually, we only need `row_store_type` and `static_desc` from data store desc.
+        ObStaticDataStoreDesc rewrite_static_desc;
+        ObDataStoreDesc rewrite_data_store_desc;
+        if (OB_FAIL(rewrite_static_desc.assign(*(data_store_desc_->static_desc_)))) {
+          LOG_WARN("fail to assign static desc for rewrite desc", K(ret), KPC(data_store_desc_->static_desc_));
+        } else if (OB_FAIL(rewrite_data_store_desc.shallow_copy(*data_store_desc_))) {
+          LOG_WARN("fail to shallow copy for rewrite desc", K(ret), KPC(data_store_desc_));
+        } else {
+          rewrite_data_store_desc.static_desc_ = &rewrite_static_desc;
+        }
+        ObIndexBlockRowDesc clustered_row_desc(rewrite_data_store_desc);
 
         // The following code needs to consider compatibility.
         int64_t agg_row_size = 0;
         const ObIndexBlockRowHeader *idx_row_header = nullptr;
-        if (OB_FAIL(idx_row_parser.get_header(idx_row_header))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(idx_row_parser.get_header(idx_row_header))) {
           LOG_WARN("fail to get idx row header", K(ret));
         } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
           clustered_row_desc.serialized_agg_row_buf_ = nullptr;
@@ -477,6 +490,20 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
         } else if (OB_FAIL(clustered_row_desc.row_key_.assign(row.storage_datums_, rowkey_column_count))) {
           LOG_WARN("fail to assign rowkey to row_desc", K(ret), K(row), K(rowkey_column_count));
         } else {
+          // The following items need to remain consistent with meta_to_row_desc.
+          rewrite_data_store_desc.row_store_type_ = idx_row_header->get_row_store_type();
+          rewrite_data_store_desc.static_desc_->compressor_type_ = idx_row_header->get_compressor_type();
+          rewrite_data_store_desc.static_desc_->master_key_id_ = idx_row_header->get_master_key_id();
+          rewrite_data_store_desc.static_desc_->encrypt_id_ = idx_row_header->get_encrypt_id();
+          MEMCPY(rewrite_data_store_desc.static_desc_->encrypt_key_,
+                 idx_row_header->get_encrypt_key(),
+                 sizeof(rewrite_data_store_desc.static_desc_->encrypt_key_));
+          rewrite_data_store_desc.static_desc_->schema_version_ = idx_row_header->get_schema_version();
+          if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+            // Snapshot version should use data's value.
+            rewrite_data_store_desc.static_desc_->end_scn_.convert_for_tx(idx_row_parser.get_snapshot_version());
+          }
+
           clustered_row_desc.is_serialized_agg_row_ = true;
           clustered_row_desc.row_offset_ = idx_row_parser.get_row_offset();
           clustered_row_desc.is_secondary_meta_ = false;
@@ -529,17 +556,31 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
   const ObMicroBlockHeader *micro_block_header =
       reinterpret_cast<const ObMicroBlockHeader *>(micro_block_data.get_buf());
   int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
+  const ObStorageDatumUtils *datum_utils;
   ObIndexBlockRowScanner index_block_row_scanner;
   // Init and open index block row scanner for reused clustered micro block
   // (maybe transformed in micro block cache).
   common::ObQueryFlag mock_query_flag;
   mock_query_flag.multi_version_minor_merge_ = compaction::is_mini_merge(clustered_index_store_desc_.get_merge_type());
-  if (OB_FAIL(index_block_row_scanner.init(
-          clustered_index_store_desc_.get_datum_utils(),
-          temp_allocator,
-          mock_query_flag,
-          0 /* nested offset */,
-          clustered_index_store_desc_.is_cg()))) {
+  if (clustered_index_store_desc_.is_cg()) {  // Fetch datum utils for index row scanner
+    const ObITableReadInfo *index_read_info;
+    if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
+      LOG_WARN("fail to get index read info for cg sstable", K(ret), K(clustered_index_store_desc_));
+    } else if (OB_UNLIKELY(!index_read_info->get_datum_utils().is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid datum utails for cg sstable", K(ret), KPC(index_read_info));
+    } else {
+      datum_utils = &index_read_info->get_datum_utils();
+    }
+  } else {
+    datum_utils = &(clustered_index_store_desc_.get_datum_utils());
+  }
+
+  if (FAILEDx(index_block_row_scanner.init(*datum_utils,
+                                           temp_allocator,
+                                           mock_query_flag,
+                                           0 /* nested offset */,
+                                           clustered_index_store_desc_.is_cg()))) {
     LOG_WARN("fail to init index block row scanner", K(ret),
              K(clustered_index_store_desc_.get_datum_utils()),
              K(clustered_index_store_desc_.is_cg()));
@@ -555,14 +596,25 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
   }
   // Iterator index info and transfer it to clustered index row.
   ObMicroIndexInfo index_info;
-  ObArenaAllocator row_key_allocator("MakeClustRK", MTL_ID());
+  ObArenaAllocator row_key_allocator(common::ObMemAttr(MTL_ID(), "MakeClustRK"));
   while (OB_SUCC(ret)) {
     row_key_allocator.reuse();
-    ObIndexBlockRowDesc clustered_row_desc(*data_store_desc_);
-    if (OB_FAIL(index_block_row_scanner.get_next(
-            index_info,
-            false /* is_multi_check */,
-            false /* is_sorted_multi_get */))) {
+    // Actually, we only need `row_store_type` and `static_desc` from data store desc.
+    ObStaticDataStoreDesc reuse_static_desc;
+    ObDataStoreDesc reuse_data_store_desc;
+    if (OB_FAIL(reuse_static_desc.assign(*(data_store_desc_->static_desc_)))) {
+      LOG_WARN("fail to assign static desc for rewrite desc", K(ret), KPC(data_store_desc_->static_desc_));
+    } else if (OB_FAIL(reuse_data_store_desc.shallow_copy(*data_store_desc_))) {
+      LOG_WARN("fail to shallow copy for rewrite desc", K(ret), KPC(data_store_desc_));
+    } else {
+      reuse_data_store_desc.static_desc_ = &reuse_static_desc;
+    }
+    ObIndexBlockRowDesc clustered_row_desc(reuse_data_store_desc);
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(index_block_row_scanner.get_next(index_info,
+                                                        false /* is_multi_check */,
+                                                        false /* is_sorted_multi_get */))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         break;
@@ -578,6 +630,20 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
         clustered_row_desc.serialized_agg_row_buf_ = nullptr;
       } else {
         clustered_row_desc.serialized_agg_row_buf_ = index_info.agg_row_buf_;
+      }
+
+      // The following items need to remain consistent with meta_to_row_desc.
+      reuse_data_store_desc.row_store_type_ = idx_row_header->get_row_store_type();
+      reuse_data_store_desc.static_desc_->compressor_type_ = idx_row_header->get_compressor_type();
+      reuse_data_store_desc.static_desc_->master_key_id_ = idx_row_header->get_master_key_id();
+      reuse_data_store_desc.static_desc_->encrypt_id_ = idx_row_header->get_encrypt_id();
+      MEMCPY(reuse_data_store_desc.static_desc_->encrypt_key_,
+             idx_row_header->get_encrypt_key(),
+             sizeof(reuse_data_store_desc.static_desc_->encrypt_key_));
+      reuse_data_store_desc.static_desc_->schema_version_ = idx_row_header->get_schema_version();
+      if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()) {
+        // Snapshot version should use data's value.
+        reuse_data_store_desc.static_desc_->end_scn_.convert_for_tx(index_info.minor_meta_info_->snapshot_version_);
       }
 
       // Reuse, no need to change macro_id.

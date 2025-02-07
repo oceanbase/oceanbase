@@ -36,6 +36,7 @@
 #include "logservice/common_util/ob_log_ls_define.h"        // logservice::TenantLSID
 #include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h" // IObLogErrHandler
+#include "logservice/cdcservice/ob_cdc_raw_log_req.h"
 
 namespace oceanbase
 {
@@ -110,7 +111,9 @@ public:
   int get_next_group_entry(
       palf::LogGroupEntry &group_entry,
       palf::LSN &lsn,
-      const char *&buf);
+      const char *&buf,
+      const share::SCN replayable_point,
+      const obrpc::ObCdcFetchRawSource data_end_source);
   int get_next_remote_group_entry(
       palf::LogGroupEntry &group_entry,
       palf::LSN &lsn,
@@ -337,7 +340,7 @@ public:
     int64_t   log_touch_tstamp_;    // Log progress last update time
 
     // Lock: Keeping read and write operations atomic
-     mutable common::ObByteLock  lock_;
+    mutable common::ObByteLock  lock_;
 
     LSProgress() { reset(); }
     ~LSProgress() { reset(); }
@@ -476,7 +479,7 @@ public:
   }
 
 public:
-  TO_STRING_KV("type", "FETCH_TASK",
+  TO_STRING_KV_WITH_HELPER("type", "FETCH_TASK",
       "stype", print_fetch_stream_type(stype_),
       K_(state),
       "state_str", print_state(state_),
@@ -493,7 +496,7 @@ public:
       K_(fetch_info),
       K_(svr_list_need_update),
       "start_log_id_locate_req",
-      start_lsn_locate_req_.is_state_idle() ? "IDLE" : to_cstring(start_lsn_locate_req_),
+      start_lsn_locate_req_.is_state_idle() ? "IDLE" : helper.convert(start_lsn_locate_req_),
       KP_(next),
       KP_(prev));
 

@@ -26,20 +26,21 @@ using namespace share;
 using namespace common;
 
 ObDDLIncStartClogCb::ObDDLIncStartClogCb()
-  : is_inited_(false), log_basic_(), scn_(SCN::min_scn())
+  : is_inited_(false), ls_id_(), log_basic_(), scn_(SCN::min_scn())
 {
 }
 
-int ObDDLIncStartClogCb::init(const ObDDLIncLogBasic& log_basic)
+int ObDDLIncStartClogCb::init(const ObLSID &ls_id, const ObDDLIncLogBasic &log_basic)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!log_basic.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !log_basic.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(log_basic));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(log_basic));
   } else {
+    ls_id_ = ls_id;
     log_basic_ = log_basic;
     is_inited_ = true;
   }
@@ -54,8 +55,8 @@ int ObDDLIncStartClogCb::on_success()
   scn_ = __get_scn();
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
+  FLOG_INFO("write ddl inc start log success", K(ls_id_), K(scn_), K(log_basic_));
   try_release();
-
   return OB_SUCCESS;
 }
 
@@ -184,7 +185,7 @@ ObDDLIncCommitClogCb::ObDDLIncCommitClogCb()
 {
 }
 
-int ObDDLIncCommitClogCb::init(const share::ObLSID &ls_id, const ObDDLIncLogBasic &log_basic)
+int ObDDLIncCommitClogCb::init(const ObLSID &ls_id, const ObDDLIncLogBasic &log_basic)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -215,14 +216,19 @@ int ObDDLIncCommitClogCb::on_success()
     LOG_ERROR("ls should not be null", K(ret), K(log_basic_.get_tablet_id()));
   } else {
     const bool is_sync = false;
-    (void)ls->tablet_freeze(log_basic_.get_tablet_id(), is_sync);
+    (void)ls->tablet_freeze(log_basic_.get_tablet_id(),
+                            is_sync,
+                            0, /*timeout, useless for async one*/
+                            false, /*need_rewrite_meta*/
+                            ObFreezeSourceFlag::DIRECT_INC_START);
     if (log_basic_.get_lob_meta_tablet_id().is_valid()) {
-      (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(), is_sync);
+      (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(),
+                              is_sync,
+                              0, /*timeout, useless for async one*/
+                              false, /*need_rewrite_meta*/
+                              ObFreezeSourceFlag::DIRECT_INC_START);
     }
-    FLOG_INFO("Commit Async Tablet Freeze Task by DDL Commit Log",
-              K(ls_id_),
-              K(log_basic_.get_tablet_id()),
-              K(log_basic_.get_lob_meta_tablet_id()));
+    FLOG_INFO("write ddl inc commit log success", K(ls_id_), K(scn_), K(log_basic_));
   }
 
   status_.set_ret_code(ret);

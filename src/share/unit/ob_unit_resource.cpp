@@ -290,7 +290,9 @@ int ObUnitResource::init_and_check_mem_(const ObUnitResource &user_spec)
   } else if (user_spec.memory_size() < unit_min_memory) {
     ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
     LOG_WARN("memory_size is below limit", KR(ret), K(user_spec), K(unit_min_memory));
-    LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MEMORY_SIZE", to_cstring(unit_min_memory));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MEMORY_SIZE",
+        helper.convert(unit_min_memory));
   } else {
     // memory_size valid
     memory_size_ = user_spec.memory_size();
@@ -315,8 +317,9 @@ int ObUnitResource::init_and_check_log_disk_(const ObUnitResource &user_spec)
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("log_disk_size is below limit", KR(ret), K(user_spec),
           K(unit_min_log_disk_size));
+      ObCStringHelper helper;
       LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "LOG_DISK_SIZE",
-          to_cstring(unit_min_log_disk_size));
+          helper.convert(unit_min_log_disk_size));
     } else {
       // log_disk_size valid
       log_disk_size_ = user_spec.log_disk_size();
@@ -353,8 +356,9 @@ int ObUnitResource::init_and_check_data_disk_(const ObUnitResource &user_spec)
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
             K(unit_min_data_disk_size));
+        ObCStringHelper helper;
         LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "DATA_DISK_SIZE",
-            to_cstring(unit_min_data_disk_size));
+            helper.convert(unit_min_data_disk_size));
       } else {
         data_disk_size_ = user_spec.data_disk_size();
       }
@@ -414,11 +418,15 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
       if (user_spec.is_min_iops_valid()) {
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("min_iops is below limit", KR(ret), K(min_iops_), K(max_iops_), K(user_spec), K(unit_min_iops));
-        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MIN_IOPS", to_cstring(unit_min_iops));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MIN_IOPS",
+            helper.convert(unit_min_iops));
       } else {
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("max_iops is below limit", KR(ret), K(min_iops_), K(max_iops_), K(user_spec), K(unit_min_iops));
-        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_IOPS", to_cstring(unit_min_iops));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_IOPS",
+            helper.convert(unit_min_iops));
       }
     } else {
       // min_iops_ and max_iops_ are all valid
@@ -430,8 +438,8 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
         // user specified
         iops_weight_ = user_spec.iops_weight();
       } else {
-        // not specified, init to 0
-        iops_weight_ = DEFAULT_IOPS_WEIGHT;
+        // not specified, init to min_cpu
+        iops_weight_ = get_default_iops_weight(min_cpu_);
       }
     }
   }
@@ -522,14 +530,15 @@ int ObUnitResource::init_and_check_net_bandwidth_(const ObUnitResource &user_spe
       if (user_spec.max_net_bandwidth_ < unit_min_net_bandwidth) {
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("max_net_bandwidth is below limit", KR(ret), K(user_spec), K(unit_min_net_bandwidth));
-        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", to_cstring(unit_min_net_bandwidth));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", helper.convert(unit_min_net_bandwidth));
       } else {
         max_net_bandwidth_ = user_spec.max_net_bandwidth();
 
         // if net_bandwidth_weight is not specified, set as DEFAULT value
         if (! user_spec.is_net_bandwidth_weight_valid()) {
           // not specified, init to DEFAULT value
-          net_bandwidth_weight_ = DEFAULT_NET_BANDWIDTH_WEIGHT;
+          net_bandwidth_weight_ = get_default_iops_weight(min_cpu_);
         } else {
           // user specified
           net_bandwidth_weight_ = user_spec.net_bandwidth_weight();
@@ -656,7 +665,9 @@ int ObUnitResource::update_and_check_mem_(const ObUnitResource &user_spec)
     if (user_spec.memory_size() < unit_min_memory) {
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("memory_size is below limit", KR(ret), K(user_spec), K(unit_min_memory));
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MEMORY_SIZE", to_cstring(unit_min_memory));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MEMORY_SIZE",
+          helper.convert(unit_min_memory));
     } else {
       // memory_size valid
       memory_size_ = user_spec.memory_size();
@@ -682,7 +693,9 @@ int ObUnitResource::update_and_check_log_disk_(const ObUnitResource &user_spec)
     } else if (user_spec.log_disk_size() < unit_min_log_disk_size) {
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("log_disk_size is below limit", KR(ret), K(user_spec), K(unit_min_log_disk_size));
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "LOG_DISK_SIZE", to_cstring(unit_min_log_disk_size));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "LOG_DISK_SIZE",
+          helper.convert(unit_min_log_disk_size));
     } else {
       log_disk_size_ = user_spec.log_disk_size();
     }
@@ -714,8 +727,9 @@ int ObUnitResource::update_and_check_data_disk_(const ObUnitResource &user_spec)
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("data_disk_size is below limit", KR(ret), K(user_spec),
           K(unit_min_data_disk_size));
+      ObCStringHelper helper;
       LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "DATA_DISK_SIZE",
-          to_cstring(unit_min_data_disk_size));
+          helper.convert(unit_min_data_disk_size));
     } else {
       data_disk_size_ = user_spec.data_disk_size();
     }
@@ -767,7 +781,8 @@ int ObUnitResource::update_and_check_iops_(const ObUnitResource &user_spec)
       // min_iops must be specified, so report error on min_iops
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("min_iops is below limit", KR(ret), K(min_iops_), K(max_iops_), K(user_spec), K(unit_min_iops));
-      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MIN_IOPS", to_cstring(unit_min_iops));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MIN_IOPS", helper.convert(unit_min_iops));
     } else {
       // all valid
       min_iops_ = new_min_iops;
@@ -802,7 +817,8 @@ int ObUnitResource::update_and_check_net_bandwidth_(const ObUnitResource &user_s
       if (user_spec.max_net_bandwidth_ < unit_min_net_bandwidth) {
         ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
         LOG_WARN("max_net_bandwidth is below limit", KR(ret), K(user_spec), K(unit_min_net_bandwidth));
-        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", to_cstring(unit_min_net_bandwidth));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "MAX_NET_BANDWIDTH", helper.convert(unit_min_net_bandwidth));
       } else {
         // user specified
         max_net_bandwidth_ = user_spec.max_net_bandwidth();

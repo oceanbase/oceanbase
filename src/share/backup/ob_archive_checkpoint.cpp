@@ -18,7 +18,8 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-
+#include "share/ob_ddl_common.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;
@@ -273,17 +274,34 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
 
   if (OB_FAIL(ret)) {
   } else if (old_round_info.state_.is_beginning()) {
-    if (counter.not_start_cnt_ > 0) {
+    bool is_no_logging = false;
+    if (OB_FAIL(ObDDLUtil::get_no_logging_param(old_round_info.key_.tenant_id_, is_no_logging))) {
+      LOG_WARN("failed to check no logging", K(ret), K(old_round_info.key_.tenant_id_));
+    } else if (counter.not_start_cnt_ > 0) {
       need_checkpoint = false;
-    } else if (counter.interrupted_cnt_ > 0) {
+    } else if (counter.interrupted_cnt_ > 0 || is_no_logging) {
       ObSqlString comment;
       new_round_info.state_.set_interrupted();
-      if (OB_FAIL(comment.append_fmt("log stream %ld interrupted.", counter.interrupted_ls_id_.id()))) {
-        LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
+      if (is_no_logging) {
+        if (OB_FAIL(comment.append_fmt("tenant %lu no logging is open", old_round_info.key_.tenant_id_))) {
+          LOG_WARN("failed to append interrupted log stream comment", K(ret), K(is_no_logging));
+        }
+        ROOTSERVICE_EVENT_ADD("log_archive", "change_status",
+                              "tenant_id", old_round_info.key_.tenant_id_,
+                              "dest_no", new_round_info.key_.dest_no_,
+                              "old_status", old_round_info.state_.to_status_str(),
+                              "new_status", new_round_info.state_.to_status_str());
+      } else{
+        if (OB_FAIL(comment.append_fmt("log stream %ld interrupted", counter.interrupted_ls_id_.id()))) {
+          LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
         LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(comment));
       }
-      LOG_INFO("switch to INTERRUPTED state", K(ret), K(old_round_info), K(counter), K(new_round_info));
+      LOG_INFO("switch to INTERRUPTED state", K(ret), K(old_round_info), K(counter), K(new_round_info), K(is_no_logging));
     } else if (next_checkpoint_scn <= old_round_info.start_scn_) {
       need_checkpoint = false;
     } else if (OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) {
@@ -295,18 +313,34 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
       LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
     }
   } else if (old_round_info.state_.is_doing()) {
+    bool is_no_logging = false;
     if (counter.not_start_cnt_ > 0) {
       need_checkpoint = false;
-    } else if (OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) {
-    } else if (counter.interrupted_cnt_ > 0) {
+    } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(old_round_info.key_.tenant_id_, is_no_logging))) {
+      LOG_WARN("failed to check no logging", K(ret), K(old_round_info.key_.tenant_id_));
+    } else if (!is_no_logging && OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) { // don't set checkpoint_scn when no logging is true
+    } else if (counter.interrupted_cnt_ > 0 || is_no_logging) {
       ObSqlString comment;
       new_round_info.state_.set_interrupted();
-      if (OB_FAIL(comment.append_fmt("log stream %ld interrupted.", counter.interrupted_ls_id_.id()))) {
-        LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
-      } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
-        LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(comment));
+      if (is_no_logging) {
+        if (OB_FAIL(comment.append_fmt("tenant %lu no logging is open", old_round_info.key_.tenant_id_))) {
+          LOG_WARN("failed to append interrupted log stream comment", K(ret), K(is_no_logging));
+        }
+        ROOTSERVICE_EVENT_ADD("log_archive", "change_status",
+                              "tenant_id", old_round_info.key_.tenant_id_,
+                              "dest_no", new_round_info.key_.dest_no_,
+                              "old_status", old_round_info.state_.to_status_str(),
+                              "new_status", new_round_info.state_.to_status_str());
+      } else {
+        if (OB_FAIL(comment.append_fmt("log stream %ld interrupted", counter.interrupted_ls_id_.id()))) {
+          LOG_WARN("failed to append interrupted log stream comment", K(ret), K(new_round_info), K(counter));
+        }
       }
-      LOG_INFO("switch to INTERRUPTED state", K(ret), K(old_round_info), K(counter), K(new_round_info));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
+        LOG_WARN("failed to assign comment", K(ret), K(new_round_info), K(counter), K(is_no_logging), K(comment));
+      }
+      LOG_INFO("switch to INTERRUPTED state", K(ret), K(old_round_info), K(counter), K(is_no_logging), K(new_round_info));
     } else if (counter.doing_cnt_ == actual_count) {
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -337,6 +371,23 @@ int ObDestRoundCheckpointer::gen_new_round_info_(
   return ret;
 }
 
+void ObDestRoundCheckpointer::fill_force_stop_msg_(ObTenantArchiveRoundAttr &new_round_info, const int ret_code) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString comment;
+  const char *err_str = NULL;
+  if (OB_SUCCESS == ret_code) {
+  } else if (!allow_force_stop_) {
+  } else if (!new_round_info.comment_.is_empty()) {
+    // have set before, do nothing
+  } else if (FALSE_IT(err_str = common::ob_strerror(ret_code))) {
+  } else if (OB_FAIL(comment.append_fmt("force stop, result: %d(%s)", ret_code, err_str))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(new_round_info.comment_.assign(comment.ptr()))) {
+    LOG_WARN("failed to assign comment", K(ret), K(comment));
+  }
+}
+
 
 int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_round_info, const ObDestRoundSummary &summary,
     ObDestRoundCheckpointer::Result &result) const
@@ -347,8 +398,9 @@ int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_rou
     LOG_WARN("failed to generate pieces", K(ret), K(old_round_info), K(summary));
   } else if (OB_FAIL(round_checkpoint_cb_(round_handler_->get_sql_proxy(), old_round_info, result.new_round_info_))) {
     if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
+      fill_force_stop_msg_(result.new_round_info_, ret);
+      LOG_ERROR("allow_force_stop is set, ignore round_checkpoint_cb error", K(ret), K(old_round_info), K(summary), K(result));
       ret = OB_SUCCESS;
-      LOG_INFO("allow_force_stop is set, ignore round_checkpoint_cb error", K(old_round_info), K(summary), K(result));
     } else {
       LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
     }
@@ -389,8 +441,9 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
         LOG_WARN("failed to generate one piece", K(ret), K(old_round_info), K(result), K(summary), K(piece_id));
       } else if (OB_FAIL(piece_generated_cb_(round_handler_->get_sql_proxy(), old_round_info, result, piece))) {
         if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
+          fill_force_stop_msg_(result.new_round_info_, ret);
+          LOG_ERROR("allow_force_stop is set, ignore piece_generated_cb_ error", K(ret), K(old_round_info), K(piece));
           ret = OB_SUCCESS;
-          LOG_INFO("allow_force_stop is set, ignore piece_generated_cb_ error", K(old_round_info), K(piece));
         } else {
           LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
         }

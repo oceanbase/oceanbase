@@ -208,6 +208,7 @@ class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
 #endif
     int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg &arg);
     int resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg &arg);
+    int resolve_restore_with_config_item(const ParseNode *node, obrpc::ObPhysicalRestoreTenantArg &arg);
 };
 
 class ObRecoverTenantResolver : public ObSystemCmdResolver
@@ -250,7 +251,7 @@ public:
 private:
   int check_param_valid(int64_t tenant_id,
       const common::ObString &name_node, const common::ObString &value_node);
-  int convert_param_value(ObAdminSetConfigItem &item);
+  int convert_param_value(obrpc::ObAdminSetConfigItem &item);
 };
 class ObTransferPartitionResolver : public ObSystemCmdResolver
 {
@@ -306,6 +307,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupManageResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupCleanResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDeletePolicyResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupKeyResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupClusterParamResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObEnableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDisableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObSetRegionBandwidthResolver);
@@ -340,6 +342,7 @@ private:
 #endif
   int resolve_backup_set_pwd_(common::ObString &pwd);
   int resolve_restore_source_(common::ObString &restore_source);
+  int resolve_restore_with_config_item_(const ParseNode *node, obrpc::ObRecoverTableArg &arg);
 };
 
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);

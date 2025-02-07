@@ -113,6 +113,8 @@ static DtlWriterType msg_writer_map[] =
   CONTROL_WRITER, // DH_RD_WINFUNC_PX_WHOLE_MSG
   CONTROL_WRITER, // DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG,
   CONTROL_WRITER, // DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG,
+  MAX_WRITER, // DH_STATISTICS_COLLECTOR_PIECE_MSG, placeholder
+  MAX_WRITER, // DH_STATISTICS_COLLECTOR_WHOLE_MSG, placeholder
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
@@ -561,11 +563,13 @@ public:
   {
     buffer->msg_type() = ObDtlMsgType::PX_VECTOR_FIXED;
   }
+  void set_size_per_buffer(const int64_t size) { size_per_buffer_ = size; }
 private:
   DtlWriterType type_;
   ObDtlLinkedBuffer *write_buffer_;
   ObDtlVectors vector_buffer_;
   int write_ret_;
+  int64_t size_per_buffer_;
 };
 
 OB_INLINE int ObDtlVectorFixedMsgWriter::write(
@@ -741,7 +745,11 @@ protected:
 
   OB_INLINE virtual bool has_msg() { return recv_buffer_cnt_ > processed_buffer_cnt_; }
 
-  virtual void reset_px_row_iterator() { datum_iter_.reset(); }
+  virtual void reset_px_row_iterator()
+  {
+    datum_iter_.reset();
+    row_iter_.reset();
+  }
 protected:
   bool is_inited_;
   const uint64_t local_id_;
@@ -778,6 +786,7 @@ protected:
   ObDtlChannelEncoder *msg_writer_;
   // row/datum store iterator for interm result iteration.
   ObChunkDatumStore::Iterator datum_iter_;
+  ObTempRowStore::Iterator row_iter_;
 
   ObDtlBcastService *bc_service_;
 

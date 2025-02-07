@@ -91,7 +91,9 @@ struct GenTableSpecHelper
       LOG_WARN("fail to alloc table api spec", K(ret));
     } else {
       SpecType *spec_ptr = new(buf) SpecType(alloc, type);
-      if (OB_FAIL(ObTableSpecCgService::generate_spec(alloc, ctx, *spec_ptr))) {
+      if (OB_FAIL(ctx.generate_table_schema_for_cg())) {
+        LOG_WARN("ctx table schema is null and failed to generate", K(ret));
+      } else if (OB_FAIL(ObTableSpecCgService::generate_spec(alloc, ctx, *spec_ptr))) {
         LOG_WARN("fail to generate table api spec", K(ret));
         spec_ptr->~SpecType();
         alloc.free(buf);

@@ -61,6 +61,10 @@ int SortKeyColResult::init(int64_t max_batch_size)
                          allocator_.alloc(sizeof(char *) * max_batch_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_ENG_LOG(WARN, "failed to alloc ptrs", K(ret));
+  }
+  if (OB_FAIL(ret) && nullptr != buffer) {
+    allocator_.free(buffer);
+    buffer = nullptr;
   } else {
     uniform_fmt_nulls_ = sql::to_bit_vector(buffer);
   }

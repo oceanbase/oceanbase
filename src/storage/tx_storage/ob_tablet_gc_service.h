@@ -87,6 +87,7 @@ public:
       TabletGCStatus &need_gc,
       bool &need_retry,
       const share::SCN &decided_scn);
+  static int check_tablet_from_aborted_tx(const ObTablet &tablet, TabletGCStatus &gc_status);
   int get_unpersist_tablet_ids(
       common::ObIArray<ObTabletHandle> &deleted_tablets,
       common::ObIArray<ObTabletHandle> &immediately_deleted_tablets,
@@ -118,6 +119,8 @@ private:
   bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
+
+  int64_t get_gc_lock_abs_timeout() const;
 
 public:
   static const int64_t GC_LOCK_TIMEOUT = 100_ms; // 100ms
@@ -165,6 +168,12 @@ public:
   }
   ObPrivateBlockGCThread* get_private_block_gc_thread()
   { return &private_block_gc_thread_; }
+  void set_mtl_start_max_block_id(const uint64_t mtl_start_max_block_id)
+  { private_block_gc_task_.set_mtl_start_max_block_id(mtl_start_max_block_id); }
+  void set_observer_start_macro_block_id_trigger()
+  { private_block_gc_task_.set_observer_start_macro_block_id_trigger(); }
+  uint64_t get_mtl_start_max_block_id()
+  { return private_block_gc_task_.get_mtl_start_max_block_id(); }
 #endif
 
 private:

@@ -56,6 +56,8 @@ if (OB_BUILD_ORACLE_PARSER)
     sql_parser_oracle_single_byte_mode_lex.h
     sql_parser_oracle_single_byte_mode_tab.c
     sql_parser_oracle_single_byte_mode_tab.h
+    sql_parser_oracle_hkscs_mode_lex.c
+    sql_parser_oracle_hkscs_mode_tab.c
   )
 
   set(ob_inner_sql_parser_object_list
@@ -63,6 +65,7 @@ if (OB_BUILD_ORACLE_PARSER)
     non_reserved_keywords_oracle_utf8_mode.c
     non_reserved_keywords_oracle_gbk_mode.c
     non_reserved_keywords_oracle_single_byte_mode.c
+    non_reserved_keywords_oracle_hkscs_mode.c
   )
 endif()
 
@@ -89,6 +92,7 @@ set(ob_inner_sql_parser_object_list
   ob_char_type.h
   ob_fast_parser.h
   ob_fast_parser.cpp
+  ob_parser_charset_utils.cpp
   sql_parser_base.c
   sql_parser_base.h
   sql_parser_base.h
@@ -112,7 +116,9 @@ add_library(ob_sql_proxy_parser_objects OBJECT
             ${ob_sql_parser_hash_object_list}
             ${ob_sql_parser_charset_object_list}
             )
-
+if (BUILD_CDC_ONLY)
+  set_target_properties(ob_sql_proxy_parser_objects PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
 
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT
@@ -141,6 +147,10 @@ add_library(ob_sql_server_parser_static
 target_link_libraries(ob_sql_proxy_parser_static
   PUBLIC
   ob_sql_proxy_parser_objects)
+
+if(ENABLE_THIN_LTO AND USE_LTO_CACHE)
+  add_dependencies(ob_sql_proxy_parser_static observer)
+endif()
 
 target_link_libraries(ob_sql_server_parser_static
   PUBLIC

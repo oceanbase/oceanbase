@@ -83,10 +83,6 @@ public:
     join_infos_ = join_infos;
   }
 
-  int check_rowscn_table_column_namespace(
-      const ObQualifiedName &q_name,
-      const TableItem *&table_item);
-
   int check_ext_table_column_namespace(
     const ObQualifiedName &q_name,
     const TableItem *&table_item);

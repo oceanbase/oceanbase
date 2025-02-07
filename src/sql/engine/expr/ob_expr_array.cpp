@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_array.h"
 #include "lib/udt/ob_collection_type.h"
-#include "lib/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -82,16 +81,6 @@ int ObExprArray::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-#define FIXED_SIZE_ARRAY_APPEND(Element_Type, Get_Func)                                               \
-  ObArrayFixedSize<Element_Type> *array_obj = static_cast<ObArrayFixedSize<Element_Type> *>(arr_obj); \
-  if (datum->is_null()) {                                                                             \
-    if (OB_FAIL(array_obj->push_back(0, true))) {                                                     \
-      LOG_WARN("failed to push back null value", K(ret), K(i));                                       \
-    }                                                                                                 \
-  } else if (OB_FAIL(array_obj->push_back(datum->Get_Func()))) {                                      \
-    LOG_WARN("failed to push back value", K(ret), K(i));                                              \
-  }
-
 int ObExprArray::eval_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -124,57 +113,11 @@ int ObExprArray::eval_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         } else {
           if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
             ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-            switch (elem_type->basic_meta_.get_obj_type()) {
-              case ObNullType: {
-                ObArrayFixedSize<int8_t> *null_array = static_cast<ObArrayFixedSize<int8_t> *>(arr_obj);
-                if (!datum->is_null()) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("expect null value", K(ret), K(*datum));
-                } else if (OB_FAIL(null_array->push_null())) {
-                  LOG_WARN("failed to push back null value", K(ret), K(i));
-                }
-                break;
-              }
-              case ObTinyIntType: {
-                FIXED_SIZE_ARRAY_APPEND(int8_t, get_tinyint);
-                break;
-              }
-              case ObInt32Type: {
-                FIXED_SIZE_ARRAY_APPEND(int32_t, get_int32);
-                break;
-              }
-              case ObIntType: {
-                FIXED_SIZE_ARRAY_APPEND(int64_t, get_int);
-                break;
-              }
-              case ObUInt64Type: {
-                FIXED_SIZE_ARRAY_APPEND(uint64_t, get_uint64);
-                break;
-              }
-              case ObFloatType: {
-                FIXED_SIZE_ARRAY_APPEND(float, get_float);
-                break;
-              }
-              case ObDoubleType: {
-                FIXED_SIZE_ARRAY_APPEND(double, get_double);
-                break;
-              }
-              case ObVarcharType: {
-                ObArrayBinary *binary_array = static_cast<ObArrayBinary *>(arr_obj);
-                if (datum->is_null()) {
-                  if (OB_FAIL(binary_array->push_back(ObString(), true))) {
-                    LOG_WARN("failed to push back null value", K(ret), K(i));
-                  }
-                } else if (OB_FAIL(binary_array->push_back(datum->get_string()))) {
-                  LOG_WARN("failed to push back null value", K(ret), K(i));
-                }
-                break;
-              }
-              default:
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("unsupported element type", K(ret), K(subschema_id), K(elem_type->basic_meta_.get_obj_type()));
+            if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type->basic_meta_.get_obj_type(), datum))) {
+              LOG_WARN("failed to append array value", K(ret), K(i));
             }
-          } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
+          } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE ||
+                     arr_type->element_type_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
             ObString raw_bin;
             uint16_t elem_subid;
             ObArrayNested *nest_array = static_cast<ObArrayNested *>(arr_obj);

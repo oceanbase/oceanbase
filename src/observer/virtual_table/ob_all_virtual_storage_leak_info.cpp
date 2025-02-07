@@ -128,13 +128,13 @@ int ObAllVirtualStorageLeakInfo::process_row()
           break;
         }
         case CHECK_ID : {
-          cur_row_.cells_[cell_idx].set_int(map_iter_->first.check_id_);
+          cur_row_.cells_[cell_idx].set_int((int64_t)map_iter_->first.check_id_);
           break;
         }
         case CHECK_MOD : {
-          int64_t check_id = map_iter_->first.check_id_;
+          ObStorageCheckID check_id = map_iter_->first.check_id_;
           if (check_id < ObStorageCheckID::ALL_CACHE) {
-            if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_name(check_id, check_mod_))) {
+            if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_name((int64_t)check_id, check_mod_))) {
               SERVER_LOG(WARN, "Fail to get cache name", K(ret), K(check_id));
             }
           } else if (ObStorageCheckID::IO_HANDLE == check_id) {

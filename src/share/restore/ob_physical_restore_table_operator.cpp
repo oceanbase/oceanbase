@@ -49,6 +49,7 @@ static const char* phy_restore_status_str_array[PHYSICAL_RESTORE_MAX_STATUS] = {
   "RESTORE_PRE",
   "RESTORE_CREATE_INIT_LS",
   "PHYSICAL_RESTORE_WAIT_RESTORE_TO_CONSISTENT_SCN",
+  "PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH",
   "RESTORE_WAIT_LS",
   "POST_CHECK",
   "UPGRADE",
@@ -221,6 +222,8 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_WITH_UINT_VALUE(job_info, consistent_scn, (job_info.get_consistent_scn().get_val_for_inner_table_field()));
     //restore_type
     ADD_COLUMN_WITH_VALUE(job_info, restore_type, job_info.get_restore_type().to_str());
+    //restore progress display mode
+    ADD_COLUMN_WITH_VALUE(job_info, progress_display_mode, job_info.get_progress_display_mode().to_str());
     if (OB_SUCC(ret)) {
       uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
@@ -268,6 +271,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, using_complement_log);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, sts_credential);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -525,6 +529,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
     RETRIEVE_INT_VALUE(backup_compatible, job);
+    RETRIEVE_STR_VALUE(sts_credential, job);
 
     if (OB_SUCC(ret)) {
       if (name == "backup_dest") {
@@ -706,6 +711,22 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      if (name == "progress_display_mode") {
+        ObString display_mode_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", display_mode_str);
+        if (OB_SUCC(ret))  {
+          share::ObRestoreProgressDisplayMode tmp_display_mode(display_mode_str);
+          if (!tmp_display_mode.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid restore progress display str extracted from sql", K(ret), K(display_mode_str));
+          } else {
+            job.set_progress_display_mode(tmp_display_mode);
+          }
+        }
+      }
+    }
+
 #undef RETRIEVE_UINT_VALUE
 #undef RETRIEVE_INT_VALUE
 #undef RETRIEVE_STR_VALUE
@@ -869,12 +890,21 @@ int ObPhysicalRestoreTableOperator::update_job_error_info(
   } else {
     ObSqlString sql;
     int64_t affected_rows = 0;
+    char addr_str[OB_IP_PORT_STR_BUFF] = {'\0'};
+    char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    int64_t addr_pos = 0;
+    int64_t trace_id_pos = 0;
     // update __all_restore_info
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
+    if (OB_FAIL(databuff_printf(addr_str, sizeof(addr_str), addr_pos, addr))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(addr), K(addr_pos));
+    } else if (OB_FAIL(databuff_printf(
+        trace_id_str, sizeof(trace_id_str), trace_id_pos, trace_id))) {
+      LOG_WARN("call databuff_printf failed", K(ret), K(trace_id), K(trace_id_pos));
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s SET value = '%s : %s(%d) on %s with traceid %s' "
                                "WHERE job_id = %ld AND name = 'comment'",
                                OB_ALL_RESTORE_JOB_TNAME, mod_str,
                                ob_error_name(return_ret), return_ret,
-                               to_cstring(addr), to_cstring(trace_id),
+                               addr_str, trace_id_str,
                                job_id))) {
       LOG_WARN("failed to set sql", K(ret), K(mod_str), K(return_ret), K(trace_id), K(addr));
     } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
@@ -1146,6 +1176,56 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_target_status(
 
         if (OB_SUCC(ret) && is_finished && !is_success) {
           LOG_INFO("tenant restore failed", K(ls_id), K(ls_restore_status));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTableOperator::check_all_ls_finish_quick_restore(bool &is_finish)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_sys_tenant(exec_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id cannot be sys", KR(ret), K_(tenant_id));
+  } else {
+    is_finish = true;
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select a.ls_id, b.restore_status, b.replica_status from %s as a "
+              "left join %s as b on a.ls_id = b.ls_id",
+              OB_ALL_LS_STATUS_TNAME, OB_ALL_LS_META_TABLE_TNAME))) {
+        LOG_WARN("failed to assign sql", K(ret));
+      } else if (OB_FAIL(sql_client_->read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(sql));
+      } else {
+        int64_t ls_id = 0;
+        share::ObLSRestoreStatus ls_restore_status;
+        int32_t restore_status = -1;
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "restore_status", restore_status, int32_t);
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
+            LOG_WARN("failed to set status", KR(ret), K(restore_status));
+          } else if (ObLSRestoreStatus::Status::RESTORE_START <= ls_restore_status
+                     &&  ObLSRestoreStatus::Status::QUICK_RESTORE >= ls_restore_status) {
+            is_finish = false;
+          }
+        } // while
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
         }
       }
     }

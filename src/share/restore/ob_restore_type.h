@@ -36,7 +36,7 @@ public:
 public:
   ObRestoreType() : type_(FULL) {}
   ~ObRestoreType() = default;
-  explicit ObRestoreType(const Type &type);
+  explicit ObRestoreType(const Type &type) : type_(type) {}
   explicit ObRestoreType(const ObString &str);
   ObRestoreType &operator=(const ObRestoreType &restore_type);
   ObRestoreType &operator=(const Type &type);

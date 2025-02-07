@@ -21,6 +21,7 @@
 #include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
+#include "storage/tablet/ob_tablet_create_sstable_param.h"
 
 namespace oceanbase
 {
@@ -157,6 +158,7 @@ int ObRootBlockInfo::init_root_block_info(
     LOG_WARN("fail to get memory address", K(ret), K(addr));
   } else if (ObMicroBlockData::DDL_BLOCK_TREE == block_data.type_) {
     block_data_ = block_data;
+    orig_block_buf_ = block_data_.buf_;
   } else if (size > 0 && OB_ISNULL(orig_buf = static_cast<char *>(allocator.alloc(size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", K(ret), K(size));
@@ -290,7 +292,6 @@ int ObRootBlockInfo::read_block_data(
     read_info.buf_ = buf;
     read_info.mtl_tenant_id_ = MTL_ID();
     read_info.bypass_micro_cache_ = true;
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
@@ -813,6 +814,7 @@ int ObSSTableMacroInfo::serialize_(char *buf, const int64_t buf_len, int64_t &po
 
 int ObSSTableMacroInfo::persist_block_ids(
     const ObTabletID &tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     common::ObArenaAllocator &allocator,
     storage::ObSSTableLinkBlockWriteInfo * const link_write_info,
@@ -820,7 +822,7 @@ int ObSSTableMacroInfo::persist_block_ids(
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemWriter block_writer;
-  if (OB_FAIL(write_block_ids(tablet_id, snapshot_version, block_writer, entry_id_, link_write_info))) {
+  if (OB_FAIL(write_block_ids(tablet_id, tablet_transfer_seq, snapshot_version, block_writer, entry_id_, link_write_info))) {
     LOG_WARN("fail to write other block ids", K(ret), KPC(link_write_info));
   } else if (OB_FAIL(save_linked_block_list(block_writer.get_meta_block_list(), allocator))) {
     LOG_WARN("fail to save linked block ids", K(ret));
@@ -1149,6 +1151,7 @@ DEF_TO_STRING(ObSSTableMacroInfo)
 
 int ObSSTableMacroInfo::write_block_ids(
     const ObTabletID &tablet_id,
+    const int64_t tablet_transfer_seq,
     const int64_t snapshot_version,
     storage::ObLinkedMacroBlockItemWriter &writer,
     MacroBlockId &entry_id,
@@ -1163,11 +1166,11 @@ int ObSSTableMacroInfo::write_block_ids(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data_block_count_ and other_block_count_ shouldn't be both 0", K(ret), K(data_block_count_),
         K(other_block_count_));
-  } else if (OB_FAIL(writer.init_for_object(tablet_id.id(), snapshot_version, link_write_info->start_macro_seq_, link_write_info->get_ddl_redo_callback()))) {
+  } else if (OB_FAIL(writer.init_for_object(tablet_id.id(), tablet_transfer_seq, snapshot_version, link_write_info->start_macro_seq_, link_write_info->get_ddl_redo_callback()))) {
     LOG_WARN("fail to initialize item writer", K(ret), KPC(link_write_info));
-  } else if (OB_NOT_NULL(data_block_ids_) && OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
+  } else if (OB_FAIL(flush_ids(data_block_ids_, data_block_count_, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_block_count_));
-  } else if (OB_NOT_NULL(other_block_ids_) && OB_FAIL(flush_ids(other_block_ids_, other_block_count_, writer))) {
+  } else if (OB_FAIL(flush_ids(other_block_ids_, other_block_count_, writer))) {
     LOG_WARN("fail to flush other block ids", KP(ret), K(other_block_count_));
   } else if (OB_FAIL(writer.close())) {
     LOG_WARN("fail to close block id writer", K(ret));
@@ -1187,9 +1190,9 @@ int ObSSTableMacroInfo::flush_ids(
     storage::ObLinkedMacroBlockItemWriter &writer)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(blk_ids)) {
+  if (OB_UNLIKELY(nullptr == blk_ids && 0 != blk_cnt) || OB_UNLIKELY(nullptr != blk_ids && blk_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("blk_ids should not be nullptr", KR(ret));
+    LOG_WARN("blk_ids should not be nullptr", KR(ret), KP(blk_ids), K(blk_cnt));
   } else {
     int64_t len = 0;
     OB_UNIS_ADD_LEN_ARRAY(blk_ids, blk_cnt);

@@ -41,6 +41,7 @@ namespace oceanbase
 {
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR);
 
 ObSSTableWrapper::ObSSTableWrapper()
   : meta_handle_(),
@@ -215,6 +216,29 @@ int ObCOSSTableMeta::deserialize(const char *buf, const int64_t data_len, int64_
   return ret;
 }
 
+/************************************* ObCOMajorSSTableStatus *************************************/
+const char* ObCOMajorSSTableStatusStr[] = {
+  "INVALID_STATUS",
+  "COL_WITH_ALL",
+  "COL_ONLY_ALL",
+  "PURE_COL",
+  "PURE_COL_ONLY_ALL",
+  "COL_REPLICA_MAJOR",
+  "DELAYED_TRANSFORM_MAJOR",
+  "PURE_COL_WITH_ALL"
+};
+
+const char* co_major_sstable_status_to_str(const ObCOMajorSSTableStatus& major_sstable_status)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MAX_CO_MAJOR_SSTABLE_STATUS) == ARRAYSIZEOF(ObCOMajorSSTableStatusStr), "co major sstable str len is mismatch");
+  const char *str = "";
+  if (is_valid_co_major_sstable_status(major_sstable_status)) {
+    str = ObCOMajorSSTableStatusStr[major_sstable_status];
+  } else {
+    str = "invalid_co_major_status";
+  }
+  return str;
+}
 
 /************************************* ObCOSSTableV2 *************************************/
 ObCOSSTableV2::ObCOSSTableV2()
@@ -247,17 +271,17 @@ int ObCOSSTableV2::init(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!param.is_valid() ||
-                  ObCOSSTableBaseType::INVALID_TYPE >= param.co_base_type_ ||
-                  ObCOSSTableBaseType::MAX_TYPE <= param.co_base_type_ ||
-                  1 >= param.column_group_cnt_ ||
+                  ObCOSSTableBaseType::INVALID_TYPE >= param.co_base_type() ||
+                  ObCOSSTableBaseType::MAX_TYPE <= param.co_base_type() ||
+                  1 >= param.column_group_cnt() ||
                   NULL == allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(param), K(allocator));
   } else if (OB_FAIL(ObSSTable::init(param, allocator))) {
     LOG_WARN("failed to init basic ObSSTable", K(ret), K(param));
-  } else if (param.is_co_table_without_cgs_) {
+  } else if (param.is_co_table_without_cgs()) {
     // current co sstable is empty, or the normal cg is redundant, no need to init cg sstable
-    cs_meta_.column_group_cnt_ = param.column_group_cnt_; // other cs meta is zero.
+    cs_meta_.column_group_cnt_ = param.column_group_cnt(); // other cs meta is zero.
     is_cgs_empty_co_ = true;
     if (OB_FAIL(build_cs_meta_without_cgs())) {
       LOG_WARN("failed to build cs meta without cgs", K(ret), K(param), KPC(this));
@@ -265,9 +289,9 @@ int ObCOSSTableV2::init(
   }
 
   if (OB_SUCC(ret)) {
-    base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type_);
-    valid_for_cs_reading_ = param.is_co_table_without_cgs_;
-    cs_meta_.full_column_cnt_ = param.full_column_cnt_;
+    base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type());
+    valid_for_cs_reading_ = param.is_co_table_without_cgs();
+    cs_meta_.full_column_cnt_ = param.full_column_cnt();
   } else {
     reset();
   }
@@ -318,7 +342,6 @@ int ObCOSSTableV2::build_cs_meta_without_cgs()
     cs_meta_.original_size_ = basic_meta.original_size_;
     cs_meta_.data_checksum_ = basic_meta.data_checksum_;
     // cs_meta_.column_group_cnt_ and cs_meta_.full_column_cnt_ are assigned in ObCOSSTableV2::init
-    LOG_INFO("[RowColSwitch] finish build cs meta without cg sstables", K_(cs_meta), K(basic_meta), KPC(this));
   }
   return ret;
 }
@@ -902,7 +925,7 @@ int ObCOSSTableV2::fill_column_ckm_array(
   ObIArray<int64_t> &column_checksums) const
 {
   int ret = OB_SUCCESS;
-  if (is_cgs_empty_co_table()) {
+  if (is_all_cg_base()) {
     ret = ObSSTable::fill_column_ckm_array(column_checksums);
   } else {
     const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
@@ -915,7 +938,8 @@ int ObCOSSTableV2::fill_column_ckm_array(
     }
 
     common::ObArray<ObSSTableWrapper> cg_tables;
-    if (FAILEDx(get_all_tables(cg_tables))) {
+    if (is_empty()) {
+    } else if (FAILEDx(get_all_tables(cg_tables))) {
       LOG_WARN("fail to get_all_tables", K(ret));
     } else {
       ObSSTableMetaHandle cg_table_meta_hdl;
@@ -951,6 +975,18 @@ int ObCOSSTableV2::fill_column_ckm_array(
           }
         }
       } // for
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        int tmp_ret = EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR;
+        if (OB_SUCCESS != tmp_ret) {
+          const int64_t column_cnt = column_checksums.count();
+          for (int64_t j = column_cnt - 1; j - 1 >= 0; j--) {
+            column_checksums.at(j) = column_checksums.at(j-1);
+          }
+          LOG_INFO("ERRSIM EN_CO_SSTABLE_COLUMN_CHECKSUM_ERROR, after errsim", K(tmp_ret), K(column_checksums));
+        }
+      }
+#endif
     }
   }
   return ret;

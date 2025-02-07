@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/json_type/ob_json_common.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 
 using namespace oceanbase::common;
 
@@ -30,7 +31,7 @@ public:
   virtual ~ObExprJsonPretty();
 
   static int calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
-                  ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null);
+                  MultimodeAlloctor *allocator, ObJsonBuffer &j_buf, bool &is_null);
   int calc_result_type1(ObExprResType &type,
                         ObExprResType &type1,
                         common::ObExprTypeCtx &type_ctx) const override;

@@ -17,6 +17,7 @@
 #include "sql/spm/ob_spm_define.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/monitor/ob_exec_stat.h"
+#include "sql/spm/ob_plan_baseline_mgr.h"
 
 namespace oceanbase
 {
@@ -40,8 +41,7 @@ public:
 
   static int accept_plan_baseline_by_user(obrpc::ObModifyPlanBaselineArg& arg);
   static int cancel_evolve_task(obrpc::ObModifyPlanBaselineArg& arg);
-  static int load_baseline(const obrpc::ObLoadPlanBaselineArg& arg, ObPhysicalPlan* plan);
-  static int deny_new_plan_as_baseline(ObSpmCacheCtx& spm_ctx);
+  static int load_baseline(ObSpmBaselineLoader &baseline_loader);
   static int64_t calc_spm_timeout_us(const int64_t normal_timeout, const int64_t baseline_exec_time);
 };
 

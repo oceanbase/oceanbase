@@ -118,7 +118,7 @@ int ObLogFileGroup::get_file_id_range(int64_t &min_file_id, int64_t &max_file_id
 
     if (need_scan_dir) {
       ObGetFileIdRangeFunctor functor(log_dir_);
-      if (OB_FAIL(THE_IO_DEVICE->scan_dir(log_dir_, functor))) {
+      if (OB_FAIL(LOCAL_DEVICE_INSTANCE.scan_dir(log_dir_, functor))) {
         LOG_WARN("fail to scan dir", K(ret), K_(log_dir));
       } else {
         min_file_id = functor.get_min_file_id();
@@ -163,7 +163,7 @@ int ObLogFileGroup::get_total_used_size(int64_t &total_size) const
     LOG_WARN("not inited", K(ret));
   } else {
     ObGetFileSizeFunctor functor(log_dir_);
-    if (OB_FAIL(THE_IO_DEVICE->scan_dir(log_dir_, functor))) {
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.scan_dir(log_dir_, functor))) {
       LOG_WARN("fail to scan dir", K(ret), K_(log_dir));
     } else {
       total_size = functor.get_total_size();
@@ -213,7 +213,7 @@ int ObLogFileGroup::check_file_existence(const char *dir, const int64_t file_id,
   } else if (OB_FAIL(ObLogFileHandler::format_file_path(
       full_path, sizeof(full_path), dir, file_id))) {
     LOG_WARN("failed to format file path", K(ret), K(dir), K(file_id));
-  } else if (OB_FAIL(THE_IO_DEVICE->exist(full_path, b_exist))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.exist(full_path, b_exist))) {
     LOG_WARN("failed to check existence", K(ret), K(full_path));
   }
   return ret;

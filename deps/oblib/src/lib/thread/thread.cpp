@@ -27,6 +27,8 @@
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/signal/ob_signal_struct.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_session_stat.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -170,9 +172,15 @@ void Thread::run()
 {
   IRunWrapper *run_wrapper_ = threads_->get_run_wrapper();
   if (OB_NOT_NULL(run_wrapper_)) {
-    run_wrapper_->pre_run();
+    {
+      ObDisableDiagnoseGuard disable_guard;
+      run_wrapper_->pre_run();
+    }
     threads_->run(idx_);
-    run_wrapper_->end_run();
+    {
+      ObDisableDiagnoseGuard disable_guard;
+      run_wrapper_->end_run();
+    }
   } else {
     threads_->run(idx_);
   }
@@ -276,6 +284,7 @@ void* Thread::__th_start(void *arg)
   ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
   th->tid_ = gettid();
+
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
   abort_unless(stack_header->check_magic());
@@ -318,7 +327,7 @@ void* Thread::__th_start(void *arg)
       ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
       if (OB_ISNULL(mem_context)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("null ptr", K(ret));
       } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
                          ContextParam().set_properties(RETURN_MALLOC_DEFAULT)

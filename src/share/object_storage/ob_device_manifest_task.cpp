@@ -497,29 +497,30 @@ int ObDeviceManifestTask::update_device_config(
         LOG_WARN("fail to get device config", KR(ret), K(device_config_key));
       } else if (FALSE_IT(device_config.op_id_ = storage_op_info.op_id_)) {
       } else if (FALSE_IT(device_config.sub_op_id_ = storage_op_info.sub_op_id_)) {
+      // Note: must MEMSET zero before STRCPY, because calc checksum depends on sizeof()
+      } else if (FALSE_IT(MEMSET(device_config.state_, 0, sizeof(device_config.state_)))) {
       } else if (FALSE_IT(STRCPY(device_config.state_, ObZoneStorageState::get_str(op_type)))) {
       } else if (ObZoneStorageState::STATE::CHANGING == op_type) {
-        // reset old_access_info
-        memset(device_config.old_access_info_, 0, sizeof(device_config.old_access_info_));
-        // replace old_access_info with access_info
-        if (OB_FAIL(ObDeviceConfigParser::convert_access_info_to_old(
-                    device_config.access_info_, device_config.old_access_info_))) {
-          LOG_WARN("fail to convert access info to old", KR(ret), "access_info",
-                   common::ObSzString(device_config.access_info_));
-        } else {
-          STRCPY(device_config.old_encrypt_info_, device_config.encrypt_info_);
-          STRCPY(device_config.old_extension_, device_config.extension_);
-          STRCPY(device_config.access_info_, zone_storage_info.dest_attr_.authorization_);
-          STRCPY(device_config.extension_, zone_storage_info.dest_attr_.extension_);
-          device_config.max_iops_ = zone_storage_info.max_iops_;
-          device_config.max_bandwidth_ = zone_storage_info.max_bandwidth_;
-          device_config.last_check_timestamp_ = common::ObTimeUtility::fast_current_time();
-          char tmp_state_info[OB_MAX_STORAGE_STATE_INFO_LENGTH] = { 0 };
-          MEMCPY(tmp_state_info, STORAGE_IS_CONNECTIVE_KEY, STRLEN(STORAGE_IS_CONNECTIVE_KEY));
-          MEMCPY(tmp_state_info + STRLEN(tmp_state_info), is_connective ? "true" : "false",
-                 is_connective ? STRLEN("true") : STRLEN("false"));
-          STRCPY(device_config.state_info_, tmp_state_info);
-        }
+        // Note: must MEMSET zero before STRCPY, because calc checksum depends on sizeof()
+        MEMSET(device_config.old_access_info_, 0, sizeof(device_config.old_access_info_));
+        MEMSET(device_config.old_encrypt_info_, 0, sizeof(device_config.old_encrypt_info_));
+        MEMSET(device_config.old_extension_, 0, sizeof(device_config.old_extension_));
+        STRCPY(device_config.old_access_info_, device_config.access_info_);
+        STRCPY(device_config.old_encrypt_info_, device_config.encrypt_info_);
+        STRCPY(device_config.old_extension_, device_config.extension_);
+        MEMSET(device_config.access_info_, 0, sizeof(device_config.access_info_));
+        MEMSET(device_config.extension_, 0, sizeof(device_config.extension_));
+        STRCPY(device_config.access_info_, zone_storage_info.dest_attr_.authorization_);
+        STRCPY(device_config.extension_, zone_storage_info.dest_attr_.extension_);
+        device_config.max_iops_ = zone_storage_info.max_iops_;
+        device_config.max_bandwidth_ = zone_storage_info.max_bandwidth_;
+        device_config.last_check_timestamp_ = common::ObTimeUtility::fast_current_time();
+        char tmp_state_info[OB_MAX_STORAGE_STATE_INFO_LENGTH] = { 0 };
+        MEMCPY(tmp_state_info, STORAGE_IS_CONNECTIVE_KEY, STRLEN(STORAGE_IS_CONNECTIVE_KEY));
+        MEMCPY(tmp_state_info + STRLEN(tmp_state_info), is_connective ? "true" : "false",
+                is_connective ? STRLEN("true") : STRLEN("false"));
+        MEMSET(device_config.state_info_, 0, sizeof(device_config.state_info_));
+        STRCPY(device_config.state_info_, tmp_state_info);
       }
       if (FAILEDx(ObDeviceConfigMgr::get_instance().update_device_config(device_config))) {
         LOG_WARN("fail to update device config", KR(ret), K(device_config));

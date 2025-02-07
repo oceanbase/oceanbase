@@ -499,7 +499,8 @@ void pn_release(pn_comm_t* pn_comm)
     // destroy pktc socket
     dlink_for(&pktc->sk_list, p) {
       pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
-      rk_info("sock destroy: sock=%p, connection=%s", s, T2S(sock_fd, s->fd));
+      char sock_fd_buf[PNIO_NIO_FD_ADDR_LEN] = {'\0'};
+      rk_info("sock destroy: sock=%p, connection=%s", s, sock_fd_str(s->fd, sock_fd_buf, sizeof(sock_fd_buf)));
       sock_destroy((sock_t*)s);
     }
   }
@@ -511,6 +512,7 @@ typedef struct pn_resp_ctx_t
   void* req_handle;
   uint64_t sock_id;
   uint64_t pkt_id;
+  void* resp_ptr;
   char reserve[sizeof(pkts_req_t)];
 } pn_resp_ctx_t;
 
@@ -524,6 +526,7 @@ static pn_resp_ctx_t* create_resp_ctx(pn_t* pn, void* req_handle, uint64_t sock_
     ctx->req_handle = req_handle;
     ctx->sock_id = sock_id;
     ctx->pkt_id = pkt_id;
+    ctx->resp_ptr = NULL;
   }
   return ctx;
 }
@@ -556,8 +559,11 @@ static void pn_pkts_flush_cb_func(pkts_req_t* req)
   if ((uint64_t)resp->ctx->reserve == (uint64_t)resp) {
     fifo_free(resp->ctx);
   } else {
+    void* resp_ptr = resp->ctx->resp_ptr;
     fifo_free(resp->ctx);
-    cfifo_free(resp);
+    if (likely(resp_ptr)) {
+      cfifo_free(resp_ptr);
+    }
   }
 }
 
@@ -566,15 +572,35 @@ static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
   pn_resp_ctx_t* ctx = (typeof(ctx))structof(req, pn_resp_ctx_t, reserve);
   fifo_free(ctx);
 }
+PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz)
+{
+  void* p = NULL;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (likely(ctx)) {
+    if (unlikely(ctx->resp_ptr != NULL)) {
+      int err = PNIO_ERROR;
+      rk_error("pn_resp_pre_alloc might has been executed, it is unexpected, ctx=%p, resp_ptr=%p", ctx, ctx->resp_ptr);
+      cfifo_free(ctx->resp_ptr);
+    }
+    p = cfifo_alloc(&ctx->pn->server_resp_alloc, sz);
+    ctx->resp_ptr = p;
+  }
+  return p;
+}
 
-PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us)
+PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t payload_sz, int64_t resp_expired_abs_us)
 {
   pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
   pn_resp_t* resp = NULL;
-  if (sizeof(pn_resp_t) + sz <= sizeof(ctx->reserve)) {
-    resp = (typeof(resp))(ctx->reserve);
+  if (unlikely(0 == hdr_sz)) { // response null or response error
+    if (ctx->resp_ptr) {
+      cfifo_free(ctx->resp_ptr);
+    }
+    ctx->resp_ptr = cfifo_alloc(&ctx->pn->server_resp_alloc, sizeof(*resp) + payload_sz);
+    resp = (typeof(resp))ctx->resp_ptr;
   } else {
-    resp = (typeof(resp))cfifo_alloc(&ctx->pn->server_resp_alloc, sizeof(*resp) + sz);
+    assert(hdr_sz >= sizeof(*resp));
+    resp = (typeof(resp))(buf + hdr_sz - sizeof(*resp));
   }
   pkts_req_t* r = NULL;
   if (NULL != resp) {
@@ -585,8 +611,9 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_ex
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
     r->expire_us = resp_expired_abs_us;
-    eh_copy_msg(&r->msg, ctx->pkt_id, buf, sz);
+    eh_copy_msg(&r->msg, ctx->pkt_id, buf + hdr_sz, payload_sz);
   } else {
+    rk_warn("allocate memory for pn_resp_t failed");
     r = (typeof(r))(ctx->reserve);
     r->errcode = ENOMEM;
     r->flush_cb = pn_pkts_flush_cb_error_func;
@@ -715,8 +742,12 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   // print socket diag info
   dlink_for(&pn->pktc.sk_list, p) {
     pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+    char local_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
+    char dest_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
     rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-              s, T2S(addr, s->sk_diag_info.local_addr), T2S(addr, s->dest), s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+              s, addr_str(s->sk_diag_info.local_addr, local_addr_buf, sizeof(local_addr_buf)),
+              addr_str(s->dest, dest_addr_buf, sizeof(dest_addr_buf)),
+              s->fd, s->sk_diag_info.establish_time, s->conn_ok,
               s->wq.cnt, s->wq.sz,
               s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
               s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
@@ -727,8 +758,9 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   if (pn->pkts.sk_list.next != NULL) {
     dlink_for(&pn->pkts.sk_list, p) {
       pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
+      char peer_addr_buf[PNIO_NIO_ADDR_LEN] = {'\0'};
       rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
-                s, T2S(addr, s->peer), s->fd, s->sk_diag_info.establish_time,
+                s, addr_str(s->peer, peer_addr_buf, sizeof(peer_addr_buf)), s->fd, s->sk_diag_info.establish_time,
                 s->wq.cnt, s->wq.sz,
                 s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
                 s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,

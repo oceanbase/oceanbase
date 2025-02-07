@@ -151,9 +151,8 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
     //Otherwise, you can show only the threads at the same Tenant with you.
     //If you have the PROCESS privilege, you can show all threads at your Tenant.
     //Otherwise, you can show only your own threads.
-    // if session is marked killed, no display to user.
-    if (sess_info->is_shadow() || sess_info->is_mark_killed()) {
-      //this session info is logical free, shouldn't be added to scanner
+    if (sess_info->is_shadow()) {
+      // do not show shadow session
     } else if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id())
         || (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id()
             && (has_process_privilege()
@@ -518,6 +517,10 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             } else {
               cur_row_->cells_[cell_idx].set_null();
             }
+            break;
+          }
+          case MEMORY_USAGE: {
+            cur_row_->cells_[cell_idx].set_null();
             break;
           }
           default: {

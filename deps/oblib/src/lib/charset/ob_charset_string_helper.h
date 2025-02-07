@@ -700,6 +700,36 @@ public:
             foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
           : foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
+    case CHARSET_UTF16LE:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_UTF16LE, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_UTF16LE, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_SJIS:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_SJIS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_SJIS, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_HKSCS:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_HKSCS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_HKSCS, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_HKSCS31:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_HKSCS31, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_HKSCS31, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_DEC8:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_DEC8, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_DEC8, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_BIG5:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_BIG5, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_BIG5, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
     case CHARSET_LATIN1:
       ret = convert_unicode ?
             foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)

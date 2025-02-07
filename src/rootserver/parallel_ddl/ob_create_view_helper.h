@@ -44,6 +44,7 @@ public:
 private:
   int lock_objects_();
   int generate_schemas_();
+  virtual int calc_schema_version_cnt_() override;
   int create_schemas_();
 private:
   const obrpc::ObCreateTableArg &arg_;

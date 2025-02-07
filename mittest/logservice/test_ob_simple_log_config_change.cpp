@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -1109,8 +1112,90 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner_loop)
     }
   }
 
+  for (int i = 0; i < ObSimpleLogClusterTestBase::node_cnt_; i++) {
+    unblock_pcode(i, ObRpcPacketCode::OB_LOG_PUSH_REQ);
+  }
   revert_cluster_palf_handle_guard(palf_list);
   PALF_LOG(INFO, "end test learner_loop", K(id));
+}
+
+// 1. 3 paxos member (A, B ,C), A is the leader. D is a learner, C is the parent of D.
+// 2. block_net A <-> C, submit logs, logs of C and D are behind from A
+// 3. remove C, or the step 4 cannot be executed succcessfully
+// 4. switch D from learner to acceptor, D can not accept the reconfig log because it miss some logs
+// 5. remove B
+TEST_F(TestObSimpleLogClusterConfigChange, switch_lagged_learner_to_acceptor)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "switch_lagged_learner_to_acceptor");
+  int ret = OB_SUCCESS;
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+	int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  LogLearnerList all_learner;
+  const ObMemberList &node_list = get_node_list();
+  std::vector<PalfHandleImplGuard*> palf_list;
+  common::ObRegion beijing_region("BEIJING");
+  common::ObRegion shanghai_region("SHANGHAI");
+
+	EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+
+  // 1. add a learner, idx = 3
+  const int64_t learner_idx = 3;
+  const int64_t followerc_idx = (leader_idx + 1) % 3;
+  const int64_t followerb_idx = (leader_idx + 2) % 3;
+  const ObAddr followerc_addr = get_cluster()[followerc_idx]->get_addr();
+  const ObAddr followerb_addr = get_cluster()[followerb_idx]->get_addr();
+
+  // set region, beijing(leader, follower b), shanghai(follower c, learner)
+  for (int i = 0; i < ObSimpleLogClusterTestBase::node_cnt_; i++) {
+    const common::ObAddr addr = palf_list[i]->palf_handle_impl_->self_;
+    if (leader.palf_handle_impl_->config_mgr_.alive_paxos_memberlist_.contains(addr) &&
+        i != followerc_idx) {
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, beijing_region);
+    } else {
+      get_cluster()[0]->get_locality_manager()->set_server_region(addr, shanghai_region);
+    }
+  }
+  for (auto palf_handle: palf_list) { palf_handle->palf_handle_impl_->update_self_region_(); }
+  // add D to learner_list
+  common::ObMember learner;
+  EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(learner_idx, learner));
+  EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(LogLearner(learner.get_server(), 1)));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(learner, CONFIG_CHANGE_TIMEOUT));
+
+  // check topo
+  EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, all_learner));
+  EXPECT_UNTIL_EQ(0, leader.palf_handle_impl_->config_mgr_.children_.get_member_number());
+  EXPECT_UNTIL_EQ(0, palf_list[followerb_idx]->palf_handle_impl_->config_mgr_.children_.get_member_number());
+  EXPECT_UNTIL_EQ(1, palf_list[followerc_idx]->palf_handle_impl_->config_mgr_.children_.get_member_number());
+  EXPECT_UNTIL_EQ(followerc_addr, palf_list[learner_idx]->palf_handle_impl_->config_mgr_.parent_);
+  loc_cb.leader_ = get_cluster()[leader_idx]->get_addr();
+
+  // 2. remove C, or the step 4 cannot be executed succcessfully
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(followerc_addr, 1), 2, CONFIG_CHANGE_TIMEOUT));
+  LogConfigVersion leader_config_version;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(leader_config_version));
+  // ensure the learner can be added successfully
+  EXPECT_EQ(leader_config_version, palf_list[learner_idx]->palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.config_version_);
+
+  // 3. block_net between leader and followerc, submit logs
+  block_net(leader_idx, followerc_idx);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn().val_, leader.palf_handle_impl_->get_end_lsn().val_);
+
+  // 4. switch D from learner to acceptor, D can not accept the reconfig log because it miss some logs
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(leader_config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(learner, 3, leader_config_version, CONFIG_CHANGE_TIMEOUT));
+
+  // 5. remove B
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(ObMember(followerb_addr, 1), 2, CONFIG_CHANGE_TIMEOUT));
+
+  unblock_net(leader_idx, followerc_idx);
+  leader.reset();
+  revert_cluster_palf_handle_guard(palf_list);
+  PALF_LOG(INFO, "end switch_lagged_learner_to_acceptor", K(id));
 }
 
 } // end unittest

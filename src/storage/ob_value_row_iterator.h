@@ -62,21 +62,19 @@ public:
 
   int init_dml_access_ctx(
       ObStoreCtx &store_ctx,
-      const ObDMLBaseParam &dml_param,
       bool skip_read_lob = false);
   int init_dml_access_param(
       ObRelativeTable &data_table,
-      const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &out_col_ids,
       const bool skip_read_lob = false);
-  int prepare_cached_iter_node();
+  int prepare_cached_iter_node(const ObDMLBaseParam &dml_param);
   ObTableAccessParam &get_access_param() { return access_param_; }
   ObTableAccessContext &get_access_ctx() { return access_ctx_; }
   void set_relative_table(ObRelativeTable *relative_table) { relative_table_ = relative_table; }
   int open(const blocksstable::ObDatumRowkey &rowkey, bool use_fuse_row_cache = false);
   int get_next_row(blocksstable::ObDatumRow *&row);
 private:
-  bool can_use_global_iter_pool() const;
+  bool can_use_global_iter_pool(const ObDMLBaseParam &dml_param) const;
   int init_single_merge();
 private:
   ObTablet *tablet_;

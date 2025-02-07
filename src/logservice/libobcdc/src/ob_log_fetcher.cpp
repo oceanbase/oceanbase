@@ -925,8 +925,9 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const logservice::TenantLSID &t
     part_count_++;
 
     if (g_print_ls_heartbeat_info) {
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] TLS=%s PROGRESS=%ld DISPATCH_LOG_LSN=%lu "
-          "DATA_PROGRESS=%ld DDL_PROGRESS=%ld DDL_DISPATCH_LOG_LSN=%lu", to_cstring(tls_id),
+          "DATA_PROGRESS=%ld DDL_PROGRESS=%ld DDL_DISPATCH_LOG_LSN=%lu", helper.convert(tls_id),
           progress, last_dispatch_log_lsn.val_, data_progress_, ddl_progress_, ddl_last_dispatch_log_lsn_.val_);
     }
   }
@@ -1007,22 +1008,23 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
         min_progress_tls_id = logservice::TenantLSID(ddl_min_progress_tenant_id, share::SYS_LS);
       }
 
+      ObCStringHelper helper;
       _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] DELAY=[%.3lf, %.3lf](sec) LS_COUNT=%ld "
           "MIN_DELAY=%s(%ld) MAX_DELAY=%s(%ld) DATA_PROGRESS=%s(%ld) "
           "DDL_PROGRESS=%s(%ld) DDL_TENANT=%lu DDL_LOG_LSN=%s",
           get_delay_sec(max_progress),
           get_delay_sec(min_progress),
           hb_func.part_count_,
-          to_cstring(max_progress_tls_id),
+          helper.convert(max_progress_tls_id),
           max_progress,
-          to_cstring(min_progress_tls_id),
+          helper.convert(min_progress_tls_id),
           min_progress,
           NTS_TO_STR(data_progress),
           data_progress,
           NTS_TO_STR(ddl_handle_progress),
           ddl_handle_progress,
           ddl_min_progress_tenant_id,
-          to_cstring(ddl_handle_lsn));
+          helper.convert(ddl_handle_lsn));
     }
 
     if (OB_UNLIKELY(OB_INVALID_TIMESTAMP != heartbeat_tstamp && cdc_start_tstamp_ns -1 > heartbeat_tstamp)) {
@@ -1034,6 +1036,7 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
     }
     // Checks if the heartbeat timestamp is reverted
     else if (OB_INVALID_TIMESTAMP != last_timestamp && heartbeat_tstamp < last_timestamp) {
+      ObCStringHelper helper;
       LOG_ERROR("heartbeat timestamp is rollback, unexcepted error",
           "last_timestamp", NTS_TO_STR(last_timestamp),
           K(last_timestamp),
@@ -1044,8 +1047,8 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
           K(min_progress_tls_id), K(last_min_data_progress_ls),
           "ddl_handle_progress", NTS_TO_STR(ddl_handle_progress),
           "last_ddl_handle_progress", NTS_TO_STR(last_ddl_handle_progress),
-          "ddl_handle_lsn", to_cstring(ddl_handle_lsn),
-          "last_ddl_handle_lsn", to_cstring(last_ddl_handle_lsn),
+          "ddl_handle_lsn", helper.convert(ddl_handle_lsn),
+          "last_ddl_handle_lsn", helper.convert(last_ddl_handle_lsn),
           K(last_ls_progress_infos));
       ret = OB_ERR_UNEXPECTED;
     } else {

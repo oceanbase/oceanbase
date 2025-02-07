@@ -160,7 +160,11 @@ int ObCGIterParamPool::fill_cg_iter_param(
     LOG_WARN("Fail to push back out cols project", K(ret));
   }
   if (OB_FAIL(ret)) {
-    OB_DELETE(ColumnsIndex, "unused", out_cols_project);
+    if (nullptr != out_cols_project) {
+      out_cols_project->~ColumnsIndex();
+      alloc_.free(out_cols_project);
+      out_cols_project = nullptr;
+    }
   } else if (OB_FAIL(generate_for_column_store(row_param, param_output_exprs, param_agg_exprs, out_cols_project, cg_idx, cg_param))) {
     LOG_WARN("Fail to generate cg iter param", K(ret));
   }
@@ -181,7 +185,11 @@ int ObCGIterParamPool::copy_param_exprs(
     LOG_WARN("Fail to assign exprs", K(ret));
   }
   if (OB_FAIL(ret)) {
-    OB_DELETE(ObFixedArray, "unused", param_exprs);
+    if (nullptr != param_exprs) {
+      param_exprs->~ObFixedArray();
+      alloc_.free(param_exprs);
+      param_exprs = nullptr;
+    }
   }
   return ret;
 }

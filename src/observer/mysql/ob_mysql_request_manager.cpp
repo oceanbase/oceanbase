@@ -137,7 +137,7 @@ void ObMySQLRequestManager::destroy()
 {
   if (!destroyed_) {
     TG_DESTROY(tg_id_);
-    clear_queue();
+    clear_queue(true);
     queue_.destroy();
     allocator_.destroy();
     inited_ = false;
@@ -239,6 +239,10 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         record->data_.proxy_user_name_ = buf + pos;
         pos += user_len;
       }
+      if (nullptr != audit_record.sql_memory_used_) {
+        record->data_.request_memory_used_ = *audit_record.sql_memory_used_;
+      }
+
       //for find bug
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false
@@ -251,7 +255,16 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
 
       // query response time
       if (enable_query_response_time_stats) {
-        observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
+        observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector =
+            MTL(observer::ObTenantQueryRespTimeCollector *);
+        if (OB_NOT_NULL(t_query_resp_time_collector)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(t_query_resp_time_collector->collect(audit_record.stmt_type_,
+                                               audit_record.is_inner_sql_,
+                                               audit_record.get_elapsed_time()))) {
+            SERVER_LOG(WARN, "failed to statistic query response time histogram", K(tmp_ret));
+          }
+        }
       }
 
       //push into queue
@@ -304,10 +317,10 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
   return ret;
 }
 
-int ObMySQLRequestManager::release_record(int64_t release_cnt) {
+int ObMySQLRequestManager::release_record(int64_t release_cnt, bool is_destroyed) {
   int ret = OB_SUCCESS;
   LockGuard lock_guard(destroy_second_level_mutex_);
-  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this)))) {
+  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this), is_destroyed))) {
     SERVER_LOG(WARN, "fail to release record",
           K(release_cnt), K(ret));
   }

@@ -105,8 +105,8 @@ int ObPxRepartTransmitOp::do_transmit()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
   ObPxRepartTransmitOpInput *trans_input = static_cast<ObPxRepartTransmitOpInput*>(input_);
-
-  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)) {
+  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_)) || OB_ISNULL(trans_input)
+       || OB_ISNULL(phy_plan_ctx->get_phy_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to op ctx", "op_id", MY_SPEC.id_, "op_type", MY_SPEC.type_,
               KP(trans_input), K(ret));
@@ -161,7 +161,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                       task_channels_.count(),
                                                       MY_SPEC.dist_exprs_,
                                                       MY_SPEC.dist_hash_funcs_,
-                                                      MY_SPEC.repartition_type_);
+                                                      MY_SPEC.repartition_type_,
+                                                      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                       >= CLUSTER_VERSION_4_3_5_0);
           if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::SM_REPART_HASH>(repart_slice_calc))) {
             LOG_WARN("failed to do repart transmit for pkey random", K(ret));
           }
@@ -197,7 +199,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                                   MY_SPEC.repartition_type_,
                                                                   &MY_SPEC.dist_exprs_,
                                                                   &MY_SPEC.dist_hash_funcs_,
-                                                                  &MY_SPEC.repartition_exprs_);
+                                                                  &MY_SPEC.repartition_exprs_,
+                                                                  ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                                   >= CLUSTER_VERSION_4_3_5_0);
             if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::NULL_AWARE_AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }
@@ -211,7 +215,9 @@ int ObPxRepartTransmitOp::do_transmit()
                                                               MY_SPEC.null_row_dist_method_,
                                                               MY_SPEC.repartition_type_,
                                                               &MY_SPEC.dist_exprs_,
-                                                              &MY_SPEC.dist_hash_funcs_);
+                                                              &MY_SPEC.dist_hash_funcs_,
+                                                              ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version()
+                                                                >= CLUSTER_VERSION_4_3_5_0);
             if (OB_FAIL(do_repart_transmit<ObSliceIdxCalc::AFFINITY_REPART>(repart_slice_calc))) {
               LOG_WARN("failed to do repart transmit for pkey", K(ret));
             }

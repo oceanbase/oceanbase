@@ -41,9 +41,9 @@ Similar to ob_malloc, OB_NEW provides a set of "C++" interfaces that call the ob
 
 /// T is the type, pool is the memory pool allocator
 #define OB_NEWx(T, pool, ...)
+#define OB_DELETEx(T, pool, ptr)
 ```
 
-> There is no OB_DELETEx, but you can release the memory by yourself.
 
 ## ObArenaAllocator
 

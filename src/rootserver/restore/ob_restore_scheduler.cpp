@@ -42,6 +42,10 @@
 #include "share/ob_master_key_getter.h"
 #endif
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
+#include "rootserver/mview/ob_mview_timer_task.h"
+#include "rootserver/mview/ob_collect_mv_merge_info_task.h"
+#include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
 
 namespace oceanbase
 {
@@ -188,6 +192,9 @@ int ObRestoreScheduler::process_restore_job(const ObPhysicalRestoreJob &job)
       case PHYSICAL_RESTORE_WAIT_CONSISTENT_SCN:
         ret = restore_wait_to_consistent_scn(job);
         break;
+      case PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH:
+        ret = restore_wait_quick_restore_finish(job);
+        break;
       case PHYSICAL_RESTORE_WAIT_LS:
         ret = restore_wait_ls_finish(job);
         break;
@@ -231,7 +238,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (OB_INVALID_TENANT_ID != job_info.get_tenant_id()) {
     // restore_tenant can only be executed once.
-    // only update job status 
+    // only update job status
   } else if (OB_FAIL(pool_list.assign(job_info.get_pool_list()))) {
     LOG_WARN("failed to assign pool list", KR(ret), K(job_info));
   } else if (OB_FAIL(fill_create_tenant_arg(job_info, pool_list, arg))) {
@@ -250,6 +257,9 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
       LOG_WARN("update restore option", K(ret), K(new_tenant_id), K(job_id), K(tenant_id_));
     } else if (OB_FAIL(may_update_restore_concurrency_(new_tenant_id, job_info))) {
       LOG_WARN("failed to update restore concurrency", K(ret), K(new_tenant_id), K(job_info));
+    } else if (!job_info.get_sts_credential().empty()
+      && OB_FAIL(set_tenant_sts_crendential_config_(*sql_proxy_, new_tenant_id, job_info))) {
+      LOG_WARN("fail to set tenant sts credential config", K(ret), K(new_tenant_id));
     } else {
       restore_service_->wakeup();
     }
@@ -423,9 +433,7 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     }
   } else if (!is_sys_ready) { // sys job not in WAIT_RETSTORE_TENANT_FINISH  state
     ret = OB_EAGAIN;
-  } else if (share::ObBackupSetFileDesc::is_allow_quick_restore(
-              static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
-             && OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
+  } else if (OB_FAIL(update_tenant_restore_data_mode_to_remote_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to REMOTE", K(ret), K_(tenant_id));
   } else if (OB_FAIL(restore_root_key(job_info))) {
     LOG_WARN("fail to restore root key", K(ret));
@@ -448,6 +456,26 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
 
   LOG_INFO("[RESTORE] restore pre", K(ret), K(job_info));
 
+  return ret;
+}
+int ObRestoreScheduler::set_tenant_sts_crendential_config_(
+    common::ObISQLClient &proxy, const uint64_t tenant_id, const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_row = 0;
+  ObSqlString sql;
+  const ObString &sts_credential = job_info.get_sts_credential();
+  bool is_exist = false;
+  if (!is_user_tenant(tenant_id) || sts_credential.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not user tenant or sts credential is empty", K(job_info));
+  } else if (OB_FAIL(sql.assign_fmt("alter system set sts_credential='%.*s'", sts_credential.length(), sts_credential.ptr()))) {
+    LOG_WARN("failed to assign fmt", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
+    LOG_WARN("failed to set sts credential", K(ret), K(tenant_id));
+  } else {
+    LOG_INFO("update restore tenant sts credential", K(tenant_id));
+  }
   return ret;
 }
 
@@ -496,7 +524,20 @@ int ObRestoreScheduler::fill_restore_statistics(const share::ObPhysicalRestoreJo
     } else {
       restore_progress_info.ls_count_ = ls_info.ls_attr_array_.count();
       restore_progress_info.tablet_count_ = 0;
-      restore_progress_info.total_bytes_ = backup_set_info.backup_set_file_.stats_.output_bytes_;
+
+      // take sum of all backup sets needed
+      ARRAY_FOREACH_X(job_info.get_multi_restore_path_list().get_backup_set_path_list(), i, cnt, OB_SUCC(ret)) {
+        store.reset();
+        storage::ObExternBackupSetInfoDesc set_info;
+        const share::ObBackupSetPath set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(i);
+        if (OB_FAIL(store.init(set_path.ptr()))) {
+          LOG_WARN("fail to init backup data store", K(set_path));
+        } else if (OB_FAIL(store.read_backup_set_info(set_info))) {
+          LOG_WARN("fail to read backup set info", K(ret));
+        } else {
+          restore_progress_info.total_bytes_ += set_info.backup_set_file_.stats_.output_bytes_;
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -664,8 +705,6 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
   } else if (job_info.get_restore_type().is_full_restore()
-             && share::ObBackupSetFileDesc::is_allow_quick_restore(
-                static_cast<share::ObBackupSetFileDesc::Compatible>(job_info.get_backup_compatible()))
              && OB_FAIL(update_tenant_restore_data_mode_to_normal_(tenant_id_))) {
     LOG_WARN("fail to update tenant restore data mode to NORMAL", K(ret), K_(tenant_id));
   } else if (OB_FAIL(ObRestoreCommonUtil::try_update_tenant_role(sql_proxy_, tenant_id_,
@@ -774,7 +813,7 @@ int ObRestoreScheduler::try_get_tenant_restore_history_(
 {
   int ret = OB_SUCCESS;
   restore_tenant_exist = true;
-  ObHisRestoreJobPersistInfo user_history_info; 
+  ObHisRestoreJobPersistInfo user_history_info;
   const uint64_t restore_tenant_id = job_info.get_tenant_id();
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -813,7 +852,7 @@ int ObRestoreScheduler::try_recycle_job(const ObPhysicalRestoreJob &job)
   bool is_dropped = false;
   int failed_ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_RECYCLE_PHYSICAL_RESTORE_JOB);
-  
+
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
@@ -860,7 +899,7 @@ int ObRestoreScheduler::try_update_job_status(
   } else if (OB_FAIL(restore_op.init(&sql_client, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("fail init", K(ret), K(tenant_id_));
   } else {
-    PhysicalRestoreStatus next_status = get_next_status(return_ret, job.get_status());
+    PhysicalRestoreStatus next_status = get_next_status(job.get_progress_display_mode(), return_ret, job.get_status());
     const common::ObCurTraceId::TraceId trace_id = *ObCurTraceId::get_trace_id();
 
     if (PHYSICAL_RESTORE_FAIL == next_status && OB_LS_RESTORE_FAILED != return_ret
@@ -915,6 +954,7 @@ PhysicalRestoreStatus ObRestoreScheduler::get_sys_next_status(
 
 
 PhysicalRestoreStatus ObRestoreScheduler::get_next_status(
+  const share::ObRestoreProgressDisplayMode &progress_mode,
   int return_ret,
   PhysicalRestoreStatus current_status)
 {
@@ -934,6 +974,14 @@ PhysicalRestoreStatus ObRestoreScheduler::get_next_status(
         break;
       }
       case PHYSICAL_RESTORE_WAIT_CONSISTENT_SCN : {
+        if (progress_mode.is_bytes()) {
+          next_status = PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH;
+        } else {
+          next_status = PHYSICAL_RESTORE_WAIT_LS;
+        }
+        break;
+      }
+      case PHYSICAL_RESTORE_WAIT_QUICK_RESTORE_FINISH : {
         next_status = PHYSICAL_RESTORE_WAIT_LS;
         break;
       }
@@ -970,12 +1018,13 @@ int ObRestoreScheduler::restore_upgrade(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", KR(ret));
+  } else if (OB_FAIL(wait_restore_safe_mview_merge_info_())) {
+    LOG_WARN("fail to wait restore safe mview merge info, need retry",
+              K(ret), K(job_info));
   } else {
-    if (OB_SUCC(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
-        LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
-      }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
+      LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
     }
   }
   LOG_INFO("[RESTORE] upgrade pre finish", KR(ret), K(job_info));
@@ -988,7 +1037,7 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_INIT_LS);
   ObSchemaGetterGuard schema_guard;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
-  const common::ObSArray<share::ObBackupSetPath> &backup_set_path_array = 
+  const common::ObSArray<share::ObBackupSetPath> &backup_set_path_array =
     job_info.get_multi_restore_path_list().get_backup_set_path_list();
   const common::ObSArray<share::ObBackupPathString> &log_path_array = job_info.get_multi_restore_path_list().get_log_path_list();
   if (OB_UNLIKELY(!inited_)) {
@@ -1040,7 +1089,7 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
       LOG_WARN("failed to finish create ls", KR(ret), KPC(tenant_schema));
     } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, sql_proxy_))) {
       LOG_WARN("failed to init restore_source_mgr", KR(ret));
-    } else if (1 == log_path_array.count() 
+    } else if (1 == log_path_array.count()
       && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
       LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
     } else if (0 == log_path_array.count()) /*add restore source*/ {
@@ -1158,7 +1207,7 @@ int ObRestoreScheduler::wait_all_ls_created_(const share::schema::ObTenantSchema
     palf::PalfBaseInfo palf_base_info;
     ObLSRecoveryStat recovery_stat;
     ObLSRecoveryStatOperator ls_recovery_operator;
-    
+
     if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id, ls_array,
                                                      *sql_proxy_))) {
       LOG_WARN("failed to get all ls status", KR(ret), K(tenant_id));
@@ -1292,6 +1341,52 @@ int ObRestoreScheduler::check_tenant_replay_to_consistent_scn(const uint64_t ten
   return ret;
 }
 
+int ObRestoreScheduler::restore_wait_quick_restore_finish(const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  TenantRestoreStatus tenant_restore_status;
+  const uint64_t tenant_id = job_info.get_tenant_id();
+  const ObTenantSchema *tenant_schema = NULL;
+  ObSchemaGetterGuard schema_guard;
+  bool is_replay_finish = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_FAIL(check_tenant_can_restore_(tenant_id))) {
+    LOG_WARN("failed to check tenant can restore", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(
+          OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant not exist or tenant is not in physical restore status", KR(ret),
+               KPC(tenant_schema));
+  } else if (OB_FAIL(check_all_ls_quick_restore_finish_(tenant_id, job_info.get_restore_type(), tenant_restore_status))) {
+    LOG_WARN("fail to check all ls finish quick restore", KR(ret), K(job_info));
+  } else if (tenant_restore_status.is_finish()) {
+    LOG_INFO("[RESTORE] restore wait all ls finish quick restore done", K(tenant_id), K(tenant_restore_status));
+    int tmp_ret = OB_SUCCESS;
+    const uint64_t exec_tenant_id = gen_meta_tenant_id(job_info.get_tenant_id());
+    if (tenant_restore_status.is_failed()) {
+      ret = OB_LS_RESTORE_FAILED;
+      LOG_INFO("[RESTORE]restore wait quick restore finish failed", K(ret));
+      if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
+        LOG_WARN("fail to update job status", KR(ret), K(job_info));
+      }
+    } else if (OB_FAIL(stat_restore_progress_(*sql_proxy_, job_info, false/*is_restore_stat_start*/, false/*is_restore_finish*/))) {
+      LOG_WARN("fail to stat restore progress", K(ret));
+    } else if (OB_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
+      LOG_WARN("fail to update job status", KR(ret), K(job_info));
+    }
+  }
+  return ret;
+}
+
 int ObRestoreScheduler::restore_wait_ls_finish(const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
@@ -1319,7 +1414,7 @@ int ObRestoreScheduler::restore_wait_ls_finish(const share::ObPhysicalRestoreJob
     LOG_WARN("tenant not exist or tenant is not in physical restore status", KR(ret),
                KPC(tenant_schema));
   } else if (job_info.get_restore_type().is_quick_restore()
-            && OB_FAIL(check_all_ls_quick_restore_finish_(tenant_id, tenant_restore_status))) {
+            && OB_FAIL(check_all_ls_quick_restore_finish_(tenant_id, job_info.get_restore_type(), tenant_restore_status))) {
     LOG_WARN("fail to check all ls quick restore finish", KR(ret), K(job_info));
   } else if (job_info.get_restore_type().is_full_restore()
             && OB_FAIL(check_all_ls_restore_finish_(tenant_id, tenant_restore_status))) {
@@ -1332,7 +1427,7 @@ int ObRestoreScheduler::restore_wait_ls_finish(const share::ObPhysicalRestoreJob
     int tenant_restore_result = OB_LS_RESTORE_FAILED;
     if (tenant_restore_status.is_success()) {
       tenant_restore_result = OB_SUCCESS;
-    } 
+    }
     if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, tenant_restore_result, job_info))) {
       LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), KR(tenant_restore_result), K(job_info));
     }
@@ -1402,14 +1497,19 @@ int ObRestoreScheduler::check_all_ls_restore_to_consistent_scn_finish_(
 
 int ObRestoreScheduler::check_all_ls_quick_restore_finish_(
     const uint64_t tenant_id,
+    const ObRestoreType &restore_type,
     TenantRestoreStatus &tenant_restore_status)
 {
   int ret = OB_SUCCESS;
   bool is_finished = false;
   bool is_success = false;
   ObPhysicalRestoreTableOperator restore_op;
-  const ObLSRestoreStatus sys_ls_target_status(ObLSRestoreStatus::Status::NONE);
-  const ObLSRestoreStatus user_ls_target_status(ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH);
+  ObLSRestoreStatus sys_ls_target_status(ObLSRestoreStatus::Status::NONE);
+  ObLSRestoreStatus user_ls_target_status(ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH);
+  if (restore_type.is_full_restore()) {
+    sys_ls_target_status = ObLSRestoreStatus::Status::WAIT_QUICK_RESTORE;
+    user_ls_target_status = ObLSRestoreStatus::WAIT_QUICK_RESTORE;
+  }
   if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id, share::OBCG_STORAGE/*group_id*/))) {
     LOG_WARN("fail init", K(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_op.check_finish_restore_to_target_status(sys_ls_target_status, user_ls_target_status, is_finished, is_success))) {
@@ -1619,6 +1719,8 @@ int ObRestoreScheduler::stat_restore_progress_(
   ObArray<share::ObLSRestoreProgressPersistInfo> progress_array;
   int64_t total_tablet_cnt = 0;
   int64_t finished_tablet_cnt = 0;
+  int64_t total_bytes = 0;
+  int64_t finished_bytes = 0;
   ObRestoreJobPersistKey job_key;
   ObRestoreProgressPersistInfo restore_progress;
   job_key.tenant_id_ = tenant_id_;
@@ -1639,6 +1741,8 @@ int ObRestoreScheduler::stat_restore_progress_(
     int64_t ls_replica_cnt = 0;
     int64_t total_tablet_replica_cnt = 0;
     int64_t finish_tablet_replica_cnt = 0;
+    int64_t total_replica_bytes = 0;
+    int64_t finish_replica_bytes = 0;
     if (OB_FAIL(lst_operator_->get(GCONF.cluster_id,
                                    tenant_id_,
                                    ls_progress.key_.ls_id_,
@@ -1659,7 +1763,6 @@ int ObRestoreScheduler::stat_restore_progress_(
       if (cur.key_.ls_id_ != ls_progress.key_.ls_id_) {
         break;
       }
-
       const ObLSReplica *replica = nullptr;
       if (OB_ISNULL(leader_replica)) {
         // the ls was deleted.
@@ -1667,6 +1770,8 @@ int ObRestoreScheduler::stat_restore_progress_(
         total_tablet_replica_cnt += cur.tablet_count_;
         // treat tablets on deleted ls as all finished.
         finish_tablet_replica_cnt += cur.tablet_count_;
+        total_replica_bytes += cur.total_bytes_;
+        finish_replica_bytes += cur.total_bytes_;
       } else if (OB_FAIL(ls_info.find(cur.key_.addr_, replica))) {
         // the replica was not in member list, ignore the progress.
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -1678,6 +1783,8 @@ int ObRestoreScheduler::stat_restore_progress_(
         ++ls_replica_cnt;
         total_tablet_replica_cnt += cur.tablet_count_;
         finish_tablet_replica_cnt += cur.finish_tablet_count_;
+        total_replica_bytes += cur.total_bytes_;
+        finish_replica_bytes += cur.finish_bytes_;
       } else if (replica->get_in_learner_list()) {
         // filter learner replicas with flag
         common::ObMember learner_in_learner_list;
@@ -1689,6 +1796,8 @@ int ObRestoreScheduler::stat_restore_progress_(
           ++ls_replica_cnt;
           total_tablet_replica_cnt += cur.tablet_count_;
           finish_tablet_replica_cnt += cur.finish_tablet_count_;
+          total_replica_bytes += cur.total_bytes_;
+          finish_replica_bytes += cur.finish_bytes_;
         }
       }
     }
@@ -1696,26 +1805,65 @@ int ObRestoreScheduler::stat_restore_progress_(
     if (ls_replica_cnt > 0) {
       total_tablet_cnt += total_tablet_replica_cnt / ls_replica_cnt;
       finished_tablet_cnt += finish_tablet_replica_cnt / ls_replica_cnt;
+      total_bytes += total_replica_bytes / ls_replica_cnt;
+      finished_bytes += finish_replica_bytes / ls_replica_cnt;
     }
   }
 
   if (is_restore_stat_start) {
     finished_tablet_cnt = 0;
+    finished_bytes = 0;
   } else if (is_restore_finish) {
     total_tablet_cnt = restore_progress.tablet_count_;
     // correct result, force finished_tablet_cnt equal to total_tablet_cnt.
     finished_tablet_cnt = total_tablet_cnt;
+    // initial value of total bytes may not set until is_restore_finish
+    total_bytes = restore_progress.total_bytes_ > 0 ? restore_progress.total_bytes_ : total_bytes;
+    finished_bytes = total_bytes;
   } else {
     total_tablet_cnt = restore_progress.tablet_count_;
+    //intial value of total_bytes in not set when is_restore_stat_start
+    total_bytes = restore_progress.total_bytes_ > 0 ? restore_progress.total_bytes_ : total_bytes;
     if (finished_tablet_cnt >= total_tablet_cnt) {
       LOG_INFO("finished_tablet_cnt is bigger than total_tablet_cnt.", K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
       // If something wrong with the restore stat, let it keep to 99%.
       finished_tablet_cnt = total_tablet_cnt - 1;
+      finished_bytes = total_bytes / 100 * 99;
     }
   }
-  if (FAILEDx(helper.update_restore_process(proxy, job_key, total_tablet_cnt, finished_tablet_cnt))) {
-    LOG_WARN("fail to update restore progress", K(ret), K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
+  TenantRestoreStatus tenant_restore_status;
+  if (FAILEDx(helper.update_restore_progress_by_tablet_cnt(proxy, job_key, total_tablet_cnt, finished_tablet_cnt))) {
+    LOG_WARN("fail to update restore progress by tablet cnt", K(ret), K(job_key), K(total_tablet_cnt), K(finished_tablet_cnt));
+  } else if (OB_FAIL(update_restore_progress_by_bytes_(job_info, total_bytes, finished_bytes))) {
+    LOG_WARN("fail to update restore progress by bytes", K(ret), K(job_key), K(total_bytes), K(finished_bytes));
   }
+  return ret;
+}
+
+int ObRestoreScheduler::update_restore_progress_by_bytes_(
+  const ObPhysicalRestoreJob &job, const int64_t total_bytes, const int64_t finish_bytes)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalRestoreTableOperator restore_op;
+  ObRestoreJobPersistKey job_key;
+  share::ObRestorePersistHelper helper;
+  bool all_finish = false;
+  job_key.tenant_id_ = tenant_id_;
+  job_key.job_id_ = job.get_job_id();
+
+  if (!job.get_progress_display_mode().is_bytes()) {
+    // do nothing
+  } else if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
+    LOG_WARN("fail to init", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(restore_op.check_all_ls_finish_quick_restore(all_finish))) {
+    LOG_WARN("fail to check all ls finish quick restore", K(ret), K(job));
+  } else if (!all_finish) { //skip
+  } else if (OB_FAIL(helper.init(tenant_id_, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(helper.update_restore_progress_by_bytes(*sql_proxy_, job_key, total_bytes, finish_bytes))) {
+    LOG_WARN("fail to update restore progress by bytes", K(ret), K(job_key), K(total_bytes), K(finish_bytes));
+  }
+
   return ret;
 }
 
@@ -1781,5 +1929,101 @@ int ObRestoreScheduler::update_tenant_restore_data_mode_(const uint64_t tenant_i
   return ret;
 }
 
+int ObRestoreScheduler::try_collect_ls_mv_merge_scn_(const share::SCN &major_mv_merge_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLSAttrArray ls_attr_array;
+  const uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
+  share::ObLSAttrOperator ls_attr_operator(user_tenant_id, sql_proxy_);
+  if (!is_valid_tenant_id(user_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id!", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(ls_attr_operator.get_all_ls_by_order(ls_attr_array))) {
+    LOG_WARN("fail to get all ls", KR(ret));
+  } else {
+    share::SCN min_merge_scn(share::SCN::max_scn());
+    share::SCN merge_scn;
+    ARRAY_FOREACH(ls_attr_array, i) {
+      const ObLSAttr &ls_attr = ls_attr_array.at(i);
+      if (ls_attr.get_ls_id().is_sys_ls()) {
+        // skip sys ls
+      } else if (OB_LS_NORMAL != ls_attr.get_ls_status()) {
+        LOG_INFO("skip collect not normal ls", K(ls_attr), K(user_tenant_id));
+      } else if (OB_FAIL(ObCollectMvMergeInfoTask::
+                         collect_ls_member_merge_info(user_tenant_id, ls_attr.get_ls_id(), merge_scn))) {
+        LOG_WARN("fail to collect ls member merge scn", KR(ret), K(ls_attr), K(user_tenant_id));
+      } else if (min_merge_scn > merge_scn) {
+        min_merge_scn = merge_scn;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (min_merge_scn >= major_mv_merge_scn) {
+        // do nothing
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("ls member merge scn is less than lastest merge_scn",
+                  K(ret), K(min_merge_scn), K(tenant_id_), K(major_mv_merge_scn));
+      }
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_WAIT_RESTORE_SAFE_MVIEW);
+// step 1 get major tenant mv merge scn
+// step 2 gWAIT_RESTORE_SFAFE_MVIEWs
+// step 3 check major mv merge scn is geater than tenant mv merge scn
+// step 4 safe check
+int ObRestoreScheduler::wait_restore_safe_mview_merge_info_()
+{
+  int ret = OB_SUCCESS;
+
+  bool need_schedule = false;
+  share::SCN mv_lastest_merge_scn(share::SCN::min_scn());
+#ifdef ERRSIM
+  ret = ERRSIM_WAIT_RESTORE_SAFE_MVIEW ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("error sim to wait in restore upgrade status",  K(ret), K(tenant_id_));
+  }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error! sql proxy is null!", K(ret), K(sql_proxy_));
+  } else if (OB_FAIL(ObMViewTimerTask::need_schedule_major_refresh_mv_task(tenant_id_, need_schedule))) {
+    LOG_WARN("failed to check need schedule", KR(ret), K(tenant_id_));
+  } else if (!need_schedule) {
+    // do nothing
+  } else {
+    share::SCN major_mv_merge_scn(share::SCN::min_scn());
+    ObGlobalStatProxy global_proxy(*sql_proxy_, tenant_id_);
+    if (OB_FAIL(ObCollectMvMergeInfoTask::get_min_mv_tablet_major_compaction_scn(mv_lastest_merge_scn))) {
+      LOG_WARN("fail to mv tablet merge scn", KR(ret), K(tenant_id_));
+      // when create mv/remove mv, get tablet major scn is null
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(global_proxy.get_major_refresh_mv_merge_scn(false, /*for update*/
+                                                                   major_mv_merge_scn))) {
+      LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id_));
+      if (OB_ERR_NULL_VALUE == ret) {
+        ret = OB_SUCCESS;
+      }
+    } else if (mv_lastest_merge_scn < major_mv_merge_scn) {
+      ret = OB_EAGAIN;
+      LOG_INFO("major_refresh_mv_merge_scn is not greater than tenant mv merge scn",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+    } else {
+      LOG_INFO("major_merge_scn is greater than tenant_mv_merge_scn, pass check",
+                 K(ret), K(tenant_id_), K(mv_lastest_merge_scn), K(major_mv_merge_scn));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!major_mv_merge_scn.is_min() && OB_FAIL(try_collect_ls_mv_merge_scn_(major_mv_merge_scn))) {
+      LOG_WARN("fail to collect ls mv merge scn", K(ret), K(major_mv_merge_scn));
+    } else if (FALSE_IT(void(ObMViewPushRefreshScnTask::check_major_mv_refresh_scn_safety(tenant_id_)))) {
+    }
+  }
+  return ret;
+}
 } // end namespace rootserver
 } // end namespace oceanbase

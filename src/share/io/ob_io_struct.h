@@ -23,6 +23,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/io/ob_io_define.h"
 #include "share/io/io_schedule/ob_io_mclock.h"
 
@@ -164,55 +165,78 @@ struct ObIOUsageInfo
   TO_STRING_KV(K(io_stat_), K(io_estimator_), K(avg_iops_), K(avg_byte_), K(avg_prepare_delay_us_), K(avg_schedule_delay_us_), K(avg_submit_delay_us_), K(avg_device_delay_us_), K(avg_total_delay_us_));
 };
 
+// avg delay array (us)
+struct ObIODelayArr
+{
+  ObIODelayArr():prepare_delay_us_(0), schedule_delay_us_(0), submit_delay_us_(0), device_delay_us_(0), total_delay_us_(0)
+  {}
+  ~ObIODelayArr(){}
+  int64_t prepare_delay_us_;
+  int64_t schedule_delay_us_;
+  int64_t submit_delay_us_;
+  int64_t device_delay_us_;
+  int64_t total_delay_us_;
+  void inc(const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
+      const int64_t device_delay, const int64_t total_delay)
+  {
+    ATOMIC_FAA(&prepare_delay_us_, prepare_delay);
+    ATOMIC_FAA(&schedule_delay_us_, schedule_delay);
+    ATOMIC_FAA(&submit_delay_us_, submit_delay);
+    ATOMIC_FAA(&device_delay_us_, device_delay);
+    ATOMIC_FAA(&total_delay_us_, total_delay);
+  }
+  int reset()
+  {
+    ATOMIC_SET(&prepare_delay_us_, 0);
+    ATOMIC_SET(&schedule_delay_us_, 0);
+    ATOMIC_SET(&submit_delay_us_, 0);
+    ATOMIC_SET(&device_delay_us_, 0);
+    ATOMIC_SET(&total_delay_us_, 0);
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K(prepare_delay_us_), K(schedule_delay_us_), K(submit_delay_us_), K(device_delay_us_), K(total_delay_us_));
+};
+
 struct ObIOGroupUsage
 {
+  struct ObIOLastStat
+  {
+    ObIOLastStat() : avg_size_(0), avg_iops_(0), avg_bw_(0), avg_delay_arr_()
+    {}
+    ~ObIOLastStat()
+    {}
+    double avg_size_;
+    double avg_iops_;
+    int64_t avg_bw_;
+    ObIODelayArr avg_delay_arr_;
+    TO_STRING_KV(K(avg_size_), K(avg_iops_), K(avg_bw_), K(avg_delay_arr_));
+  };
   ObIOGroupUsage()
-      : last_ts_(ObTimeUtility::fast_current_time()),
-        io_count_(0),
-        size_(0),
-        last_io_ps_record_(0),
-        last_io_bw_record_(0),
-        total_prepare_delay_(0),
-        total_schedule_delay_(0),
-        total_submit_delay_(0),
-        total_device_delay_(0),
-        total_total_delay_(0)
+      : last_ts_(ObTimeUtility::fast_current_time()), last_stat_(), io_count_(0), size_(0), total_delay_arr_()
   {}
-  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay,
-      int64_t &avg_schedule_delay, int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
+  int calc(double &avg_size, double &avg_iops, int64_t &avg_bw, int64_t &avg_prepare_delay, int64_t &avg_schedule_delay,
+      int64_t &avg_submit_delay, int64_t &avg_device_delay, int64_t &avg_total_delay);
   void inc(const int64_t size, const int prepare_delay, const int64_t schedule_delay, const int64_t submit_delay,
       const int64_t device_delay, const int64_t total_delay)
   {
     ATOMIC_FAA(&size_, size);
     ATOMIC_FAA(&io_count_, 1);
-    ATOMIC_FAA(&total_prepare_delay_, prepare_delay);
-    ATOMIC_FAA(&total_schedule_delay_, schedule_delay);
-    ATOMIC_FAA(&total_submit_delay_, submit_delay);
-    ATOMIC_FAA(&total_device_delay_, device_delay);
-    ATOMIC_FAA(&total_total_delay_, total_delay);
+    total_delay_arr_.inc(prepare_delay, schedule_delay, submit_delay, device_delay, total_delay);
   }
   int clear()
   {
-    ATOMIC_SET(&total_prepare_delay_, 0);
-    ATOMIC_SET(&total_schedule_delay_, 0);
-    ATOMIC_SET(&total_submit_delay_, 0);
-    ATOMIC_SET(&total_device_delay_, 0);
-    ATOMIC_SET(&total_total_delay_, 0);
-    return OB_SUCCESS;
+    int ret = total_delay_arr_.reset();
+    return ret;
   }
-  int64_t last_ts_;
+  int record(const double avg_size, const double avg_iops, const int64_t avg_bw, const int64_t avg_prepare_delay,
+      const int64_t avg_schedule_delay, const int64_t avg_submit_delay, const int64_t avg_device_delay,
+      const int64_t avg_total_delay);
+  int64_t last_ts_;  // us
+  ObIOLastStat last_stat_;
   int64_t io_count_;
   int64_t size_;
-  int64_t last_io_ps_record_;    // iops
-  int64_t last_io_bw_record_;    // iobw
-  int64_t total_prepare_delay_;  // us
-  int64_t total_schedule_delay_;
-  int64_t total_submit_delay_;
-  int64_t total_device_delay_;
-  int64_t total_total_delay_;
-  TO_STRING_KV(K(last_ts_), K(io_count_), K(size_), K(last_io_ps_record_), K(last_io_bw_record_),
-      K(total_prepare_delay_), K(total_schedule_delay_), K(total_submit_delay_), K(total_device_delay_),
-      K(total_total_delay_));
+  ObIODelayArr total_delay_arr_;  // us
+  TO_STRING_KV(K(last_ts_), K(last_stat_), K(io_count_), K(size_), K(total_delay_arr_));
 };
 
 struct ObIOFailedReqUsageInfo : ObIOGroupUsage
@@ -222,20 +246,24 @@ struct ObIOFailedReqUsageInfo : ObIOGroupUsage
 class ObIOUsage final
 {
 public:
-  ObIOUsage() : info_(), failed_req_info_() {}
-  ~ObIOUsage() {}
-  int init(const int64_t group_num);
+  ObIOUsage() : info_(), failed_req_info_(), group_throttled_time_us_(), lock_() {}
+  ~ObIOUsage();
+  int init(const uint64_t tenant_id, const int64_t group_num);
   int refresh_group_num (const int64_t group_num);
   void accumulate(ObIORequest &request);
   void calculate_io_usage();
   const ObSEArray<ObIOUsageInfo, GROUP_START_NUM> &get_io_usage() { return info_; }
   ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> &get_failed_req_usage() { return failed_req_info_; }
   ObSEArray<int64_t, GROUP_START_NUM> &get_group_throttled_time_us() { return group_throttled_time_us_; }
+  int assign(const ObIOUsage &other);
   int64_t to_string(char* buf, const int64_t buf_len) const;
+private:
+  int assign_unsafe(const ObIOUsage &other);
 private:
   ObSEArray<ObIOUsageInfo, GROUP_START_NUM> info_;
   ObSEArray<ObIOFailedReqUsageInfo, GROUP_START_NUM> failed_req_info_;
   ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
+  mutable common::ObQSyncLock lock_;
 };
 
 class ObCpuUsage final
@@ -367,6 +395,8 @@ public:
 private:
   int schedule_request_(ObIORequest &req, const int64_t schedule_request);
 private:
+  static const int64_t SENDER_QUEUE_WATERLEVEL = 64;
+  friend class ObIOTuner;
   bool is_inited_;
   const ObIOConfig &io_config_;
   ObIAllocator &allocator_;
@@ -427,6 +457,7 @@ private:
 
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
+  static const int32_t MAX_DETECT_DISK_HUNG_IO_CNT = 10;
   static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
 private:
   bool is_inited_;
@@ -460,6 +491,11 @@ private:
   static int64_t cal_thread_count(const int64_t conf_thread_count);
 private:
   bool is_inited_;
+  static const int64_t MAX_SYNC_IO_QUEUE_COUNT = 512;
+  ObFixedQueue<ObIORequest> req_queue_;
+  ObThreadCond cond_;
+  int64_t submit_count_;
+  bool is_wait_;
 };
 
 // each device has several channels, including async channels and sync channels.
@@ -493,6 +529,7 @@ private:
   ObIODevice *device_handle_; //local device_handle
   int64_t used_io_depth_;
   int64_t max_io_depth_;
+  ObSpinLock lock_for_sync_io_;
 };
 
 class ObIORunner : public lib::TGRunnable
@@ -618,14 +655,16 @@ struct ObIOFuncUsageByMode : ObIOGroupUsage
 {
 };
 typedef ObSEArray<ObIOFuncUsageByMode, static_cast<uint8_t>(ObIOGroupMode::MODECNT)> ObIOFuncUsage;
+typedef ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> ObIOFuncUsageArr;
 struct ObIOFuncUsages
 {
 public:
   ObIOFuncUsages();
   ~ObIOFuncUsages() = default;
+  int init(const uint64_t tenant_id);
   int accumulate(ObIORequest &req);
   TO_STRING_KV(K(func_usages_));
-  ObSEArray<ObIOFuncUsage, static_cast<uint8_t>(share::ObFunctionType::MAX_FUNCTION_NUM)> func_usages_;
+  ObIOFuncUsageArr func_usages_;
 };
 
 // Device Health status
@@ -722,9 +761,7 @@ private:
   hash::ObHashMap<int64_t /*request_ptr*/, TraceInfo> trace_map_;
 };
 
-
 // template function implementation
-
 template<typename T, typename... Args>
 int ObIOAllocator::alloc(T *&instance, Args &...args)
 {

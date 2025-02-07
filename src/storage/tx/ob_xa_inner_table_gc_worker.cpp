@@ -15,6 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -56,19 +57,27 @@ int ObXAInnerTableGCWorker::start()
   return ret;
 }
 
+// 1. in mysql mode, only meta leader collect invalid records
+// 2. no need gc for sys tenant temporarily
 void ObXAInnerTableGCWorker::run1()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObLSID meta_ls_id(ObLSID::SYS_LS_ID);
   const uint64_t tenant_id = MTL_ID();
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   int64_t last_scan_ts = ObTimeUtil::current_time();
 
+  bool has_decided_mode = false;
   bool is_oracle_mode = false;
   int64_t start_delay =  ObRandom::rand(1, 100);
-
   // use start delay avoid diffient thread do gc on the same time
   lib::set_thread_name("ObXAGCWorker");
-  for (int64_t i = 0; i < start_delay && !has_set_stop(); ++i) {
-    sleep(1);
+  {
+    ObBKGDSessInActiveGuard inactive_guard;
+    for (int64_t i = 0; i < start_delay && !has_set_stop(); ++i) {
+      sleep(1);
+    }
   }
 
   constexpr int64_t gc_interval_upper_bound = 24L * (3600L * 1000L * 1000L); //upper bound is 24h
@@ -76,31 +85,61 @@ void ObXAInnerTableGCWorker::run1()
   int64_t gc_interval = std::max(2 * max_gc_cost_time_, tmp_start_delay);
   gc_interval = std::min(gc_interval, gc_interval_upper_bound);
 
-  int64_t gc_cost_time = 0;
-  int64_t before_gc_ts = 0;
-
+  if (OB_SUCCESS != (tmp_ret = ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
+          is_oracle_mode))) {
+    TRANS_LOG(WARN, "check oracle mode failed", K(ret));
+  } else {
+    has_decided_mode = true;
+  }
   while (!has_set_stop()) {
-    before_gc_ts = ObTimeUtil::current_time();
-    if (before_gc_ts - last_scan_ts > gc_interval) {
-      if (is_user_tenant(tenant_id)
-          && OB_SUCC(share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))
-          && is_oracle_mode) {
-        if (OB_FAIL(xa_service_->gc_invalid_xa_record(tenant_id))) {
-          TRANS_LOG(WARN, "gc invalid xa record failed", K(ret), K(tenant_id),
-                    K(gc_interval), K(last_scan_ts), K(before_gc_ts));
+    if (is_user_tenant(tenant_id) && has_decided_mode) {
+      int64_t gc_cost_time = 0;
+      int64_t before_gc_ts = ObTimeUtil::current_time();
+      if (before_gc_ts - last_scan_ts > gc_interval) {
+        if (is_oracle_mode) {
+          // oracle mode
+          if (OB_FAIL(xa_service_->gc_invalid_xa_record(tenant_id))) {
+            TRANS_LOG(WARN, "gc invalid xa record failed", K(ret), K(tenant_id),
+                      K(gc_interval), K(last_scan_ts), K(before_gc_ts));
+          } else {
+            // update last scan ts
+            last_scan_ts = ObTimeUtil::current_time();
+            gc_cost_time = last_scan_ts - before_gc_ts; // compute gc cost
+            max_gc_cost_time_ = std::max(max_gc_cost_time_, gc_cost_time);
+            TRANS_LOG(INFO, "clean invalid records", K(tenant_id), K(ret), K(gc_cost_time));
+          }
         } else {
-          // update last scan ts
-          last_scan_ts = ObTimeUtil::current_time();
-          gc_cost_time = last_scan_ts - before_gc_ts; // compute gc cost
-          max_gc_cost_time_ = std::max(max_gc_cost_time_, gc_cost_time);
-          TRANS_LOG(INFO, "scan xa inner table for one round", K(tenant_id), K(ret), K(gc_cost_time));
+          // mysql mode
+          common::ObAddr leader_addr;
+          if (OB_FAIL(MTL(ObTransService *)->get_location_adapter()->nonblock_get_leader(
+                  GCONF.cluster_id, meta_tenant_id, meta_ls_id, leader_addr))) {
+            TRANS_LOG(WARN, "get leader failed", K(ret));
+          } else if (GCTX.self_addr() == leader_addr) {
+            if (OB_FAIL(xa_service_->gc_record_for_mysql())) {
+              TRANS_LOG(WARN, "gc record failed", K(ret));
+            } else {
+              // update last scan ts
+              last_scan_ts = ObTimeUtil::current_time();
+              gc_cost_time = last_scan_ts - before_gc_ts;
+              max_gc_cost_time_ = std::max(max_gc_cost_time_, gc_cost_time);
+              TRANS_LOG(INFO, "clean invalid records", K(ret), K(gc_cost_time));
+            }
+          }
         }
+      }
+    } else if (is_user_tenant(tenant_id) && !has_decided_mode) {
+      if (OB_SUCCESS != (tmp_ret = ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id,
+              is_oracle_mode))) {
+        TRANS_LOG(WARN, "check oracle mode failed", K(ret));
       } else {
-        last_scan_ts = before_gc_ts;
+        has_decided_mode = true;
       }
     }
     //sleep 20 secnd whether gc succ or not
-    SLEEP(20);
+    {
+      ObBKGDSessInActiveGuard inactive_guard;
+      SLEEP(20);
+    }
     // try refresh gc_interval,
     // if gc falied, and not update last_scan_ts, update gc_interval can be effective
     // gc_interval ～ [20s, 24h]

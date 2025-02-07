@@ -16,6 +16,7 @@
 #include <cstdint>
 #include "lib/net/ob_addr.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "logservice/logfetcher/ob_log_fetcher_user.h"
 #include "share/ob_errno.h"
 
 namespace oceanbase
@@ -94,6 +95,31 @@ private:
   uint64_t client_pid_;
   ObAddr client_addr_;
 };
+
+enum ObCdcFetchLogProtocolType
+{
+  UnknownProto = -1,
+  LogGroupEntryProto = 0,
+  RawLogDataProto = 1,
+};
+
+ObCdcFetchLogProtocolType get_fetch_log_protocol_type(const ObString &proto_type_str);
+
+const char *fetch_log_protocol_type_str(const ObCdcFetchLogProtocolType type);
+
+inline bool is_v1_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
+  return ObCdcFetchLogProtocolType::LogGroupEntryProto == type;
+}
+
+inline bool is_v2_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
+  return ObCdcFetchLogProtocolType::RawLogDataProto == type;
+}
+
+const char *cdc_client_type_str(const ObCdcClientType type);
+
+const char *feedback_type_str(const FeedbackType feedback);
+
+ObCdcClientType get_client_type_from_user_type(const logfetcher::LogFetcherUser user_type);
 
 }
 }

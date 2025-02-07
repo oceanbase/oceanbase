@@ -247,11 +247,13 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
@@ -296,11 +298,13 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
   Note:
       Degree of Parallelisim is 1 because of table property
 drop table tt2;
@@ -309,11 +313,11 @@ explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_Ge
 ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
 explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|tt2(idx)|1       |969         |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|tt2(idx)|1       |969         |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(tt2.g)]), filter([BOOL(ST_Intersects(tt2.g, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326)))])
@@ -438,20 +442,23 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|tt2(idx)|1       |969         |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|tt2(idx)|1       |969         |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(tt2.g)]), filter([BOOL(ST_Intersects(tt2.g, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326)))])
@@ -577,21 +584,24 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 insert into tt2 values (1, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
 explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|tt2(idx)|1       |969         |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|tt2(idx)|1       |969         |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(tt2.g)]), filter([BOOL(ST_Intersects(tt2.g, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326)))])
@@ -716,20 +726,23 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|tt2(idx)|1       |969         |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|tt2(idx)|1       |969         |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(tt2.g)]), filter([BOOL(ST_Intersects(tt2.g, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326)))])
@@ -855,11 +868,14 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats info:[version=0, is_locked=0, is_expired=0]
+      stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
+  Parameters:
+      :0 => 'LINESTRING(0 0, 10 10, 20 25, 50 60)'
+      :1 => 4326
   Note:
       Degree of Parallelisim is 1 because of table property
 drop table tt2;
@@ -881,11 +897,11 @@ insert into t (g) values
 (ST_GeomFromText('POINT(5 5)'));
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(0 0)'))])
@@ -906,11 +922,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(0 0)'), t.g)])
@@ -931,11 +947,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(1 1)'))])
@@ -956,11 +972,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(1 1)'), t.g)])
@@ -981,11 +997,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(2 2)'))])
@@ -1006,11 +1022,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(2 2)'), t.g)])
@@ -1031,11 +1047,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(3 3)'))])
@@ -1056,11 +1072,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(3 3)'), t.g)])
@@ -1081,11 +1097,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(4 4)'))])
@@ -1106,11 +1122,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,MIN,MIN ; 1152921504606846981,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(4 4)'), t.g)])
@@ -1131,11 +1147,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,MIN,MIN ; 1152921504606846981,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(5 5)'))])
@@ -1156,11 +1172,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,MIN,MIN ; 1152921504606846981,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(5 5)'), t.g)])
@@ -1181,11 +1197,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,MIN,MIN ; 1152921504606846981,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)'));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(3.1415926 3.1415926)'))])
@@ -1206,11 +1222,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)'), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)'), t.g)])
@@ -1288,11 +1304,11 @@ insert into t (g) values
 (ST_GeomFromText('POINT(5 5)', 4326));
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)',4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(0 0)', 4326))])
@@ -1313,11 +1329,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(0 0)', 4326), t.g)])
@@ -1338,11 +1354,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(1 1)', 4326))])
@@ -1363,11 +1379,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1153277837650709461,MIN,MIN ; 1153277837650709461,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(1 1)', 4326), t.g)])
@@ -1388,11 +1404,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1153277837650709461,MIN,MIN ; 1153277837650709461,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(2 2)', 4326))])
@@ -1413,11 +1429,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1154346547446608371,MIN,MIN ; 1154346547446608371,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(2 2)', 4326), t.g)])
@@ -1438,11 +1454,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1154346547446608371,MIN,MIN ; 1154346547446608371,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(3 3)', 4326))])
@@ -1463,11 +1479,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1157514470122841853,MIN,MIN ; 1157514470122841853,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(3 3)', 4326), t.g)])
@@ -1488,11 +1504,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1157514470122841853,MIN,MIN ; 1157514470122841853,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(4 4)', 4326))])
@@ -1513,11 +1529,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1158573256594155117,MIN,MIN ; 1158573256594155117,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(4 4)', 4326), t.g)])
@@ -1538,11 +1554,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1158573256594155117,MIN,MIN ; 1158573256594155117,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(5 5)', 4326))])
@@ -1563,11 +1579,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1158926715659086667,MIN,MIN ; 1158926715659086667,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(5 5)', 4326), t.g)])
@@ -1588,11 +1604,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1158926715659086667,MIN,MIN ; 1158926715659086667,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326));
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(t.g, ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326))])
@@ -1613,11 +1629,11 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1157707706271199443,MIN,MIN ; 1157707706271199443,MAX,MAX)
 explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326), g);
 Query Plan
-=================================================
-|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |159         |
-=================================================
+==================================================
+|ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE RANGE SCAN|t(idx)|1       |159         |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326), t.g)])

@@ -64,7 +64,7 @@ static int ussl_listenfd_handle_event(ussl_listenfd_t *s)
     // Note, if an error occurs while processing an acceptfd,
     // the returned result will still be 0.
     while (1) {
-      accept_fd = libc_accept(s->fd, (struct sockaddr *)&addr, &addr_len);
+      accept_fd = libc_accept4(s->fd, (struct sockaddr *)&addr, &addr_len, O_CLOEXEC);
       if (accept_fd >= 0) {
         ussl_on_accept(accept_fd, s->fty, s->ep);
       } else {

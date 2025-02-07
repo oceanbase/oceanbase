@@ -647,7 +647,7 @@ int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
     //no need topk histogram item.
   } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
+  } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_UNLIKELY(param.partition_infos_.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -671,7 +671,7 @@ int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to pack raw sql", K(ret));
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+  } else if (OB_FAIL(do_estimate(param, raw_sql.string(), false,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to evaluate basic stats", K(ret));
   } else {

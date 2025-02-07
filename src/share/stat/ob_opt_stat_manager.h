@@ -75,7 +75,6 @@ public:
                       const uint64_t tab_ref_id,
                       const ObIArray<int64_t> &part_ids,
                       const uint64_t column_id,
-                      const ObIArray<int64_t> &global_part_ids,
                       const int64_t row_cnt,
                       const double scale_ratio,
                       ObGlobalColumnStat &stat,
@@ -102,7 +101,6 @@ public:
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t tab_ref_id,
                      const ObIArray<int64_t> &part_ids,
-                     const ObIArray<int64_t> &global_part_ids,
                      const double scale_ratio,
                      ObGlobalTableStat &stat);
 

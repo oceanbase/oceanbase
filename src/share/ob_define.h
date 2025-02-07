@@ -63,7 +63,9 @@ using std::isnan;
 
 #define CK_0(a, b)                              \
   if (!(b)) {                                   \
-    ret = OB_ERR_UNEXPECTED;                    \
+    if (OB_SUCC(ret)) {                         \
+      ret = OB_ERR_UNEXPECTED;                  \
+    }                                           \
     LOG_WARN("invalid arguments", a, b);        \
   }
 

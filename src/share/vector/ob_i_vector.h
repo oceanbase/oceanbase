@@ -52,6 +52,13 @@ namespace common
                                 const ObLength r_len,       \
                                 int &cmp_ret
 
+#define VECTOR_COMPARE_BATCH_ROWS_ARGS const sql::ObExpr &expr,    \
+                                const uint16_t *sel,               \
+                                const uint16_t sel_cnt,            \
+                                sql::ObCompactRow **rows,          \
+                                const int64_t row_col_idx,         \
+                                const sql::RowMeta &row_meta,      \
+                                int *cmp_ret
 #define VECTOR_NOT_NULL_COMPARE_ARGS const sql::ObExpr &expr,    \
                                 const int64_t row_idx1,      \
                                 const int64_t row_idx2,      \
@@ -183,6 +190,10 @@ public:                                                                         
   {                                                                                                \
     return get<int64_t>(idx);                                                                      \
   }                                                                                                \
+  OB_INLINE int64_t get_mysql_datetime(const int64_t idx) const                            \
+  {                                                                                                \
+    return get<int64_t>(idx);                                                              \
+  }                                                                                                \
   OB_INLINE int64_t get_timestamp(const int64_t idx) const                                         \
   {                                                                                                \
     return get<int64_t>(idx);                                                                      \
@@ -190,6 +201,10 @@ public:                                                                         
   OB_INLINE int32_t get_date(const int64_t idx) const                                              \
   {                                                                                                \
     return get<int32_t>(idx);                                                                      \
+  }                                                                                                \
+  OB_INLINE int32_t get_mysql_date(const int64_t idx) const                                    \
+  {                                                                                                \
+    return get<int32_t>(idx);                                                                  \
   }                                                                                                \
   OB_INLINE int64_t get_time(const int64_t idx) const                                              \
   {                                                                                                \
@@ -316,6 +331,10 @@ public:                                                                         
   {                                                                                                \
     set<int64_t>(idx, v);                                                                          \
   }                                                                                                \
+  OB_INLINE void set_mysql_datetime(const int64_t idx, const ObMySQLDateTime v)                    \
+  {                                                                                                \
+    set<ObMySQLDateTime>(idx, v);                                                                  \
+  }                                                                                                \
   OB_INLINE void set_timestamp(const int64_t idx, const int64_t v)                                 \
   {                                                                                                \
     set<int64_t>(idx, v);                                                                          \
@@ -327,6 +346,10 @@ public:                                                                         
   OB_INLINE void set_date(const int64_t idx, const int32_t v)                                      \
   {                                                                                                \
     set<int32_t>(idx, v);                                                                          \
+  }                                                                                                \
+  OB_INLINE void set_mysql_date(const int64_t idx, const ObMySQLDate v)                            \
+  {                                                                                                \
+    set<ObMySQLDate>(idx, v);                                                                      \
   }                                                                                                \
   OB_INLINE void set_year(const int64_t idx, const int8_t v)                                       \
   {                                                                                                \
@@ -511,6 +534,8 @@ public:
   // compare the values ​​in the given interval with EvalBound and return the first unequal row idx
   virtual int null_first_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const = 0;
   virtual int null_last_mul_cmp(VECTOR_MUL_COMPARE_ARGS) const = 0;
+  virtual int null_first_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const = 0;
+  virtual int no_null_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const = 0;
 
   // append values to this vector from idx-th column of rows
   virtual int from_rows(const sql::RowMeta &row_meta,

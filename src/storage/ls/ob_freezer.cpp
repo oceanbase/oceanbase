@@ -1091,11 +1091,16 @@ int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
   ObTabletCreateDeleteMdsUserData user_data;
   bool is_committed = false;
   share::SCN transfer_scn = share::SCN::max_scn();
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
 
   if (tablet_id.is_ls_inner_tablet()) {
     //do nothing
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data,
-                                                                             is_committed))) {
+                                                                             writer,
+                                                                             trans_stat,
+                                                                             trans_version))) {
     LOG_WARN("fail to get latest tablet status", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
              && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
@@ -1290,6 +1295,7 @@ int ObFreezer::wait_data_memtable_freeze_finish_(ObITabletMemtable *tablet_memta
     int64_t write_lock = 0;
     ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
     if (OB_FAIL(check_ls_state())) {
+      TRANS_LOG(WARN, "ls state invalid", KR(ret));
     } else if (OB_FAIL(memtable->finish_freeze())) {
       TRANS_LOG(ERROR, "[Freezer] memtable cannot be flushed", K(ret), K(ls_id), KPC(memtable));
       stat_.add_diagnose_info("memtable cannot be flushed");
@@ -1313,6 +1319,7 @@ int ObFreezer::wait_direct_load_memtable_freeze_finish_(ObITabletMemtable *table
     int64_t write_lock = 0;
     ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
     if (OB_FAIL(check_ls_state())) {
+      TRANS_LOG(WARN, "ls state invalid", KR(ret));
     } else if (OB_FAIL(tablet_memtable->finish_freeze())) {
       TRANS_LOG(ERROR, "[Freezer] direct load memtable cannot be flushed", K(ret), K(ls_id), KPC(tablet_memtable));
       stat_.add_diagnose_info("direct load memtable cannot be flushed");
@@ -1345,7 +1352,9 @@ int ObFreezer::wait_memtable_ready_for_flush_(ObITabletMemtable *tablet_memtable
 
     int64_t time_counter = 0;
     do {
-      if (OB_ISNULL(tablet_memtable)) {
+      if (OB_FAIL(check_ls_state())) {
+        TRANS_LOG(WARN, "ls state invalid", KR(ret));
+      } else if (OB_ISNULL(tablet_memtable)) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "[Freezer] memtable cannot be null", K(ret));
       } else if (FALSE_IT(ready_for_flush = tablet_memtable->ready_for_flush())) {
@@ -1378,7 +1387,8 @@ namespace {
     DECLARE_TO_STRING
     {
       int64_t pos = 0;
-      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(), ret_);
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)), ret_);
       return pos;
     }
   };
@@ -1420,7 +1430,8 @@ int ObFreezer::submit_log_for_freeze(const bool is_tablet_freeze, const bool is_
           TRANS_LOG(WARN, "[Freezer] traverse_trans_to_submit_redo_log failed", K(ret),
                     K(ls_id), K(cost_time), K(fail_tx_id));
           FreezeDiagnoseInfo diagnose("traverse_trans_to_submit_redo_log failed, traceId:%s, errorCode:%d", ret);
-          stat_.add_diagnose_info(to_cstring(diagnose));
+          ObCStringHelper helper;
+          stat_.add_diagnose_info(helper.convert(diagnose));
           if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE,
                           ls_id, tablet_id, ObSuspectInfoType::SUSPECT_SUBMIT_LOG_FOR_FREEZE,
                           static_cast<int64_t>(ret), fail_tx_id.get_id()))) {

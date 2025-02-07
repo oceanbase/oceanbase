@@ -16,7 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
-
+#include "lib/geo/ob_s2adapter.h"
 namespace oceanbase
 {
 namespace common
@@ -26,24 +26,78 @@ struct ObDataTypeCastParams;
 namespace sql
 {
 struct ColumnItem;
+class ObRawExpr;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, true> ObRangesArray;
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
+static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
+static const int64_t NEW_MAX_NOT_IN_SIZE = 1000; // mysql support 1000 not in range node
+
+struct ObFastFinalNLJRangeCtx
+{
+  ObFastFinalNLJRangeCtx()
+    : has_check_valid(false),
+      is_valid(false) {}
+
+  bool has_check_valid;
+  bool is_valid;
+};
 
 class ObQueryRangeProvider
 {
 public:
+  virtual ~ObQueryRangeProvider() {}
+  virtual bool is_new_query_range() const = 0;
+  virtual int get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params) const = 0;
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
                                 bool &all_single_value_ranges,
                                 const common::ObDataTypeCastParams &dtc_params) = 0;
+  virtual int get_ss_tablet_ranges(common::ObIAllocator &allocator,
+                                   ObExecContext &exec_ctx,
+                                   ObQueryRangeArray &ss_ranges,
+                                   const common::ObDataTypeCastParams &dtc_params) const = 0;
+  virtual int get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params,
+                                ObIArray<common::ObSpatialMBR> &mbr_filters) const = 0;
+  virtual int get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                         common::ObIAllocator &allocator,
+                                         ObExecContext &exec_ctx,
+                                         const ParamStore &param_store,
+                                         void *range_buffer,
+                                         ObQueryRangeArray &ranges,
+                                         const common::ObDataTypeCastParams &dtc_params) const = 0;
+  virtual bool is_precise_whole_range() const = 0;
+  virtual int is_get(bool &is_get) const = 0;
+  virtual bool is_precise_get() const = 0;
+  virtual int64_t get_column_count() const = 0;
+  virtual bool has_exec_param() const = 0;
+  virtual bool is_ss_range() const = 0;
+  virtual int64_t get_skip_scan_offset() const = 0;
+  virtual int reset_skip_scan_range() = 0;
+  virtual bool has_range() const = 0;
+  virtual bool is_contain_geo_filters() const = 0;
+  virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const = 0;
+  virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const = 0;
+  virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const = 0;
+  virtual int get_prefix_info(int64_t &equal_prefix_count,
+                              int64_t &range_prefix_count,
+                              bool &contain_always_false) const = 0;
 
   // to string
   virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
+  virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const = 0;
+  virtual bool is_fast_nlj_range() const = 0;
 };
+
 }
 }
 #endif //OCEANBASE_SQL_REWRITE_QUERY_RANGE_PROVIDER_
 //// end of header file
-
-
 

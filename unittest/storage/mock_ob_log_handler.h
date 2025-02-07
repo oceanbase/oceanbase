@@ -196,6 +196,14 @@ public:
     UNUSEDx(member_list, paxos_replica_num, learner_list);
     return OB_SUCCESS;
   }
+  int get_stable_membership(palf::LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list) const
+  {
+    UNUSEDx(config_version, member_list, paxos_replica_num, learner_list);
+    return OB_SUCCESS;
+  }
   int get_max_lsn(palf::LSN &lsn) const
   {
     UNUSED(lsn);

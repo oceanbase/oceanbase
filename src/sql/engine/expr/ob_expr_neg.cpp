@@ -351,7 +351,9 @@ int ObExprNeg::calc_param_type(const ObExprResType &param_type,
   case ObDateTimeTC:
   case ObTimeTC:
   case ObTextTC:
-  case ObStringTC: {
+  case ObStringTC:
+  case ObMySQLDateTC:
+  case ObMySQLDateTimeTC: {
     if (lib::is_oracle_mode()) {
       result_type = calc_type = ObNumberType;
     } else {

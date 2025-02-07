@@ -24,6 +24,10 @@ ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
     generate_ts_(0),
     mds_construct_sequence_(-1)
 {
+  // Mds dump should not access mds data to avoid potential dead lock
+  // between mds table lock on ObTabletPointer and other mds component
+  // inner locks.
+  skip_get_tablet_ = true;
 }
 } // namespace mds
 } // namespace storage

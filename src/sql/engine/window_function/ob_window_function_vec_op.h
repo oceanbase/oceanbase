@@ -20,6 +20,7 @@
 #include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
+#include "sql/engine/basic/ob_hp_infras_vec_mgr.h"
 
 namespace oceanbase
 {
@@ -241,10 +242,11 @@ public:
       sql_mem_processor_(profile_, op_monitor_info_),
       global_mem_limit_version_(0),
       amm_periodic_cnt_(0),
-      store_it_age_()
+      store_it_age_(),
+      hp_infras_mgr_(MTL_ID())
   {}
 
-  virtual ~ObWindowFunctionVecOp() {}
+  virtual ~ObWindowFunctionVecOp() { destroy(); }
   virtual int inner_open() override;
   virtual int inner_close() override;
   virtual int inner_rescan() override;
@@ -429,6 +431,8 @@ private:
   {
     return local_allocator_->used();
   }
+
+  int init_hp_infras_group_mgr();
 public:
   struct OpBatchCtx { // values used to help batch-calculation
     const ObCompactRow **stored_rows_;
@@ -548,6 +552,7 @@ private:
   int64_t amm_periodic_cnt_;
 
   ObTempBlockStore::IterationAge store_it_age_;
+  ObHashPartInfrasVecMgr hp_infras_mgr_;
 };
 
 } // end sql

@@ -383,7 +383,8 @@ class ObLoadFileDataTrimer
 {
 public:
   ObLoadFileDataTrimer() : incomplate_data_(NULL), incomplate_data_len_(0),
-    incomplate_data_buf_len_(ObLoadFileBuffer::MAX_BUFFER_SIZE), lines_cnt_(0) {}
+                           incomplate_data_buf_len_(ObLoadFileBuffer::MAX_BUFFER_SIZE), lines_cnt_(0),
+                           lines_cnt_current_file_(0) {}
   int init(common::ObIAllocator &allocator, const ObCSVFormats &formats);
   //for debug
   ObString get_incomplate_data_string() {
@@ -394,7 +395,9 @@ public:
   int recover_incomplate_data(ObLoadFileBuffer &buffer);
   bool has_incomplate_data() const { return incomplate_data_len_ > 0; }
   int64_t get_lines_count() const { return lines_cnt_; }
-  void commit_line_cnt(int64_t line_cnt) { lines_cnt_ += line_cnt; }
+  int64_t get_current_file_lines_count() const { return lines_cnt_current_file_; }
+  void commit_line_cnt(int64_t line_cnt) { lines_cnt_ += line_cnt; lines_cnt_current_file_ += line_cnt; }
+  void reset_current_file_line_cnt() { lines_cnt_current_file_ = 0; }
   int expand_buf(common::ObIAllocator &allocator);
   int64_t get_buffer_size() const { return incomplate_data_buf_len_; }
 private:
@@ -403,6 +406,7 @@ private:
   int64_t incomplate_data_len_;
   int64_t incomplate_data_buf_len_;
   int64_t lines_cnt_;
+  int64_t lines_cnt_current_file_;
 };
 
 class ObCSVParser {
@@ -511,6 +515,7 @@ struct ObShuffleTaskHandle {
   ObShuffleResult result;
   ObSEArray<ObParserErrRec, 16> err_records;
   common::ObMemAttr attr;
+  share::schema::ObSchemaGetterGuard schema_guard;
   TO_STRING_KV("task_id", result.task_id_);
 };
 
@@ -635,23 +640,20 @@ public:
 struct ObFileReadCursor {
   ObFileReadCursor () { reset(); }
   void reset() {
-    read_counter_ = 0;
-    file_offset_ = 0;
+    total_read_size_ = 0;
     read_size_ = 0;
     is_end_file_ = false;
   }
   bool inline is_end_file() const { return is_end_file_; }
-  int64_t inline get_total_read_MBs() { return file_offset_ >> 20; }
-  int64_t inline get_total_read_GBs() { return file_offset_ >> 30; }
+  int64_t inline get_total_read_MBs() { return total_read_size_ >> 20; }
+  int64_t inline get_total_read_GBs() { return total_read_size_ >> 30; }
   void commit_read() {
-    file_offset_ += read_size_;
+    total_read_size_ += read_size_;
     read_size_ = 0;
-    read_counter_++;
   }
-  TO_STRING_KV(K(read_counter_), K(file_offset_), K(read_size_), K(is_end_file_));
-  int64_t read_counter_;
-  int64_t file_offset_;
-  int64_t read_size_;
+  TO_STRING_KV(K(total_read_size_), K(read_size_), K(is_end_file_));
+  int64_t total_read_size_;
+  int64_t read_size_;   // the return value for each `read` calling
   bool is_end_file_;
 };
 
@@ -689,11 +691,14 @@ public:
                                ObLoadDataStmt &load_stmt,
                                ObTempExpr *&calc_tablet_id_expr);
     int release_resources();
+    int open_file(ObString filename, ObExecContext &ctx);
+    int init_file_size(ObExecContext &ctx);
 
     //modules
     ObFileReader * file_reader;
     ObFileAppender file_appender;
     ObFileReadCursor read_cursor;
+    ObLoadFileIterator file_iter;
     ObLoadFileDataTrimer data_trimer;
     ObInsertValueGenerator generator;
     ObDataFragMgr data_frag_mgr;
@@ -805,6 +810,7 @@ private:
                                            common::ObIArray<ObLoadTableColumnDesc> &insert_infos,
                                            common::ObString &data_buff,
                                            bool need_online_osg = false);
+  bool is_schema_error_need_retry_for_load_data(const int ret_code);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataSPImpl);
   // function members

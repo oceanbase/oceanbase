@@ -27,6 +27,8 @@ namespace oceanbase
 namespace common {
 class ObObj;
 class ObDSResultItem;
+class ObTabletID;
+struct ObVersionRange;
 }
 using namespace common;
 namespace sql
@@ -35,6 +37,7 @@ class ObDMLStmt;
 class ObSelectStmt;
 class ObRawExpr;
 class ObLogPlan;
+class ObLogicalOperator;
 class ObJoinOrder;
 class Path;
 class JoinPath;
@@ -45,7 +48,10 @@ class ObSQLSessionInfo;
 struct CandidatePlan;
 class OptSystemStat;
 class ObSkylineDim;
+class ObOptTabletLoc;
+class ObCandiTabletLoc;
 struct ColumnItem;
+struct ObBatchEstTasks;
 
 class ObOptimizerTraceImpl;
 
@@ -307,6 +313,9 @@ public:
 ////print basic type
 /***********************************************/
   int new_line();
+
+  template<int64_t BUF_LEN, typename ...ARGS>
+  int append_format(const char *format, const ARGS&... args);
   int append_lower(const char* msg);
   int append_ptr(const void *ptr);
   int append();
@@ -326,6 +335,7 @@ public:
 ////print plan info
 /***********************************************/
   int append(const ObLogPlan *log_plan);
+  int append(const ObLogicalOperator *plan_top);
   int append(const ObJoinOrder *join_order);
   int append(const Path *value);
   int append(const JoinPath *value);
@@ -335,6 +345,12 @@ public:
   int append(const CandidatePlan &plan);
   int append(const ObDSResultItem &ds_result);
   int append(const ObSkylineDim &dim);
+  int append(const ObNewRange &range);
+  int append(const ObOptTabletLoc& tablet_loc);
+  int append(const ObCandiTabletLoc& candi_tablet_loc);
+  int append(const ObBatchEstTasks& task);
+  int append(const ObTabletID& id);
+  int append(const ObVersionRange& version_range);
 /***********************************************/
 ////print template type
 /***********************************************/
@@ -348,35 +364,8 @@ public:
   typename std::enable_if<std::is_base_of<ObDMLStmt, T>::value, int>::type
   append(const T* value);
 
-  //for ObIArray<ObRawExpr*>
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<ObRawExpr*>, T>::value, int>::type
-  append(const T& value);
-
-  //for ObIArrayWrap<uint64_t>
-  template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
-  append(const T& value);
-
-  //for ObIArrayWrap<int64_t>
-  template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
-  append(const T& value);
-
-  //for ObIArrayWrap<double>
-  template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArrayWrap<double>, T>::value, int>::type
-  append(const T& value);
-
-  //for ObIArray<ObDSResultItem>
-  template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
-  append(const T& value);
-
-  //for ObIArray<ColumnItem>
-  template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<ColumnItem>, T>::value, int>::type
-  append(const T& value);
+  int append(const ObIArrayWrap<T>& value);
 
   //template for function append
   template<typename T1, typename T2, typename ...ARGS>
@@ -459,10 +448,8 @@ ObOptimizerTraceImpl::append(const T* value)
   return ret;
 }
 
-//for ObIArray<ObRawExpr*>
 template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<ObRawExpr*>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
+int ObOptimizerTraceImpl::append(const ObIArrayWrap<T>& value)
 {
   int ret = OB_SUCCESS;
   append("[");
@@ -473,84 +460,6 @@ ObOptimizerTraceImpl::append(const T& value)
     ret = append(value.at(i));
   }
   append("]");
-  return ret;
-}
-
-//for ObIArray<uint64_t>
-template <typename T>
-typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
-{
-  int ret = OB_SUCCESS;
-  append("[");
-  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
-    if (i > 0) {
-      append(", ");
-    }
-    ret = append(value.at(i));
-  }
-  append("]");
-  return ret;
-}
-
-//for ObIArray<int64_t>
-template <typename T>
-typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
-{
-  int ret = OB_SUCCESS;
-  append("[");
-  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
-    if (i > 0) {
-      append(", ");
-    }
-    ret = append(value.at(i));
-  }
-  append("]");
-  return ret;
-}
-
-//for ObIArray<double>
-template <typename T>
-typename std::enable_if<std::is_base_of<ObIArrayWrap<double>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
-{
-  int ret = OB_SUCCESS;
-  append("[");
-  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
-    if (i > 0) {
-      append(", ");
-    }
-    ret = append(value.at(i));
-  }
-  append("]");
-  return ret;
-}
-
-//for ObIArray<ObDSResultItem>
-template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
-    if (OB_FAIL(append(value.at(i)))) {
-    } else if (OB_FAIL(new_line())) {
-    }
-  }
-  return ret;
-}
-
-template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<ColumnItem>, T>::value, int>::type
-ObOptimizerTraceImpl::append(const T& value)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
-    if (OB_FAIL(append(value.at(i).column_name_))) {
-    } else if (i > 0 && OB_FAIL(new_line())) {
-    }
-  }
   return ret;
 }
 
@@ -607,7 +516,22 @@ int ObOptimizerTraceImpl::append_title(const ARGS&... args)
   return ret;
 }
 
+template<int64_t BUF_LEN, typename ...ARGS>
+int ObOptimizerTraceImpl::append_format(const char *format, const ARGS&... args)
+{
+  int ret = OB_SUCCESS;
+  char buf[BUF_LEN] = {0};
+  int64_t print_len = snprintf(buf, BUF_LEN, format, args...);
+  if (print_len > 0) {
+    if (OB_FAIL(log_handle_.append(buf, std::min(print_len, BUF_LEN)))) {
+      COMMON_LOG(WARN, "failed to append value", K(ret));
+    }
+  }
+  return ret;
 }
+
+}
+
 }
 
 #endif /* _OB_OPTIMIZER_TRACE_IMPL_H */

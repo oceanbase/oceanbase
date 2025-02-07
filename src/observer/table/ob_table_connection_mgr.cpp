@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_connection_mgr.h"
 #include "rpc/ob_rpc_request_operator.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -40,7 +41,7 @@ int ObTableConnection::init(const common::ObAddr &addr, int64_t tenant_id, int64
     tenant_id_ = tenant_id;
     database_id_ = database_id;
     user_id_ = user_id;
-    first_active_time_ = last_active_time_ = ObTimeUtility::current_time();
+    first_active_time_ = last_active_time_ = ObTimeUtility::fast_current_time();
   }
   return ret;
 }
@@ -55,6 +56,7 @@ ObTableConnectionMgr::ObTableConnectionMgr()
 ObTableConnectionMgr &ObTableConnectionMgr::get_instance()
 {
   ObTableConnectionMgr *instance = NULL;
+  DISABLE_SQL_MEMLEAK_GUARD;
   while (OB_UNLIKELY(once_ < 2)) {
     if (ATOMIC_BCAS(&once_, 0, 1)) {
       instance = OB_NEW(ObTableConnectionMgr, ObModIds::TABLE_PROC);
@@ -148,6 +150,6 @@ void ObTableConnectionMgr::on_conn_close(easy_connection_t *c)
 
 void ObTableConnUpdater::operator() (common::hash::HashMapPair<common::ObAddr, ObTableConnection> &entry)
 {
-  entry.second.update_last_active_time(ObTimeUtility::current_time());
+  entry.second.update_last_active_time(ObTimeUtility::fast_current_time());
   entry.second.update_all_ids(tenant_id_, database_id_, user_id_);
 }

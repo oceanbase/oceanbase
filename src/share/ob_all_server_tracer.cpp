@@ -15,6 +15,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/alloc/alloc_assist.h"
 #include "observer/ob_server_struct.h"
+#include "share/ob_zone_table_operation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -240,9 +241,30 @@ int ObServerTraceMap::get_rpc_port_status(const ObAddr &addr, const int64_t sql_
 
 int ObServerTraceMap::is_server_stopped(const ObAddr &addr, bool &is_stopped) const
 {
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(addr);
-  UNUSED(is_stopped);
+  int ret = OB_SUCCESS;
+  ObServerInfoInTable server_info;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("addr trace map has not inited", KR(ret));
+  } else if (OB_UNLIKELY(!addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid addr", KR(ret), K(addr));
+  } else {
+    SpinRLockGuard guard(lock_);
+    if (OB_FAIL(find_server_info(addr, server_info))) {
+      LOG_WARN("fail to find server info", KR(ret), K(addr));
+    } else if (server_info.is_stopped()) {
+      is_stopped = true;
+    } else {
+
+      for (int64_t j = 0; OB_SUCC(ret) && j < inactive_zone_list_.count(); ++j) {
+        if (server_info.get_zone() == inactive_zone_list_.at(j)) {
+          is_stopped = true;
+          break;
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -585,6 +607,7 @@ int ObServerTraceMap::refresh()
 {
   int ret = OB_SUCCESS;
   ObArray<ObServerInfoInTable> servers_info;
+  common::ObSEArray<common::ObZone, 4> inactive_zone_list;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObServerTraceMap has not been inited", KR(ret), K(is_inited_));
@@ -596,10 +619,16 @@ int ObServerTraceMap::refresh()
   } else if (OB_UNLIKELY(servers_info.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("read nothing in table", KR(ret), K(servers_info));
+  } else if (OB_FAIL(ObZoneTableOperation::get_inactive_zone_list(*GCTX.sql_proxy_, inactive_zone_list))) {
+    LOG_WARN("failed to get inactive zone list", K(ret));
   } else {
     SpinWLockGuard guard(lock_);
     // reuse memory
     server_info_arr_.reuse();
+    inactive_zone_list_.reuse();
+    if (OB_FAIL(inactive_zone_list_.assign(inactive_zone_list))) {
+      LOG_WARN("failed to assign inactive zone list", K(ret));
+    }
     // can not use ObArray's assign, which will reallocate memory
     for (int64_t i = 0; i < servers_info.count() && OB_SUCC(ret); ++i) {
       const ObServerInfoInTable &server_info_i = servers_info.at(i);

@@ -53,7 +53,7 @@ void set_mds_mem_check_thread_local_info(const storage::mds::MdsWriter &writer,
                                          const uint32_t alloc_line)
 {
   int64_t pos = 0;
-  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, "%s", to_cstring(writer));
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, writer);
   __thread_mds_alloc_type__ = alloc_ctx_type;
   __thread_mds_alloc_file__ = alloc_file;
   __thread_mds_alloc_func__ = alloc_func;
@@ -68,7 +68,9 @@ void set_mds_mem_check_thread_local_info(const share::ObLSID &ls_id,
                                          const uint32_t alloc_line)
 {
   int64_t pos = 0;
-  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, "%s, %s", to_cstring(ls_id), to_cstring(tablet_id));
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, ls_id);
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, ", ");
+  databuff_printf(__thread_mds_tag__, TAG_SIZE, pos, tablet_id);
   __thread_mds_alloc_type__ = data_type;
   __thread_mds_alloc_file__ = alloc_file;
   __thread_mds_alloc_func__ = alloc_func;

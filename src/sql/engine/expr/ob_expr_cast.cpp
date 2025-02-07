@@ -41,7 +41,7 @@ ObExprCast::ObExprCast(ObIAllocator &alloc)
     : ObFuncExprOperator::ObFuncExprOperator(alloc, T_FUN_SYS_CAST,
                                              N_CAST,
                                              2,
-                                             NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+                                             VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   extra_serialize_ = 0;
   disable_operand_auto_cast();
@@ -70,7 +70,7 @@ int ObExprCast::get_cast_inttc_len(ObExprResType &type1,
     int16_t scale = type1.get_accuracy().get_scale();
     if (ObDoubleTC == tc1) {
       res_len -= 1;
-    } else if (ObDateTimeTC == tc1 && scale > 0) {
+    } else if ((ObDateTimeTC == tc1 || ObMySQLDateTimeTC == tc1) && scale > 0) {
       res_len += scale - 1;
     } else if (OB_FAIL(get_cast_string_len(type1, type2, type_ctx, res_len, length_semantics, conn, cast_mode))) {
       LOG_WARN("fail to get cast string length", K(ret));
@@ -142,6 +142,7 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     case ObTimestampLTZType:
     case ObTimestampNanoType:
     case ObDateTimeType:
+    case ObMySQLDateTimeType:
     case ObTimestampType: {
         if (scale > 0) {
           res_len += scale + 1;
@@ -251,7 +252,8 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
                                     session.get_stmt_type(),
                                     session.is_ignore_stmt(),
                                     sql_mode, cast_mode);
-  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
+  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc || ObMySQLDateTC == dst_tc
+      || ObMySQLDateTimeTC == dst_tc) {
     cast_mode |= CM_NULL_ON_WARN;
   } else if (ob_is_int_uint(src_tc, dst_tc)) {
     cast_mode |= CM_NO_RANGE_CHECK;
@@ -278,6 +280,8 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
         cast_mode |= CM_WARN_ON_FAIL;
       }
     }
+    OZ (ObRawExprUtils::wrap_cm_warn_on_fail_if_need(cast_raw_expr.get_param_expr(0), dst_type,
+                                                     &session, cast_mode));
   }
   return ret;
 }
@@ -346,7 +350,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session, enable_decimalint))) {
     LOG_WARN("fail to check_enable_decimalint", K(ret), K(session->get_effective_tenant_id()));
   } else if (OB_FAIL(get_cast_type(enable_decimalint,
-                                   type2, cast_raw_expr->get_extra(), dst_type))) {
+                                   type2, cast_raw_expr->get_extra(), type_ctx, dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
                                                              type1.get_collation_level(),
@@ -426,7 +430,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     int16_t scale = dst_type.get_scale();
     if (is_explicit_cast
         && !lib::is_oracle_mode()
-        && (ObTimeType == dst_type.get_type() || ObDateTimeType == dst_type.get_type())
+        && (ObTimeType == dst_type.get_type()
+          || ob_is_datetime_or_mysql_datetime(dst_type.get_type()))
         && scale > 6) {
       ret = OB_ERR_TOO_BIG_PRECISION;
       LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", OB_MAX_DATETIME_PRECISION);
@@ -437,8 +442,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
-          || ob_is_geometry(dst_type.get_type())) {
+      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())
+                                         || ob_is_json(dst_type.get_type())
+                                         || ob_is_geometry(dst_type.get_type())) {
         type.set_collation_level(dst_type.get_collation_level());
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
@@ -446,18 +452,18 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             : (OB_NOT_NULL(type_ctx.get_session())
                 ? type_ctx.get_session()->get_actual_nls_length_semantics()
                 : LS_BYTE));
-        if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
-          if (dst_type.is_char() || dst_type.is_nchar()) {
-            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, length_semantics);
-          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
-            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, length_semantics);
-          }
-        } else if (len > 0) { // cast(1 as char(10))
+        if (len > 0) { // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
                                                collation_connection,
                                                cast_raw_expr->get_extra()))) { // cast (1 as char)
           LOG_WARN("fail to get cast string length", K(ret));
+        } else if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
+          if (dst_type.is_char() || dst_type.is_nchar()) {
+            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, dst_type.get_length_semantics());
+          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
+            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, dst_type.get_length_semantics());
+          }
         } else {
           type.set_full_length(len, length_semantics);
         }
@@ -472,7 +478,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       } else if (ob_is_extend(dst_type.get_type())
                  || dst_type.is_user_defined_sql_type()
                  || dst_type.is_collection_sql_type()) {
-        type.set_udt_id(type2.get_udt_id());
+        if (type1.is_ext() && type1.get_udt_id() != type2.get_udt_id()) { // type1 and dst_type is not the same udt
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("udt_id of type1 is not the same as udt_id of type2 ", K(ret), K(type1), K(type2));
+        }
+        OX (type.set_udt_id(type2.get_udt_id()));
       } else {
         type.set_length(length);
         if ((ObNumberTC == dst_type.get_type_class() || ObDecimalIntTC == dst_type.get_type_class())
@@ -557,15 +567,19 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         sql_xml_type.set_sql_udt(ObXMLSqlType);
         type1.set_calc_meta(sql_xml_type.get_obj_meta());
       } else {
-        bool need_warp = false;
+        bool need_wrap = false;
         if (ob_is_enumset_tc(type1.get_type())) {
           // For enum/set type, need to check whether warp to string is required.
-          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1.get_type(), type1.get_calc_type(),
-                                                          false, need_warp))) {
+          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1, type1.get_calc_type(),
+                                                          false, need_wrap))) {
             LOG_WARN("need_wrap_to_string failed", K(ret), K(type1));
+          } else if (!need_wrap) {
+            // need_wrap is false, set calc_type to type1 itself.
+            type1.set_calc_meta(type1.get_obj_meta());
+            type1.set_calc_accuracy(type1.get_calc_accuracy());
           }
-        } else if (OB_LIKELY(need_warp)) {
-          // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
+        } else if (OB_LIKELY(need_wrap)) {
+          // need_wrap is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
           // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
         } else {
           if (ob_is_geometry_tc(dst_type.get_type())) {
@@ -581,7 +595,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             }
           }
           if (OB_SUCC(ret)) {
-            // need_warp is false, set calc_type to type1 itself.
+            // need_wrap is false, set calc_type to type1 itself.
             type1.set_calc_meta(type1.get_obj_meta());
           }
         }
@@ -616,6 +630,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
 int ObExprCast::get_cast_type(const bool enable_decimal_int,
                               const ObExprResType param_type2,
                               const ObCastMode cast_mode,
+                              const ObExprTypeCtx &type_ctx,
                               ObExprResType &dst_type)
 {
   int ret = OB_SUCCESS;
@@ -656,8 +671,8 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
       dst_type.set_udt_id(param_type2.get_udt_id());
       if (ob_is_collection_sql_type(obj_type)) {
         // recover subschema id
-        dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
-        dst_type.set_collation_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
+        dst_type.set_cs_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
+        dst_type.set_cs_level(static_cast<ObCollationLevel>(parse_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX]));
       }
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -701,6 +716,15 @@ int ObExprCast::get_cast_type(const bool enable_decimal_int,
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
+    }
+    if (OB_SUCC(ret) && CM_IS_EXPLICIT_CAST(cast_mode) && lib::is_mysql_mode()) {
+      if (type_ctx.enable_mysql_compatible_dates()) {
+        if (ObDateType == dst_type.get_type()) {
+          dst_type.set_type(ObMySQLDateType);
+        } else if (ObDateTimeType == dst_type.get_type()) {
+          dst_type.set_type(ObMySQLDateTimeType);
+        }
+      }
     }
     LOG_DEBUG("get_cast_type", K(dst_type), K(param_type2));
   }
@@ -930,6 +954,11 @@ int ObExprCast::construct_collection(const sql::ObExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(coll->init_allocator(alloc, true))) {
+      LOG_WARN("failed to init allocator", K(ret));
+    }
+  }
 
   // set collection property
   if (OB_FAIL(ret)) {
@@ -1081,7 +1110,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
               static_cast<ObObj*>(coll->get_data())[i] = new_composite;
             }
           } else {
-            static_cast<ObObj*>(coll->get_data())[i] = v;
+            OZ (pl::ObUserDefinedType::deep_copy_obj(*coll->get_allocator(), v, coll->get_data()[i]));
           }
         }
       }
@@ -1091,13 +1120,18 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
         if (OB_FAIL(ObSPIService::spi_pad_char_or_varchar(session,
                                                           info->elem_type_.get_obj_type(),
                                                           info->elem_type_.get_accuracy(),
-                                                          coll->get_allocator(),
+                                                          &alloc,
                                                           &v))) {
           LOG_WARN("failed to pad", K(ret));
-        } else {
-          static_cast<ObObj*>(coll->get_data())[i] = v;
+        } else if (OB_FAIL(deep_copy_obj(*coll->get_allocator(), v, coll->get_data()[i]))) {
+          LOG_WARN("failed to deep copy", K(ret));
         }
       }
+    }
+  }
+  if (info->elem_type_.get_meta_type().is_ext()) {
+    for (int64_t i = 0; i < data_arr.count(); ++i) {
+      pl::ObUserDefinedType::destruct_obj(data_arr.at(i), nullptr);
     }
   }
 
@@ -1319,6 +1353,10 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
                                               rt_expr.get_vec_value_tc(), just_eval_arg,
                                               rt_expr.eval_func_, cast_mode) :
             nullptr;
+        // 有些VEC_TC_XXXX类中尚有部分类型暂时没有实现向量化，仍走非向量化接口
+        if (ObTinyTextType == in_type || ObTinyTextType == out_type) {
+          rt_expr.eval_vector_func_ = nullptr;
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1356,26 +1394,6 @@ int ObExprCast::do_implicit_cast(ObExprCtx &expr_ctx,
     dst_obj = *obj_ptr;
   }
   LOG_DEBUG("do_implicit_cast done", K(ret), K(dst_obj), K(src_obj), K(dst_type), K(cast_mode));
-  return ret;
-}
-
-int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
-  int ret = OB_SUCCESS;
-  if (exprs.count() != 2) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
-  } else if (OB_ISNULL(exprs.at(0)) || OB_ISNULL(exprs.at(1)) || OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
-  } else {
-    ObObjType src = exprs.at(0)->get_result_type().get_type();
-    ObObjType dst = expr->get_result_type().get_type();
-    if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
-      is_valid = false;
-    } else {
-      is_valid = true;
-    }
-  }
   return ret;
 }
 

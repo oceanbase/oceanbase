@@ -324,16 +324,28 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
+    ObCharsetType charset_type = CHARSET_INVALID;
+    ObCharsetType nchar = CHARSET_INVALID;
+
+    if (OB_SUCC(ret)) {
+      const ObSQLSessionInfo &my_session = result.get_session();
+      if (OB_FAIL(my_session.get_ncharacter_set_connection(nchar))) {
+        LOG_WARN("get ncharacter set connection failed", K(ret));
+      } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
+        LOG_WARN("fail to get result charset", K(ret));
+      }
+    }
+
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
       if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
-        OZ(convert_string_value_charset(value, result));
+        OZ(convert_string_value_charset(value, result, charset_type, nchar));
       } else if (value.is_clob_locator()
-                && OB_FAIL(convert_lob_value_charset(value, result))) {
+                && OB_FAIL(convert_lob_value_charset(value, result, charset_type, nchar))) {
         LOG_WARN("convert lob value charset failed", K(ret));
       } else if (ob_is_text_tc(value.get_type())
-                && OB_FAIL(convert_text_value_charset(value, result))) {
+                && OB_FAIL(convert_text_value_charset(value, result, charset_type, nchar))) {
         LOG_WARN("convert text value charset failed", K(ret));
       }
       if (OB_FAIL(ret)) {

@@ -196,13 +196,11 @@ int ObIBackupIndexStore::decode_index_from_block_(const int64_t data_zlength, co
 }
 
 int ObIBackupIndexStore::fetch_block_(const ObBackupFileType &backup_file_type, const int64_t offset,
-    const int64_t length, common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer_reader)
+    const int64_t length, common::ObIAllocator &allocator, ObKVCacheHandle &handle, blocksstable::ObBufferReader &buffer_reader)
 {
   int ret = OB_SUCCESS;
   ObBackupIndexCacheKey key;
   const ObBackupIndexCacheValue *pvalue = NULL;
-  ObKVCacheHandle handle;
-  char *buf = NULL;
   if (offset < 0 || length <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(offset), K(length));
@@ -213,6 +211,7 @@ int ObIBackupIndexStore::fetch_block_(const ObBackupFileType &backup_file_type, 
     LOG_WARN("failed to get backup index cache key", K(ret), K(backup_file_type), K(offset), K(length));
   } else if (OB_FAIL(index_kv_cache_->get(key, pvalue, handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
+      EVENT_INC(ObStatEventIds::BACKUP_INDEX_CACHE_MISS);
       ret = OB_SUCCESS;
       if (OB_FAIL(do_on_cache_miss_(backup_file_type, offset, length, allocator, buffer_reader))) {
         LOG_WARN("failed to do on cache miss", K(ret), K(backup_file_type), K(offset), K(length));
@@ -227,13 +226,9 @@ int ObIBackupIndexStore::fetch_block_(const ObBackupFileType &backup_file_type, 
   } else if (OB_ISNULL(pvalue)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache value should not be null", K(ret));
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(pvalue->len())))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret), K(*pvalue));
   } else {
-    // TODO(yangyi.yyy): refine this method, remove the need of memory copying in 4.1
-    MEMCPY(buf, pvalue->buf(), pvalue->len());
-    buffer_reader.assign(buf, pvalue->len());
+    buffer_reader.assign(pvalue->buf(), pvalue->len());
+    EVENT_INC(ObStatEventIds::BACKUP_INDEX_CACHE_HIT);
   }
   return ret;
 }
@@ -482,20 +477,23 @@ int ObBackupMetaIndexStore::get_tablet_meta_index_(const ObBackupMetaKey &meta_k
   } else if (OB_FAIL(meta_key.get_backup_index_file_type(backup_file_type))) {
     LOG_WARN("failed to get backup index file type", K(ret), K(meta_key));
   } else {
+    ObKVCacheHandle handle;
     ObBackupMetaIndex index;
     ObArray<ObBackupMetaIndex> index_list;
     ObBackupMetaIndexIndex index_index;
     ObArray<ObBackupMetaIndexIndex> index_index_list;
     while (OB_SUCC(ret)) {
+      buffer_reader.assign(NULL, 0);
+      handle.reset();
+      allocator.reuse();
       index_index.reset();
       index_index_list.reset();
-      buffer_reader.assign(NULL, 0);
       ObBackupCommonHeader common_header;
       ObBackupMultiLevelIndexHeader index_header;
       int64_t data_length = 0;
       int64_t data_zlength = 0;
       ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
-      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
+      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, handle, buffer_reader))) {
         LOG_WARN("failed to get block from cache", K(ret), K(backup_file_type), K(offset), K(length));
       } else if (OB_FAIL(decode_headers_(buffer_reader, common_header,
           index_header, data_length, data_zlength, compressor_type))) {
@@ -520,7 +518,6 @@ int ObBackupMetaIndexStore::get_tablet_meta_index_(const ObBackupMetaKey &meta_k
             offset = index_index.offset_;
             length = index_index.length_;
             LOG_DEBUG("find tablet meta index index", K(meta_key), K(index_index), K(index_index_list));
-            allocator.reuse();
           }
         }
       }
@@ -780,17 +777,20 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
     ObArray<ObBackupMacroRangeIndex> index_list;
     ObBackupMacroRangeIndexIndex index_index;
     ObArray<ObBackupMacroRangeIndexIndex> index_index_list;
+    ObKVCacheHandle handle;
     int64_t round = 0;
     while (OB_SUCC(ret)) {
+      buffer_reader.assign(NULL, 0);
+      handle.reset();
+      allocator.reuse();
       index_index.reset();
       index_index_list.reset();
-      buffer_reader.assign(NULL, 0);
       ObBackupCommonHeader common_header;
       ObBackupMultiLevelIndexHeader index_header;
       int64_t data_length = 0;
       int64_t data_zlength = 0;
       ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
-      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
+      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, handle, buffer_reader))) {
         LOG_WARN("failed to fetch block", K(ret), K(offset), K(length));
       } else if (OB_FAIL(decode_headers_(buffer_reader, common_header, index_header, data_length, data_zlength, compressor_type))) {
         LOG_WARN("failed to decode header", K(ret), K(offset), K(length), K(buffer_reader));
@@ -812,7 +812,6 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
           } else {
             offset = index_index.offset_;
             length = index_index.length_;
-            allocator.reuse();
           }
         }
       }
@@ -1542,18 +1541,21 @@ int ObBackupOrderedMacroBlockIndexStore::get_macro_block_index(
   } else {
     ObBackupCommonHeader common_header;
     ObBackupMultiLevelIndexHeader index_header;
+    ObKVCacheHandle handle;
     while (OB_SUCC(ret)) {
+      buffer_reader.assign(NULL, 0);
+      handle.reset();
+      allocator.reuse();
       index.reset();
       index_index.reset();
       index_list.reset();
       index_index_list.reset();
-      buffer_reader.assign(NULL, 0);
       common_header.reset();
       index_header.reset();
       int64_t data_length = 0;
       int64_t data_zlength = 0;
       ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
-      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
+      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, handle, buffer_reader))) {
         LOG_WARN("failed to fetch block", K(ret), K_(trailer));
       } else if (OB_FAIL(decode_headers_(buffer_reader, common_header,
           index_header, data_length, data_zlength, compressor_type))) {
@@ -1576,7 +1578,6 @@ int ObBackupOrderedMacroBlockIndexStore::get_macro_block_index(
           } else {
             offset = index_index.offset_;
             length = index_index.length_;
-            allocator.reuse();
           }
         }
       }

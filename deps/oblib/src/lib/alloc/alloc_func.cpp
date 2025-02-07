@@ -13,6 +13,8 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/resource/achunk_mgr.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "common/errsim_module/ob_errsim_module_interface.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -186,6 +188,40 @@ int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt)
   const int64_t tenant_limit = get_tenant_memory_limit(tenant_id);
   const int64_t rpc_lmt = (tenant_limit / 100) * rpc_pct_lmt;
   return set_ctx_limit(tenant_id, common::ObCtxIds::RPC_CTX_ID, rpc_lmt);
+}
+
+bool errsim_alloc(const ObMemAttr &attr)
+{
+  bool bret = OB_SUCCESS != EventTable::EN_4;
+#ifdef ERRSIM
+  const ObErrsimModuleType type = THIS_WORKER.get_module_type();
+  if (is_errsim_module(attr.tenant_id_, type.type_)) {
+    //errsim alloc memory failed.
+    bret = true;
+  }
+#endif
+  if (bret) {
+    AllocFailedCtx &afc = g_alloc_failed_ctx();
+    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
+  }
+  return bret;
+}
+
+int set_req_chunkmgr_parallel(uint64_t tenant_id, uint64_t ctx_id, int32_t parallel)
+{
+  int ret = OB_SUCCESS;
+  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+  if (!OB_ISNULL(ma)) {
+    ObTenantCtxAllocatorGuard ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+    if (OB_NOT_NULL(ta)) {
+      ta->set_req_chunkmgr_parallel(parallel);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+    }
+  } else {
+    ret = OB_NOT_INIT;
+  }
+  return ret;
 }
 
 } // end of namespace lib

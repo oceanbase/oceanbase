@@ -1342,38 +1342,6 @@ bool is_backup_mode()
   return (TCONF.enable_backup_mode != 0);
 }
 
-char *lbt_oblog()
-{
-  int ret = OB_SUCCESS;
-  //As lbt used when print error log, can not print error log
-  //in this function and functions called.
-  static __thread void *addrs[100];
-  static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = ob_backtrace(addrs, 100);
-  char **res = backtrace_symbols(addrs, 100);
-  int64_t pos = 0;
-
-  for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-    char *res_idx = res[idx];
-    int tmp_ret = OB_SUCCESS;
-
-    if (OB_NOT_NULL(res_idx)) {
-      if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        if (OB_SIZE_OVERFLOW != ret) {
-          LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
-              K(LBT_BUFFER_LENGTH));
-        }
-      }
-    }
-  }
-
-  if (OB_NOT_NULL(res)) {
-    free(res);
-  }
-
-  return buf;
-}
-
 int get_br_value(IBinlogRecord *br,
     ObArray<BRColElem> &new_values)
 {

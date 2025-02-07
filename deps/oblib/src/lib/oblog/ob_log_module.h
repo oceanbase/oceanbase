@@ -19,6 +19,7 @@
 #include "ob_log_print_kv.h"
 #include "lib/hash/fnv_hash.h"
 #include "ob_log_time_fmt.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -364,6 +365,15 @@ LOG_MOD_END(PL)
                               OB_LOG_LEVEL_##level)) ?                                           \
     _OB_PRINT("["#parMod"."#subMod"] ", level, _fmt_, ##args) : (void) 0);                       \
     }(__FUNCTION__); } } while (false)
+
+#define OB_MOD_LOG_RET(mod_ptr, level, errcode, info_string, args...)                              \
+    { int ret = errcode;                                                                           \
+      do { if (IS_LOG_ENABLED(level)) {                                                            \
+      [&](const char *_fun_name_) __attribute__((GET_LOG_FUNC_ATTR(level))) {                      \
+      if (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))                              \
+      { ::oceanbase::common::OB_PRINT(mod_ptr, OB_LOG_LEVEL(level), info_string, LOG_KVS(args)); } \
+      }(__FUNCTION__); } } while (false);                                                          \
+    }
 
 // BEGIN MODULE LOG MACRO DEFINE
 //define ParMod_LOG

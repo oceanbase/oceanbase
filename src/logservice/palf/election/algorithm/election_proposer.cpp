@@ -720,7 +720,8 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   if (OB_NOT_NULL(p_election_)) {
     common::databuff_printf(buf, buf_len, pos, "{ls_id:{id:%ld}", p_election_->id_);
-    common::databuff_printf(buf, buf_len, pos, ", addr:%s", to_cstring(p_election_->get_self_addr()));
+    common::databuff_printf(buf, buf_len, pos, ", addr:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->get_self_addr());
   }
   common::databuff_printf(buf, buf_len, pos, ", role:%s", obj_to_string(role_));
   common::databuff_printf(buf, buf_len, pos, ", ballot_number:%ld", ballot_number_);
@@ -735,25 +736,26 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   } else {
     common::databuff_printf(buf, buf_len, pos, ", lease_interval:%ldus", lease);
   }
-  common::databuff_printf(buf, buf_len, pos, ", memberlist_with_states:%s",
-                                                to_cstring(memberlist_with_states_));
+  common::databuff_printf(buf, buf_len, pos, ", memberlist_with_states:");
+  common::databuff_printf(buf, buf_len, pos, memberlist_with_states_);
   if (leader_lease_and_epoch_.is_valid()) {// 非有效的leader不打印lease信息
-    common::databuff_printf(buf, buf_len, pos, ", lease_and_epoch:%s",
-                                                  to_cstring(leader_lease_and_epoch_));
+    common::databuff_printf(buf, buf_len, pos, ", lease_and_epoch:");
+    common::databuff_printf(buf, buf_len, pos, leader_lease_and_epoch_);
   }
   if (switch_source_leader_ballot_ != INVALID_VALUE) {// 该变量与切主相关，只在切主过程中打印该变量
     common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_ballot:%ld",
                                                   switch_source_leader_ballot_);
   }
   if (switch_source_leader_addr_.is_valid()) {// 该变量与切主相关，只在切主过程中打印该变量
-    common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:%s",
-                                                  to_cstring(switch_source_leader_addr_));
+    common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:");
+    common::databuff_printf(buf, buf_len, pos, switch_source_leader_addr_);
   }
   common::databuff_printf(buf, buf_len, pos, ", priority_seed:0x%lx", (unsigned long)p_election_->generate_inner_priority_seed_());
   common::databuff_printf(buf, buf_len, pos, ", restart_counter:%ld", restart_counter_);
   common::databuff_printf(buf, buf_len, pos, ", last_do_prepare_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_do_prepare_ts_));
   if (OB_NOT_NULL(p_election_)) {
-    common::databuff_printf(buf, buf_len, pos, ", self_priority:%s", p_election_->priority_ == nullptr ? "NULL" : to_cstring(*(p_election_->priority_)));
+    common::databuff_printf(buf, buf_len, pos, ", self_priority:");
+    common::databuff_printf(buf, buf_len, pos, p_election_->priority_);
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;

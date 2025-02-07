@@ -31,7 +31,7 @@ namespace sql
     const ObUpdateStmt *get_stmt() const override
     { return reinterpret_cast<const ObUpdateStmt*>(stmt_); }
 
-    int perform_vector_assign_expr_replacement(ObUpdateStmt *stmt);
+    virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt)override;
 
   protected:
     virtual int generate_normal_raw_plan() override;
@@ -47,13 +47,6 @@ namespace sql
     int allocate_update_as_top(ObLogicalOperator *&top,
                                ObConstRawExpr *lock_row_flag_expr,
                                bool is_multi_part_dml);
-
-    int replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happened);
-    int extract_assignment_subqueries(ObIArray<ObRawExpr*> &normal_query_refs,
-                                      ObIArray<ObRawExpr*> &alias_query_refs);
-    int extract_assignment_subqueries(ObRawExpr *expr,
-                                      ObIArray<ObRawExpr*> &normal_query_refs,
-                                      ObIArray<ObRawExpr*> &alias_query_refs);
     virtual int prepare_dml_infos() override;
     virtual int prepare_table_dml_info_special(const ObDmlTableInfo& table_info,
                                                IndexDMLInfo* table_dml_info,

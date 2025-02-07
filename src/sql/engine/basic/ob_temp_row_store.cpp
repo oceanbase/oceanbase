@@ -626,7 +626,7 @@ template<bool RA>
 int ObTempRowStoreBase<RA>::ReaderBase::next_block()
 {
   int ret = OB_SUCCESS;
-  const Block *read_blk = NULL;
+  const Block *read_blk = cur_blk_;
   if (cur_blk_id_ >= get_row_cnt()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(get_block(cur_blk_id_, read_blk))) {

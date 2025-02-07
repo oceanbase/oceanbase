@@ -179,6 +179,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionSchemaIter);
 };
 
+struct ObPartitionNameCmp
+{
+  ObPartitionNameCmp(const ObCollationType collation_type) : collation_type_(collation_type) {}
+  ~ObPartitionNameCmp() {}
+  bool operator()(const ObPartition *lhs, const ObPartition *rhs) {
+    return 0 > ObCharset::strcmp(collation_type_, lhs->get_part_name(), rhs->get_part_name());
+  }
+  ObCollationType collation_type_;
+};
+
 }
 }
 }

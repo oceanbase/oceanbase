@@ -70,7 +70,7 @@ int ObPxFifoCoordOp::inner_open()
       // use parallel scheduler for ddl to avoid large memory usage because
       // serial scheduler will hold the memory of intermediate result rows
       msg_proc_.set_scheduler(&parallel_scheduler_);
-    } else if (1 == px_dop_) {
+    } else if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);
@@ -176,6 +176,7 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
               : row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
                                          eval_ctx_,  row_cnt, read_rows, stored_rows_);
         brs_.size_ = read_rows;
+        brs_.all_rows_active_ = true;
       }
       metric_.mark_interval_end(&time_recorder_);
       if (OB_FAIL(ret)) {
@@ -210,12 +211,12 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
         break;
       }
     }
-
-    if (OB_FAIL(ctx_.fast_check_status())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_any())) {
       LOG_DEBUG("process one failed error", K(ret));
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
       } else if (OB_ITER_END != ret) {

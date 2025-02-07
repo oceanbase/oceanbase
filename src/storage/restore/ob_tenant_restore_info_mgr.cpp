@@ -16,8 +16,10 @@
 #include "share/restore/ob_physical_restore_table_operator.h"
 #include "share/restore/ob_restore_persist_helper.h"
 #include "share/restore/ob_physical_restore_info.h"
+#include "share/backup/ob_backup_connectivity.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -33,7 +35,8 @@ ObTenantRestoreInfoMgr::ObTenantRestoreInfoMgr()
     is_refreshed_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     restore_job_id_(),
-    backup_set_list_()
+    backup_set_list_(),
+    dest_id_(0)
 {
 }
 
@@ -119,11 +122,16 @@ int ObTenantRestoreInfoMgr::refresh_restore_info()
   } else if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
     // tenant in restore, get backup set list from table __all_restore_job
     share::ObPhysicalRestoreTableOperator restore_table_operator;
+    const ObBackupDestType::TYPE backup_dest_type = ObBackupDestType::DEST_TYPE_RESTORE_DATA;
+    int64_t dest_id = 0;
     HEAP_VAR(ObPhysicalRestoreJob, job) {
       if (OB_FAIL(restore_table_operator.init(sql_proxy, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("fail to init restore table operator", K(ret));
       } else if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id_, job))) {
         LOG_WARN("fail to get restore job", K(ret), K_(tenant_id));
+      } else if (OB_FAIL(share::ObBackupStorageInfoOperator::get_restore_dest_id(
+            *sql_proxy, tenant_id_, backup_dest_type, dest_id))) {
+        LOG_WARN("failed to get restore dest id", K(ret), K_(tenant_id), K(backup_dest_type));
       } else {
         lib::ObMutexGuard guard(mutex_);
         if (is_refreshed_) {
@@ -134,6 +142,7 @@ int ObTenantRestoreInfoMgr::refresh_restore_info()
           LOG_WARN("backup set list is empty", K(ret), K_(tenant_id));
         } else {
           restore_job_id_ = job.get_job_id();
+          dest_id_ = dest_id;
           set_refreshed_();
           stop();
           LOG_INFO("get refresh restore info", K_(tenant_id), K_(backup_set_list));
@@ -179,9 +188,29 @@ int ObTenantRestoreInfoMgr::refresh_restore_info()
 int ObTenantRestoreInfoMgr::get_backup_dest(const int64_t backup_set_id, share::ObBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  const bool enable_error_test = GCONF.enable_quick_restore_remove_backup_dest_test;
+  if (enable_error_test) {
+    ret = OB_EAGAIN;
+    LOG_WARN("enable error test, fake backup dest is removed", K(ret));
+  }
+#endif
+
   lib::ObMutexGuard guard(mutex_);
   int64_t idx = -1;
-  if (!is_refreshed_) {
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader *);
+  share::ObRestoreDataMode restore_data_mode;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info loader is null", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(tenant_info_loader->get_restore_data_mode(restore_data_mode))) {
+    LOG_WARN("fail to get restore data mode", K(ret), K_(tenant_id));
+  } else if (!restore_data_mode.is_remote_mode()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    LOG_WARN("restore data mode is not REMOTE, tenant should not have any backup IO", K(ret), K_(tenant_id));
+  } else  if (!is_refreshed_) {
     ret = OB_EAGAIN;
     LOG_WARN("restore info has not been refreshed", K(ret), K(backup_set_id));
   } else if (OB_FAIL(get_restore_backup_set_brief_info_(backup_set_id, idx))) {
@@ -210,6 +239,21 @@ int ObTenantRestoreInfoMgr::get_backup_type(const int64_t backup_set_id, ObBacku
   } else {
     backup_type = backup_set_list_.at(idx).backup_set_desc_.backup_type_;
     LOG_INFO("get backup type", K(backup_set_id), K(backup_type));
+  }
+  return ret;
+}
+
+int ObTenantRestoreInfoMgr::get_restore_dest_id(int64_t &dest_id)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mutex_);
+  int64_t idx = -1;
+  if (!is_refreshed_) {
+    ret = OB_EAGAIN;
+    LOG_WARN("restore info has not been refreshed", K(ret));
+  } else {
+    dest_id_ = dest_id;
+    LOG_INFO("get dest id", K(dest_id));
   }
   return ret;
 }

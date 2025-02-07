@@ -78,7 +78,7 @@ void ObDiskUsageReportTask::runTimerTask()
   int ret = OB_SUCCESS;
 
   const ObAddr addr = GCTX.self_addr();
-  const int64_t self_svr_seq = GCTX.server_id_;
+  const int64_t self_svr_seq = GCTX.get_server_id();
   char addr_buffer[MAX_IP_ADDR_LENGTH] = {};
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -450,24 +450,9 @@ int ObDiskUsageReportTask::count_tenant_tmp()
 
   if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
     STORAGE_LOG(WARN, "fail to get_mtl_tenant_ids", KR(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
-    int64_t tmp_occupy_size = 0;
-    int64_t tmp_required_size = 0;
-    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
-      STORAGE_LOG(WARN, "fail to get_mtl_tenant_ids", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-      MTL_SWITCH(tenant_ids[i]) {
-        report_key.tenant_id_ = tenant_ids[i];
-        if (OB_FAIL(MTL(ObTenantTmpFileManager *)->get_ss_file_manager().get_tmp_file_disk_usage(tmp_required_size, tmp_occupy_size))) {
-          STORAGE_LOG(WARN, "failed to get tmp file size of tenant", K(ret), K(tenant_ids[i]));
-        } else if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tmp_occupy_size, tmp_required_size), 1))) {
-          STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(tmp_occupy_size), K(tmp_required_size));
-        }
-      }
-    }
   } else {
-    int64_t macro_block_cnt = 0;
+    int64_t occupy_size = 0;
+    int64_t required_size = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
       if (GCTX.omt_->is_available_tenant(tenant_ids.at(i))) {
         MTL_SWITCH(tenant_ids.at(i)) {
@@ -476,14 +461,11 @@ int ObDiskUsageReportTask::count_tenant_tmp()
           if (OB_ISNULL(tmp_file_manager)) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(ERROR, "unexpected null", KR(ret));
-          } else if (OB_FAIL(tmp_file_manager->get_sn_file_manager().get_macro_block_count(macro_block_cnt))) {
-            STORAGE_LOG(WARN, "fail to get_macro_block_count", KR(ret));
-          } else {
-            int64_t tenant_tmp_size = macro_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
-            if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tenant_tmp_size, tenant_tmp_size), 1))) {
-              STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(macro_block_cnt));
-            }
-          }
+          } else if (OB_FAIL(tmp_file_manager->get_tmp_file_disk_usage(required_size, occupy_size))) {
+            STORAGE_LOG(WARN, "fail to get_tmp_file_disk_usage", KR(ret));
+          } else if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(occupy_size, required_size), 1))) {
+          STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(required_size), K(occupy_size));
+        }
         } // end MTL_SWITCH
       }
     } // end for

@@ -235,6 +235,16 @@ private:
   blocksstable::ObStorageDatum cast_datum_;
 };
 
+class ObRbBuildAggCellVec : public ObAggCellVec
+{
+public:
+  ObRbBuildAggCellVec(const int64_t agg_idx,
+                  const ObAggCellVecBasicInfo &basic_info,
+                  common::ObIAllocator &allocator);
+protected:
+  OB_INLINE bool can_use_index_info() const override { return false; }
+};
+
 class ObPDAggVecFactory
 {
 public:

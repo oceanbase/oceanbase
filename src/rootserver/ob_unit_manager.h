@@ -130,7 +130,7 @@ public:
            share::schema::ObMultiVersionSchemaService &schema_service,
            ObRootBalancer &root_balance,
            ObRootService &root_service);
-  virtual bool check_inner_stat() const { return inited_ && loaded_; }
+  virtual int check_inner_stat() const;
   virtual int load();
   common::SpinRWLock& get_lock() { return lock_; }
   common::ObMySQLProxy &get_sql_proxy() { return *proxy_; }
@@ -291,7 +291,8 @@ public:
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       bool &is_legal);
   static int calc_sum_load(const common::ObArray<ObUnitLoad> *unit_loads,
-                           share::ObUnitConfig &sum_load);
+                           share::ObUnitConfig &sum_load,
+                           const bool include_ungranted_unit = true);
   // get hard limit
   int get_hard_limit(double &hard_limit) const;
 
@@ -395,6 +396,10 @@ private:
                        const bool is_manual = false);
   int get_zone_units(const common::ObArray<share::ObResourcePool *> &pools,
                      common::ObArray<ZoneUnit> &zone_units) const;
+  int get_tenant_unit_servers_(
+      const uint64_t tenant_id,
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &server_array) const;
   virtual int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT);
   int get_excluded_servers(
       const share::ObUnit &unit,
@@ -893,8 +898,7 @@ private:
       share::ObResourcePool *resource_pool);
   int cancel_migrate_unit(
       const share::ObUnit &unit,
-      const bool migrate_from_server_can_migrate_in,
-      const bool is_gts_unit);
+      const bool migrate_from_server_can_migrate_in);
   int check_split_pool_name_condition(
       const common::ObIArray<share::ObResourcePoolName> &split_pool_name_list);
   int check_split_pool_zone_condition(
@@ -1194,8 +1198,7 @@ int ObUnitManager::check_schema_zone_unit_enough(
   int ret = OB_SUCCESS;
   enough = true;
   SpinRLockGuard guard(lock_);
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
+  if (OB_FAIL(check_inner_stat())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1222,8 +1225,7 @@ int ObUnitManager::inner_check_schema_zone_unit_enough(
   common::ObArray<share::ObZoneReplicaNumSet> zone_locality_array;
   enough = true;
   UNUSED(logonly_unit_num);
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
+  if (OB_FAIL(check_inner_stat())) {
     RS_LOG(WARN, "variable is not init", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;

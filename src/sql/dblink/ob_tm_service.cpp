@@ -48,7 +48,7 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
   bool need_start = false;
   int64_t tx_timeout = 0;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
-  ObTxDesc *&tx_desc = my_session->get_tx_desc();
+  ObTxDesc *tx_desc = my_session->get_tx_desc();
   ObXAService *xa_service = MTL(ObXAService*);
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
   const int64_t cluster_id = GCONF.cluster_id;
@@ -95,7 +95,6 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
   // step 2, promote or start trans in current session
   if (OB_SUCCESS != ret) {
   } else {
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     const int64_t timeout_seconds = my_session->get_xa_end_timeout_seconds();
     //if (need_start || need_promote) {
     //  if (OB_FAIL(ObXAService::generate_xid(xid))) {
@@ -110,10 +109,16 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
       tx_param.cluster_id_ = cluster_id;
       tx_param.timeout_us_ = tx_timeout;
       tx_param.lock_timeout_us_ = my_session->get_trx_lock_timeout();
+      {
+        ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+        my_session->get_tx_desc() = NULL;
+      }
       if (OB_FAIL(xa_service->xa_start_for_tm(0, timeout_seconds, my_session->get_sessid(),
               tx_param, tx_desc, xid, my_session->get_data_version()))) {
         LOG_WARN("xa start for dblink failed", K(ret), K(tx_param));
         // TODO, reset
+        ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+        my_session->get_tx_desc() = tx_desc;
         my_session->reset_first_need_txn_stmt_type();
         my_session->get_trans_result().reset();
         my_session->reset_tx_variable();
@@ -122,12 +127,15 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected xid or tx desc", K(ret), K(xid), KPC(tx_desc));
       } else {
+        ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+        my_session->get_tx_desc() = tx_desc;
         my_session->associate_xa(xid);
       }
     } else if (need_promote) {
       if (OB_FAIL(xa_service->xa_start_for_tm_promotion(0, timeout_seconds, tx_desc, xid))) {
         LOG_WARN("xa start for dblink promotion failed", K(ret), K(xid));
       } else {
+        ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
         my_session->associate_xa(xid);
       }
     }
@@ -180,7 +188,7 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
-  ObTxDesc *&tx_desc = my_session->get_tx_desc();
+  ObTxDesc *tx_desc = my_session->get_tx_desc();
   ObXAService *xa_service = MTL(ObXAService*);
   const int64_t start_ts = ObTimeUtility::current_time();
 
@@ -191,9 +199,11 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
     LOG_WARN("not support tx free route for dblink trans");
   } else {
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
-    my_session->get_raw_audit_record().trans_id_ = tx_id;
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = NULL;
+    }
     {
       ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
       if (OB_FAIL(xa_service->commit_for_dblink_trans(tx_desc))) {
@@ -204,6 +214,9 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     }
     // TODO, if fail, kill trans forcely and reset session
     // reset
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    my_session->get_tx_desc() = tx_desc;
+    my_session->get_raw_audit_record().trans_id_ = tx_id;
     my_session->reset_first_need_txn_stmt_type();
     my_session->get_trans_result().reset();
     my_session->reset_tx_variable();
@@ -230,7 +243,7 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
-  ObTxDesc *&tx_desc = my_session->get_tx_desc();
+  ObTxDesc *tx_desc = my_session->get_tx_desc();
   ObXAService *xa_service = MTL(ObXAService*);
   const int64_t start_ts = ObTimeUtility::current_time();
 
@@ -241,9 +254,11 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
     ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
     LOG_WARN("not support tx free route for dblink trans");
   } else {
-    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
-    my_session->get_raw_audit_record().trans_id_ = tx_id;
+    {
+      ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+      my_session->get_tx_desc() = NULL;
+    }
     if (OB_FAIL(xa_service->rollback_for_dblink_trans(tx_desc))) {
       LOG_WARN("fail to rollback for dblink trans", K(ret));
     } else {
@@ -251,6 +266,9 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
     }
     // TODO, if fail, kill trans forcely and reset session
     // reset
+    ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
+    my_session->get_tx_desc() = tx_desc;
+    my_session->get_raw_audit_record().trans_id_ = tx_id;
     my_session->reset_first_need_txn_stmt_type();
     my_session->get_trans_result().reset();
     my_session->reset_tx_variable();

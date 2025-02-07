@@ -78,6 +78,21 @@ int HashBasedDistinctVecExtraResult::init_my_skip(const int64_t batch_size)
   return ret;
 }
 
+int HashBasedDistinctVecExtraResult::init_vector_default(ObEvalCtx &ctx, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < aggr_info_->param_exprs_.count(); i++) {
+    const ObExpr *expr = aggr_info_->param_exprs_.at(i);
+    const VectorHeader &header = expr->get_vector_header(ctx);
+    if (VEC_INVALID != header.format_) {
+      // do nothing
+    } else if (OB_FAIL(expr->init_vector_default(ctx, size))) {
+      LOG_WARN("failed to init vector default", K(ret));
+    }
+  }
+  return ret;
+}
+
 int HashBasedDistinctVecExtraResult::init_hp_infras()
 {
   int ret = OB_SUCCESS;

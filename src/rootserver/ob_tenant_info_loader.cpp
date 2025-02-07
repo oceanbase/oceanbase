@@ -189,7 +189,7 @@ void ObTenantInfoLoader::run2()
       const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us - cost_time_us_service_name);
       //At least sleep 10ms, allowing the thread to release the lock
       if (!stop_) {
-        get_cond().wait_us(idle_time);
+        idle_wait_us(idle_time);
       }
     }//end while
   }
@@ -843,6 +843,7 @@ int ObAllTenantInfoCache::assign_new_tenant_info_(
              K(new_finish_data_version), K(new_data_version_barrier_scn));
   } else if (new_ora_rowscn > ora_rowscn_) {
     MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
+    MTL_SET_SWITCHOVER_EPOCH(new_tenant_info.get_switchover_epoch());
     (void)tenant_info_.assign(new_tenant_info);
     ora_rowscn_ = new_ora_rowscn;
     assigned = true;

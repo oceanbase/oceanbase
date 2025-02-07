@@ -43,6 +43,9 @@ public:
   int get_min_medium_snapshot(
       const int64_t last_major_snapshot_version,
       int64_t &min_medium_snapshot);
+  int get_next_mds_kv(
+      common::ObIAllocator &allocator,
+      mds::MdsDumpKV *&kv);
 private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;

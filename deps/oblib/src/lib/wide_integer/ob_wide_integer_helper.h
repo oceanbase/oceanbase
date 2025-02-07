@@ -148,6 +148,7 @@
     }                                                                                              \
     case sizeof(int128_t): {                                                                       \
       task(int256_t, int128_t);                                                                    \
+      break;                                                                                       \
     }                                                                                              \
     case sizeof(int256_t): {                                                                       \
       task(int256_t, int256_t);                                                                    \
@@ -177,6 +178,7 @@
     }                                                                                              \
     case sizeof(int128_t): {                                                                       \
       task(int512_t, int128_t);                                                                    \
+      break;                                                                                       \
     }                                                                                              \
     case sizeof(int256_t): {                                                                       \
       task(int512_t, int256_t);                                                                    \

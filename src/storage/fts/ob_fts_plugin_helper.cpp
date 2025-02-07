@@ -13,11 +13,12 @@
 #define USING_LOG_PREFIX STORAGE_FTS
 
 #include "lib/alloc/alloc_assist.h"
-#include "lib/utility/utility.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/utility.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/fts/ob_fts_stop_word.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/fts/ob_fts_stop_word.h"
 
 namespace oceanbase
 {
@@ -237,7 +238,7 @@ int ObFTParseHelper::segment(
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator ptr is nullptr", K(ret), KP_(allocator), K_(is_inited));
-  } else if (OB_UNLIKELY(CS_TYPE_INVALID == type || type >= CS_TYPE_EXTENDED_MARK)) {
+  } else if (OB_UNLIKELY(CS_TYPE_INVALID == type || type >= CS_TYPE_PINYIN_BEGIN_MARK)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type));
   } else if (OB_ISNULL(cs = common::ObCharset::get_charset(type))) {
@@ -256,6 +257,99 @@ int ObFTParseHelper::segment(
   }
   LOG_DEBUG("ft parse segment", K(ret), K(type), K(add_word_flag_), K(parser_name_),
       K(ObString(fulltext_len, fulltext)), K(words.size()));
+  return ret;
+}
+
+int ObFTParseHelper::make_detail_json(
+    const ObFTWordMap &words,
+    const int64_t doc_length,
+    common::ObIJsonBase *&json_root)
+{
+ int ret = OB_SUCCESS;
+  ObJsonObject *root_obj = static_cast<ObJsonObject *>(allocator_->alloc(sizeof(ObJsonObject)));
+
+  ObJsonInt *cnt = static_cast<ObJsonInt *>(allocator_->alloc(sizeof(ObJsonInt)));
+
+  ObJsonArray *token_array = static_cast<ObJsonArray *>(allocator_->alloc(sizeof(ObJsonArray)));
+
+  if (OB_UNLIKELY(OB_ISNULL(root_obj) || OB_ISNULL(cnt) || OB_ISNULL(token_array))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc memory for json", K(ret));
+  } else {
+    new (root_obj) ObJsonObject(allocator_);
+    new (cnt) ObJsonInt(doc_length);
+    new (token_array) ObJsonArray(allocator_);
+
+    for (ObFTWordMap::const_iterator it = words.begin(); OB_SUCC(ret) && it != words.end(); ++it) {
+      ObString key = it->first.get_word();
+      ObJsonObject *node = static_cast<ObJsonObject *>(allocator_->alloc(sizeof(ObJsonObject)));
+      ObJsonInt *token_cnt_node = static_cast<ObJsonInt *>(allocator_->alloc(sizeof(ObJsonInt)));
+      if (OB_ISNULL(token_cnt_node) || OB_ISNULL(node)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Fail to alloc memory for json int", K(ret));
+        break;
+      } else {
+        new (node) ObJsonObject(allocator_);
+        int64_t token_cnt = it->second;
+        new (token_cnt_node) ObJsonInt(token_cnt);
+
+        if (OB_FAIL(node->add(key, token_cnt_node))) {
+          LOG_WARN("Fail to add token count to json", K(ret));
+          break;
+        } else if (OB_FAIL(token_array->append(node))) {
+          LOG_WARN("Fail to append json object", K(ret));
+          break;
+        } else {
+          // pass
+        }
+      }
+    } // for
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(root_obj->add(ENTRY_NAME_TOKENS, token_array))) {
+        LOG_WARN("Fail to add token array to json", K(ret));
+      } else if (OB_FAIL(root_obj->add(ENTRY_NAME_DOC_LEN, cnt))) {
+        LOG_WARN("Fail to add doc len to json", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    json_root = root_obj;
+  }
+
+  return ret;
+}
+
+int ObFTParseHelper::make_token_array_json(
+    const ObFTWordMap &words,
+    common::ObIJsonBase *&json_root)
+{
+  int ret = OB_SUCCESS;
+  ObJsonArray *token_array = static_cast<ObJsonArray *>(allocator_->alloc(sizeof(ObJsonArray)));
+  if (OB_UNLIKELY(OB_ISNULL(token_array))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc memory for json", K(ret));
+  } else {
+    new (token_array) ObJsonArray(allocator_);
+    for (ObFTWordMap::const_iterator it = words.begin(); OB_SUCC(ret) && it != words.end(); ++it) {
+      ObString key = it->first.get_word();
+      ObJsonString *token = static_cast<ObJsonString *>(allocator_->alloc(sizeof(ObJsonString)));
+      if (OB_UNLIKELY(OB_ISNULL(token))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Fail to alloc memory for json int", K(ret));
+        break;
+      } else {
+        new (token) ObJsonString(key);
+        if (OB_FAIL(token_array->append(token))) {
+          LOG_WARN("Fail to append json string", K(ret));
+          break;
+        } else {
+        }
+      }
+    } // for
+  }
+  if (OB_SUCC(ret)) {
+    json_root = token_array;
+  }
   return ret;
 }
 

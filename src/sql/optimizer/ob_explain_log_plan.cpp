@@ -54,6 +54,8 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       LOG_ERROR("failed to create log plan for explain stmt");
     } else if (OB_FAIL(child_plan->generate_plan())) {
       LOG_WARN("failed to generate plan tree for explain", K(ret));
+    } else if (OB_FAIL(remove_duplicate_constraints())) {
+      LOG_WARN("failed to remove duplicate constraints for explain", K(ret));
     } else if (OB_FAIL(check_explain_generate_plan_with_outline(child_plan))) {
       LOG_WARN("failed to check generate plan with outline for explain", K(ret));
     } else if (OB_FAIL(ObCodeGenerator::detect_batch_size(*child_plan, batch_size))) {

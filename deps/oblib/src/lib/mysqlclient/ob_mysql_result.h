@@ -240,6 +240,25 @@
     } \
   }
 
+#define EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type) \
+  if (OB_SUCC(ret)) \
+  { \
+    uint64_t uint_value = 0; \
+    if (OB_SUCCESS == (ret = (result).get_uint(column_name, uint_value))) \
+    { \
+      field = static_cast<type>(uint_value); \
+    } \
+    else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      ret = OB_SUCCESS; \
+      field = static_cast<type>(0); \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", K(column_name), K(ret)); \
+    } \
+  }
+
 #define EXTRACT_DATETIME_FIELD_MYSQL_SKIP_RET(result, column_name, field, type) \
   if (OB_SUCC(ret)) \
   { \
@@ -1070,6 +1089,11 @@
       const ObDataTypeCastParams dtc_params(&tz_info);               \
       bool no_dtc_params = (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)); \
       ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
+      if (ob_is_mysql_compact_dates_type(data_type)) { \
+        /* The default value validation has been finished in resolver stage. set cast mode to */ \
+        /* allow invalid dates for mysql compact type there. */ \
+        cast_ctx.set_allow_invalid_dates_cast_mode(); \
+      } \
       if (is_cur_default_value && column.is_default_expr_v2_column())\
       { \
         if (lib::is_mysql_mode()) { \
@@ -1132,7 +1156,7 @@
         {                                                                                 \
           def_obj.set_type(data_type);                                                    \
           if (is_mysql_mode()) {                                                          \
-            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision()))) {    \
+            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision(), ObCollationType::CS_TYPE_INVALID /*string_cs_type, no need set for json*/))) {    \
               SQL_LOG(WARN, "failed to build not strict default json value", K(ret));     \
             } else {                                                                      \
               res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),              \
@@ -1213,6 +1237,11 @@
       const ObDataTypeCastParams dtc_params(&tz_info);               \
       bool no_dtc_params = (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)); \
       ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
+      if (ob_is_mysql_compact_dates_type(data_type)) {                                           \
+        /* The default value validation has been finished in resolver stage. set cast mode to */ \
+        /* allow invalid dates for mysql compact type there. */                                  \
+        cast_ctx.set_allow_invalid_dates_cast_mode();                                            \
+      }                                                                                          \
       if (is_cur_default_value && column.is_default_expr_v2_column())                            \
       {                                                                                          \
         if (lib::is_mysql_mode()) {                                                              \
@@ -1275,7 +1304,7 @@
         {                                                                                        \
           def_obj.set_type(data_type);                                                           \
           if (is_mysql_mode()) {                                                                 \
-            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision()))) {  \
+            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision(), ObCollationType::CS_TYPE_INVALID /*string_cs_type, no need set for json*/))) {  \
               SQL_LOG(WARN, "failed to build not strict default json value", K(ret));            \
             } else {                                                                             \
               res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),                     \
@@ -1603,6 +1632,62 @@
     }                                                                   \
   } while (false)
 
+#define EXTRACT_INT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field, type) \
+  if (OB_SUCC(ret)) \
+  { \
+    common::number::ObNumber number_value; \
+    char buffer[common::number::ObNumber::MAX_NUMBER_ALLOC_BUFF_SIZE]; \
+    ObDataBuffer data_buffer(buffer, sizeof(buffer)); \
+    int64_t context_val = -1; \
+    if (OB_SUCCESS == (ret = (result).get_number(column_name, number_value, data_buffer)))  \
+    { \
+      if (!number_value.is_valid_int64(context_val)) { \
+        field = static_cast<type>(0); \
+        SQL_LOG(WARN, "failed to get int64 from number", K(number_value), K(ret)); \
+      } \
+      else \
+      { \
+        field = static_cast<type>(context_val); \
+      }\
+    } \
+    else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      ret = OB_SUCCESS; \
+      field = static_cast<type>(0); \
+    } \
+    else { \
+      SQL_LOG(WARN, "fail to get column in row. ", "column_name", column_name, K(ret)); \
+    } \
+  }
+
+#define EXTRACT_UINT_FIELD_FROM_NUMBER_SKIP_RET(result, column_name, field, type) \
+  if (OB_SUCC(ret)) \
+  { \
+    common::number::ObNumber number_value; \
+    char buffer[common::number::ObNumber::MAX_NUMBER_ALLOC_BUFF_SIZE]; \
+    ObDataBuffer data_buffer(buffer, sizeof(buffer)); \
+    uint64_t context_val = -1; \
+    if (OB_SUCCESS == (ret = (result).get_number(column_name, number_value, data_buffer)))  \
+    { \
+      if (!number_value.is_valid_uint64(context_val)) { \
+        field = static_cast<type>(0); \
+        SQL_LOG(WARN, "failed to get int64 from number", K(number_value), K(ret)); \
+      } \
+      else \
+      { \
+        field = static_cast<type>(context_val); \
+      }\
+    } \
+    else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      ret = OB_SUCCESS; \
+      field = static_cast<type>(0); \
+    } \
+    else { \
+      SQL_LOG(WARN, "fail to get column in row. ", "column_name", column_name, K(ret)); \
+    } \
+  }
+
 namespace oceanbase
 {
 namespace common
@@ -1673,7 +1758,7 @@ public:
   }
   virtual int get_type(const int64_t col_idx, ObObjMeta &type) const = 0;
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
-                           oceanbase::common::ObString &name, ObDataType &data_type) const = 0;
+                           oceanbase::common::ObString &name, oceanbase::common::ObDataType &data_type) const = 0;
   int format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                      oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                      DblinkDriverProto link_type, bool old_max_length) const;

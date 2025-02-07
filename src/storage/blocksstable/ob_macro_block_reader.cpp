@@ -367,7 +367,7 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
     LOG_WARN("invalid input size", K(ret), K(size), K(header));
   } else if (OB_FAIL(do_decrypt_and_decompress_data(header, deserialize_meta, input, size,
       uncomp_buf, uncomp_size, is_compressed, need_deep_copy, ext_allocator))) {
-    LOG_WARN("fail to do_decrypt_and_decompress_data", K(ret), K(header));
+    LOG_WARN("fail to do_decrypt_and_decompress_data", K(ret), K(header), K(deserialize_meta));
   }
 
   return ret;
@@ -551,9 +551,9 @@ int ObMacroBlockReader::decrypt_buf(
       deserialize_meta.master_key_id_,
       deserialize_meta.encrypt_key_,
       share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH))) {
-    LOG_WARN("Fail to init micro block encryption", K(ret));
+    LOG_WARN("Fail to init micro block encryption", K(ret), K(deserialize_meta));
   } else if (OB_FAIL(encryption_->decrypt(buf, size, decrypt_buf, decrypt_size))) {
-    LOG_WARN("Fail to decrypt data", K(ret));
+    LOG_WARN("Fail to decrypt data", K(ret), K(deserialize_meta));
   }
   return ret;
 }
@@ -774,7 +774,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const MicroBlockType bloc
       // dump leaf index block
       if (OB_FAIL(macro_iter.open_leaf_index_micro_block())) {
         LOG_WARN("Fail to open leaf index micro block", K(ret));
-      } else if (OB_FAIL(dump_sstable_micro_block(0, block_type, macro_iter))) {
+      } else if (OB_FAIL(dump_sstable_micro_block(0, MicroBlockType::INDEX, macro_iter))) {
         LOG_WARN("Fail to dump leaf index micro block", K(ret));
       } else if (OB_FAIL(dump_macro_block_meta_block(macro_iter))) {
         LOG_WARN("Fail to dump macro meta block in macro block", K(ret));

@@ -25,13 +25,34 @@ namespace oceanbase
 {
 namespace share
 {
+enum ObVecAuxTableIdx { //FARM COMPAT WHITELIST
+  INV_SCAN_IDX = 0,
+  DELTA_BUFFER_TBL_IDX = 1,
+  INDEX_ID_TBL_IDX = 2,
+  SNAPSHOT_TBL_IDX = 3,
+  COM_AUX_TBL_IDX = 4
+};
 
+
+// temporary solution, need to be refactored
+enum ObVecIndexType : uint8_t
+{//FARM COMPAT WHITELIST
+  VEC_INDEX_INVALID = 0,
+  VEC_INDEX_POST = 1,
+  VEC_INDEX_PRE = 2
+};
 class ObVectorIndexUtil final
 {
 public:
   static int parser_params_from_string(
       const ObString &origin_string,
       ObVectorIndexHNSWParam &param);
+  static int check_distance_algorithm_match(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const ObString &index_column_name,
+      const ObItemType type,
+      bool &is_match);
   static int insert_index_param_str(
       const ObString &new_add_param,
       ObIAllocator &allocator,
@@ -39,11 +60,25 @@ public:
   static int get_index_name_prefix(
       const schema::ObTableSchema &index_schema,
       ObString &prefix);
+  static int check_table_has_vector_of_fts_index(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      bool &has_fts_index,
+      bool &has_vec_index);
   static int check_column_has_vector_index(
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
       const int64_t col_id,
       bool &is_column_has_vector_index);
+  static int check_vec_aux_index_deleted(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      bool &is_all_deleted);
+  static int check_vector_index_by_column_name(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const ObString &index_column_name,
+      bool &is_valid);
   static int get_vector_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
@@ -100,9 +135,34 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const ObTableSchema &data_table_schema,
       ObTableSchema &new_index_schema);
+
+  static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                  const uint64_t vidx_table_id,
+                                  const common::ObString &exec_env);
+  static int remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+                                     const uint64_t vidx_table_id);
+  static int get_dbms_vector_job_info(common::ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const uint64_t vidx_table_id,
+                                      common::ObIAllocator &allocator,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      dbms_scheduler::ObDBMSSchedJobInfo &job_info);
   static bool has_multi_index_on_same_column(
       ObIArray<uint64_t> &vec_index_cols,
       const uint64_t col_id);
+  static int check_table_exist(
+      const ObTableSchema &data_table_schema,
+      const ObString &domain_index_name);
+  static int get_rebuild_drop_index_id_and_name(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      obrpc::ObDropIndexArg &arg);
+private:
+  static bool is_expr_type_and_distance_algorithm_match(
+      const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm);
+  static bool is_match_index_column_name(
+      const schema::ObTableSchema &table_schema,
+      const schema::ObTableSchema &index_schema,
+      const ObString &index_column_name);
 };
 
 // For vector index snapshot write data

@@ -77,7 +77,7 @@ public:
          common::ObISQLClient &sql_client,
          const ObString &clone_tenant_name,
          bool &clone_already_finish,
-         const ObCancelCloneJobReason &reason);
+         const share::ObCancelCloneJobReason &reason);
   // cancel clone job by source tenant id, this will be called by
   // standby tenant iterating multi-source log(upgrade, transfer, alter_ls)
   // @params[in]  sql_client, the client to use
@@ -87,14 +87,14 @@ public:
   static int cancel_clone_job_by_source_tenant_id(
          common::ObISQLClient &sql_client,
          const uint64_t source_tenant_id,
-         const ObCancelCloneJobReason &reason,
+         const share::ObCancelCloneJobReason &reason,
          bool &clone_already_finish);
   static void try_to_record_clone_status_change_rs_event(
-         const ObCloneJob &clone_job,
+         const share::ObCloneJob &clone_job,
          const share::ObTenantCloneStatus &prev_clone_status,
          const share::ObTenantCloneStatus &cur_clone_status,
          const int ret_code,
-         const ObCancelCloneJobReason &reason);
+         const share::ObCancelCloneJobReason &reason);
 private:
   // inner cancel clone job
   // @params[in]  clone_op, operator to use
@@ -102,9 +102,9 @@ private:
   // @params[in]  reason, the reason to cancel clone job
   // @params[out] clone_already_finish, whether clone job already finished
   static int inner_cancel_clone_job_(
-         ObTenantCloneTableOperator &clone_op,
-         const ObCloneJob &clone_job,
-         const ObCancelCloneJobReason &reason,
+         share::ObTenantCloneTableOperator &clone_op,
+         const share::ObCloneJob &clone_job,
+         const share::ObCancelCloneJobReason &reason,
          bool &clone_already_finish);
 
   // construct data version to record

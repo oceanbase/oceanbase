@@ -14,12 +14,14 @@
 #include "lib/restore/ob_i_storage.h"
 #include "lib/restore/ob_object_device.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/container/ob_array_iterator.h"
 #include "common/ob_smart_var.h"
 #include "common/storage/ob_device_common.h"
 #include "common/storage/ob_io_device.h"
 #include "lib/atomic/ob_atomic.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -47,7 +49,7 @@ void print_access_storage_log(
       if (NULL != is_slow) {
         *is_slow = true;
       }
-      _STORAGE_LOG_RET(WARN, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
+      _STORAGE_LOG_RET(INFO, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
         msg, uri.length(), uri.ptr(), size, cost_ts, speed);
     }
   }
@@ -104,9 +106,13 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
       || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX));
 }
 
+bool is_object_storage_type(const ObStorageType &type)
+{ return ObStorageType::OB_STORAGE_FILE != type
+      && ObStorageType::OB_STORAGE_MAX_TYPE != type;
+}
 bool is_io_error(const int result)
 {
-  return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result;
+  return OB_IO_ERROR == result || OB_OBJECT_STORAGE_IO_ERROR == result;
 }
 
 int get_storage_type_from_name(const char *type_str, ObStorageType &type)
@@ -249,10 +255,12 @@ int DelAppendableObjectFragmentOp::func(const dirent *entry)
              "%s%s%s", uri_.ptr(), delemiter_str, entry->d_name))) {
     OB_LOG(WARN, "fail to construct appendable obj fragment path", K(ret), K_(uri), K(delemiter_str), K(entry->d_name));
   } else if (OB_FAIL(util_.del_file(obj_fragment_path))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
     OB_LOG(WARN, "fail to del appendable object fragment", K(ret), K(obj_fragment_path));
   } else {
     OB_LOG(DEBUG, "succ to del appendable object fragment", K(obj_fragment_path));
   }
+  EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
   return ret;
 }
 
@@ -557,6 +565,24 @@ void ObStorageUtil::close()
   }
 }
 
+// inner func
+int ObStorageUtil::head_object_meta_(const ObString &uri, ObStorageObjectMetaBase &obj_meta)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_init())) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "util is not inited", K(ret), K(uri));
+  } else if (OB_UNLIKELY(!is_storage_type_match(uri, device_type_))) {
+    ret = OB_INVALID_BACKUP_DEST;
+    STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
+        K(ret), K(uri), K_(device_type));
+  } else if (OB_FAIL(util_->head_object_meta(uri, obj_meta))) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+    STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(uri));
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
+  return ret;
+}
 /*---------------------------------- NEW ADAPTIVE INTERFACE ----------------------------------*/
 int ObStorageUtil::detect_storage_obj_meta(
     const common::ObString &uri,
@@ -578,7 +604,7 @@ int ObStorageUtil::detect_storage_obj_meta(
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(WARN, "uri prefix does not match the expected device type",
         K(ret), K(uri), K_(device_type));
-  } else if (OB_FAIL(util_->head_object_meta(uri, obj_meta))) {
+  } else if (OB_FAIL(head_object_meta_(uri, obj_meta))) {
     STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(uri));
   } else if (obj_meta.is_exist_) {
     if (ObStorageObjectMetaType::OB_FS_DIR != obj_meta.type_) {
@@ -610,7 +636,7 @@ int ObStorageUtil::detect_storage_obj_meta(
       if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_FORMAT_META,
                                                format_meta_uri, sizeof(format_meta_uri)))) {
         OB_LOG(WARN, "fail to construct s3 format_meta name", K(ret), K(uri));
-      } else if (OB_FAIL(util_->head_object_meta(format_meta_uri, obj_meta))) {
+      } else if (OB_FAIL(head_object_meta_(format_meta_uri, obj_meta))) {
         STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
       } else if (obj_meta.is_exist_) {
         obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND;
@@ -644,42 +670,52 @@ int ObStorageUtil::read_seal_meta_if_needed(
                                                   seal_meta_uri, OB_MAX_URI_LENGTH))) {
     OB_LOG(WARN, "fail to construct s3 seal_meta name", K(ret), K(uri));
   } else {
-    ObStorageReader reader;
-    int64_t seal_meta_len = 0;
-    if (OB_FAIL(reader.open(seal_meta_uri, storage_info_))) {
-      if (OB_OBJECT_NOT_EXIST == ret) {
-        obj_meta.is_exist_ = false;
-        ret = OB_SUCCESS;
-      }
+    ObStorageReader *reader = nullptr;
+    if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc buf for reader", K(ret));
+    } else if (FALSE_IT(new (reader) ObStorageReader())) {
     } else {
-      // If exist seal meta, directly read it content.
-      seal_meta_len = reader.get_length();
-      if (seal_meta_len > 0) {
-        int64_t read_size = 0;
-        char *buf = NULL;
-        pos = 0;
-        if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_FAIL(reader.pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
-          OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
-          ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "fail to read seal meta file entire content",
-              K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
-        } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
-          OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
-        } else {
-          obj_meta.is_exist_ = true;
+      int64_t seal_meta_len = 0;
+      if (OB_FAIL(reader->open(seal_meta_uri, storage_info_))) {
+        if (OB_OBJECT_NOT_EXIST == ret) {
+          obj_meta.is_exist_ = false;
+          ret = OB_SUCCESS;
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
-      }
+        // If exist seal meta, directly read it content.
+        seal_meta_len = reader->get_length();
+        if (seal_meta_len > 0) {
+          int64_t read_size = 0;
+          char *buf = NULL;
+          pos = 0;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_FAIL(reader->pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
+            OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
+            ret = OB_ERR_UNEXPECTED;
+            OB_LOG(WARN, "fail to read seal meta file entire content",
+                K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
+          } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
+            OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
+          } else {
+            obj_meta.is_exist_ = true;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
+        }
 
-      if (OB_TMP_FAIL(reader.close())) {
-        OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        if (OB_TMP_FAIL(reader->close())) {
+          OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        }
       }
+    }
+    if (OB_NOT_NULL(reader)) {
+      reader->~ObStorageReader();
+      reader = nullptr;
     }
   }
   return ret;
@@ -792,8 +828,11 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     }
   } else {
     if (OB_FAIL(util_->del_file(uri))) {
+      EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
       OB_LOG(WARN, "fail to delete file", K(ret), K(uri));
     }
+    EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
+    EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   }
 
   if (OB_SUCC(ret)) {
@@ -807,12 +846,6 @@ int ObStorageUtil::del_file(const common::ObString &uri, const bool is_adaptive)
     ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
   }
 #endif
-
-  if (OB_FAIL(ret)) {
-    EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
-  }
-  EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
-  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -970,6 +1003,13 @@ int ObStorageUtil::list_adaptive_files(
       }
     } while (OB_SUCC(ret) && list_ctx->has_next_ && !list_ctx->has_reached_list_limit());
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
+
   return ret;
 }
 
@@ -1220,6 +1260,11 @@ int ObStorageUtil::list_directories(
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_files", K(ret), K(uri), K(uri_buf));
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
   return ret;
 }
 
@@ -1251,6 +1296,10 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
     STORAGE_LOG(WARN, "failed to check is exist", K(ret), K(uri));
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1292,6 +1341,10 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1402,6 +1455,8 @@ int ObStorageUtil::batch_del_files(
   const int64_t n_files_to_delete = files_to_delete.count();
   int64_t cur_deleted_pos = 0;
   failed_files_idx.reset();
+  const bool use_batch_del_flag =
+      (OB_STORAGE_FILE != device_type_);
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_init())) {
@@ -1413,7 +1468,7 @@ int ObStorageUtil::batch_del_files(
   } else if (OB_UNLIKELY(0 == n_files_to_delete)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(n_files_to_delete));
-  } else if (OB_STORAGE_FILE != device_type_) {
+  } else if (use_batch_del_flag) {
     hash::ObHashMap<ObString, int64_t> files_to_delete_map;
     const ObString &uri = files_to_delete.at(0);
     const char *prefix = nullptr;
@@ -1476,7 +1531,7 @@ int ObStorageUtil::batch_del_files(
   }
 
   if (OB_NOT_SUPPORTED == ret
-      || (OB_SUCC(ret) && OB_STORAGE_FILE == device_type_)) {
+      || (OB_SUCC(ret) && !use_batch_del_flag)) {
     ret = OB_SUCCESS;
     STORAGE_LOG(WARN, "batch_del interface is not supported, "
         "falling back to a looped single-delete calls instead",
@@ -1486,7 +1541,7 @@ int ObStorageUtil::batch_del_files(
     while (OB_SUCC(ret) && cur_deleted_pos < n_files_to_delete) {
       if (OB_FAIL(del_file(files_to_delete.at(cur_deleted_pos)))) {
         STORAGE_LOG(WARN, "fail to batch del files",
-            K(ret), K(cur_deleted_pos), K(files_to_delete.at(cur_deleted_pos++)));
+            K(ret), K(cur_deleted_pos), K(files_to_delete.at(cur_deleted_pos)));
       } else {
         cur_deleted_pos++;
       }
@@ -1509,6 +1564,11 @@ int ObStorageUtil::batch_del_files(
     }
   }
 
+  if (OB_FAIL(ret)) {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT, n_files_to_delete - failed_files_idx.count());
+  }
+  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_COUNT, n_files_to_delete);
+  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -1670,6 +1730,11 @@ int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseD
   } else if (OB_FAIL(util_->list_directories(uri_buf, op))) {
     STORAGE_LOG(WARN, "failed to list_directories", K(ret), K(uri), K(uri_buf));
   } 
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
   return ret;
 }
 
@@ -1694,6 +1759,11 @@ int ObStorageUtil::is_tagging(const common::ObString &uri, bool &is_tagging)
   } else if (OB_FAIL(util_->is_tagging(uri, is_tagging))) {
     STORAGE_LOG(WARN, "failed to check is tagging", K(ret), K(uri));
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   return ret;
 }
 
@@ -1911,6 +1981,14 @@ int ObStorageReader::open(const common::ObString &uri,
     storage_info_ = storage_info;
   }
 
+
+  if (!head_meta) {
+  } else {
+    if (OB_FAIL(ret)) {
+      EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
+    }
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
+  }
   return ret;
 }
 
@@ -2086,8 +2164,10 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     // no need to open reader
   } else if (meta_.is_object_file_type()) {
     if (OB_FAIL(reader_->open(uri, storage_info))) {
+      EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_FAIL_COUNT);
       OB_LOG(WARN, "fail to open reader", K(ret), K(uri), KPC(storage_info));
     }
+    EVENT_INC(ObStatEventIds::OBJECT_STORAGE_IO_HEAD_COUNT);
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "invalid storage object type", K(ret), K(uri), KPC(storage_info), K_(meta));
@@ -2130,6 +2210,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
     if (OB_FAIL(reader_->pread(buf, buf_size, offset, read_size))) {
       OB_LOG(WARN, "fail to read object", K(ret), K_(meta));
     }
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
   } else if (meta_.is_simulate_append_type()) {
     // To enable parallel pread,
     // use a temporary allocator/reader for each pread call instead of using allocator_/reader_
@@ -2187,6 +2268,7 @@ int ObStorageAdaptiveReader::pread(char *buf,
         } else {
           cur_read_size += actual_read_size;
         }
+        EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
       }
 
       if (OB_SUCC(ret)) {
@@ -2198,7 +2280,10 @@ int ObStorageAdaptiveReader::pread(char *buf,
     OB_LOG(ERROR, "unkown object type", K(ret), K_(meta));
   }
 
-  // TODO @fangdan: add event
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
+  }
   EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
@@ -2290,6 +2375,8 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
       STORAGE_LOG(WARN, "writer_ is null", K(ret), K(uri));
     } else if (OB_FAIL(writer_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
+    } else {
+      storage_info_ = storage_info;
     }
   }
 
@@ -2460,42 +2547,49 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   int64_t read_buf_size = 0;
   int64_t actual_write_offset = 0;
   char *read_buffer = nullptr;
-  ObStorageReader reader;
+  ObStorageReader *reader = nullptr;
   ObArenaAllocator allocator;
 
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_FAIL(reader.open(uri_, storage_info_))) {
+  } else if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "fail to alloc buf for reader", K(ret));
+  } else if(FALSE_IT(new (reader) ObStorageReader())) {
+  } else if (OB_FAIL(reader->open(uri_, storage_info_))) {
     STORAGE_LOG(WARN, "failed to open reader", K(ret));
-  } else if (reader.get_length() <= offset) {
+  } else if (reader->get_length() <= offset) {
     // This situation also has concurrency issues.
     // The length read by the reader may be old, so offset not match needs to be returned for retry.
-    ret = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
-    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader.get_length(), K(ret));
-  } else if (OB_FALSE_IT(actual_write_offset = reader.get_length() - offset)) {
+    ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
+    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader->get_length(), K(ret));
+  } else if (OB_FALSE_IT(actual_write_offset = reader->get_length() - offset)) {
   } else if (OB_FALSE_IT(read_buf_size = std::min(actual_write_offset, size))) {
   } else if (OB_ISNULL(read_buffer = static_cast<char *>(allocator.alloc(read_buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to allocate memory", K(ret), K(size));
-  } else if (OB_FAIL(reader.pread(read_buffer, read_buf_size, offset, read_size))) {
+  } else if (OB_FAIL(reader->pread(read_buffer, read_buf_size, offset, read_size))) {
     STORAGE_LOG(WARN, "failed to pread", K(ret));
   } else if (0 != MEMCMP(buf, read_buffer, read_buf_size)) {
-    ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
+    ret = OB_OBJECT_STORAGE_PWRITE_CONTENT_NOT_MATCH;
     STORAGE_LOG(WARN, "data inconsistent", K(ret));
-  } else if (offset + size > reader.get_length()) {
-    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader.get_length()))) {
-      if (OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret) {
+  } else if (offset + size > reader->get_length()) {
+    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader->get_length()))) {
+      if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret) {
         ret = OB_IO_ERROR;
         STORAGE_LOG(WARN, "There may be concurrency problems that require the caller to retry", K(ret));
       }
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = reader.close())) {
+  if (OB_SUCCESS != (tmp_ret = reader->close())) {
     STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret));
   }
-
+  if (OB_NOT_NULL(reader)) {
+    reader->~ObStorageReader();
+    reader = nullptr;
+  }
   return ret;
 }
 
@@ -2520,14 +2614,22 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
   }
 
   // no need to adjust the function repeatable_pwrite_
-  // because S3 will not return OB_BACKUP_PWRITE_OFFSET_NOT_MATCH
-  if (OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret && appender_ != &s3_appender_) {
+  // because S3 will not return OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH
+  if (OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH == ret && appender_ != &s3_appender_) {
     if (OB_FAIL(repeatable_pwrite_(buf, size, offset))) {
       STORAGE_LOG(WARN, "failed to repeatable_pwrite", K(ret));
     } else {
       STORAGE_LOG(DEBUG, "repeatable pwrite success", K(ret));
     }
   }
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
   return ret;
 }
@@ -2734,6 +2836,9 @@ int ObStorageMultiPartWriter::write(const char *buf, const int64_t size)
   } else {
     EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
@@ -2757,11 +2862,15 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
     OB_LOG(WARN, "call pwrite in an unexpected order",
         K(ret), K(offset), K(size), K_(cur_max_offset));
   } else if (OB_FAIL(multipart_writer_->pwrite(buf, size, offset))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to write", K(ret));
   } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
     cur_max_offset_ = offset + size;
   }
 
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2796,6 +2905,12 @@ int ObStorageMultiPartWriter::complete()
     STORAGE_LOG(WARN, "failed to complete", K(ret));
   }
 
+  // for complete
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2815,6 +2930,12 @@ int ObStorageMultiPartWriter::abort()
     STORAGE_LOG(WARN, "failed to abort", K(ret));
   }
 
+  // for abort
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -2984,6 +3105,13 @@ int ObStorageDirectMultiPartWriter::upload_part(
     SpinWLockGuard guard(lock_);
     uploaded_file_length_ += size;
   }
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -3020,6 +3148,12 @@ int ObStorageDirectMultiPartWriter::abort()
     STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K_(uri));
   }
 
+  // for abort
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 

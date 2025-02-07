@@ -27,6 +27,7 @@
 #include "rpc/obrpc/ob_rpc_proxy_macros.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "rpc/obrpc/ob_rpc_opts.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -163,7 +164,7 @@ public:
             || pcode == OB_OUT_TRANS_LOCK_TABLE || pcode == OB_OUT_TRANS_UNLOCK_TABLE
             || pcode == OB_TABLE_LOCK_TASK
             || pcode == OB_HIGH_PRIORITY_TABLE_LOCK_TASK || pcode == OB_BATCH_TABLE_LOCK_TASK
-            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK
+            || pcode == OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK || pcode == OB_BATCH_REPLACE_TABLE_LOCK_TASK
             || pcode == OB_REGISTER_TX_DATA
             || pcode == OB_REFRESH_SYNC_VALUE || pcode == OB_CLEAR_AUTOINC_CACHE
             || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
@@ -291,7 +292,9 @@ class Handle {
 
 public:
   Handle();
+  ~Handle();
   const common::ObAddr &get_dst_addr() const { return dst_; }
+  void reset_timeout();
 
 protected:
   bool has_more_;
@@ -304,6 +307,7 @@ protected:
   bool do_ratelimit_;
   int8_t is_bg_flow_;
   int64_t first_pkt_id_;
+  int64_t abs_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };

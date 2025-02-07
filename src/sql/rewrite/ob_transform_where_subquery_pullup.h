@@ -247,8 +247,6 @@ struct SingleSetParam {
                                           const ObSelectStmt &subquery,
                                           bool &is_correlated);
 
-  int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
-
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 

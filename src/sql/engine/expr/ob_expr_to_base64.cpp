@@ -74,7 +74,7 @@ int ObExprToBase64::calc_result_type1(ObExprResType &type,
 
   str.set_calc_type(ObVarcharType);
   str.set_calc_collation_type(
-    str.is_string_type() ? str.get_collation_type() : CS_TYPE_UTF8MB4_BIN);
+    (str.is_string_type() || str.is_enum_or_set()) ? str.get_collation_type() : CS_TYPE_UTF8MB4_BIN);
 
   int64_t mbmaxlen = 0;
   int64_t max_result_length = 0;
@@ -82,9 +82,7 @@ int ObExprToBase64::calc_result_type1(ObExprResType &type,
     LOG_WARN("fail to get mbmaxlen", K(str.get_collation_type()), K(ret));
   } else {
     max_result_length = (base64_needed_encoded_length(str.get_length()) - 1) * mbmaxlen;
-    if (max_result_length > OB_MAX_BLOB_WIDTH) {
-      max_result_length = OB_MAX_BLOB_WIDTH;
-    }
+    max_result_length = MIN(MAX(0, max_result_length), OB_MAX_BLOB_WIDTH);
     int64_t max_l = max_result_length / mbmaxlen;
     int64_t max_deduce_length = max_l * mbmaxlen;
     if (max_deduce_length < OB_MAX_MYSQL_VARCHAR_LENGTH) {

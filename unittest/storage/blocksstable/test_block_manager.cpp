@@ -14,6 +14,7 @@
 #include <sys/statvfs.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <iostream>
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -42,6 +43,23 @@ public:
   TestBlockManager();
   virtual ~TestBlockManager() = default;
   virtual void SetUp() override;
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
+
+private:
+  int init_multi_tenant();
+
+private:
+  common::ObAddr addr_;
+  omt::ObMultiTenant multi_tenant_;
 };
 
 TestBlockManager::TestBlockManager()
@@ -49,10 +67,25 @@ TestBlockManager::TestBlockManager()
 {
 }
 
+int TestBlockManager::init_multi_tenant()
+{
+  int ret = OB_SUCCESS;
+  GCONF.cpu_count = 6;
+  if (OB_SUCCESS != (ret = multi_tenant_.init(addr_))) {
+    STORAGE_LOG(WARN, "init multi_tenant failed", K(ret));
+  } else {
+    multi_tenant_.start();
+    GCTX.omt_ = &multi_tenant_;
+  }
+  return ret;
+}
+
 void TestBlockManager::SetUp()
 {
   TestDataFilePrepare::SetUp();
+  ASSERT_EQ(OB_SUCCESS, init_multi_tenant());
   OB_SERVER_BLOCK_MGR.block_map_.reset();
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }
 
 TEST_F(TestBlockManager, test_inc_and_dec_ref_cnt)
@@ -111,10 +144,16 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
     ASSERT_EQ(common::OB_SUCCESS, ret);
   }
 
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
-  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
+
+  ObTimerService *timer_service = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  ASSERT_EQ(OB_SUCCESS, timer_service->start());
+  tenant_ctx.set(timer_service);
+
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
 
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
@@ -123,7 +162,7 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   tenant_ctx.set(tf_mgr);
   ObTenantEnv::set_tenant(&tenant_ctx);
-
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
   ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
 
   const int blk_cnt = 100;
@@ -180,6 +219,64 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   tmp_file::ObTmpPageCache::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   common::ObClockGenerator::destroy();
+}
+
+TEST_F(TestBlockManager, test_mark_and_sweep_skip_mark)
+{
+  int ret = OB_SUCCESS;
+  ObBlockManager::BlockInfo block_info;
+  ObMacroBlockHandle macro_handle;
+
+  ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
+
+  const int64_t bucket_num = 1024;
+  const int64_t max_cache_size = 1024 * 1024 * 1024;
+  const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
+
+  ret = ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
+  if (OB_INIT_TWICE == ret) {
+    ret = common::OB_SUCCESS;
+  } else {
+    ASSERT_EQ(common::OB_SUCCESS, ret);
+  }
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  ASSERT_EQ(0, OB_SERVER_BLOCK_MGR.block_map_.count());
+
+  ObBlockManager::MacroBlkIdMap mark_info;
+  ret = mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> macro_id_set;
+  ret = macro_id_set.create(MAX(2, OB_SERVER_BLOCK_MGR.block_map_.count()));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  int64_t safe_ts = ObTimeUtility::current_time();
+  int64_t hold_cnt = 0;
+  ObBlockManager::GetPendingFreeBlockFunctor functor(1000000, mark_info, hold_cnt);
+  ret = OB_SERVER_BLOCK_MGR.block_map_.for_each(functor);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, mark_info.count());
+
+  // first mark_and_sweep, should update start_time_
+  OB_SERVER_BLOCK_MGR.mark_and_sweep();
+  ASSERT_EQ(false, OB_SERVER_BLOCK_MGR.marker_status_.mark_finished_);
+  int64_t first_start_time = OB_SERVER_BLOCK_MGR.marker_status_.start_time_;
+  int64_t first_last_end_time = OB_SERVER_BLOCK_MGR.marker_status_.last_end_time_;
+
+  std::cout << ObTimeUtility::fast_current_time() << std::endl;
+  sleep(1);
+  std::cout << ObTimeUtility::fast_current_time() << std::endl;
+
+  // second mark_and_sweep, should update start_time_, should not update last_end_time_
+  OB_SERVER_BLOCK_MGR.mark_and_sweep();
+  ASSERT_EQ(false, OB_SERVER_BLOCK_MGR.marker_status_.mark_finished_);
+  ASSERT_NE(first_start_time, OB_SERVER_BLOCK_MGR.marker_status_.start_time_);
+  ASSERT_EQ(first_last_end_time, OB_SERVER_BLOCK_MGR.marker_status_.last_end_time_);
+
+  macro_handle.reset();
+
+  // FILE_MANAGER_INSTANCE_V2.destroy();
+  ObKVGlobalCache::get_instance().destroy();
 }
 
 TEST_F(TestBlockManager, test_ref_cnt_wash_and_load)

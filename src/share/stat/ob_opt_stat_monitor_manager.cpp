@@ -27,6 +27,7 @@
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
 #include "pl/sys_package/ob_dbms_stats.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -934,6 +935,7 @@ int ObOptStatMonitorManager::gen_tablet_list(const ObIArray<ObOptDmlStat> &dml_s
       if (!is_valid && OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard,
                                                                      dml_stats.at(i).tenant_id_,
                                                                      dml_stats.at(i).table_id_,
+                                                                     false,
                                                                      is_valid))) {
         LOG_WARN("failed to check is stat table", K(ret));
       } else if (is_valid) {

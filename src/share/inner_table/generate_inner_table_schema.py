@@ -1110,7 +1110,7 @@ def replace_agent_table_columns_def(columns):
       t = "otimestamp"
     elif t == "otimestamp":
       pass
-    elif t == "longtext":
+    elif t in ("longtext", "longblob"):
       pass
     elif t.startswith("varchar:") or t.startswith("varbinary:"):
       if len(column) >= 4 and "false" == column[2] and "" == column[3]:

@@ -15,6 +15,7 @@
 #include "logservice/ob_log_handler.h"
 #include "logservice/logrpc/ob_log_rpc_proxy.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/ob_reconfig_checker_adapter.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
 
@@ -232,12 +233,18 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
 {
   int ret = OB_SUCCESS;
   ObLogReporterAdapter *reporter;
+  logservice::ObReconfigCheckerAdapter reconfig_checker;
   if (NULL == palf_handle_) {
     ret = OB_NOT_INIT;
   } else if (false == req.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(get_reporter_(reporter))) {
     CLOG_LOG(ERROR, "get_reporter failed", K(req.palf_id_));
+  } else if (OB_FAIL(reconfig_checker.init(MTL_ID(), share::ObLSID(req.palf_id_), req.timeout_us_))) {
+    CLOG_LOG(WARN, "ObReconfigCheckerAdapter init failed", K(ret), K(req.palf_id_));
+  } else if (OB_FAIL(palf_handle_->set_reconfig_checker_cb(&reconfig_checker))) {
+    CLOG_LOG(WARN, "set_reconfig_checker_cb failed, another reconfiguration is running", K(ret), K(req.palf_id_));
+    ret = OB_EAGAIN;
   } else {
     switch (req.cmd_type_) {
       case FORCE_SINGLE_MEMBER_CMD:
@@ -294,6 +301,7 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
       default:
         break;
     }
+    palf_handle_->reset_reconfig_checker_cb();
   }
   resp.ret_ = ret;
   if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {
@@ -413,6 +421,36 @@ int LogRequestHandler::handle_request<LogFlashbackMsg>(const LogFlashbackMsg &re
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+template<>
+int LogRequestHandler::handle_sync_request<LogProbeRsReq, LogProbeRsResp>(const LogProbeRsReq &req, LogProbeRsResp &resp)
+{
+  int ret = OB_SUCCESS;
+  if (false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "invalid argument!", K(ret), K(req));
+  } else {
+    const common::ObAddr &sender = req.src_;
+    const int64_t palf_id = ObLSID::SYS_LS_ID;
+    int64_t unused_pid = OB_INVALID_TIMESTAMP;
+    common::ObRole role = INVALID_ROLE;
+    palf::PalfHandleGuard palf_handle_guard;
+    if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
+      CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
+    } else if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+      CLOG_LOG(WARN, "get_role failed when handling LogProbeRsReq", K(ret));
+    } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+      resp.ret_ = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "send LogProbeRsReq to wrong addr, this log stream is not rs leader", K_(resp.ret), K(palf_id), K(role));
+    } else {
+      resp.ret_ = OB_SUCCESS;
+      CLOG_LOG(INFO, "the network between the sender and rs is normal",K(sender));
+    }
+  }
+  return ret;
+}
+#endif
+
 template <>
 int LogRequestHandler::handle_sync_request<LogGetCkptReq, LogGetCkptResp>(
     const LogGetCkptReq &req,
@@ -442,18 +480,27 @@ int LogRequestHandler::handle_sync_request<LogGetCkptReq, LogGetCkptResp>(
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
 template <>
 int LogRequestHandler::handle_request<LogSyncBaseLSNReq>(const LogSyncBaseLSNReq &req)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!req.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(req));
+    CLOG_LOG(ERROR, "Invalid argument!!!", K(req));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "unexcepted error, mustn't use this interface in non-shared storage mode, ", K(req));
   } else {
+    LSN end_lsn;
+    LSN base_lsn;
     palf::PalfHandleGuard palf_handle_guard;
     if (OB_FAIL(get_palf_handle_guard_(req.ls_id_.id(), palf_handle_guard))) {
       CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(req));
-    } else if (OB_FAIL(palf_handle_guard.advance_base_lsn(req.base_lsn_))) {
+    } else if (OB_FAIL(palf_handle_guard.get_end_lsn(end_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsnf failed", KR(ret), K(req));
+    } else if (FALSE_IT(base_lsn = MIN(end_lsn, req.base_lsn_))) {
+    } else if (OB_FAIL(palf_handle_guard.advance_base_lsn(base_lsn))) {
       PALF_LOG(WARN, "PalfHandleImpl update_base_lsn failed", K(req));
     } else {
       PALF_LOG(TRACE, "handle sync_base_lsn success", K(req));
@@ -462,7 +509,6 @@ int LogRequestHandler::handle_request<LogSyncBaseLSNReq>(const LogSyncBaseLSNReq
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
 template <>
 int LogRequestHandler::handle_request<LogAcquireRebuildInfoMsg>(const LogAcquireRebuildInfoMsg &req)
 {

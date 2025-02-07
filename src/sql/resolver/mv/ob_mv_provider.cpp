@@ -33,6 +33,27 @@ namespace sql
 int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                    const share::SCN &refresh_scn,
                                    ObSchemaGetterGuard *schema_guard,
+                                   ObSQLSessionInfo *session_info,
+                                   int64_t part_idx,
+                                   int64_t sub_part_idx,
+                                   ObNewRange &range)
+{
+  int ret = OB_SUCCESS;
+  MajorRefreshInfo major_refresh_info(part_idx, sub_part_idx, range);
+  major_refresh_info_ = major_refresh_info.is_valid_info() ? &major_refresh_info : NULL;
+  if (OB_FAIL(init_mv_provider(last_refresh_scn, refresh_scn, schema_guard, session_info))) {
+    LOG_WARN("Failed to init mv provider", K(ret), K(major_refresh_info));
+  }
+  major_refresh_info_ = NULL;
+  return ret;
+}
+
+// 1. resolve mv definition and get stmt
+// 2. check refresh type by stmt
+// 3. print refresh dmls
+int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
+                                   const share::SCN &refresh_scn,
+                                   ObSchemaGetterGuard *schema_guard,
                                    ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
@@ -56,6 +77,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
       ObRawExprFactory expr_factory(alloc);
       ObSchemaChecker schema_checker;
       const ObTableSchema *mv_schema = NULL;
+      const ObTableSchema *mv_container_schema = NULL;
       ObQueryCtx *query_ctx = NULL;
       int64_t max_version = OB_INVALID_VERSION;
       ObSEArray<ObString, 4> operators;
@@ -74,6 +96,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                           *session_info,
                                           mview_id_,
                                           mv_schema,
+                                          mv_container_schema,
                                           view_stmt))) {
         LOG_WARN("failed to gen mv stmt", K(ret));
       } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
@@ -84,7 +107,7 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
         LOG_WARN("failed to collect dep infos", K(ret));
       } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
         LOG_WARN("failed to assign fixed array", K(ret));
-      } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt))) {
+      } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
         if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
           inited_ = true;
           refreshable_type_ = OB_MV_REFRESH_INVALID;
@@ -93,8 +116,9 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
           LOG_WARN("failed to check mv column type", K(ret));
         }
       } else if (OB_FALSE_IT(query_ctx->get_query_hint_for_update().reset())) { // reset hint from mview definition
-      } else if (OB_FAIL(ObMVPrinter::print_mv_operators(*mv_schema, *view_stmt, for_rt_expand_,
-                                                         last_refresh_scn, refresh_scn,
+      } else if (OB_FAIL(ObMVPrinter::print_mv_operators(*mv_schema, *mv_container_schema,
+                                                         *view_stmt, for_rt_expand_,
+                                                         last_refresh_scn, refresh_scn, major_refresh_info_,
                                                          alloc, inner_alloc_,
                                                          schema_guard,
                                                          stmt_factory,
@@ -191,7 +215,8 @@ int ObMVProvider::get_mv_dependency_infos(ObIArray<ObDependencyInfo> &dep_infos)
 // if the result type from mv_schema and view_stmt is different, no refresh method is allowed
 // get new column info same as ObCreateViewResolver::add_column_infos
 int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
-                                       const ObSelectStmt *view_stmt)
+                                       const ObSelectStmt *view_stmt,
+                                       ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mv_schema) || OB_ISNULL(view_stmt)) {
@@ -212,6 +237,7 @@ int ObMVProvider::check_mv_column_type(const ObTableSchema *mv_schema,
       } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_items.at(i).expr_,
                                                                       mv_schema->get_charset_type(),
                                                                       mv_schema->get_table_id(),
+                                                                      session,
                                                                       cur_column))) {
         LOG_WARN("failed to fill column meta infos", K(ret), K(cur_column));
       } else if (OB_FAIL(check_mv_column_type(*org_column, cur_column))) {
@@ -265,15 +291,20 @@ int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_col
     is_match = true;
   } else if (org_column.get_meta_type().get_type() != cur_column.get_meta_type().get_type()) {
     is_match = false;
-  } else if (!ob_is_numeric_type(org_column.get_meta_type().get_type())) {
-    is_match = org_column.get_accuracy() == cur_column.get_accuracy();
-  } else {
+  } else if (ob_is_string_type(org_column.get_meta_type().get_type())) {
+    is_match = org_column.get_accuracy().get_length() >= cur_column.get_accuracy().get_length();
+  } else if (ob_is_numeric_type(org_column.get_meta_type().get_type())) {
+    // only check scale for number
+    // check scale and length for decimal int
+    // not need to check precision here
     is_match = true;
     const ObAccuracy &org = org_column.get_accuracy();
     const ObAccuracy &cur = cur_column.get_accuracy();
-    is_match &= (-1 == org.get_length() || org.get_length() >= cur.get_length());
-    is_match &= (-1 == org.get_precision() || org.get_precision() >= cur.get_precision());
     is_match &= (-1 == org.get_scale() || org.get_scale() >= cur.get_scale());
+    is_match &= (cur_column.get_meta_type().is_number() || -1 == org.get_length() || org.get_length() >= cur.get_length());
+  } else {
+    // for columns neither string nor numeric, only check the type
+    is_match = true;
   }
   return ret;
 }
@@ -285,11 +316,14 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
                                    ObSQLSessionInfo &session_info,
                                    const uint64_t mv_id,
                                    const ObTableSchema *&mv_schema,
+                                   const ObTableSchema *&mv_container_schema,
                                    const ObSelectStmt *&view_stmt)
 {
   int ret = OB_SUCCESS;
   view_stmt = NULL;
   mv_schema = NULL;
+  mv_container_schema = NULL;
+  uint64_t mv_container_id = 0;
   ObString view_definition;
   ParseResult parse_result;
   ParseNode *node = NULL;
@@ -314,6 +348,14 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mv schema", K(ret), KPC(mv_schema));
     mv_schema = NULL;
+  } else if (FALSE_IT(mv_container_id = mv_schema->get_data_table_id())) {
+
+  } else if (OB_FAIL(resolver_ctx.query_ctx_->sql_schema_guard_.get_table_schema(mv_container_id,
+                                                                                 mv_container_schema))) {
+    LOG_WARN("fail to get mv container schema", KR(ret), K(mv_container_id));
+  } else if (OB_ISNULL(mv_container_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("unexpected null", KR(ret), K(mv_container_schema));
   } else if (OB_FAIL(check_mview_dep_session_vars(*mv_schema, session_info, true, is_vars_matched))) {
     LOG_WARN("failed to check mview dep session vars", K(ret));
   } else if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(alloc,
@@ -323,13 +365,15 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
     LOG_WARN("fail to generate view definition for resolve", K(ret));
   } else if (OB_FAIL(parser.parse(view_definition, parse_result))) {
     LOG_WARN("parse view definition failed", K(view_definition), K(ret));
-  } else if (OB_ISNULL(node = parse_result.result_tree_->children_[0]) || OB_UNLIKELY(T_SELECT != node->type_)) {
+  } else if (OB_ISNULL(node = parse_result.result_tree_->children_[0]) ||
+             OB_UNLIKELY(T_SELECT != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid mv select node", K(ret), K(node), K(node->type_));
-  } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->question_marks_count_ = static_cast<int64_t>(parse_result.question_mark_ctx_.count_))) {
+  } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->set_questionmark_count(
+                                   static_cast<int64_t>(parse_result.question_mark_ctx_.count_)))) {
   } else if (OB_FAIL(select_resolver.resolve(*node))) {
     LOG_WARN("resolve view definition failed", K(ret));
-  } else if (OB_ISNULL(sel_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt()))) {
+  } else if (OB_ISNULL(sel_stmt = static_cast<ObSelectStmt *>(select_resolver.get_basic_stmt()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid mv stmt", K(ret), K(sel_stmt));
   } else if (OB_FAIL(sel_stmt->formalize_stmt_expr_reference(&expr_factory, &session_info, true))) {

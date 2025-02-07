@@ -227,22 +227,23 @@ TEST(ObNumber, poly_mono_mul)
   uint64_t multiplier = 0;
   MockPoly product(10);
   product.resize(poly.size() + 1);
+  ObCStringHelper helper;
   int ret = OB_SUCCESS;
 
   multiplier = 1;
   ret = poly_mono_mul(poly, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 4)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 4)), helper.convert(product));
 
   multiplier = 2;
   ret = poly_mono_mul(poly, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 8)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 8)), helper.convert(product));
 
   multiplier = 3;
   ret = poly_mono_mul(poly, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 1, 2)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 1, 2)), helper.convert(product));
 
   product.resize(poly.size());
   ret = poly_mono_mul(poly, multiplier, product);
@@ -259,24 +260,25 @@ TEST(ObNumber, poly_mono_div)
   MockPoly quotient(10);
   uint64_t remainder = 0;
   quotient.resize(poly.size());
+  ObCStringHelper helper;
   int ret = OB_SUCCESS;
 
   divisor = 1;
   ret = poly_mono_div(poly, divisor, quotient, remainder);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 1, 2)), to_cstring(quotient));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 1, 2)), helper.convert(quotient));
   EXPECT_EQ(0, remainder);
 
   divisor = 3;
   ret = poly_mono_div(poly, divisor, quotient, remainder);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 4)), to_cstring(quotient));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 4)), helper.convert(quotient));
   EXPECT_EQ(0, remainder);
 
   divisor = 5;
   ret = poly_mono_div(poly, divisor, quotient, remainder);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 2)), to_cstring(quotient));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 2)), helper.convert(quotient));
   EXPECT_EQ(2, remainder);
 
   poly.fill(10, 8);
@@ -284,7 +286,7 @@ TEST(ObNumber, poly_mono_div)
   divisor = 9;
   ret = poly_mono_div(poly, divisor, quotient, remainder);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0)), to_cstring(quotient));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0)), helper.convert(quotient));
   EXPECT_EQ(8, remainder);
 
   quotient.resize(poly.size() - 1);
@@ -300,24 +302,25 @@ TEST(ObNumber, poly_poly_add)
   MockPoly augend(10, 9, 9, 8);
   MockPoly addend(10, 1);
   MockPoly sum(10);
+  ObCStringHelper helper;
   int ret = OB_SUCCESS;
 
   sum.resize(std::max(augend.size(), addend.size()) + 1);
   ret = poly_poly_add(augend, addend, sum);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 9, 9, 9)), to_cstring(sum));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 9, 9, 9)), helper.convert(sum));
 
   addend.fill(10, 2);
   sum.resize(std::max(augend.size(), addend.size()) + 1);
   ret = poly_poly_add(augend, addend, sum);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 1, 0, 0, 0)), to_cstring(sum));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 1, 0, 0, 0)), helper.convert(sum));
 
   addend.fill(10, 9, 9, 9);
   sum.resize(std::max(augend.size(), addend.size()) + 1);
   ret = poly_poly_add(augend, addend, sum);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 1, 9, 9, 7)), to_cstring(sum));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 1, 9, 9, 7)), helper.convert(sum));
 
   sum.resize(std::max(augend.size(), addend.size()));
   ret = poly_poly_add(augend, addend, sum);
@@ -333,26 +336,27 @@ TEST(ObNumber, poly_poly_sub)
   MockPoly subtrahend(10, 1);
   MockPoly remainder(10);
   bool negative = false;
+  ObCStringHelper helper;
   int ret = OB_SUCCESS;
 
   remainder.resize(std::max(minuend.size(), subtrahend.size()));
   ret = poly_poly_sub(minuend, subtrahend, remainder, negative);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 9, 9, 7)), to_cstring(remainder));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 9, 9, 7)), helper.convert(remainder));
   EXPECT_FALSE(negative);
 
   subtrahend.fill(10, 9, 9, 9);
   remainder.resize(std::max(minuend.size(), subtrahend.size()));
   ret = poly_poly_sub(minuend, subtrahend, remainder, negative);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 0, 1)), to_cstring(remainder));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 0, 1)), helper.convert(remainder));
   EXPECT_TRUE(negative);
 
   subtrahend.fill(10, 9, 9, 9, 9, 9);
   remainder.resize(std::max(minuend.size(), subtrahend.size()));
   ret = poly_poly_sub(minuend, subtrahend, remainder, negative);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 9, 9, 0, 0, 1)), to_cstring(remainder));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 9, 9, 0, 0, 1)), helper.convert(remainder));
   EXPECT_TRUE(negative);
 
   remainder.resize(std::max(minuend.size(), subtrahend.size()) - 1);
@@ -368,31 +372,32 @@ TEST(ObNumber, poly_poly_mul)
   MockPoly multiplicand(10, 9, 9, 9, 9);
   MockPoly multiplier(10, 1);
   MockPoly product(10);
+  ObCStringHelper helper;
   int ret = OB_SUCCESS;
 
   product.resize(multiplicand.size() + multiplier.size());
   ret = poly_poly_mul(multiplicand, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 9, 9, 9, 9)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 9, 9, 9, 9)), helper.convert(product));
 
   multiplier.fill(10, 9, 9);
   product.resize(multiplicand.size() + multiplier.size());
   ret = poly_poly_mul(multiplicand, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 9, 8, 9, 9, 0, 1)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 9, 8, 9, 9, 0, 1)), helper.convert(product));
 
   multiplier.fill(10, 9, 9, 9, 9);
   product.resize(multiplicand.size() + multiplier.size());
   ret = poly_poly_mul(multiplicand, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 9, 9, 9, 8, 0, 0, 0, 1)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 9, 9, 9, 8, 0, 0, 0, 1)), helper.convert(product));
 
   multiplicand.fill(10, 1, 0, 0, 0);
   multiplier.fill(10, 1, 0, 0, 0);
   product.resize(multiplicand.size() + multiplier.size());
   ret = poly_poly_mul(multiplicand, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 1, 0, 0, 0, 0, 0, 0)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 1, 0, 0, 0, 0, 0, 0)), helper.convert(product));
 
   product.resize(multiplicand.size() + multiplier.size() - 1);
   ret = poly_poly_mul(multiplicand, multiplier, product);
@@ -407,7 +412,7 @@ TEST(ObNumber, poly_poly_mul)
   product.resize(multiplicand.size() + multiplier.size());
   ret = poly_poly_mul(multiplicand, multiplier, product);
   EXPECT_EQ(OB_SUCCESS, ret);
-  EXPECT_STREQ(to_cstring(MockPoly(0x0000000100000000, 4294967295, 4294967295, 4294967295, 4294967294, 0, 0, 0, 1)), to_cstring(product));
+  EXPECT_STREQ(helper.convert(MockPoly(0x0000000100000000, 4294967295, 4294967295, 4294967295, 4294967294, 0, 0, 0, 1)), helper.convert(product));
 }
 
 //TEST(ObNumber, poly_poly_div)
@@ -416,14 +421,15 @@ TEST(ObNumber, poly_poly_mul)
 //  MockPoly divisor(10, 4, 5);
 //  MockPoly quotient(10);
 //  MockPoly remainder(10);
+//  ObCStringHelper helper;
 //  int ret = OB_SUCCESS;
 //
 //  quotient.resize(dividend.size() - divisor.size() + 1);
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 2, 2)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 9)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 2, 2)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 9)), helper.convert(remainder));
 //
 //  dividend.fill(10, 4, 1, 0, 0);
 //  divisor.fill(10, 5, 8, 8);
@@ -431,8 +437,8 @@ TEST(ObNumber, poly_poly_mul)
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 6)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 5, 7, 2)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 6)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 5, 7, 2)), helper.convert(remainder));
 //
 //  dividend.fill(10, 4, 1, 0, 0);
 //  divisor.fill(10, 2, 0);
@@ -440,8 +446,8 @@ TEST(ObNumber, poly_poly_mul)
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 2, 0, 5)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 0)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 2, 0, 5)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 0)), helper.convert(remainder));
 //
 //  dividend.fill(10, 4, 1, 0, 0);
 //  divisor.fill(10, 2);
@@ -449,8 +455,8 @@ TEST(ObNumber, poly_poly_mul)
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 2, 0, 5, 0)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 2, 0, 5, 0)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0)), helper.convert(remainder));
 //
 //  dividend.fill(10, 4, 1, 0, 0);
 //  divisor.fill(10, 1);
@@ -458,8 +464,8 @@ TEST(ObNumber, poly_poly_mul)
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 4, 1, 0, 0)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 4, 1, 0, 0)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0)), helper.convert(remainder));
 //
 //  dividend.fill(10, 1, 1);
 //  divisor.fill(10, 3);
@@ -467,8 +473,8 @@ TEST(ObNumber, poly_poly_mul)
 //  remainder.resize(divisor.size());
 //  ret = poly_poly_div(dividend, divisor, quotient, remainder);
 //  EXPECT_EQ(OB_SUCCESS, ret);
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 0, 3)), to_cstring(quotient));
-//  EXPECT_STREQ(to_cstring(MockPoly(10, 2)), to_cstring(remainder));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 0, 3)), helper.convert(quotient));
+//  EXPECT_STREQ(helper.convert(MockPoly(10, 2)), helper.convert(remainder));
 //}
 
 class ParseHelperTester : public ObNumberBuilder
@@ -2454,9 +2460,11 @@ TEST(ObNumber, format_number_format_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-        SET_OB_LOG_TRACE_MODE();    // prevent printing log
-        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+        {
+          ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
+          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+        }
 
         pos_v1 = 0;
         pos_v2 = 0;
@@ -2471,9 +2479,11 @@ TEST(ObNumber, format_number_format_cmp)
 
       char tmp_buf[MAX_BUF_SIZE];
       snprintf(tmp_buf, MAX_BUF_SIZE, "%.17lf", (i * (1 == i%2 ? 1 : -1)) * pow(10, 20));
-      SET_OB_LOG_TRACE_MODE();    // prevent printing log
-      num1.from_v1(tmp_buf, strlen(tmp_buf), allocator);
-      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+      {
+        ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
+        num1.from_v1(tmp_buf, strlen(tmp_buf), allocator);
+      }
 
       pos_v1 = 0;
       pos_v2 = 0;
@@ -2499,9 +2509,11 @@ TEST(ObNumber, format_number_format_cmp)
     number::ObNumber num1, num2, value_old,value_new;
     for (int64_t i = 0; i < 11; ++i) {
       allocator.free();
-      SET_OB_LOG_TRACE_MODE();    // prevent printing log
-      num1.from_v1(const_number_str + i, j, allocator);
-      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+      {
+        ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
+        num1.from_v1(const_number_str + i, j, allocator);
+      }
 
       pos_v1 = 0;
       pos_v2 = 0;
@@ -3084,10 +3096,12 @@ TEST(ObNumber, format_number_round_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-        SET_OB_LOG_TRACE_MODE();    // prevent printing log
-        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-        num2.from_v1(ffi.ptr(), ffi.length(), allocator);
-        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+        {
+          ObLogger::ObTraceLogGuard trace_log_guard; // prevent printing log
+          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+          num2.from_v1(ffi.ptr(), ffi.length(), allocator);
+        }
 
         _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, ffi=%.*s", j, i, k, static_cast<int>(ffi.length()), ffi.ptr());
         for (int64_t z = -(j+2); z < j + 2; z++) {
@@ -3122,10 +3136,12 @@ TEST(ObNumber, format_number_round_cmp)
     for (int64_t i = begin_value, k = 0; k < MAX_TEST_COUNT && i < end_value - begin_value; i += add_step, ++k) {
       char tmp_buf[MAX_BUF_SIZE];
       snprintf(tmp_buf, MAX_BUF_SIZE, "%.17lf", (i * (1 == i%2 ? 1 : -1)) * pow(10, 20));
-      SET_OB_LOG_TRACE_MODE();    // prevent printing log
-      num1.from(tmp_buf, allocator);
-      num2.from(tmp_buf, allocator);
-      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+      {
+        ObLogger::ObTraceLogGuard trace_log_guard;
+        num1.from(tmp_buf, allocator);
+        num2.from(tmp_buf, allocator);
+      }
 
       _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, str=%s", j, i, k, tmp_buf);
       for (int64_t z = -(j+2); z < j + 2; z++) {
@@ -3153,10 +3169,12 @@ TEST(ObNumber, format_number_round_cmp)
       _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, ffi=%.*s", j, i, static_cast<int>(j), const_number_str + i);
 
       allocator.free();
-      SET_OB_LOG_TRACE_MODE();    // prevent printing log
-      num1.from_v1(const_number_str + i, j, allocator);
-      num2.from_v1(const_number_str + i, j, allocator);
-      CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+      {
+        ObLogger::ObTraceLogGuard trace_log_guard;
+        num1.from_v1(const_number_str + i, j, allocator);
+        num2.from_v1(const_number_str + i, j, allocator);
+      }
 
       for (int64_t z = -(j+2); z < j + 2; z++) {
         num1.set_zero();
@@ -4126,9 +4144,11 @@ TEST(ObNumber, arithmetic_cmp)
       for (int64_t m = 0; m < j; ++m) {
         ObFastFormatInt ffi(i * (1 == i%2 ? 1 : -1));
         *const_cast<char *>(ffi.ptr() + m) = '.';
-        SET_OB_LOG_TRACE_MODE();    // prevent printing log
-        num1.from_v1(ffi.ptr(), ffi.length(), allocator);
-        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+        {
+          ObLogger::ObTraceLogGuard trace_log_guard;
+          num1.from_v1(ffi.ptr(), ffi.length(), allocator);
+        }
 
         _OB_LOG(INFO, "debug jianhua decimal, j=%ld, i=%ld, k=%ld, ffi=%.*s", j, i, k, static_cast<int>(ffi.length()), ffi.ptr());
         for (int d = 0; d < MAX_TEST2_COUNT; d++) {
@@ -4194,10 +4214,12 @@ TEST(ObNumber, arithmetic_cmp)
 
       for (int64_t m = 0; m < 11; ++m) {
         allocator.free();
-        SET_OB_LOG_TRACE_MODE();    // prevent printing log
-        num1.from_v1(const_number_str + i, j, allocator);
-        num2.from_v1(const_number_str + m, j, allocator);
-        CANCLE_OB_LOG_TRACE_MODE();    // prevent printing log
+
+        {
+          ObLogger::ObTraceLogGuard trace_log_guard;
+          num1.from_v1(const_number_str + i, j, allocator);
+          num2.from_v1(const_number_str + m, j, allocator);
+        }
 
         value_old.set_zero();
         value_new.set_zero();

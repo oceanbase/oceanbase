@@ -69,7 +69,7 @@ class ObIndexBlockMicroIterator
 {
 public:
   ObIndexBlockMicroIterator();
-  virtual ~ObIndexBlockMicroIterator() {}
+  virtual ~ObIndexBlockMicroIterator() { reset(); }
 
   int init(
       const blocksstable::ObMacroBlockDesc &macro_desc,

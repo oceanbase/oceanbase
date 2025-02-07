@@ -62,7 +62,7 @@ enum SelectParserOffset
   PARSE_SELECT_FETCH_TEMP, //use to temporary store fetch clause in parser
   PARSE_SELECT_WITH_CHECK_OPTION,
   PARSE_SELECT_INTO_EXTRA,// ATTENTION!! SELECT_INTO_EXTRA must be the last one
-  PARSE_SELECT_MAX_IDX
+  PARSE_SELECT_MAX_IDX  // = 24, ATTENTION!! adjust malloc_select_node(node, malloc_pool) after adding a new enum value
 };
 
 enum GrantParseOffset
@@ -271,6 +271,11 @@ typedef struct _ParenthesesOffset
   struct _ParenthesesOffset *next_;
 } ParenthesesOffset;
 
+typedef struct _ParseNodeOptParens {
+  struct _ParseNode *select_node_;
+  bool is_parenthesized_;
+} ParseNodeOptParens;
+
 //dml base runtime context definition
 typedef struct _InsMultiValuesResult
 {
@@ -319,6 +324,7 @@ typedef struct
     uint32_t contain_sensitive_data_           : 1;
     uint32_t may_contain_sensitive_data_       : 1;
     uint32_t is_external_table_                : 1;
+    uint32_t is_returning_                     : 1;
   };
 
   ParseNode *result_tree_;
@@ -390,6 +396,8 @@ extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
 extern ParseNode *new_list_node(void *malloc_pool, ObItemType node_tag, int capacity, int num, ...);
 
 extern int obpl_parser_check_stack_overflow();
+extern int check_mem_status();
+extern int try_check_mem_status(int64_t check_try_times);
 
 int get_deep_copy_size(const ParseNode *node, int64_t *size);
 int deep_copy_parse_node(void *malloc_pool, const ParseNode *src, ParseNode *dst);
@@ -419,6 +427,7 @@ extern ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode 
 extern ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node);
 extern ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node);
 extern ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node);
+extern ParseNodeOptParens *new_parse_node_opt_parens(void *malloc_pool);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

@@ -376,13 +376,16 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenan
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
   bool same_member_list = true;
-  const ObTransferLockStatus status(ObTransferLockStatus::START);
+  const ObTransferLockStatus start_status(ObTransferLockStatus::START);
+  const ObTransferLockStatus doing_status(ObTransferLockStatus::DOING);
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, lock_timeout))) {
+    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   } else {
     LOG_INFO(
@@ -573,61 +576,27 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
 {
   int ret = OB_SUCCESS;
   all_backfilled = true;
-  storage::ObCheckTransferTabletBackfillProxy batch_proxy(
+  storage::ObCheckTransferTabletBackfillProxy batch_rpc_proxy(
       *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_transfer_tablet_backfill_completed);
-  FOREACH_X(location, member_addr_list, OB_SUCC(ret))
-  {
-    if (OB_ISNULL(location)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("location should not be null", K(ret));
-    } else {
-      const common::ObAddr &server = *location;
-      const int64_t timeout = GCONF.rpc_timeout;
-      const int64_t cluster_id = GCONF.cluster_id;
-      const uint64_t group_id = share::OBCG_STORAGE;
-      ObCheckTransferTabletBackfillArg arg;
-      arg.tenant_id_ = tenant_id;
-      arg.ls_id_ = dest_ls_id;
-      if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
-        LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
-      } else if (OB_FAIL(batch_proxy.call(server,
-                                          timeout,
-                                          cluster_id,
-                                          tenant_id,
-                                          group_id,
-                                          arg))) {
-        LOG_WARN("failed to send check transfer tablet backfill request", K(ret), K(server), K(tenant_id));
-      } else {
-        LOG_INFO("check_transfer_tablet_backfill_completed", K(arg), K(server));
-      }
-    }
-  }
-  ObArray<int> return_code_array;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
-    LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
-    ret = OB_SUCC(ret) ? tmp_ret : ret;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (return_code_array.count() != member_addr_list.count()
-      || return_code_array.count() != batch_proxy.get_results().count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cnt not match", K(ret),
-             "return_cnt", return_code_array.count(),
-             "result_cnt", batch_proxy.get_results().count(),
-             "server_cnt", member_addr_list.count());
+  ObHAAsyncRpcArg async_rpc_arg;
+  ObArray<obrpc::ObCheckTransferTabletBackfillRes> responses;
+  const int64_t rpc_timeout = GCONF.rpc_timeout;
+  const uint64_t group_id = share::OBCG_STORAGE;
+  ObCheckTransferTabletBackfillArg arg;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = dest_ls_id;
+  if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
+    LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
+    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
+  } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
+    LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
   } else {
-    ARRAY_FOREACH_X(batch_proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-      const ObCheckTransferTabletBackfillRes *response = batch_proxy.get_results().at(idx);
-      const int res_ret = return_code_array.at(idx);
-      if (OB_SUCCESS != res_ret) {
-        ret = res_ret;
-        LOG_WARN("rpc execute failed", KR(ret), K(idx));
-      } else if (OB_ISNULL(response)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("response is null", K(ret));
-      } else if (!response->backfill_finished_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < responses.count(); ++i) {
+      const obrpc::ObCheckTransferTabletBackfillRes &res = responses.at(i);
+      if (!res.backfill_finished_) {
         all_backfilled = false;
+        LOG_INFO("server has not finished backfill", K(i), K(member_addr_list));
         break;
       }
     }
@@ -1167,7 +1136,7 @@ int ObTxFinishTransfer::record_server_event_(
           LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
         }
       } else {
-        if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+        if (REACH_THREAD_TIME_INTERVAL(10 * 1000 * 1000)) {
           if (OB_FAIL(write_server_event_(result, extra_info_str, doing_status))) {
             LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
           } else if (elapsed_us_from_start_scn > TASK_EXECUTE_LONG_WARNING_THRESHOLD) {

@@ -215,27 +215,11 @@ OB_DECLARE_AVX512_SPECIFIC_CODE(
 
 #endif
 
-OB_INLINE uint32_t get_supported_archs()
-{
-  uint32_t result = 0;
-  if (ObCpuFlagsCache::support_sse42()) {
-    result |= static_cast<uint32_t>(ObTargetArch::SSE42);
-  }
-  if (ObCpuFlagsCache::support_avx()) {
-    result |= static_cast<uint32_t>(ObTargetArch::AVX);
-  }
-  if (ObCpuFlagsCache::support_avx2()) {
-    result |= static_cast<uint32_t>(ObTargetArch::AVX2);
-  }
-  if (ObCpuFlagsCache::support_avx512()) {
-    result |= static_cast<uint32_t>(ObTargetArch::AVX512);
-  }
-  return result;
-}
+void init_arches();
+extern uint32_t arches;
 
 OB_INLINE bool is_arch_supported(ObTargetArch arch)
 {
-  static uint32_t arches = get_supported_archs();
   return arch == ObTargetArch::Default || (arches & static_cast<uint32_t>(arch));
 }
 

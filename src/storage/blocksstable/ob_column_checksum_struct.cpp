@@ -47,13 +47,19 @@ int ObColumnCkmStruct::deserialize(ObArenaAllocator &allocator, const char *buf,
                 const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  OB_UNIS_DECODE(count_);
-  if (OB_FAIL(ret) || 0 == count_) {
-  } else if (OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * count_)))) {
+  int64_t tmp_count = 0;
+  OB_UNIS_DECODE(tmp_count);
+  if (OB_FAIL(ret) || 0 == tmp_count) {
+  } else if (OB_ISNULL(column_checksums_ = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * tmp_count)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate column checksum memory", K(ret), K(count_));
+    LOG_WARN("fail to allocate column checksum memory", K(ret), K(tmp_count));
   } else {
-    OB_UNIS_DECODE_ARRAY(column_checksums_, count_);
+    OB_UNIS_DECODE_ARRAY(column_checksums_, tmp_count);
+    if (OB_SUCC(ret)) {
+      count_ = tmp_count;
+    } else {
+      reset();
+    }
   }
   return ret;
 }

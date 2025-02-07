@@ -68,7 +68,7 @@ public:
                          int64_t param_num);
   static int fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs);
 
-  static int newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id);
+  static int newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id, ObIAllocator *alloc);
 
   virtual void reset() {
     rowsize_ = 0;

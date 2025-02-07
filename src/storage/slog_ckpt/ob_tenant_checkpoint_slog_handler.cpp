@@ -182,8 +182,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     tg_id_(-1),
     write_ckpt_task_(this),
     replay_tablet_disk_addr_map_(),
-    super_block_mutex_(),
-    is_trivial_version_(false)
+    super_block_mutex_()
 {
 }
 
@@ -263,7 +262,6 @@ int ObTenantCheckpointSlogHandler::start_replay(const ObTenantSuperBlock &super_
   } else if (OB_UNLIKELY(!super_block.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant super block invalid", K(ret), K(super_block));
-  } else if (FALSE_IT(ATOMIC_STORE(&is_trivial_version_, super_block.is_trivial_version()))) {
   } else if (OB_FAIL(replay_checkpoint_and_slog(super_block))) {
     LOG_WARN("fail to read_checkpoint_and_replay_slog", K(ret), K(super_block));
   }
@@ -730,10 +728,9 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
   int64_t min_interval = ObWriteCheckpointTask::RETRY_WRITE_CHECKPOINT_MIN_INTERVAL;
 
   uint64_t tenant_id = MTL_ID();
-  ObTenantStorageCheckpointWriter tenant_storage_ckpt_writer;
   omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
 
-  HEAP_VARS_2((ObTenantSuperBlock, super_block, tenant_id), (ObTenantSuperBlock, last_super_block)) {
+  HEAP_VARS_3((ObTenantSuperBlock, super_block, tenant_id), (ObTenantSuperBlock, last_super_block), (ObTenantStorageCheckpointWriter, tenant_storage_ckpt_writer)) {
     last_super_block = tenant->get_super_block();
     //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
     //checkpoint after merge finish.
@@ -798,8 +795,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
       }
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(update_tablet_meta_addr_and_block_list(
-          last_super_block.is_trivial_version(), tenant_storage_ckpt_writer))) {
+      } else if (OB_FAIL(update_tablet_meta_addr_and_block_list(tenant_storage_ckpt_writer))) {
         LOG_ERROR("fail to update_tablet_meta_addr_and_block_list", K(ret), K(last_super_block));
         // abort if failed, because it cannot be rolled back if partially success.
         // otherwise, updates need to be transactional.
@@ -808,7 +804,6 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
       } else if (OB_FAIL(slogger_->remove_useless_log_file(ckpt_cursor_.file_id_, MTL_ID()))) {
         LOG_WARN("fail to remove_useless_log_file", K(ret), K(super_block));
       } else {
-        ATOMIC_STORE(&is_trivial_version_, super_block.is_trivial_version());
         last_ckpt_time_ = start_time;
         last_frozen_version_ = frozen_version;
         cost_time = ObTimeUtility::current_time() - start_time;
@@ -924,7 +919,6 @@ void ObTenantCheckpointSlogHandler::clean_copy_status()
 }
 
 int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
-    const bool is_replay_old,
     ObTenantStorageCheckpointWriter &meta_writer)
 {
   int ret = OB_SUCCESS;
@@ -938,8 +932,8 @@ int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
   // update the tablet addr. to resolve the dead lock, update_tablet_meta_addr is moved out of lock,
   // but this may cause t3m read a new addr which is not in the tablet_block_handle_. when this
   // happens, t3m needs to retry.
-  if (OB_FAIL(meta_writer.batch_compare_and_swap_tablet(is_replay_old))) {
-    LOG_WARN("fail to update_tablet_meta_addr", K(ret), K(is_replay_old));
+  if (OB_FAIL(meta_writer.batch_compare_and_swap_tablet())) {
+    LOG_WARN("fail to update_tablet_meta_addr", K(ret));
   }
 
   TCWLockGuard guard(lock_);
@@ -1393,9 +1387,13 @@ int ObTenantCheckpointSlogHandler::parse(
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
           LOG_WARN("fail to deserialize tablet meta", K(ret), KP(buf), K(len), K(pos));
-        } else if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length, to_cstring(slog_entry))) {
-          ret = OB_IO_ERROR;
-          LOG_WARN("Fail to print slog to file.", K(ret));
+        } else {
+          ObCStringHelper helper;
+          if (0 > fprintf(stream, "%s\n version:%d length:%d\n%s\n", slog_name, version, length,
+              helper.convert(slog_entry))) {
+            ret = OB_IO_ERROR;
+            LOG_WARN("Fail to print slog to file.", K(ret));
+          }
         }
         break;
       }
@@ -1415,9 +1413,12 @@ int ObTenantCheckpointSlogHandler::parse(
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "empty shell tablet slog: ");
         if (OB_FAIL(slog_entry.deserialize_id(buf, len, pos))) {
           LOG_WARN("failed to deserialize empty shell tablet_id_", K(ret));
-        } else if (0 > fprintf(stream, "%s\n%s\n", slog_name, to_cstring(slog_entry))) {
-          ret = OB_IO_ERROR;
-          LOG_WARN("Fail to print slog to file.", K(ret));
+        } else {
+          ObCStringHelper helper;
+          if (0 > fprintf(stream, "%s\n%s\n", slog_name, helper.convert(slog_entry))) {
+            ret = OB_IO_ERROR;
+            LOG_WARN("Fail to print slog to file.", K(ret));
+          }
         }
         break;
       }

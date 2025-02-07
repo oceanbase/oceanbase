@@ -18,6 +18,7 @@
 #include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "ob_expr_json_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -251,7 +252,8 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   bool is_null = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -265,7 +267,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[1];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
@@ -299,7 +301,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && expr.arg_cnt_ >= 4 && !is_null) {
     json_arg = expr.args_[3];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       // do nothing, null type use default escape
@@ -338,7 +340,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   if (OB_SUCC(ret) && !is_null) {
     json_arg = expr.args_[2];
     val_type = json_arg->datum_meta_.type_;
-    if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
       is_null = true;
@@ -379,7 +381,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_; i++) {        
         json_arg = expr.args_[i];
         val_type = json_arg->datum_meta_.type_;
-        if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+        if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
           LOG_WARN("eval json arg failed", K(ret));
         } else if (val_type == ObNullType || json_datum->is_null()) {
           is_null = true;

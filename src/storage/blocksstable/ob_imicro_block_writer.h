@@ -25,6 +25,7 @@
 #include "ob_micro_block_checksum_helper.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/blocksstable/ob_batch_datum_rows.h"
 
 namespace oceanbase
 {
@@ -129,6 +130,14 @@ public:
   }
   virtual ~ObIMicroBlockWriter() {}
   virtual int append_row(const ObDatumRow &row) = 0;
+  virtual int append_batch(const ObBatchDatumRows &vec_batch,
+                           const int64_t start,
+                           const int64_t row_count)
+  {
+    int ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(ERROR, "Unspport append_batch", K(ret));
+    return ret;
+  }
   virtual int build_block(char *&buf, int64_t &size) = 0;
   virtual int64_t get_row_count() const = 0;
   virtual int64_t get_block_size() const = 0; // estimate block size after encoding
@@ -139,7 +148,7 @@ public:
     ObIMicroBlockWriter::reuse();
     checksum_helper_.reset();
   }
-  virtual void dump_diagnose_info() const { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }
+  virtual void dump_diagnose_info() { STORAGE_LOG(INFO, "IMicroBlockWriter", K(checksum_helper_)); }
   virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
   {
     int ret = OB_NOT_SUPPORTED;

@@ -670,7 +670,8 @@ public:
   OB_INLINE uint64_t get_serialize_size()
   {
     uint64_t size = 0;
-    if (json_type() == ObJsonNodeType::J_DATE || json_type() == ObJsonNodeType::J_ORACLEDATE) {
+    if (json_type() == ObJsonNodeType::J_DATE || json_type() == ObJsonNodeType::J_MYSQL_DATE
+        || json_type() == ObJsonNodeType::J_ORACLEDATE) {
       size = sizeof(int32_t);
     } else {
       size = sizeof(int64_t);

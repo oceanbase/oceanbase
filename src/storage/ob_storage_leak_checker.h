@@ -21,13 +21,30 @@ namespace oceanbase
 namespace storage
 {
 
-enum ObStorageCheckID
+enum class ObStorageCheckID
 {
+  INVALID_ID,
   ALL_CACHE = MAX_CACHE_NUM,
   IO_HANDLE,
   STORAGE_ITER
 };
 
+
+inline bool is_cache(ObStorageCheckID id) {
+  return (int)id > OB_CACHE_INVALID && (int)id <= (int)ObStorageCheckID::ALL_CACHE;
+}
+
+inline bool is_io_handle(ObStorageCheckID id) {
+  return id == ObStorageCheckID::IO_HANDLE;
+}
+
+inline bool is_storage_iter(ObStorageCheckID id) {
+  return id == ObStorageCheckID::STORAGE_ITER;
+}
+
+inline bool is_valid_check_id(ObStorageCheckID id) {
+  return is_cache(id) || is_io_handle(id) || is_storage_iter(id);
+}
 
 struct ObStorageCheckerKey
 {
@@ -54,7 +71,7 @@ public:
   ObStorageCheckerValue & operator= (const ObStorageCheckerValue &other);
   TO_STRING_KV(K_(tenant_id), K_(check_id), K_(bt));
   uint64_t tenant_id_;
-  int64_t check_id_;
+  ObStorageCheckID check_id_;
   char bt_[512];
 };
 
@@ -65,21 +82,25 @@ public:
   static const char ALL_CACHE_NAME[MAX_CACHE_NAME_LENGTH];
   static const char IO_HANDLE_CHECKER_NAME[MAX_CACHE_NAME_LENGTH];
   static const char ITER_CHECKER_NAME[MAX_CACHE_NAME_LENGTH];
+  static constexpr int MEMORY_LIMIT = 128L << 20;
+  static constexpr int MAP_SIZE_LIMIT = MEMORY_LIMIT / sizeof(ObStorageCheckerValue);
 
-  ObStorageLeakChecker();
-  ~ObStorageLeakChecker();
   static ObStorageLeakChecker &get_instance();
   void reset();
-  void handle_hold(const void *handle, const ObStorageCheckID type_id);
+  // return if is recorded
+  bool handle_hold(const void *handle, const ObStorageCheckID type_id);
   void handle_reset(const void *handle, const ObStorageCheckID type_id);
-  int set_check_id(const int64_t check_id);
   int get_aggregate_bt_info(hash::ObHashMap<ObStorageCheckerValue, int64_t> &bt_info);
 private:
   static const int64_t HANDLE_BT_MAP_BUCKET_NUM = 10000;
 
-  int64_t check_id_;
+  ObStorageLeakChecker();
+  ~ObStorageLeakChecker();
+
+  static ObStorageLeakChecker instance_;
+
+  ObStorageCheckID check_id_;
   hash::ObHashMap<ObStorageCheckerKey, ObStorageCheckerValue> checker_info_;
-  bool is_inited_;
 };
 
 

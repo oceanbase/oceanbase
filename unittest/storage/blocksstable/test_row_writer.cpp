@@ -357,10 +357,11 @@ TEST_F(TestRowWriter, data_type)
     }
     //every obj should equal
     for (int64_t i = 0; i < column_num ; ++i){
+      ObCStringHelper helper;
       ASSERT_TRUE(writer_row.row_val_.cells_[i] == reader_row.row_val_.cells_[i])
         << "\n i: " << i
-        << "\n writer:  "<< to_cstring(writer_row.row_val_.cells_[i])
-        << "\n reader:  " << to_cstring(reader_row.row_val_.cells_[i]);
+        << "\n writer:  "<< helper.convert(writer_row.row_val_.cells_[i])
+        << "\n reader:  " << helper.convert(reader_row.row_val_.cells_[i]);
     }
   }
   //unsupported data type

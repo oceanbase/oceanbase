@@ -39,7 +39,8 @@ public:
     tenant_id_(500),
     buffer_(nullptr),
     msg_writer_(nullptr),
-    meta_(nullptr)
+    meta_(nullptr),
+    size_per_buffer_(-1)
   {}
   ~ObDtlBufEncoder() {}
   void set_tenant_id(int64_t tenant_id) {
@@ -76,6 +77,7 @@ public:
   { msg_writer_->write_msg_type(buffer); }
   ObDtlLinkedBuffer *get_buffer() { return buffer_; }
   void set_row_meta(RowMeta &meta) { meta_ = &meta; }
+  void set_size_per_buffer(const int64_t size) { size_per_buffer_ = size; }
 private:
   int64_t use_row_store_;
   int64_t tenant_id_;
@@ -88,13 +90,14 @@ private:
   ObDtlVectorFixedMsgWriter vector_fixed_msg_writer_;
   ObDtlChannelEncoder *msg_writer_;
   RowMeta *meta_;
+  int64_t size_per_buffer_;
 };
 
 class ObDtlBcastService
 {
 public:
-  ObDtlBcastService() : server_addr_(), bcast_buf_(nullptr), send_count_(0), bcast_ch_count_(0),
- ch_infos_(), resps_(), peer_ids_(), active_chs_count_(0) {}
+  ObDtlBcastService(int64_t tenant_id, bool send_by_tenant) : server_addr_(), bcast_buf_(nullptr), send_count_(0), bcast_ch_count_(0),
+              ch_infos_(), resps_(), peer_ids_(), active_chs_count_(0), tenant_id_(tenant_id), send_by_tenant_(send_by_tenant) {}
   virtual ~ObDtlBcastService() {}
   int send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain);
   void set_bcast_ch_count(int64_t ch_count) { bcast_ch_count_ = ch_count; }
@@ -116,6 +119,8 @@ public:
   common::ObArray<int64_t> peer_ids_;
   // active channel count, some of channel in this group may by drained.
   int64_t active_chs_count_;
+  uint64_t tenant_id_;
+  bool send_by_tenant_;
 };
 
 class ObDtlChanAgent
@@ -143,6 +148,7 @@ public:
            int64_t timeout_ts);
   int destroy();
   void set_row_meta(RowMeta &meta) { dtl_buf_encoder_.set_row_meta(meta); }
+  void set_size_per_buffer(const int64_t size) { dtl_buf_encoder_.set_size_per_buffer(size); }
 private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer *&last_buffer);

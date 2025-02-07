@@ -39,7 +39,7 @@ struct DistinctObjMeta
     : obj_type_(obj_type), coll_type_(coll_type),
       coll_level_(coll_level), scale_(scale)
   {
-    if (!ObDatumFuncs::is_string_type(obj_type_)) {
+    if (!ObDatumFuncs::is_string_type(obj_type_) && !ob_is_enum_or_set_type(obj_type_)) {
       coll_type_ = CS_TYPE_MAX;
       coll_level_ = CS_LEVEL_INVALID;
     }
@@ -533,9 +533,14 @@ private:
   int create_inner_view_stmt(ObDMLStmt *batch_stmt, ObSelectStmt*& inner_view_stmt);
 
   int transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
+
+  int transform_for_insertup_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
+
   int transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
 
   int check_insert_can_batch(ObInsertStmt *insert_stmt, bool &can_batch);
+
+  bool check_insertup_support_batch_opt(ObInsertStmt *insert_stmt, bool &can_batch);
 
   int formalize_batch_stmt(ObDMLStmt *batch_stmt,
                           ObSelectStmt* inner_view_stmt,
@@ -566,10 +571,10 @@ private:
 
   int remove_shared_expr(ObDMLStmt *stmt,
                          JoinedTable *joined_table,
-                         hash::ObHashSet<uint64_t> &expr_set,
+                         hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                          bool is_nullside);
 
-  int do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr_set,
+  int do_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                             ObIArray<ObRawExpr *> &padnull_exprs,
                             bool is_nullside,
                             ObRawExpr *&expr,
@@ -678,7 +683,6 @@ private:
   int get_rowkey_for_single_table(ObSelectStmt* stmt,
                                   ObIArray<ObRawExpr*> &unique_keys,
                                   bool &is_valid);
-  int disable_complex_dml_for_fulltext_index(ObDMLStmt *stmt);
   int try_gen_straight_join_leading(ObDMLStmt *stmt, bool &trans_happened);
   int get_flattened_tables_of_pure_straight_join(ObDMLStmt* stmt,
                                                  ObIArray<TableItem*> &flattened_tables);

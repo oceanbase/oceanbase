@@ -24,8 +24,10 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
+#include "ob_ls_transfer_info.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "common/ob_learner_list.h"
+#include "storage/high_availability/ob_tablet_ha_status.h"
 
 namespace oceanbase
 {
@@ -61,6 +63,7 @@ struct ObMigrationOpType
     CHANGE_LS_OP = 3,
     REMOVE_LS_OP = 4,
     RESTORE_STANDBY_LS_OP = 5,
+    REBUILD_TABLET_OP = 6,
     MAX_LS_OP,
   };
   static const char *get_str(const TYPE &status);
@@ -101,31 +104,57 @@ public:
       const ObMigrationStatus &status,
       bool &in_final_state);
   static bool check_is_running_migration(const ObMigrationStatus &cur_status);
+  static bool can_gc_ls_without_check_dependency(
+      const ObMigrationStatus &cur_status);
+  static bool check_can_report_readable_scn(
+      const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,
       const ObMigrationStatus &migration_status,
       bool &allow_gc);
-  static int check_transfer_dest_ls_status_for_ls_gc(
-      const share::ObLSID &transfer_ls_id,
-      const ObTabletID &tablet_id,
-      const share::SCN &transfer_scn,
-      const bool need_wait_dest_ls_replay,
-      bool &allow_gc);
   static int check_transfer_dest_tablet_for_ls_gc(
       ObLS *ls,
       const ObTabletID &tablet_id,
-      const share::SCN &transfer_scn,
-      const bool need_wait_dest_ls_replay,
       bool &allow_gc);
   static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);
   static int set_ls_migrate_gc_status_(
       ObLS &ls,
       bool &allow_gc);
-  static int check_ls_with_transfer_task_(
+  static int check_transfer_dest_ls_(
+      const share::ObLSID &ls_id,
+      bool &allow_gc);
+  static int check_transfer_dest_tablets_(
+      const ObLSTransferMetaInfo &transfer_meta_info,
+      ObLS &dest_ls,
+      bool &allow_gc);
+  static int allow_transfer_src_ls_gc_(
+      const ObMigrationStatus &migration_status,
+      bool &allow_gc);
+
+  //compatible ls gc function
+  static int check_ls_transfer_tablet_v1_(
+      const share::ObLSID &ls_id,
+      const ObMigrationStatus &migration_status,
+      bool &allow_gc);
+  static int check_ls_with_transfer_task_v1_(
       ObLS &ls,
       bool &need_check_allow_gc,
       bool &need_wait_dest_ls_replay);
+  static int check_transfer_dest_ls_status_for_ls_gc_v1_(
+      const share::ObLSID &transfer_ls_id,
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const bool need_wait_dest_ls_replay,
+      bool &allow_gc);
+  static int check_transfer_dest_tablet_for_ls_gc_v1_(
+      ObLS *ls,
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const bool need_wait_dest_ls_replay,
+      bool &allow_gc);
+  static int check_transfer_meta_info_compatible_(
+      bool &for_compatible);
 };
 
 enum ObMigrationOpPriority
@@ -160,6 +189,7 @@ struct ObMigrationOpArg
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_src_;
   int64_t paxos_replica_number_;
+  bool prioritize_same_zone_src_;
 };
 
 struct ObTabletsTransferArg
@@ -486,7 +516,10 @@ public:
   ObBackfillTabletsTableMgr();
   ~ObBackfillTabletsTableMgr();
   int init(const int64_t rebuild_seq, const share::SCN &transfer_start_scn);
-  int init_tablet_table_mgr(const common::ObTabletID &tablet_id, const int64_t transfer_seq);
+  int init_tablet_table_mgr(
+      const common::ObTabletID &tablet_id,
+      const int64_t transfer_seq,
+      const ObTabletRestoreStatus::STATUS &restore_status);
   int add_sstable(
       const common::ObTabletID &tablet_id,
       const int64_t rebuild_seq,
@@ -504,6 +537,10 @@ public:
       const common::ObTabletID &tablet_id,
       share::SCN &max_major_end_scn);
   int get_local_rebuild_seq(int64_t &local_rebuild_seq);
+  int get_restore_status(
+      const common::ObTabletID &tablet_id,
+      ObTabletRestoreStatus::STATUS &restore_status);
+  int get_transfer_scn(share::SCN &transfer_scn);
 private:
   class ObTabletTableMgr final
   {
@@ -512,7 +549,8 @@ private:
     ~ObTabletTableMgr();
     int init(
         const common::ObTabletID &tablet_id,
-        const int64_t transfer_seq);
+        const int64_t transfer_seq,
+        const ObTabletRestoreStatus::STATUS &restore_status);
     int add_sstable(
         const int64_t transfer_seq,
         const share::SCN &transfer_start_scn,
@@ -520,6 +558,7 @@ private:
     int get_all_sstables(ObTablesHandleArray &table_handle_array);
     int set_max_major_end_scn(const share::SCN &max_major_end_scn);
     int get_max_major_end_scn(share::SCN &max_major_end_scn);
+    int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status);
   private:
     bool is_inited_;
     common::ObTabletID tablet_id_;
@@ -527,6 +566,7 @@ private:
     share::SCN max_major_end_scn_;
     common::ObArenaAllocator allocator_;
     ObTablesHandleArray table_handle_array_;
+    ObTabletRestoreStatus::STATUS restore_status_;
     DISALLOW_COPY_AND_ASSIGN(ObTabletTableMgr);
   };
 private:
@@ -538,6 +578,118 @@ private:
   int64_t local_rebuild_seq_;
   share::SCN transfer_start_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObBackfillTabletsTableMgr);
+};
+
+class ObMacroBlockReuseMgr final
+{
+public:
+  ObMacroBlockReuseMgr();
+  ~ObMacroBlockReuseMgr();
+  int init();
+  void reset();
+  int destroy();
+  int count(int64_t &count);
+  bool is_inited() const { return is_inited_; }
+  // get the macro block physical ID and data checksum by the macro block logical ID
+  int get_macro_block_reuse_info(
+    const ObITable::TableKey &table_key,
+    const blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id,
+    int64_t &data_checksum);
+  // add the macro block logical ID -> [physical ID, data checksum] and data checksum mapping
+  int add_macro_block_reuse_info(
+    const ObITable::TableKey &table_key,
+    const blocksstable::ObLogicMacroBlockId &logic_id,
+    const blocksstable::MacroBlockId &macro_id,
+    const int64_t &data_checksum);
+  // update single reuse map of the chosen major sstable
+  // if the snapshot version of the input table key is larger than the one in the reuse map, update the reuse map
+  int update_single_reuse_map(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
+  // get target major sstable's snapshot_version and co_base_snapshot_version in the reuse map
+  int get_major_snapshot_version(const ObITable::TableKey &table_key, int64_t &snapshot_version, int64_t &co_base_snapshot_version);
+public:
+  static int64_t get_item_size() {
+      // size of key + size of value + size pointer of next node (linear hash map)
+      // see ObLinearHashMap::Node
+      return sizeof(blocksstable::ObLogicMacroBlockId)
+        + sizeof(MacroBlockReuseInfo)
+        + sizeof(void *);
+  }
+private:
+  // physical ID and data checksum of a macro block, value of a single reuse map
+  struct MacroBlockReuseInfo final
+  {
+  public:
+    MacroBlockReuseInfo();
+    ~MacroBlockReuseInfo() = default;
+    void reset();
+  public:
+    blocksstable::MacroBlockId id_;
+    int64_t data_checksum_;
+
+    TO_STRING_KV(
+      K_(id),
+      K_(data_checksum));
+  };
+  // logical ID -> [physical ID, data checksum] mapping of a major sstable.
+  typedef ObLinearHashMap<blocksstable::ObLogicMacroBlockId, MacroBlockReuseInfo> ReuseMap;
+  // Key of the reuse_maps, use the tablet_id, column_group_idx and table_type to identify the lastest local snapshot version
+  // and the reuse info (logical ID -> [physical ID, data checksum] mapping) of a major sstable.
+  struct ReuseMajorTableKey final
+  {
+  public:
+    ReuseMajorTableKey();
+    ReuseMajorTableKey(const common::ObTabletID &tablet_id, const uint16_t column_group_idx, const ObITable::TableType table_type);
+    ~ReuseMajorTableKey() = default;
+    void reset();
+    uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
+    bool operator == (const ReuseMajorTableKey &other) const;
+    TO_STRING_KV(
+      K_(tablet_id),
+      K_(column_group_idx),
+      "table_type", ObITable::get_table_type_name(table_type_));
+
+  public:
+    common::ObTabletID tablet_id_;
+    uint16_t column_group_idx_;
+    ObITable::TableType table_type_;
+  };
+  // Value of the reuse_maps, indicate the reuse info (logical ID -> [physical ID, data checksum] mapping) of a
+  // specific version major sstable (the latest local snapshot version).
+  struct ReuseMajorTableValue final
+  {
+  public:
+    ReuseMajorTableValue();
+    ~ReuseMajorTableValue();
+    int init(const int64_t &snapshot_version, const int64_t &co_base_snapshot_version);
+    int count(int64_t &count);
+    TO_STRING_KV(
+      K_(is_inited),
+      K_(snapshot_version),
+      K_(co_base_snapshot_version));
+  public:
+    bool is_inited_;
+    int64_t snapshot_version_;
+    int64_t co_base_snapshot_version_;
+    ReuseMap reuse_map_;
+  };
+  typedef ObLinearHashMap<ReuseMajorTableKey, ReuseMajorTableValue *> ReuseMaps;
+private:
+  int get_reuse_key_(const ObITable::TableKey &table_key, ReuseMajorTableKey &reuse_key);
+  int get_reuse_value_(const ObITable::TableKey &table_key, ReuseMap *&reuse_map, int64_t &snapshot_version, int64_t &co_base_snapshot_version);
+  // remove single reuse map of the chosen major sstable (chosen by table_key)
+  int remove_single_reuse_map_(const ReuseMajorTableKey &reuse_key);
+  // build single reuse map of the chosen major sstable
+  int build_single_reuse_map_(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
+  // alloc reuse value then init it
+  int prepare_reuse_value_(const int64_t &snapshot_version, const int64_t &co_base_snapshot_version, ReuseMajorTableValue *&reuse_value);
+  // free reuse value
+  void free_reuse_value_(ReuseMajorTableValue *&reuse_value);
+private:
+  bool is_inited_;
+  ReuseMaps reuse_maps_; // mapping from major sstable to reuse info (if not column store, this map will only contain one element)
+  DISALLOW_COPY_AND_ASSIGN(ObMacroBlockReuseMgr);
 };
 
 struct ObLogicTabletID final
@@ -574,24 +726,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
 };
 
-struct ObMigrationChooseSrcHelperInitParam final
-{
-public:
-  ObMigrationChooseSrcHelperInitParam();
-  ~ObMigrationChooseSrcHelperInitParam() = default;
-  void reset();
-  bool is_valid() const;
-  int assign(const ObMigrationChooseSrcHelperInitParam &param);
-
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(local_clog_checkpoint_scn), K_(arg), K_(info));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  share::SCN local_clog_checkpoint_scn_;
-  ObMigrationOpArg arg_;
-  ObLSMemberListInfo info_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMigrationChooseSrcHelperInitParam);
-};
 }
 }
 #endif

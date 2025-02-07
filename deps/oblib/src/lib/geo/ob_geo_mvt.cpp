@@ -80,7 +80,7 @@ int mvt_agg_result::generate_feature(ObObj *tmp_obj, uint32_t obj_cnt)
           LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
         } else if (OB_FAIL(str_iter.get_full_data(str))) {
           LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
-        } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(*temp_allocator_, str, NULL, geo, true))) {
+        } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(*temp_allocator_, str, NULL, geo, true, !str_iter.is_outrow_lob()))) {
           LOG_WARN("failed to construct geometry", K(ret));
         } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())
                   && OB_FAIL(ObGeoTypeUtil::convert_geometry_3D_to_2D(NULL, allocator_, geo, ObGeoBuildFlag::GEO_ALL_DISABLE, geo))) {
@@ -267,7 +267,7 @@ int mvt_agg_result::transform_json_column(ObObj &json)
               default:
                 // ignore other type, do nothing
                 ignore_type = true;
-                break;;
+                break;
             }
             if (OB_SUCC(ret) && !ignore_type) {
               tile_value.value_ = value;

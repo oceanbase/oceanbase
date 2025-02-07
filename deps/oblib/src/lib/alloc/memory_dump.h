@@ -209,7 +209,20 @@ public:
   }
   int generate_mod_stat_task(ObMemoryCheckContext *memory_check_ctx = NULL);
   int check_sql_memory_leak();
-  int load_malloc_sample_map(lib::ObMallocSampleMap& malloc_sample_map);
+  int load_malloc_sample_map(lib::ObMallocSampleMap &malloc_sample_map)
+  {
+    int ret = OB_SUCCESS;
+    if (is_inited_) {
+      ObLatchRGuard guard(iter_lock_, ObLatchIds::MEM_DUMP_ITER_LOCK);
+      lib::ObMallocSampleMap &map = r_stat_->malloc_sample_map_;
+      for (lib::ObMallocSampleMap::iterator it = map.begin(); OB_SUCC(ret) && it != map.end();
+           ++it) {
+        ret = malloc_sample_map.set_refactored(it->first, it->second);
+      }
+    }
+    return ret;
+  }
+
 private:
   void run1() override;
   void handle(void *task);

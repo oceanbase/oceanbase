@@ -89,7 +89,7 @@ public:
       ObMicroBlockData &transformed_data,
       ObIAllocator &allocator,
       char *&allocated_buf,
-      const ObIArray<share::schema::ObColDesc> *col_descs = nullptr);
+      const ObITableReadInfo *table_read_info = nullptr);
 
   // For micro header bug in version before 4.3, when root block serialized in sstable meta,
   // data length related fileds was lefted to be filled
@@ -98,7 +98,7 @@ int fix_micro_header_and_transform(
     ObMicroBlockData &transformed_data,
     ObIAllocator &allocator,
     char *&allocated_buf);
-  static int get_transformed_upper_mem_size(const ObIArray<share::schema::ObColDesc> *rowkey_col_descs, const char *raw_block_data, int64_t &mem_limit);
+  static int get_transformed_upper_mem_size(const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
 private:
   int get_reader(const ObRowStoreType store_type, ObIMicroBlockReader *&micro_reader);
 private:
@@ -353,7 +353,7 @@ public:
       const common::ObQueryFlag &query_flag,
       const int64_t nested_offset,
       const bool is_normal_cg = false,
-      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr);
+      const ObITableReadInfo *table_read_info = nullptr);
   // todo :qilu get ls_id from MTL() after ddl_kv_mgr split to tenant
   int open(
       const MacroBlockId &macro_id,
@@ -415,13 +415,13 @@ public:
   void switch_context(const ObSSTable &sstable,
                       const ObTablet *tablet,
                       const ObStorageDatumUtils &datum_utils,
-                      ObTableAccessContext &access_ctx,
-                      const ObIArray<share::schema::ObColDesc> *rowkey_col_descs = nullptr);
+                      const ObQueryFlag &query_flag,
+                      const ObITableReadInfo *table_read_info = nullptr);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
                K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
                K_(is_normal_cg), K_(parent_row_range), K_(filter_constant_type), K_(is_normal_query),
-               K_(iter_param), KP_(rowkey_col_descs));
+               K_(iter_param), KP_(table_read_info));
 private:
   int init_by_micro_data(const ObMicroBlockData &idx_block_data);
   int locate_key(const ObDatumRowkey &rowkey);
@@ -468,7 +468,7 @@ private:
   bool is_normal_query_;
   sql::ObBoolMaskType filter_constant_type_;
   ObIndexBlockIterParam iter_param_; // todo qilu: refactor this after refactor ddl_kv_mgr
-  const ObIArray<share::schema::ObColDesc> *rowkey_col_descs_;
+  const ObITableReadInfo *table_read_info_;
 };
 
 } // namespace blocksstable

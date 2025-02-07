@@ -31,6 +31,29 @@ namespace blocksstable
 {
 using namespace common;
 
+int ObVecBatchInfo::init(const int32_t row_count,
+                         const int32_t fixed_len,
+                         const uint32_t *offsets,
+                         sql::ObBitVector *nulls,
+                         const uint32_t start_offset,
+                         const bool is_integer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(row_count <= 0 || (fixed_len < 0 &&  nullptr == offsets)
+      || (fixed_len >= 0 && nullptr != offsets))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(row_count), K(fixed_len), KP(offsets));
+  } else {
+    row_count_ = row_count;
+    fixed_len_ = fixed_len;
+    offsets_ = offsets;
+    nulls_ = nulls;
+    start_offset_ = start_offset;
+    is_integer_ = is_integer;
+  }
+  return ret;
+}
+
 template <typename T>
 T *ObMicroBlockCSEncoder::alloc_encoder_()
 {
@@ -67,7 +90,7 @@ int ObMicroBlockCSEncoder::alloc_and_init_encoder_(const int64_t column_index, O
       LOG_WARN("alloc encoder failed", K(ret));
     } else {
       col_ctxs_.at(column_index).try_set_need_sort(e->get_type(), column_index, has_lob_out_row_);
-      if (OB_FAIL(e->init(col_ctxs_.at(column_index), column_index, datum_row_offset_arr_.count()))) {
+      if (OB_FAIL(e->init(col_ctxs_.at(column_index), column_index, appended_row_count_))) {
         LOG_WARN("init column encoder failed", K(ret), K(column_index));
       }
       if (OB_FAIL(ret)) {
@@ -87,6 +110,8 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     all_col_datums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     pivot_allocator_(lib::ObMemAttr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT), OB_MALLOC_MIDDLE_BLOCK_SIZE),
     datum_row_offset_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
+    vec_batch_info_arrs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
+    appended_batch_count_(0), appended_row_count_(0),
     estimate_size_(0), estimate_size_limit_(0), all_headers_size_(0),
     expand_pct_(DEFAULT_ESTIMATE_REAL_SIZE_PCT),
     encoders_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
@@ -96,7 +121,9 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     hashtable_factory_(),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     length_(0), is_inited_(false),
-    is_all_column_force_raw_(false), all_string_data_len_(0)
+    is_all_column_force_raw_(false),
+    encoder_freezed_(false),
+    all_string_data_len_(0)
 {
 }
 
@@ -141,6 +168,7 @@ int ObMicroBlockCSEncoder::init(const ObMicroBlockEncodingCtx &ctx)
         need_check_lob_ = true;
       }
     }
+    encoder_freezed_ = false;
     is_inited_ = true;
   }
   return ret;
@@ -193,6 +221,18 @@ void ObMicroBlockCSEncoder::reset()
     }
   }
   all_col_datums_.reset();
+
+  FOREACH(iter, vec_batch_info_arrs_)
+  {
+    ObVecBatchInfoArr *arr = *iter;
+    if (nullptr != arr) {
+      arr->~ObVecBatchInfoArr();
+      pivot_allocator_.free(arr);
+    }
+  }
+  vec_batch_info_arrs_.reset();
+  appended_batch_count_ = 0;
+  appended_row_count_ = 0;
   pivot_allocator_.reset();
   datum_row_offset_arr_.reset();
   estimate_size_ = 0;
@@ -209,6 +249,7 @@ void ObMicroBlockCSEncoder::reset()
   length_ = 0;
   is_all_column_force_raw_ = false;
   all_string_data_len_ = 0;
+  encoder_freezed_ = false;
 }
 
 void ObMicroBlockCSEncoder::reuse()
@@ -222,6 +263,13 @@ void ObMicroBlockCSEncoder::reuse()
   {
     (*c)->reuse();
   }
+
+  FOREACH(arr, vec_batch_info_arrs_)
+  {
+    (*arr)->reuse();
+  }
+  appended_batch_count_ = 0;
+  appended_row_count_ = 0;
   // pivot_allocator_  pivot array memory is cached until encoder reset()
   row_buf_holder_.reuse();
   all_string_data_buffer_.reuse();
@@ -238,9 +286,10 @@ void ObMicroBlockCSEncoder::reuse()
   length_ = 0;
   is_all_column_force_raw_ = false;
   all_string_data_len_ = 0;
+  encoder_freezed_ = false;
 }
 
-void ObMicroBlockCSEncoder::dump_diagnose_info() const
+void ObMicroBlockCSEncoder::dump_diagnose_info()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -266,8 +315,34 @@ void ObMicroBlockCSEncoder::dump_diagnose_info() const
     } else if (OB_FAIL(datum_row.init(column_cnt))) {
       LOG_WARN("fail to init datum row", K_(ctx), K(column_cnt));
     } else {
-      int64_t appended_row_count = datum_row_offset_arr_.count();
-      for (int64_t row_id = 0; OB_SUCC(ret) && row_id < appended_row_count; ++row_id) {
+      bool can_dump_buffered_row = false;
+      if (0 == appended_batch_count_) {
+        // non-batch interface
+        if (OB_FAIL(set_datum_rows_ptr_())) {
+          LOG_WARN("fail to set datum rows ptr", K(ret));
+        } else {
+          can_dump_buffered_row = true;
+        }
+      } else {
+        if (!encoder_freezed_) {
+          if (OB_FAIL(build_all_col_datums_())) {
+            LOG_WARN("fail to build all column datums before dump diagnose info", K(ret));
+          } else {
+            can_dump_buffered_row = true;
+          }
+        } else {
+          can_dump_buffered_row = true;
+          for (int64_t col_idx = 0; col_idx < column_cnt && can_dump_buffered_row; ++col_idx) {
+            if (all_col_datums_.at(col_idx)->count() != appended_row_count_) {
+              can_dump_buffered_row = false;
+              LOG_WARN("can not dump buffered rows since buffered datum is invalid", K(col_idx),
+                  K(all_col_datums_.at(col_idx)->count()), K_(appended_row_count));
+            }
+          }
+        }
+      }
+
+      for (int64_t row_id = 0; OB_SUCC(ret) && can_dump_buffered_row && row_id < appended_row_count_; ++row_id) {
         for (int64_t col_idx = 0; col_idx < column_cnt; ++col_idx) {
           datum_row.storage_datums_[col_idx].ptr_ = all_col_datums_.at(col_idx)->at(row_id).ptr_;
           datum_row.storage_datums_[col_idx].pack_ = all_col_datums_.at(col_idx)->at(row_id).pack_;
@@ -283,6 +358,7 @@ void ObMicroBlockCSEncoder::dump_diagnose_info() const
           FLOG_WARN("error micro block store_row (original)", K(row_id), K(store_row));
         }
       }
+      encoder_freezed_ = true;
     }
   }
   // ignore ret
@@ -305,6 +381,24 @@ int ObMicroBlockCSEncoder::init_all_col_values_(const ObMicroBlockEncodingCtx &c
         c->~ObColDatums();
         pivot_allocator_.free(c);
       }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::init_vec_batch_info_arrs_(const ObMicroBlockEncodingCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(vec_batch_info_arrs_.reserve(ctx.column_cnt_))) {
+    LOG_WARN("reserve array failed", K(ret), "size", ctx.column_cnt_);
+  }
+  for (int64_t i = vec_batch_info_arrs_.count(); i < ctx.column_cnt_ && OB_SUCC(ret); ++i) {
+    ObVecBatchInfoArr *arr = OB_NEWx(ObVecBatchInfoArr, &pivot_allocator_, pivot_allocator_);
+    if (OB_ISNULL(arr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret), K(ctx));
+    } else if (OB_FAIL(vec_batch_info_arrs_.push_back(arr))) {
+      LOG_WARN("push back vec_batch_info_arrs_ failed", K(ret));
     }
   }
   return ret;
@@ -367,9 +461,12 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
   } else if (OB_UNLIKELY(row.get_column_count() != ctx_.column_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column count mismatch", K(ret), "ctx", ctx_, K(row));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
   } else if (OB_FAIL(inner_init_())) {
     LOG_WARN("failed to inner init", K(ret));
-  } else if (0 == datum_row_offset_arr_.count()) {
+  } else if (0 == appended_row_count_) {
     if (OB_FAIL(init_column_ctxs_())) {
       LOG_WARN("fail to init_column_ctxs_", K(ret), K_(ctx));
     }
@@ -377,14 +474,11 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
 
   if (OB_SUCC(ret)) {
     int64_t store_size = 0;
-    if (OB_UNLIKELY(datum_row_offset_arr_.count() >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT)) {
+    if (OB_UNLIKELY(appended_row_count_ >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT
+          || appended_row_count_ > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
-          K(datum_row_offset_arr_.count()), K(row));
-    } else if (OB_FAIL(process_out_row_columns_(row))) {
-      if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
-        LOG_WARN("failed to process out row columns", K(ret));
-      }
+      LOG_DEBUG("Try to encode more rows than maximum of row cnt in header, force to build a block",
+          K_(appended_row_count), K(row), K(ctx_.encoding_granularity_));
     } else if (OB_FAIL(copy_and_append_row_(row, store_size))) {
       if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
         LOG_WARN("copy and append row failed", K(ret));
@@ -399,10 +493,595 @@ int ObMicroBlockCSEncoder::append_row(const ObDatumRow &row)
       }
       cal_row_stat(row);
       estimate_size_ += store_size;
-      LOG_DEBUG("cs encoder append row", K_(estimate_size), K(store_size), K(datum_row_offset_arr_.count()));
+      LOG_DEBUG("cs encoder append row", K_(estimate_size), K(store_size), K_(appended_row_count));
     }
   }
 
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::append_batch(const ObBatchDatumRows &vec_batch,
+                                        const int64_t start,
+                                        const int64_t row_count)
+
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(vec_batch.vectors_.count() != ctx_.column_cnt_ || row_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column count mismatch", K(ret), K_(ctx), K(vec_batch), K(row_count));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
+  } else if (OB_FAIL(inner_init_())) {
+    LOG_WARN("failed to inner init", K(ret));
+  } else if (0 == appended_batch_count_) {
+    if (OB_FAIL(init_column_ctxs_())) {
+      LOG_WARN("fail to init_column_ctxs_", K(ret), K_(ctx));
+    } else if (vec_batch_info_arrs_.count() < ctx_.column_cnt_ &&
+        OB_FAIL(init_vec_batch_info_arrs_(ctx_))) {
+      LOG_WARN("init vec_batch_info_arrs_ failed", K(ret), K_(ctx));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t store_size = 0;
+    if (OB_UNLIKELY(appended_row_count_ >= ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT
+          || appended_row_count_ > ctx_.encoding_granularity_)) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
+          K_(appended_row_count), K_(appended_batch_count), K(ctx_.encoding_granularity_));
+    } else if (OB_FAIL(copy_and_append_batch_(vec_batch, start, row_count, store_size))) {
+      if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+        LOG_WARN("copy and append row failed", K(ret));
+      } else if (0 == appended_batch_count_ && 1 == row_count) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("At least encode one row", K(ret), K(vec_batch), K(start), K(row_count));
+      } else if (OB_UNLIKELY(0 == appended_batch_count_)) {
+        reuse();
+      }
+    } else {
+      // The statistics here are only meaningful for the mini/minor sstable,
+      // and cs-encoding is only used for major sstable, so there is no need to call this func.
+      // cal_row_stat(row);
+      estimate_size_ += store_size;
+      LOG_DEBUG("cs encoder append batch", K_(estimate_size), K(store_size), K_(appended_row_count));
+    }
+  }
+
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::copy_and_append_batch_(const ObBatchDatumRows &vec_batch,
+                                                  const int64_t start,
+                                                  const int64_t row_count,
+                                                  int64_t &store_size)
+{
+  int ret = OB_SUCCESS;
+  // performance critical, do not double check parameters in private method
+  const int64_t column_cnt = vec_batch.vectors_.count();
+  const int64_t start_offset = length_;
+  if (appended_row_count_ > 0 && estimate_size_ >= estimate_size_limit_) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else {
+    bool is_finish = false;
+    while(OB_SUCC(ret) && !is_finish) {
+      store_size = 0;
+      length_ = start_offset;
+      is_finish = true;
+      bool is_row_holder_not_enough = false;
+      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < column_cnt; ++col_idx) {
+        if (OB_FAIL(copy_vector_(vec_batch.vectors_.at(col_idx),
+                                 start,
+                                 row_count,
+                                 col_idx,
+                                 store_size,
+                                 is_row_holder_not_enough))) {
+          if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+            LOG_WARN("fail to copy vector", K(ret), K(col_idx), K(store_size));
+          } else {
+            // failed to append batch due to buf not enough, but some vec batch may has been push back, need rollback
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(remove_invalid_vec_batch_info_(col_idx))) {
+              LOG_WARN("fail to remove_invalid_vec_batch_info_", K(ret), K(tmp_ret), K(column_cnt));
+              ret = tmp_ret;
+            }
+          }
+        } else if (is_row_holder_not_enough) {
+          int64_t need_size = 0;
+          if (OB_FAIL(calc_batch_data_size_(vec_batch.vectors_, start, row_count, need_size))) {
+            LOG_WARN("fail to calc_vec_batch_data_size", K(ret), K(row_count));
+          } else if (OB_UNLIKELY(need_size <= row_buf_holder_.size() - row_buf_holder_.length())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected row holder buf not enough", K(ret), K(need_size), K(row_buf_holder_));
+          } else if (OB_FAIL(row_buf_holder_.ensure_space(need_size))) {
+            LOG_WARN("failed to ensure space", K(ret), K(need_size), K(row_buf_holder_));
+          } else if (OB_FAIL(remove_invalid_vec_batch_info_(col_idx))) {
+            LOG_WARN("fail to remove_invalid_vec_batch_info_", K(ret), K(column_cnt));
+          } else {
+            is_finish = false;
+            break;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(row_buf_holder_.write_nop(length_ - start_offset))) {
+        STORAGE_LOG(WARN, "fail to write nop", K(ret), K(length_), K(start_offset), K(row_buf_holder_));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(try_to_append_row_(store_size))) {
+    if (OB_UNLIKELY(OB_BUF_NOT_ENOUGH != ret)) {
+      LOG_WARN("fail to try append row", K(ret));
+    } else {
+      // failed to try_to_append_row due to buf not enough, but this row has been push back, need rollback
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(remove_invalid_vec_batch_info_(column_cnt))) {
+        LOG_WARN("fail to remove_invalid_vec_batch_info_", K(ret), K(tmp_ret), K(column_cnt));
+        ret = tmp_ret;
+      }
+    }
+  } else {
+    appended_batch_count_++;
+    appended_row_count_ += row_count;
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::copy_vector_(const ObIVector *vector,
+                                        const int64_t start,
+                                        const int64_t row_count,
+                                        const int64_t col_idx,
+                                        int64_t &store_size,
+                                        bool &is_row_holder_not_enough)
+{
+  int ret = OB_SUCCESS;
+  const ObColDesc &col_desc = ctx_.col_descs_->at(col_idx);
+  ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
+  const bool is_int_sc = store_class == ObIntSC || store_class == ObUIntSC;
+  is_row_holder_not_enough = false;
+  int64_t extra_store_size_for_var_string = 0;
+  const VectorFormat vec_format = vector->get_format();
+  const int16_t precision = col_desc.col_type_.is_decimal_int() ?
+      col_desc.col_type_.get_stored_precision() : PRECISION_UNKNOWN_YET;
+  const VecValueTypeClass vec_tc = common::get_vec_value_tc(
+      col_desc.col_type_.get_type(), col_desc.col_type_.get_scale(), precision);
+  int64_t vec_data_size = 0;
+  ObDataFormatType data_format_type = ObDataFormatType::MAX;
+
+  if (OB_FAIL(calc_col_batch_data_size_(vector, start, row_count, col_idx, vec_data_size))) {
+    LOG_WARN("fail to calc_col_batch_data_size_", K(ret), K(col_desc));
+  } else if (is_int_sc) {
+    store_size += sizeof(uint64_t) * row_count;
+    if (VectorFormat::VEC_FIXED == vec_format) {
+      if (ObCSEncodingUtil::is_int64_vec_value_tc(vec_tc)) {
+        data_format_type = INT_64BIT_FIXED;
+      } else {
+        data_format_type = INT_NOT_64BIT_FIXED;
+      }
+    } else if (VectorFormat::VEC_CONTINUOUS == vec_format) {
+      data_format_type = INT_CONTINUOUS;
+    } else if (VectorFormat::VEC_DISCRETE == vec_format) {
+      data_format_type = INT_DISCRETE;
+    } else if (VectorFormat::VEC_UNIFORM == vec_format) {
+      data_format_type = INT_UNIFORM;
+    } else if (VectorFormat::VEC_UNIFORM_CONST == vec_format) {
+      data_format_type = INT_UNIFORM_CONST;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector format", K(ret), K(vec_format));
+    }
+  } else { // for string
+    if (ObCSEncodingUtil::is_variable_len_store_class(store_class)) {
+      extra_store_size_for_var_string = sizeof(uint64_t) * row_count; // for var length string offset array
+    }
+    store_size += vec_data_size + extra_store_size_for_var_string;
+
+    if (VectorFormat::VEC_FIXED == vec_format) {
+      data_format_type = STR_FIXED;
+    } else if (VectorFormat::VEC_CONTINUOUS == vec_format) {
+      data_format_type = STR_CONTINUOUS;
+    } else if (VectorFormat::VEC_DISCRETE == vec_format) {
+      data_format_type = STR_DISCRETE;
+    } else if (VectorFormat::VEC_UNIFORM == vec_format) {
+      data_format_type = STR_UNIFORM;
+    } else if (VectorFormat::VEC_UNIFORM_CONST == vec_format) {
+      data_format_type = STR_UNIFORM_CONST;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector format", K(ret), K(vec_format));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (appended_batch_count_ > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else if (row_count > 1 && estimate_size_ + store_size >= estimate_size_limit_) {
+    ret = OB_BUF_NOT_ENOUGH;
+  // appended_batch_count_ == 0 && row_count == 1 represent a large row, do not return OB_BUF_NOT_ENOUGH
+  } else if (row_buf_holder_.size() < length_ + vec_data_size) {
+    is_row_holder_not_enough = true;
+  } else if (OB_FAIL(do_copy_vector_(vector,
+                                     start,
+                                     row_count,
+                                     col_idx,
+                                     vec_data_size,
+                                     data_format_type,
+                                     store_class == ObIntSC/*is_signed*/))) {
+    LOG_WARN("fail to do copy vector", K(ret),
+        K(data_format_type), K(col_desc), K(row_count), K(vec_data_size));
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::do_copy_vector_(const ObIVector *vector,
+                                           const int64_t start,
+                                           const int64_t row_count,
+                                           const int64_t col_idx,
+                                           const int64_t vec_data_size,
+                                           const ObDataFormatType type,
+                                           const bool is_signed)
+{
+
+#define DEFINE_MASK_FOR_SIGNED_INT                 \
+  uint64_t value = 0;                              \
+  uint64_t mask = 0;                               \
+  uint64_t reverse_mask = 0;                       \
+  if (is_signed) {                                 \
+    mask = INTEGER_MASK_TABLE[type_store_size];    \
+    reverse_mask = ~mask;                          \
+  }
+
+#define COPY_INT_AND_COMPLETE_SIGNED_BIT(src, src_len)                \
+  ENCODING_ADAPT_MEMCPY(&value, src, src_len)                         \
+  if (is_signed) {                                                    \
+    value = value & mask;                                             \
+    if (0 != reverse_mask && (value & (reverse_mask >> 1))) {         \
+      value |= reverse_mask;                                          \
+    }                                                                 \
+  }                                                                   \
+  ENCODING_ADAPT_MEMCPY(buf + length_, &value, sizeof(uint64_t));
+
+#define DEEP_COPY_NULLS_BITMAP(vector)                                                         \
+  if (vector->has_null()) {                                                                    \
+    if (OB_ISNULL(nulls_buf = allocator_.alloc(sql::ObBitVector::memory_size(row_count)))) {   \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                         \
+      LOG_WARN("fail to allocate mem", K(ret), K(row_count));                                  \
+    } else {                                                                                   \
+      nulls = sql::to_bit_vector(nulls_buf);                                                   \
+      const sql::ObBitVector *src_nulls = vector->get_nulls();                                 \
+      if (start == 0) {                                                                        \
+        nulls->deep_copy(*src_nulls, row_count);                                               \
+      } else {                                                                                 \
+        MEMSET(nulls_buf, 0, sql::ObBitVector::memory_size(row_count));                        \
+        for (int64_t i = start, j = 0; j < row_count; i++, j++) {                              \
+          if (src_nulls->at(i)) {                                                              \
+            nulls->set(j);                                                                     \
+          }                                                                                    \
+        }                                                                                      \
+      }                                                                                        \
+    }                                                                                          \
+  }
+
+  int ret = OB_SUCCESS;
+  ObVecBatchInfo batch_info;
+  const ObColDesc &col_desc = ctx_.col_descs_->at(col_idx);
+  char *buf = row_buf_holder_.data();
+  const int64_t vec_start_offset = length_;
+  uint32_t *offsets = nullptr;
+  int32_t fixed_len = -1;
+  sql::ObBitVector *nulls = nullptr;
+  void *nulls_buf = nullptr;
+  const int64_t type_store_size = get_type_size_map()[col_desc.col_type_.get_type()];
+  bool is_integer =false;
+  const int64_t end = start + row_count;
+
+  switch (type) {
+    case INT_64BIT_FIXED: {
+      is_integer = true;
+      const ObFixedLengthBase *fix_vec = static_cast<const ObFixedLengthBase *>(vector);
+      fixed_len = fix_vec->get_length();
+      OB_ASSERT(fixed_len == sizeof(uint64_t));
+      const char *src = fix_vec->get_data() + start * fixed_len;
+      MEMCPY(buf + length_, src, vec_data_size);
+      length_ += fixed_len * row_count;
+      DEEP_COPY_NULLS_BITMAP(fix_vec);
+      break;
+    }
+
+    case INT_NOT_64BIT_FIXED: {
+      is_integer = true;
+      const ObFixedLengthBase *fix_vec = static_cast<const ObFixedLengthBase *>(vector);
+      fixed_len = fix_vec->get_length();
+      const char *src = fix_vec->get_data() + start * fixed_len;
+      DEFINE_MASK_FOR_SIGNED_INT;
+      for (int64_t i = 0; i < row_count; i++) {
+        COPY_INT_AND_COMPLETE_SIGNED_BIT(src + i * fixed_len, fixed_len);
+        length_ += sizeof(uint64_t);
+      }
+      DEEP_COPY_NULLS_BITMAP(fix_vec);
+      break;
+    }
+
+    case INT_CONTINUOUS: {  // INT don't use continuous format?
+      is_integer = true;
+      fixed_len = 0;
+      const ObContinuousFormat *conti_vec = static_cast<const ObContinuousFormat *>(vector);
+      DEFINE_MASK_FOR_SIGNED_INT;
+      for (int64_t i = start; i < end; i++) {
+        const uint32_t len = conti_vec->get_length(i);
+        if (len != 0) { // len == 0 if the element is null, no need copy
+          fixed_len = len;
+          COPY_INT_AND_COMPLETE_SIGNED_BIT(conti_vec->get_payload(i), len);
+        }
+        length_ += sizeof(uint64_t);
+      }
+      DEEP_COPY_NULLS_BITMAP(conti_vec);
+      break;
+    }
+
+    case INT_DISCRETE: { // INT don't use discrete format?
+      is_integer = true;
+      fixed_len = 0;
+      const ObDiscreteFormat *disc_vec = static_cast<const ObDiscreteFormat *>(vector);
+      DEFINE_MASK_FOR_SIGNED_INT;
+      for (int64_t i = start; i < end; i++) {
+        if (!disc_vec->has_null() || !disc_vec->is_null(i)) { // not null
+          const uint32_t len = disc_vec->get_length(i);
+          fixed_len = len;
+          COPY_INT_AND_COMPLETE_SIGNED_BIT(disc_vec->get_payload(i), len);
+        }
+        length_ += sizeof(uint64_t);
+      }
+      DEEP_COPY_NULLS_BITMAP(disc_vec);
+      break;
+    }
+
+    case INT_UNIFORM: {
+      is_integer = true;
+      fixed_len = 0;
+      const ObUniformFormat<false> *uni_vec = static_cast<const ObUniformFormat<false> *>(vector);
+      DEFINE_MASK_FOR_SIGNED_INT;
+      for (int64_t i = start, j = 0; OB_SUCC(ret) && i < end; i++, j++) {
+        if (!uni_vec->is_null(i)) {
+          const uint32_t len = uni_vec->get_length(i);
+          fixed_len = len;
+          COPY_INT_AND_COMPLETE_SIGNED_BIT(uni_vec->get_payload(i), len);
+        } else {
+          if (OB_ISNULL(nulls_buf)) {
+            if (OB_ISNULL(nulls_buf = allocator_.alloc(sql::ObBitVector::memory_size(row_count)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+            } else {
+              MEMSET(nulls_buf, 0, sql::ObBitVector::memory_size(row_count));
+              nulls = sql::to_bit_vector(nulls_buf);
+            }
+          }
+          if (OB_SUCC(ret)) {
+            nulls->set(j);
+          }
+        }
+        length_ += sizeof(uint64_t);
+      }
+      break;
+    }
+
+    case INT_UNIFORM_CONST: {
+      is_integer = true;
+      fixed_len = 0;
+      const ObUniformFormat<true> *uni_vec = static_cast<const ObUniformFormat<true> *>(vector);
+      DEFINE_MASK_FOR_SIGNED_INT;
+      if (!uni_vec->is_null(start)) {
+        const uint32_t len = uni_vec->get_length(start);
+        fixed_len = len;
+        const char *payload = uni_vec->get_payload(start);
+        for (int64_t i = start; i < end; i++) {
+          COPY_INT_AND_COMPLETE_SIGNED_BIT(payload, len);
+          length_ += sizeof(uint64_t);
+        }
+      } else { // const is null
+        if (OB_ISNULL(nulls_buf = allocator_.alloc(sql::ObBitVector::memory_size(row_count)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+        } else {
+          MEMSET(nulls_buf, 0xFF, sql::ObBitVector::memory_size(row_count));
+          nulls = sql::to_bit_vector(nulls_buf);
+          length_ += sizeof(uint64_t) * row_count;
+        }
+      }
+      break;
+    }
+
+    case STR_FIXED:  {
+      const ObFixedLengthBase *fix_vec = static_cast<const ObFixedLengthBase *>(vector);
+      fixed_len = fix_vec->get_length();
+      const char *src = fix_vec->get_data() + start * fixed_len;
+      MEMCPY(buf + length_, src, vec_data_size);
+      length_ += fixed_len * row_count;
+      DEEP_COPY_NULLS_BITMAP(fix_vec);
+      break;
+    }
+
+    case STR_CONTINUOUS: {
+      const ObContinuousFormat *conti_vec = static_cast<const ObContinuousFormat *>(vector);
+      if (OB_ISNULL(offsets = (uint32_t*)allocator_.alloc(sizeof(uint32_t) * (row_count + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+      } else {
+        MEMCPY(buf + length_, conti_vec->get_payload(start), vec_data_size);
+        for (int64_t i = start, j = 0; i < end; i++, j++) {
+          const uint32_t len = conti_vec->get_length(i);
+          offsets[j] = length_;
+          length_ += len;
+        }
+        offsets[row_count] = length_;
+        DEEP_COPY_NULLS_BITMAP(conti_vec);
+      }
+      break;
+    }
+
+    case STR_DISCRETE: {
+      const ObDiscreteFormat *disc_vec = static_cast<const ObDiscreteFormat *>(vector);
+      if (OB_ISNULL(offsets = (uint32_t*)allocator_.alloc(sizeof(uint32_t) * (row_count + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+      } else {
+        for (int64_t i = start, j = 0; i < end; i++, j++) {
+          if (!disc_vec->has_null() || !disc_vec->is_null(i)) { // not null
+            const uint32_t len = disc_vec->get_length(i);
+            MEMCPY(buf + length_, disc_vec->get_payload(i), len);
+            offsets[j] = length_;
+            length_ += len;
+          } else {
+            offsets[j] = length_;
+          }
+        }
+        offsets[row_count] = length_;
+        DEEP_COPY_NULLS_BITMAP(disc_vec);
+      }
+      break;
+    }
+
+    case STR_UNIFORM: {
+      const ObUniformFormat<false> *uni_vec = static_cast<const ObUniformFormat<false> *>(vector);
+      if (OB_ISNULL(offsets = (uint32_t*)allocator_.alloc(sizeof(uint32_t) * (row_count + 1)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+      } else {
+        for (int64_t i = start, j = 0; OB_SUCC(ret) && i < end; i++, j++) {
+          if (!uni_vec->is_null(i)) {
+            const uint32_t len = uni_vec->get_length(i);
+            MEMCPY(buf + length_, uni_vec->get_payload(i), len);
+            offsets[j] = length_;
+            length_ += len;
+          } else {
+            if (OB_ISNULL(nulls_buf)) {
+              if (OB_ISNULL(nulls_buf = allocator_.alloc(sql::ObBitVector::memory_size(row_count)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+              } else {
+                MEMSET(nulls_buf, 0, sql::ObBitVector::memory_size(row_count));
+                nulls = sql::to_bit_vector(nulls_buf);
+              }
+            }
+            if (OB_SUCC(ret)) {
+              nulls->set(j);
+              offsets[j] = length_;
+            }
+          }
+        }
+        offsets[row_count] = length_;
+      }
+      break;
+    }
+
+    case STR_UNIFORM_CONST: {
+      const ObUniformFormat<true> *uni_vec = static_cast<const ObUniformFormat<true> *>(vector);
+      fixed_len = 0;
+      if (!uni_vec->is_null(start)) {
+        const uint32_t len = uni_vec->get_length(start);
+        const char *payload = uni_vec->get_payload(start);
+        fixed_len = len;
+        for (int64_t i = start; i < end; i++) {
+          MEMCPY(buf + length_, payload, len);
+          length_ += len;
+        }
+      } else {  // const is null
+        if (OB_ISNULL(nulls_buf = allocator_.alloc(sql::ObBitVector::memory_size(row_count)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate mem", K(ret), K(row_count));
+        } else {
+          MEMSET(nulls_buf, 0xFF, sql::ObBitVector::memory_size(row_count));
+          nulls = sql::to_bit_vector(nulls_buf);
+        }
+      }
+      break;
+    }
+
+    default: {
+      ret = OB_ERR_UNDEFINED;
+      LOG_ERROR("unexpected data format type", K(type), K(col_desc), K(is_signed));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(length_ - vec_start_offset != vec_data_size)) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("vector data len not match", K(ret), K(length_), K(vec_start_offset), K(vec_data_size));
+  } else if (OB_FAIL(batch_info.init(row_count,
+                                     fixed_len,
+                                     offsets,
+                                     nulls,
+                                     vec_start_offset,
+                                     is_integer))) {
+    LOG_ERROR("fail to init vector batch info", K(ret), K(row_count), K(fixed_len), KP(offsets),
+        KP(nulls), K(vec_start_offset), K(is_integer));
+  } else if (OB_FAIL(vec_batch_info_arrs_.at(col_idx)->push_back(batch_info))) {
+    LOG_WARN("fail to push batch info", K(ret), K(batch_info));
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::build_all_col_datums_()
+{
+  int ret = OB_SUCCESS;
+  const char *data_buf = row_buf_holder_.data();
+
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < ctx_.column_cnt_; col_idx++) {
+    const ObVecBatchInfoArr &batch_info_arr = *vec_batch_info_arrs_[col_idx];
+    int64_t total_row_count = 0;
+
+    for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < appended_batch_count_; batch_idx++) {
+      const ObVecBatchInfo &batch_info = batch_info_arr.at(batch_idx);
+      ObColDatums &col_datums = *all_col_datums_[col_idx];
+      total_row_count += batch_info.row_count_;
+
+      if (batch_info.offsets_ != nullptr) { // continuous format
+        const uint32_t *offsets = batch_info.offsets_;
+        OB_ASSERT(!batch_info.is_integer_);
+        OB_ASSERT(offsets[0] ==  batch_info.start_offset_);
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < batch_info.row_count_; row_idx++) {
+          ObDatum datum;
+          if (batch_info.nulls_ == nullptr || !batch_info.nulls_->at(row_idx)) {
+            datum.ptr_ = data_buf + offsets[row_idx];
+            datum.len_ = offsets[row_idx + 1] - offsets[row_idx];
+          } else {
+            datum.set_null();
+          }
+          if (OB_FAIL(col_datums.push_back(datum))) {
+            LOG_WARN("fail to push back datum", K(ret), K(datum), K(col_idx), K(batch_idx), K(row_idx));
+          }
+        }
+      } else if (OB_UNLIKELY(batch_info.fixed_len_ < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected fixed_len when offsets in nullptr", K(ret), K(batch_info));
+      } else { // fixed format
+        // integer is formatted to 8byte int row_buf_holder_
+        const int32_t buf_step = batch_info.is_integer_ ? sizeof(uint64_t) : batch_info.fixed_len_;
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < batch_info.row_count_; row_idx++) {
+          ObDatum datum;
+          if (batch_info.nulls_ == nullptr || !batch_info.nulls_->at(row_idx)) {
+            datum.ptr_ = data_buf + batch_info.start_offset_ + row_idx * buf_step;
+            datum.len_ = batch_info.fixed_len_;
+          } else {
+            datum.set_null();
+          }
+          if (OB_FAIL(col_datums.push_back(datum))) {
+            LOG_WARN("fail to push back datum", K(ret), K(datum), K(col_idx), K(batch_idx), K(row_idx));
+          }
+        }
+      }
+    } // end of for build one column
+
+    if (OB_SUCC(ret) && total_row_count != appended_row_count_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("row_count mismatch", K(ret), K(total_row_count), K_(appended_row_count));
+    }
+  }
   return ret;
 }
 
@@ -589,6 +1268,32 @@ int ObMicroBlockCSEncoder::store_stream_offsets_(int64_t &stream_offsets_length)
   return ret;
 }
 
+int ObMicroBlockCSEncoder::prepare_for_build_block_()
+{
+  int ret = OB_SUCCESS;
+  if (appended_batch_count_ == 0) { // use singel-row interface
+    if (OB_FAIL(set_datum_rows_ptr_())) {
+      LOG_WARN("fail to set datum rows ptr", K(ret));
+    } else if (OB_FAIL(process_out_row_columns_())) {
+      LOG_WARN("failed to process out row columns", K(ret));
+    }
+  } else { // use batch-row interface
+    if (OB_FAIL(build_all_col_datums_())) {
+      LOG_WARN("fail to build all col datums", K(ret));
+    } else if (OB_FAIL(process_out_row_columns_())) {
+      LOG_WARN("failed to process out row columns", K(ret));
+    } else if (get_header(data_buffer_)->has_column_checksum_ &&
+        OB_FAIL(checksum_helper_.cal_column_checksum(all_col_datums_,
+            appended_row_count_, get_header(data_buffer_)->column_checksums_))) {
+      LOG_WARN("cal column checksum failed", K(ret), K_(appended_row_count));
+    } else if (need_cal_row_checksum() &&
+        OB_FAIL(checksum_helper_.cal_rows_checksum(all_col_datums_, appended_row_count_))) {
+      LOG_WARN("fail to cal row chksum", K(ret), K_(appended_row_count), K_(checksum_helper));
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
 {
   int ret = OB_SUCCESS;
@@ -597,18 +1302,22 @@ int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(0 == datum_row_offset_arr_.count())) {
+  } else if (OB_UNLIKELY(0 == appended_row_count_)) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("empty micro block", K(ret));
-  } else if (OB_FAIL(set_datum_rows_ptr_())) {
-    LOG_WARN("fail to set datum rows ptr", K(ret));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K_(appended_row_count), K_(appended_batch_count));
+  } else if (FALSE_IT(encoder_freezed_ = true)) {
+  } else if (OB_FAIL(prepare_for_build_block_())) {
+    LOG_WARN("fail to prepare_for_build_block", K(ret));
   } else if (OB_FAIL(encoder_detection_())) {
     LOG_WARN("detect column encoding failed", K(ret));
   } else if (OB_FAIL(data_buffer_.write_nop(all_column_header_size + column_headers_size))) {
     LOG_WARN("fail to ensure space", K(ret), K_(data_buffer), K(all_column_header_size), K(column_headers_size));
   } else {
     LOG_DEBUG("build micro block", K_(estimate_size), K_(all_headers_size),
-        K(column_headers_size), K_(expand_pct), K(datum_row_offset_arr_.count()), K(ctx_));
+        K(column_headers_size), K_(expand_pct), K_(appended_row_count), K(ctx_));
 
     int64_t column_data_offset = 0;
     int64_t stream_offsets_length = 0;
@@ -616,7 +1325,7 @@ int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
     uint32_t all_string_data_size = 0;
     // <1> store all columns, include column meta and column data
     if (OB_FAIL(store_columns_(column_data_offset))) {
-      LOG_WARN("fail to store columns", K(ret), K_(ctx), K(datum_row_offset_arr_.count()), K(estimate_size_));
+      LOG_WARN("fail to store columns", K(ret), K_(ctx), K_(appended_row_count), K(estimate_size_));
     // <2> store all string data
     } else if (OB_FAIL(store_all_string_data_(all_string_data_size, is_all_string_compress))) {
       LOG_WARN("fail to store_all_string_data_", K(ret));
@@ -644,7 +1353,7 @@ int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
         all_column_header->set_is_all_string_compressed();
       }
       // <6> fill micro header
-      header->row_count_ = datum_row_offset_arr_.count();
+      header->row_count_ = appended_row_count_;
       header->has_string_out_row_ = has_string_out_row_;
       header->all_lob_in_row_ = !has_lob_out_row_;
       header->max_merged_trans_version_ = max_merged_trans_version_;
@@ -658,7 +1367,7 @@ int ObMicroBlockCSEncoder::build_block(char *&buf, int64_t &size)
       size = data_buffer_.length();
 
       LOG_DEBUG("finish build one micro block", KP(this), K(encoders_.count()),
-          K(datum_row_offset_arr_.count()), K(column_data_offset), K(size), K_(estimate_size), K_(estimate_size_limit),
+          K_(appended_row_count), K(column_data_offset), K(size), K_(estimate_size), K_(estimate_size_limit),
           K_(expand_pct), K(ctx_.micro_block_cnt_), K_(block_size_upper_bound), K(stream_offsets_.count()),
           K(ctx_.compressor_type_), KP(buf), K(size), K_(all_string_data_len));
     }
@@ -698,10 +1407,14 @@ int ObMicroBlockCSEncoder::init_column_ctxs_()
 int ObMicroBlockCSEncoder::set_datum_rows_ptr_()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(row_buf_holder_.has_expand())) {
+  if (OB_UNLIKELY(appended_row_count_ != datum_row_offset_arr_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("appended_row_count is unexpected", K(ret),
+        K_(appended_row_count), K(datum_row_offset_arr_.count()));
+  } else if (OB_UNLIKELY(row_buf_holder_.has_expand())) {
     char *data = row_buf_holder_.data();
     const int64_t column_cnt = ctx_.column_cnt_;
-    for (int64_t row_id = 0; OB_SUCC(ret) && row_id < datum_row_offset_arr_.count(); ++row_id) {
+    for (int64_t row_id = 0; OB_SUCC(ret) && row_id < appended_row_count_; ++row_id) {
       const char *orig_row_start_ptr = all_col_datums_.at(0)->at(row_id).ptr_;
       char *curr_row_start_ptr = data + datum_row_offset_arr_.at(row_id);
       // ptr is invalid and need update
@@ -722,26 +1435,35 @@ int ObMicroBlockCSEncoder::set_datum_rows_ptr_()
   return ret;
 }
 
-int ObMicroBlockCSEncoder::process_out_row_columns_(const ObDatumRow &row)
+int ObMicroBlockCSEncoder::process_out_row_columns_()
 {
   // make sure in&out row status of all values in a column are same
   int ret = OB_SUCCESS;
   if (!need_check_lob_) {
-  } else if (OB_UNLIKELY(row.get_column_count() != col_ctxs_.count())) {
+  } else if (OB_UNLIKELY(all_col_datums_.count() != col_ctxs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected column count not match", K(ret));
-  } else if (!has_lob_out_row_) {
-    for (int64_t i = 0; !has_lob_out_row_ && OB_SUCC(ret) && i < row.get_column_count(); ++i) {
-      ObStorageDatum &datum = row.storage_datums_[i];
-      if (ctx_.col_descs_->at(i).col_type_.is_lob_storage()) {
-        if (datum.is_nop() || datum.is_null()) {
-        } else if (datum.len_ < sizeof(ObLobCommon)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected lob datum len", K(ret), K(i), K(ctx_.col_descs_->at(i).col_type_), K(datum));
-        } else {
-          const ObLobCommon &lob_common = datum.get_lob_data();
-          has_lob_out_row_ = !lob_common.in_row_;
-          LOG_DEBUG("chaser debug lob out row", K(has_lob_out_row_), K(lob_common), K(datum));
+  } else {
+    const int64_t col_count = all_col_datums_.count();
+    for (int64_t col_idx = 0;
+        !has_lob_out_row_ && OB_SUCC(ret) && col_idx < col_count; col_idx++) {
+      if (!ctx_.col_descs_->at(col_idx).col_type_.is_lob_storage()) {
+        // skip non-lob column
+      } else {
+        ObColDatums &col_datums = *all_col_datums_.at(col_idx);
+        for (int64_t row_idx = 0;
+            !has_lob_out_row_ && OB_SUCC(ret) && row_idx < appended_row_count_; ++row_idx) {
+          ObDatum &datum = col_datums.at(row_idx);
+          if (datum.is_nop() || datum.is_null()) {
+          } else if (datum.len_ < sizeof(ObLobCommon)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected lob datum len", K(ret), K(row_idx),
+                K(ctx_.col_descs_->at(col_idx).col_type_), K(datum));
+          } else {
+            const ObLobCommon &lob_common = datum.get_lob_data();
+            has_lob_out_row_ = !lob_common.in_row_;
+            LOG_DEBUG("chaser debug lob out row", K(has_lob_out_row_), K(lob_common), K(datum));
+          }
         }
       }
     }
@@ -762,7 +1484,7 @@ int ObMicroBlockCSEncoder::copy_and_append_row_(const ObDatumRow &src, int64_t &
   const int64_t column_cnt = src.get_column_count();
   const int64_t datum_row_offset = length_;
   ObDatum dst_datum;
-  if (datum_row_offset_arr_.count() > 0 && estimate_size_ >= estimate_size_limit_) {
+  if (appended_row_count_ > 0 && estimate_size_ >= estimate_size_limit_) {
     ret = OB_BUF_NOT_ENOUGH;
   } else {
     bool is_finish = false;
@@ -829,6 +1551,8 @@ int ObMicroBlockCSEncoder::copy_and_append_row_(const ObDatumRow &src, int64_t &
     }
   } else if (OB_FAIL(datum_row_offset_arr_.push_back(datum_row_offset))) {
     LOG_WARN("fail to push back datum_row_offset", K(ret), K(datum_row_offset));
+  } else {
+    appended_row_count_++;
   }
 
   return ret;
@@ -838,8 +1562,19 @@ int ObMicroBlockCSEncoder::remove_invalid_datums_(const int32_t column_cnt)
 {
   int ret = OB_SUCCESS;
   for (int64_t i  = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-    if (OB_FAIL(all_col_datums_.at(i)->resize(datum_row_offset_arr_.count()))) {
-      LOG_ERROR("fail to resize all_col_datums_", K(ret), K(datum_row_offset_arr_.count()), K(i), K(column_cnt));
+    if (OB_FAIL(all_col_datums_.at(i)->resize(appended_row_count_))) {
+      LOG_ERROR("fail to resize all_col_datums_", K(ret), K_(appended_row_count), K(i), K(column_cnt));
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::remove_invalid_vec_batch_info_(const int32_t column_cnt)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i  = 0; OB_SUCC(ret) && i < column_cnt; i++) {
+    if (OB_FAIL(vec_batch_info_arrs_.at(i)->resize(appended_batch_count_))) {
+      LOG_ERROR("fail to resize vec_batch_info_arrs_", K(ret), K_(appended_batch_count), K(i), K(column_cnt));
     }
   }
   return ret;
@@ -875,9 +1610,9 @@ int ObMicroBlockCSEncoder::copy_cell_(const ObColDesc &col_desc, const
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(store_size += datum_size + extra_store_size_for_var_string)) {
-  } else if (datum_row_offset_arr_.count() > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
+  } else if (appended_row_count_ > 0 && estimate_size_ + store_size >= estimate_size_limit_) {
     ret = OB_BUF_NOT_ENOUGH;
-  // datum_row_offset_arr_.count() == 0 represent a large row, do not return OB_BUF_NOT_ENOUGH
+  // appended_row_count_ == 0 represent a large row, do not return OB_BUF_NOT_ENOUGH
   } else if (row_buf_holder_.size() < length_ + datum_size) {
     is_row_holder_not_enough = true;
   } else {
@@ -927,6 +1662,86 @@ int64_t ObMicroBlockCSEncoder::calc_datum_row_size_(const ObDatumRow &src) const
   return need_size;
 }
 
+int ObMicroBlockCSEncoder::calc_col_batch_data_size_(const ObIVector *vector,
+                                                     const int64_t start,
+                                                     const int64_t row_count,
+                                                     const int64_t col_idx,
+                                                     int64_t &size) const
+{
+  int ret = OB_SUCCESS;
+  size = 0;
+  const ObColDesc &col_desc = ctx_.col_descs_->at(col_idx);
+  ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
+  const VectorFormat vec_format = vector->get_format();
+  const int64_t end = start + row_count;
+
+  if (store_class == ObIntSC || store_class == ObUIntSC) {
+    size += row_count * sizeof(uint64_t); // Whether it's null or not, occupy 8 bytes for one integer
+  } else {
+    switch (vec_format) {
+      case VEC_FIXED : {
+        const ObFixedLengthBase *fix_vec = static_cast<const ObFixedLengthBase *>(vector);
+        size += row_count * fix_vec->get_length();
+        break;
+      }
+      case VEC_CONTINUOUS: {
+        const ObContinuousFormat *conti_vec = static_cast<const ObContinuousFormat *>(vector);
+        const uint32_t *offsets = conti_vec->get_offsets();
+        size += offsets[end] - offsets[start];
+        break;
+      }
+      case VEC_DISCRETE: {
+        const ObDiscreteFormat *disc_vec = static_cast<const ObDiscreteFormat *>(vector);
+        for (int64_t i = start; i < end; i++) {
+          if (!disc_vec->has_null() || !disc_vec->is_null(i)) {
+            size += disc_vec->get_length(i);
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM:{
+        const ObUniformFormat<false> *uni_vec = static_cast<const ObUniformFormat<false> *>(vector);
+        for (int64_t i = start; i < end; i++) {
+          if (!uni_vec->is_null(i)) {
+            size += uni_vec->get_length(i);
+          }
+        }
+        break;
+      }
+      case VEC_UNIFORM_CONST:{
+        const ObUniformFormat<true> *uni_vec = static_cast<const ObUniformFormat<true> *>(vector);
+        if (!uni_vec->is_null(start)) {
+          size += uni_vec->get_length(start) * row_count;
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", K(ret), K(vec_format));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockCSEncoder::calc_batch_data_size_(const ObIArray<ObIVector *> &vectors,
+                                                 const int64_t start,
+                                                 const int64_t row_count,
+                                                 int64_t &size) const
+{
+  int ret = OB_SUCCESS;
+  size = 0;
+  int64_t col_data_size = 0;
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < vectors.count(); ++col_idx) {
+    if (OB_FAIL(calc_col_batch_data_size_(vectors.at(col_idx), start, row_count, col_idx, col_data_size))) {
+      LOG_WARN("fail to calc_col_batch_data_size_", K(ret), K(col_idx));
+    } else {
+      size += col_data_size;
+    }
+  }
+  return ret;
+}
+
 int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
 {
   int ret = OB_SUCCESS;
@@ -943,24 +1758,24 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     col_ctx.col_datums_ = all_col_datums_.at(column_index);
 
     // build hashtable
-    ObEncodingHashTable *ht = nullptr;
-    ObEncodingHashTableBuilder *builder = nullptr;
+    ObDictEncodingHashTable *ht = nullptr;
+    ObDictEncodingHashTableBuilder *builder = nullptr;
     // next power of 2
-    uint64_t bucket_num = datum_row_offset_arr_.count() << 1;
+    uint64_t bucket_num = appended_row_count_ << 1;
     if (0 != (bucket_num & (bucket_num - 1))) {
       while (0 != (bucket_num & (bucket_num - 1))) {
         bucket_num = bucket_num & (bucket_num - 1);
       }
       bucket_num = bucket_num << 1;
     }
-    const int64_t node_num = datum_row_offset_arr_.count();
+    const int64_t node_num = appended_row_count_;
     if (OB_UNLIKELY(node_num != col_ctx.col_datums_->count())) {
       ret = OB_INNER_STAT_ERROR;
       LOG_ERROR("row_count and col_datums_count is not requal",
           K(ret), K(node_num), KPC(col_ctx.col_datums_));
     } else if (OB_FAIL(hashtable_factory_.create(bucket_num, node_num, ht))) {
       LOG_WARN("create hashtable failed", K(ret), K(bucket_num), K(node_num));
-    } else if (FALSE_IT(builder = static_cast<ObEncodingHashTableBuilder *>(ht))) {
+    } else if (FALSE_IT(builder = static_cast<ObDictEncodingHashTableBuilder *>(ht))) {
     } else if (OB_FAIL(builder->build(*col_ctx.col_datums_, col_desc))) {
       LOG_WARN("build hash table failed", K(ret), K(column_index), K(column_type));
     }

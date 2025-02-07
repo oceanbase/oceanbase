@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "sql/engine/ob_des_exec_context.h"
+#include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
 
 namespace oceanbase
 {
@@ -60,6 +61,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.max_error_row_count_ = arg_.config_.max_error_row_count_;
     param.column_count_ = arg_.column_count_;
     param.need_sort_ = arg_.config_.is_need_sort_;
+    param.task_need_sort_ = arg_.config_.is_task_need_sort_;
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
@@ -97,10 +99,9 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
 {
   int ret = OB_SUCCESS;
   table_ctx = nullptr;
-  if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  if (OB_FAIL(ObTableLoadService::alloc_ctx(table_ctx))) {
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
-  } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_, arg_.des_exec_ctx_))) {
+  } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_, arg_.exec_ctx_serialized_str_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
                                                 arg_.target_partition_id_array_))) {
@@ -110,7 +111,7 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
   }
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx) {
-      ObTableLoadService::free_ctx(table_ctx);
+      ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
   }
@@ -650,11 +651,13 @@ int ObDirectLoadControlInsertTransExecutor::process()
   if (OB_SUCC(ret)) {
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
-    ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTableLoadSharedAllocatorHandle allocator_handle;
     int64_t data_len = arg_.payload_.length();
     char *buf = nullptr;
-    if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
+    if (OB_FAIL(ObTableLoadSharedAllocatorHandle::make_handle(
+          allocator_handle, "TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()))) {
+      LOG_WARN("failed to make allocator handle", KR(ret));
+    } else if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else if (!allocator_handle) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -681,6 +684,35 @@ int ObDirectLoadControlInsertTransExecutor::process()
       ObTableLoadService::put_ctx(table_ctx);
       table_ctx = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObDirectLoadControlInitEmptyTabletsExecutor::check_args()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_
+      || 0 == arg_.ddl_param_.task_id_
+      || arg_.partition_id_array_.empty()
+      || arg_.target_partition_id_array_.empty()
+      || arg_.partition_id_array_.count() != arg_.target_partition_id_array_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return OB_SUCCESS;
+}
+
+int ObDirectLoadControlInitEmptyTabletsExecutor::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
+  } else if (OB_FAIL(ObTableLoadEmptyInsertTabletCtxManager::execute(
+                                                    arg_.table_id_,
+                                                    arg_.ddl_param_,
+                                                    arg_.partition_id_array_,
+                                                    arg_.target_partition_id_array_))) {
+    LOG_WARN("fail to execute init empty tablet", KR(ret));
   }
   return ret;
 }

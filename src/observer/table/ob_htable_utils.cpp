@@ -21,19 +21,62 @@ using namespace oceanbase::table;
 using namespace oceanbase::share::schema;
 
 ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row)
-    :ob_row_(ob_row)
+    : ob_row_(ob_row),
+      type_(Type::NORMAL)
+{}
+
+ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row, Type type)
+    : ob_row_(ob_row),
+      type_(type)
 {}
 
 ObHTableCellEntity::ObHTableCellEntity()
-    :ob_row_(NULL)
-{}
-
-ObHTableCellEntity::~ObHTableCellEntity()
+    : ob_row_(NULL),
+      type_(Type::NORMAL)
 {}
 
 ObString ObHTableCellEntity::get_rowkey() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  ObString rowkey_str;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_rowkey but ob_row is null", K(ob_row_));
+    rowkey_str = NULL;
+  } else {
+    rowkey_str = ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  }
+  return rowkey_str;
+}
+
+int ObHTableCellEntity::deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ob_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deep copy param ob_row is null", K(ret));
+  } else {
+    int64_t buf_size = ob_row->get_deep_copy_size() + sizeof(ObNewRow);
+    char *tmp_row_buf = static_cast<char *>(allocator.alloc(buf_size));
+    if (OB_ISNULL(tmp_row_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc new row", KR(ret));
+    } else {
+      int64_t pos = sizeof(ObNewRow);
+      ob_row_ = new (tmp_row_buf) ObNewRow();
+      if (OB_FAIL(ob_row_->deep_copy(*ob_row, tmp_row_buf, buf_size, pos))) {
+        allocator.free(tmp_row_buf);
+        LOG_WARN("fail to deep copy ob_row", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObHTableCellEntity::reset(common::ObArenaAllocator &allocator)
+{
+  if (OB_NOT_NULL(ob_row_)) {
+    allocator.free(ob_row_);
+    ob_row_ = NULL;
+  }
 }
 
 ObString ObHTableCellEntity::get_qualifier() const
@@ -49,6 +92,15 @@ int64_t ObHTableCellEntity::get_timestamp() const
 ObString ObHTableCellEntity::get_value() const
 {
   return ob_row_->get_cell(ObHTableConstants::COL_IDX_V).get_varchar();
+}
+
+ObString ObHTableCellEntity::get_family() const
+{
+  return family_;
+}
+
+void ObHTableCellEntity::set_family(const ObString family) {
+  family_ = family;
 }
 ////////////////////////////////////////////////////////////////
 ObString ObHTableCellEntity2::get_rowkey() const
@@ -184,27 +236,38 @@ ObString ObHTableCellEntity3::get_value() const
 }
 
 ////////////////////////////////////////////////////////////////
-int ObHTableUtils::create_last_cell_on_row_col(common::ObArenaAllocator &allocator,
-                                               const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row_col(common::ObIAllocator &allocator,
+                                               const ObHTableCell &cell,
+                                               ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObString qualifier_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, cell.get_qualifier(), qualifier_clone))) {
     LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableLastOnRowColCell, (&allocator), rowkey_clone, qualifier_clone);
-    if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    last_cell[ObHTableConstants::COL_IDX_T].set_max_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on column.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::LAST_ON_COL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on column.", K(ret));
     }
   }
   return ret;
 }
 
-int ObHTableUtils::create_first_cell_on_row_col(common::ObArenaAllocator &allocator,
+int ObHTableUtils::create_first_cell_on_row_col(common::ObIAllocator &allocator,
                                                 const ObHTableCell &cell,
                                                 const common::ObString &qualifier,
                                                 ObHTableCell *&new_cell)
@@ -212,32 +275,120 @@ int ObHTableUtils::create_first_cell_on_row_col(common::ObArenaAllocator &alloca
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
   ObString qualifier_clone;
+  ObObj *first_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, qualifier, qualifier_clone))) {
     LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableFirstOnRowColCell, (&allocator), rowkey_clone, qualifier_clone);
-    if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
+    first_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    first_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    first_cell[ObHTableConstants::COL_IDX_T].set_min_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), first_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first NewRow on column.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::FIRST_ON_COL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first entity on column.", K(ret));
     }
   }
   return ret;
 }
 
-int ObHTableUtils::create_last_cell_on_row(common::ObArenaAllocator &allocator,
-                                           const ObHTableCell &cell, ObHTableCell *&new_cell)
+int ObHTableUtils::create_last_cell_on_row(common::ObIAllocator &allocator,
+                                           const ObHTableCell &cell,
+                                           ObHTableCell *&new_cell)
 {
   int ret = OB_SUCCESS;
   ObString rowkey_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
   if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
     LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
   } else {
-    new_cell = OB_NEWx(ObHTableLastOnRowCell, (&allocator), rowkey_clone);
-    if (NULL == new_cell) {
-      LOG_WARN("no memory", K(ret));
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_max_value();
+    last_cell[ObHTableConstants::COL_IDX_T].set_max_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on row.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::LAST_ON_ROW))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on row.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::create_first_cell_on_row_col_ts(common::ObIAllocator &allocator,
+                                                   const ObHTableCell &cell,
+                                                   const int64_t timestamp,
+                                                   ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObString rowkey_clone;
+  ObString qualifier_clone;
+  ObObj *last_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
+  if (OB_FAIL(ob_write_string(allocator, cell.get_rowkey(), rowkey_clone))) {
+    LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, cell.get_qualifier(), qualifier_clone))) {
+    LOG_WARN("failed to clone qualifier", K(ret));
+  } else if (OB_ISNULL(last_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
+  } else {
+    last_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    last_cell[ObHTableConstants::COL_IDX_Q].set_varbinary(qualifier_clone);
+    last_cell[ObHTableConstants::COL_IDX_T].set_int(timestamp);
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), last_cell, 3))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on column timestamp.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::NORMAL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator first entity on column timestamp.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObHTableCell &cell,
+                                            ObHTableCell *&new_cell)
+{
+  return create_first_cell_on_row(allocator, cell.get_rowkey(), new_cell);
+}
+
+int ObHTableUtils::create_first_cell_on_row(common::ObIAllocator &allocator,
+                                            const ObString &row_key,
+                                            ObHTableCell *&new_cell)
+{
+  int ret = OB_SUCCESS;
+  ObString rowkey_clone;
+  ObObj *first_cell = nullptr;
+  ObNewRow *ob_row = nullptr;
+  if (OB_FAIL(ob_write_string(allocator, row_key, rowkey_clone))) {
+    LOG_WARN("failed to clone rowkey", K(ret));
+  } else if (OB_ISNULL(first_cell = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * 3)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for start_obj failed", K(ret));
+  } else {
+    first_cell[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey_clone);
+    first_cell[ObHTableConstants::COL_IDX_Q].set_min_value();
+    first_cell[ObHTableConstants::COL_IDX_T].set_min_value();
+    if (OB_ISNULL(ob_row = OB_NEWx(ObNewRow, (&allocator), first_cell, 3))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last NewRow on row.", K(ret));
+    } else if (OB_ISNULL(new_cell = OB_NEWx(ObHTableCellEntity, (&allocator), ob_row, ObHTableCell::Type::FIRST_ON_ROW))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator last entity on row.", K(ret));
     }
   }
   return ret;
@@ -264,31 +415,32 @@ int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &c
       // compare qualifiers
       ObString qualifier1 = cell1.get_qualifier();
       ObString qualifier2 = cell2.get_qualifier();
-      if(common::ObQueryFlag::Reverse == scan_order){ 
-        cmp_ret = qualifier2.compare(qualifier1);
-      } else {
-        cmp_ret = qualifier1.compare(qualifier2);
-      }
+      cmp_ret = qualifier1.compare(qualifier2);
       if (0 == cmp_ret) {
-        // compare timestamps in ascending order (the value of timestamp is negative)
-        int64_t ts1 = cell1.get_timestamp();
-        int64_t ts2 = cell2.get_timestamp();
-        if (ts1 == ts2) {
-          // one of the cells could be ObHTableFirstOnRowCell or ObHTableFirstOnRowColCell
-          if (common::ObQueryFlag::Reverse == scan_order) { 
-            cmp_ret = static_cast<int>(cell2.get_type()) - static_cast<int>(cell1.get_type());
+        // one of the cells could be ObHTableFirstOnRowColCell or ObHTableLastOnRowColCell
+        cmp_ret = static_cast<int>(cell1.get_type()) - static_cast<int>(cell2.get_type());
+        if (0 == cmp_ret) {
+          // compare timestamps in ascending order (the value of timestamp is negative)
+          int64_t ts1 = cell1.get_timestamp();
+          int64_t ts2 = cell2.get_timestamp();
+          if (ts1 == ts2) {
+          } else if (ts1 < ts2) {
+            cmp_ret = -1;
           } else {
-            cmp_ret = static_cast<int>(cell1.get_type()) - static_cast<int>(cell2.get_type());
+            cmp_ret = 1;
           }
-        } else if (ts1 < ts2) {
-          cmp_ret = -1;
-        } else {
-          cmp_ret = 1;
         }
       }
     }
   }
   return cmp_ret;
+}
+
+int ObHTableUtils::compare_cell(const ObHTableCell &cell1, const ObHTableCell &cell2, bool is_reversed)
+{
+  common::ObQueryFlag::ScanOrder scan_order =
+    is_reversed? common::ObQueryFlag::ScanOrder::Reverse : common::ObQueryFlag::ScanOrder::Forward;
+  return compare_cell(cell1, cell2, scan_order);
 }
 
 int ObHTableUtils::compare_qualifier(const common::ObString &cq1, const common::ObString &cq2)
@@ -328,16 +480,16 @@ int ObHTableUtils::int64_to_java_bytes(int64_t val, char bytes[8])
   return OB_SUCCESS;
 }
 
-int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObIArray<ObTableOperation> &ops, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
 {
   int ret = OB_SUCCESS;
-  const int64_t N = mutations.count();
+  const int64_t N = ops.count();
   if (table_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table id", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const ObITableEntity &entity = mutations.at(i).entity();
+    const ObITableEntity &entity = ops.at(i).entity();
     ObHTableCellEntity3 htable_cell(&entity);
     ObString row = htable_cell.get_rowkey();
     if (row.empty()) {
@@ -379,6 +531,22 @@ int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable
   }
   return ret;
 }
+
+int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (lock_key.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null redis lock_key", K(ret));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, lock_key, lock_mode, handle))) {
+    LOG_WARN("fail to lock redis key", K(ret), K(table_id), K(lock_key), K(lock_mode));
+  }
+
+  return ret;
+}
 int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -411,6 +579,145 @@ int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
   } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_schema->get_column_name()) != 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the fourth column should be V", K(ret), K(value_schema->get_column_name()));
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos, const char *name)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "%s", name);
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::get_hbase_scanner_timeout(uint64_t tenant_id)
+{
+  int value = HBASE_SCANNER_TIMEOUT_DEFAULT_VALUE;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    value = tenant_config->kv_hbase_client_scanner_timeout_period;
+  }
+  return value;
+}
+
+int ObHTableUtils::generate_hbase_bytes(ObIAllocator& allocator, int32_t len, char*& val)
+{
+  int ret = OB_SUCCESS;
+  val = static_cast<char*>(allocator.alloc(sizeof(len)));
+  if (val == nullptr) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory", K(ret));
+  } else {
+    // Hbase use big endian.
+    for (int i = 3; i >= 0; i--) {
+      val[i] = static_cast<int8_t>(len);
+      len >>= sizeof(char) * 8;
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::get_prefix_key_range(common::ObIAllocator &allocator, ObString prefix, KeyRange *range)
+{
+  int ret = OB_SUCCESS;
+  bool is_max = true;
+  ObString prefix_end;
+  if (OB_FAIL(ob_write_string(allocator, prefix, prefix_end))) {
+    LOG_WARN("failed to clone prefix", K(ret), K(prefix));
+  } else if (!prefix_end.empty()) {
+    char* ptr = prefix_end.ptr();
+    bool loop = true;
+    for (int i = prefix_end.length() - 1; i >= 0 && loop; i--) {
+      if (ptr[i] != -1) {
+        is_max = false;
+        ptr[i] += 1;
+        loop = false;
+        prefix_end.set_length(i + 1);
+      }
+    }
+    if (is_max) {
+      prefix_end.reset();
+    }
+    range->set_max(prefix_end);
+    range->set_max_inclusive(false);
+  }
+  return ret;
+}
+
+int ObHTableUtils::merge_key_range(ObKeyRangeTree& tree)
+{
+  int ret = OB_SUCCESS;
+  ObKeyRangeNode* curr_range = tree.get_first();
+  ObKeyRangeNode* merge_range = nullptr;
+  if (nullptr == curr_range) {
+  } else if (!curr_range->get_value()->valid()) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid key range", KR(ret), KPC(curr_range));
+  } else if (OB_FAIL(tree.get_next(curr_range, merge_range))) {
+    LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+  }
+
+  bool loop = true;
+  while (OB_SUCC(ret) && merge_range != nullptr && loop) {
+    if (!merge_range->get_value()->valid()) {
+      ret = common::OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid row range", KR(ret), KPC(merge_range));
+    } else if (curr_range->get_value()->max().empty()) {
+      loop = false;
+    } else {
+      KeyRange* l_val = curr_range->get_value();
+      KeyRange* r_val = merge_range->get_value();
+      // With overlap in the ranges
+      if (l_val->max().compare(r_val->min()) > 0
+      || (l_val->max().compare(r_val->min()) == 0 &&
+      (l_val->max_inclusive() || r_val->min_inclusive()) )) {
+        if (r_val->max().empty()) {
+          l_val->set_max(ObString());
+          tree.remove(merge_range);
+          loop = false;
+        } else {
+          int cmp = l_val->max().compare(r_val->max());
+          if (cmp < 0) {
+            l_val->set_max(r_val->max());
+            l_val->set_max_inclusive(r_val->max_inclusive());
+          } else if (cmp == 0) {
+            l_val->set_max_inclusive(l_val->max_inclusive() | r_val->max_inclusive());
+          }
+          tree.remove(merge_range);
+        }
+      } else {
+        curr_range = merge_range;
+      }
+
+      if (loop && OB_FAIL(tree.get_next(curr_range, merge_range))) {
+        LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+      }
+    }
+  }
+
+  loop = (nullptr != curr_range);
+  while (OB_SUCC(ret) && loop) {
+    if (OB_FAIL(tree.get_next(curr_range, merge_range))) {
+      LOG_WARN("fail to get next node from tree", KR(ret), KPC(merge_range));
+    } else if (merge_range == NULL) {
+      loop = false;
+    } else {
+      tree.remove(merge_range);
+    }
   }
 
   return ret;

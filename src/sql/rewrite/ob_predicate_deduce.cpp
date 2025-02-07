@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -81,7 +82,7 @@ int ObPredicateDeduce::check_deduce_validity(ObRawExpr *cond, bool &is_valid)
 }
 
 int ObPredicateDeduce::deduce_simple_predicates(ObTransformerCtx &ctx,
-                                               ObIArray<ObRawExpr *> &result)
+                                                ObIArray<ObRawExpr *> &result)
 {
   int ret = OB_SUCCESS;
   ObArray<uint8_t> chosen;
@@ -210,7 +211,7 @@ int ObPredicateDeduce::choose_unequal_preds(ObTransformerCtx &ctx,
   if (OB_FAIL(topo_sort(topo_order_))) {
     LOG_WARN("failed to topo sort", K(ret));
   }
-  for (int64_t i = 0; i < topo_order_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < topo_order_.count(); ++i) {
     // if a variable A equal with a const B,
     // there is no need to deduce unequal predicates like A > c1 for A
     // because, it is better to replace that with B > c1
@@ -352,6 +353,8 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
   ObRawExpr *pred = NULL;
   ObRawExprFactory *expr_factory = ctx.expr_factory_;
   ObSQLSessionInfo *session_info = ctx.session_info_;
+  ObQuestionmarkEqualCtx cmp_ctx(false);
+  ObSEArray<ObRawExpr *, 4> tmp_exprs;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(session_info), K(expr_factory));
@@ -368,7 +371,7 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
           LOG_WARN("failed to create double op expr", K(ret));
         } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
-        } else if (OB_FAIL(output_exprs.push_back(pred))) {
+        } else if (OB_FAIL(tmp_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
         }
       }
@@ -380,7 +383,7 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
           LOG_WARN("failed to create double op expr", K(ret));
         } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
-        } else if (OB_FAIL(output_exprs.push_back(pred))) {
+        } else if (OB_FAIL(tmp_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
         }
       }
@@ -392,10 +395,25 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
           LOG_WARN("failed to create double op expr", K(ret));
         } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
-        } else if (OB_FAIL(output_exprs.push_back(pred))) {
+        } else if (OB_FAIL(tmp_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
         }
       }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_exprs.count(); ++i) {
+    bool find_same = false;
+    for (int64_t j = 0; OB_SUCC(ret) && !find_same && j < output_exprs.count(); ++j) {
+      if (OB_ISNULL(output_exprs.at(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(j));
+      } else if (tmp_exprs.at(i)->same_as(*output_exprs.at(j), &cmp_ctx)) {
+        find_same = true;
+        // no need to add constraints
+      }
+    }
+    if (OB_SUCC(ret) && !find_same && OB_FAIL(output_exprs.push_back(tmp_exprs.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
     }
   }
   return ret;

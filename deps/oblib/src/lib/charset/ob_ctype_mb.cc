@@ -29,14 +29,25 @@ static void pad_max_char(const ObCharsetInfo *cs, char *str, char *end)
 {
   char buf[10];
   char buf_len;
-  if (!(cs->state & OB_CS_UNICODE)) {
+  if (!!(cs->state & OB_CS_BINSORT)) {
+    buf[0] = 0xff;
+    buf_len = 1;
+  } else if (!(cs->state & OB_CS_UNICODE)) {
     if (cs->max_sort_char <= 255) {
       memset(str, cs->max_sort_char, end - str);
       return;
+    } else if (cs->max_sort_char > 0xFFFFFF) {
+      //for gb18030
+      buf[0] = cs->max_sort_char >> 24 & 0xFF;
+      buf[1] = cs->max_sort_char >> 16 & 0xFF;
+      buf[2] = cs->max_sort_char >> 8 & 0xFF;
+      buf[3] = cs->max_sort_char & 0xFF;
+      buf_len = 4;
+    } else {
+      buf_len= 2;
+      buf[0]= cs->max_sort_char >> 8;
+      buf[1]= cs->max_sort_char & 0xFF;
     }
-    buf_len= 2;
-    buf[0]= cs->max_sort_char >> 8;
-    buf[1]= cs->max_sort_char & 0xFF;
   } else {
     buf_len= cs->cset->wc_mb(cs, cs->max_sort_char, (unsigned char*) buf,
                             (unsigned char*) buf + sizeof(buf));
@@ -49,14 +60,16 @@ bool ob_like_range_mb_help(const ObCharsetInfo *cs,
        size_t res_length,
        char **min_str_,char **max_str_,
        char **min_org_, char **min_end_,
-       size_t *min_length,size_t *max_length, char **max_end_)
+       size_t *min_length,size_t *max_length,
+       char **max_end_, size_t *prefix_length)
 {
   char *min_str = *min_str_;
   char *max_str = *max_str_;
   char *min_end = *min_end_;
   char *max_end = *max_end_;
   char *min_org = *min_org_;
-  *min_length = ((cs->state & OB_CS_BINSORT) ? (size_t) (min_str - min_org) : res_length);
+  *prefix_length = (size_t) (min_str - min_org);
+  *min_length = ((!!(cs->state & OB_CS_BINSORT) || cs->pad_attribute == NO_PAD) ? (size_t) (min_str - min_org) : res_length);
   *max_length = res_length;
   do {
     *min_str++ = (char) cs->min_sort_char;
@@ -76,7 +89,8 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
                       pbool escape_char, pbool w_one, pbool w_many,
                       size_t res_length,
                       char *min_str,char *max_str,
-                      size_t *min_length,size_t *max_length)
+                      size_t *min_length,size_t *max_length,
+                      size_t *prefix_length)
 {
   unsigned int mb_len;
   const char *end= ptr + ptr_length;
@@ -90,7 +104,7 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
     if (*ptr == escape_char && ptr+1 != end) {
       ptr++;                                      
     } else if (*ptr == w_one ||  *ptr == w_many) {
-      return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+      return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
     }
     mb_len= ob_ismbchar(cs, ptr, end);
     if ( mb_len > 1) {
@@ -105,11 +119,11 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
       if (contractions && ptr + 1 < end &&
           ob_uca_can_be_contraction_head(contractions, (unsigned char) *ptr)) {
         if (ptr[1] == w_one || ptr[1] == w_many) {
-          return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+          return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
         } else if (ob_uca_can_be_contraction_tail(contractions, (unsigned char) ptr[1]) &&
                    ob_uca_contraction2_weight(contractions, (unsigned char) ptr[0], ptr[1])) {
           if (max_char_len == 1 || min_str + 1 >= min_end) {
-            return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end);
+            return ob_like_range_mb_help(cs,res_length, &min_str,&max_str, &min_org, &min_end, min_length, max_length, &max_end, prefix_length);
           }
           max_char_len--;
           *min_str++= *max_str++= *ptr++;
@@ -119,7 +133,7 @@ bool ob_like_range_mb(const ObCharsetInfo *cs,
     }
   }
 
-  *min_length= *max_length = (size_t) (min_str - min_org);
+  *min_length= *max_length = *prefix_length = (size_t) (min_str - min_org);
   while (min_end != min_str) {
     *min_str++= *max_str++= ' ';
   }             
@@ -236,6 +250,28 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
     }
   }
   return (str != str_end ? 1 : 0);
+}
+
+/*
+  ob_strcasecmp_mb() returns 0 if strings are equal, non-zero otherwise.
+ */
+
+int ob_strcasecmp_mb(const ObCharsetInfo *cs, const char *s, const char *t) {
+  uint32 l;
+  const uchar *map = cs->to_upper;
+
+  while (*s && *t) {
+    /* Pointing after the '\0' is safe here. */
+    if ((l = ob_ismbchar(cs, s, s + cs->mbmaxlen))) {
+      while (l--)
+        if (*s++ != *t++) return 1;
+    } else if (ob_mbcharlen(cs, *t) != 1 ||
+               map[(uchar)*s++] != map[(uchar)*t++])
+      return 1;
+  }
+  /* At least one of '*s' and '*t' is zero here. */
+  assert(!*t || !*s);
+  return (*t != *s);
 }
 
 unsigned int __attribute__ ((noinline)) ob_instr_mb_help(size_t s_length, ob_match_t *match, unsigned int nmatch)
@@ -439,7 +475,7 @@ size_t ob_lengthsp_8bit(const ObCharsetInfo *cs __attribute__((unused)),
                         const char *ptr, size_t length)
 {
   const char *end;
-  end= (const char *) skip_trailing_space((const unsigned char *)ptr, length, 0);
+  end = (const char *) cs->cset->skip_trailing_space(cs, (const unsigned char *)ptr, length); // 8bit not utf16
   return (size_t) (end-ptr);
 }
 
@@ -693,7 +729,7 @@ static int ob_wildcmp_mb_bin_impl(const ObCharsetInfo *cs, const char *str,
               str += mb_len;
               break;
             }
-          } else if (!ob_ismbchar(cs, str, str_end) && *str == cmp) {
+          } else if (!ob_ismbchar(cs, str, str_end) && static_cast<unsigned char>(*str) == cmp) {
             str++;
             break;
           }
@@ -723,14 +759,14 @@ int ob_wildcmp_mb_bin(const ObCharsetInfo *cs,
                                 escape_char, w_one, w_many, 1);
 }
 
-void ob_hash_sort_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
+void ob_hash_sort_mb_bin(const ObCharsetInfo *cs,
                     const unsigned char *key, size_t len,unsigned long int *nr1, unsigned long int *nr2,
                     const bool calc_end_space, hash_algo hash_algo)
 {
   const unsigned char *pos = key;
 
   if (!calc_end_space) {
-    key= skip_trailing_space(key, len, 0);
+    key = cs->cset->skip_trailing_space(cs, key, len);  // use in utf8 not utf16
   } else {
     key += len;
   }

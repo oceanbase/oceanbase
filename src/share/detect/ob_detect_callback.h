@@ -66,6 +66,7 @@ enum class DetectCallBackType
   SINGLE_DFO_DETECT_CB = 3,
   TEMP_TABLE_DETECT_CB = 4,
   P2P_DATAHUB_DETECT_CB = 5,
+  DAS_REMOTE_TASK_DETECT_CB = 6,
 };
 
 // detectable id with activate time, used for delay detect

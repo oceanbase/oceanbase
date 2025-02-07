@@ -9,8 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef OB_SMALL_HASHSET_
-#define OB_SMALL_HASHSET_
+
+#pragma once
+
 #include "lib/ob_define.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -33,6 +34,7 @@ namespace sql {
 template <bool _Accurate>
 class ObSmallHashSet
 {
+  OB_UNIS_VERSION(1);
 public:
   using bucket_t = uint64_t;
   ~ObSmallHashSet() {}
@@ -111,6 +113,18 @@ public:
     return ret;
   }
 
+  int merge(const ObSmallHashSet<_Accurate> &other)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; i < other.capacity_ && OB_SUCC(ret); ++i) {
+      if (EMPTY_KEY == other.buckets_[i]) {
+      } else {
+        ret = insert_hash(other.buckets_[i]);
+      }
+    }
+    return ret;
+  }
+
   inline bool test_hash(uint64_t hash) const
   {
     bool find = false;
@@ -137,6 +151,8 @@ public:
 #endif
     return find;
   }
+
+TO_STRING_KV(K(inited_), K(capacity_), K(size_));
 
 private:
   uint64_t normalize_capacity(uint64_t n)
@@ -195,7 +211,112 @@ private:
 #endif
 };
 
+template <bool _Accurate>
+int ObSmallHashSet<_Accurate>::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        RPC_WARN("serialize fail", K(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos,
+                                        serial_size);
+    }
+  }
+  return ret;
+}
+
+template <bool _Accurate>
+int ObSmallHashSet<_Accurate>::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(capacity_);
+  OB_UNIS_ENCODE(size_);
+  for (int64_t i = 0; i < capacity_ && OB_SUCC(ret); ++i) {
+    if (EMPTY_KEY == buckets_[i]) {
+    } else {
+      OB_UNIS_ENCODE(buckets_[i]);
+    }
+  }
+  return ret;
+}
+
+template <bool _Accurate>
+int ObSmallHashSet<_Accurate>::deserialize(const char *buf, int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t version = 0;
+  int64_t len = 0;
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(version);
+    OB_UNIS_DECODE(len);
+    CHECK_VERSION_LENGTH(CLS, version, len);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t pos_orig = pos;
+    pos = 0;
+    if (OB_FAIL(deserialize_(buf + pos_orig, len, pos))) {
+      RPC_WARN("deserialize_ fail", "slen", len, K(pos), K(ret));
+    }
+    pos = pos_orig + len;
+  }
+  return ret;
+}
+
+template <bool _Accurate>
+int ObSmallHashSet<_Accurate>::deserialize_(const char *buf, int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  uint64_t capacity = 0;
+  uint64_t size = 0;
+  OB_UNIS_DECODE(capacity);
+  OB_UNIS_DECODE(size);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init(capacity, ob_get_tenant_id()))) {
+    RPC_WARN("failed to init");
+  }
+  uint64_t hash = 0;
+  for (int64_t i = 0; i < size && OB_SUCC(ret); ++i) {
+    OB_UNIS_DECODE(hash);
+    if (OB_FAIL(insert_hash(hash))) {
+      RPC_WARN("failed to insert_hash");
+    }
+  }
+  return ret;
+}
+
+template <bool _Accurate>
+int64_t ObSmallHashSet<_Accurate>::get_serialize_size() const
+{
+  int64_t len = get_serialize_size_();
+  OB_UNIS_ADD_LEN(UNIS_VERSION);
+  len += NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+  return len;
+}
+
+template <bool _Accurate>
+int64_t ObSmallHashSet<_Accurate>::get_serialize_size_() const
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(capacity_);
+  OB_UNIS_ADD_LEN(size_);
+  for (int64_t i = 0; i < capacity_; ++i) {
+    if (EMPTY_KEY == buckets_[i]) {
+    } else {
+      OB_UNIS_ADD_LEN(buckets_[i]);
+    }
+  }
+  return len;
+}
+
 } // namespace sql
 } // namespace oceanbases
-
-# endif /* OB_SMALL_HASHSET_ */

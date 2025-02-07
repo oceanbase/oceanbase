@@ -350,7 +350,6 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     } else if (OB_FAIL(rowkey.deep_copy(micro_block_desc.last_rowkey_, allocator))) {
       STORAGE_LOG(WARN, "Fail to deep copy last rowkey", K(ret));
     } else if (need_check_sum) {
-      // TODO(luhaopeng.lhp): check it
       ObMicroBlockChecksumHelper checksum_helper;
       if (OB_FAIL(checksum_helper.init(&data_store_desc.get_col_desc_array(), data_store_desc.contain_full_col_descs()))) {
         STORAGE_LOG(WARN, "Failed to init checksum helper", K(ret), K(data_store_desc));

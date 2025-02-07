@@ -16,12 +16,13 @@
 
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+class ObBasicSessionInfo;
 
 // wrapper class to handle sql expr string/text type result
 template <typename VectorType>
@@ -42,7 +43,7 @@ public:
 
   TO_STRING_KV(KP_(expr), KP_(ctx), KPC_(res_datum));
 
-  int init(int64_t res_len, ObIAllocator *allocator = NULL);
+  int init(int64_t res_len, ObIAllocator *allocator = NULL) override;
   int init_with_batch_idx(int64_t res_len, int64_t batch_idx);
   void set_result();
   void set_result_null();
@@ -110,6 +111,9 @@ int ObTextStringVectorResult<VectorType>::init_with_batch_idx(int64_t res_len, i
       SQL_LOG(WARN, "Lob: fill_temp_lob_header failed", K(ret), K(type_));
     }
   }
+  if (OB_SUCC(ret)) {
+    is_init_ = true;
+  }
   return ret;
 }
 
@@ -141,7 +145,7 @@ public:
   ~ObTextStringObObjResult(){};
 
   TO_STRING_KV(KP_(params), KP_(res_obj));
-  int init(int64_t res_len, ObIAllocator *allocator = NULL);
+  int init(int64_t res_len, ObIAllocator *allocator = NULL) override;
   void set_result();
 
 private:
@@ -313,6 +317,43 @@ public:
     return read_real_string_data(allocator, type, CS_TYPE_BINARY, has_lob_header, str, exec_ctx);
   }
 
+  // return str is copy of inrow/outrow lob
+  static int read_real_string_data_with_copy(ObIAllocator &allocator, const ObDatum &datum, const ObDatumMeta &meta,
+                                   bool has_lob_header, ObString &str)
+  {
+    int ret = OB_SUCCESS;
+    str = datum.get_string();
+    bool need_copy = false;
+    if (datum.is_null()) {
+      str.reset();
+    } else if (is_lob_storage(meta.type_)) {
+      uint64_t tenant_id = MTL_ID();
+      ObArenaAllocator *tmp_alloc_ptr = nullptr;
+      ObArenaAllocator tmp_allocator("ObLobRRSD", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+      if (tenant_id != OB_INVALID_TENANT_ID) {
+        tmp_alloc_ptr = &tmp_allocator;
+      }
+      ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+      if (OB_FAIL(str_iter.init(0, NULL, &allocator, tmp_alloc_ptr))) {
+        COMMON_LOG(WARN, "Lob: str iter init failed ", K(ret), K(str_iter));
+      } else if (OB_FAIL(str_iter.get_full_data(str))) {
+        COMMON_LOG(WARN, "Lob: str iter get full data failed ", K(ret), K(str_iter));
+      } else if (!str_iter.is_outrow_lob()) {
+        need_copy = true;
+      }
+    } else {
+      need_copy = true;
+    }
+    if (OB_SUCC(ret) && need_copy) {
+      ObString str_cpy;
+      if (OB_FAIL(ob_write_string(allocator, str, str_cpy))) {
+        COMMON_LOG(WARN, "fail to copy inrow data");
+      } else {
+        str = str_cpy;
+      }
+    }
+    return ret;
+  };
 
   // get outrow lob prefix or inrow/string tc full data
   static int read_prefix_string_data(ObEvalCtx &ctx,

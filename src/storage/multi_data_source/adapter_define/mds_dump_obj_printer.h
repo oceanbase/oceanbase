@@ -118,7 +118,7 @@ struct MdsDumpObjPrinter
         if (MDS_FAIL(user_key->mds_deserialize(data_buf.ptr(), data_buf.length(), des_pos))) {
           databuff_printf(buf, buf_len, pos, "user_key:ERROR:%d", ret);
         } else {
-          databuff_printf(buf, buf_len, pos, "user_key:%s", to_cstring(*user_key));
+          databuff_print_multi_objs(buf, buf_len, pos, "user_key:", *user_key);
         }
         user_key->~KeyType();
       } else {
@@ -156,7 +156,7 @@ struct MdsDumpObjPrinter
         if (MDS_FAIL(serializer.deserialize(data_buf.ptr(), data_buf.length(), des_pos))) {
           databuff_printf(buf, buf_len, pos, "user_data:ERROR:%d", ret);
         } else {
-          databuff_printf(buf, buf_len, pos, "user_data:%s", to_cstring(*user_data));
+          databuff_print_multi_objs(buf, buf_len, pos, "user_data:", *user_data);
         }
         user_data->~ValueType();
       } else {

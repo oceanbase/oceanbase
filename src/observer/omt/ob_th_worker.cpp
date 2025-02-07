@@ -30,6 +30,9 @@
 #include "observer/ob_server.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/executor/ob_memory_tracker.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -149,7 +152,7 @@ void ObThWorker::resume()
 }
 
 
-RLOCAL(uint64_t, serving_tenant_id);
+thread_local uint64_t ObThWorker::serving_tenant_id_;
 
 // Check only before user request starts
 ObThWorker::Status ObThWorker::check_qtime_throttle()
@@ -255,6 +258,10 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   }
   // need_retry_ can be set in procor_.process() via THIS_WORKER.set_need_retry()
   if (OB_UNLIKELY(need_retry_)) {
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, 0, 0, 0);
+    }
     int32_t retry_times = req.get_retry_times();
     req.set_retry_times(retry_times + 1);
     if (need_wait_lock) {
@@ -289,6 +296,9 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
     }
 
     if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(di)) {
+        di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+      }
       can_retry_ = false;
       need_retry_ = false;
       if (OB_FAIL(procor_.process(req))) {
@@ -304,8 +314,8 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
 void ObThWorker::set_th_worker_thread_name()
 {
   char buf[32];
-  if (serving_tenant_id != tenant_->id()) {
-    serving_tenant_id = tenant_->id();
+  if (serving_tenant_id_ != tenant_->id()) {
+    serving_tenant_id_ = tenant_->id();
     snprintf(buf, sizeof(buf), "L%d_G%ld", get_worker_level(), get_group_id());
     lib::set_thread_name(buf);
   }
@@ -319,6 +329,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   int64_t wait_end_time = 0;
   procor_.th_created();
   blocking_ts_ = &Thread::blocking_ts_;
+  ObDisableDiagnoseGuard disable_guard;
 
   ObTLTaGuard ta_guard(tenant_->id());
   ObMemVersionNodeGuard mem_version_node_guard;
@@ -350,6 +361,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
       CREATE_WITH_TEMP_CONTEXT(param) {
+        MEM_TRACKER_GUARD(CURRENT_CONTEXT);
         const uint64_t owner_id =
           (!is_virtual_tenant_id(tenant_->id()) || is_virtual_tenant_for_memory(tenant_->id())) ?
           tenant_->id() : OB_SERVER_TENANT_ID;
@@ -369,19 +381,33 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             ObIAllocator **allocator_;
           } allocator_guard(&allocator_);
           WITH_ENTITY(&tenant_->ctx()) {
-            ObTenantStatEstGuard guard(tenant_->id());
-            set_compatibility_mode(tenant_->get_compat_mode());
-            // get request from queue and process it
             rpc::ObRequest *req = NULL;
-            wait_start_time = ObTimeUtility::current_time();
-            /// get request from tenant
             {
-              ObWaitEventGuard wait_guard(ObWaitEventIds::OMT_IDLE, 0, wait_start_time, 0, 0);
+              set_compatibility_mode(tenant_->get_compat_mode());
+              // get request from queue and process it
+              wait_start_time = ObTimeUtility::current_time();
+              /// get request from tenant
               ret = tenant_->get_new_request(*this, is_level_worker() ? NESTING_REQUEST_WAIT_TIME : REQUEST_WAIT_TIME, req);
               wait_end_time = ObTimeUtility::current_time();
             }
             if (OB_SUCC(ret)) {
               if (OB_NOT_NULL(req)) {
+                ObEnableDiagnoseGuard enable_guard;
+                ObDiagnosticInfo *di = req->get_type() == ObRequest::OB_MYSQL
+                        ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+                        : req->get_diagnostic_info();
+                ObDiagnosticInfoSwitchGuard guard(di);
+                if (di) {
+                  di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
+                }
+#ifdef ENABLE_DEBUG_LOG
+                if (OB_ISNULL(di)) {
+                  if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+                    LOG_INFO("empty diagnostic info, disable it", KPC(req));
+                  }
+                }
+#endif
+                EVENT_INC(REQUEST_DEQUEUE_COUNT);
                 req_recv_timestamp = req->get_receive_timestamp();
                 EVENT_ADD(REQUEST_QUEUE_TIME, wait_end_time - req->get_enqueue_timestamp());
                 req->set_push_pop_diff(wait_end_time);
@@ -406,7 +432,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             IGNORE_RETURN ATOMIC_FAA(&idle_us_, (wait_end_time - wait_start_time));
             if (this->get_worker_level() != 0) {
               // nesting workers not allowed to calling check_worker_count
-            } else if (this->get_group() == nullptr) {
+            } else if (!is_group_worker()) {
               tenant_->lq_end(*this);
               tenant_->check_worker_count(*this);
             } else {
@@ -428,6 +454,7 @@ void ObThWorker::run(int64_t idx)
   int64_t tenant_id = -1;
   int64_t req_recv_timestamp = -1;
   int32_t worker_level = -1;
+  SET_GROUP_ID(get_group_id());
   this->worker(tenant_id, req_recv_timestamp, worker_level);
 }
 
@@ -473,7 +500,8 @@ int ObThWorker::check_status()
   }
 
   if (OB_SUCC(ret)) {
-    if (is_timeout()) {
+    if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    } else if (is_timeout()) {
       ret = OB_TIMEOUT;
     } else {
       if (WS_OUT_OF_THROTTLE == check_wait()) {

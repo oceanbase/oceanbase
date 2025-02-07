@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.3.0"
-#current_data_version = "4.3.3.0"
+#current_cluster_version = "4.3.5.1"
+#current_data_version = "4.3.5.1"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -1346,11 +1346,12 @@
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #  current_version = actions.fetch_observer_version(cur)
 #  target_version = actions.get_current_cluster_version()
-#  # when upgrade across version, disable enable_ddl/major_freeze
+#  # when upgrade across version, disable enable_ddl/major_freeze/direct_load
 #  if current_version != target_version:
 #    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
 #    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
+#    actions.set_parameter(cur, '_ob_enable_direct_load', 'False', timeout)
 #    # wait scheduler in storage to notice adaptive_compaction is switched to false
 #    time.sleep(60 * 2)
 #    query_cur = actions.QueryCursor(cur)
@@ -1630,8 +1631,6 @@
 #      ori_enable_ddl = actions.get_ori_enable_ddl(cur, timeout)
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
-#      # enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'True', timeout)
 #      # get max_used_job_id
 #      max_used_job_id = get_max_used_job_id(cur)
 #      # run upgrade job
@@ -1640,8 +1639,6 @@
 #      cur.execute(sql)
 #      # check upgrade job result
 #      check_upgrade_job_result(cur, job_name, timeout, max_used_job_id)
-#      # reset enable_sys_table_ddl
-#      actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
 #      # reset enable_ddl
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
@@ -1671,7 +1668,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
-#  old_version = '4.0.0.0'
+#  old_version = '4.2.5.1'
 #
 #class PasswordMaskingFormatter(logging.Formatter):
 #  def format(self, record):
@@ -2082,7 +2079,7 @@
 #    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
 #
-## 5. 检查是否有异常租户(creating，延迟删除，恢复中)
+## 5. 检查是否有异常租户(creating，延迟删除，恢复中，租户unit有残留)
 #def check_tenant_status(query_cur):
 #
 #  # check tenant schema
@@ -2112,6 +2109,16 @@
 #    fail_list.append('has locked tenant, should unlock')
 #  else:
 #    logging.info('check tenant lock status success')
+#
+#  # check all deleted tenant's unit is freed
+#  (desc, results) = query_cur.exec_query("select count(*) from oceanbase.gv$ob_units a, oceanbase.__all_tenant_history b where b.is_deleted = 1 and a.tenant_id = b.tenant_id")
+#  if len(results) != 1 or len(results[0]) != 1:
+#    fail_list.append('results len not match')
+#  elif 0 != results[0][0]:
+#    fail_list.append('has deleted tenant with unit not freed')
+#  else:
+#    logging.info('check deleted tenant unit gc success')
+#
 #
 ## 6. 检查无恢复任务
 #def check_restore_job_exist(query_cur):
@@ -2539,6 +2546,14 @@
 #    bret=True
 #  return bret
 #
+## 检查 direct_load 是否已经结束，开启升级之前需要确保没有 direct_load 任务，且升级期间尽量禁止 direct_load 任务
+#def check_direct_load_job_exist(cur, query_cur):
+#  sql = """select count(1) from __all_virtual_load_data_stat"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if 0 != results[0][0]:
+#    fail_list.append("There are direct load task in progress")
+#  logging.info('check direct load task execut status success')
+#
 ## 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 ## 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
 #def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
@@ -2650,6 +2665,7 @@
 #      check_disk_space_for_mds_sstable_compat(query_cur)
 #      check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
 #      # all check func should execute before check_fail_list
+#      check_direct_load_job_exist(cur, query_cur)
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)
 #    except Exception as e:
@@ -3275,6 +3291,14 @@
 #  actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'True', timeout)
 #  actions.do_resume_merge(cur, timeout)
 #
+## 8 打开 direct load
+#def enable_direct_load(cur, timeout):
+#  actions.set_parameter(cur, '_ob_enable_direct_load', 'True', timeout)
+#
+## 9 关闭enable_sys_table_ddl
+#def disable_sys_table_ddl(cur, timeout):
+#  actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
+#
 ## 开始升级后的检查
 #def do_check(conn, cur, query_cur, timeout):
 #  try:
@@ -3285,6 +3309,8 @@
 #    enable_rebalance(cur, timeout)
 #    enable_rereplication(cur, timeout)
 #    enable_major_freeze(cur, timeout)
+#    enable_direct_load(cur, timeout)
+#    disable_sys_table_ddl(cur, timeout)
 #  except Exception as e:
 #    logging.exception('run error')
 #    raise

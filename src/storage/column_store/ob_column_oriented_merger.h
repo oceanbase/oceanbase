@@ -42,12 +42,9 @@ public:
       co_major_snapshot_version_(co_major_snapshot_version)
   {}
   virtual ~ObCOMinorSSTableMergeHelper() {}
-  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param,
-                                                 const bool is_base_iter,
-                                                 const bool is_small_sstable,
-                                                 const ObITable *table) override
+  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const ObITable *table) override
   {
-    UNUSEDx(merge_param, is_base_iter, is_small_sstable);
+    UNUSEDx(merge_param, table);
     return alloc_helper<ObPartitionRowMergeIter> (allocator_, allocator_);
   }
   virtual OB_INLINE bool is_co_major_helper() const { return true; }
@@ -56,7 +53,7 @@ private:
   const int64_t co_major_snapshot_version_;
 };
 
-typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeWriter *, ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGEWRITERS;
+typedef oceanbase::common::ObSEArray<oceanbase::compaction::ObCOMergeWriter *, DEFAULT_CG_MERGE_BATCH_SIZE, common::ObIAllocator&> MERGEWRITERS;
 
 class ObCOMerger : public ObMerger
 {
@@ -78,8 +75,8 @@ protected:
   virtual int close() override;
 private:
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) override;
-  int init_merge_iters(ObSSTable *sstable);
-  int init_writers(ObSSTable *sstable);
+  int init_base_merge_iter(ObSSTable *sstable);
+  int init_cg_writers(ObSSTable *sstable);
   bool is_empty_table(const ObSSTable &sstable) const;
   int build_mergelog(const blocksstable::ObDatumRow &row, ObMergeLog &merge_log, bool &need_replay, bool &row_store_iter_need_move);
   int replay_merglog(const ObMergeLog &merge_log, const blocksstable::ObDatumRow &row);

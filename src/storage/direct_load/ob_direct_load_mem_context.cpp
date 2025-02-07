@@ -15,7 +15,6 @@
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_mem_loader.h"
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
-
 namespace oceanbase
 {
 namespace storage
@@ -95,6 +94,7 @@ void ObDirectLoadMemContext::reset()
   finish_compact_count_ = 0;
   mem_dump_task_count_ = 0;
   has_error_ = false;
+  all_trans_finished_ = false;
 
   ObArray<ObDirectLoadMemWorker *> loader_array;
   loader_array.set_tenant_id(MTL_ID());

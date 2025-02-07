@@ -17,6 +17,10 @@
 #include "src/observer/ob_server_struct.h"
 namespace oceanbase
 {
+namespace obrpc
+{
+struct ObSharedDeviceResource;
+}
 namespace observer
 {
 class ObVirtualSharedStorageQuota : public common::ObVirtualTableScannerIterator

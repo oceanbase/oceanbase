@@ -445,45 +445,45 @@ Outputs & filters:
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
 Query Plan
-==============================================================
-|ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |SUBPLAN FILTER                |    |2       |39          |
-|1 |├─TABLE FULL SCAN             |t1  |2       |3           |
-|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2  |1       |18          |
-==============================================================
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |SUBPLAN FILTER    |    |2       |39          |
+|1 |├─TABLE FULL SCAN |t1  |2       |3           |
+|2 |└─TABLE RANGE SCAN|t2  |1       |18          |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 5 OR (T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
+      access(nil), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([:0 > t2.c1])
 explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);
 Query Plan
-==============================================================
-|ID|OPERATOR                      |NAME|EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |SUBPLAN FILTER                |    |2       |39          |
-|1 |├─TABLE FULL SCAN             |t1  |2       |3           |
-|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2  |1       |18          |
-==============================================================
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |SUBPLAN FILTER    |    |2       |39          |
+|1 |├─TABLE FULL SCAN |t1  |2       |3           |
+|2 |└─TABLE RANGE SCAN|t2  |1       |18          |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 5 OR (T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   2 - output([1]), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
+      access(nil), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([:0 < t2.c1])
@@ -497,12 +497,12 @@ Query Plan
 |2 |│ ├─TABLE FULL SCAN          |t1  |2       |3           |
 |3 |│ └─MATERIAL                 |    |2       |3           |
 |4 |│   └─TABLE FULL SCAN        |t2  |2       |3           |
-|5 |└─DISTRIBUTED TABLE GET      |t2  |1       |18          |
+|5 |└─TABLE GET                  |t2  |1       |18          |
 =============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter([t1.c1 > (T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
@@ -515,20 +515,20 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
   5 - output([1]), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
+      access(nil), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 = :0])
 explain select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 where t1.c1=t3.c1);
 Query Plan
-=======================================================
-|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |41          |
-|1 |├─TABLE FULL SCAN      |t1  |2       |3           |
-|2 |├─DISTRIBUTED TABLE GET|t3  |1       |18          |
-|3 |└─TABLE FULL SCAN      |t2  |1       |3           |
-=======================================================
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |41          |
+|1 |├─TABLE FULL SCAN|t1  |2       |3           |
+|2 |├─TABLE GET      |t3  |1       |18          |
+|3 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([:1 + 1 = ANY(subquery(1))]), rowset=16
@@ -551,10 +551,10 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |21          |
+|0 |SUBPLAN FILTER         |    |1       |18          |
 |1 |├─SCALAR GROUP BY      |    |1       |3           |
 |2 |│ └─TABLE FULL SCAN    |t1  |2       |3           |
-|3 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
+|3 |└─DISTRIBUTED TABLE GET|t2  |1       |16          |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -612,7 +612,7 @@ Query Plan
 |2 |│ ├─TABLE FULL SCAN    |t1  |2       |3           |
 |3 |│ └─TABLE FULL SCAN    |t2  |2       |3           |
 |4 |└─MERGE SEMI JOIN      |    |1       |5           |
-|5 |  ├─NESTED-LOOP JOIN   |    |2       |3           |
+|5 |  ├─NESTED-LOOP JOIN   |    |3       |3           |
 |6 |  │ ├─TABLE FULL SCAN  |t2  |2       |3           |
 |7 |  │ └─MATERIAL         |    |2       |3           |
 |8 |  │   └─TABLE FULL SCAN|t1  |2       |3           |
@@ -624,7 +624,7 @@ Outputs & filters:
   0 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
   1 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c1 + 1 = t2.c2]), other_conds(nil)
-  2 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
+  2 - output([t1.c1 + 1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -633,7 +633,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
   4 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-      equal_conds([t2.c1 = t3.c3]), other_conds([t3.c1 > t1.c1 + 1])
+      equal_conds([t3.c3 = t2.c1]), other_conds([t3.c1 > t1.c1 + 1])
       merge_directions([ASC])
   5 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       conds([lnnvl(cast(t1.c1 + 1 = t2.c2, TINYINT(-1, 0)))]), nl_params_(nil), use_batch=false
@@ -641,7 +641,7 @@ Outputs & filters:
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  7 - output([t1.c1]), filter(nil), rowset=16
+  7 - output([t1.c1 + 1]), filter(nil), rowset=16
   8 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -686,7 +686,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |MERGE JOIN       |    |1       |5           |
+|0 |MERGE JOIN       |    |2       |5           |
 |1 |├─TABLE FULL SCAN|t2  |2       |3           |
 |2 |└─TABLE FULL SCAN|t1  |2       |3           |
 =================================================
@@ -708,8 +708,8 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |MERGE JOIN         |    |1       |7           |
-|1 |├─MERGE JOIN       |    |1       |5           |
+|0 |MERGE JOIN         |    |2       |7           |
+|1 |├─MERGE JOIN       |    |2       |5           |
 |2 |│ ├─TABLE FULL SCAN|t2  |2       |3           |
 |3 |│ └─TABLE FULL SCAN|t3  |2       |3           |
 |4 |└─TABLE FULL SCAN  |t1  |2       |3           |
@@ -736,54 +736,70 @@ Outputs & filters:
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
 Query Plan
-===========================================================
-|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------------
-|0 |SUBPLAN FILTER             |    |1       |75          |
-|1 |├─TABLE FULL SCAN          |t1  |2       |3           |
-|2 |└─MERGE UNION DISTINCT     |    |2       |36          |
-|3 |  ├─SCALAR GROUP BY        |    |1       |18          |
-|4 |  │ └─DISTRIBUTED TABLE GET|t2  |1       |18          |
-|5 |  └─SCALAR GROUP BY        |    |1       |18          |
-|6 |    └─DISTRIBUTED TABLE GET|t3  |1       |18          |
-===========================================================
+=============================================================
+|ID|OPERATOR                    |NAME |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN FILTER              |     |1       |75          |
+|1 |├─TABLE FULL SCAN           |t1   |2       |3           |
+|2 |└─LIMIT                     |     |1       |36          |
+|3 |  └─SUBPLAN SCAN            |VIEW1|1       |36          |
+|4 |    └─LIMIT                 |     |1       |36          |
+|5 |      └─MERGE UNION DISTINCT|     |1       |36          |
+|6 |        ├─LIMIT             |     |1       |18          |
+|7 |        │ └─SCALAR GROUP BY |     |1       |18          |
+|8 |        │   └─TABLE GET     |t2   |1       |18          |
+|9 |        └─LIMIT             |     |1       |18          |
+|10|          └─SCALAR GROUP BY |     |1       |18          |
+|11|            └─TABLE GET     |t3   |1       |18          |
+=============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([cast(t1.c2, DECIMAL(11, 0)) = ANY(subquery(1))]), rowset=16
-      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)], [cast(t1.c2, DECIMAL(11, 0))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  2 - output([UNION([1])]), filter(nil), rowset=16
-  3 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter(nil), rowset=16
+      access(nil)
+  4 - output([UNION([1])]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  5 - output([UNION([1])]), filter(nil), rowset=16
+  6 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  7 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4))]), filter([cast(cast(T_FUN_SUM(t2.c1),
+       DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t2.c1), DECIMAL_INT(20, 0)), DECIMAL(15, 4)) = :1]), rowset=16
       group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
-  4 - output([t2.c1]), filter(nil), rowset=16
+  8 - output([t2.c1]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, keep_ordering=true, 
+      is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true, 
       range_cond([t2.c1 = :0])
-  5 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
+  9 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
+      limit(1), offset(nil)
+ 10 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter([cast(T_FUN_COUNT(*), DECIMAL(24, 4)) = :1]), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
-  6 - output(nil), filter(nil), rowset=16
+ 11 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
-      is_index_back=false, is_global_index=false, keep_ordering=true, 
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 
       range_cond([t3.c1 = :0])
 explain select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
 Query Plan
-================================================================
-|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SUBPLAN FILTER                 |     |1       |43          |
-|1 |├─TABLE FULL SCAN              |t1   |2       |3           |
-|2 |└─LIMIT                        |     |1       |21          |
-|3 |  └─MERGE JOIN                 |     |1       |21          |
-|4 |    ├─SUBPLAN SCAN             |VIEW1|1       |18          |
-|5 |    │ └─SCALAR GROUP BY        |     |1       |18          |
-|6 |    │   └─DISTRIBUTED TABLE GET|t3   |1       |18          |
-|7 |    └─TABLE FULL SCAN          |t2   |2       |3           |
-================================================================
+========================================================
+|ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |SUBPLAN FILTER         |     |1       |75          |
+|1 |├─TABLE FULL SCAN      |t1   |2       |3           |
+|2 |└─LIMIT                |     |1       |36          |
+|3 |  └─MERGE JOIN         |     |1       |36          |
+|4 |    ├─SUBPLAN SCAN     |VIEW1|1       |18          |
+|5 |    │ └─SCALAR GROUP BY|     |1       |18          |
+|6 |    │   └─TABLE GET    |t3   |1       |18          |
+|7 |    └─TABLE FULL SCAN  |t2   |2       |18          |
+========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 != subquery(1)]), rowset=16
@@ -803,7 +819,7 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MAX(t3.c2)])
   6 - output([t3.c2]), filter(nil), rowset=16
       access([t3.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, keep_ordering=true, 
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 
       range_cond([t3.c1 = :0])
   7 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
@@ -983,11 +999,11 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select 1, round(1.1) from dual);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
@@ -996,11 +1012,11 @@ Outputs & filters:
       range_key([t1.__pk_increment]), range(MAX ; MIN)always false
 explain select * from t1 where not exists (select max(a) from t2);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
@@ -1030,11 +1046,11 @@ Outputs & filters:
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2);
 Query Plan
-===============================================
-|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE FULL SCAN|t1  |0       |3           |
-===============================================
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t1  |0       |3           |
+================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
@@ -1255,48 +1271,47 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |7           |
+|0 |SUBPLAN FILTER         |    |1       |5           |
 |1 |├─TABLE FULL SCAN      |t1  |1       |3           |
-|2 |└─LIMIT                |    |1       |5           |
-|3 |  └─SUBPLAN FILTER     |    |1       |5           |
-|4 |    ├─HASH GROUP BY    |    |1       |3           |
-|5 |    │ └─TABLE FULL SCAN|t2  |1       |3           |
-|6 |    └─TABLE FULL SCAN  |t3  |1       |3           |
+|2 |└─LIMIT                |    |1       |3           |
+|3 |  └─NESTED-LOOP JOIN   |    |1       |3           |
+|4 |    ├─TABLE FULL SCAN  |t2  |1       |3           |
+|5 |    └─MATERIAL         |    |1       |3           |
+|6 |      └─TABLE FULL SCAN|t3  |1       |3           |
 =======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=16
-      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=false
-  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:1]), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
       access([t1.a], [t1.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   2 - output([1]), filter(nil), rowset=16
       limit(1), offset(nil)
-  3 - output(nil), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([T_FUN_MAX(t2.a)(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
-  4 - output([T_FUN_MAX(t2.a)]), filter(nil), rowset=16
-      group([t2.a]), agg_func([T_FUN_MAX(t2.a)])
-  5 - output([t2.a]), filter(nil), rowset=16
+  3 - output(nil), filter(nil), rowset=16
+      conds([t3.a > t2.a]), nl_params_(nil), use_batch=false
+  4 - output([t2.a]), filter(nil), rowset=16
       access([t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([1]), filter([t3.a > :0]), rowset=16
+  5 - output([t3.a]), filter(nil), rowset=16
+  6 - output([t3.a]), filter(nil), rowset=16
       access([t3.a]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
 explain select * from t1 where exists ( select sum(a) from t2 group by a having exists (select * from t3 where t3.a > sum(t2.a)));
 Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN FILTER         |    |1       |7           |
+|0 |SUBPLAN FILTER         |    |1       |23          |
 |1 |├─TABLE FULL SCAN      |t1  |1       |3           |
-|2 |└─LIMIT                |    |1       |5           |
-|3 |  └─SUBPLAN FILTER     |    |1       |5           |
+|2 |└─LIMIT                |    |1       |21          |
+|3 |  └─SUBPLAN FILTER     |    |1       |21          |
 |4 |    ├─HASH GROUP BY    |    |1       |3           |
 |5 |    │ └─TABLE FULL SCAN|t2  |1       |3           |
-|6 |    └─TABLE FULL SCAN  |t3  |1       |3           |
+|6 |    └─TABLE FULL SCAN  |t3  |1       |18          |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -1832,18 +1847,18 @@ Query Plan
 ====================================================================================
 |ID|OPERATOR                   |NAME                         |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------------
-|0 |SUBPLAN FILTER             |                             |1       |9           |
+|0 |SUBPLAN FILTER             |                             |1       |57          |
 |1 |├─TABLE FULL SCAN          |table0_hash_pk_parts_1_bigint|1       |3           |
-|2 |└─SUBPLAN FILTER           |                             |1       |7           |
-|3 |  ├─SCALAR GROUP BY        |                             |1       |3           |
-|4 |  │ └─SUBPLAN SCAN         |VIEW3                        |1       |3           |
-|5 |  │   └─SCALAR GROUP BY    |                             |1       |3           |
-|6 |  │     └─SUBPLAN SCAN     |VIEW1                        |1       |3           |
-|7 |  │       └─TABLE FULL SCAN|ff                           |1       |3           |
-|8 |  └─MERGE SEMI JOIN        |                             |1       |5           |
-|9 |    ├─TABLE FULL SCAN      |s(idx5)                      |1       |3           |
-|10|    └─SORT                 |                             |1       |3           |
-|11|      └─TABLE FULL SCAN    |table0_hash_pk_parts_1_bigint|1       |3           |
+|2 |└─SUBPLAN FILTER           |                             |1       |54          |
+|3 |  ├─SCALAR GROUP BY        |                             |1       |18          |
+|4 |  │ └─SUBPLAN SCAN         |VIEW3                        |1       |18          |
+|5 |  │   └─SCALAR GROUP BY    |                             |1       |18          |
+|6 |  │     └─SUBPLAN SCAN     |VIEW1                        |1       |18          |
+|7 |  │       └─TABLE FULL SCAN|ff                           |1       |18          |
+|8 |  └─MERGE SEMI JOIN        |                             |1       |36          |
+|9 |    ├─TABLE FULL SCAN      |s(idx5)                      |1       |18          |
+|10|    └─SORT                 |                             |1       |18          |
+|11|      └─TABLE FULL SCAN    |table0_hash_pk_parts_1_bigint|1       |18          |
 ====================================================================================
 Outputs & filters:
 -------------------------------------
@@ -1910,17 +1925,17 @@ Query Plan
 ================================================================================
 |ID|OPERATOR               |NAME                         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------------
-|0 |SUBPLAN FILTER         |                             |1       |9           |
+|0 |SUBPLAN FILTER         |                             |1       |57          |
 |1 |├─TABLE FULL SCAN      |table0_hash_pk_parts_1_bigint|1       |3           |
-|2 |└─SUBPLAN FILTER       |                             |1       |7           |
-|3 |  ├─SCALAR GROUP BY    |                             |1       |3           |
-|4 |  │ └─SUBPLAN FILTER   |                             |1       |3           |
+|2 |└─SUBPLAN FILTER       |                             |1       |54          |
+|3 |  ├─SCALAR GROUP BY    |                             |1       |18          |
+|4 |  │ └─SUBPLAN FILTER   |                             |1       |18          |
 |5 |  │   ├─EXPRESSION     |                             |1       |1           |
-|6 |  │   └─TABLE FULL SCAN|ff(idx3)                     |1       |3           |
-|7 |  └─MERGE SEMI JOIN    |                             |1       |5           |
-|8 |    ├─TABLE FULL SCAN  |s(idx5)                      |1       |3           |
-|9 |    └─SORT             |                             |1       |3           |
-|10|      └─TABLE FULL SCAN|table0_hash_pk_parts_1_bigint|1       |3           |
+|6 |  │   └─TABLE FULL SCAN|ff(idx3)                     |1       |18          |
+|7 |  └─MERGE SEMI JOIN    |                             |1       |36          |
+|8 |    ├─TABLE FULL SCAN  |s(idx5)                      |1       |18          |
+|9 |    └─SORT             |                             |1       |18          |
+|10|      └─TABLE FULL SCAN|table0_hash_pk_parts_1_bigint|1       |18          |
 ================================================================================
 Outputs & filters:
 -------------------------------------

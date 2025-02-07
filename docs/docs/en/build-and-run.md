@@ -37,7 +37,7 @@ Now that you built the `observer` binary, you can deploy an OceanBase instance w
 ./tools/deploy/obd.sh deploy -c ./tools/deploy/single.yaml
 ```
 
-This starts the OceanBase server listening on port 10000.
+You can check the `mysql_port` in `./tools/deploy/single.yaml` file to see the listening port. Normally, if you deploy with the root user, the OceanBase server will listen on port 10000, and the examples below are also based on this port.
 
 ## Connect
 

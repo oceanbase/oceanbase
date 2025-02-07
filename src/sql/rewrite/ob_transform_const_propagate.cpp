@@ -443,7 +443,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_update_stmt()) {
       is_happened = false;
       ObUpdateStmt *upd_stmt = static_cast<ObUpdateStmt *>(stmt);
-       for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
         ObUpdateTableInfo* table_info = upd_stmt->get_update_table_info().at(i);
         if (OB_ISNULL(table_info)) {
           ret = OB_ERR_UNEXPECTED;
@@ -813,7 +813,7 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
                                                                   got_result,
                                                                   *ctx_->allocator_))) {
               LOG_WARN("failed to calc const or caculable expr", K(ret));
-            } else if (got_result && (result.is_null()
+            } else if (got_result && !result.is_ext() && (result.is_null()
                       || (lib::is_oracle_mode() && result.is_null_oracle()))) {
               is_valid = true;
               if (!equal_info.const_expr_ -> is_const_raw_expr()) {
@@ -1916,6 +1916,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
       if (OB_SUCC(ret) && is_valid) {
+        new_info.exclude_expr_ = expr;
         if (OB_FAIL(const_ctx.add_const_info(new_info))) {
           LOG_WARN("failed to push back", K(ret));
         }

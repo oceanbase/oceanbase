@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #define private public
+#define protected public
 #include "storage/ob_parallel_external_sort.h"
 #undef private
 #include <algorithm>
@@ -170,6 +171,16 @@ public:
   void test_multi_task_sort(const int64_t buf_mem_limit, const int64_t file_buf_size, const int64_t items_cnt, const int64_t task_cnt);
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
 public:
   static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
   static const int64_t MACRO_BLOCK_COUNT = 15* 1024;
@@ -198,6 +209,12 @@ void TestParallelExternalSort::SetUp()
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
 
+  ObTimerService *timer_service = nullptr;
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+  EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+  tenant_ctx.set(timer_service);
+  tenant_ctx.set(timer_service);
+
   tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
   EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
@@ -206,6 +223,7 @@ void TestParallelExternalSort::SetUp()
   tenant_ctx.set(tf_mgr);
 
   ObTenantEnv::set_tenant(&tenant_ctx);
+  SERVER_STORAGE_META_SERVICE.is_started_ = true;
 }
 
 void TestParallelExternalSort::TearDown()
@@ -224,6 +242,11 @@ void TestParallelExternalSort::TearDown()
   TestDataFilePrepare::TearDown();
   common::ObClockGenerator::destroy();
   destroy_tenant_mgr();
+  ObTimerService *timer_service = MTL(ObTimerService *);
+  ASSERT_NE(nullptr, timer_service);
+  timer_service->stop();
+  timer_service->wait();
+  timer_service->destroy();
 }
 
 int TestParallelExternalSort::init_tenant_mgr()
@@ -371,7 +394,7 @@ int TestParallelExternalSort::build_reader(const ObVector<TestItem *> &items, co
     ObFragmentWriterV2<TestItem> writer;
     int64_t dir_id = -1;
     std::sort(items.begin(), items.end(), compare);
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id))) {
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to allocate file directory", K(ret));
     } else if (OB_FAIL(writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id))) {
       COMMON_LOG(WARN, "fail to open writer", K(ret));
@@ -682,7 +705,7 @@ TEST_F(TestParallelExternalSort, test_writer)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);
@@ -739,7 +762,7 @@ TEST_F(TestParallelExternalSort, test_reader)
   int ret = OB_SUCCESS;
   int64_t dir_id = -1;
 
-  ret = FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id);
+  ret = FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(OB_SYS_TENANT_ID, dir_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   // single macro buffer, total write bytes is less than single macro buffer length
   ret = writer.open(buf_cap, expire_timestamp, OB_SYS_TENANT_ID, dir_id);

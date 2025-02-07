@@ -367,6 +367,8 @@ int ObIOBenchRunner::do_benchmark(const ObIOBenchLoad &load, const int64_t threa
       sleep(BENCHMARK_TIMEOUT_S);
       TG_STOP(tg_id_);
       TG_WAIT(tg_id_);
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
       if (io_count_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid io count", K(ret), K(io_count_));
@@ -388,6 +390,7 @@ void ObIOBenchRunner::destroy()
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
     TG_WAIT(tg_id_);
+    TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
   if (nullptr != write_buf_) {
@@ -421,7 +424,6 @@ void ObIOBenchRunner::run1()
     io_info.buf_ = ObIOMode::READ == load_.mode_ ? nullptr : write_buf_;
     io_info.user_data_buf_ = ObIOMode::READ == load_.mode_ ? read_buf_ : nullptr;
     io_info.flag_.set_mode(load_.mode_);
-    io_info.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_sys_module_id(ObIOModule::CALIBRATION_IO);
     io_info.flag_.set_wait_event(ObIOMode::READ == load_.mode_ ?
         ObWaitEventIds::DB_FILE_DATA_READ : ObWaitEventIds::DB_FILE_COMPACT_WRITE);
@@ -433,7 +435,7 @@ void ObIOBenchRunner::run1()
       const int64_t block_idx = ObRandom::rand(0, block_count_ - 1);
       io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
       io_info.offset_ = ObRandom::rand(0, OB_DEFAULT_MACRO_BLOCK_SIZE - load_.size_);
-      io_info.timeout_us_ = MAX_IO_WAIT_TIME_MS;
+      io_info.timeout_us_ = MAX_IO_WAIT_TIME_MS * 1000;
 #ifdef OB_BUILD_SHARED_STORAGE
       if (GCTX.is_shared_storage_mode()) {
         io_info.fd_.first_id_ = ObIOFd::NORMAL_FILE_ID; // first_id is not used in shared storage mode;
@@ -483,6 +485,7 @@ ObIOBenchController::~ObIOBenchController()
   if (tg_id_ >= 0) {
     TG_STOP(tg_id_);
     TG_WAIT(tg_id_);
+    TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
 }
@@ -498,6 +501,12 @@ int ObIOBenchController::start_io_bench()
       ret = OB_SUCCESS;
     }
   } else {
+    if (-1 != tg_id_) {
+      TG_STOP(tg_id_);
+      TG_WAIT(tg_id_);
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
+    }
     if (OB_FAIL(TG_CREATE(TGDefIDs::IO_BENCHMARK, tg_id_))) {
       LOG_WARN("create tg failed", K(ret));
     } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
@@ -735,18 +744,21 @@ int ObIOCalibration::get_io_ability(ObIOAbility &io_ability)
 
 void ObIOCalibration::get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid)
 {
+  int ret = OB_SUCCESS;
   is_io_ability_valid = false;
   iops_scale = 1.0 * BASELINE_IO_SIZE / size;
   if (OB_UNLIKELY(!is_inited_)) {
     // do nothing
-  } else if (OB_UNLIKELY(mode >= ObIOMode::MAX_MODE || size <= 0)) {
+  } else if (OB_UNLIKELY(mode >= ObIOMode::MAX_MODE)) {
     // do nothing
+  } else if (size <= 0) {
+    iops_scale = 1.0;
+    LOG_WARN("invalid size", K(mode), K(size), K(iops_scale));
   } else {
     DRWLock::RDLockGuard guard(lock_);
     if (!io_ability_.is_valid()) {
     // do nothing
     } else {
-      int ret = OB_SUCCESS;
       double iops = 0;
       if (OB_FAIL(io_ability_.get_iops(mode, size, iops))) {
         LOG_WARN("get iops failed", K(ret), K(mode), K(size));
@@ -857,7 +869,12 @@ int ObIOCalibration::refresh(const bool only_refresh, const ObIArray<ObIOBenchRe
       LOG_WARN("reset io ability failed", K(ret));
     }
   }
-  LOG_INFO("refresh io calibration", K(ret), K(only_refresh), K(items), K(io_ability_));
+  ObIOAbility io_ability;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = ObIOCalibration::get_instance().get_io_ability(io_ability))) {
+    LOG_WARN("get io ability failed", KR(tmp_ret));
+  }
+  LOG_INFO("refresh io calibration", K(ret), K(only_refresh), K(items), K(io_ability));
   return ret;
 }
 

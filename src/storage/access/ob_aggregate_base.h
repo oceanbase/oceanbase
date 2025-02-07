@@ -44,6 +44,7 @@ enum ObPDAggType
   PD_FIRST_ROW,
   PD_HLL,
   PD_SUM_OP_SIZE,
+  PD_RB_BUILD,
   PD_MAX_TYPE
 };
 
@@ -79,7 +80,7 @@ public:
   OB_INLINE bool is_max_agg() const { return PD_MAX == agg_type_; }
   OB_INLINE ObBitmap &get_bitmap() { return *bitmap_; };
   VIRTUAL_TO_STRING_KV(K_(agg_type), K_(is_inited), KPC_(bitmap), KP_(agg_row_reader),
-    K_(result_datum), K_(skip_index_datum), K_(is_assigned_to_group_by_processor));
+    K_(result_datum), K_(is_assigned_to_group_by_processor));
 protected:
   ObBitmap *bitmap_;
   blocksstable::ObAggRowReader *agg_row_reader_;
@@ -101,12 +102,12 @@ public:
   virtual int eval_batch(
       const ObTableIterParam *iter_param,
       const ObTableAccessContext *context,
-      const int32_t col_idx,
+      const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t *row_ids,
       const int64_t row_count,
-      const bool projected) = 0;
-  virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg) = 0;
+      const bool reserve_memory) = 0;
+  virtual int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) = 0;
   virtual int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };

@@ -13,7 +13,7 @@
 
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/access/ob_multiple_scan_merge.h"
-#include "storage/access/ob_store_row_iterator.h"
+#include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
@@ -67,7 +67,7 @@ public:
   int scan(
       const blocksstable::ObDatumRange &key_range,
       common::ObIAllocator &allocator,
-      ObIStoreRowIterator *&row_iter,
+      ObDirectLoadIStoreRowIterator *&row_iter,
       bool skip_read_lob);
   int rescan(const blocksstable::ObDatumRange &key_range, ObIStoreRowIterator *row_iter);
   bool is_valid() const { return is_inited_; }
@@ -89,7 +89,7 @@ private:
   bool is_inited_;
 };
 
-class ObDirectLoadOriginTableScanner : public ObIStoreRowIterator
+class ObDirectLoadOriginTableScanner : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadOriginTableScanner();

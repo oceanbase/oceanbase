@@ -34,6 +34,7 @@ public:
   int try_pop(common::ObLink *&task, const int32_t level);
   int64_t get_size(const int32_t level) const;
   int64_t get_total_size() const;
+  common::ObPriorityQueue<1>* get_pq_queue(const int32_t level) { return &queue_[level]; }
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;

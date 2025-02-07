@@ -29,7 +29,6 @@ namespace sql
 class ObRawExprPrinter
 {
 #define LEN_AND_PTR(str) (str.length()), (str.ptr())
-#define SQL_ESCAPE_STR(str) (to_cstring(ObHexEscapeSqlStr(str)))
 #define _DATA_PRINTF(...) databuff_printf(buf_, buf_len_, *pos_, __VA_ARGS__)
 #define DATA_PRINTF(...)                                           \
   do {                                                              \
@@ -155,12 +154,15 @@ private:
   int print_window_clause(ObWinFunRawExpr *expr);
   int print_xml_parse_expr(ObSysFunRawExpr *expr);
   int print_xml_element_expr(ObSysFunRawExpr *expr);
+  int print_xml_forest_expr(ObSysFunRawExpr *expr);
   int print_xml_attributes_expr(ObSysFunRawExpr *expr);
   int print_xml_agg_expr(ObAggFunRawExpr *expr);
   int print_xml_serialize_expr(ObSysFunRawExpr *expr);
   int print_sql_udt_attr_access(ObSysFunRawExpr *expr);
   int print_sql_udt_construct(ObSysFunRawExpr *expr);
   int print_st_asmvt(ObAggFunRawExpr *expr);
+  int print_array_agg_expr(ObAggFunRawExpr *expr);
+  int print_array_map(ObSysFunRawExpr *expr);
 
   int print_type(const ObExprResType &dst_type);
 

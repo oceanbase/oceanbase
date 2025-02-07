@@ -45,7 +45,7 @@ GB_3 [\x30-\x39]
 UTF8_GB_CHAR ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
 space            [ \t\n\r\f]
 non_newline      [^\n\r]
-comment      ("--"{space}+{non_newline}*)|(#{non_newline}*)
+comment      ("--"[ \t]+{non_newline}*)|(#{non_newline}*|"--"[\n\r])
 whitespace       ({space}+|{comment})
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
@@ -174,6 +174,7 @@ NULL {
   tmp_literal[yylval->node->str_len_] = '\0';
   yylloc->first_column = scanner_ctx->first_column_;
   yylval->node->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, parse_ctx->mem_pool_);
+  check_ptr(yylval->node->str_value_);
   return STRING;
 }
 
@@ -233,6 +234,7 @@ NULL {
     malloc_new_node(yylval->node->children_[0], parse_ctx->mem_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             parse_ctx->mem_pool_);
+    check_ptr((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -271,6 +273,7 @@ NULL {
   check_ptr(yylval);
   tmp_literal[yylval->node->str_len_] = '\0';
   yylval->node->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, parse_ctx->mem_pool_);
+  check_ptr(yylval->node->str_value_);
   return STRING;
 }
 
@@ -321,6 +324,7 @@ NULL {
     malloc_new_node(yylval->node->children_[0], parse_ctx->mem_pool_, T_CONCAT_STRING, 0);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             parse_ctx->mem_pool_);
+    check_ptr((*yylval->node->children_)->str_value_);
     (*yylval->node->children_)->str_len_ = yylval->node->str_len_;
     yylval->node->num_child_ = 1;
   }
@@ -625,6 +629,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
       } else {
         node->str_value_ = parse_strdup(yytext, parse_ctx->mem_pool_, &(node->str_len_));
       }
+      check_ptr(node->str_value_);
     } else {
       yylval->non_reserved_keyword = word;
       token = word->keyword_type;

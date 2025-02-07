@@ -9,6 +9,8 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#ifndef _OB_LOAD_DATA_PARSER_H_
+#define _OB_LOAD_DATA_PARSER_H_
 
 #include "lib/charset/ob_charset.h"
 #include "common/object/ob_object.h"
@@ -16,8 +18,6 @@
 #include "lib/string/ob_string.h"
 #include "lib/json/ob_json.h"
 
-#ifndef _OB_LOAD_DATA_PARSER_H_
-#define _OB_LOAD_DATA_PARSER_H_
 
 namespace oceanbase
 {
@@ -37,12 +37,17 @@ struct ObODPSGeneralFormat {
     access_key_(),
     sts_token_(),
     endpoint_(),
+    tunnel_endpoint_(),
     project_(),
     schema_(),
     table_(),
     quota_(),
-    compression_code_()
-  {}
+    compression_code_(),
+    collect_statistics_on_create_(false),
+    region_()
+  {
+  }
+
   int deep_copy_str(const ObString &src,
                     ObString &dest);
   int deep_copy(const ObODPSGeneralFormat &src);
@@ -56,26 +61,34 @@ struct ObODPSGeneralFormat {
     "ACCESSKEY",
     "STSTOKEN",
     "ENDPOINT",
+    "TUNNEL_ENDPOINT",
     "PROJECT_NAME",
     "SCHEMA_NAME",
     "TABLE_NAME",
     "QUOTA_NAME",
     "COMPRESSION_CODE",
+    "COLLECT_STATISTICS_ON_CREATE",
+    "REGION",
   };
   common::ObString access_type_;
   common::ObString access_id_;
   common::ObString access_key_;
   common::ObString sts_token_;
   common::ObString endpoint_;
+  common::ObString tunnel_endpoint_;
   common::ObString project_;
   common::ObString schema_;
   common::ObString table_;
   common::ObString quota_;
   common::ObString compression_code_;
+  bool collect_statistics_on_create_;
+  common::ObString region_;
   common::ObArenaAllocator arena_alloc_;
   int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code));
+  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
+               K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
+               K_(compression_code), K_(collect_statistics_on_create), K_(region));
   OB_UNIS_VERSION(1);
 };
 
@@ -93,7 +106,10 @@ struct ObCSVGeneralFormat {
     trim_space_(false),
     null_if_(),
     empty_field_as_null_(false),
-    file_column_nums_(0)
+    file_column_nums_(0),
+    compression_algorithm_(ObCSVCompression::NONE),
+    is_optional_(false),
+    file_extension_(DEFAULT_FILE_EXTENSION)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -106,7 +122,20 @@ struct ObCSVGeneralFormat {
     "TRIM_SPACE",
     "NULL_IF_EXETERNAL",
     "EMPTY_FIELD_AS_NULL",
+    "COMPRESSION",
+    "IS_OPTIONAL",
+    "FILE_EXTENSION"
   };
+  enum ObCSVCompression
+  {
+    INVALID = -1,
+    NONE = 0,
+    AUTO = 1,
+    GZIP = 2,
+    DEFLATE = 3,
+    ZSTD = 4,
+  };
+  static constexpr const char *DEFAULT_FILE_EXTENSION = ".csv";
   common::ObString line_start_str_;
   common::ObString line_term_str_;
   common::ObString field_term_str_;
@@ -119,17 +148,89 @@ struct ObCSVGeneralFormat {
   bool trim_space_;
   common::ObArrayWrap<common::ObString> null_if_;
   bool empty_field_as_null_;
-
   int64_t file_column_nums_;
+  ObCSVCompression compression_algorithm_;
+  bool is_optional_;
+  common::ObString file_extension_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
                   ObCollationType file_cs_type);
-  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
-               K(field_escaped_char_), K(field_term_str_), K(line_term_str_));
+               K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
+               K(compression_algorithm_), K(file_extension_));
+  OB_UNIS_VERSION(1);
+};
+
+struct ObParquetGeneralFormat {
+  ObParquetGeneralFormat () :
+    row_group_size_(256LL * 1024 * 1024), /* default 256 MB */
+    compress_type_index_(0) /* default UNCOMPRESSED */
+  {}
+  static constexpr const char *OPTION_NAMES[] = {
+    "ROW_GROUP_SIZE",
+    "COMPRESSION"
+  };
+  static constexpr const char *COMPRESSION_ALGORITHMS[] = {
+    "UNCOMPRESSED",
+    "SNAPPY",
+    "GZIP",
+    "BROTLI",
+    "ZSTD",
+    "LZ4",
+    "LZ4_FRAME",
+    "LZO",
+    "BZ2",
+    "LZ4_HADOOP"
+  };
+  static constexpr const char *DEFAULT_FILE_EXTENSION = ".parquet";
+
+  int64_t row_group_size_;
+  int64_t compress_type_index_;
+
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  TO_STRING_KV(K_(row_group_size), K_(compress_type_index));
+  OB_UNIS_VERSION(1);
+};
+
+struct ObOrcGeneralFormat {
+  ObOrcGeneralFormat () :
+    stripe_size_(64LL * 1024 * 1024),      /* default 64 MB */
+    compress_type_index_(0),               /* default UNCOMPRESSED */
+    compression_block_size_(256LL * 1024), /* default 256 KB */
+    row_index_stride_(10000),
+    column_use_bloom_filter_()
+  {}
+  static constexpr const char *OPTION_NAMES[] = {
+    "STRIPE_SIZE",
+    "COMPRESSION",
+    "COMPRESSION_BLOCK_SIZE",
+    "ROW_INDEX_STRIDE",
+    "COLUMN_USE_BLOOM_FILTER"
+  };
+  static constexpr const char *COMPRESSION_ALGORITHMS[] = {
+    "UNCOMPRESSED",
+    "ZLIB",
+    "SNAPPY",
+    "LZO",
+    "LZ4",
+    "ZSTD"
+  };
+  static constexpr const char *DEFAULT_FILE_EXTENSION = ".orc";
+
+  int64_t stripe_size_;
+  int64_t compress_type_index_;
+  int64_t compression_block_size_;
+  int64_t row_index_stride_;
+  common::ObArrayWrap<int64_t> column_use_bloom_filter_;
+
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_), K(row_index_stride_), K(column_use_bloom_filter_));
   OB_UNIS_VERSION(1);
 };
 
@@ -211,6 +312,19 @@ public:
     case common::CHARSET_GB18030:
     case common::CHARSET_GB18030_2022:
       ret = scan_proto<common::CHARSET_GB18030, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_SJIS:
+      ret = scan_proto<common::CHARSET_SJIS, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_BIG5:
+      ret = scan_proto<common::CHARSET_BIG5, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_HKSCS:
+    case common::CHARSET_HKSCS31:
+      ret = scan_proto<common::CHARSET_HKSCS, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     default:
@@ -330,6 +444,27 @@ inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_GBK>(const char *ptr, c
   UNUSED(end);
   unsigned char c = *ptr;
   return (0x81 <= c && c <= 0xFE) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_SJIS>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return ((0x81 <= (c) && (c) <= 0x9f) || ((0xe0 <= (c)) && (c) <= 0xfc)) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_BIG5>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return (0xa1 <= c && c <= 0xf9) ? 2 : 1;
+}
+
+template<>
+inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_HKSCS>(const char *ptr, const char *end) {
+  UNUSED(end);
+  unsigned char c = *ptr;
+  return (0x81 <= c && c <= 0xfe) ? 2 : 1;
 }
 
 template<>
@@ -538,25 +673,19 @@ struct ObOriginFileFormat
   common::ObString origin_null_if_str_;
 };
 
-enum class ObLoadCompressionFormat
-{
-  INVALID,
-  NONE,
-  AUTO,
-  GZIP,
-  DEFLATE,
-  ZSTD,
-};
-
-const char *compression_format_to_string(ObLoadCompressionFormat compression_format);
-int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format);
+const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression compression_algorithm);
+int compression_algorithm_from_string(ObString compression_name,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm);
 
 /**
  * guess compression format from filename suffix
  *
  * Return NONE if none of the known compression format matches.
  */
-int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format);
+int compression_algorithm_from_suffix(ObString filename,
+                                      ObCSVGeneralFormat::ObCSVCompression &compression_algorithm);
+
+const char *compression_algorithm_to_suffix(ObCSVGeneralFormat::ObCSVCompression compression_algorithm);
 
 struct ObExternalFileFormat
 {
@@ -566,6 +695,15 @@ struct ObExternalFileFormat
     common::ObString str_;
     common::ObIAllocator &allocator_;
     TO_STRING_KV(K_(str));
+    OB_UNIS_VERSION(1);
+  };
+
+  struct StringList {
+    StringList(common::ObIAllocator &alloc) : allocator_(alloc), strs_(alloc) {}
+    int store_strs(ObIArray<ObString> &strs);
+    common::ObIAllocator &allocator_;
+    common::ObFixedArray<common::ObString, common::ObIAllocator> strs_;
+    TO_STRING_KV(K_(strs));
     OB_UNIS_VERSION(1);
   };
 
@@ -583,17 +721,19 @@ struct ObExternalFileFormat
     OPT_BINARY_AS_TEXT = 1 << 1,
   };
 
-  ObExternalFileFormat() : format_type_(INVALID_FORMAT), compression_format_(ObLoadCompressionFormat::NONE) {}
+  ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
 
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char* buf, const int64_t buf_len, bool into_outfile = false) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
   int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);
+  int get_format_file_extension(FormatType format_type, ObString &file_extension);
 
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
+  sql::ObParquetGeneralFormat parquet_format_;
   sql::ObODPSGeneralFormat odps_format_;
-  ObLoadCompressionFormat compression_format_;
+  sql::ObOrcGeneralFormat orc_format_;
   uint64_t options_;
   static const char *FORMAT_TYPE_STR[];
 };

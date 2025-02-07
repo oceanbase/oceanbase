@@ -44,7 +44,9 @@ int ObExprLockFunc::calc_result_type0(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
@@ -54,7 +56,9 @@ int ObExprLockFunc::calc_result_type1(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
 
   // lock name
@@ -69,7 +73,9 @@ int ObExprLockFunc::calc_result_type2(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
+  const ObAccuracy &res_acc =  ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType];
   type.set_type(ObIntType);
+  type.set_accuracy(res_acc);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
 
   // lock name

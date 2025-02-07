@@ -1080,7 +1080,7 @@ int ObInnerTableSchema::gv_sql_join_filter_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           SVR_IP,           SVR_PORT,           CAST(NULL AS SIGNED) AS QC_SESSION_ID,           CAST(NULL AS SIGNED) AS QC_INSTANCE_ID,           CAST(NULL AS SIGNED) AS SQL_PLAN_HASH_VALUE,           CAST(OTHERSTAT_5_VALUE AS SIGNED) as FILTER_ID,           CAST(NULL AS SIGNED) as BITS_SET,           CAST(OTHERSTAT_1_VALUE AS SIGNED) as FILTERED,           CAST(OTHERSTAT_3_VALUE AS SIGNED) as PROBED,           CAST(NULL AS SIGNED) as ACTIVE,           CAST(TENANT_ID AS SIGNED) as CON_ID,           CAST(TRACE_ID AS CHAR(64)) as TRACE_ID         FROM oceanbase.__all_virtual_sql_plan_monitor         WHERE plan_operation = 'PHY_JOIN_FILTER'  )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           SVR_IP,           SVR_PORT,           CAST(NULL AS SIGNED) AS QC_SESSION_ID,           CAST(NULL AS SIGNED) AS QC_INSTANCE_ID,           PLAN_HASH_VALUE AS SQL_PLAN_HASH_VALUE,           CAST(OTHERSTAT_5_VALUE AS SIGNED) as FILTER_ID,           CAST(NULL AS SIGNED) as BITS_SET,           CAST(OTHERSTAT_1_VALUE AS SIGNED) as FILTERED,           CAST(OTHERSTAT_3_VALUE AS SIGNED) as PROBED,           CAST(NULL AS SIGNED) as ACTIVE,           CAST(TENANT_ID AS SIGNED) as CON_ID,           CAST(TRACE_ID AS CHAR(64)) as TRACE_ID         FROM oceanbase.__all_virtual_sql_plan_monitor         WHERE plan_operation = 'PHY_JOIN_FILTER'  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1386,7 +1386,7 @@ int ObInnerTableSchema::dba_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING    WHERE      SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      oceanbase.__all_virtual_wr_control SETTING    WHERE      SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1437,7 +1437,7 @@ int ObInnerTableSchema::cdb_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      oceanbase.__all_virtual_wr_control SETTING   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

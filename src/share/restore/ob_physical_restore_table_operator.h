@@ -129,6 +129,12 @@ public:
       bool &is_finished,
       bool &is_success);
 
+    /*
+   * description: check all ls has finished quick restore
+   * @param[out] return true if has finished quick restore.
+   * */
+  int check_all_ls_finish_quick_restore(bool &is_finish);
+
 public:
   static const char* get_physical_restore_mod_str(PhysicalRestoreMod mod);
   static const char* get_restore_status_str(PhysicalRestoreStatus status);

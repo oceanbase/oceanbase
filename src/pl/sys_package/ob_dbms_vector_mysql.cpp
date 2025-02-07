@@ -36,7 +36,7 @@ int ObDBMSVectorMySql::refresh_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
   CK(OB_LIKELY(5 == params.count()));
   CK(OB_LIKELY(params.at(0).is_varchar()),
       OB_LIKELY(params.at(1).is_varchar()),
@@ -74,7 +74,7 @@ int ObDBMSVectorMySql::rebuild_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
   CK(OB_LIKELY(8 == params.count()));
   CK(OB_LIKELY(params.at(0).is_varchar()),
       OB_LIKELY(params.at(1).is_varchar()),
@@ -105,6 +105,58 @@ int ObDBMSVectorMySql::rebuild_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
   return ret;
 }
 
+int ObDBMSVectorMySql::refresh_index_inner(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
+  CK(OB_LIKELY(3 == params.count()));
+  CK(OB_LIKELY(params.at(0).is_int()),
+      OB_LIKELY(params.at(1).is_int32()),
+      OB_LIKELY(params.at(2).is_null() || params.at(2).is_varchar()));
+  if (OB_SUCC(ret)) {
+    ObVectorRefreshIndexInnerArg refresh_arg;
+    ObVectorRefreshIndexExecutor refresh_executor;
+    refresh_arg.idx_table_id_ = params.at(0).get_int();
+    refresh_arg.refresh_threshold_ = params.at(1).get_int();
+    params.at(2).is_varchar() ? refresh_arg.refresh_type_ = params.at(2).get_varchar() : NULL;
+    if (OB_FAIL(refresh_executor.execute_refresh_inner(ctx, refresh_arg))) {
+        LOG_WARN("fail to execute refresh index", KR(ret), K(refresh_arg));
+    }
+  }
+  return ret;
+}
+
+int ObDBMSVectorMySql::rebuild_index_inner(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0);
+  CK(OB_LIKELY(6 == params.count()));
+  CK(OB_LIKELY(params.at(0).is_int()),
+      OB_LIKELY(params.at(1).is_float()),
+      OB_LIKELY(params.at(2).is_null() || params.at(2).is_varchar()),
+      OB_LIKELY(params.at(3).is_varchar()),
+      OB_LIKELY(params.at(4).is_null() || params.at(4).is_text()),
+      OB_LIKELY(params.at(5).is_int32()));
+  if (OB_SUCC(ret)) {
+    ObVectorRebuildIndexInnerArg rebuild_arg;
+    ObVectorRefreshIndexExecutor rebuild_executor;
+    rebuild_arg.idx_table_id_ = params.at(0).get_int();
+    rebuild_arg.delta_rate_threshold_ = params.at(1).get_float();
+    params.at(2).is_varchar() ? rebuild_arg.idx_organization_ = params.at(2).get_varchar() : NULL;
+    rebuild_arg.idx_distance_metrics_ = params.at(3).get_varchar();
+    rebuild_arg.idx_parallel_creation_ = params.at(5).get_int();
+
+    rebuild_arg.idx_parameters_ = NULL;
+    if (params.at(4).is_text() && OB_FAIL(params.at(4).get_string(rebuild_arg.idx_parameters_))) {
+        LOG_WARN("fail to get string", K(ret));
+    } else if (OB_FAIL(rebuild_executor.execute_rebuild_inner(ctx, rebuild_arg))) {
+        LOG_WARN("fail to execute refresh index", KR(ret), K(rebuild_arg));
+    }
+  }
+  return ret;
+}
 
 }
 }

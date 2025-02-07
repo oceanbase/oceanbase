@@ -91,7 +91,7 @@ int ObDDLServerClient::create_hidden_table(
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(wait_task_reach_pending(arg.get_tenant_id(), res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_))) {
+    if (OB_FAIL(wait_task_reach_pending(arg.get_tenant_id(), res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_, res.is_no_logging_))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
 #ifdef ERRSIM
@@ -132,6 +132,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   int64_t unused_snapshot_version = OB_INVALID_VERSION;
   uint64_t unused_data_format_version = 0;
+  bool unused_no_logging = false;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
@@ -144,7 +145,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, unused_data_format_version, *GCTX.sql_proxy_))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, unused_data_format_version, *GCTX.sql_proxy_, unused_no_logging))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -400,7 +401,8 @@ int ObDDLServerClient::wait_task_reach_pending(
     const int64_t task_id,
     int64_t &snapshot_version,
     uint64_t &data_format_version,
-    ObMySQLProxy &sql_proxy)
+    ObMySQLProxy &sql_proxy,
+    bool &is_no_logging)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -417,9 +419,11 @@ int ObDDLServerClient::wait_task_reach_pending(
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
     } else {
       while (OB_SUCC(ret)) {
+        uint64_t unused_target_object_id = 0;
+        int64_t unused_schema_version = 0;
         share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
         if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version,
-            snapshot_version, task_status))) {
+            snapshot_version, task_status, unused_target_object_id, unused_schema_version, is_no_logging))) {
           if (OB_LIKELY(OB_ITER_END == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
             ObAddr unused_addr;

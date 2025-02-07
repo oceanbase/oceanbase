@@ -25,11 +25,11 @@
 </p>
 
 <p align="center">
-    <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
-        <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
+    <a href="https://ask.oceanbase.com">
+        <img alt="中文论坛" src="https://img.shields.io/badge/Support-Join%20OceanBase-brightgreen?logo=support" />
     </a>
-    <a href="https://stackoverflow.com/questions/tagged/oceanbase">
-        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
+    <a href="images/dingtalk.png">
+        <img alt="DingTalk" src="https://img.shields.io/badge/Dingtalk-Dingtalk-brightgreen?logo=Dingtalk" />
     </a>
 </p>
 
@@ -91,7 +91,7 @@ obd demo
     docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # 连接root用户sys租户
     ```
 
-更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce)。
+更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/blob/main/oceanbase-ce/README_CN.md)。
 
 ## ☸️ 使用 Kubernetes
 
@@ -107,7 +107,7 @@ obd demo
 
 # 案例
 
-OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
+OceanBase 已服务超过 2000 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
 
 更详细的信息请参考[客户案例](https://www.oceanbase.com/customer/home)和[谁在使用 OceanBase](https://github.com/oceanbase/oceanbase/issues/1301)。
 
@@ -128,7 +128,6 @@ OceanBase 数据库根据 Mulan 公共许可证版本 2 获得许可。有关详
 有以下加入社区的方法：
 
 * [中文论坛](https://ask.oceanbase.com/)
-* [Slack Workspace](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
 * [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
-* 钉钉群: 33254054 ([二维码](images/dingtalk.svg))
+* 钉钉群:  [33254054](images/dingtalk.png)
 * 微信群 (添加微信小助手: OBCE666)

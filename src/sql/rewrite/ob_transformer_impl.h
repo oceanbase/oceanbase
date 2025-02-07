@@ -122,7 +122,8 @@ public:
       contain_link_table_(false),
       contain_json_table_(false),
       contain_fulltext_search_(false),
-      contain_dml_with_doc_id_(false)
+      contain_dml_with_doc_id_(false),
+      contain_vec_index_approx_(false)
     {}
 
     bool all_found() const {
@@ -136,7 +137,8 @@ public:
           contain_link_table_ &&
           contain_json_table_ &&
           contain_fulltext_search_ &&
-          contain_dml_with_doc_id_;
+          contain_dml_with_doc_id_ &&
+          contain_vec_index_approx_;
     }
 
     bool contain_hie_query_;
@@ -150,10 +152,10 @@ public:
     bool contain_json_table_;
     bool contain_fulltext_search_;
     bool contain_dml_with_doc_id_;
+    bool contain_vec_index_approx_;
   };
   static int check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
-  int check_vec_approx(ObDMLStmt *stmt, bool &has_approx);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
   int set_transformation_parameters(ObQueryCtx *query_ctx);
 private:

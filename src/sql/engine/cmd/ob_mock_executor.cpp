@@ -32,7 +32,9 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
       || stmt::T_DROP_SERVER == stmt.get_stmt_type()
       || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type()
       || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
-      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()) {
+      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_GRANT_PROXY == stmt.get_stmt_type()
+      || stmt::T_REVOKE_PROXY == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement is");
   } else if (stmt::T_FLUSH_MOCK_LIST == stmt.get_stmt_type()) {
     const ObIArray<stmt::StmtType> &type_list = stmt.get_stmt_type_list();
@@ -52,6 +54,10 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Repair table Statement just mocks the syntax of MySQL without supporting specific realization");
   } else if (stmt::T_CHECKSUM_TABLE == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Checksum table Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else if (stmt::T_CACHE_INDEX == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Cache index Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else if (stmt::T_LOAD_INDEX_INTO_CACHE == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Load index into cache Statement just mocks the syntax of MySQL without supporting specific realization");
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_USER_WARN(OB_NOT_SUPPORTED, "unknown stmt type");

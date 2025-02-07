@@ -30,7 +30,8 @@ const int64_t ObDeviceManifest::MANIFEST_VERSION = 1;
 const int64_t ObDeviceManifest::MAX_FILE_LINE_LEN = 16384; // 16K
 const char ObDeviceManifest::MANIFEST_FILE_NAME[] = "manifest";
 const char ObDeviceManifest::HEAD_SECTION[] = "[head]";
-const char ObDeviceManifest::DEVICE_SECTION[] = "[device]";
+const char ObDeviceManifest::DEVICE_BEGIN_SECTION[] = "[device begin]";
+const char ObDeviceManifest::DEVICE_END_SECTION[] = "[device end]";
 const char ObDeviceManifest::COMMENT_SYMBOL = '#';
 const char ObDeviceManifest::VERSION_KEY[] = "version=";
 const char ObDeviceManifest::CLUSTER_ID_KEY[] = "cluster_id=";
@@ -71,17 +72,15 @@ int ObDeviceManifest::load(ObIArray<ObDeviceConfig> &config_arr, HeadSection &he
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDeviceManifest not init", KR(ret));
+  } else if (OB_ISNULL(data_dir_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data dir is nullptr", KR(ret));
   } else if (OB_FAIL(databuff_printf(manifest_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s",
                                      data_dir_, MANIFEST_FILE_NAME))) {
     LOG_WARN("construct manifest path fail", KR(ret));
   } else if (OB_ISNULL(fp = fopen(manifest_path, "r"))) {
-    if (ENOENT == errno) {
-      ret = OB_FILE_NOT_EXIST;
-      LOG_INFO("device manifest file does not exist", KR(ret), K(manifest_path));
-    } else {
-      ret = OB_IO_ERROR;
-      LOG_WARN("cannot open file", KR(ret), K(manifest_path), K(errno));
-    }
+    ret = ObIODeviceLocalFileOp::convert_sys_errno();
+    LOG_WARN("fail to open device manifest file", KR(ret), K(errno), KERRMSG);
   } else if (OB_FAIL(parse_file_(fp, config_arr, head))) {
     LOG_WARN("fail to parse file", KR(ret), K(manifest_path));
   } else if (OB_FAIL(validate_config_checksum_(config_arr, head))) {
@@ -91,7 +90,10 @@ int ObDeviceManifest::load(ObIArray<ObDeviceConfig> &config_arr, HeadSection &he
     LOG_WARN("invalid device manifest", K(cluster_id_in_GCONF), "manifest_cluster_id", head.cluster_id_);
   }
   if (OB_NOT_NULL(fp)) {
-    fclose(fp);
+    if (OB_UNLIKELY(0 != fclose(fp))) {
+      ret = ObIODeviceLocalFileOp::convert_sys_errno();
+      LOG_ERROR("fail to close file", KR(ret), K(errno), KERRMSG);
+    }
   }
   LOG_INFO("finish to load device manifest", KR(ret), K(config_arr), K(head));
   return ret;
@@ -101,23 +103,35 @@ int ObDeviceManifest::parse_file_(FILE *fp, ObIArray<ObDeviceConfig> &config_arr
 {
   int ret = OB_SUCCESS;
   SectionType curr_section_type = SECTION_TYPE_INVLAID;
-  SMART_VAR(char[MAX_FILE_LINE_LEN + 2], line_buf) {
+  SMART_VARS_2((char[MAX_FILE_LINE_LEN + 2], line_buf), (ObDeviceConfig, device_config)) {
     while (OB_SUCC(ret)) {
       if (0 != feof(fp)) {
         break; // end of file
-      } else if (0 != ferror(fp)) {
+      } else if (OB_UNLIKELY(0 != ferror(fp))) {
         ret = OB_IO_ERROR;
         LOG_WARN("fail to read manifest file", KR(ret), K(errno));
       } else if (OB_ISNULL(fgets(line_buf, sizeof(line_buf), fp))) {
         // do nothing
-      } else if (STRLEN(line_buf) > MAX_FILE_LINE_LEN) {
+      } else if (OB_UNLIKELY(STRLEN(line_buf) > MAX_FILE_LINE_LEN)) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("file line len is too long", KR(ret), K(MAX_FILE_LINE_LEN));
       } else if (FALSE_IT(line_buf[STRLEN(line_buf) - 1] = '\0')) {  // remove the '\n'
       } else if (0 == STRLEN(line_buf) || (COMMENT_SYMBOL == line_buf[0])) {
         // skip blank line or comment line
       } else if (OB_SUCC(parse_section_type_(line_buf, curr_section_type))) {
-        // this line is a section name
+        // this line is a section name.
+        // SECTION_TYPE_DEVICE_END means finishing parsing one device config, push back the
+        // parsed device config and reset device_config to parse the next device config.
+        if (SECTION_TYPE_DEVICE_END == curr_section_type) {
+          if (OB_UNLIKELY(!device_config.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid device config", KR(ret), K(device_config));
+          } else if (OB_FAIL(config_arr.push_back(device_config))) {
+            LOG_WARN("fail to push back", KR(ret), K(device_config));
+          } else {
+            device_config.reset();
+          }
+        }
       } else if (OB_ITEM_NOT_MATCH != ret) {
         LOG_WARN("fail to parse section type", KR(ret), K(line_buf));
       } else if (SECTION_TYPE_HEAD == curr_section_type) {
@@ -125,23 +139,17 @@ int ObDeviceManifest::parse_file_(FILE *fp, ObIArray<ObDeviceConfig> &config_arr
         if (OB_FAIL(parse_head_section_(line_buf, head))) {
           LOG_WARN("fail to parse head section", KR(ret), K(line_buf), K(head));
         }
-      } else if (SECTION_TYPE_DEVICE == curr_section_type) {
+      } else if (SECTION_TYPE_DEVICE_BEGIN == curr_section_type) {
         ret = OB_SUCCESS; // ignore ret, and then parse device section
-        SMART_VAR(ObDeviceConfig, device_config) {
-          if (OB_FAIL(parse_device_section_(line_buf, device_config))) {
-            LOG_WARN("fail to parse device section", KR(ret), K(line_buf));
-          } else if (OB_FAIL(config_arr.push_back(device_config))) {
-            LOG_WARN("fail to push back", KR(ret), K(device_config));
-          } else {
-            LOG_INFO("succ to parse device section", K(device_config));
-          }
+        if (OB_FAIL(parse_device_section_(line_buf, device_config))) {
+          LOG_WARN("fail to parse device section", KR(ret), K(line_buf));
         }
       } else {
         LOG_WARN("unknow manifest section", KR(ret), K(curr_section_type), K(line_buf));
       }
     }
   }
-  if (OB_SUCC(ret) && (config_arr.count() != head.device_num_)) {
+  if (OB_SUCC(ret) && OB_UNLIKELY((config_arr.count() != head.device_num_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device num does not match between head and device sections", KR(ret), K(head), K(config_arr));
   }
@@ -154,8 +162,10 @@ int ObDeviceManifest::parse_section_type_(const char *buf, SectionType &type)
   int ret = OB_SUCCESS;
   if (0 == STRCMP(buf, HEAD_SECTION)) {
     type = SECTION_TYPE_HEAD;
-  } else if (0 == STRCMP(buf, DEVICE_SECTION)) {
-    type = SECTION_TYPE_DEVICE;
+  } else if (0 == STRCMP(buf, DEVICE_BEGIN_SECTION)) {
+    type = SECTION_TYPE_DEVICE_BEGIN;
+  } else if (0 == STRCMP(buf, DEVICE_END_SECTION)) {
+    type = SECTION_TYPE_DEVICE_END;
   } else {
     ret = OB_ITEM_NOT_MATCH;
   }
@@ -165,7 +175,10 @@ int ObDeviceManifest::parse_section_type_(const char *buf, SectionType &type)
 int ObDeviceManifest::parse_head_section_(const char *buf, HeadSection &head)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(ObDeviceConfigParser::parse_config_type_int(VERSION_KEY, buf, head.version_))) {
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is nullptr", KR(ret));
+  } else if (OB_SUCC(ObDeviceConfigParser::parse_config_type_int(VERSION_KEY, buf, head.version_))) {
   } else if (OB_ITEM_NOT_MATCH != ret) {
     LOG_WARN("fail to parse_config_type_int", KR(ret), K(VERSION_KEY), K(buf));
   } else if (OB_SUCC(ObDeviceConfigParser::parse_config_type_int(CLUSTER_ID_KEY, buf,
@@ -202,20 +215,18 @@ int ObDeviceManifest::parse_head_section_(const char *buf, HeadSection &head)
   return ret;
 }
 
-int ObDeviceManifest::parse_device_section_(char *buf, ObDeviceConfig &device_config)
+int ObDeviceManifest::parse_device_section_(const char *buf, ObDeviceConfig &device_config)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(ObDeviceConfigParser::parse_one_device_config(buf, device_config))) {
-    if (!device_config.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid non-initial device config", KR(ret), K(device_config));
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is nullptr", KR(ret));
+  } else if (OB_FAIL(ObDeviceConfigParser::parse_device_config_field(buf, device_config))) {
+    if (OB_ITEM_NOT_MATCH == ret) {
+      LOG_WARN("unknow manifest device section line", KR(ret), K(buf));
     } else {
-      LOG_INFO("succ to parse one device config", K(device_config));
+      LOG_WARN("fail to parse device config field", KR(ret), K(buf));
     }
-  } else if (OB_ITEM_NOT_MATCH != ret) {
-    LOG_WARN("fail to parse_one_device_config", KR(ret), K(buf));
-  } else {
-    LOG_WARN("unknow manifest device section line", KR(ret), K(buf));
   }
   return ret;
 }
@@ -256,6 +267,9 @@ int ObDeviceManifest::dump2file(
                                                allocator.alloc(OB_MAX_FILE_NAME_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to malloc memory for his_manifest_path", KR(ret), K(OB_MAX_FILE_NAME_LENGTH));
+      } else if (OB_ISNULL(data_dir_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data dir is nullptr", KR(ret));
       } else if (OB_FAIL(databuff_printf(manifest_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s",
                                          data_dir_, MANIFEST_FILE_NAME))) {
         LOG_WARN("fail to construct manifest path", KR(ret));
@@ -272,11 +286,8 @@ int ObDeviceManifest::dump2file(
       } else if (OB_ISNULL(fp = ::fdopen(fd, "w")))  {
         ret = ObIODeviceLocalFileOp::convert_sys_errno();
         LOG_WARN("fail to fdopen", KR(ret), K(fd), K(errno), KERRMSG);
-      } else if (FALSE_IT(pret =
-        fprintf(fp, "# THIS FILE IS AUTOMATICALLY GENERATED BY OBSERVER. PLEASE DO NOT MODIFY IT MANUALLY!!!\n"))) {
-      } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
+      } else if (OB_FAIL(print_file_line_(fp, "# THIS FILE IS AUTOMATICALLY GENERATED BY OBSERVER. PLEASE DO NOT MODIFY IT MANUALLY!!!\n"))) {
+        LOG_WARN("fail to print file line", KR(ret));
       } else if (OB_FAIL(write_head_(fp, head))) {
         LOG_WARN("fail to write head", KR(ret), K(head));
       } else if (OB_FAIL(write_device_config_(fp, configs))) {
@@ -308,66 +319,77 @@ int ObDeviceManifest::dump2file(
   return ret;
 }
 
+// The format of head section is like:
+// [head]
+// version=1
+// cluster_id=0
+// head_checksum=790215355
+// device_checksum=2094936029
+// device_num=2
+// modify_timestamp_us=1725551141912558
+// last_op_id=3
+// last_sub_op_id=4
 int ObDeviceManifest::write_head_(FILE *fp, const HeadSection &head) const
 {
   int ret = OB_SUCCESS;
-  int pret = 0;
-  if (FALSE_IT(pret = fprintf(fp, "%s\n", HEAD_SECTION))) { // [head]
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", VERSION_KEY, head.version_))) { // version=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", CLUSTER_ID_KEY, head.cluster_id_))) { // cluster_id=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", HEAD_CHECKSUM_KEY, head.head_checksum_))) { // head_checksum=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", DEVICE_CHECKSUM_KEY, head.device_checksum_))) { // device_checksum=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", DEVICE_NUM_KEY, head.device_num_))) { // device_num=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", MODIFY_TIMESTAMP_KEY, head.modify_timestamp_us_))) { // modify_timestamp_us=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", LAST_OP_ID_KEY, head.last_op_id_))) { // last_op_id=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s%ld\n", LAST_SUB_OP_ID_KEY, head.last_sub_op_id_))) { // last_sub_op_id=
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
-  } else if (FALSE_IT(pret = fprintf(fp, "%s\n", DEVICE_SECTION))) { // [device]
-  } else if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno));
+  if (OB_FAIL(print_file_line_(fp, "%s\n", HEAD_SECTION))) { // [head]
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", VERSION_KEY, head.version_))) { // version=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", CLUSTER_ID_KEY, head.cluster_id_))) { // cluster_id=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", HEAD_CHECKSUM_KEY, head.head_checksum_))) { // head_checksum=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", DEVICE_CHECKSUM_KEY, head.device_checksum_))) { // device_checksum=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", DEVICE_NUM_KEY, head.device_num_))) { // device_num=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", MODIFY_TIMESTAMP_KEY, head.modify_timestamp_us_))) { // modify_timestamp_us=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", LAST_OP_ID_KEY, head.last_op_id_))) { // last_op_id=
+    LOG_WARN("fail to print file line", KR(ret));
+  } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", LAST_SUB_OP_ID_KEY, head.last_sub_op_id_))) { // last_sub_op_id=
+    LOG_WARN("fail to print file line", KR(ret));
   }
-  LOG_INFO("finish to write head", KR(ret));
+  LOG_INFO("finish to write manifest head", KR(ret));
   return ret;
 }
 
-// The format of each line in device section is like:
-// Example 1:
-// used_for=...&path=...&endpoint=...
-// &access_mode=access_by_id&access_id=...&access_key=...&encrypt_info=...&extension=...
-// &old_access_mode=access_by_id&old_access_id=...&old_access_key=...&old_encrypt_info=...
-// &old_extension=...&state=...&state_info=...&create_timestamp=...&last_check_timestamp=...
-// &op_id=...&sub_op_id=...&storage_id=...&iops=...&bandwidth=...
-// Example 2:
-// used_for=...&path=...&endpoint=...&access_mode=access_by_ram_url&ram_url=xxx&state=...
-// &state_info=...&create_timestamp=...&last_check_timestamp=...&op_id=...&sub_op_id=...
-// &storage_id=...&iops=...&bandwidth=...
+// The format of device section is like:
+// [device begin]
+// used_for=DATA
+// path=oss://bucket-name/root_dir
+// endpoint=host=cn-xxx.com
+// access_info=access_id=ccccc&encrypt_key=ddddd
+// extension=appid=456&checksum_type=md5
+// old_access_info=access_id=aaa&encrypt_key=bbb
+// old_extension=appid=123&checksum_type=crc32
+// state=ADDED
+// state_info=is_connective=true
+// create_timestamp=1679579590156
+// last_check_timestamp=1679579590256
+// op_id=3
+// sub_op_id=4
+// storage_id=2
+// max_iops=10000
+// max_bandwidth=1024000000
+// [device end]
+// [device begin]
+// used_for=LOG
+// path=oss://bucket-name/root_dir
+// endpoint=host=cn-xxx.com
+// access_info=access_id=aaa&encrypt_key=bbb
+// extension=appid=123&checksum_type=crc32
+// state=ADDED
+// state_info=is_connective=true
+// create_timestamp=1679579590156
+// last_check_timestamp=1679579590256
+// op_id=1
+// sub_op_id=2
+// storage_id=1
+// max_iops=10000
+// max_bandwidth=1024000000
+// [device end]
 // Note: not all the fields are needed.
 int ObDeviceManifest::write_device_config_(
     FILE *fp,
@@ -383,87 +405,53 @@ int ObDeviceManifest::write_device_config_(
       if (!config.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("device config is invalid", KR(ret), K(config));
-      } else if (OB_FAIL(databuff_printf(buf, MAX_FILE_LINE_LEN, "%s%s&%s%s&%s%s&%s",
-          ObDeviceConfigParser::USED_FOR, config.used_for_,
-          ObDeviceConfigParser::PATH, config.path_,
-          ObDeviceConfigParser::ENDPOINT, config.endpoint_,
-          config.access_info_))) {
-        LOG_WARN("fail to construct device config line buf", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s\n", DEVICE_BEGIN_SECTION))) { // [device begin]
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::USED_FOR, config.used_for_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::PATH, config.path_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::ENDPOINT, config.endpoint_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::ACCESS_INFO, config.access_info_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if ((0 < STRLEN(config.encrypt_info_)) &&
+                 OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::ENCRYPT_INFO, config.encrypt_info_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if ((0 < STRLEN(config.extension_)) &&
+                 OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::EXTENSION, config.extension_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if ((0 < STRLEN(config.old_access_info_)) &&
+                 OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::OLD_ACCESS_INFO, config.old_access_info_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if ((0 < STRLEN(config.old_encrypt_info_)) &&
+                 OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::OLD_ENCRYPT_INFO, config.old_encrypt_info_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if ((0 < STRLEN(config.old_extension_)) &&
+                 OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::OLD_EXTENSION, config.old_extension_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::STATE, config.state_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%s\n", ObDeviceConfigParser::STATE_INFO, config.state_info_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", ObDeviceConfigParser::CREATE_TIMESTAMP, config.create_timestamp_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", ObDeviceConfigParser::LAST_CHECK_TIMESTAMP, config.last_check_timestamp_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%lu\n", ObDeviceConfigParser::OP_ID, config.op_id_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%lu\n", ObDeviceConfigParser::SUB_OP_ID, config.sub_op_id_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%lu\n", ObDeviceConfigParser::STORAGE_ID, config.storage_id_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", ObDeviceConfigParser::MAX_IOPS, config.max_iops_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s%ld\n", ObDeviceConfigParser::MAX_BANDWIDTH, config.max_bandwidth_))) {
+        LOG_WARN("fail to print file line", KR(ret));
+      } else if (OB_FAIL(print_file_line_(fp, "%s\n", DEVICE_END_SECTION))) { // [device end]
+        LOG_WARN("fail to print file line", KR(ret));
       }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.encrypt_info_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::ENCRYPT_INFO, config.encrypt_info_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.extension_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::EXTENSION, config.extension_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.old_access_info_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s", config.old_access_info_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.old_encrypt_info_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::OLD_ENCRYPT_INFO, config.old_encrypt_info_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.old_extension_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::OLD_EXTENSION, config.old_extension_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::STATE, config.state_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret) && 0 != STRLEN(config.state_info_)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%s", ObDeviceConfigParser::STATE_INFO, config.state_info_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%ld", ObDeviceConfigParser::CREATE_TIMESTAMP, config.create_timestamp_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%ld", ObDeviceConfigParser::LAST_CHECK_TIMESTAMP, config.last_check_timestamp_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%lu", ObDeviceConfigParser::OP_ID, config.op_id_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%lu", ObDeviceConfigParser::SUB_OP_ID, config.sub_op_id_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%lu", ObDeviceConfigParser::STORAGE_ID, config.storage_id_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%ld", ObDeviceConfigParser::MAX_IOPS, config.max_iops_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        } else if (OB_FAIL(databuff_printf(buf + STRLEN(buf), MAX_FILE_LINE_LEN - STRLEN(buf),
-          "&%s%ld", ObDeviceConfigParser::MAX_BANDWIDTH, config.max_bandwidth_))) {
-          LOG_WARN("fail to construct device config line buf", KR(ret), K(config));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        pret = fprintf(fp, "%s\n", buf);
-        if (pret <= 0 || pret > MAX_FILE_LINE_LEN) {
-          ret = OB_IO_ERROR;
-          LOG_WARN("fail to write manifest", KR(ret), K(pret), K(errno), K(buf));
-        }
-      }
-      LOG_INFO("finish to write manifest device line", KR(ret), K(buf));
+      LOG_INFO("finish to write manifest device", KR(ret), K(buf));
     }
   }
   LOG_INFO("finish to write device config", KR(ret));
@@ -560,6 +548,25 @@ int ObDeviceManifest::validate_config_checksum_(
     ret = OB_CHECKSUM_ERROR;
     LOG_WARN("config checksum error", KR(ret), K(device_checksum), "device_checksum_record_in_head",
       head.device_checksum_, K(head_checksum), "head_checksum_record_in_head", head.head_checksum_);
+  }
+  return ret;
+}
+
+int ObDeviceManifest::print_file_line_(FILE *fp, const char *fmt, ...) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(fp) || OB_ISNULL(fmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(fp), KP(fmt));
+  } else {
+    va_list args;
+    va_start(args, fmt);
+    int pret = vfprintf(fp, fmt, args);
+    va_end(args);
+    if (OB_UNLIKELY((pret <= 0) || (pret >= MAX_FILE_LINE_LEN))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("fail to vfprintf", KR(ret), K(pret), K(errno), KERRMSG);
+    }
   }
   return ret;
 }

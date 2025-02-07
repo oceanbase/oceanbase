@@ -23,16 +23,20 @@ namespace table
 class ObTableApiInsertSpec : public ObTableApiModifySpec
 {
 public:
+  typedef common::ObArrayWrap<ObTableInsCtDef*> ObTableInsCtDefArray;
   ObTableApiInsertSpec(common::ObIAllocator &alloc, const ObTableExecutorType type)
       : ObTableApiModifySpec(alloc, type),
-        ins_ctdef_(alloc)
+        ins_ctdefs_()
   {
   }
+
+  int init_ctdefs_array(int64_t size);
+  virtual ~ObTableApiInsertSpec();
 public:
-  OB_INLINE const ObTableInsCtDef& get_ctdef() const { return ins_ctdef_; }
-  OB_INLINE ObTableInsCtDef& get_ctdef() { return ins_ctdef_; }
+  OB_INLINE const ObTableInsCtDefArray& get_ctdefs() const { return ins_ctdefs_; }
+  OB_INLINE ObTableInsCtDefArray& get_ctdefs() { return ins_ctdefs_; }
 private:
-  ObTableInsCtDef ins_ctdef_;
+  ObTableInsCtDefArray ins_ctdefs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiInsertSpec);
 };
@@ -40,9 +44,11 @@ private:
 class ObTableApiInsertExecutor : public ObTableApiModifyExecutor
 {
 public:
+  typedef common::ObArrayWrap<ObTableInsRtDef> ObTableInsRtDefArray;
   ObTableApiInsertExecutor(ObTableCtx &ctx, const ObTableApiInsertSpec &spec)
       : ObTableApiModifyExecutor(ctx),
         ins_spec_(spec),
+        ins_rtdefs_(),
         cur_idx_(0)
   {
   }
@@ -52,6 +58,7 @@ public:
   virtual int get_next_row() override;
   virtual int close() override;
 private:
+  int inner_open_with_das();
   int process_single_operation(const ObTableEntity *entity);
   int get_next_row_from_child();
   int ins_rows_post_proc();
@@ -59,7 +66,7 @@ private:
 
 private:
   const ObTableApiInsertSpec &ins_spec_;
-  ObTableInsRtDef ins_rtdef_;
+  ObTableInsRtDefArray ins_rtdefs_;
   int64_t cur_idx_;
 };
 

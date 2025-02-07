@@ -75,6 +75,12 @@ public:
       const int64_t ls_epoch,
       const ObIArray<ObPendingFreeTabletItem> &items);
 #ifdef OB_BUILD_SHARED_STORAGE
+  // recover pending_free_tablet_arr_map during reboot
+  int ss_replay_ls_pending_free_arr(
+    ObArenaAllocator &allocator,
+    const ObLSID &ls_id,
+    const uint64_t ls_epoch);
+
   // for ls replica gc
   int ss_delete_tablet_current_version(
     const ObTabletID &tablet_id,
@@ -92,6 +98,7 @@ public:
     const ObLSID &ls_id,
     const uint64_t ls_epoch,
     const int64_t deleted_tablet_version,
+    const int64_t deleted_tablet_transfer_seq,
     ObArenaAllocator &allocator);
   int ss_delete_tenant_ls_item(
     const share::ObLSID ls_id, const int64_t ls_epoch)

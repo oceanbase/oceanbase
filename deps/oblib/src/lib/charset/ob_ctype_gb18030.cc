@@ -989,7 +989,9 @@ static ObCharsetHandler ob_charset_gb18030_handler = {
     ob_strntod_8bit,
     // my_strtoll10_8bit,
     ob_strntoull10rnd_8bit,
-    ob_scan_8bit};
+    ob_scan_8bit,
+    skip_trailing_space
+};
 
 ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     oceanbase::common::CS_TYPE_GB18030_CHINESE_CI,
@@ -1620,7 +1622,8 @@ static ObCharsetHandler ob_charset_gb18030_2022_handler =
   ob_strntoull_8bit,
   ob_strntod_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 ObCharsetInfo ob_charset_gb18030_2022_bin =

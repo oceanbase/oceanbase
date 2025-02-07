@@ -14,10 +14,13 @@ extern void sockaddr_to_addr_c(struct sockaddr_storage *sock_addr, bool *is_ipv6
 extern char *sockaddr_to_str_c(struct sockaddr_storage *sock_addr, char *buf, int len);
 extern struct sockaddr_storage* make_unix_sockaddr_c(bool is_ipv6, void *ip, int port, struct sockaddr_storage *sock_addr);
 
-const char* addr_str(format_t* f, addr_t addr) {
-  char buf[INET6_ADDRSTRLEN + 6];
-  struct sockaddr_storage sock_addr;
-  return format_sf(f, "%s", sockaddr_to_str_c(make_sockaddr(&sock_addr, addr), buf, sizeof(buf)));
+const char* addr_str(addr_t addr, char *buf, int buf_len)
+{
+  if (NULL != buf && buf_len > 0) {
+    struct sockaddr_storage sock_addr;
+    (void) sockaddr_to_str_c(make_sockaddr(&sock_addr, addr), buf, buf_len);
+  }
+  return buf;
 }
 
 addr_t* addr_init(addr_t* addr, const char* ip, int port) {
@@ -48,7 +51,7 @@ addr_t get_local_addr(int fd) {
   addr_t addr;
   struct sockaddr_storage sock_addr;
   socklen_t addr_len = sizeof(sock_addr);
-  if (0 == getpeername(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
+  if (0 == getsockname(fd, (struct sockaddr*)&sock_addr, &addr_len)) {
     sockaddr_to_addr_c(&sock_addr, &addr.is_ipv6, &addr.ip, (int*)&addr.port);
   } else {
     addr_reset(&addr);

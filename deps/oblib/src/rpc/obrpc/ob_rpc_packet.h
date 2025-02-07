@@ -103,6 +103,11 @@ public:
     return name;
   }
 
+  const char *name_of_pcode(ObRpcPacketCode code) const
+  {
+    return name_of_idx(idx_of_pcode(code));
+  }
+
   const char *label_of_idx(int64_t idx) const
   {
     const char *name = "Unknown";

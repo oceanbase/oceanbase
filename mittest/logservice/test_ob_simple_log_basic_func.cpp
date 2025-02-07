@@ -1,3 +1,6 @@
+// owner: zjf225077
+// owner group: log
+
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -81,7 +84,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
 // test_max_padding_size: 测试padding entry最长的场景(2M+16K+88+4K-1B).
 TEST_F(TestObSimpleLogClusterBasicFunc, test_max_padding_size)
 {
-  SET_CASE_LOG_FILE(TEST_NAME, "submit_log");
+  SET_CASE_LOG_FILE(TEST_NAME, "max_padding_size");
   //OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t create_ts = 100;

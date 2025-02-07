@@ -381,7 +381,10 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
     } //end for global index ctdef loop
     if (OB_SUCC(ret)) {
       int64_t update_rows = rtdefs.at(0).is_row_changed_ ? 1 : 0;
-      if (OB_FAIL(merge_implict_cursor(0, update_rows, 0, 1))) {
+      ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+      bool client_found_rows = session->get_capability().cap_flags_.OB_CLIENT_FOUND_ROWS;
+      int64_t affected_rows = client_found_rows ? 1 /*found_rows*/ : update_rows;
+      if (OB_FAIL(merge_implict_cursor(affected_rows, 1 /*found_rows*/, 1 /*match_rows*/, update_rows /*duplicated_rows*/))) {
         LOG_WARN("merge implict cursor failed", K(ret));
       }
     }

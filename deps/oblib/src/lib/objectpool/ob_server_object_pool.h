@@ -292,6 +292,7 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()));
     } else if ((buf_ = ob_malloc(arena_num_ * cnt_per_arena_ * item_size_, attr)) == NULL) {
+      ob_free(ptr);
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()), K(item_size_),
                  K(arena_num_), K(+cnt_per_arena_));

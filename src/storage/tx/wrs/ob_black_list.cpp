@@ -16,6 +16,7 @@
 #include "deps/oblib/src/common/ob_role.h"                      // role
 #include "storage/tx/wrs/ob_weak_read_util.h"               // ObWeakReadUtil
 #include "storage/tx/ob_ts_mgr.h"
+#include "lib/ash/ob_active_session_guard.h"                    // ObASHSetInnerSqlWaitGuard
 
 namespace oceanbase
 {
@@ -192,6 +193,7 @@ void ObBLService::run1()
       int64_t wait_interval = BLACK_LIST_REFRESH_INTERVAL - cost_time;
       TRANS_LOG(INFO, "ls blacklist refresh finish", K(cost_time));
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         thread_cond_.timedwait(wait_interval);
       }
     }
@@ -210,6 +212,7 @@ void ObBLService::do_thread_task_(const int64_t begin_tstamp,
 
   // 查询ls内部表，根据时间戳信息决定是否将ls其加入黑名单
   SMART_VAR(ObISQLClient::ReadResult, res) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::LOG_GET_BLACK_LIST_LS_INFO);
     if (OB_ISNULL((sql_proxy = GCTX.sql_proxy_))) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "sql_proxy is null", KR(ret));
@@ -267,7 +270,7 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     } else if (ls_info.is_leader() && check_need_skip_leader_(bl_key.get_tenant_id())) {
       // cannot add leader into blacklist
       need_remove = true;
-    } else if (ls_info.weak_read_scn_ == 0) {
+    } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATION_STATUS_NONE) {
       // log stream is initializing, should't be put into blacklist
       need_remove = true;
     } else if (OB_FAIL(OB_TS_MGR.get_gts(bl_key.get_tenant_id(), NULL, gts_scn))) {

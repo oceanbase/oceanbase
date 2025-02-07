@@ -781,9 +781,7 @@ private:
 class TG_TIMER : public ITG
 {
 public:
-  TG_TIMER(int64_t max_task_num = 32)
-    : max_task_num_(max_task_num)
-  {}
+  TG_TIMER() {}
   ~TG_TIMER() { destroy(); }
   int thread_cnt() override { return 1; }
   int set_thread_cnt(int64_t thread_cnt) override
@@ -798,9 +796,10 @@ public:
     if (timer_ != nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      timer_ = new (buf_) common::ObTimer(max_task_num_);
-      timer_->set_run_wrapper(tg_helper_);
-      if (OB_FAIL(timer_->init(attr_.name_,
+      timer_ = new (buf_) common::ObTimer();
+      if (OB_FAIL(timer_->set_run_wrapper(tg_helper_))) {
+        OB_LOG(WARN, "timer set run wrapper failed", K(ret));
+      } else if (OB_FAIL(timer_->init(attr_.name_,
                                ObMemAttr(get_tenant_id(), "TGTimer")))) {
         OB_LOG(WARN, "init failed", K(ret));
       }
@@ -843,7 +842,7 @@ public:
     if (OB_ISNULL(timer_)) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      ret = timer_->task_exist(task, exist);
+      exist = timer_->task_exist(task);
     }
     return ret;
   }
@@ -898,7 +897,6 @@ public:
 private:
   char buf_[sizeof(common::ObTimer)];
   common::ObTimer *timer_ = nullptr;
-  int64_t max_task_num_;
 };
 
 class TG_ASYNC_TASK_QUEUE : public ITG
@@ -1185,7 +1183,7 @@ public:
       ret = tmp_tg->logical_start();                                                                    \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical start only can be used with REENTRANT_THREAD_POOL");                        \
+      OB_LOG(ERROR, "logical start only can be used with REENTRANT_THREAD_POOL");                       \
     }                                                                                                   \
     ret;                                                                                                \
   })
@@ -1203,7 +1201,7 @@ public:
       tmp_tg->logical_stop();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 
@@ -1220,7 +1218,7 @@ public:
       tmp_tg->logical_wait();                                                                           \
     } else {                                                                                            \
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
-      OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
+      OB_LOG(ERROR, "logical stop only can be used with REENTRANT_THREAD_POOL");                        \
     }                                                                                                   \
   })
 } // end of namespace lib

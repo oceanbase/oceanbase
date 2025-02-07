@@ -222,13 +222,13 @@ TEST_F(ObTestMemtableNewSafeToDestroy, test_safe_to_destroy)
   storage::ObTabletMemtableMgr *memtable_mgr = memtable->get_memtable_mgr();
   EXPECT_EQ(OB_SUCCESS, memtable_mgr->release_memtables());
 
-  TRANS_LOG(INFO, "qcc print2", KPC(memtable));;
+  TRANS_LOG(INFO, "qcc print2", KPC(memtable));
 
   ObTabletHandle tablet_handle;
   get_tablet(tenant_id, share::ObLSID(1001), tablet_id, tablet_handle);
   tablet_handle.get_obj()->reset_memtable();
 
-  TRANS_LOG(INFO, "qcc print3", KPC(memtable));;
+  TRANS_LOG(INFO, "qcc print3", KPC(memtable));
 
   usleep(5 * 1000 * 1000);
 

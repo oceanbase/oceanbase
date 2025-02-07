@@ -278,19 +278,19 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=8
+       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=256
       limit(1), offset(nil)
   1 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=8
+       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
        [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)])
   2 - output([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
-       [ANONYMOUS_VIEW1.c7]), filter(nil), rowset=8
+       [ANONYMOUS_VIEW1.c7]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
        [ANONYMOUS_VIEW1.c7])
-  3 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=8
+  3 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=256
       distinct([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7])
-  4 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=8
+  4 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil), rowset=256
       access([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t111_var.__pk_increment]), range(MIN ; MAX)always true
@@ -5948,25 +5948,28 @@ Outputs & filters:
 REPLACE INTO t1(c0) VALUES('rF0Lll5');
 explain basic SELECT count(*) as rowCount FROM (SELECT /*+ USE_HASH (t1) */ DISTINCT t0.c0 AS t0c0, t0.c1 AS t0c1, t2.c0 AS t2c0, t1.c0 AS t1c0 FROM t0, t2, t1 WHERE t0.c1 ORDER BY t0.c0 DESC, t1.c0 DESC LIMIT 2147483647 OFFSET 0) as result WHERE concat(result.t0c0,'') IS NULL AND result.t0c1 = 398204275 AND result.t2c0 = 1489403758 AND concat(result.t1c0,'') = "q6h]zjLt)|[?S*C";
 Query Plan
-=========================================================
-|ID|OPERATOR                                   |NAME    |
----------------------------------------------------------
-|0 |SCALAR GROUP BY                            |        |
-|1 |└─SUBPLAN SCAN                             |result  |
-|2 |  └─LIMIT                                  |        |
-|3 |    └─TOP-N SORT                           |        |
-|4 |      └─HASH DISTINCT                      |        |
-|5 |        └─NESTED-LOOP JOIN CARTESIAN       |        |
-|6 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |
-|7 |          │ ├─DISTRIBUTED TABLE FULL SCAN  |t1(i430)|
-|8 |          │ └─MATERIAL                     |        |
-|9 |          │   └─DISTRIBUTED TABLE FULL SCAN|t2(i950)|
-|10|          └─MATERIAL                       |        |
-|11|            └─PX COORDINATOR               |        |
-|12|              └─EXCHANGE OUT DISTR         |:EX10000|
-|13|                └─PX PARTITION ITERATOR    |        |
-|14|                  └─TABLE FULL SCAN        |t0      |
-=========================================================
+=======================================================
+|ID|OPERATOR                                 |NAME    |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY                          |        |
+|1 |└─SUBPLAN SCAN                           |result  |
+|2 |  └─LIMIT                                |        |
+|3 |    └─TOP-N SORT                         |        |
+|4 |      └─HASH DISTINCT                    |        |
+|5 |        └─NESTED-LOOP JOIN CARTESIAN     |        |
+|6 |          ├─NESTED-LOOP JOIN CARTESIAN   |        |
+|7 |          │ ├─TABLE FULL SCAN            |t1(i430)|
+|8 |          │ └─MATERIAL                   |        |
+|9 |          │   └─PX COORDINATOR           |        |
+|10|          │     └─EXCHANGE OUT DISTR     |:EX10000|
+|11|          │       └─PX PARTITION ITERATOR|        |
+|12|          │         └─TABLE FULL SCAN    |t2(i950)|
+|13|          └─MATERIAL                     |        |
+|14|            └─PX COORDINATOR             |        |
+|15|              └─EXCHANGE OUT DISTR       |:EX20000|
+|16|                └─PX PARTITION ITERATOR  |        |
+|17|                  └─TABLE FULL SCAN      |t0      |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
@@ -5990,40 +5993,48 @@ Outputs & filters:
       range_key([t1.__substr1_16], [t1.__pk_increment], [t1.c0]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   8 - output([t2.c0]), filter(nil), rowset=256
   9 - output([t2.c0]), filter(nil), rowset=256
+ 10 - output([t2.c0]), filter(nil), rowset=256
+      dop=1
+ 11 - output([t2.c0]), filter(nil), rowset=256
+      force partition granule
+ 12 - output([t2.c0]), filter(nil), rowset=256
       access([t2.c0]), partitions(p[0-2])
       is_index_back=false, is_global_index=true, 
       range_key([t2.c0], [t2.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
- 10 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
- 11 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
- 12 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 13 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 14 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 15 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
       dop=1
- 13 - output([t0.c1], [t0.c0]), filter(nil), rowset=256
+ 16 - output([t0.c1], [t0.c0]), filter(nil), rowset=256
       force partition granule
- 14 - output([t0.c1], [t0.c0]), filter([t0.c1]), rowset=256
+ 17 - output([t0.c1], [t0.c0]), filter([t0.c1]), rowset=256
       access([t0.c1], [t0.c0]), partitions(p[0-14])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t0.__pk_increment]), range(MIN ; MAX)always true
 EXPLAIN BASIC SELECT count(*) as rowCount FROM (SELECT /*+ USE_HASH (t1) */ DISTINCT t0.c0 AS t0c0, t0.c1 AS t0c1, t2.c0 AS t2c0, t1.c0 AS t1c0 FROM t0, t2, t1 WHERE t0.c1 ORDER BY t0.c0 DESC, t1.c0 DESC LIMIT 2147483647 OFFSET 0) as result WHERE concat(result.t0c0,'') IS NULL AND result.t0c1 = 398204275 AND result.t2c0 = 1489403758 AND concat(result.t1c0,'') = "q6h]zjLt)|[?S*C";
 Query Plan
-=========================================================
-|ID|OPERATOR                                   |NAME    |
----------------------------------------------------------
-|0 |SCALAR GROUP BY                            |        |
-|1 |└─SUBPLAN SCAN                             |result  |
-|2 |  └─LIMIT                                  |        |
-|3 |    └─TOP-N SORT                           |        |
-|4 |      └─HASH DISTINCT                      |        |
-|5 |        └─NESTED-LOOP JOIN CARTESIAN       |        |
-|6 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |
-|7 |          │ ├─DISTRIBUTED TABLE FULL SCAN  |t1(i430)|
-|8 |          │ └─MATERIAL                     |        |
-|9 |          │   └─DISTRIBUTED TABLE FULL SCAN|t2(i950)|
-|10|          └─MATERIAL                       |        |
-|11|            └─PX COORDINATOR               |        |
-|12|              └─EXCHANGE OUT DISTR         |:EX10000|
-|13|                └─PX PARTITION ITERATOR    |        |
-|14|                  └─TABLE FULL SCAN        |t0      |
-=========================================================
+=======================================================
+|ID|OPERATOR                                 |NAME    |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY                          |        |
+|1 |└─SUBPLAN SCAN                           |result  |
+|2 |  └─LIMIT                                |        |
+|3 |    └─TOP-N SORT                         |        |
+|4 |      └─HASH DISTINCT                    |        |
+|5 |        └─NESTED-LOOP JOIN CARTESIAN     |        |
+|6 |          ├─NESTED-LOOP JOIN CARTESIAN   |        |
+|7 |          │ ├─TABLE FULL SCAN            |t1(i430)|
+|8 |          │ └─MATERIAL                   |        |
+|9 |          │   └─PX COORDINATOR           |        |
+|10|          │     └─EXCHANGE OUT DISTR     |:EX10000|
+|11|          │       └─PX PARTITION ITERATOR|        |
+|12|          │         └─TABLE FULL SCAN    |t2(i950)|
+|13|          └─MATERIAL                     |        |
+|14|            └─PX COORDINATOR             |        |
+|15|              └─EXCHANGE OUT DISTR       |:EX20000|
+|16|                └─PX PARTITION ITERATOR  |        |
+|17|                  └─TABLE FULL SCAN      |t0      |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
@@ -6047,16 +6058,21 @@ Outputs & filters:
       range_key([t1.__substr1_16], [t1.__pk_increment], [t1.c0]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   8 - output([t2.c0]), filter(nil), rowset=256
   9 - output([t2.c0]), filter(nil), rowset=256
+ 10 - output([t2.c0]), filter(nil), rowset=256
+      dop=1
+ 11 - output([t2.c0]), filter(nil), rowset=256
+      force partition granule
+ 12 - output([t2.c0]), filter(nil), rowset=256
       access([t2.c0]), partitions(p[0-2])
       is_index_back=false, is_global_index=true, 
       range_key([t2.c0], [t2.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
- 10 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
- 11 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
- 12 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 13 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 14 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
+ 15 - output([t0.c0], [t0.c1]), filter(nil), rowset=256
       dop=1
- 13 - output([t0.c1], [t0.c0]), filter(nil), rowset=256
+ 16 - output([t0.c1], [t0.c0]), filter(nil), rowset=256
       force partition granule
- 14 - output([t0.c1], [t0.c0]), filter([t0.c1]), rowset=256
+ 17 - output([t0.c1], [t0.c0]), filter([t0.c1]), rowset=256
       access([t0.c1], [t0.c0]), partitions(p[0-14])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t0.__pk_increment]), range(MIN ; MAX)always true

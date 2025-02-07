@@ -47,6 +47,7 @@ public:
       OB_SYS_TENANT_ID);
     ASSERT_EQ(OB_SUCCESS, ret);
     int s = (int)time(NULL);
+    SERVER_STORAGE_META_SERVICE.is_started_ = true;
     LOG_INFO("initial setup random seed", K(s));
     srandom(s);
   }
@@ -120,6 +121,17 @@ public:
     TestChunkDatumStore &t_;
   };
 
+  static void SetUpTestCase()
+  {
+    ASSERT_EQ(OB_SUCCESS, ObTimerService::get_instance().start());
+  }
+  static void TearDownTestCase()
+  {
+    ObTimerService::get_instance().stop();
+    ObTimerService::get_instance().wait();
+    ObTimerService::get_instance().destroy();
+  }
+
   void init_exprs()
   {
     int64_t pos = 0;
@@ -174,6 +186,11 @@ public:
       EXPECT_EQ(OB_SUCCESS, io_service->start());
       tenant_ctx.set(io_service);
 
+      ObTimerService *timer_service = nullptr;
+      EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
+      EXPECT_EQ(OB_SUCCESS, ObTimerService::mtl_start(timer_service));
+      tenant_ctx.set(timer_service);
+
       tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
       EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
       EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
@@ -182,6 +199,7 @@ public:
       tenant_ctx.set(tf_mgr);
 
       ObTenantEnv::set_tenant(&tenant_ctx);
+      SERVER_STORAGE_META_SERVICE.is_started_ = true;
     }
 
     cell_cnt_ = COLS;
@@ -217,6 +235,11 @@ public:
 
     tmp_file::ObTmpBlockCache::get_instance().destroy();
     tmp_file::ObTmpPageCache::get_instance().destroy();
+    ObTimerService *timer_service = MTL(ObTimerService *);
+    ASSERT_NE(nullptr, timer_service);
+    timer_service->stop();
+    timer_service->wait();
+    timer_service->destroy();
     blocksstable::TestDataFilePrepare::TearDown();
     LOG_INFO("TearDown finished", K_(rs));
   }
@@ -906,9 +929,9 @@ TEST_F(TestChunkDatumStore, test_only_disk_data)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkDatumStore rs("TEST");
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);
@@ -933,9 +956,9 @@ TEST_F(TestChunkDatumStore, test_only_disk_data1)
   int64_t rows = round * cnt;
   LOG_INFO("starting write disk test: append rows", K(rows));
   ObChunkDatumStore rs("TEST");
-  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   ObChunkDatumStore::Iterator it;
   ASSERT_EQ(OB_SUCCESS, rs.init(0, tenant_id_, ctx_id_, label_));
+  ASSERT_EQ(OB_SUCCESS, rs.alloc_dir_id());
   rs.set_mem_limit(1L << 30);
   // disk data
   CALL(append_rows, rs, cnt);
@@ -994,9 +1017,10 @@ TEST_F(TestChunkDatumStore, test_append_block)
 
   //recv
   ObChunkDatumStore rs2("TEST");
-  rs2.alloc_dir_id();
   ObChunkDatumStore::Block *block2 = reinterpret_cast<ObChunkDatumStore::Block *>(mem2);
   ret = rs2.init(0, tenant_id_, ctx_id_, label_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = rs2.alloc_dir_id();
   ASSERT_EQ(OB_SUCCESS, ret);
   for (int64_t i = 0; OB_SUCC(ret) && i < 100; ++i) {
     ret = rs2.append_block(block->get_buffer()->data(), block->get_buffer()->data_size(), true);

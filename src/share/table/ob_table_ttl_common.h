@@ -22,7 +22,7 @@ namespace oceanbase
 namespace table
 {
 
-class ObTTLTaskParam final
+class ObTTLTaskParam
 {
 public:
   ObTTLTaskParam()
@@ -66,6 +66,21 @@ public:
   uint64_t table_id_;
 };
 
+
+
+class ObTTLHRowkeyTaskParam : public ObTTLTaskParam
+{
+public:
+  explicit ObTTLHRowkeyTaskParam(ObTTLTaskParam &task_param, common::ObIArray<common::ObString> &rowkeys)
+    : ObTTLTaskParam(task_param),
+      rowkeys_(rowkeys)
+  {}
+  OB_INLINE const common::ObIArray<common::ObString>& get_rowkeys() const { return rowkeys_; }
+public:
+  common::ObIArray<common::ObString> &rowkeys_;
+};
+
+
 class ObTTLTaskInfo final
 {
 public:
@@ -97,6 +112,13 @@ public:
            (task_id_ == other.task_id_) &&
            (table_id_ == other.table_id_) &&
            (tablet_id_ == other.tablet_id_));
+  }
+
+  void reset_cnt()
+  {
+    ttl_del_cnt_ = 0;
+    max_version_del_cnt_ = 0;
+    scan_cnt_ = 0;
   }
 
   TO_STRING_KV(K_(task_id), K_(tablet_id), K_(table_id), K_(is_user_trigger),

@@ -275,7 +275,7 @@ int ObPushdownAggContext::prepare_aggregate_rows(const int64_t count)
   int ret = OB_SUCCESS;
   int64_t row_size = 0;
   void *buf = nullptr;
-  if (count > USE_GROUP_BY_MAX_DISTINCT_CNT) {
+  if (OB_UNLIKELY(count > USE_GROUP_BY_MAX_DISTINCT_CNT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected agg row count", K(ret), K(count));
   } else if (count > agg_row_num_) {
@@ -412,12 +412,12 @@ int ObAggDatumBuf::new_agg_datum_buf(
 {
   int ret = OB_SUCCESS;
   int64_t new_size = size;
-  if (size > USE_GROUP_BY_MAX_DISTINCT_CNT) {
+  if (OB_UNLIKELY(size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid size", K(size));
+    LOG_WARN("Invalid size", K(ret), K(size));
   } else if (nullptr != datum_buf) {
     if (size > datum_buf->get_capacity()) {
-      new_size = MIN(MAX(size, 2 * datum_buf->get_capacity()), USE_GROUP_BY_MAX_DISTINCT_CNT);
+      new_size = MAX(size, 2 * datum_buf->get_capacity());
       allocator.reuse();
       datum_buf = nullptr;
     } else {

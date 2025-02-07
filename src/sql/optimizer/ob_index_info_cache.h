@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OPTIMIZER_OB_INDEX_INFO_CACHE_H 1
 
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "sql/ob_sql_define.h"
 
 namespace oceanbase
@@ -28,6 +29,7 @@ public:
   QueryRangeInfo() : is_valid_(false),
       contain_always_false_(false),
       query_range_(NULL),
+      pre_range_graph_(NULL),
       ranges_(),
       ss_ranges_(),
       equal_prefix_count_(0),
@@ -35,8 +37,15 @@ public:
       range_prefix_count_(0),
       index_column_count_(0),
       range_columns_(),
-      expr_constraints_() {}
+      expr_constraints_(),
+      index_prefix_(-1) {}
   const ObQueryRange* get_query_range() const { return query_range_; }
+  const ObPreRangeGraph* get_pre_range_graph() const { return pre_range_graph_; }
+  const ObQueryRangeProvider *get_query_range_provider() const
+  {
+    return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                       : static_cast<const ObQueryRangeProvider *>(query_range_);
+  }
   const ObQueryRangeArray& get_ranges() const { return ranges_; }
   const common::ObIArray<ColumnItem> &get_range_columns() const { return range_columns_; }
   const common::ObIArray<ObExprConstraint> &get_expr_constraints() const
@@ -53,6 +62,7 @@ public:
   ObQueryRangeArray& get_ss_ranges() { return ss_ranges_; }
   const ObQueryRangeArray& get_ss_ranges() const { return ss_ranges_; }
   void set_query_range(ObQueryRange *query_range) { query_range_ = query_range; }
+  void set_pre_range_graph(ObPreRangeGraph *pre_range_graph) { pre_range_graph_ = pre_range_graph; }
   common::ObIArray<ColumnItem> &get_range_columns() { return range_columns_; }
   common::ObIArray<ObExprConstraint> &get_expr_constraints() { return expr_constraints_; }
   void set_valid() { is_valid_ = true; }
@@ -87,14 +97,18 @@ public:
   { index_column_count_ = index_column_count; };
   void set_contain_always_false(const bool contain_always_false)
   { contain_always_false_ = contain_always_false; }
+  void set_index_prefix(int64_t index_prefix)
+  { index_prefix_  = index_prefix; }
+  int64_t get_index_prefix() const { return index_prefix_; }
 
   TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
                K_(equal_prefix_null_count), K_(range_prefix_count),
-               K_(index_column_count), K_(expr_constraints));
+               K_(index_column_count), K_(expr_constraints), K_(index_prefix));
 private:
   bool is_valid_;
   bool contain_always_false_;
   ObQueryRange *query_range_;
+  ObPreRangeGraph *pre_range_graph_;
   ObQueryRangeArray ranges_;
   ObQueryRangeArray ss_ranges_; // for index skip scan, postfix range
   int64_t equal_prefix_count_;
@@ -103,6 +117,7 @@ private:
   int64_t index_column_count_; // index column count without adding primary key
   common::ObArray<ColumnItem> range_columns_;
   common::ObArray<ObExprConstraint> expr_constraints_;
+  int64_t index_prefix_;
   DISALLOW_COPY_AND_ASSIGN(QueryRangeInfo);
 };
 
@@ -142,6 +157,7 @@ public:
     is_fulltext_index_(false),
     is_multivalue_index_(false),
     is_vector_index_(false),
+    force_direction_(false),
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
@@ -185,6 +201,8 @@ public:
   ObShardingInfo *get_sharding_info() const { return sharding_info_; }
   bool is_multivalue_index() const { return is_multivalue_index_; }
   void set_is_multivalue_index(const bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
+  bool is_force_direction() const { return force_direction_; }
+  void set_force_direction(bool force) { force_direction_ = force; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
                K_(is_fulltext_index), K_(is_multivalue_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
@@ -197,6 +215,7 @@ private:
   bool is_fulltext_index_;
   bool is_multivalue_index_;
   bool is_vector_index_;
+  bool force_direction_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;
   int64_t interesting_order_info_;  // 记录索引的序在stmt中的哪些地方用到 e.g. join, group by, order by
@@ -223,12 +242,14 @@ public:
   int get_query_range(const uint64_t table_id,
                       const uint64_t index_id,
                       const QueryRangeInfo *&query_range_info) const;
+
   int get_access_path_ordering(const uint64_t table_id,
                                const uint64_t index_id,
                                const OrderingInfo *&ordering_info) const;
   int get_index_info_entry(const uint64_t table_id,
                            const uint64_t index_id,
-                           IndexInfoEntry *&entry) const;
+                           IndexInfoEntry *&entry,
+                           int64_t *idx = nullptr) const;
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   void set_base_table_id(const uint64_t base_table_id) { base_table_id_ = base_table_id; }
   uint64_t get_table_id() const { return table_id_; }
@@ -238,7 +259,7 @@ private:
   uint64_t table_id_;
   uint64_t base_table_id_;
   int64_t entry_count_;
-  IndexInfoEntry *index_entrys_[common::OB_MAX_INDEX_PER_TABLE + 1]; //including table and index table
+  IndexInfoEntry *index_entrys_[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1]; //including table and index table
   DISALLOW_COPY_AND_ASSIGN(ObIndexInfoCache);
 };
 

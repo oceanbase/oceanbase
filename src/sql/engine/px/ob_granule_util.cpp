@@ -28,9 +28,6 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/das/ob_das_simple_op.h"
-#ifdef OB_BUILD_CPP_ODPS
-#include "sql/engine/table/ob_odps_table_row_iter.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -45,7 +42,7 @@ void ObParallelBlockRangeTaskParams::reset()
   expected_task_load_ = sql::OB_EXPECTED_TASK_LOAD;
   min_task_count_per_thread_ = sql::OB_MIN_PARALLEL_TASK_COUNT;
   max_task_count_per_thread_ = sql::OB_MAX_PARALLEL_TASK_COUNT;
-  min_task_access_size_ = GCONF.px_task_size >> 20;
+  min_task_access_size_ = GCONF.px_task_size >> 10;
 }
 
 int ObParallelBlockRangeTaskParams::valid() const
@@ -114,38 +111,30 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     }
   } else if (!external_table_files.empty() &&
              ObExternalFileFormat::ODPS_FORMAT == external_file_format.format_type_) {
-#ifdef OB_BUILD_CPP_ODPS
+#if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
     int64_t task_idx = 0;
+    LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
     for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
       const ObExternalFileInfo& external_info = external_table_files.at(i);
+      ObNewRange new_range;
       if (0 != external_info.file_id_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected file id", K(ret), K(i), K(external_info.file_id_));
       } else {
-        // file_size_ is the total row cnt of odps table partition
-        uint64_t block_cnt = (external_info.file_size_ + sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE - 1)
-                             / sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE;
-        uint64_t start_idx = 0;
-        block_cnt = (0 == block_cnt ? 1 : block_cnt); // one odps table partition should have at least one task, even it's empty
-        for (int64_t j = 0; OB_SUCC(ret) && j < block_cnt; ++j) {
-          ObNewRange new_range;
-          int64_t start = start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j);
-          int64_t end = sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE;
-          if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
+        int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
+        int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
+        if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
                                                     external_info.file_id_,
                                                     external_info.part_id_,
-                                                    start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j),
-                                                    j == block_cnt -1 ?
-                                                    INT64_MAX :
-                                                    sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE,
+                                                    file_start,
+                                                    file_row_count,
                                                     allocator,
                                                     new_range))) {
-            LOG_WARN("failed to make external table scan range", K(ret));
-          } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
-                 OB_FAIL(granule_idx.push_back(task_idx++)) ||
-                 OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
+          LOG_WARN("failed to make external table scan range", K(ret));
+        } else if ((OB_FAIL(granule_ranges.push_back(new_range)) ||
+                OB_FAIL(granule_idx.push_back(task_idx++)) ||
+                OB_FAIL(granule_tablets.push_back(tablets.at(0))))) {
+          LOG_WARN("fail to push back", K(ret));
         }
       }
     }
@@ -325,8 +314,8 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
                                                                  partition_size))) {
         LOG_WARN("failed to get multi ranges cost", K(ret), K(tablet));
       } else {
-        // B to MB
-        partition_size = partition_size / 1024 / 1024;
+        // B to KB
+        partition_size = partition_size / 1024;
       }
 
       if (OB_SUCC(ret)) {
@@ -340,6 +329,7 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
         }
       }
     }
+    LOG_TRACE("get multi ranges cost", K(empty_partition_cnt), K(size_each_partitions));
   }
 
   // 3. calc the total number of tasks for all partitions
@@ -347,7 +337,7 @@ int ObGranuleUtil::split_block_granule(ObExecContext &exec_ctx,
   if (OB_SUCC(ret)) {
     ObParallelBlockRangeTaskParams params;
     params.parallelism_ = parallelism;
-    params.expected_task_load_ = tablet_size/1024/1024;
+    params.expected_task_load_ = tablet_size/1024;
     if (OB_FAIL(compute_total_task_count(params, total_size, esti_task_cnt_by_data_size))) {
       LOG_WARN("compute task count failed", K(ret));
     } else {
@@ -430,6 +420,8 @@ int ObGranuleUtil::compute_total_task_count(const ObParallelBlockRangeTaskParams
     // default value of expected_task_load_ is 128 MB
     int64_t expected_task_load = max(params.expected_task_load_, min_task_access_size);
 
+    LOG_TRACE("compute task count: ", K(total_access_size), K(expected_task_load));
+
     // lower bound size: dop*128M*13
     int64_t lower_bound_size = params.parallelism_ * expected_task_load * params.min_task_count_per_thread_;
     // hight bound size: dop*128M*100
@@ -446,16 +438,18 @@ int ObGranuleUtil::compute_total_task_count(const ObParallelBlockRangeTaskParams
       tmp_total_task_count = min(params.min_task_count_per_thread_ * params.parallelism_,
                                  total_access_size/min_task_access_size);
       tmp_total_task_count = max(tmp_total_task_count, total_access_size / expected_task_load);
-      LOG_TRACE("the data is less than lower bound size", K(ret), K(tmp_total_task_count));
+      LOG_TRACE("the data is less than lower bound size", K(ret), K(tmp_total_task_count),
+                K(total_size), K(params));
     } else if (total_access_size > upper_bound_size) {
       // the data size is greater than upper bound size
       tmp_total_task_count = params.max_task_count_per_thread_ * params.parallelism_;
-      LOG_TRACE("the data size is greater upper bound size", K(ret), K(tmp_total_task_count));
+      LOG_TRACE("the data size is greater upper bound size", K(ret), K(tmp_total_task_count),
+                K(total_size), K(params));
     } else {
       // the data size is between lower bound size and upper bound size
       tmp_total_task_count = total_access_size / expected_task_load;
       LOG_TRACE("the data size is between lower bound size and upper bound size",
-        K(ret), K(tmp_total_task_count));
+        K(ret), K(tmp_total_task_count), K(total_size), K(params));
     }
   }
   if (OB_SUCC(ret)) {

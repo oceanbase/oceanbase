@@ -68,6 +68,14 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
   FLT_DEF_SPAN(end_transaction, "end of transaction")
   // for transaction end
 
+  // for xa transaction
+  FLT_DEF_SPAN(xa_start, "xa start")
+  FLT_DEF_SPAN(xa_end, "xa end")
+  FLT_DEF_SPAN(xa_prepare, "xa prepare")
+  FLT_DEF_SPAN(xa_commit, "xa commit")
+  FLT_DEF_SPAN(xa_rollback, "xa rollback")
+  // for xa transaction end
+
   // for ps
   FLT_DEF_SPAN(ps_prepare, "prepare phase of ps protocol")
   FLT_DEF_SPAN(ps_execute, "execute phase of ps protocol")

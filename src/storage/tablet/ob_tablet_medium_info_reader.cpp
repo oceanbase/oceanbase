@@ -183,5 +183,22 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(
 
   return ret;
 }
+
+int ObTabletMediumInfoReader::get_next_mds_kv(
+    common::ObIAllocator &allocator,
+    mds::MdsDumpKV *&kv)
+{
+  int ret = OB_SUCCESS;
+  kv = nullptr;
+  if (OB_FAIL(iter_.get_next_mds_kv(allocator, kv))) {
+    if (OB_ITER_END == ret) {
+      LOG_DEBUG("iter end", K(ret));
+    } else {
+      LOG_WARN("fail to get next mds kv", K(ret));
+    }
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

@@ -86,13 +86,6 @@ public:
   {
     return OB_NOT_SUPPORTED;
   }
-   static int check_need_medium_merge(
-      storage::ObLS &ls,
-      storage::ObTablet &tablet,
-      const int64_t medium_snapshot,
-      bool &need_merge,
-      bool &can_merge,
-      bool &need_force_freeze);
   static int generate_parallel_minor_interval(
       const ObMergeType merge_type,
       const int64_t minor_compact_trigger,
@@ -257,6 +250,7 @@ public:
 
   static const char *merge_reason_to_str(const int64_t merge_reason);
   static bool is_valid_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
@@ -317,6 +311,7 @@ public:
   1) ALL+EACH
   ALL+EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> ALL+EACH
   ALL+EACH --(BUILD_COLUMN_STORE_MERGE)--> ALL+EACH
+  EACH --(BUILD_REDUNDANT_ROW_STORE_MERGE)--> ALL+EACH
   2) EACH
   EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> EACH
   EACH --(BUILD_COLUMN_STORE_MERGE)--> EACH
@@ -335,7 +330,8 @@ public:
     BUILD_COLUMN_STORE_MERGE = 1,
     BUILD_ROW_STORE_MERGE = 2,
     USE_RS_BUILD_SCHEMA_MATCH_MERGE = 3,
-    MAX_CO_MAJOR_MERGE_TYPE = 4
+    BUILD_REDUNDANT_ROW_STORE_MERGE = 4,
+    MAX_CO_MAJOR_MERGE_TYPE = 5
   };
   static const char *co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type);
   static inline bool is_valid_major_merge_type(const ObCOMajorMergeType &major_merge_type)
@@ -353,6 +349,10 @@ public:
   static inline bool is_use_rs_build_schema_match_merge(const ObCOMajorMergeType &major_merge_type)
   {
     return USE_RS_BUILD_SCHEMA_MATCH_MERGE == major_merge_type;
+  }
+  static inline bool is_build_redundent_row_store_merge(const ObCOMajorMergeType &major_merge_type)
+  {
+    return BUILD_REDUNDANT_ROW_STORE_MERGE == major_merge_type;
   }
   static int decide_co_major_sstable_status(
       const ObCOSSTableV2 &co_sstable,

@@ -285,7 +285,8 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
     for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
       const ObDependencyInfo &dep = dependency_infos.at(i);
       const ObTableSchema *based_table_schema = nullptr;
-      if (OB_UNLIKELY(ObObjectType::TABLE != dep.get_ref_obj_type())) {
+      if (OB_UNLIKELY(ObObjectType::TABLE != dep.get_ref_obj_type()
+                      && ObObjectType::VIEW != dep.get_ref_obj_type())) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("ref obj type is not table, not supported", KR(ret), K(dep));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table is");
@@ -375,7 +376,10 @@ int ObMViewRefresher::check_fast_refreshable()
   // check mlog
   for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
     const ObMLogInfo &mlog_info = mlog_infos.at(i);
-    if (!mlog_info.is_valid()) {
+    const ObDependencyInfo &dep = dependency_infos.at(i);
+    if (ObObjectType::VIEW == dep.get_dep_obj_type()) {
+      // bypass
+    } else if (!mlog_info.is_valid()) {
       ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
       LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos));
     } else if (OB_UNLIKELY(mlog_info.get_last_purge_scn() >
@@ -467,6 +471,7 @@ int ObMViewRefresher::fast_refresh()
   const int64_t start_time = ObTimeUtil::current_time();
   ObMViewTransaction &trans = *refresh_ctx_->trans_;
   ObMViewInfo &mview_info = refresh_ctx_->mview_info_;
+  const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx_->dependency_infos_;
   const ObIArray<ObMLogInfo> &mlog_infos = refresh_ctx_->mlog_infos_;
   const ObScnRange &refresh_scn_range = refresh_ctx_->refresh_scn_range_;
   const ObIArray<ObString> &refresh_sqls = refresh_ctx_->refresh_sqls_;
@@ -523,8 +528,11 @@ int ObMViewRefresher::fast_refresh()
     {
       for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
         const ObMLogInfo &mlog_info = mlog_infos.at(i);
+        const ObDependencyInfo &dep = dependency_infos.at(i);
         ObMLogInfo new_mlog_info;
-        if (OB_UNLIKELY(!mlog_info.is_valid())) {
+        if (ObObjectType::VIEW == dep.get_dep_obj_type()) {
+          // bypass
+        } else if (OB_UNLIKELY(!mlog_info.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected invalid mlog", KR(ret), K(i), K(mlog_infos));
         } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans, tenant_id, mlog_info.get_mlog_id(),
@@ -552,7 +560,8 @@ int ObMViewRefresher::fast_refresh()
       mview_info.set_last_refresh_type(ObMVRefreshType::FAST);
       mview_info.set_last_refresh_date(start_time);
       mview_info.set_last_refresh_time((end_time - start_time) / 1000 / 1000);
-      if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
+      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+      if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last refresh trace id", KR(ret));
       } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));

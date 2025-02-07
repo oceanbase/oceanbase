@@ -16,6 +16,7 @@
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/blocksstable/ob_data_buffer.h"
+#include "lib/wait_event/ob_wait_event.h"
 
 namespace oceanbase {
 namespace backup {
@@ -26,6 +27,7 @@ public:
   virtual ~ObBackupTmpFile();
   int open(const uint64_t tenant_id);
   int write(const char *buf, const int64_t size);
+  int seal();
   int close();
   bool is_opened() const { return is_opened_; }
 
@@ -68,6 +70,7 @@ public:
   int put_backup_index(const T &backup_index);
   template <typename T>
   int get_backup_index(T &backup_index);
+  int seal_node();
   void reset();
 
 public:
@@ -142,7 +145,7 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
   tmp_file::ObTmpFileIOInfo io_info;
   tmp_file::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
-  io_info.io_desc_.set_wait_event(2);
+  io_info.io_desc_.set_wait_event(common::ObWaitEventIds::BACKUP_TMP_FILE_WAIT);
   io_info.size_ = std::min(need_read_size, estimate_size_ - read_offset_);
   io_info.io_timeout_ms_ = timeout_ms;
   common::ObArenaAllocator allocator;
@@ -157,7 +160,7 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to alloc memory", K(ret), K(need_read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->pread(io_info, read_offset_, handle))) {
+  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info, read_offset_, handle))) {
     OB_LOG(WARN, "failed to pread from tmp file", K(ret), K(io_info), K_(read_offset), K(need_read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, need_read_size);

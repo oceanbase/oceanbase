@@ -45,8 +45,8 @@ int ObImportResult::set_result(const int err_code, const share::ObTaskId &trace_
   } else if (OB_FALSE_IT(trace_id.to_string(trace_id_buf, OB_MAX_TRACE_ID_BUFFER_SIZE))) {
   } else if (OB_FAIL(addr.ip_port_to_string(addr_buf, OB_MAX_SERVER_ADDR_SIZE))) {
     LOG_WARN("failed to convert addr to string", K(ret), K(addr));
-  } else if (OB_FAIL(databuff_printf(comment_.ptr(), comment_.capacity(), "result:%d(%s), addr:%s, trace_id:%s",
-                                     err_code, extra_info.empty() ? "" : extra_info.ptr(),
+  } else if (OB_FAIL(databuff_printf(comment_.ptr(), comment_.capacity(), "%s(%d), addr:%s, trace_id:%s",
+                                     ob_error_name(err_code), err_code,
                                      addr_buf, trace_id_buf))) {
     LOG_WARN("failed to databuff printf", K(ret), K(err_code), K(trace_id), K(addr));
   } else {
@@ -58,14 +58,69 @@ void ObImportResult::reset()
 {
   is_succeed_ = true;
   comment_.reset();
+  tables_import_result_ = TablesImportResult::SUCCESS;
 }
 
 ObImportResult &ObImportResult::operator=(const ObImportResult &result)
 {
   is_succeed_ = result.is_succeed_;
   comment_ = result.comment_;
+  tables_import_result_ = result.tables_import_result_;
   return *this;
 }
+
+void ObImportResult::set_tables_import_result(const int64_t finished_table_count, const int64_t failed_table_count)
+{
+  if (finished_table_count == 0) {
+    tables_import_result_ = TablesImportResult::FAILED;
+  } else if (finished_table_count > 0 &&  failed_table_count == 0) {
+    tables_import_result_ = TablesImportResult::SUCCESS;
+  } else {
+    tables_import_result_ = TablesImportResult::PARTIAL_SUCCESS;
+  }
+}
+
+const char* ObImportResult::get_tables_import_result_str() const
+{
+  const char *str = "UNKNOWN";
+  const char *tables_import_result_strs[] = {
+    "SUCCESS",
+    "PARTIAL_SUCCESS",
+    "FAILED",
+  };
+
+  STATIC_ASSERT(MAX == ARRAYSIZEOF(tables_import_result_strs), "tables import result count mismatch");
+  if (tables_import_result_ < SUCCESS || tables_import_result_ > FAILED) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid tables_import_result", K(tables_import_result_));
+  } else {
+    str = tables_import_result_strs[tables_import_result_];
+  }
+  return str;
+}
+
+int ObImportResult::set_tables_import_result(const char *str)
+{
+  int ret = OB_SUCCESS;
+  ObString s(str);
+  const char *tables_import_result_strs[] = {
+    "SUCCESS",
+    "PARTIAL_SUCCESS",
+    "FAILED",
+  };
+  if (s.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table import result str can't empty", K(ret));
+  } else {
+    const int64_t count = ARRAYSIZEOF(tables_import_result_strs);
+    for (int64_t i = 0; i < count; ++i) {
+      if (0 == s.case_compare(tables_import_result_strs[i])) {
+        tables_import_result_ = static_cast<TablesImportResult>(i);
+      }
+    }
+  }
+  return ret;
+}
+
 const char* ObImportTableTaskStatus::get_str() const
 {
   const char *str = "UNKNOWN";
@@ -316,7 +371,7 @@ int ObImportTableTask::fill_pkey_dml(share::ObDMLSqlSplicer &dml) const
 int ObImportTableTask::parse_from(common::sqlclient::ObMySQLResult &result)
 {
   int ret = OB_SUCCESS;
-  const int64_t OB_MAX_RESULT_BUF_LEN = 12;
+  const int64_t OB_MAX_RESULT_BUF_LEN = 24;
   char result_buf[OB_MAX_RESULT_BUF_LEN] = "";
   ObImportResult::Comment comment;
   EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", tenant_id_, uint64_t);
@@ -440,6 +495,7 @@ const char* ObImportTableJobStatus::get_str() const
     "RECONSTRUCT_REF_CONSTRAINT",
     "CANCELING",
     "IMPORT_FINISH",
+    "IMPORT_FAILED",
   };
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
@@ -461,6 +517,7 @@ int ObImportTableJobStatus::set_status(const char *str)
     "RECONSTRUCT_REF_CONSTRAINT",
     "CANCELING",
     "IMPORT_FINISH",
+    "IMPORT_FAILED",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {
@@ -573,7 +630,7 @@ int ObImportTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
   int ret = OB_SUCCESS;
   ObNameCaseMode name_case_mode;
   bool import_all = false;
-  const int64_t OB_MAX_RESULT_BUF_LEN = 12;
+  const int64_t OB_MAX_RESULT_BUF_LEN = 24;
   char result_buf[OB_MAX_RESULT_BUF_LEN] = "";
   ObImportResult::Comment comment;
   EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", tenant_id_, uint64_t);
@@ -613,12 +670,11 @@ int ObImportTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
   int64_t real_length = 0;
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_RESULT, result_buf, OB_MAX_RESULT_BUF_LEN, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, OB_STR_COMMENT, comment.ptr(), comment.capacity(), real_length);
-  if (OB_SUCC(ret)) {
-    bool is_succeed = true;
-    if (0 == STRCMP("FAILED", result_buf)) {
-      is_succeed = false;
+  if (OB_SUCC(ret) && status_.is_finish()) {
+    result_.set_result(status_.is_import_finish(), comment);
+    if (OB_FAIL(result_.set_tables_import_result(result_buf))) {
+      LOG_WARN("failed to set recover table result", K(ret), KP(result_buf));
     }
-    result_.set_result(is_succeed, comment);
   }
 
   if (OB_SUCC(ret)) {
@@ -744,7 +800,7 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
   FILL_STR_COLUMN(description)
 
   if (OB_SUCC(ret) && status_.is_finish()) {
-    if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_result_str()))) {
+    if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_tables_import_result_str()))) {
       LOG_WARN("failed to add column", K(ret));
     }
   }
@@ -1083,7 +1139,7 @@ int ObRecoverTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
   int ret = OB_SUCCESS;
   ObNameCaseMode name_case_mode;
   bool import_all = false;
-  const int64_t OB_MAX_RESULT_BUF_LEN = 12;
+  const int64_t OB_MAX_RESULT_BUF_LEN = 24;
   char result_buf[OB_MAX_RESULT_BUF_LEN] = "";
   ObImportResult::Comment comment;
   EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", tenant_id_, uint64_t);
@@ -1131,12 +1187,12 @@ int ObRecoverTableJob::parse_from(common::sqlclient::ObMySQLResult &result)
   int64_t real_length = 0;
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_RESULT, result_buf, OB_MAX_RESULT_BUF_LEN, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, OB_STR_COMMENT, comment.ptr(), comment.capacity(), real_length);
-  if (OB_SUCC(ret)) {
-    bool is_succeed = true;
-    if (0 == STRCMP("FAILED", result_buf)) {
-      is_succeed = false;
+  if (OB_SUCC(ret) && status_.is_finish()) {
+    result_.set_result(status_.is_completed(), comment);
+    // unfinish job result default is empty string
+    if (OB_FAIL(result_.set_tables_import_result(result_buf))) {
+      LOG_WARN("failed to set recover table result", K(ret), KP(result_buf));
     }
-    result_.set_result(is_succeed, comment);
   }
 
   if (OB_SUCC(ret)) {
@@ -1296,7 +1352,7 @@ int ObRecoverTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
   FILL_STR_COLUMN(description)
 
   if (OB_SUCC(ret) && status_.is_finish()) {
-    if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_result_str()))) {
+    if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_tables_import_result_str()))) {
       LOG_WARN("failed to add column", K(ret));
     } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(result_.get_comment())))) {
       LOG_WARN("failed to add column", K(ret));

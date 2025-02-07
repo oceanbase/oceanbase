@@ -53,6 +53,7 @@
 #include "sql/engine/dml/ob_link_op.h"
 #include <cctype>
 #include "sql/engine/expr/ob_expr_last_refresh_scn.h"
+#include "src/rootserver/mview/ob_mview_maintenance_service.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -150,8 +151,10 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   my_session_.set_process_query_time(ObClockGenerator::getClock());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
@@ -215,11 +218,16 @@ int ObResultSet::open_result()
       }
     } else if (OB_FAIL(drive_dml_query())) {
       LOG_WARN("fail to drive dml query", K(ret));
-    } else if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-      // for insert /*+ append */ into select clause
-      if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
-        LOG_WARN("fail to commit direct insert", KR(ret));
+    } else if (stmt::T_INSERT == get_stmt_type()) {
+      ObPhysicalPlanCtx *plan_ctx = NULL;
+      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("physical plan ctx is null");
+      } else if (plan_ctx->get_is_direct_insert_plan()) {
+        // for insert /*+ append */ into select clause
+        if (OB_FAIL(ObTableDirectInsertService::commit_direct_insert(get_exec_context(), *physical_plan_))) {
+          LOG_WARN("fail to commit direct insert", KR(ret));
+        }
       }
     }
   }
@@ -460,7 +468,9 @@ int ObResultSet::end_stmt(const bool is_rollback)
 //see the call reference in LinkExecCtxGuard
 int ObResultSet::get_next_row(const common::ObNewRow *&row)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
   return inner_get_next_row(row);
 }
 
@@ -575,6 +585,8 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ctx.reset_op_env();
   exec_result_ = &(ctx.get_task_exec_ctx().get_execute_result());
+  rootserver::ObMViewMaintenanceService *mview_maintenance_service =
+                                        MTL(rootserver::ObMViewMaintenanceService*);
   if (stmt::T_PREPARE != stmt_type_) {
     if (OB_FAIL(ctx.init_phy_op(physical_plan_->get_phy_operator_size()))) {
       LOG_WARN("fail init exec phy op ctx", K(ret));
@@ -591,22 +603,29 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
 
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(mview_maintenance_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mview_maintenance_service is null", K(ret), KP(mview_maintenance_service));
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
   } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
-             && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(physical_plan_->get_mview_ids(),
-                                                                    ctx.get_sql_proxy(),
-                                                                    ctx.get_my_session(),
-                                                                    ctx.get_das_ctx().get_snapshot().core_.version_,
-                                                                    ctx.get_physical_plan_ctx()->get_mview_ids(),
-                                                                    ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
+             && OB_FAIL((mview_maintenance_service->get_mview_refresh_info(physical_plan_->get_mview_ids(),
+                                                                           ctx.get_sql_proxy(),
+                                                                           ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                           ctx.get_physical_plan_ctx()->get_mview_ids(),
+                                                                           ctx.get_physical_plan_ctx()->get_last_refresh_scns())))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
     // for insert /*+ append */ into select clause
-    if ((stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-      if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
-        LOG_WARN("fail to start direct insert", KR(ret));
+    if (stmt::T_INSERT == get_stmt_type()) {
+      ObPhysicalPlanCtx *plan_ctx = NULL;
+      if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("physical plan ctx is null");
+      } else if (plan_ctx->get_is_direct_insert_plan()) {
+        if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
+          LOG_WARN("fail to start direct insert", KR(ret));
+        }
       }
     }
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
@@ -808,6 +827,28 @@ bool ObResultSet::need_rollback(int ret, int errcode, bool is_error_ignored) con
   return bret;
 }
 
+int ObResultSet::deal_feedback_info(ObPhysicalPlan *physical_plan, bool is_rollback, ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *physical_ctx = get_exec_context().get_physical_plan_ctx();
+  if (ctx.get_feedback_info().is_valid() && physical_plan->get_logical_plan().is_valid()) {
+    if (physical_ctx != nullptr && !is_rollback && physical_ctx->get_check_pdml_affected_rows()) {
+      if (OB_FAIL(physical_plan->check_pdml_affected_rows(ctx))) {
+        LOG_WARN("fail to check pdml affected_rows", K(ret));
+      }
+    }
+    if (physical_plan->try_record_plan_info()) {
+      if (OB_FAIL(physical_plan->set_feedback_info(ctx))) {
+        LOG_WARN("fail to set feed_back info", K(ret));
+      } else {
+        physical_plan->set_record_plan_info(false);
+      }
+    }
+  }
+
+  return ret;
+}
+
 OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 {
   int ret = common::OB_SUCCESS;
@@ -850,8 +891,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if ((stmt::T_INSERT == get_stmt_type()) &&
-        (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    if (stmt::T_INSERT == get_stmt_type() && plan_ctx->get_is_direct_insert_plan()) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(
@@ -890,14 +930,8 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       ret = sret;
     }
     if (OB_SUCC(ret)) {
-      if (physical_plan_->try_record_plan_info()) {
-        if (ctx.get_feedback_info().is_valid() &&
-            physical_plan_->get_logical_plan().is_valid() &&
-            OB_FAIL(physical_plan_->set_feedback_info(ctx))) {
-          LOG_WARN("failed to set feedback info", K(ret));
-        } else {
-          physical_plan_->set_record_plan_info(false);
-        }
+      if (OB_FAIL(deal_feedback_info(physical_plan_, rollback, ctx))) {
+        LOG_WARN("fail to deal feedback info", K(ret));
       }
     }
   } else {
@@ -914,7 +948,9 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 int ObResultSet::do_close(int *client_ret)
 {
   int ret = OB_SUCCESS;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
+  ObRetryWaitEventInfoGuard retry_info_guard(my_session_);
 
   FLTSpanGuard(close);
   const bool is_tx_active = my_session_.is_in_transaction();
@@ -2002,7 +2038,8 @@ int ObRemoteResultSet::reset_and_init_remote_resp_handler()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObInnerSqlRpcStreamHandle", K(ret));
   } else {
-    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle();
+    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle("InnerSqlRpcStream",
+                                                                  get_tenant_id_for_result_memory());
   }
 
   return ret;
@@ -2079,7 +2116,7 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(OB_SERVER_TENANT_ID))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(get_tenant_id_for_result_memory()))) {
           // Only when the local machine has no tenant resources will it be sent to the remote end
           // for execution. Therefore, the local machine can only use the resources of 500 tenants.
           // The scanner will limit the package size to no more than 64M.

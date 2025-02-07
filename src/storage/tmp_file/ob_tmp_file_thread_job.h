@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_
 
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/queue/ob_link_queue.h"
@@ -66,7 +66,7 @@ class ObTmpFileFlushMonitor
 public:
   ObTmpFileFlushMonitor()
     : flush_task_cnt_(0),
-      total_flush_data_length_(0),
+      total_flushing_data_length_(0),
       max_flush_data_length_(-1),
       min_flush_data_length_(INT64_MAX),
       f1_cnt_(0),
@@ -80,7 +80,7 @@ public:
   void record_flush_task(const int64_t data_length);
 private:
   int64_t flush_task_cnt_;
-  int64_t total_flush_data_length_;
+  int64_t total_flushing_data_length_;
   int64_t max_flush_data_length_;
   int64_t min_flush_data_length_;
   int64_t f1_cnt_;
@@ -111,4 +111,4 @@ private:
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_THREAD_JOB_H_

@@ -62,6 +62,21 @@ public:
                                                     const uint64_t tenant_id,
                                                     ObSqlString &sql);
 
+  static int check_job_exists(common::ObMySQLProxy *sql_proxy,
+                              const uint64_t tenant_id,
+                              const char* job_name,
+                              bool &is_join_exists);
+
+  static int get_spm_stats_upgrade_jobs_sql(common::ObMySQLProxy *sql_proxy,
+                                            const ObSysVariableSchema &sys_variable,
+                                            const uint64_t tenant_id,
+                                            const bool is_oracle_mode,
+                                            ObSqlString &raw_sql);
+
+  static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
+                                  const uint64_t tenant_id,
+                                  int32_t &offset_sec);
+
 private:
   static int get_window_job_info(const int64_t current_time,
                                  const int64_t nth_window,
@@ -83,6 +98,12 @@ private:
                                                const int64_t job_id,
                                                const ObString &exec_env,
                                                ObSqlString &raw_sql);
+  static int get_spm_stats_job_sql(const bool is_oracle_mode,
+                                   const uint64_t tenant_id,
+                                   const int64_t job_id,
+                                   const int64_t offset_sec,
+                                   const ObString &exec_env,
+                                   ObSqlString &raw_sql);
 
   static int get_dummy_guard_job_sql(const uint64_t tenant_id,
                                      const int64_t job_id,
@@ -90,9 +111,6 @@ private:
 
   static bool is_work_day(int64_t now_wday) { return now_wday >= 1 && now_wday <= MAX_OF_WORK_DAY; }
 
-  static int get_time_zone_offset(const share::schema::ObSysVariableSchema &sys_variable,
-                                  const uint64_t tenant_id,
-                                  int32_t &offset_sec);
   static int check_date_validate(const ObString &job_name,
                                  const int64_t specify_time,
                                  const int64_t current_time,
@@ -102,14 +120,11 @@ private:
                                             const int64_t job_id,
                                             const ObString &exec_env,
                                             ObSqlString &raw_sql);
-  static int get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
-                                                        ObIAllocator &allocator,
-                                                        const uint64_t tenant_id,
-                                                        int64_t &job_id,
-                                                        ObString &exec_env);
-  static int check_async_gather_job_exists(common::ObMySQLProxy *sql_proxy,
-                                           const uint64_t tenant_id,
-                                           bool &is_join_exists);
+  static int get_next_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                          ObIAllocator &allocator,
+                                          const uint64_t tenant_id,
+                                          int64_t &job_id,
+                                          ObString &exec_env);
 
 };
 

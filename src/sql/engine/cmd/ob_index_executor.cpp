@@ -28,6 +28,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/ob_partition_pre_split.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -56,6 +57,14 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   obrpc::ObAlterTableRes res;
   ObString first_stmt;
   bool is_sync_ddl_user = false;
+  uint64_t tenant_id = create_index_arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+  int64_t start_time = 0;
+  int64_t refresh_time = 0;
+  int64_t ddl_task_time = 0;
+  int64_t end_time = 0;
+  ObSArray<ObIndexArg *> index_arg_list;
+  ObPartitionPreSplit pre_split;
   ObArenaAllocator allocator("CreateIndexExec");
 
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
@@ -80,13 +89,59 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   } else if (OB_INVALID_ID == create_index_arg.session_id_
              && FALSE_IT(create_index_arg.session_id_ = my_session->get_sessid_for_table())) {
     //impossible
-  } else if (FALSE_IT(create_index_arg.is_inner_ = my_session->is_inner())) {
-  } else if (FALSE_IT(create_index_arg.parallelism_ = stmt.get_parallelism())) {
-  } else if (FALSE_IT(create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id())) {
-  } else if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
-    LOG_WARN("rpc proxy create index failed", K(create_index_arg),
-             "dst", common_rpc_proxy->get_server(), K(ret));
-  } else if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
+  } else {
+    create_index_arg.is_inner_ = my_session->is_inner();
+    create_index_arg.parallelism_ = stmt.get_parallelism();
+    create_index_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
+    if (OB_FAIL(index_arg_list.push_back(&create_index_arg))) {
+      LOG_WARN("fail to push back create index arg", KR(ret));
+    } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(
+                      create_index_arg.tenant_id_, create_index_arg.session_id_, create_index_arg.database_name_,
+                      create_index_arg.table_name_, index_arg_list))) {
+      LOG_WARN("fail to get global index pre split schema if need", K(ret));
+      //overwrite ret code
+      ret = OB_SUCCESS;
+    }
+  }
+  if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else {
+    bool is_parallel_ddl = true;
+    if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                ObParallelDDLControlMode::CREATE_INDEX,
+                tenant_id, is_parallel_ddl))) {
+      LOG_WARN("fail to get whether create index is parallel", KR(ret), K(tenant_id));
+    } else if (!is_parallel_ddl
+              || data_version < DATA_VERSION_4_2_2_0
+              || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_5_0)
+              || share::schema::is_fts_or_multivalue_index(create_index_arg.index_type_)
+              || share::schema::is_vec_index(create_index_arg.index_type_)) {
+      start_time = ObTimeUtility::current_time();
+      if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
+        LOG_WARN("rpc proxy create index failed", K(create_index_arg),
+                 "dst", common_rpc_proxy->get_server(), K(ret));
+      }
+      refresh_time = ObTimeUtility::current_time();
+      ddl_task_time = refresh_time;
+    } else {
+      ObTimeoutCtx ctx;
+      start_time = ObTimeUtility::current_time();
+      const int64_t rpc_timeout = (static_cast<obrpc::ObRpcProxy*>(common_rpc_proxy))->timeout();
+      if (OB_FAIL(ctx.set_timeout(rpc_timeout))) {
+        LOG_WARN("fail to set timeout ctx", KR(ret));
+      } else if (OB_FAIL(common_rpc_proxy->parallel_create_index(create_index_arg, res))) {
+        LOG_WARN("fail to parallel create index", KR(ret), "dst", common_rpc_proxy->get_server());
+      } else {
+        refresh_time = ObTimeUtility::current_time();
+        if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+            ctx, my_session, tenant_id, res.schema_version_, false /*skip_consensus*/))) {
+          LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
+        }
+        ddl_task_time = ObTimeUtility::current_time();
+      }
+    }
+  }
+  if (FAILEDx(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
     LOG_WARN("Failed to check sync_dll_user", K(ret));
   } else if (!is_sys_index && !is_sync_ddl_user) {
     // 只考虑非系统表和非备份恢复时的索引同步检查
@@ -111,6 +166,14 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     "table_id", res.index_table_id_,
     "schema_version", res.schema_version_);
   SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
+  end_time = ObTimeUtility::current_time();
+  LOG_INFO("[create_index]", KR(ret),
+           "tenant_id", tenant_id,
+           "cost", end_time - start_time,
+           "execute_time", refresh_time - start_time,
+           "wait_schema", ddl_task_time - refresh_time,
+           "wait_ddl_task", end_time - ddl_task_time,
+           "index_name", create_index_arg.index_name_);
   return ret;
 }
 

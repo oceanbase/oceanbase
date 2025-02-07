@@ -203,14 +203,15 @@ int64_t ObMetaDiskAddr::to_string(char *buf, const int64_t buf_len) const
     break;
   default:
     databuff_printf(buf, buf_len, pos,
-                    "[2nd=%lu][3rd=%lu][offset=%lu,size=%lu,type=%lu,seq=%lu][5th=%lu][6th=%lu]}",
+                    "[2nd=%lu][3rd=%lu][offset=%lu,size=%lu,type=%lu,seq=%lu][trans_seq=%lu, sec_part=%lu][6th=%lu]}",
                     second_id_,
                     third_id_,
                     (uint64_t) offset_,
                     (uint64_t) size_,
                     (uint64_t) type_,
                     (uint64_t) seq_,
-                    fifth_id_,
+                    (uint64_t) block_id().macro_transfer_seq(),
+                    (uint64_t) block_id().tenant_seq(),
                     sixth_id_);
     break;
   };

@@ -79,8 +79,46 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
     get_lock_type(node_iter_->hash_, type);
     const int64_t col_count = output_column_ids_.count();
     ObString ipstr;
+
+    // resolve compatibility problem
+    const int column_id_fix_offset = BLOCK_SESSION_ID;
+    ObString column_name;
+    bool exist = false;
+    bool need_align = false;
+    if (OB_ISNULL(table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(ERROR, "table_schema of all_virtual_lock_wait_stat is NULL", K(ret));
+    } else {
+      table_schema_->get_column_name_by_column_id(column_id_fix_offset, column_name, exist);
+      if (!exist) {
+        // no need align
+      } else if (column_name == "holder_session_id" || column_name == "HOLDER_SESSION_ID") {
+        /*
+          *  ...
+          *  |     session_id    |
+          *  | holder_session_id |  <---- is here in the first version of 4.3.2
+          *  |  block_session_id |
+          *  ...
+          *
+          *  ...
+          *  |      trans_id     |
+          *  |  holder_trans_id  |
+          *  | holder_session_id |  <---- is here in later version
+          *  ...
+          * */
+        need_align = true;
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
+      if (need_align) {
+        if (col_id > column_id_fix_offset) {
+          col_id -= 1;
+        } else if (col_id == column_id_fix_offset) {
+          col_id = HOLDER_SESSION_ID;
+        }
+      }
       switch (col_id) {
         // svr_ip
         case SVR_IP: {

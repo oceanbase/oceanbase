@@ -35,7 +35,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
 private:
-  static int process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator, bool &is_null_res, ObGeometry *&geo1,
+  static int process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, MultimodeAlloctor &allocator, bool &is_null_res, ObGeometry *&geo1,
       ObGeometry *&geo2, const ObSrsItem *&srs1, const ObSrsItem *&srs2);
   DISALLOW_COPY_AND_ASSIGN(ObExprPrivSTClipByBox2D);
 };

@@ -21,7 +21,6 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
-
 namespace oceanbase
 {
 namespace sql
@@ -29,6 +28,12 @@ namespace sql
 using namespace common;
 using namespace share;
 using namespace common::number;
+
+OB_INLINE static ObScale round_up_scale(const ObScale scale)
+{
+  static const ObScale DIV_CALC_SCALE = 9;
+  return static_cast<ObScale>(((scale) + DIV_CALC_SCALE - 1) / DIV_CALC_SCALE * DIV_CALC_SCALE);
+}
 
 ObExprDiv::ObExprDiv(ObIAllocator &alloc, ObExprOperatorType type)
   : ObArithExprOperator(alloc,
@@ -42,9 +47,6 @@ ObExprDiv::ObExprDiv(ObIAllocator &alloc, ObExprOperatorType type)
 {
   param_lazy_eval_ = lib::is_oracle_mode();
 }
-
-#define ROUND_UP(scale) static_cast<ObScale>(((scale) + DIV_CALC_SCALE - 1) / \
-                                             DIV_CALC_SCALE * DIV_CALC_SCALE)
 
 int ObExprDiv::calc_result_type2(ObExprResType &type,
                                  ObExprResType &type1,
@@ -60,13 +62,27 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
   OC( (ObArithExprOperator::calc_result_type2)(type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     const ObObjTypeClass result_tc = type.get_type_class();
+    bool use_decint_as_calc_type = (type1.get_calc_meta().is_decimal_int() && type2.get_calc_meta().is_decimal_int());
     if (ObNumberTC == result_tc || ObDecimalIntTC == result_tc) {
       if (is_oracle_mode()) {
         type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
         type.set_precision(PRECISION_UNKNOWN_YET);
       } else if (type.has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
-        type.set_scale(type1.get_scale() - type2.get_scale());
-        type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
+        if (type1.is_decimal_int() && type2.is_decimal_int() && type.is_number()) {
+          ObScale res_scale = type1.get_scale() - type2.get_precision() - extra_scale_for_decint_div;
+          ObPrecision res_prec = type1.get_precision() - type2.get_precision() - extra_scale_for_decint_div;
+          if (OB_UNLIKELY(res_scale < 0 || res_prec < 0 || res_prec < res_scale)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected result precision & scale", K(ret), K(res_scale), K(res_prec));
+          } else {
+            type.set_scale(res_scale);
+            type.set_precision(res_prec);
+            type.set_calc_scale(type1.get_scale() - type2.get_scale());
+          }
+        } else {
+          type.set_scale(type1.get_scale() - type2.get_scale());
+          type.set_precision(MAX(type1.get_precision(), type2.get_precision()));
+        }
       } else {
         ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
         ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
@@ -91,8 +107,8 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
           type.set_scale(SCALE_UNKNOWN_YET);
         } else {
           ObScale calc_scale = static_cast<ObScale>(
-              MAX(ROUND_UP(scale1) + ROUND_UP(scale2),
-                  ROUND_UP(scale1 + scale2 + div_precision_increment)));
+              MAX(round_up_scale(scale1) + round_up_scale(scale2),
+                  round_up_scale(scale1 + scale2 + div_precision_increment)));
           if (ObNumberTC == result_tc) {
             type.set_calc_scale(calc_scale);
           }
@@ -113,9 +129,41 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
               type2.set_calc_accuracy(type2.get_accuracy());
             }
           }
+        } else if (use_decint_as_calc_type && type.is_number()) {
+          // suppose we have numerator(P1, S1) & denominator(P2, S2)
+          // quotient is required to have at least (P1, S1 + div_inc)
+          // numerator's calc accuracy should by (P1 + P2 + div_inc, S1 + P2 + div_inc)
+          // demoniator's calc accuracy is same as (P2, S2)
+          // quotient's accuracy is (P1 + div_inc, S1 - S2 + P2 + div_inc)
+          // here: `div_inc = extra_scale_for_decint_div + div_precision_increment`
+          ObAccuracy type1_acc = type1.get_accuracy();
+          ObAccuracy type2_acc = type2.get_accuracy();
+          ObPrecision calc_prec1 = type1_acc.get_precision() + type2_acc.get_precision()
+                                   + div_precision_increment + extra_scale_for_decint_div;
+          ObScale calc_scale1 = type1_acc.get_scale() + calc_prec1 - type1_acc.get_precision();
+          if (calc_prec1 > OB_MAX_DECIMAL_POSSIBLE_PRECISION || calc_scale1 > number::ObNumber::FLOATING_SCALE) {
+            // to large precision, use number as calc type instead
+
+            // if we have a decimal int with (P, S) = (81, 73)
+            // sizeof(floating digits) = 9, sizeof(integer digits) = 1, however ObNumber can only store 9 digits as maximum
+            // thus, fall back to ObNumber instead.
+            type1.set_calc_type(ObNumberType);
+            type2.set_calc_type(ObNumberType);
+          } else {
+            type1.set_calc_accuracy(ObAccuracy(calc_prec1, calc_scale1));
+            type2.set_calc_accuracy(type2_acc);
+            type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
+            // store result scale for quotient
+            ObScale decint_res_scale = type1_acc.get_scale() - type2_acc.get_scale()
+                                       + type2_acc.get_precision() + div_precision_increment
+                                       + extra_scale_for_decint_div;
+            type.set_calc_scale(decint_res_scale);
+          }
+          LOG_DEBUG("use decimal int as calc types", K(type1), K(type2), K(calc_prec1),
+                    K(calc_scale1), K(type1.get_calc_meta()), K(type2.get_calc_meta()));
         }
-        LOG_DEBUG("div calc_result_type2", K(type.get_calc_scale()), K(scale1), K(scale2),
-                  "new_scale1", ROUND_UP(scale1), "new_scale2", ROUND_UP(scale2),
+        LOG_DEBUG("div calc_result_type2", K(type), K(type.get_calc_scale()), K(scale1), K(scale2),
+                  "new_scale1", round_up_scale(scale1), "new_scale2", round_up_scale(scale2),
                   K(div_precision_increment));
       }
     } else if (ObDoubleTC == result_tc || ObFloatTC == result_tc) {
@@ -509,7 +557,6 @@ int ObExprDiv::div_interval(ObObj &res,
   return ret;
 }
 
-const ObScale ObExprDiv::DIV_CALC_SCALE = 9;
 const ObScale ObExprDiv::DIV_MAX_CALC_SCALE = 100;
 
 struct ObFloatDivFunc
@@ -954,16 +1001,20 @@ struct ObDecimalIntBatchDivRaw : public ObArithOpRawType<L, L, R>
   {
     using val_type = typename common::wide::CommonType<L, R>::type;
     UNUSED(is_error_div_by_zero);
-    res = l / r;
-    const val_type round = l % r;
-    const val_type abs_right = r < 0 ? -r : r;
-    const val_type abs_round = round < 0 ? -round : round;
-    // if |right| is odd, |right|/2 < |r| => need_carry
-    // if |right| is even, |right|/2 <= |r| => need_carry
-    const bool need_carry = ((abs_right >> 1) + (abs_right & 1)) <= abs_round;
-    if (need_carry) {
-      const int32_t carry = res < 0 ? -1 : 1;
-      res = res + carry;
+    if (r == -1) {
+      res = -l;
+    } else {
+      res = l / r;
+      const val_type round = l % r;
+      const val_type abs_right = r < 0 ? -r : r;
+      const val_type abs_round = round < 0 ? -round : round;
+      // if |right| is odd, |right|/2 < |r| => need_carry
+      // if |right| is even, |right|/2 <= |r| => need_carry
+      const bool need_carry = ((abs_right >> 1) + (abs_right & 1)) <= abs_round;
+      if (need_carry) {
+        const int32_t carry = res < 0 ? -1 : 1;
+        res = res + carry;
+      }
     }
   }
 
@@ -1120,8 +1171,22 @@ DECINC_DIV_EVAL_FUNC_WITH_CHECK_DECL(512)
 #undef DECINC_DIV_EVAL_FUNC_DECL
 #undef DECINC_DIV_EVAL_FUNC_BASIC_DECL
 
+#define CHOOSE_MYSQL_DIV_FUNCS(ltype, rtype)                                                       \
+  do {                                                                                             \
+    if (sizeof(ltype) >= sizeof(rtype)) {                                                          \
+      rt_expr.eval_func_ = ObExprDiv::decint_div_mysql_fn<ltype, rtype>;                           \
+      rt_expr.eval_batch_func_ = ObExprDiv::decint_div_mysql_batch_fn<ltype, rtype>;               \
+      rt_expr.eval_vector_func_ = ObExprDiv::decint_div_mysql_vec_fn<ltype, rtype>;                \
+    } else {                                                                                       \
+      rt_expr.eval_func_ = nullptr;                                                                \
+      rt_expr.eval_batch_func_ = nullptr;                                                          \
+      rt_expr.eval_vector_func_ = nullptr;                                                         \
+    }                                                                                              \
+  } while (false)
+
 void set_decimalint_div_func_ptr(ObExpr &expr)
 {
+  int ret = OB_SUCCESS;
   static ObExpr::EvalFunc funcs[DECIMAL_INT_MAX][DECIMAL_INT_MAX] = {
     {
       ObExprDiv::div_decimalint_32_32,
@@ -1243,8 +1308,8 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
 
   rt_expr.inner_functions_ = NULL;
   rt_expr.may_not_need_raw_check_ = false;
-  LOG_DEBUG("arrive here cg_expr", K(ret), K(raw_expr), K(rt_expr));
   rt_expr.div_calc_scale_ = raw_expr.get_result_type().get_calc_scale();
+  LOG_DEBUG("arrive here cg_expr", K(ret), K(raw_expr), K(rt_expr), K(rt_expr.div_calc_scale_));
   switch (rt_expr.datum_meta_.type_) {
     case ObFloatType: {
       SET_DIV_FUNC_PTR(div_float);
@@ -1258,8 +1323,18 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     case ObUNumberType:
     case ObNumberType: {
-      SET_DIV_FUNC_PTR(div_number);
-      rt_expr.eval_vector_func_ = div_number_vector;
+      bool use_decint_as_args = (rt_expr.args_[0]->obj_meta_.is_decimal_int()
+                                 && rt_expr.args_[1]->obj_meta_.is_decimal_int());
+      if (use_decint_as_args && rt_expr.datum_meta_.type_ == ObNumberType && lib::is_mysql_mode()) {
+        int32_t l_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+          rt_expr.args_[0]->datum_meta_.precision_);
+        int32_t r_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+          rt_expr.args_[1]->datum_meta_.precision_);
+        DISPATCH_INOUT_WIDTH_TASK(l_bytes, r_bytes, CHOOSE_MYSQL_DIV_FUNCS);
+      } else {
+        SET_DIV_FUNC_PTR(div_number);
+        rt_expr.eval_vector_func_ = div_number_vector;
+      }
       break;
     }
     case ObIntervalYMType: {
@@ -1310,4 +1385,5 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 }
 
+#include "ob_expr_div_decint.ipp"
 

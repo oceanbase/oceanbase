@@ -48,8 +48,10 @@ public:
       const ObFTSDDLChildTaskInfo &doc_rowkey,
       const ObFTSDDLChildTaskInfo &domain_index,
       const ObFTSDDLChildTaskInfo &fts_doc_word,
+      const ObString &ddl_stmt_str,
       const int64_t schema_version,
-      const int64_t consumer_group_id);
+      const int64_t consumer_group_id,
+      const int64_t target_object_id);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual int serialize_params_to_message(
@@ -90,6 +92,12 @@ private:
   int succ();
   int fail();
   virtual int cleanup_impl() override;
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
+  }
   bool is_fts_task() const { return share::ObDDLType::DDL_DROP_FTS_INDEX == task_type_; }
 
 private:

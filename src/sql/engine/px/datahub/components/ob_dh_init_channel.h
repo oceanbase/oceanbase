@@ -58,7 +58,7 @@ class ObInitChannelWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObInitChannelWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObInitChannelPieceMsg, ObInitChannelWholeMsg>;
 public:
   ObInitChannelWholeMsg() : ready_state_(0)
   {}

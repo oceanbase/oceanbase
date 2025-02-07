@@ -17,6 +17,7 @@
 #include "log_reader_utils.h"         // ReadBuf
 #include "palf_handle_impl.h"         // LogCache
 #include "share/scn.h"
+#include "log_io_adapter.h"           // LogIOAdapter
 
 namespace oceanbase
 {
@@ -53,7 +54,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool, LogPlugins *plugins,
-                     LogCache *log_cache)
+                     LogCache *log_cache, LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -68,7 +69,8 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              log_cache))) {
+                              log_cache,
+                              io_adapter))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
     PALF_LOG(INFO, "LogStorage init success", K(ret), K(base_dir), K(sub_dir),
@@ -616,7 +618,8 @@ int LogStorage::do_init_(const char *base_dir,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
                          LogPlugins *plugins,
-                         LogCache *log_cache)
+                         LogCache *log_cache,
+                         LogIOAdapter *io_adapter)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -631,9 +634,10 @@ int LogStorage::do_init_(const char *base_dir,
                                      align_size,
                                      align_buf_size,
                                      logical_block_size + MAX_INFO_BLOCK_SIZE,
-                                     log_block_pool))) {
+                                     log_block_pool,
+                                     io_adapter))) {
     PALF_LOG(ERROR, "LogBlockMgr init failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_reader_.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE, io_adapter))) {
     PALF_LOG(ERROR, "LogReader init failed", K(ret), K(log_dir));
   } else {
     log_tail_ = readable_log_tail_ = base_lsn;
@@ -866,8 +870,8 @@ int LogStorage::read_block_header_(const block_id_t block_id,
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(readable_log_tail), K(max_block_id), K(log_block_header));
   } else {
-    LogIteratorInfo iterator_info(false);
-    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, &iterator_info))) {
+    LogIOContext io_ctx(LogIOUser::META_INFO);
+    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, io_ctx))) {
       PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
     } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
       PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
@@ -946,7 +950,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   } else {
     if (is_log_cache_inited_()) {
       if (OB_FAIL(log_cache_->read(flashback_version, read_lsn, real_in_read_size,
-                                   read_buf, out_read_size, io_ctx.get_iterator_info()))) {
+                                   read_buf, out_read_size, io_ctx))) {
         PALF_LOG(WARN, "read log cache failed", K(flashback_version), K(read_lsn),
                  K(real_in_read_size), K(read_buf), K(out_read_size), KPC(this));
       } else {
@@ -958,7 +962,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                                          real_in_read_size,
                                          read_buf,
                                          out_read_size,
-                                         io_ctx.get_iterator_info()))) {
+                                         io_ctx))) {
       PALF_LOG(WARN, "LogReader pread failed", K(ret), K(read_lsn),
                K(log_tail_), K(real_in_read_size), KPC(this));
     } else {

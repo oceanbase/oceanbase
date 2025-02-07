@@ -11,6 +11,9 @@
  */
 
 #include "observer/virtual_table/ob_information_kvcache_table.h"
+#include "share/ash/ob_di_util.h"
+#include "observer/ob_server_struct.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::common;
 
@@ -123,12 +126,31 @@ int ObInfoSchemaKvCacheTable::get_tenant_info()
     if (is_sys_tenant(effective_tenant_id_)) {
       arenallocator_.reuse();
       tenant_dis_.reuse();
-      if (OB_FAIL(ObDIGlobalTenantCache::get_instance().get_all_stat_event(arenallocator_, tenant_dis_))) {
-        SERVER_LOG(WARN, "Fail to get all stat event", K(ret));
+      common::ObVector<uint64_t> ids;
+      GCTX.omt_->get_tenant_ids(ids);
+      for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
+        uint64_t tenant_id = ids[i];
+        void *buf = NULL;
+        if (!is_virtual_tenant_id(tenant_id)) {
+          if (OB_ISNULL(buf = allocator_->alloc(sizeof(common::ObDiagnoseTenantInfo)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SERVER_LOG(WARN, "Fail to alloc buf", KR(ret));
+          } else {
+            std::pair<uint64_t, common::ObDiagnoseTenantInfo *> pair;
+            pair.first = tenant_id;
+            pair.second = new (buf) common::ObDiagnoseTenantInfo(allocator_);
+            if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(
+                    tenant_id, *(pair.second)))) {
+              SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(tenant_id));
+            } else if (OB_FAIL(tenant_dis_.push_back(pair))) {
+              SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(tenant_id));
+            }
+          }
+        }
       }
     } else {
       tenant_di_info_.reset();
-      if (OB_FAIL(ObDIGlobalTenantCache::get_instance().get_the_diag_info(effective_tenant_id_, tenant_di_info_))) {
+      if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(effective_tenant_id_, tenant_di_info_))) {
         SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(effective_tenant_id_));
       }
     }
@@ -143,23 +165,25 @@ int ObInfoSchemaKvCacheTable::get_handles(ObKVCacheInst *&inst, ObDiagnoseTenant
 
   inst = nullptr;
   tenant_info = nullptr;
-  if (cache_iter_ >= inst_handles_.count()) {
-    ret = OB_ITER_END;
-  } else {
-    inst = inst_handles_.at(cache_iter_++).get_inst();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!oceanbase::lib::is_diagnose_info_enabled()) {
-  } else if (is_sys_tenant(effective_tenant_id_)) {
-    for (int64_t i = 0 ; i < tenant_dis_.count() ; ++i) {
-      if (tenant_dis_.at(i).first == inst->tenant_id_) {
-        tenant_info = tenant_dis_.at(i).second;
-        break;
-      }
+  do {
+    if (cache_iter_ >= inst_handles_.count()) {
+      ret = OB_ITER_END;
+    } else {
+      inst = inst_handles_.at(cache_iter_++).get_inst();
     }
-  } else {
-    tenant_info = &tenant_di_info_;
-  }
+    if (OB_FAIL(ret)) {
+    } else if (!oceanbase::lib::is_diagnose_info_enabled()) {
+    } else if (is_sys_tenant(effective_tenant_id_)) {
+      for (int64_t i = 0; i < tenant_dis_.count(); ++i) {
+        if (tenant_dis_.at(i).first == inst->tenant_id_) {
+          tenant_info = tenant_dis_.at(i).second;
+          break;
+        }
+      }
+    } else {
+      tenant_info = &tenant_di_info_;
+    }
+  } while (OB_SUCC(ret) && OB_ISNULL(tenant_info));
 
   return ret;
 }
@@ -199,10 +223,16 @@ int ObInfoSchemaKvCacheTable::set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseT
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_DS_STAT_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"log_kv_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::LOG_KV_CACHE_MISS);
+  } else if (0 == strcmp(inst->status_.config_->cache_name_,"multi_version_fuse_row_cache")) {
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::MULTI_VERSION_FUSE_ROW_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"tablet_table_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::TABLET_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"storage_meta_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::STORAGE_META_CACHE_MISS);
+  } else if (0 == strcmp(inst->status_.config_->cache_name_,"BACKUP_INDEX_CACHE")) {
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::BACKUP_INDEX_CACHE_MISS);
+  } else if (0 == strcmp(inst->status_.config_->cache_name_,"BACKUP_META_CACHE")) {
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::BACKUP_META_CACHE_MISS);
   }
 
   return ret;

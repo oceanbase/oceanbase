@@ -38,6 +38,7 @@ public:
     return writer_type_ == rhs.writer_type_ && writer_id_ == rhs.writer_id_;
   }
   bool operator!=(const MdsWriter &rhs) const { return !operator==(rhs); }
+  void reset();
   bool is_valid() const;
   TO_STRING_KV("writer_type", obj_to_string(writer_type_), K_(writer_id));
 public:

@@ -38,7 +38,7 @@ public:
 private:
   int set_ip(const common::ObAddr &addr);
 protected:
-  int convert_node_to_row(const common::ActiveSessionStat &node, ObNewRow *&row);
+  int convert_node_to_row(const common::ObActiveSessionStatItem &node, ObNewRow *&row);
 protected:
   enum COLUMN_ID
   {
@@ -98,6 +98,11 @@ protected:
     THREAD_ID,
     STMT_TYPE,
     TABLET_ID,
+    PROXY_SID,
+    DELTA_READ_IO_REQUESTS,
+    DELTA_READ_IO_BYTES,
+    DELTA_WRITE_IO_REQUESTS,
+    DELTA_WRITE_IO_BYTES,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

@@ -101,6 +101,7 @@ int get_tenant_tz_map_function(
 
 class IObLogErrHandler;
 class IObLogSysTableHelper;
+// TODO: replace to linked_hashmap in case of update while using tz_info
 typedef common::hash::ObHashMap<uint64_t, ObCDCTenantTimeZoneInfo*> ObLogTZInfoMap;
 class ObCDCTimeZoneInfoGetter : public IObCDCTimeZoneInfoGetter
 {

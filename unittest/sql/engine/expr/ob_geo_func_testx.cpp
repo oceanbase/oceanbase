@@ -107,7 +107,10 @@ public:
     static int eval(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, int &result)
     {
       UNUSEDx(context, g1, g2);
-      ObGeoEvalCtx gis_context(context.get_allocator(), context.get_srs());
+      lib::MemoryContext mem_context;
+      CURRENT_CONTEXT->CREATE_CONTEXT(mem_context,
+          lib::ContextParam().set_label("GIS_UT"));
+      ObGeoEvalCtx gis_context(mem_context, context.get_srs());
       ObString dumy_wkb(4, 4, "dumy");
       ObIWkbGeogPoint gmp1;
       ObIWkbGeogPoint gmp2;

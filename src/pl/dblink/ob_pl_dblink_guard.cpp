@@ -54,12 +54,13 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
   ObString object_name;
   ObString sub_object_name;
   int64_t object_type;
+  uint32_t remote_version = 0;
   OZ (schema_guard.get_dblink_schema(tenant_id, dblink_name, dblink_schema), tenant_id, dblink_name);
   OV (OB_NOT_NULL(dblink_schema), OB_DBLINK_NOT_EXIST_TO_ACCESS, dblink_name);
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
-  OZ (check_remote_version(*dblink_proxy, *dblink_conn));
+  OZ (check_remote_version(*dblink_proxy, *dblink_conn, remote_version));
   OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
   OZ (dblink_name_resolve(dblink_proxy,
                           dblink_conn,
@@ -78,7 +79,8 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
                                schema_name,
                                object_name,
                                sub_object_name,
-                               routine_infos));
+                               routine_infos,
+                               remote_version));
 #define CHECK_NOT_SUPPORT_TYPE(will_check_type) \
   if (ob_is_nvarchar2(will_check_type) || ob_is_nchar(will_check_type)) { \
     ret = OB_NOT_SUPPORTED; \
@@ -184,19 +186,20 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
   common::ObDbLinkProxy *dblink_proxy = NULL;
   common::sqlclient::ObISQLConnection *dblink_conn = NULL;
   common::sqlclient::DblinkDriverProto link_type = DBLINK_UNKNOWN;
+  ObString full_name;
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
   if (OB_SUCC(ret)) {
-    ObString full_name;
     ObString schema_name;
     ObString object_name;
     ObString sub_object_name;
     int64_t object_type;
     const ObDbLinkSchema *dblink_schema = NULL;
+    uint32_t remote_version = 0;
     OZ (schema_guard.get_dblink_schema(MTL_ID(), dblink_name, dblink_schema), dblink_name);
     OV (OB_NOT_NULL(dblink_schema), OB_ERR_UNEXPECTED, dblink_name);
-    OZ (check_remote_version(*dblink_proxy, *dblink_conn));
+    OZ (check_remote_version(*dblink_proxy, *dblink_conn, remote_version));
     OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
     OZ (dblink_name_resolve(dblink_proxy,
                             dblink_conn,
@@ -216,7 +219,8 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
                                 schema_name,
                                 object_name,
                                 sub_object_name,
-                                udt));
+                                udt,
+                                remote_version));
   }
   if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
     int tmp_ret = OB_SUCCESS;
@@ -225,6 +229,71 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
     }
     if (OB_SUCC(ret)) {
       ret = tmp_ret;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (NULL != udt) {
+      if (ObPLTypeFrom::PL_TYPE_DBLINK == udt->get_type_from_origin()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("type is not supported", K(ret), KPC(udt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, full_name.ptr());
+      }
+      if (OB_SUCC(ret)) {
+        if (!udt->is_collection_type() && !udt->is_record_type()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "in dblink, composite types other than collection type and record type are");
+        } else {
+          const ObRecordType *record_type = NULL;
+          if (udt->is_collection_type()) {
+            const ObCollectionType *coll_type = static_cast<const ObCollectionType *>(udt);
+            if (OB_ISNULL(coll_type)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("coll_type is NULL", K(ret));
+            } else {
+              const ObPLDataType &elem_type = coll_type->get_element_type();
+              if (elem_type.is_obj_type()) {
+                // do nothing
+              } else if (elem_type.is_record_type()) {
+                const pl::ObUserDefinedType *udt2 = NULL;
+                OZ (get_dblink_type_by_id(extract_package_id(elem_type.get_user_type_id()),
+                                          elem_type.get_user_type_id(), udt2));
+                if (OB_SUCC(ret)) {
+                  record_type = static_cast<const ObRecordType *>(udt2);
+                }
+              } else {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "in dblink, collection element type must be basic types or record types, other types are");
+              }
+            }
+          } else if (OB_ISNULL(record_type = static_cast<const ObRecordType *>(udt))){
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("record_type is NULL", K(ret));
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(record_type)) {
+            for (int64_t mem_idx = 0; OB_SUCC(ret) && mem_idx < record_type->get_member_count(); mem_idx++) {
+              const ObPLDataType *mem_type = record_type->get_record_member_type(mem_idx);
+              if (OB_ISNULL(mem_type)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("mem_type is NULL", K(ret));
+              } else if (!mem_type->is_obj_type()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "in dblink, record type member types must be basic types, other types are");
+              }
+            }
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, full_name.ptr());
+    }
+    if (OB_SUCC(ret)) {
+      if (!udt->is_collection_type() && !udt->is_record_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite types other than collection type and record type are");
+      }
     }
   }
 #endif
@@ -239,7 +308,8 @@ int ObPLDbLinkGuard::get_dblink_routine_infos(common::ObDbLinkProxy *dblink_prox
                                               const ObString &db_name,
                                               const ObString &pkg_name,
                                               const ObString &routine_name,
-                                              common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos)
+                                              common::ObIArray<const share::schema::ObIRoutineInfo *> &routine_infos,
+                                              uint32_t remote_version)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
@@ -262,8 +332,14 @@ int ObPLDbLinkGuard::get_dblink_routine_infos(common::ObDbLinkProxy *dblink_prox
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
-      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo();
-      new_dblink_info->set_dblink_id(dblink_id);
+      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo(dblink_id,
+                                                            next_link_object_id_,
+                                                            alloc_,
+                                                            session_info,
+                                                            schema_guard,
+                                                            dblink_proxy,
+                                                            dblink_conn);
+      new_dblink_info->set_remote_version(remote_version);
       dblink_info = new_dblink_info;
       OZ (dblink_infos_.push_back(dblink_info));
     }
@@ -419,6 +495,16 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     }
 #undef BIND_BASIC_BY_POS
   }
+  if (NULL != dblink_schema
+      && NULL != dblink_proxy
+      && NULL != dblink_conn
+      && DblinkDriverProto::DBLINK_DRV_OCI == static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+      LOG_WARN("failed to close oci result", K(tmp_ret));
+      ret = (OB_SUCC(ret) ? tmp_ret : ret);
+    }
+  }
 #endif
   return ret;
 }
@@ -431,7 +517,8 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy
                                              const common::ObString &db_name,
                                              const common::ObString &pkg_name,
                                              const common::ObString &udt_name,
-                                             const pl::ObUserDefinedType *&udt)
+                                             const pl::ObUserDefinedType *&udt,
+                                             uint32_t remote_version)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
@@ -453,8 +540,14 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(common::ObDbLinkProxy *dblink_proxy
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
-      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo();
-      new_dblink_info->set_dblink_id(dblink_id);
+      new_dblink_info = new (new_dblink_info)ObPLDbLinkInfo(dblink_id,
+                                                            next_link_object_id_,
+                                                            alloc_,
+                                                            session_info,
+                                                            schema_guard,
+                                                            dblink_proxy,
+                                                            dblink_conn);
+      new_dblink_info->set_remote_version(remote_version);
       dblink_info = new_dblink_info;
       OZ (dblink_infos_.push_back(dblink_info));
     }
@@ -599,7 +692,8 @@ int ObPLDbLinkGuard::get_dblink_info(const uint64_t dblink_id,
 }
 
 int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
-                                          common::sqlclient::ObISQLConnection &dblink_conn)
+                                          common::sqlclient::ObISQLConnection &dblink_conn,
+                                          uint32_t &remote_version)
 {
   int ret = OB_SUCCESS;
   if (DblinkDriverProto::DBLINK_DRV_OB == dblink_conn.get_dblink_driver_proto()) {
@@ -643,6 +737,10 @@ int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
         LOG_WARN("not support dblink", K(ret), K(part1), K(part2), K(part3));
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
           "oceanbase PL dblink oceanbase PL oracle mode, remote database version less then 4.2.4.0");
+      } else {
+        remote_version = ObPLDbLinkInfo::gen_remote_version(static_cast<uint32_t>(part1),
+                                                            static_cast<uint32_t>(part2),
+                                                            static_cast<uint32_t>(part3));
       }
     }
   }

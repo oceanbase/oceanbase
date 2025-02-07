@@ -381,6 +381,23 @@ int ObPhysicalPlanCtx::merge_implicit_cursor_info(const ObImplicitCursorInfo &im
   return ret;
 }
 
+int ObPhysicalPlanCtx::replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(implicit_cursor.stmt_id_ < 0)
+      || OB_UNLIKELY(implicit_cursor.stmt_id_ >= implicit_cursor_infos_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("implicit cursor is invalid", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()));
+  } else if (OB_FAIL(implicit_cursor_infos_.at(implicit_cursor.stmt_id_).
+      replace_cursor(implicit_cursor))) {
+    LOG_WARN("merge implicit cursor info failed", K(ret),
+             K(implicit_cursor), K(implicit_cursor_infos_.count()), K(implicit_cursor));
+  }
+  LOG_DEBUG("merge implicit cursor info", K(ret), K(implicit_cursor), K(lbt()));
+  return ret;
+}
+
 const ObIArray<int64_t> *ObPhysicalPlanCtx::get_part_param_idxs(int64_t part_id) const
 {
   const ObIArray<int64_t> *part_param_idxs = nullptr;
@@ -997,7 +1014,6 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_DECODE(*local_vars);
     }
   }
-
   // following is not deserialize, please add deserialize ahead.
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
@@ -1064,7 +1080,7 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
       udt_meta = *(reinterpret_cast<ObSqlUDTMeta *>(value.value_));
     }
   } else if (!subschema_ctx_.is_inited()) { // no phy plan
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ISNULL(phy_plan_) ? OB_NOT_INIT : OB_ERR_UNEXPECTED;
     LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
   } else {
     if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, value))) {
@@ -1101,7 +1117,7 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
   if (OB_SUCC(ret)
       && (OB_ISNULL(phy_plan_) || !is_subschema_inited_in_plan)) {
     if (!subschema_ctx_.is_inited()) { // no phy plan
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ISNULL(phy_plan_) ? OB_NOT_INIT : OB_ERR_UNEXPECTED;
       LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
     } else {
       if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, sub_meta))) {
@@ -1112,6 +1128,44 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
       }
     }
   }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                        const ObEnumSetMeta *&meta) const
+{
+  int ret = OB_SUCCESS;
+  ObSubSchemaValue value;
+  if (subschema_id == ObMaxSystemUDTSqlType || subschema_id >= UINT_MAX16) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid subschema id", K(ret), K(subschema_id));
+  } else if (OB_NOT_NULL(phy_plan_)) { // physical plan exist, use subschema ctx on phy plan
+    if (!phy_plan_->get_subschema_ctx().is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plan with empty subschema mapping", K(ret), K(phy_plan_->get_subschema_ctx()));
+    } else if (OB_FAIL(phy_plan_->get_subschema_ctx().get_subschema(subschema_id, value))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get subschema by subschema id", K(ret), K(subschema_id));
+      } else {
+        LOG_WARN("subschema not exist in subschema mapping", K(ret), K(subschema_id));
+      }
+    } else {
+      meta = reinterpret_cast<const ObEnumSetMeta *>(value.value_);
+    }
+  } else if (!subschema_ctx_.is_inited()) { // no phy plan
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
+  } else {
+    if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, value))) {
+      LOG_WARN("failed to get subschema", K(ret), K(subschema_id));
+    } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid subschema type", K(ret), K(value));
+    } else { // Notice: shallow copy
+      meta = reinterpret_cast<const ObEnumSetMeta *>(value.value_);
+    }
+  }
+  LOG_TRACE("ENUMSET: search subschema", K(ret), KP(this), K(subschema_id));
   return ret;
 }
 
@@ -1233,6 +1287,51 @@ int ObPhysicalPlanCtx::get_subschema_id_by_type_string(const ObString &type_stri
     } else if (OB_FAIL(subschema_ctx_.get_subschema_id_by_typedef(type_string, subschema_id))) {
       LOG_WARN("failed to get subschema id", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                     const ObIArray<common::ObString> &type_info,
+                                                     uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  uint16_t temp_subschema_id = ObMaxSystemUDTSqlType;
+  bool found = false;
+  ObEnumSetMeta src_meta(obj_meta, &type_info);
+  if (OB_NOT_NULL(phy_plan_)) { // physical plan exist, use subschema ctx on phy plan
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get type info when physical plan exist is not unexpected", K(ret), K(type_info));
+  } else if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
+    LOG_WARN("subschema ctx init failed", K(ret));
+  } else if (OB_FAIL(subschema_ctx_.get_subschema_id(OB_SUBSCHEMA_ENUM_SET_TYPE,
+                                                     src_meta,
+                                                     temp_subschema_id))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get subschema id by udt_id", K(ret), K(type_info));
+    } else { // build new meta
+      ret = OB_SUCCESS;
+      uint16 new_subschema_id = ObMaxSystemUDTSqlType;
+      ObSubSchemaValue value;
+      ObEnumSetMeta *dst_meta = NULL;
+      if (OB_FAIL(src_meta.deep_copy(allocator_, dst_meta))) {
+        LOG_WARN("fail to deep copy enumset meta", K(ret));
+      } else if (OB_FAIL(subschema_ctx_.get_new_subschema_id(new_subschema_id))) {
+        LOG_WARN("failed to get new subschema id", K(ret), K(get_tenant_id()));
+      } else {
+        value.type_ = OB_SUBSCHEMA_ENUM_SET_TYPE;
+        value.signature_ = dst_meta->get_signature();
+        value.value_ = static_cast<void *>(dst_meta);
+        if (OB_FAIL(subschema_ctx_.set_subschema(new_subschema_id, value))) {
+          LOG_WARN("failed to set new subschema", K(ret), K(new_subschema_id), K(value));
+        } else {
+          subschema_id = new_subschema_id;
+        }
+      }
+      LOG_TRACE("ENUMSET: build subschema", K(ret), KP(this), K(subschema_id));
+    }
+  } else { // success
+    subschema_id = temp_subschema_id;
   }
   return ret;
 }

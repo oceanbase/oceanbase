@@ -26,14 +26,16 @@ public:
   ObDelUpdLogPlan(ObOptimizerContext &ctx, const ObDelUpdStmt *del_upd_stmt)
       : ObLogPlan(ctx, del_upd_stmt),
         max_dml_parallel_(ObGlobalHint::UNSET_PARALLEL),
-        use_pdml_(false)
+        use_pdml_(false),
+        use_parallel_das_dml_(false)
     {}
   virtual ~ObDelUpdLogPlan() {}
 
   inline virtual const ObDelUpdStmt *get_stmt() const override
   { return static_cast<const ObDelUpdStmt *>(stmt_); }
 
-  int check_table_rowkey_distinct(const ObIArray<IndexDMLInfo *> &index_dml_infos);
+  int check_table_rowkey_distinct(const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                  bool &need_duplicate_date);
 
   int check_fullfill_safe_update_mode(ObLogicalOperator *op);
 
@@ -60,6 +62,7 @@ public:
                                              const ObTablePartitionInfo &target_table_partition,
                                              const IndexDMLInfo &index_dml_info,
                                              bool is_index_maintenance,
+                                             bool need_duplicate_date,
                                              ObExchangeInfo &exch_info);
 
   int compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &exch_info,
@@ -240,14 +243,26 @@ public:
   int compute_dml_parallel();
   int get_parallel_info_from_candidate_plans(int64_t &dop) const;
   int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
-
+  bool get_can_use_parallel_das_dml() const { return use_parallel_das_dml_; }
+  int64_t get_max_dml_parallel() { return max_dml_parallel_; }
+  virtual int perform_vector_assign_expr_replacement(ObDelUpdStmt *stmt);
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                 OSGShareInfo &info,
                                                 OSG_TYPE type);
+  int replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happened);
+
+  int candi_allocate_subplan_filter_for_assignments(ObIArray<ObRawExpr*> &assign_exprs);
+  int extract_assignment_subqueries(ObRawExpr *expr,
+                                    ObIArray<ObRawExpr*> &normal_query_refs,
+                                    ObIArray<ObRawExpr*> &alias_query_refs);
 private:
+  int get_parallel_info_from_direct_load(const ObDelUpdStmt *del_upd_stmt,
+                                         const ObSQLSessionInfo *session_info,
+                                         int64_t &dml_parallel) const;
+  int check_use_direct_load();
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:
@@ -255,6 +270,7 @@ protected:
   ObSEArray<share::schema::ObSchemaObjVersion, 4, common::ModulePageAllocator, true> extra_dependency_tables_;
   int64_t max_dml_parallel_;
   int64_t use_pdml_;
+  bool use_parallel_das_dml_;
 };
 
 } /* namespace sql */

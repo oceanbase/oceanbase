@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#define USING_LOG_PREFIX SHARE
 
 #include "share/detect/ob_detect_manager.h"
 #include "lib/ob_running_mode.h"
@@ -34,18 +34,18 @@ ObDetectableIdGen &ObDetectableIdGen::instance()
 int ObDetectableIdGen::generate_detectable_id(ObDetectableId &detectable_id, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  // use server id to ensure that the detectable_id is unique in cluster
-  uint64_t server_id = GCTX.server_id_;
-  if (!is_valid_server_id(server_id)) {
+  // use server index to ensure that the detectable_id is unique in cluster
+  uint64_t server_index = GCTX.get_server_index();
+  if (OB_UNLIKELY(!is_valid_server_index(server_index))) {
     ret = OB_SERVER_IS_INIT;
-    LIB_LOG(WARN, "[DM] server id is invalid");
+    LIB_LOG(WARN, "[DM] server index is invalid", K(server_index));
   } else {
     detectable_id.first_ = get_detect_sequence_id();
     // use timestamp to ensure that the detectable_id is unique during the process
     uint64_t timestamp = ObTimeUtility::current_time();
-    // [ server_id (16bits) ][ timestamp (32bits) ]
+    // [ server_index (16bits) ][ timestamp (32bits) ]
     // only if qps > 2^48 or same server reboots after 2^48 the detectable_id be repeated
-    detectable_id.second_ = (server_id) << 48 | (timestamp & 0x0000FFFFFFFFFFFF);
+    detectable_id.second_ = (server_index) << 48 | (timestamp & 0x0000FFFFFFFFFFFF);
     detectable_id.tenant_id_ = tenant_id;
   }
   return ret;
@@ -713,7 +713,7 @@ int ObDetectManagerThread::detect() {
     if (sleep_time < 0) {
       sleep_time = 0;
     } else {
-      ob_usleep(sleep_time);
+      ob_usleep(sleep_time, true/*is_idle_sleep*/);
     }
     ++loop_time;
     LIB_LOG(DEBUG, "[DM] detect has execute ", K(loop_time));

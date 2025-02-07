@@ -41,6 +41,7 @@ public:
   int64_t extra_buf_size_;
   common::ObCompressorType compressor_type_;
   bool is_heap_table_;
+  bool is_shared_storage_; // 共享存储模式, multiple sstable会额外写一份rowkey数据
   // sort param
   int64_t mem_chunk_size_;
   int64_t max_mem_chunk_count_;

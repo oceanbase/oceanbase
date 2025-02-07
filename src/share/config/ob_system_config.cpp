@@ -408,7 +408,7 @@ int ObSystemConfig::read_config(
         // 看到更新后的值 5M。
       } else {
         item.set_version(version);
-        if (!item.set_value(pvalue->value())) {
+        if (!item.set_value_unsafe(pvalue->value())) {
           // without set ret
           SHARE_LOG(WARN, "set config item value failed",
                     K(key.name()), K(pvalue->value()), K(version));

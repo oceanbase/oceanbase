@@ -94,7 +94,7 @@ int ObTenantStorageCheckpointWriter::record_meta(MacroBlockId &ls_meta_entry)
     LOG_WARN("ObTenantStorageCheckpointWriter not inited", K(ret));
   } else if (OB_FAIL(record_ls_meta(ls_meta_entry))) {
     LOG_WARN("fail to construct ls ckpt linked list", K(ret));
-  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
     LOG_WARN("fail to fsync_block", K(ret));
   }
   return ret;
@@ -305,7 +305,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
   const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
   int64_t processed_cnt = 0;
   ObMetaDiskAddr addr;
-  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
+  ObLSTabletAddrIterator tablet_iter;
   ObTabletMapKey tablet_key;
   char slog_buf[sizeof(ObUpdateTabletLog)];
 
@@ -381,7 +381,8 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   slog.ls_id_ = tablet_key.ls_id_;
   slog.tablet_id_ = tablet_key.tablet_id_;
   bool has_slog = false;
-  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_);
+  int64_t transfer_seq = 0; // useless in shared_nothing
+  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(OB_E(EventTable::EN_SLOG_CKPT_ERROR) OB_SUCCESS)) {
   } else if (OB_FAIL(ckpt_slog_handler_->check_slog(tablet_key, has_slog))) {
@@ -456,7 +457,8 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
   slog.ls_id_ = tablet_key.ls_id_;
   slog.tablet_id_ = tablet_key.tablet_id_;
   ObMetaDiskAddr old_addr;
-  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_);
+  int64_t transfer_seq = 0; // useless in shared_nothing
+  const ObTabletPersisterParam param(tablet_key.ls_id_, 0, tablet_key.tablet_id_, transfer_seq);
 
   if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, tablet_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -571,7 +573,7 @@ int ObTenantStorageCheckpointWriter::get_tablet_block_list(
   return ret;
 }
 
-int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is_replay_old)
+int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet()
 {
   int ret = OB_SUCCESS;
 
@@ -589,7 +591,7 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
     ObMetaDiskAddr tablet_addr;
     if (OB_FAIL(t3m->get_tablet_addr(addr_info.tablet_key_, tablet_addr))) {
       // OB_ENTRY_NOT_EXIST is not allowed during upgrade
-      if (OB_ENTRY_NOT_EXIST != ret || is_replay_old) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("fail to get tablet addr", K(ret), K(addr_info));
       } else {
         ret = OB_SUCCESS;
@@ -600,7 +602,7 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
       LOG_WARN("ls service is null", K(ret));
     } else if (OB_FAIL(ls_svr->get_ls(addr_info.tablet_key_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       LOG_WARN("fail to get ls", K(ret), K(addr_info));
-    } else if (!is_replay_old) {
+    } else {
       if (OB_FAIL(get_tablet_with_addr(addr_info, new_tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to load tablet", K(ret), K(addr_info));
@@ -618,7 +620,6 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
               addr_info.tablet_key_,
               addr_info.old_addr_,
               addr_info.new_addr_,
-              is_replay_old,
               new_tablet_handle))) {
             if (OB_NOT_THE_OBJECT == ret) {
               ret = OB_SUCCESS;
@@ -631,28 +632,6 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
             }
           }
         } while (ignore_ret(ret));
-      }
-    } else {
-      addr_info.need_rollback_ = false;
-      ObArenaAllocator allocator("CompatLoad", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      ObTabletHandle old_tablet_handle;
-      do {
-        old_tablet_handle.reset();
-        allocator.reuse();
-        if (OB_FAIL(t3m->get_tablet_with_allocator(
-            WashTabletPriority::WTP_LOW, addr_info.tablet_key_, allocator, old_tablet_handle))) {
-          LOG_WARN("fail to get tablet with allocator", K(ret), K(addr_info));
-        } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_checkpoint(
-            addr_info.tablet_key_,
-            addr_info.old_addr_,
-            addr_info.new_addr_,
-            is_replay_old,
-            new_tablet_handle))) {
-          LOG_WARN("fail to compare and swap tablet with seq check", K(ret), K(addr_info));
-        }
-      } while (ignore_ret(ret));
-      if (OB_SUCC(ret)) {
-        old_tablet_handle.get_obj()->dec_macro_ref_cnt();
       }
     }
   }

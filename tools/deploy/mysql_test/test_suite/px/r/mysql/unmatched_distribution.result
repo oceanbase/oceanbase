@@ -65,13 +65,12 @@ Query Plan
 |0 |PX COORDINATOR                        |        |3       |8           |
 |1 |└─EXCHANGE OUT DISTR                  |:EX10001|3       |6           |
 |2 |  └─HASH OUTER JOIN                   |        |3       |4           |
-|3 |    ├─PART JOIN FILTER CREATE         |:RF0000 |3       |1           |
-|4 |    │ └─PX BLOCK ITERATOR             |        |3       |1           |
-|5 |    │   └─TABLE FULL SCAN             |t1      |3       |1           |
-|6 |    └─EXCHANGE IN DISTR               |        |2       |3           |
-|7 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
-|8 |        └─PX BLOCK HASH JOIN-FILTER   |:RF0000 |2       |2           |
-|9 |          └─TABLE FULL SCAN           |t2      |2       |2           |
+|3 |    ├─PX BLOCK ITERATOR               |        |3       |1           |
+|4 |    │ └─TABLE FULL SCAN               |t1      |3       |1           |
+|5 |    └─EXCHANGE IN DISTR               |        |2       |3           |
+|6 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
+|7 |        └─PX BLOCK ITERATOR           |        |2       |2           |
+|8 |          └─TABLE FULL SCAN           |t2      |2       |2           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------
@@ -80,18 +79,16 @@ Outputs & filters:
       dop=4
   2 - output([t1.c2], [t2.c2], [t1.c1], [t1.c3], [t2.c1], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c2]), other_conds(nil)
-  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
-      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c2, t1.c2)]
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
   4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
-  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
   6 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
-  7 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
       dop=4
+  7 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-  9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0sp[0-1])
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1], [t2.c2], [t2.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -111,13 +108,12 @@ Query Plan
 |0 |PX COORDINATOR                        |        |3       |8           |
 |1 |└─EXCHANGE OUT DISTR                  |:EX10001|3       |6           |
 |2 |  └─HASH OUTER JOIN                   |        |3       |4           |
-|3 |    ├─PART JOIN FILTER CREATE         |:RF0000 |3       |1           |
-|4 |    │ └─PX BLOCK ITERATOR             |        |3       |1           |
-|5 |    │   └─TABLE FULL SCAN             |t1      |3       |1           |
-|6 |    └─EXCHANGE IN DISTR               |        |2       |3           |
-|7 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
-|8 |        └─PX BLOCK HASH JOIN-FILTER   |:RF0000 |2       |2           |
-|9 |          └─TABLE FULL SCAN           |t2      |2       |2           |
+|3 |    ├─PX BLOCK ITERATOR               |        |3       |1           |
+|4 |    │ └─TABLE FULL SCAN               |t1      |3       |1           |
+|5 |    └─EXCHANGE IN DISTR               |        |2       |3           |
+|6 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
+|7 |        └─PX BLOCK ITERATOR           |        |2       |2           |
+|8 |          └─TABLE FULL SCAN           |t2      |2       |2           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------
@@ -126,18 +122,16 @@ Outputs & filters:
       dop=4
   2 - output([t1.c2], [t2.c2], [t1.c1], [t1.c3], [t2.c1], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c2]), other_conds(nil)
-  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
-      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c2, t1.c2)]
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
   4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
-  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
   6 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
-  7 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
       dop=4
+  7 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-  9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0sp[0-1])
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1], [t2.c2], [t2.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -158,13 +152,12 @@ Query Plan
 |0 |PX COORDINATOR                        |        |3       |8           |
 |1 |└─EXCHANGE OUT DISTR                  |:EX10001|3       |6           |
 |2 |  └─HASH OUTER JOIN                   |        |3       |4           |
-|3 |    ├─PART JOIN FILTER CREATE         |:RF0000 |3       |1           |
-|4 |    │ └─PX BLOCK ITERATOR             |        |3       |1           |
-|5 |    │   └─TABLE FULL SCAN             |t1      |3       |1           |
-|6 |    └─EXCHANGE IN DISTR               |        |2       |3           |
-|7 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
-|8 |        └─PX BLOCK HASH JOIN-FILTER   |:RF0000 |2       |2           |
-|9 |          └─TABLE FULL SCAN           |t2      |2       |2           |
+|3 |    ├─PX BLOCK ITERATOR               |        |3       |1           |
+|4 |    │ └─TABLE FULL SCAN               |t1      |3       |1           |
+|5 |    └─EXCHANGE IN DISTR               |        |2       |3           |
+|6 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
+|7 |        └─PX BLOCK ITERATOR           |        |2       |2           |
+|8 |          └─TABLE FULL SCAN           |t2      |2       |2           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------
@@ -173,18 +166,16 @@ Outputs & filters:
       dop=4
   2 - output([t1.c2], [t2.c2], [t1.c1], [t1.c3], [t2.c1], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c2]), other_conds(nil)
-  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
-      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c2, t1.c2)]
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
   4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
-  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
   6 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
-  7 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
       dop=4
+  7 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-  9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0sp[0-1])
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1], [t2.c2], [t2.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -204,13 +195,12 @@ Query Plan
 |0 |PX COORDINATOR                        |        |3       |8           |
 |1 |└─EXCHANGE OUT DISTR                  |:EX10001|3       |6           |
 |2 |  └─HASH OUTER JOIN                   |        |3       |4           |
-|3 |    ├─PART JOIN FILTER CREATE         |:RF0000 |3       |1           |
-|4 |    │ └─PX BLOCK ITERATOR             |        |3       |1           |
-|5 |    │   └─TABLE FULL SCAN             |t1      |3       |1           |
-|6 |    └─EXCHANGE IN DISTR               |        |2       |3           |
-|7 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
-|8 |        └─PX BLOCK HASH JOIN-FILTER   |:RF0000 |2       |2           |
-|9 |          └─TABLE FULL SCAN           |t2      |2       |2           |
+|3 |    ├─PX BLOCK ITERATOR               |        |3       |1           |
+|4 |    │ └─TABLE FULL SCAN               |t1      |3       |1           |
+|5 |    └─EXCHANGE IN DISTR               |        |2       |3           |
+|6 |      └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2       |2           |
+|7 |        └─PX BLOCK ITERATOR           |        |2       |2           |
+|8 |          └─TABLE FULL SCAN           |t2      |2       |2           |
 ==========================================================================
 Outputs & filters:
 -------------------------------------
@@ -219,18 +209,16 @@ Outputs & filters:
       dop=4
   2 - output([t1.c2], [t2.c2], [t1.c1], [t1.c3], [t2.c1], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c2]), other_conds(nil)
-  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
-      RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t1.c2, t1.c2)]
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
   4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
-  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
   6 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
-  7 - output([t2.c2], [t2.c1], [t2.c3]), filter(nil), rowset=16
       dop=4
+  7 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
   8 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-  9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0sp[0-1])
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1], [t2.c2], [t2.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true

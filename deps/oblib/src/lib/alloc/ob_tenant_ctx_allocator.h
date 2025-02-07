@@ -20,9 +20,10 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/allocator/ob_tc_malloc.h"
-#include "lib/utility/ob_sort.h"
+#include "lib/alloc/memory_sanity.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
+#include "lib/alloc/alloc_func.h"
 #include <signal.h>
-
 namespace oceanbase
 {
 
@@ -32,6 +33,7 @@ struct LabelItem;
 }
 namespace lib
 {
+extern bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr);
 class ObTenantCtxAllocator
     : public common::ObIAllocator,
       private common::ObLink
@@ -64,6 +66,7 @@ private:
 class ReqChunkMgr : public IChunkMgr
 {
 public:
+  static constexpr int32_t MAX_PARALLEL = 64;
   ReqChunkMgr(ObTenantCtxAllocator &ta)
     : ta_(ta), parallel_(CTX_ATTR(ta_.get_ctx_id()).parallel_)
   {
@@ -95,7 +98,7 @@ public:
   }
   void reclaim_chunks()
   {
-    for (int i = 0; i < parallel_; i++) {
+    for (int i = 0; i < MAX_PARALLEL; i++) {
       AChunk *chunk = ATOMIC_TAS(&chunks_[i], NULL);
       if (chunk != NULL) {
         ta_.free_chunk(chunk,
@@ -106,7 +109,7 @@ public:
   int64_t n_chunks() const
   {
     int64_t n = 0;
-    for (int i = 0; i < parallel_; i++) {
+    for (int i = 0; i < MAX_PARALLEL; i++) {
       AChunk *chunk = ATOMIC_LOAD(&chunks_[i]);
       if (chunk != NULL) {
         n++;
@@ -114,10 +117,73 @@ public:
     }
     return n;
   }
+  void set_parallel(int32_t parallel)
+  {
+    int32_t min_parallel = CTX_ATTR(ta_.get_ctx_id()).parallel_;
+    if (parallel < min_parallel) {
+      parallel_ = min_parallel;
+    } else if (parallel > MAX_PARALLEL) {
+      parallel_ = MAX_PARALLEL;
+    } else {
+      parallel_ = parallel;
+    }
+  }
 private:
   ObTenantCtxAllocator &ta_;
-  const int parallel_;
-  AChunk *chunks_[32];
+  int32_t parallel_;
+  AChunk *chunks_[MAX_PARALLEL];
+};
+
+class AChunkUsingList
+{
+public:
+  static const uint64_t NWAY = 64;
+  uint64_t get_index(AChunk *chunk)
+  {
+    return (((uint64_t)chunk>>21) * 0xdeece66d + 0xb) % NWAY;
+  }
+  void insert(AChunk *chunk)
+  {
+    uint64_t index = get_index(chunk);
+    lib::ObMutexGuard guard(slots_[index].mutex_);
+    AChunk &head = slots_[index].head_;
+    chunk->prev2_ = &head;
+    chunk->next2_ = head.next2_;
+    head.next2_->prev2_ = chunk;
+    head.next2_ = chunk;
+  }
+  void remove(AChunk *chunk)
+  {
+    uint64_t index = get_index(chunk);
+    lib::ObMutexGuard guard(slots_[index].mutex_);
+    chunk->prev2_->next2_ = chunk->next2_;
+    chunk->next2_->prev2_ = chunk->prev2_;
+  }
+  void get_chunks(AChunk **chunks, int cap, int &cnt)
+  {
+    for (int i = 0; i < NWAY; ++i) {
+      lib::ObMutexGuard guard(slots_[i].mutex_);
+      AChunk &head = slots_[i].head_;
+      AChunk *cur = head.next2_;
+      while (cur != &head && cnt < cap) {
+        chunks[cnt++] = cur;
+        cur = cur->next2_;
+      }
+    }
+  }
+private:
+  struct Slot {
+    Slot()
+      : mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
+        head_()
+    {
+      mutex_.enable_record_stat(false);
+      head_.prev2_ = &head_;
+      head_.next2_ = &head_;
+    }
+    ObMutex mutex_;
+    AChunk head_;
+  } slots_[NWAY];
 };
 
 public:
@@ -132,18 +198,14 @@ public:
                NULL),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
-      using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
-      using_list_head_(), wash_related_chunks_(0), washed_blocks_(0), washed_size_(0),
+      wash_related_chunks_(0), washed_blocks_(0), washed_size_(0),
       chunk_mgr_(*this), req_chunk_mgr_(*this)
   {
     MEMSET(&head_chunk_, 0, sizeof(AChunk));
-    using_list_head_.prev2_ = &using_list_head_;
-    using_list_head_.next2_ = &using_list_head_;
     ObMemAttr attr;
     attr.tenant_id_  = tenant_id;
     attr.ctx_id_ = ctx_id;
     chunk_freelist_mutex_.enable_record_stat(false);
-    using_list_mutex_.enable_record_stat(false);
     for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
       new (obj_mgrs_ + i) ObjectMgr(*this,
                                     CTX_ATTR(ctx_id).enable_no_log_,
@@ -282,6 +344,7 @@ public:
   }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
   void reset_req_chunk_mgr() { req_chunk_mgr_.reclaim_chunks(); }
+  void set_req_chunkmgr_parallel(int32_t parallel) { req_chunk_mgr_.set_parallel(parallel); }
 private:
   int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
   int64_t get_ref_cnt() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -299,16 +362,64 @@ private:
     }
     return ret;
   }
+public:
+  template <typename T>
+  static void* common_realloc(const void *ptr, const int64_t size, const ObMemAttr &attr,
+      ObTenantCtxAllocator& ta, T &allocator)
+  {
+    ObDisableDiagnoseGuard disable_diagnose_guard;
+    SANITY_DISABLE_CHECK_RANGE();
+    if (!attr.label_.is_valid()) {
+      LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
+    }
+    void *nptr = NULL;
+    if (errsim_alloc(attr)) {
+      // do-nothing
+    } else {
+      AObject *obj = NULL; // original object
+      AObject *nobj = NULL; // newly allocated object
+      ObMemAttr inner_attr = attr;
+      if (NULL != ptr) {
+        obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+        on_free(*obj);
+      }
+      ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
+          && ObCtxIds::GLIBC != attr.ctx_id_);
+      BASIC_TIME_GUARD(time_guard, "ObMalloc");
+      DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
+      bool sample_allowed = malloc_sample_allowed(size, inner_attr);
+      inner_attr.alloc_extra_info_ = sample_allowed;
+      nobj = allocator.realloc_object(obj, size, inner_attr);
+      if (OB_ISNULL(nobj)) {
+        int64_t total_size = 0;
+        if (g_alloc_failed_ctx().need_wash_block()) {
+          total_size += ta.sync_wash();
+          BASIC_TIME_GUARD_CLICK("WASH_BLOCK_END");
+        } else if (g_alloc_failed_ctx().need_wash_chunk()) {
+          total_size += CHUNK_MGR.sync_wash();
+          BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
+        }
+        if (total_size > 0) {
+          nobj = allocator.realloc_object(obj, size, inner_attr);
+        }
+      }
+      if (OB_UNLIKELY(NULL == nobj && NULL != obj)) {
+        SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+      }
+      if (OB_NOT_NULL(nobj)) {
+        on_alloc(*nobj, inner_attr);
+        nptr = nobj->data_;
+      }
+    }
+    if (NULL == nptr) {
+      print_alloc_failed_msg();
+    }
+    return nptr;
+  }
+  static void common_free(void *ptr);
 private:
   static void on_alloc(AObject& obj, const ObMemAttr& attr);
   static void on_free(AObject& obj);
-public:
-  template <typename T>
-  static void* common_realloc(const void *ptr, const int64_t size,
-                              const ObMemAttr &attr, ObTenantCtxAllocator& ta,
-                              T &allocator);
-
-  static void common_free(void *ptr);
 
 private:
   ObTenantResourceMgrHandle resource_handle_;
@@ -322,8 +433,7 @@ private:
   // Temporarily useless, leave debug
   int64_t chunk_cnt_;
   ObMutex chunk_freelist_mutex_;
-  ObMutex using_list_mutex_;
-  AChunk using_list_head_;
+  AChunkUsingList using_list_;
   int64_t wash_related_chunks_;
   int64_t washed_blocks_;
   int64_t washed_size_;

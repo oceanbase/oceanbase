@@ -249,6 +249,7 @@ int ObIntegerBaseDiffDecoder::decode_vector(
         break;
       }
       case VEC_TC_DATE:
+      case VEC_TC_MYSQL_DATE:
       case VEC_TC_DEC_INT32: {
         // int32_t
         FILL_VECTOR_FUNC(ObFixedLengthFormat<int32_t>, decoder_ctx.has_extend_value());
@@ -256,6 +257,7 @@ int ObIntegerBaseDiffDecoder::decode_vector(
       }
       case VEC_TC_INTEGER:
       case VEC_TC_DATETIME:
+      case VEC_TC_MYSQL_DATETIME:
       case VEC_TC_TIME:
       case VEC_TC_UNKNOWN:
       case VEC_TC_INTERVAL_YM:
@@ -521,9 +523,9 @@ int ObIntegerBaseDiffDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
     int cmp_res = 0;
-    if (FAILEDx(cmp_func(ref_datum, base_datum, cmp_res))) {
+    if (FAILEDx(cmp_func(base_datum, ref_datum, cmp_res))) {
       LOG_WARN("Failed to compare datum", K(ret), K(ref_datum), K(base_datum));
-    } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res < 0)){
+    } else if (FALSE_IT(filter_obj_smaller_than_base = cmp_res > 0)){
     } else if (filter_obj_smaller_than_base) {
       // Do not need to decode the data
       if (op_type == sql::WHITE_OP_GE || op_type == sql::WHITE_OP_GT || op_type == sql::WHITE_OP_NE) {

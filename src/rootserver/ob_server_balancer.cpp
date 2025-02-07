@@ -333,7 +333,7 @@ int ObServerBalancer::distribute_for_standalone_sys_unit()
   } else if (!enable_sys_unit_standalone) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("sys unit standalone deployment is disabled", K(ret));
-  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+  } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
           OB_SYS_TENANT_ID, empty_zone, sys_unit_server_array))) {
     LOG_WARN("fail to get tenant unit server array", K(ret));
   } else {
@@ -878,7 +878,8 @@ int ObServerBalancer::check_can_execute_rebalance(
         } else if (OB_UNLIKELY(nullptr == unit_loads)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unit loads ptr is null", K(ret));
-        } else if (OB_FAIL(unit_mgr_->calc_sum_load(unit_loads, sum_load))) {
+        } else if (OB_FAIL(unit_mgr_->calc_sum_load(unit_loads, sum_load,
+                                                    false/*include_ungranted_unit*/))) {
           LOG_WARN("fail to calc sum load", K(ret));
         }
         if (OB_FAIL(ret)) {
@@ -1240,7 +1241,7 @@ int ObServerBalancer::generate_available_servers(
       LOG_WARN("zone is not in active", K(ret), K(zone_info));
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
-    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
+    } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers_(
             OB_SYS_TENANT_ID, zone, sys_unit_server_array))) {
       LOG_WARN("fail to get tenant unit server array", K(ret));
     } else {
@@ -4931,11 +4932,11 @@ int ObServerBalancer::make_available_servers_balance_by_cm(
   } else {
     common::ObArray<UnitMigrateStat> task_array;
     if (OB_FAIL(do_non_ttg_unit_balance_by_cm(
-            task_array, not_grant_units, over_server_loads, under_server_loads,
+            task_array, standalone_units, over_server_loads, under_server_loads,
             upper_lmt, g_res_weights, weights_count))) {
       LOG_WARN("fail to do non ttg unit balance by units", K(ret));
     } else if (OB_FAIL(do_non_ttg_unit_balance_by_cm(
-            task_array, standalone_units, over_server_loads, under_server_loads,
+            task_array, not_grant_units, over_server_loads, under_server_loads,
             upper_lmt, g_res_weights, weights_count))) {
       LOG_WARN("fail to do non ttg unit balance by units", K(ret));
     } else if (task_array.count() > 0) {

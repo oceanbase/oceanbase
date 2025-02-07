@@ -14,6 +14,7 @@
 
 #include "lib/ob_define.h"
 #include "sql/parser/parse_node.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -101,6 +102,9 @@ public:
                                             const ParseNode &node,
                                             common::ObIAllocator &allocator,
                                             int64_t &timestamp);
+private:
+  static int acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,
+                                                 const uint64_t tenant_id);
 };
 } // namespace storage
 } // namespace oceanbase

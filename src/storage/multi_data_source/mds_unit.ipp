@@ -482,6 +482,34 @@ int MdsUnit<K, V>::get_latest(const K &key, OP &&read_op) const
   } else if (MDS_FAIL(p_kv->v_.get_latest(std::forward<OP>(read_op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
+    } else {
+      MDS_LOG_GET(DEBUG, "MdsUnit get_latest failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsUnit get_latest success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename K, typename V>
+template <typename OP>
+int MdsUnit<K, V>::get_latest_committed(const K &key, OP &&read_op) const
+{
+  #define PRINT_WRAPPER KR(ret), K(key), K(typeid(OP).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(10_ms);
+  MdsRLockGuard lg(lock_);
+  CLICK();
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(get_row_from_list_(key, p_kv))) {
+    MDS_LOG_GET(WARN, "failed to get row");
+  } else if (OB_ISNULL(p_kv)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    MDS_LOG_GET(WARN, "row key not exist");
+  } else if (MDS_FAIL(p_kv->v_.get_latest_committed(std::forward<OP>(read_op)))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }
   } else {
     MDS_LOG_GET(TRACE, "MdsUnit get_latest success");
@@ -597,7 +625,7 @@ void MdsUnit<K, V>::report_event_(const char (&event_str)[N],
   constexpr int64_t buffer_size = 1_KB;
   char stack_buffer[buffer_size] = { 0 };
   int64_t pos = 0;
-  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, "%s", to_cstring(key)))) {
+  if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos, key))) {
   } else {
     event.key_str_.assign(stack_buffer, pos);
     event.event_ = event_str;
@@ -861,6 +889,26 @@ int MdsUnit<DummyKey, V>::get_latest(OP &&read_op) const
   MdsRLockGuard lg(lock_);
   CLICK();
   if (MDS_FAIL(single_row_.v_.get_latest(std::forward<OP>(read_op)))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
+    }
+  } else {
+    MDS_LOG_GET(TRACE, "MdsUnit get_latest success");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename V>
+template <typename OP>
+int MdsUnit<DummyKey, V>::get_latest_committed(OP &&op) const
+{
+  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name())
+  int ret = OB_SUCCESS;
+  MDS_TG(10_ms);
+  MdsRLockGuard lg(lock_);
+  CLICK();
+  if (MDS_FAIL(single_row_.v_.get_latest_committed(std::forward<OP>(op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }

@@ -629,7 +629,9 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_fts_index_(false),
     is_multivalue_index_(false),
     is_column_replica_table_(false),
-    is_vec_index_(false)
+    is_vec_index_(false),
+    is_partition_table_(false),
+    is_normal_cgs_at_the_end_(false)
 {
   reset();
 }
@@ -660,6 +662,8 @@ void ObTableParam::reset()
   is_multivalue_index_ = false;
   is_column_replica_table_ = false;
   is_vec_index_ = false;
+  is_partition_table_ = false;
+  is_normal_cgs_at_the_end_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -703,6 +707,12 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_vec_index_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
   }
   return ret;
 }
@@ -796,6 +806,14 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_vec_index_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_normal_cgs_at_the_end_);
+  }
   return ret;
 }
 
@@ -843,6 +861,15 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_vec_index_);
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_partition_table_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_normal_cgs_at_the_end_);
   }
   return len;
 }
@@ -955,10 +982,11 @@ int ObTableParam::construct_columns_and_projector(
   } else if (!is_cs && query_cs_replica) {
     is_cs = true;
     is_column_replica_table_ = true;
+    has_all_column_group = false;
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+  } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   } else {
     // column array
@@ -1005,7 +1033,7 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
         } else if (is_cs) {
           if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
-            LOG_WARN("Fail to get column group index", K(ret));
+            LOG_WARN("Fail to get column group index", K(ret), KPC(column));
           } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
             LOG_WARN("Fail to push back cg idx", K(ret));
           }
@@ -1026,10 +1054,14 @@ int ObTableParam::construct_columns_and_projector(
       } else if (OB_UNLIKELY(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) ||
                  common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id ||
+                  common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id ||
                  common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id) {
         ObObjMeta meta_type;
         if (common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id) {
           meta_type.set_urowid();
+        } else if (common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == column_id) {
+          meta_type.set_varchar();
+          meta_type.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
         } else {
           meta_type.set_int();
         }
@@ -1196,6 +1228,10 @@ int ObTableParam::construct_columns_and_projector(
         LOG_WARN("Fail to add read infos", K(ret));
       }
     }
+  }
+
+  if (FAILEDx(table_schema.check_is_normal_cgs_at_the_end(is_normal_cgs_at_the_end_))) {
+    LOG_WARN("Fail to check whether normal cgs are at the end of schema array", K(ret), K(table_schema));
   }
   return ret;
 }
@@ -1562,7 +1598,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_fts_index),
        K_(parser_name),
        K_(is_vec_index),
-       K_(is_column_replica_table));
+       K_(is_column_replica_table),
+       K_(is_normal_cgs_at_the_end));
   J_OBJ_END();
 
   return pos;

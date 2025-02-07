@@ -95,6 +95,9 @@ int ObLogMerge::get_plan_item_info(PlanText &plan_text,
       }
       EXPLAIN_PRINT_EXPRS(delete_conds, type);
     }
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }
@@ -141,6 +144,23 @@ int ObLogMerge::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (OB_FAIL(append_array_no_dup(all_exprs, get_delete_condition()))) {
     LOG_WARN("failed to add exprs to ctx", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogMerge::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(is_dml_fixed_expr(expr, get_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_update_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  } else if (is_fixed) {
+    // do nothing
+  } else if (OB_FAIL(is_dml_fixed_expr(expr, get_delete_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
   return ret;
 }
 
@@ -451,6 +471,22 @@ int ObLogMerge::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   } else if (OB_FAIL(replace_exprs_action(replacer,
                         static_cast<ObMergeLogPlan &>(my_dml_plan_).get_delete_condition()))) {
     LOG_WARN("failed to replace delete condition exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogMerge::op_is_update_pk_with_dop(bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  if (!index_upd_infos_.empty()) {
+    IndexDMLInfo *index_dml_info = index_upd_infos_.at(0);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index_upd_infos_));
+    } else if (index_dml_info->is_update_primary_key_ && (is_pdml() || get_das_dop() > 1)) {
+      is_update = true;
+    }
   }
   return ret;
 }

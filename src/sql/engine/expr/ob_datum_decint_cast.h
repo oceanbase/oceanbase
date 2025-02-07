@@ -1228,16 +1228,21 @@ REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL_BATCH, g_decimalint_cast_ba
 int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  // child is questionmark, do not need evaluation.
-  const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
-  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-  ObNumStackOnceAlloc tmp_alloc;
-  number::ObNumber out_nmb;
-  if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), in_scale,
-                              tmp_alloc, out_nmb))) {
-    LOG_WARN("to_number failed", K(ret));
+  ObDatum *child_eval_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
+    LOG_WARN("failef to eval child datum");
   } else {
-    expr_datum.set_number(out_nmb);
+    // child is questionmark, do not need evaluation.
+    const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
+    ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
+    ObNumStackOnceAlloc tmp_alloc;
+    number::ObNumber out_nmb;
+    if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), in_scale,
+                                tmp_alloc, out_nmb))) {
+      LOG_WARN("to_number failed", K(ret));
+    } else {
+      expr_datum.set_number(out_nmb);
+    }
   }
   return ret;
 }
@@ -1246,21 +1251,26 @@ static int _eval_questionmark_nmb2decint(const ObExpr &expr, ObEvalCtx &ctx, ObD
                                          const ObCastMode cm)
 {
   int ret = OB_SUCCESS;
-  // child is questionmark, do not need evaluation.
-  const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
-  ObDecimalIntBuilder tmp_alloc, res_val;
-  number::ObNumber in_nmb(child.get_number());
-  ObScale in_scale = in_nmb.get_scale();
-  ObPrecision out_prec = expr.datum_meta_.precision_;
-  ObScale out_scale = expr.datum_meta_.scale_;
-  ObDecimalInt *decint = nullptr;
-  int32_t int_bytes = 0;
-  if (OB_FAIL(wide::from_number(in_nmb, tmp_alloc, in_scale, decint, int_bytes))) {
-    LOG_WARN("from number failed", K(ret));
-  } else if (OB_FAIL(scale_const_decimalint_expr(decint, int_bytes, in_scale, out_scale, out_prec, cm, res_val))) {
-    LOG_WARN("scale const decimal int failed", K(ret));
+  ObDatum *child_eval_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
+    LOG_WARN("failef to eval child datum");
   } else {
-    expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    // child is questionmark, do not need evaluation.
+    const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
+    ObDecimalIntBuilder tmp_alloc, res_val;
+    number::ObNumber in_nmb(child.get_number());
+    ObScale in_scale = in_nmb.get_scale();
+    ObPrecision out_prec = expr.datum_meta_.precision_;
+    ObScale out_scale = expr.datum_meta_.scale_;
+    ObDecimalInt *decint = nullptr;
+    int32_t int_bytes = 0;
+    if (OB_FAIL(wide::from_number(in_nmb, tmp_alloc, in_scale, decint, int_bytes))) {
+      LOG_WARN("from number failed", K(ret));
+    } else if (OB_FAIL(scale_const_decimalint_expr(decint, int_bytes, in_scale, out_scale, out_prec, cm, res_val))) {
+      LOG_WARN("scale const decimal int failed", K(ret));
+    } else {
+      expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    }
   }
   return ret;
 }
@@ -1269,16 +1279,21 @@ static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, 
                                             const ObCastMode cm)
 {
   int ret = OB_SUCCESS;
-  ObScale out_scale = expr.datum_meta_.scale_;
-  ObPrecision out_prec = expr.datum_meta_.precision_;
-  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-  ObDecimalIntBuilder res_val;
-  const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
-  if (OB_FAIL(ObDatumCast::common_scale_decimalint(child.get_decimal_int(), child.get_int_bytes(),
-                                                   in_scale, out_scale, out_prec, cm, res_val))) {
-    LOG_WARN("common scale decimal int failed", K(ret));
+  ObDatum *child_eval_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, child_eval_datum))) {
+    LOG_WARN("failef to eval child datum");
   } else {
-    expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    ObScale out_scale = expr.datum_meta_.scale_;
+    ObPrecision out_prec = expr.datum_meta_.precision_;
+    ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
+    ObDecimalIntBuilder res_val;
+    const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
+    if (OB_FAIL(ObDatumCast::common_scale_decimalint(child.get_decimal_int(), child.get_int_bytes(),
+                                                    in_scale, out_scale, out_prec, cm, res_val))) {
+      LOG_WARN("common scale decimal int failed", K(ret));
+    } else {
+      expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    }
   }
   return ret;
 }

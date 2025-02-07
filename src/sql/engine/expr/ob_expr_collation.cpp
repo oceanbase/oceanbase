@@ -286,6 +286,9 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
   }
   if (OB_SUCC(ret)) {
     type1.set_calc_type(ObVarcharType);
+    if (!type1.is_string_type()) {
+      type1.set_calc_collation_type(type2.get_collation_type());
+    }
     type2.set_calc_type(ObIntType);
   }
   return ret;
@@ -384,7 +387,12 @@ int calc_cmp_meta_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   int ret = OB_SUCCESS;
   ObExprStrResAlloc res_alloc(expr, ctx);
   ObString res_str;
-  if (OB_FAIL(ob_alloc_printf(res_str, res_alloc, "%s", S(expr.args_[0]->obj_meta_)))) {
+  ObCStringHelper helper;
+  const char *ptr = helper.convert(expr.args_[0]->obj_meta_);
+  if (OB_ISNULL(ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to convert obj_meta", K(ret));
+  } else if (OB_FAIL(ob_alloc_printf(res_str, res_alloc, "%s", ptr))) {
     LOG_WARN("failed to print", K(ret));
   } else {
     res_datum.set_string(res_str);

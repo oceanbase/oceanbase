@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "storage/blocksstable/ob_batch_datum_rows.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/direct_load/ob_direct_load_external_row.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_row.h"
@@ -26,7 +27,12 @@ public:
   ObDirectLoadDMLRowHandler() = default;
   virtual ~ObDirectLoadDMLRowHandler() = default;
   // handle rows direct insert into sstable
-  virtual int handle_insert_row(const blocksstable::ObDatumRow &row) = 0;
+  virtual int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
+  virtual int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) = 0;
+  virtual int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
+  // only used for heap table
+  virtual int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row) = 0;
+  virtual int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) = 0;
   // handle rows with the same primary key in the imported data
   virtual int handle_update_row(const blocksstable::ObDatumRow &row) = 0;
   virtual int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
@@ -34,7 +40,8 @@ public:
   virtual int handle_update_row(common::ObArray<const ObDirectLoadMultipleDatumRow *> &rows,
                                 const ObDirectLoadMultipleDatumRow *&row) = 0;
   // handle rows with the same primary key between the imported data and the original data
-  virtual int handle_update_row(const blocksstable::ObDatumRow &old_row,
+  virtual int handle_update_row(const ObTabletID tablet_id,
+                                const blocksstable::ObDatumRow &old_row,
                                 const blocksstable::ObDatumRow &new_row,
                                 const blocksstable::ObDatumRow *&result_row) = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;

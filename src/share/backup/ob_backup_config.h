@@ -108,6 +108,8 @@ public:
     const bool for_verify,
     ObCompatibilityMode &compat_mode) { return OB_NOT_SUPPORTED; }
   virtual int get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode) { return OB_NOT_SUPPORTED; }
+  int set_default_checksum_type(share::ObBackupPathString &backup_dest);
+  int set_default_checksum_type(ObBackupDest &backup_dest);
   TO_STRING_KV(K_(tenant_id), K_(type), K_(config_items));
 protected:
   uint64_t tenant_id_;

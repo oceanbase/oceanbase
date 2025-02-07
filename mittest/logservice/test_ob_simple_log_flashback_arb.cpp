@@ -1,3 +1,6 @@
+// owner: yunlong.cb
+// owner group: log
+
 // Copyright (c) 2021 OceanBase
 // OceanBase is licensed under Mulan PubL v2.
 // You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -26,8 +29,19 @@ namespace oceanbase
 {
 using namespace logservice;
 
+int64_t ARB_TIMEOUT_ARG = 2 * 1000 * 1000L;
+
 namespace logservice
 {
+
+void ObArbitrationService::update_arb_timeout_()
+{
+  arb_timeout_us_ = ARB_TIMEOUT_ARG;
+  if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
+    CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
+  }
+}
+
 int LogRequestHandler::change_access_mode_(const LogChangeAccessModeCmd &req)
 {
   int ret = common::OB_SUCCESS;
@@ -180,6 +194,7 @@ TEST_F(TestObSimpleLogClusterFlashbackArb, test_flashback_after_upgrading)
 
     // 4. submit logs, the leader must not commit logs by itself
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 50, id));
     const LSN curr_max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
     sleep(5);
@@ -188,6 +203,7 @@ TEST_F(TestObSimpleLogClusterFlashbackArb, test_flashback_after_upgrading)
         << after_flashback_end_lsn.val_ << ", " << leader.palf_handle_impl_->sw_.committed_end_lsn_.val_;
 
     // 5. clear env
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
   }
   delete_paxos_group(id);

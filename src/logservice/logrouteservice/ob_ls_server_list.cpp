@@ -14,7 +14,7 @@
 
 #include "ob_ls_server_list.h"
 #include "lib/container/ob_se_array_iterator.h"  // begin/end
-#include <algorithm>                             // std::sort
+#include "lib/utility/ob_sort.h"
 
 using namespace oceanbase::common;
 
@@ -301,9 +301,10 @@ int LSSvrList::check_found_svr_priority_(
       need_switch = true;
     }
 
+    ObCStringHelper helper;
     LOG_INFO("[CHECK_NEED_SWITCH_SERVER] find different server", K(key), K(need_switch),
         K(cur_svr_idx), K(found_svr_idx),
-        "cur_svr_item", (-1 == cur_svr_idx) ? to_cstring(cur_svr) : to_cstring(svr_items_.at(cur_svr_idx)),
+        "cur_svr_item", (-1 == cur_svr_idx) ? helper.convert(cur_svr) : helper.convert(svr_items_.at(cur_svr_idx)),
         K(found_svr_item));
   }
 
@@ -453,8 +454,11 @@ bool LSSvrList::SvrItem::is_priority_equal(const SvrItem &svr_item) const
 int64_t LSSvrList::SvrItem::to_string(char *buffer, int64_t length) const
 {
   int64_t pos = 0;
-  (void)databuff_printf(buffer, length, pos, "{server:%s, ranges:[%s], ",
-      to_cstring(svr_), to_cstring(log_ranges_));
+  (void)databuff_printf(buffer, length, pos, "{server:");
+  (void)databuff_printf(buffer, length, pos, svr_);
+  (void)databuff_printf(buffer, length, pos, ", ranges:[");
+  (void)databuff_printf(buffer, length, pos, log_ranges_);
+  (void)databuff_printf(buffer, length, pos, "], ");
 
   (void)databuff_printf(buffer, length, pos,
       "priority:[is_meta_table:%d region:%s, replica:%s, is_leader:%d]}",

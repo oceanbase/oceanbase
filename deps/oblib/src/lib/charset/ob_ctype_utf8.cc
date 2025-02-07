@@ -18,6 +18,7 @@
 *
 */
 
+#include "lib/charset/ob_byteorder.h"
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_dtoa.h"
 #include "lib/charset/ob_uctype.h"
@@ -468,9 +469,7 @@ size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
     src+= res;
     if (uni_plane)
       ob_tosort_unicode(uni_plane, &wc, cs->state);
-    if ((res= cs->cset->wc_mb(cs, wc, dst, de)) <= 0)
-      break;
-    dst+= res;
+    dst = store16be(dst, wc); //这是是不是bydesign的
   }
   ob_strnxfrm_unicode_help(&dst,&de, nweights, flags, &dst0);
   return dst - dst0;
@@ -879,9 +878,13 @@ size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo *cs,
       break;
     }
     src+= res;
-    if ((res= cs->cset->wc_mb(cs, wc, dst, de)) <= 0)
-      break;
-    dst+= res;
+    *dst++= (uchar) (wc >> 16);
+    if (dst < de)
+    {
+      *dst++= (uchar) ((wc >> 8) & 0xFF);
+      if (dst < de)
+        *dst++= (uchar) (wc & 0xFF);
+    }
   }
   if (flags & OB_STRXFRM_PAD_WITH_SPACE)
   {
@@ -953,7 +956,7 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_max_bytes_charpos_mb,
   ob_well_formed_len_utf8mb4,
   ob_lengthsp_8bit,
-  ob_mb_wc_utf8mb4,
+  ob_mb_wc_utf8mb4_thunk,
   ob_wc_mb_utf8mb4,
   ob_mb_ctype_mb,
   ob_caseup_utf8mb4,
@@ -966,7 +969,8 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_strntod_8bit,
   //ob_strtoll10_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 static ObCollationHandler ob_collation_utf8mb4_general_ci_handler=

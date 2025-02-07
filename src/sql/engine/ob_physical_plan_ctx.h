@@ -24,6 +24,7 @@
 #include "sql/engine/user_defined_function/ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "lib/udt/ob_udt_type.h"
+#include "lib/enumset/ob_enum_set_meta.h"
 #include "sql/engine/ob_subschema_ctx.h"
 #include "sql/engine/expr/ob_expr_util.h"
 
@@ -404,6 +405,15 @@ public:
   {
     return is_or_expand_transformed_;
   }
+  inline void set_check_pdml_affected_rows(const bool check_pdml_affected_rows)
+  {
+    check_pdml_affected_rows_ = check_pdml_affected_rows;
+  }
+  inline bool get_check_pdml_affected_rows() const
+  {
+    return check_pdml_affected_rows_;
+  }
+
   /*
   ** 目前OB有语句级重试和语句内部重试，当我们遇到错误码OB_TRANSACTION_SET_VIOLATION,
   ** 不会重新执行sql，而是重新执行计划，此时plan_ctx有些变量需要重置，目前梳理只有下面几种，
@@ -474,6 +484,7 @@ public:
   { return implicit_cursor_infos_; }
   int merge_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor_info);
   int merge_implicit_cursors(const common::ObIArray<ObImplicitCursorInfo> &implicit_cursors);
+  int replace_implicit_cursor_info(const ObImplicitCursorInfo &implicit_cursor_info);
   void reset_cursor_info();
   void set_cur_stmt_id(int64_t cur_stmt_id) { cur_stmt_id_ = cur_stmt_id; }
   int64_t get_cur_stmt_id() const { return cur_stmt_id_; }
@@ -488,6 +499,7 @@ public:
   bool is_ps_protocol() const { return is_ps_protocol_; }
   void set_original_param_cnt(const int64_t cnt) { original_param_cnt_ = cnt; }
   int64_t get_original_param_cnt() const { return original_param_cnt_; }
+  bool is_exec_param_readable() const { return param_store_.count() > original_param_cnt_; }
   void set_orig_question_mark_cnt(const int64_t cnt) { orig_question_mark_cnt_ = cnt; }
   int64_t get_orig_question_mark_cnt() const { return orig_question_mark_cnt_; }
   void set_is_ps_rewrite_sql() { is_ps_rewrite_sql_ = true; }
@@ -508,6 +520,7 @@ public:
   int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
   int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubSchemaValue &sub_meta);
   bool is_subschema_ctx_inited();
+  int get_enumset_meta_by_subschema_id(uint16_t subschema_id, const ObEnumSetMeta *&meta) const;
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
@@ -515,6 +528,9 @@ public:
                                                const ObDataType &elem_type,
                                                uint16_t &subschema_id);
   int get_subschema_id_by_type_string(const ObString &type_string, uint16_t &subschema_id);
+  int get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                    const ObIArray<common::ObString> &type_info,
+                                    uint16_t &subschema_id);
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);

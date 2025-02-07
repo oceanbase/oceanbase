@@ -68,7 +68,7 @@ TEST(TestBackupDeviceWrapper, test_alloc_block) {
   OK(ObIOManager::get_instance().init(test_memory));
 
   OK(ObBackupWrapperIODevice::setup_io_opts_for_backup_device(
-      backup_set_id, ls_id, backup_data_type, turn_id, retry_id, file_id, block_type, OB_STORAGE_ACCESS_RANDOMWRITER, &io_d_opts_write));
+      backup_set_id, ls_id, backup_data_type, turn_id, retry_id, file_id, block_type, OB_STORAGE_ACCESS_APPENDER, &io_d_opts_write));
 
   ObBackupWrapperIODevice wrapper_io_write;
 

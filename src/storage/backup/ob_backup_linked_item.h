@@ -61,7 +61,7 @@ public:
   bool operator!=(const ObBackupLinkedItem &other) const;
   TO_STRING_KV(K_(macro_id), K_(backup_id));
   blocksstable::MacroBlockId macro_id_;
-  ObBackupPhysicalID backup_id_; // TODO(yanfeng): change type when quick restore code merge
+  ObBackupDeviceMacroBlockId backup_id_;
 };
 
 }

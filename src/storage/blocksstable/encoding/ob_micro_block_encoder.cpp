@@ -112,6 +112,7 @@ ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
     string_col_cnt_(0), estimate_base_store_size_(0),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, MICRO_BLOCK_PAGE_ALLOCATOR),
     length_(0),
+    encoder_freezed_(false),
     is_inited_(false)
 {
   encoding_meta_allocator_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
@@ -170,6 +171,7 @@ int ObMicroBlockEncoder::init(const ObMicroBlockEncodingCtx &ctx)
       }
     }
     ctx_ = ctx;
+    encoder_freezed_ = false;
     is_inited_ = true;
   }
   return ret;
@@ -208,6 +210,7 @@ void ObMicroBlockEncoder::reset()
 {
   ObIMicroBlockWriter::reset();
   is_inited_ = false;
+  encoder_freezed_ = false;
   //ctx_
   encoding_meta_allocator_.reset();
   data_buffer_.reset();
@@ -268,9 +271,10 @@ void ObMicroBlockEncoder::reuse()
   col_ctxs_.reuse();
   string_col_cnt_ = 0;
   length_ = 0;
+  encoder_freezed_ = false;
 }
 
-void ObMicroBlockEncoder::dump_diagnose_info() const
+void ObMicroBlockEncoder::dump_diagnose_info()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -289,7 +293,10 @@ void ObMicroBlockEncoder::dump_diagnose_info() const
     ObArenaAllocator allocator("DumpMicroInfo");
     ObMicroBlockChecksumHelper tmp_checksum_helper;
     blocksstable::ObNewRowBuilder new_row_builder;
-    if (OB_FAIL(tmp_checksum_helper.init(ctx_.col_descs_, true))) {
+    encoder_freezed_ = true;
+    if (OB_FAIL(set_datum_rows_ptr())) {
+      LOG_WARN("Failed to set datum rows ptr", K(ret));
+    } else if (OB_FAIL(tmp_checksum_helper.init(ctx_.col_descs_, true))) {
       LOG_WARN("Failed to init ObMicroBlockChecksumHelper", K(ret), KPC_(ctx_.col_descs));
     } else if (OB_FAIL(new_row_builder.init(*ctx_.col_descs_, allocator))) {
       LOG_WARN("Failed to init ObNewRowBuilder", K(ret), KPC_(ctx_.col_descs));
@@ -342,7 +349,8 @@ void ObMicroBlockEncoder::print_micro_block_encoder_status() const
 {
   FLOG_INFO("Build micro block failed, print encoder status: ", K_(ctx),
     K_(estimate_size), K_(estimate_size_limit), K_(header_size),
-      K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length));
+      K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length),
+      K(get_row_count()));
   int64_t idx = 0;
   FOREACH(e, encoders_) {
     FLOG_INFO("Print column encoder: ", K(idx), KPC(*e));
@@ -399,6 +407,9 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
   } else if (OB_UNLIKELY(row.get_column_count() != ctx_.column_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column count mismatch", K(ret), "ctx", ctx_, K(row));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K(datum_rows_.count()));
   } else if (OB_FAIL(inner_init())) {
     LOG_WARN("failed to inner init", K(ret));
   } else {
@@ -413,10 +424,11 @@ int ObMicroBlockEncoder::append_row(const ObDatumRow &row)
     int64_t store_size = 0;
     ObConstDatumRow datum_row;
     ObMicroBlockHeader *header = get_header(data_buffer_);
-    if (OB_UNLIKELY(datum_rows_.count() >= MAX_MICRO_BLOCK_ROW_CNT)) {
+    uint64_t row_count = (uint64_t)(datum_rows_.count());
+    if (OB_UNLIKELY(row_count >= MAX_MICRO_BLOCK_ROW_CNT || row_count > ctx_.encoding_granularity_)) {
       ret = OB_BUF_NOT_ENOUGH;
       LOG_INFO("Try to encode more rows than maximum of row cnt in header, force to build a block",
-          K(datum_rows_.count()), K(row));
+          K(datum_rows_.count()), K(row), K(ctx_.encoding_granularity_));
     } else if (OB_FAIL(process_out_row_columns(row))) {
       LOG_WARN("failed to process out row columns", K(ret));
     } else if (OB_FAIL(copy_and_append_row(row, store_size))) {
@@ -576,6 +588,10 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
   } else if (OB_UNLIKELY(datum_rows_.empty())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("empty micro block", K(ret));
+  } else if (OB_UNLIKELY(encoder_freezed_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected encoder status", K(ret), K_(encoder_freezed), K(datum_rows_.count()));
+  } else if (FALSE_IT(encoder_freezed_ = true)) {
   } else if (OB_FAIL(set_datum_rows_ptr())) {
     STORAGE_LOG(WARN, "fail to set datum rows ptr", K(ret));
   } else if (OB_FAIL(pivot())) {

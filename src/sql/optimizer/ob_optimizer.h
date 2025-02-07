@@ -89,6 +89,7 @@ namespace sql
 
     COLLECT_BATCH_EXEC_PARAM,
     ALLOC_OP,
+    ADJUST_SCAN_DIRECTION,
     TRAVERSE_OP_END
   };
 
@@ -207,14 +208,19 @@ namespace sql
     int set_auto_dop_params(const ObSQLSessionInfo &session);
     int check_pdml_enabled(const ObDMLStmt &stmt,
                            const ObSQLSessionInfo &session);
+    int check_direct_load_enabled(const ObDMLStmt &stmt,
+                                  const ObSQLSessionInfo &session);
     int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
+    int check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
+                                       ObSQLSessionInfo &session);
+    int check_parallel_das_dml_supported_feature(const ObDelUpdStmt &pdml_stmt,
+                                                 const ObSQLSessionInfo &session,
+                                                 bool &use_parallel_das_dml);
+
+    int check_dml_parallel_mode();
     int check_is_heap_table(const ObDMLStmt &stmt);
-    int check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
-                                                const ObDMLStmt &stmt,
-                                                const ObIArray<uint64_t> &index_ids,
-                                                bool &is_update);
     int extract_column_usage_info(const ObDMLStmt &stmt);
     int analyze_one_expr(const ObDMLStmt &stmt, const ObRawExpr *expr);
     int add_column_usage_arg(const ObDMLStmt &stmt,
@@ -225,6 +231,7 @@ namespace sql
     int init_system_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
     int init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
+    int init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
 
   private:
     ObOptimizerContext &ctx_;

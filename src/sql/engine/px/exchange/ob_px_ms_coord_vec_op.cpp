@@ -141,7 +141,7 @@ int ObPxMSCoordVecOp::inner_open()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid state", K(ret));
   } else {
-    if (1 == px_dop_) {
+    if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);
@@ -448,7 +448,7 @@ int ObPxMSCoordVecOp::next_row(const bool need_store_output)
     } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         // if no data, then unblock blocked data channel, if not, dtl maybe hang

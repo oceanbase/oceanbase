@@ -251,7 +251,7 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     }
     else {
       // 这里针对calc的转换是不是可以直接用在result上？？
-      result_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+      result_type = get_enumset_calc_type(type.get_type(), OB_INVALID_INDEX);
     }
     if (OB_UNLIKELY(ObMaxType == result_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -259,30 +259,30 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     } else if (ObVarcharType == result_type) {
       for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
         if (types_stack[i].is_enum_or_set()) {
-          types_stack[i].set_calc_type(ObVarcharType);
+          types_stack[i].set_calc_type(get_enumset_calc_type(type.get_type(), i));
         }
       }
       if (has_default) {
         if (types_stack[param_num - 1].is_enum_or_set()) {
-          types_stack[param_num - 1].set_calc_type(ObVarcharType);
+          types_stack[param_num - 1].set_calc_type(get_enumset_calc_type(type.get_type(), param_num - 1));
         }
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_calc_type()]];
+    ObObjType calc_type = get_enumset_calc_type(type.get_calc_type(), OB_INVALID_INDEX);
     if (OB_UNLIKELY(ObMaxType == calc_type)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type), K(ret));
     } else if (ObVarcharType == calc_type) {
       if (types_stack[0].is_enum_or_set()) {
-        types_stack[0].set_calc_type(ObVarcharType);
+        types_stack[0].set_calc_type(get_enumset_calc_type(type.get_calc_type(), 0));
       }
       for (int64_t i = 1; i < param_num; i += 2 /*skip conditions */) {
         //here to let enumset wrapper knows
         if (types_stack[i].is_enum_or_set()) {
-          types_stack[i].set_calc_type(ObVarcharType);
+          types_stack[i].set_calc_type(get_enumset_calc_type(type.get_calc_type(), i));
         }
       }
     } else {/*do nothing*/}

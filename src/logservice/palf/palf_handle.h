@@ -120,7 +120,7 @@ public:
                void *buffer,
                const int64_t nbytes,
                int64_t &read_size,
-               palf::LogIOContext &io_ctx);
+               LogIOContext &io_ctx);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志
@@ -235,6 +235,10 @@ public:
   int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
                                              int64_t &paxos_replica_num,
                                              GlobalLearnerList &learner_list) const;
+  int get_stable_membership(LogConfigVersion &config_version,
+                            common::ObMemberList &member_list,
+                            int64_t &paxos_replica_num,
+                            common::GlobalLearnerList &learner_list) const;
   int get_election_leader(common::ObAddr &addr) const;
   int get_parent(common::ObAddr &parent) const;
 
@@ -451,6 +455,8 @@ public:
   // - OB_SUCCESS
   // - OB_NOT_INIT
   int get_arbitration_member(common::ObMember &arb_member) const;
+  int set_election_silent_flag(const bool election_silent_flag);
+  bool is_election_silent() const;
 #endif
   int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                     const int64_t downgrade_priority_time_us,
@@ -540,6 +546,8 @@ public:
   int reset_election_priority();
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb);
   int reset_locality_cb();
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker);
+  int reset_reconfig_checker_cb();
   int stat(PalfStat &palf_stat) const;
 
   //---------config change lock related--------//

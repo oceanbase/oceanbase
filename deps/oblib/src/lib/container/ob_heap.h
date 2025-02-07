@@ -27,6 +27,7 @@ public:
   ObBinaryHeapBase(CompareFunctor &cmp, common::ObIAllocator *allocator = NULL);
   virtual ~ObBinaryHeapBase() { /* do nothing */}
   int push(const T &element);
+  int push(const T &element, bool &in_heap);
   int pop();
   const T& top() const;
   T& top();
@@ -84,6 +85,20 @@ int ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::push(const T &element
   if (OB_FAIL(array_.push_back(element))) {
     LIB_LOG(WARN, "push element to array failed", K(ret));
   } else {
+    ret = upheap(array_.count() - 1);
+  }
+  return ret;
+}
+
+template<typename T, typename CompareFunctor, int64_t LOCAL_ARRAY_SIZE>
+int ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::push(const T &element, bool &in_heap)
+{
+  int ret = OB_SUCCESS;
+  in_heap = false;
+  if (OB_FAIL(array_.push_back(element))) {
+    LIB_LOG(WARN, "push element to array failed", K(ret));
+  } else {
+    in_heap = true;
     ret = upheap(array_.count() - 1);
   }
   return ret;

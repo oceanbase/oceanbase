@@ -35,7 +35,7 @@ ObLockID            DEFAULT_TABLE_LOCK_ID;
 ObLockID            TABLE_LOCK_ID2;
 ObLockID            TABLE_LOCK_ID3;
 ObTableLockMode     DEFAULT_LOCK_MODE = ROW_EXCLUSIVE;
-ObTableLockMode     DEFAULT_COFLICT_LOCK_MODE = EXCLUSIVE;
+ObTableLockMode     DEFAULT_CONFLICT_LOCK_MODE = EXCLUSIVE;
 ObTableLockOwnerID  DEFAULT_IN_TRANS_OWNER_ID(ObTableLockOwnerID::default_owner());
 ObTableLockOwnerID  DEFAULT_OUT_TRANS_OWNER_ID(ObTableLockOwnerID::get_owner_by_value(100));
 ObTableLockOwnerID  CONFLICT_OWNER_ID(ObTableLockOwnerID::get_owner_by_value(1));
@@ -55,6 +55,7 @@ ObTableLockOp       DEFAULT_OUT_TRANS_LOCK_OP;
 ObTableLockOp       DEFAULT_OUT_TRANS_UNLOCK_OP;
 
 ObTableLockOp       DEFAULT_CONFLICT_OUT_TRANS_LOCK_OP;
+ObTableLockOp       DEFAULT_OUT_TRANS_REPLACE_LOCK_OP;
 
 void init_default_lock_test_value()
 {
@@ -108,7 +109,7 @@ void init_default_lock_test_value()
                                   create_schema_version);
 
   DEFAULT_CONFLICT_OUT_TRANS_LOCK_OP.set(DEFAULT_TABLET_LOCK_ID,
-                                         DEFAULT_COFLICT_LOCK_MODE,
+                                         DEFAULT_CONFLICT_LOCK_MODE,
                                          CONFLICT_OWNER_ID,
                                          TRANS_ID2,
                                          OUT_TRANS_LOCK_OP_TYPE,

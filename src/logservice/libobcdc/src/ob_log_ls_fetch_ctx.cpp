@@ -274,7 +274,7 @@ int LSFetchCtx::init_remote_iter()
   } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
     LOG_ERROR("get log ext handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   } else if (OB_FAIL(remote_iter_.set_io_context(palf::LogIOContext(palf::LogIOUser::CDC)))) {
     LOG_ERROR("remote iter set_io_context failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
@@ -1050,6 +1050,23 @@ int LSFetchCtx::next_server(common::ObAddr &request_svr)
   return ret;
 }
 
+int LSFetchCtx::get_server_count(int64_t &server_count)
+{
+  int ret = OB_SUCCESS;
+  logservice::ObLogRouteService *log_route_service = nullptr;
+
+  if (OB_FAIL(get_log_route_service_(log_route_service))) {
+    LOG_ERROR("get_log_route_service_ failed", KR(ret));
+  } else if (OB_FAIL(log_route_service->get_server_count(
+      tls_id_.get_tenant_id(),
+      tls_id_.get_ls_id(),
+      server_count))) {
+    LOG_ERROR("get_server_count failed", KR(ret), K_(tls_id));
+  }
+
+  return ret;
+}
+
 int LSFetchCtx::init_locate_req_svr_list_(StartLSNLocateReq &req, LocateSvrList &locate_svr_list)
 {
   int ret = OB_SUCCESS;
@@ -1188,21 +1205,23 @@ void LSFetchCtx::print_dispatch_info() const
 
   if (fetch_info_.is_from_idle_to_idle()) {
     if (REACH_TIME_INTERVAL(10 * _SEC_)) {
+      ObCStringHelper helper;
       _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
           "DELAY=%s PROGRESS=%s DISCARDED=%d",
-          to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-          to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+          helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+          helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
           NTS_TO_DELAY(progress),
-          to_cstring(cur_progress),
+          helper.convert(cur_progress),
           discarded_);
     }
   } else {
+    ObCStringHelper helper;
     _ISTAT("[DISPATCH_FETCH_TASK] LS=%s TO=%s FROM=%s REASON=\"%s\" "
         "DELAY=%s PROGRESS=%s DISCARDED=%d",
-        to_cstring(tls_id_), to_cstring(fetch_info_.cur_mod_),
-        to_cstring(fetch_info_.out_mod_), fetch_info_.out_reason_,
+        helper.convert(tls_id_), helper.convert(fetch_info_.cur_mod_),
+        helper.convert(fetch_info_.out_mod_), fetch_info_.out_reason_,
         NTS_TO_DELAY(progress),
-        to_cstring(cur_progress),
+        helper.convert(cur_progress),
         discarded_);
   }
 }
@@ -1433,8 +1452,9 @@ int64_t LSFetchCtx::FetchModule::to_string(char *buffer, const int64_t size) con
     }
 
     case FETCH_MODULE_FETCH_STREAM: {
-      (void)databuff_printf(buffer, size, pos, "[%s](%p)",
-          to_cstring(svr_), fetch_stream_);
+      (void)databuff_printf(buffer, size, pos, "[");
+      (void)databuff_printf(buffer, size, pos, svr_);
+      (void)databuff_printf(buffer, size, pos, "](%p)", fetch_stream_);
       break;
     }
 
@@ -1541,12 +1561,13 @@ void LSFetchInfoForPrint::print_fetch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s mod=%s "
       "discarded=%d delay=%s tps=%.2lf progress=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
-      to_cstring(fetch_mod_),
+      description, idx, array_cnt, helper.convert(tls_id_),
+      helper.convert(fetch_mod_),
       is_discarded_, TVAL_TO_STR(cur_time - progress_.get_progress() / NS_CONVERSION),
-      tps_, to_cstring(progress_));
+      tps_, helper.convert(progress_));
 }
 
 void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
@@ -1554,10 +1575,11 @@ void LSFetchInfoForPrint::print_dispatch_progress(const char *description,
     const int64_t array_cnt,
     const int64_t cur_time) const
 {
+  ObCStringHelper helper;
   _LOG_INFO("[STAT] %s idx=%ld/%ld tls_id=%s delay=%s pending_task(queue/total)=%ld/%ld "
       "dispatch_progress=%s last_dispatch_log_lsn=%lu next_task=%s "
       "next_trans(log_lsn=%lu,committed=%d,ready_to_commit=%d,global_version=%s) checkpoint=%s",
-      description, idx, array_cnt, to_cstring(tls_id_),
+      description, idx, array_cnt, helper.convert(tls_id_),
       TVAL_TO_STR(cur_time - dispatch_progress_/NS_CONVERSION),
       dispatch_info_.task_count_in_queue_,
       dispatch_info_.pending_task_count_,

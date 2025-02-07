@@ -62,7 +62,7 @@ public:
     tablet_ids_.set_tenant_id(MTL_ID());
   }
   int init(uint64_t tenant_id,
-           const table::ObTableLoadArray<table::ObTableLoadPartitionId> &partition_ids);
+           const common::ObIArray<table::ObTableLoadPartitionId> &partition_ids);
   int get_leader(common::ObTabletID tablet_id, PartitionLocationInfo &info) const;
   int get_all_leader(table::ObTableLoadArray<common::ObAddr> &addr_array) const;
   int get_all_leader_info(table::ObTableLoadArray<LeaderInfo> &info_array) const;
@@ -77,6 +77,10 @@ public:
   int check_tablet_has_same_leader(const ObTableLoadPartitionLocation &other, bool &result);
 
 public:
+  static int init_partition_location(const ObIArray<table::ObTableLoadPartitionId> &partition_ids,
+                                     const ObIArray<table::ObTableLoadPartitionId> &target_partition_ids,
+                                     ObTableLoadPartitionLocation &partition_location,
+                                     ObTableLoadPartitionLocation &target_partition_location);
   // 通过tablet_id获取
   static int fetch_ls_id(uint64_t tenant_id, const common::ObTabletID &tablet_id,
                          share::ObLSID &ls_id);
@@ -91,11 +95,11 @@ public:
                                  storage::ObTabletHandle &tablet_handle);
 private:
   int init_all_partition_location(
-    uint64_t tenant_id, const table::ObTableLoadArray<table::ObTableLoadPartitionId> &partition_ids);
+      uint64_t tenant_id, const common::ObIArray<table::ObTableLoadPartitionId> &partition_ids);
   int init_all_leader_info();
   int fetch_ls_locations(
     uint64_t tenant_id,
-    const table::ObTableLoadArray<table::ObTableLoadPartitionId> &partition_ids);
+    const common::ObIArray<table::ObTableLoadPartitionId> &partition_ids);
  private:
   common::ObArenaAllocator allocator_;
   common::ObArray<common::ObTabletID> tablet_ids_; //保证遍历partition_map_的时候顺序不变

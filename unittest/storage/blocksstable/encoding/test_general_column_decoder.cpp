@@ -182,6 +182,31 @@ TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
   ASSERT_EQ(datum.len_, string_len);
   ASSERT_EQ(0, MEMCMP(datum.ptr_, string_buf, string_len));
 
+  // decode vector
+  ObArenaAllocator test_allocator;
+  ObArenaAllocator frame_allocator;
+  sql::ObExecContext exec_context(test_allocator);
+  sql::ObEvalCtx eval_ctx(exec_context);
+  const char *ptr_arr[ROW_CNT];
+  uint32_t len_arr[ROW_CNT];
+
+  ObObjMeta col_meta = col_descs_.at(varchar_col_idx).col_type_;
+  const int16_t precision = col_meta.is_decimal_int() ? col_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+  VecValueTypeClass vec_tc = common::get_vec_value_tc(
+      col_meta.get_type(),
+      col_meta.get_scale(),
+      precision);
+  ASSERT_EQ(col_meta.get_type(), ObVarcharType);
+
+  sql::ObExpr col_expr;
+  ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
+      ROW_CNT, col_meta, VEC_UNIFORM, eval_ctx, col_expr, frame_allocator));
+  LOG_INFO("Current col: ", K(varchar_col_idx), K(col_meta),  K(*decoder.decoders_[varchar_col_idx].ctx_), K(precision), K(vec_tc));
+
+  ObVectorDecodeCtx vector_ctx(ptr_arr, len_arr, &row_id, 1, 0, col_expr.get_vector_header(eval_ctx));
+  ASSERT_EQ(OB_SUCCESS, decoder.decoders_[varchar_col_idx].decode_vector(decoder.row_index_, vector_ctx));
+  ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match(*(col_expr.get_vector_header(eval_ctx).get_vector()),
+      0, row.storage_datums_[varchar_col_idx]));
 
 }
 

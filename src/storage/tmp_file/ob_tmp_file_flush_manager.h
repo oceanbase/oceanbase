@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
-#define OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
 
 #include "storage/tmp_file/ob_tmp_file_eviction_manager.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
@@ -39,6 +39,7 @@ public:
   static const int32_t FLUSH_LOW_WATERMARK_F4 = 70;
   static const int32_t FLUSH_LOW_WATERMARK_F5 = 80;
   static const int64_t FAST_FLUSH_TREE_PAGE_NUM = 32;
+  static const int64_t FLUSH_TASK_FINISH_WARN_TIMEOUT_US = 60 * 1000 * 1000; // 60s
   struct UpdateFlushCtx
   {
   public:
@@ -67,22 +68,25 @@ public:
   ~ObTmpFileFlushManager() {}
   int init();
   void destroy();
+  void set_flush_timer_tg_id(int* flush_timer_tg_id, const int64_t timer_cnt);
   TO_STRING_KV(K(is_inited_), K(flush_ctx_));
 
 public:
   int free_tmp_file_block(ObTmpFileFlushTask &flush_task);
-  int alloc_flush_task(ObTmpFileFlushTask *&flush_task);
+  virtual int alloc_flush_task(ObTmpFileFlushTask *&flush_task);
   int free_flush_task(ObTmpFileFlushTask *flush_task);
   int notify_write_back_failed(ObTmpFileFlushTask *flush_task);
   int flush(ObSpLinkQueue &flushing_queue,
             ObTmpFileFlushMonitor &flush_monitor,
             const int64_t expect_flush_size,
+            const int64_t current_flush_cnt,
             const bool is_flush_meta_tree);
   int retry(ObTmpFileFlushTask &flush_task);
   int io_finished(ObTmpFileFlushTask &flush_task);
   int update_file_meta_after_flush(ObTmpFileFlushTask &flush_task);
   void try_remove_unused_file_flush_ctx();
 private:
+  int check_tmp_file_disk_usage_limit_(const int64_t current_flushing_cnt);
   int fill_block_buf_(ObTmpFileFlushTask &flush_task);
   int fast_fill_block_buf_with_meta_(ObTmpFileFlushTask &flush_task);
   int inner_fill_block_buf_(ObTmpFileFlushTask &flush_task,
@@ -99,7 +103,7 @@ private:
   int advance_status_(ObTmpFileFlushTask &flush_task, const FlushState &state);
   int drive_flush_task_prepare_(ObTmpFileFlushTask &flush_task, const FlushState state, FlushState &next_state);
   int drive_flush_task_retry_(ObTmpFileFlushTask &flush_task, const FlushState state, FlushState &next_state);
-  int drive_flush_task_wait_to_finish_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
+  int drive_flush_task_wait_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_alloc_flush_task_(const bool fast_flush_meta, ObTmpFileFlushTask *&flush_task);
   int handle_create_block_index_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_fill_block_buf_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
@@ -108,6 +112,9 @@ private:
   int handle_wait_(ObTmpFileFlushTask &flush_task, FlushState &next_state);
   int handle_finish_(ObTmpFileFlushTask &flush_task);
 private:
+  int flush_by_watermark_(ObSpLinkQueue &flushing_queue,
+                          const int64_t current_flush_cnt,
+                          const bool is_flush_meta_tree);
   int update_meta_data_after_flush_for_files_(ObTmpFileFlushTask &flush_task);
   int reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta);
   int get_or_create_file_in_ctx_(const int64_t fd, ObTmpFileSingleFlushContext &file_flush_ctx);
@@ -125,8 +132,10 @@ private:
   ObTmpWriteBufferPool &write_buffer_pool_;
   ObTmpFileEvictionManager &evict_mgr_;
   ObTmpFileFlushPriorityManager &flush_priority_mgr_;
+  int32_t cur_flush_timer_idx_;
+  int flush_timer_tg_id_[ObTmpFileGlobal::FLUSH_TIMER_CNT];
 };
 
 }  // end namespace tmp_file
 }  // end namespace oceanbase
-#endif // OCEANBASE_STORAGE_BLOCKSSTABLE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_
+#endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_TASK_MANAGER_H_

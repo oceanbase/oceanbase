@@ -383,7 +383,8 @@ public:
   int init(const ObDataStoreDesc &data_store_desc,
            ObSSTableIndexBuilder &sstable_builder,
            const blocksstable::ObMacroSeqParam &macro_seq_param,
-           const share::ObPreWarmerParam &pre_warm_param);
+           const share::ObPreWarmerParam &pre_warm_param,
+           ObIMacroBlockFlushCallback *ddl_callback);
   int append_row(const ObMicroBlockDesc &micro_block_desc,
                  const ObMacroBlock &macro_block);
   int generate_macro_row(ObMacroBlock &macro_block, const MacroBlockId &id, const int64_t ddl_start_row_offset);
@@ -416,8 +417,8 @@ private:
 
 private:
   ObSSTableIndexBuilder *sstable_builder_;
-  common::ObArenaAllocator task_allocator_;  // Used to apply for memory whose lifetime is task
-  common::ObArenaAllocator meta_row_allocator_; // Used to apply for memory whose lifetime is row
+  compaction::ObLocalArena task_allocator_;  // Used to apply for memory whose lifetime is task
+  compaction::ObLocalArena meta_row_allocator_; // Used to apply for memory whose lifetime is row
   ObBaseIndexBlockDumper macro_meta_dumper_;
   ObMicroBlockBufferHelper micro_helper_;
   ObIndexBlockRowDesc macro_row_desc_;
@@ -502,6 +503,7 @@ public:
       const MacroBlockId &macro_id,
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
+  int get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const;
 
 private:
   void set_task_type(const bool is_cg, const bool is_ddl_merge, const common::ObIArray<ObIODevice *> *device_handle_array);
@@ -605,7 +607,8 @@ public:
                         const ObDataStoreDesc &data_store_desc,
                         ObIAllocator &data_allocator,
                         const blocksstable::ObMacroSeqParam &macro_seq_param,
-                        const share::ObPreWarmerParam &pre_warm_param);
+                        const share::ObPreWarmerParam &pre_warm_param,
+                        ObIMacroBlockFlushCallback *callback);
   int init_builder_ptrs(
       ObSSTableIndexBuilder *&sstable_builder,
       ObDataStoreDesc *&data_store_desc,
@@ -636,11 +639,11 @@ public:
   bool enable_dump_disk() const { return enable_dump_disk_; }
   OB_INLINE ObSSTablePrivateObjectCleaner & get_private_object_cleaner() { return object_cleaner_; }
   bool micro_index_clustered() const;
+  int64_t get_tablet_transfer_seq() const;
   const compaction::ObMergeBlockInfo &get_merge_block_info() const { return macro_writer_.get_merge_block_info(); }
   TO_STRING_KV(K(roots_.count()));
 
 public:
-  static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);
   static int load_single_macro_block(
       const ObDataMacroBlockMeta &macro_meta,
       const int64_t nested_size,
@@ -704,7 +707,6 @@ private:
   ObWholeDataStoreDesc index_store_desc_;
   ObDataStoreDesc leaf_store_desc_;
   ObDataStoreDesc container_store_desc_; // used to open all index macro writers
-  ObDatumRow index_row_;
   ObBaseIndexBlockBuilder index_builder_;
   ObMetaIndexBlockBuilder meta_tree_builder_;
   ObIndexBlockLoader index_block_loader_;

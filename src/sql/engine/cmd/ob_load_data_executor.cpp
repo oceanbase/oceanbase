@@ -18,49 +18,35 @@
 #include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/cmd/ob_load_data_direct_impl.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
+#include "sql/optimizer/ob_optimizer.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-int ObLoadDataExecutor::check_is_direct_load(ObTableDirectInsertCtx &ctx, const ObLoadDataHint &load_hint)
-{
-  int ret = OB_SUCCESS;
-  ctx.set_is_direct(false);
-  if (GCONF._ob_enable_direct_load) {
-    const bool enable_direct = load_hint.get_direct_load_hint().is_enable();
-    int64_t append = 0;
-    if (enable_direct) { // direct
-      ctx.set_is_direct(true);
-    } else if (OB_FAIL(load_hint.get_value(ObLoadDataHint::APPEND, append))) {
-      LOG_WARN("fail to get APPEND", KR(ret));
-    } else if (append != 0) { // append
-      ctx.set_is_direct(true);
-    }
-  }
-  LOG_INFO("check load data is direct done.", K(ctx.get_is_direct()));
-  return ret;
-}
-
 int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
   ObLoadDataBase *load_impl = NULL;
+  ObDirectLoadOptimizerCtx optimizer_ctx;
+  stmt.set_optimizer_ctx(&optimizer_ctx);
   if (!stmt.get_load_arguments().is_csv_format_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid resolver results", K(ret));
-  } else if (OB_FAIL(check_is_direct_load(table_direct_insert_ctx, stmt.get_hints()))) {
-    LOG_WARN("fail to check is load mode", KR(ret));
+  } else if (OB_FAIL(optimizer_ctx.init_direct_load_ctx(&ctx, stmt))) {
+    LOG_WARN("fail to init direct load ctx", K(ret), K(stmt));
   } else {
+    if (optimizer_ctx.can_use_direct_load()) {
+      optimizer_ctx.set_use_direct_load();
+    }
+    table_direct_insert_ctx.set_is_direct(optimizer_ctx.use_direct_load());
     if (!table_direct_insert_ctx.get_is_direct()) {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
-      } else if (OB_UNLIKELY(stmt.get_load_arguments().file_iter_.count() > 1)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support multiple files", K(ret));
       }
     } else {
       if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataDirectImpl, (&ctx.get_allocator())))) {

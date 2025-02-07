@@ -142,7 +142,7 @@ int ObUtlFileHandler::get_line(const int64_t &fd, char *buffer, const int64_t le
         // cannot find '\n' within [0, len)
         buffer[len] = '\0';
         target_pos = current_read_pos + len;
-        line_size = pos;
+        line_size = len + 1;
       } else {
         buffer[pos] = '\0';
         target_pos = current_read_pos + pos + 1;
@@ -490,13 +490,6 @@ int ObUtlFileHandler::frename(const char *src_dir, const char *src_filename,
           K(dst_path), K(b_dst_path_exist), K(overwrite));
     }
   }
-  return ret;
-}
-
-int ObUtlFileHandler::fis_open(const int64_t &fd, bool &b_open)
-{
-  int ret = OB_SUCCESS;
-  b_open = (fd > 0);
   return ret;
 }
 

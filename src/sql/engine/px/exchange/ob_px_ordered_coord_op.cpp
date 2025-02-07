@@ -86,7 +86,7 @@ int ObPxOrderedCoordOp::inner_open()
   } else if (OB_FAIL(setup_loop_proc())) {
     LOG_WARN("fail setup loop proc", K(ret));
   } else {
-    if (1 == px_dop_) {
+    if (use_serial_scheduler_) {
       msg_proc_.set_scheduler(&serial_scheduler_);
     } else {
       msg_proc_.set_scheduler(&parallel_scheduler_);
@@ -221,7 +221,7 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
@@ -379,7 +379,7 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
-      if (OB_EAGAIN == ret) {
+      if (OB_DTL_WAIT_EAGAIN == ret) {
         LOG_TRACE("no message, try again", K(ret));
         ret = OB_SUCCESS;
         if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
@@ -448,12 +448,15 @@ int ObPxOrderedCoordOp::next_rows(ObReceiveRowReader &reader, int64_t max_row_cn
   LOG_TRACE("Begin next_rows", K(max_row_cnt));
   metric_.mark_interval_start();
   read_rows = 0;
-  // TODO: shanting2.0 use get_next_batch_vec
-  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
+  if (MY_SPEC.use_rich_format_) {
+    ret = reader.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                    max_row_cnt, read_rows, vector_rows_);
+  } else {
+    ret = reader.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                max_row_cnt, read_rows, stored_rows_);
+  }
   metric_.mark_interval_end(&time_recorder_);
-  if (OB_SUCC(ret)) {
-    read_rows = 1;
-  } else if (OB_ITER_END == ret) {
+  if (OB_ITER_END == ret) {
     finish_ch_cnt_++;
     channel_idx_++;
     if (OB_LIKELY(finish_ch_cnt_ < task_channels_.count())) {

@@ -92,7 +92,7 @@ void BlockSet::unlock()
 
 bool BlockSet::trylock()
 {
-  return 0 == locker_->trylock();
+  return locker_->trylock();
 }
 
 uint64_t BlockSet::get_total_hold() const

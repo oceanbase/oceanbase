@@ -12,15 +12,19 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_admin_drtask_util.h"
+#include "ob_disaster_recovery_info.h"
 #include "logservice/ob_log_service.h" // for ObLogService
 #include "storage/tx_storage/ob_ls_service.h" // for ObLSService
 #include "storage/ls/ob_ls.h" // for ObLS
 #include "observer/ob_server_event_history_table_operator.h" // for SERVER_EVENT_ADD
+#include "rootserver/ob_disaster_recovery_task.h"
+#include "src/share/ls/ob_ls_table_operator.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+using namespace drtasklog;
 static const char* obadmin_drtask_ret_comment_strs[] = {
   "succeed to send ob_admin command",
   "invalid tenant_id or ls_id in command",
@@ -74,12 +78,13 @@ int ObAdminDRTaskUtil::handle_obadmin_command(const ObAdminCommandArg &command_a
   if (OB_SUCCESS != (tmp_ret = try_construct_result_comment_(ret, ret_comment, result_comment))) {
     LOG_WARN("fail to construct result comment", K(tmp_ret), KR(ret), K(ret_comment));
   }
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
   SERVER_EVENT_ADD("ob_admin", command_arg.get_type_str(),
                    "tenant_id", tenant_id,
                    "ls_id", ls_id.id(),
                    "arg", command_arg,
                    "result", result_comment,
-                   "trace_id", ObCurTraceId::get_trace_id_str(),
+                   "trace_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                    "comment", command_arg.get_comment());
 
   int64_t cost = ObTimeUtility::current_time() - check_begin_time;
@@ -236,6 +241,9 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
       || OB_UNLIKELY(!command_arg.is_add_task())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg), K(command_arg));
+  } else if (GCTX.is_shared_storage_mode() && REPLICA_TYPE_COLUMNSTORE == arg.dst_.get_replica_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("C-replica not supported in shared-storage mode", KR(ret));
   } else if (GCTX.self_addr() == arg.dst_.get_server()) {
     // do not need to send rpc, execute locally
     MTL_SWITCH(arg.tenant_id_) {
@@ -253,10 +261,11 @@ int ObAdminDRTaskUtil::execute_task_for_add_command_(
 
   if (OB_SUCC(ret)) {
     // local execute or rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_ADD_LS_REPLICA_STR,
                           "tenant_id", arg.tenant_id_,
                           "ls_id", arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "destination", arg.dst_,
                           "comment", command_arg.get_comment());
   }
@@ -482,10 +491,11 @@ int ObAdminDRTaskUtil::execute_remove_paxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR,
                           "tenant_id", remove_paxos_arg.tenant_id_,
                           "ls_id", remove_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }
@@ -513,10 +523,11 @@ int ObAdminDRTaskUtil::execute_remove_nonpaxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
     ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR,
                           "tenant_id", remove_non_paxos_arg.tenant_id_,
                           "ls_id", remove_non_paxos_arg.ls_id_.id(),
-                          "task_id", ObCurTraceId::get_trace_id_str(),
+                          "task_id", ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf)),
                           "remove_server", remove_non_paxos_arg.remove_member_,
                           "comment", command_arg.get_comment());
   }

@@ -64,7 +64,8 @@ public:
   OB_INLINE void fill(const common::ObObjMeta &obj_meta,
       const ObMicroBlockHeader *micro_header,
       const ObColumnHeader *col_header,
-      common::ObIAllocator *allocator)
+      common::ObIAllocator *allocator,
+      const int64_t store_idx)
   {
     obj_meta_ = obj_meta;
     micro_block_header_ = micro_header;
@@ -74,6 +75,7 @@ public:
     cache_attributes_[ObColumnHeader::FIX_LENGTH] = col_header_->is_fix_length();
     cache_attributes_[ObColumnHeader::HAS_EXTEND_VALUE] = col_header_->has_extend_value();
     cache_attributes_[ObColumnHeader::BIT_PACKING] = col_header_->is_bit_packing();
+    cache_attributes_[ObColumnHeader::IS_TRANS_VERSION] = micro_block_header_->is_trans_version_column_idx(store_idx);
   }
   OB_INLINE bool is_fix_length() const { return cache_attributes_[ObColumnHeader::FIX_LENGTH]; }
   OB_INLINE bool has_extend_value() const { return cache_attributes_[ObColumnHeader::HAS_EXTEND_VALUE]; }
@@ -82,6 +84,7 @@ public:
   {
     col_param_ = col_param;
   }
+  OB_INLINE bool is_trans_version_col() const { return cache_attributes_[ObColumnHeader::IS_TRANS_VERSION]; }
 
   TO_STRING_KV(K_(obj_meta), K_(micro_block_header), K_(col_header), KP_(allocator),
       KP_(ref_decoder), KP_(ref_ctx));

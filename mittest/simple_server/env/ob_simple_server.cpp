@@ -158,6 +158,9 @@ int ObSimpleServer::simple_init()
     system(("rm -rf " + run_dir_).c_str());
     system(("rm -f *born*log*"));
     system(("rm -f *restart*log*"));
+
+    //check admin sys package exist
+    DIR *admin_dir = opendir("admin");
     SERVER_LOG(INFO, "create dir and change work dir start.", K(run_dir_.c_str()));
     if (OB_FAIL(mkdir(run_dir_.c_str(), 0777))) {
     } else if (OB_FAIL(chdir(run_dir_.c_str()))) {
@@ -173,6 +176,7 @@ int ObSimpleServer::simple_init()
     dirs.push_back("etc");
     dirs.push_back("log");
     dirs.push_back("wallet");
+    dirs.push_back("admin");
 
     dirs.push_back(data_dir + "/clog");
     dirs.push_back(data_dir + "/slog");
@@ -183,6 +187,9 @@ int ObSimpleServer::simple_init()
         SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(dir.c_str()));
         return ret;
       }
+    }
+    if (admin_dir != NULL) {
+      system(("cp ../admin/* admin/"));
     }
 
     std::string port_file_name = std::string("port.txt");

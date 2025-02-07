@@ -48,7 +48,8 @@ int ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage::prepare_user_message
 bool ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage::operator==(const ObBuildDDLErrorMessage &other) const
 {
   bool equal = ret_code_ == other.ret_code_ && ddl_type_ == other.ddl_type_
-            && 0 == STRNCMP(dba_message_, other.dba_message_, OB_MAX_ERROR_MSG_LEN);
+       && consensus_schema_version_ == other.consensus_schema_version_
+       && 0 == STRNCMP(dba_message_, other.dba_message_, OB_MAX_ERROR_MSG_LEN);
   if (equal) {
     if (nullptr == user_message_ && nullptr == other.user_message_) {
     } else if (nullptr == user_message_ || nullptr == other.user_message_) {
@@ -219,6 +220,7 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
   int ret = OB_SUCCESS;
   ObSqlString sql;
   forward_user_msg_len = 0;
+  uint64_t tenant_data_version = 0;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     sqlclient::ObMySQLResult *result = NULL;
@@ -226,18 +228,24 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
     if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || target_object_id < -1)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(target_object_id), K(addr));
-    } else if (!is_ddl_retry_task && OB_FAIL(sql.assign_fmt(
-        "SELECT ret_code, ddl_type, affected_rows, dba_message, user_message from %s "
-        "WHERE tenant_id = %ld AND task_id = %ld AND target_object_id = %ld "
-        , OB_ALL_DDL_ERROR_MESSAGE_TNAME,
-        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), task_id, target_object_id))) {
-      LOG_WARN("fail to assign sql", K(ret));
-    } else if (is_ddl_retry_task && OB_FAIL(sql.assign_fmt(
-        "SELECT ret_code, ddl_type, affected_rows, dba_message, UNHEX(user_message) as user_message from %s "
-        "WHERE tenant_id = %ld AND task_id = %ld AND target_object_id = %ld "
-        , OB_ALL_DDL_ERROR_MESSAGE_TNAME,
-        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), task_id, target_object_id))) {
-      LOG_WARN("fail to assign sql", K(ret));
+    } else if (OB_FAIL(sql.append("SELECT ret_code, ddl_type, affected_rows, dba_message "))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", KR(ret), K(tenant_id));
+    } else if (((tenant_data_version >= DATA_VERSION_4_2_2_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
+                || (tenant_data_version >= DATA_VERSION_4_3_5_0))
+               && OB_FAIL(sql.append(" ,consensus_schema_version "))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (!is_ddl_retry_task && OB_FAIL(sql.append(" ,user_message "))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (is_ddl_retry_task && OB_FAIL(sql.append(" ,UNHEX(user_message) as user_message "))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (OB_FAIL(sql.append_fmt(" from %s "
+                                      " WHERE tenant_id = %ld AND task_id = %ld AND target_object_id = %ld ",
+                                      OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+                                      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                      task_id, target_object_id))) {
+      LOG_WARN("fail to append sql", KR(ret));
     } else if (addr.is_valid()) {
       if (!addr.ip_to_string(ip, sizeof(ip))) {
         ret = OB_INVALID_ARGUMENT;
@@ -273,6 +281,9 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
       EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", error_message.ret_code_, int);
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "dba_message", str_dba_message);
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "consensus_schema_version",
+      error_message.consensus_schema_version_, int64_t, false /*skip null error*/,
+      true /*skip column error*/, OB_INVALID_VERSION);
       forward_user_msg_len = str_user_message.length();
       const int64_t buf_size = str_user_message.length() + 1;
       if (OB_FAIL(ret)) {
@@ -337,6 +348,9 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
       EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", error_message.ret_code_, int);
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "dba_message", str_dba_message);
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "consensus_schema_version",
+      error_message.consensus_schema_version_, int64_t, false /*skip null error*/,
+      true /*skip column error*/, OB_INVALID_VERSION);
       forward_user_msg_len = str_user_message.length();
       const int64_t buf_size = str_user_message.length() + 1;
       if (OB_FAIL(ret)) {
@@ -413,6 +427,12 @@ int ObDDLErrorMessageTableOperator::report_ddl_error_message(const ObBuildDDLErr
       LOG_WARN("convert ip to string failed", K(ret), K(addr));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
+    } else if (OB_UNLIKELY((tenant_data_version < DATA_VERSION_4_2_2_0
+                              || (tenant_data_version >= DATA_VERSION_4_3_0_0 && tenant_data_version < DATA_VERSION_4_3_5_0))
+                           && OB_INVALID_VERSION != error_message.consensus_schema_version_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("consensus schema version should be invalid before 4220", KR(ret), K(tenant_data_version),
+               K_(error_message.consensus_schema_version));
     } else {
       ObDMLSqlSplicer dml_splicer;
       if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))) {
@@ -444,6 +464,11 @@ int ObDDLErrorMessageTableOperator::report_ddl_error_message(const ObBuildDDLErr
           LOG_WARN("failed to add column trace_id", KR(ret), K(trace_id));
         } else if (OB_FAIL(dml_splicer.add_column(K(parent_task_id)))) {
           LOG_WARN("failed to add column parent_task_id", KR(ret), K(parent_task_id));
+        } else if (((tenant_data_version >= DATA_VERSION_4_2_2_0 && tenant_data_version < DATA_VERSION_4_3_0_0)
+                    || (tenant_data_version >= DATA_VERSION_4_3_5_0))
+                   && 0 < error_message.consensus_schema_version_ // prevent of reset to invalid after been valid
+                   && OB_FAIL(dml_splicer.add_column("consensus_schema_version", error_message.consensus_schema_version_))) {
+          LOG_WARN("fail to add column consensus_schema_version", KR(ret), K_(error_message.consensus_schema_version));
         }
       }
       if (OB_SUCC(ret)) {

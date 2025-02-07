@@ -162,6 +162,7 @@ private:
   int check_dest_validity_();
   int cancel_();
   int update_set_task_to_canceling_();
+  int select_mview_for_update_(const uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserTenantBackupJobMgr);
 };

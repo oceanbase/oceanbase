@@ -109,6 +109,7 @@ public:
   int aio_pread(char *buf, int64_t size, int64_t offset);
   int aio_write(char *buf, int64_t size);
   int wait();
+  int seal();
   OB_INLINE void cancel() { is_cancel_ = true; }
   static bool is_retry_err(int ret_code) { return OB_TIMEOUT == ret_code; }
   TO_STRING_KV(K_(file_handle), K_(io_info));

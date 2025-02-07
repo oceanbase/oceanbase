@@ -37,7 +37,8 @@ ObDeviceConfigMgr &ObDeviceConfigMgr::get_instance()
 
 ObDeviceConfigMgr::ObDeviceConfigMgr()
   : is_inited_(false), config_map_(), head_(), device_manifest_(),
-    manifest_rw_lock_(common::ObLatchIds::DEVICE_MANIFEST_RW_LOCK)
+    manifest_rw_lock_(common::ObLatchIds::DEVICE_MANIFEST_RW_LOCK),
+    data_storage_dest_(), clog_storage_dest_()
 {
 }
 
@@ -74,6 +75,8 @@ void ObDeviceConfigMgr::destroy()
     config_map_.destroy();
     device_manifest_.destroy();
     head_.reset();
+    data_storage_dest_.reset();
+    clog_storage_dest_.reset();
     is_inited_ = false;
     LOG_INFO("device config mgr finish to destroy", KR(ret), K(device_configs));
   }
@@ -90,7 +93,7 @@ int ObDeviceConfigMgr::load_configs()
       ret = OB_NOT_INIT;
       LOG_WARN("ObDeviceConfigMgr not init", KR(ret));
     } else if (OB_FAIL(device_manifest_.load(device_configs, head_))) {
-      if (OB_FILE_NOT_EXIST == ret) { // first start of observer
+      if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) { // first start of observer
         LOG_INFO("device manifest file does not exist", KR(ret));
         ret = OB_SUCCESS;
       } else {
@@ -175,9 +178,10 @@ int ObDeviceConfigMgr::get_device_config(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDeviceConfigMgr not init", KR(ret));
-  } else if (!ObStorageUsedType::is_valid(used_for)) {
+  } else if ((ObStorageUsedType::TYPE::USED_TYPE_DATA != used_for) &&
+             (ObStorageUsedType::TYPE::USED_TYPE_LOG != used_for)) { // get_device_config's used_for either data or clog, cannot all
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument!", K(used_for));
+    LOG_WARN("invalid argument!", KR(ret), K(used_for));
   } else {
     const char *used_for_cstr = ObStorageUsedType::get_str(used_for);
     const char *used_for_all = ObStorageUsedType::get_str(ObStorageUsedType::TYPE::USED_TYPE_ALL);
@@ -190,7 +194,16 @@ int ObDeviceConfigMgr::get_device_config(
       }
     }
     if (it == config_map_.end()) {
-      ret = OB_ENTRY_NOT_EXIST;
+      // if get device config from config_map failed, try to get device config from storage_dest_
+      // 1.when prepare_bootstrap, RS will send ak/sk to observer store in storage_dest_, temporary use
+      // 2.when execute_bootstrap finish, shared storage info will dump to manifest, storage_dest_ will reset, do not use again
+      if (OB_FAIL(get_device_config_from_storage_dest_(used_for, config))) {
+        LOG_WARN("fail to get device config from storage dest", KR(ret), K(used_for));
+      }
+      if (OB_FAIL(ret)) {
+        // if get device config from storage_dest failed, reset error code to OB_ENTRY_NOT_EXIST
+        ret = OB_ENTRY_NOT_EXIST;
+      }
     }
   }
   return ret;
@@ -277,9 +290,18 @@ int ObDeviceConfigMgr::add_device_config(const ObDeviceConfig &config)
 {
   int ret = OB_SUCCESS;
   DeviceConfigModifyType type = DeviceConfigModifyType::CONFIG_ADD_TYPE;
+  bool is_dump_manifest = false;
   if (OB_FAIL(modify_device_config_(config, type))) {
     LOG_WARN("fail to modify device config", KR(ret), K(config));
-  } else {
+  } else if (OB_FAIL(check_if_dump_manifest_(is_dump_manifest))) {
+    LOG_WARN("fail to check shared storage info if dump manifest file", KR(ret), K(is_dump_manifest));
+  } else if (is_dump_manifest) {
+    // if shared storage info has been dumped to manifest, storage_dest_ need reset, cannot use anymore
+    data_storage_dest_.reset();
+    clog_storage_dest_.reset();
+    LOG_INFO("shared storage info has been dumped to manifest, storage_dest reset succeed", K(is_dump_manifest));
+  }
+  if (OB_SUCC(ret)) {
     LOG_INFO("succ to add device config", KR(ret), K(config));
   }
   return ret;
@@ -439,6 +461,45 @@ bool ObDeviceConfigMgr::config_map_is_empty(const ObStorageUsedType::TYPE used_f
   return true;
 }
 
+int ObDeviceConfigMgr::set_storage_dest(const ObStorageUsedType::TYPE used_for, const ObBackupDest &storage_dest)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDeviceConfigMgr not init", KR(ret));
+  } else if (OB_UNLIKELY(!storage_dest.is_valid() || !ObStorageUsedType::is_valid(used_for))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(storage_dest), K(used_for));
+  } else {
+    bool is_used_for_clog = false;
+    bool is_used_for_data = false;
+    if (ObStorageUsedType::TYPE::USED_TYPE_ALL == used_for) {
+      is_used_for_clog = true;
+      is_used_for_data = true;
+    } else if (ObStorageUsedType::TYPE::USED_TYPE_DATA == used_for) {
+      is_used_for_data = true;
+    } else if (ObStorageUsedType::TYPE::USED_TYPE_LOG == used_for) {
+      is_used_for_clog = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected used for type", KR(ret), K(used_for));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_used_for_clog && OB_FAIL(clog_storage_dest_.deep_copy(storage_dest))) {
+      LOG_WARN("fail to deep copy dest", KR(ret), K(storage_dest));
+    } else if (is_used_for_data && OB_FAIL(data_storage_dest_.deep_copy(storage_dest))) {
+      LOG_WARN("fail to deep copy dest", KR(ret), K(storage_dest));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (is_used_for_data && OB_FAIL(OB_DIR_MGR.set_object_storage_root_dir(storage_dest.get_root_path().ptr()))) {
+      LOG_WARN("fail to set object storage root dir", KR(ret), K(storage_dest));
+#endif
+    } else {
+      LOG_INFO("succ to set storage dest", K(used_for), K(storage_dest));
+    }
+  }
+  return ret;
+}
+
 int ObDeviceConfigMgr::save_configs_()
 {
   int ret = OB_SUCCESS;
@@ -520,7 +581,7 @@ int ObDeviceConfigMgr::modify_device_config_(
         LOG_WARN("fail to get device config", KR(ret), K(device_config_key));
       } else if (OB_ISNULL(p_device_config)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("device config is null", K(device_config_key));
+        LOG_WARN("device config is null", KR(ret), K(device_config_key));
       } else {
         if (DeviceConfigModifyType::CONFIG_UPDATE_TYPE == type) {
           *p_device_config = config;
@@ -581,6 +642,83 @@ int ObDeviceConfigMgr::parse_is_connective_(char *state_info, bool &is_connectiv
           LOG_WARN("invalid value of is_connective", KR(ret), KCSTRING(value_str));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObDeviceConfigMgr::check_if_dump_manifest_(bool &is_dump_manifest)
+{
+  int ret = OB_SUCCESS;
+  is_dump_manifest = false;
+  SMART_VAR(ObArray<ObDeviceConfig>, device_configs) {
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObDeviceConfigMgr not init", KR(ret));
+    } else if (OB_FAIL(get_all_device_configs(device_configs))) {
+      LOG_WARN("fail to get all device configs", KR(ret));
+    } else {
+      bool is_used_for_clog_exist = false;
+      bool is_used_for_data_exist = false;
+      for (int64_t i = 0; OB_SUCC(ret) && (i < device_configs.count()); ++i) {
+        ObStorageUsedType::TYPE used_for_type = ObStorageUsedType::get_type(device_configs.at(i).used_for_);
+        if (ObStorageUsedType::TYPE::USED_TYPE_LOG == used_for_type) {
+          is_used_for_clog_exist = true;
+        } else if (ObStorageUsedType::TYPE::USED_TYPE_DATA == used_for_type) {
+          is_used_for_data_exist = true;
+        } else if (ObStorageUsedType::TYPE::USED_TYPE_ALL == used_for_type) {
+          is_used_for_clog_exist = true;
+          is_used_for_data_exist = true;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected used for type", KR(ret), K(used_for_type));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_used_for_clog_exist && is_used_for_data_exist) {
+        is_dump_manifest = true;
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObDeviceConfigMgr::get_device_config_from_storage_dest_(const ObStorageUsedType::TYPE &used_for,
+                                                            ObDeviceConfig &config) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDeviceConfigMgr not init", KR(ret), K_(is_inited));
+  } else if (OB_UNLIKELY((ObStorageUsedType::TYPE::USED_TYPE_DATA != used_for) &&
+                          (ObStorageUsedType::TYPE::USED_TYPE_LOG != used_for))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(used_for));
+  } else {
+    const ObBackupDest *storage_dest = nullptr;
+    if (ObStorageUsedType::TYPE::USED_TYPE_DATA == used_for) {
+      storage_dest = &data_storage_dest_;
+    } else if (ObStorageUsedType::TYPE::USED_TYPE_LOG == used_for) {
+      storage_dest = &clog_storage_dest_;
+    }
+    if (OB_ISNULL(storage_dest)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stoage dest is null", KR(ret), KP(storage_dest));
+    } else if (!storage_dest->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stoage dest is invalid", KR(ret), K(*storage_dest));
+    } else if (OB_FAIL(storage_dest->get_storage_info()->get_unencrypted_authorization_info(
+                config.access_info_, sizeof(config.access_info_)))) {
+      LOG_WARN("fail to get authorization info", KR(ret), K(*storage_dest));
+    } else {
+      STRCPY(config.used_for_, ObStorageUsedType::get_str(used_for));
+      STRCPY(config.path_, storage_dest->get_root_path().ptr());
+      STRCPY(config.endpoint_, storage_dest->get_storage_info()->endpoint_);
+      STRCPY(config.extension_, storage_dest->get_storage_info()->extension_);
+      STRCPY(config.state_, ObZoneStorageState::get_str(ObZoneStorageState::ADDED));
+      config.create_timestamp_ = common::ObTimeUtility::fast_current_time();
+      config.last_check_timestamp_ = common::ObTimeUtility::fast_current_time();
     }
   }
   return ret;

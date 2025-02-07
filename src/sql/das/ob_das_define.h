@@ -58,6 +58,8 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
  */
 const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 1 * OB_DAS_MAX_PACKET_SIZE;
 const int64_t OB_DAS_MAX_META_TENANT_PACKET_SIZE = 1 * 1024 * 1024l - 8 * 1024;
+// offset of das parallel thread_pool group_id
+static const int32_t OB_DAS_PARALLEL_POOL_MARK = 1 << 30;
 }  // namespace das
 
 enum class ObDasTaskStatus: uint8_t
@@ -85,6 +87,11 @@ enum ObDASOpType
   DAS_OP_SORT,
   DAS_OP_VEC_SCAN,
   DAS_OP_VID_MERGE,
+  DAS_OP_INDEX_MERGE,
+  DAS_OP_DOC_ID_MERGE,
+  DAS_OP_FUNC_LOOKUP,
+  DAS_OP_INDEX_PROJ_LOOKUP,
+  DAS_OP_DOMAIN_ID_MERGE,
   //append OpType before me
   DAS_OP_MAX
 };
@@ -139,7 +146,8 @@ public:
       uint64_t unuse_related_pruning_           : 1; //mark if this table use the related pruning to prune local index tablet_id
       uint64_t is_external_table_               : 1; //mark if this table is an external table
       uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
-      uint64_t reserved_                        : 57;
+      uint64_t das_empty_part_                  : 1; //mark there is false startup filter on DAS access table
+      uint64_t reserved_                        : 56;
     };
   };
   int64_t route_policy_;
@@ -177,6 +185,7 @@ public:
   TO_STRING_KV(K_(tablet_id),
                K_(ls_id),
                K_(server),
+               K_(loc_meta),
                K_(in_retry),
                K_(partition_id),
                K_(first_level_part_id));
@@ -431,7 +440,14 @@ enum ObTSCIRScanType : uint16_t
   OB_VEC_DELTA_BUF_SCAN,
   OB_VEC_IDX_ID_SCAN,
   OB_VEC_SNAPSHOT_SCAN,
-  OB_VEC_COM_AUX_SCAN
+  OB_VEC_COM_AUX_SCAN,
+  OB_VEC_ROWKEY_VID_SCAN,
+  OB_VEC_VID_ROWKEY_SCAN,
+  OB_VEC_FILTER_SCAN,
+  OB_VEC_IVF_CENTROID_SCAN,
+  OB_VEC_IVF_CID_VEC_SCAN,    // for pq is pq_id table
+  OB_VEC_IVF_ROWKEY_CID_SCAN, // for pq is pq ROWKEY_CID_TABLE
+  OB_VEC_IVF_SPECIAL_AUX_SCAN,// for pq is pq code, for sq is sq meta
 };
 
 }  // namespace sql

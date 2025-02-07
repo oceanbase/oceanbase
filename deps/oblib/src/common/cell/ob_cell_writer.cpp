@@ -616,6 +616,12 @@ int ObCellWriter::append(uint64_t column_id, const ObObj &obj, ObObj *clone_obj)
         ret = write_decimal_int(obj, clone_obj);
         break;
       }
+      case ObMySQLDateType:
+        WRITE_DATA(ObMySQLDateType, 0, ObMySQLDate, obj.get_mysql_date());
+        break;
+      case ObMySQLDateTimeType:
+        WRITE_DATA(ObMySQLDateTimeType, 0, ObMySQLDateTime, obj.get_mysql_datetime());
+        break;
       default:
         ret = OB_NOT_SUPPORTED;
         COMMON_LOG(WARN, "cell writer don't support the data type.",

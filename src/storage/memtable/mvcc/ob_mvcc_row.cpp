@@ -208,12 +208,14 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(buf_);
+  common::databuff_printf(buf, buf_len, pos, "this=%p trans_version=", this);
+  common::databuff_printf(buf, buf_len, pos, trans_version_);
+  common::databuff_printf(buf, buf_len, pos, " scn=");
+  common::databuff_printf(buf, buf_len, pos, scn_);
+  common::databuff_printf(buf, buf_len, pos, " tx_id=");
+  common::databuff_printf(buf, buf_len, pos, tx_id_);
   common::databuff_printf(buf, buf_len, pos,
-                          "this=%p "
-                          "trans_version=%s "
-                          "scn=%s "
-                          "tx_id=%s "
-                          "prev=%p "
+                          " prev=%p "
                           "next=%p "
                           "modify_count=%u "
                           "acc_checksum=%u "
@@ -221,14 +223,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "type=%d "
                           "flag=%d "
                           "snapshot_barrier=%ld "
-                          "snapshot_barrier_flag=%ld "
-                          "mtd=%s "
-                          "seq_no=%s "
-                          "write_epoch=%ld",
-                          this,
-                          to_cstring(trans_version_),
-                          to_cstring(scn_),
-                          to_cstring(tx_id_),
+                          "snapshot_barrier_flag=%ld ",
                           prev_,
                           next_,
                           modify_count_,
@@ -238,10 +233,9 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           flag_,
                           snapshot_version_barrier_
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
-                          snapshot_version_barrier_ >> 62,
-                          to_cstring(*mtd),
-                          to_cstring(seq_no_),
-                          write_epoch_);
+                          snapshot_version_barrier_ >> 62);
+  common::databuff_print_multi_objs(buf, buf_len, pos, " mtd=", *mtd,
+      " seq_no=", seq_no_, " write_epoch=", write_epoch_);
   return pos;
 }
 
@@ -291,6 +285,11 @@ void ObMvccRow::reset()
   last_compact_cnt_ = 0;
   max_modify_scn_.set_invalid();
   min_modify_scn_.set_invalid();
+
+#ifdef ENABLE_DEBUG_LOG
+  lower_lock_scanned_ts_ = 0;
+  lower_lock_scanned_info_.raw_value_ = 0;
+#endif
 }
 
 int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
@@ -304,16 +303,7 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           "last_dml=%s "
                           "update_since_compact=%d "
                           "list_head=%p "
-                          "latest_compact_node=%p "
-                          "max_trans_version=%s "
-                          "max_trans_id=%ld "
-                          "max_elr_trans_version=%s "
-                          "max_elr_trans_id=%ld "
-                          "latest_compact_ts=%ld "
-                          "last_compact_cnt=%ld "
-                          "total_trans_node_cnt=%ld "
-                          "max_modify_scn=%s "
-                          "min_modify_scn=%s}",
+                          "latest_compact_node=%p max_trans_version=",
                           this,
                           (latch_.is_locked() ? "locked" : "unlocked"),
                           flag_,
@@ -321,16 +311,37 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           get_dml_str(last_dml_flag_),
                           update_since_compact_,
                           list_head_,
-                          latest_compact_node_,
-                          to_cstring(max_trans_version_),
-                          max_trans_id_.get_id(),
-                          to_cstring(max_elr_trans_version_),
+                          latest_compact_node_);
+  common::databuff_printf(buf, buf_len, pos, max_trans_version_);
+  common::databuff_printf(buf, buf_len, pos, " max_trans_id=%ld max_elr_trans_version=",
+                          max_trans_id_.get_id());
+  common::databuff_printf(buf, buf_len, pos, max_elr_trans_version_);
+  common::databuff_printf(buf, buf_len, pos,
+                          " max_elr_trans_id=%ld "
+                          "latest_compact_ts=%ld "
+                          "last_compact_cnt=%ld "
+                          "total_trans_node_cnt=%ld max_modify_scn=",
                           max_elr_trans_id_.get_id(),
                           latest_compact_ts_,
                           last_compact_cnt_,
-                          total_trans_node_cnt_,
-                          to_cstring(max_modify_scn_),
-                          to_cstring(min_modify_scn_));
+                          total_trans_node_cnt_);
+  common::databuff_printf(buf, buf_len, pos, max_modify_scn_);
+  common::databuff_printf(buf, buf_len, pos, " min_modify_scn=");
+  common::databuff_printf(buf, buf_len, pos, min_modify_scn_);
+
+#ifdef ENABLE_DEBUG_LOG
+  common::databuff_printf(buf, buf_len, pos,
+                          " lower_lock_ts=%ld "
+                          "lower_lock_mem_cnt=%hd "
+                          "lower_lock_sst_cnt=%hd "
+                          "lower_lock_tx_id=%d",
+                          lower_lock_scanned_ts_,
+                          lower_lock_scanned_info_.lower_lock_scanned_memtable_cnt_,
+                          lower_lock_scanned_info_.lower_lock_scanned_sstable_cnt_,
+                          lower_lock_scanned_info_.lower_lock_scanned_tx_id_);
+#endif
+
+  common::databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
 
@@ -342,7 +353,9 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len, const bool verbos
     common::databuff_printf(buf, buf_len, pos, " list=[");
     ObMvccTransNode *iter = list_head_;
     while (NULL != iter) {
-      common::databuff_printf(buf, buf_len, pos, "%p:[%s],", iter, common::to_cstring(*iter));
+      common::databuff_printf(buf, buf_len, pos, "%p:[", iter);
+      common::databuff_printf(buf, buf_len, pos, *iter);
+      common::databuff_printf(buf, buf_len, pos, "],");
       iter = iter->prev_;
     }
     common::databuff_printf(buf, buf_len, pos, "]");
@@ -517,6 +530,7 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
           } else if (prev->tx_id_ == node.tx_id_
+                     && prev->seq_no_.support_branch()
                      && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)
                      // exclude the concurrently update uk case, which always in branch 0
                      && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
@@ -561,7 +575,10 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
         }
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
-        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
+        if (tmp->seq_no_.support_branch()
+            && OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)
+            // exclude the concurrently update uk case, which always in branch 0
+            && !(tmp->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
           usleep(1000);

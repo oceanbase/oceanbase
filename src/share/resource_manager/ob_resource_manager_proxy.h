@@ -16,7 +16,6 @@
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -27,8 +26,18 @@ class ObString;
 class ObObj;
 class ObMySQLProxy;
 }
+namespace sql
+{
+class ObSQLSessionInfo;
+}
 namespace share
 {
+class ObPlanDirective;
+class ObResourceMappingRule;
+class ObResourceUserMappingRule;
+class ObResourceIdNameMappingRule;
+class ObResourceColumnMappingRule;
+class ObResourceMappingRuleManager;
 class ObResourceManagerProxy
 {
 public:
@@ -187,7 +196,6 @@ public:
       const common::ObString &plan,
       const common::ObString &group,
       ObPlanDirective &directive);
-  int reset_all_mapping_rules();
 
 private:
   int allocate_consumer_group_id(
@@ -214,7 +222,6 @@ private:
       uint64_t tenant_id,
       const common::ObString &user_name,
       bool &exist);
-  int check_if_function_exist(const common::ObString &function_name, bool &exist);
   int check_if_column_exist(
       uint64_t tenant_id,
       const common::ObString &db_name,

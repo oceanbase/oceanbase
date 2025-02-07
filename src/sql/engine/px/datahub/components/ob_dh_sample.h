@@ -74,7 +74,7 @@ class ObDynamicSampleWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObDynamicSampleWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObDynamicSamplePieceMsg, ObDynamicSampleWholeMsg>;
 public:
   ObDynamicSampleWholeMsg();
   virtual ~ObDynamicSampleWholeMsg() = default;

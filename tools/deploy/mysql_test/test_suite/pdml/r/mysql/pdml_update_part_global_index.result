@@ -16,21 +16,21 @@ Query Plan
 =============================================================================================
 |ID|OPERATOR                                              |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |           |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003   |1       |60          |
-|2 |  └─INDEX INSERT                                      |t1(t1_idx1)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                               |           |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002   |1       |47          |
-|5 |        └─MATERIAL                                    |           |1       |47          |
-|6 |          └─INDEX DELETE                              |t1(t1_idx1)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                       |           |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001   |1       |35          |
-|9 |                └─MATERIAL                            |           |1       |35          |
-|10|                  └─UPDATE                            |           |1       |35          |
-|11|                    └─EXCHANGE IN DISTR               |           |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000   |1       |3           |
-|13|                        └─PX BLOCK ITERATOR           |           |1       |3           |
-|14|                          └─TABLE FULL SCAN           |t1         |1       |3           |
+|0 |PX COORDINATOR                                        |           |6       |167         |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003   |6       |164         |
+|2 |  └─INDEX INSERT                                      |t1(t1_idx1)|6       |162         |
+|3 |    └─EXCHANGE IN DISTR                               |           |6       |118         |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002   |6       |117         |
+|5 |        └─MATERIAL                                    |           |6       |115         |
+|6 |          └─INDEX DELETE                              |t1(t1_idx1)|6       |115         |
+|7 |            └─EXCHANGE IN DISTR                       |           |6       |78          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001   |6       |77          |
+|9 |                └─MATERIAL                            |           |6       |75          |
+|10|                  └─UPDATE                            |           |6       |75          |
+|11|                    └─EXCHANGE IN DISTR               |           |6       |6           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000   |6       |5           |
+|13|                        └─PX BLOCK ITERATOR           |           |6       |3           |
+|14|                          └─TABLE FULL SCAN           |t1         |6       |3           |
 =============================================================================================
 Outputs & filters:
 -------------------------------------
@@ -39,10 +39,10 @@ Outputs & filters:
       dop=3
   2 - output(nil), filter(nil)
       columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), partitions(p[0-3]), 
-      column_values([column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))], [t1.c1])
+      column_values([column_conv(INT,PS:(11,0),NULL,3)], [t1.c1])
   3 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
   4 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
-      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))]), dop=3
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,3)]), dop=3
   5 - output([t1.c1]), filter(nil), rowset=16
   6 - output([t1.c1]), filter(nil)
       table_columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), with_barrier
@@ -52,7 +52,7 @@ Outputs & filters:
   9 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
  10 - output([t1.c1], [t1.c2]), filter(nil)
       table_columns([{t1: ({t1: (t1.c1, t1.c2, t1.c3)})}]),
-      update([t1.c2=column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))])
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,3)])
  11 - output([t1.c1], [t1.c2], [PARTITION_ID], [t1.c3]), filter(nil), rowset=16
  12 - output([t1.c1], [t1.c2], [PARTITION_ID], [t1.c3]), filter(nil), rowset=16
       (#keys=1, [t1.c1]), dop=3
@@ -90,21 +90,21 @@ Query Plan
 ===================================================================================================
 |ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                               |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                    |                 |1       |47          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                            |                 |1       |35          |
-|10|                  └─UPDATE                            |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR               |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR           |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |1       |3           |
+|0 |PX COORDINATOR                                        |                 |3       |103         |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                    |                 |3       |74          |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                            |                 |3       |51          |
+|10|                  └─UPDATE                            |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
 ===================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -126,7 +126,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -167,21 +167,21 @@ Query Plan
 ===================================================================================================
 |ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                               |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                    |                 |1       |47          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                            |                 |1       |35          |
-|10|                  └─UPDATE                            |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR               |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR           |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |1       |3           |
+|0 |PX COORDINATOR                                        |                 |3       |103         |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                    |                 |3       |74          |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                            |                 |3       |51          |
+|10|                  └─UPDATE                            |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
 ===================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -203,7 +203,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -242,21 +242,21 @@ Query Plan
 ===================================================================================================
 |ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                               |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                    |                 |1       |47          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                            |                 |1       |35          |
-|10|                  └─UPDATE                            |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR               |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR           |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |1       |3           |
+|0 |PX COORDINATOR                                        |                 |3       |103         |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                    |                 |3       |74          |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                            |                 |3       |51          |
+|10|                  └─UPDATE                            |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
 ===================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -278,7 +278,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -306,21 +306,21 @@ Query Plan
 =====================================================================================================
 |ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                      |                 |1       |47          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                              |                 |1       |35          |
-|10|                  └─UPDATE                              |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR             |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |1       |3           |
+|0 |PX COORDINATOR                                          |                 |3       |103         |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |75          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                      |                 |3       |74          |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                         |                 |3       |52          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                              |                 |3       |51          |
+|10|                  └─UPDATE                              |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
 =====================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -342,7 +342,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -383,21 +383,21 @@ Query Plan
 =====================================================================================================
 |ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                      |                 |1       |47          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                              |                 |1       |35          |
-|10|                  └─UPDATE                              |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR             |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |1       |3           |
+|0 |PX COORDINATOR                                          |                 |3       |104         |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |76          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                      |                 |3       |74          |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                         |                 |3       |52          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                              |                 |3       |51          |
+|10|                  └─UPDATE                              |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
 =====================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -419,7 +419,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -458,21 +458,21 @@ Query Plan
 =====================================================================================================
 |ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |1       |61          |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |1       |60          |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|1       |60          |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |1       |47          |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |1       |47          |
-|5 |        └─MATERIAL                                      |                 |1       |47          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|1       |47          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |1       |35          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |1       |35          |
-|9 |                └─MATERIAL                              |                 |1       |35          |
-|10|                  └─UPDATE                              |                 |1       |35          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |1       |3           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |1       |3           |
-|13|                        └─PX BLOCK ITERATOR             |                 |1       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |1       |3           |
+|0 |PX COORDINATOR                                          |                 |3       |104         |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
+|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |76          |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |3       |75          |
+|5 |        └─MATERIAL                                      |                 |3       |74          |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
+|7 |            └─EXCHANGE IN DISTR                         |                 |3       |53          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |3       |52          |
+|9 |                └─MATERIAL                              |                 |3       |51          |
+|10|                  └─UPDATE                              |                 |3       |51          |
+|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
+|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
+|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
 =====================================================================================================
 Outputs & filters:
 -------------------------------------
@@ -494,7 +494,7 @@ Outputs & filters:
   9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
  10 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
-      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,5)])
  11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
  12 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [PARTITION_ID], [pindex.c3]), filter(nil), rowset=16
       (#keys=1, [pindex.c1]), dop=3
@@ -535,10 +535,10 @@ Outputs & filters:
       dop=2
   2 - output(nil), filter(nil)
       columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), partitions(p0), 
-      column_values([column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))], [pindex.a])
+      column_values([column_conv(INT,PS:(11,0),NULL,2)], [pindex.a])
   3 - output([pindex.a]), filter(nil), rowset=16
   4 - output([pindex.a]), filter(nil), rowset=16
-      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))]), dop=2
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,2)]), dop=2
   5 - output([pindex.a]), filter(nil), rowset=16
   6 - output([pindex.a]), filter(nil)
       table_columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), with_barrier
@@ -548,7 +548,7 @@ Outputs & filters:
   9 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
  10 - output([pindex.a], [pindex.b]), filter(nil)
       table_columns([{pindex: ({pindex: (pindex.a, pindex.b)})}]),
-      update([pindex.b=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
+      update([pindex.b=column_conv(INT,PS:(11,0),NULL,2)])
  11 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
  12 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
       (#keys=1, [pindex.a]), dop=2

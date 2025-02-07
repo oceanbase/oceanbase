@@ -240,6 +240,32 @@ int ObTabletTableIterator::assign(const ObTabletTableIterator& other)
         }
       }
     }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      if (OB_UNLIKELY(nullptr != other.split_extra_tablet_handles_)) {
+        if (nullptr == split_extra_tablet_handles_) {
+          void *tablet_hdl_buf = ob_malloc(sizeof(SplitExtraTabletHandleArray), ObMemAttr(MTL_ID(), "PartSplitTblH"));
+          if (OB_ISNULL(tablet_hdl_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocator memory for handle", K(ret));
+          } else {
+            split_extra_tablet_handles_ = new (tablet_hdl_buf) SplitExtraTabletHandleArray();
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(split_extra_tablet_handles_->assign(*other.split_extra_tablet_handles_))) {
+            LOG_WARN("failed to assign", K(ret));
+          }
+        }
+      } else {
+        if (nullptr != split_extra_tablet_handles_) {
+          split_extra_tablet_handles_->~ObIArray<ObTabletHandle>();
+          ob_free(split_extra_tablet_handles_);
+          split_extra_tablet_handles_ = nullptr;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -284,23 +310,46 @@ int ObTabletTableIterator::set_transfer_src_tablet_handle(const ObTabletHandle &
   return ret;
 }
 
+int ObTabletTableIterator::add_split_extra_tablet_handle(const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == split_extra_tablet_handles_) {
+    void *tablet_hdl_buf = ob_malloc(sizeof(SplitExtraTabletHandleArray), ObMemAttr(MTL_ID(), "PartSplitTblH"));
+    if (OB_ISNULL(tablet_hdl_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocator memory for handles", K(ret));
+    } else {
+      split_extra_tablet_handles_ = new (tablet_hdl_buf) SplitExtraTabletHandleArray();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(split_extra_tablet_handles_->push_back(tablet_handle))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTabletTableIterator::refresh_read_tables_from_tablet(
     const int64_t snapshot_version,
     const bool allow_no_ready_read,
-    const bool major_sstable_only)
+    const bool major_sstable_only,
+    const bool need_split_src_table,
+    const bool need_split_dst_table)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("try to refresh tables in tablet table iter with invalid tablet handle", K(ret));
   } else if (major_sstable_only) {
-    if (OB_FAIL(tablet_handle_.get_obj()->get_read_major_sstable(snapshot_version, *this))) {
+    if (OB_FAIL(tablet_handle_.get_obj()->get_read_major_sstable(
+        snapshot_version, *this, need_split_src_table))) {
       LOG_WARN("failed to get read major sstable from tablet",
-          K(ret), K(snapshot_version), K_(tablet_handle));
+        K(ret), K(snapshot_version), K_(tablet_handle));
     }
   } else {
     if (OB_FAIL(tablet_handle_.get_obj()->get_read_tables(
-        snapshot_version, *this, allow_no_ready_read))) {
+        snapshot_version, *this, allow_no_ready_read, need_split_src_table, need_split_dst_table))) {
       LOG_WARN("failed to get read tables from tablet", K(ret), K_(tablet_handle));
     }
   }
@@ -327,10 +376,12 @@ int ObTabletTableIterator::get_read_tables_from_tablet(
     const int64_t snapshot_version,
     const bool allow_no_ready_read,
     const bool major_sstable_only,
+    const bool need_split_src_table,
+    const bool need_split_dst_table,
     ObIArray<ObITable *> &tables)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(refresh_read_tables_from_tablet(snapshot_version, allow_no_ready_read, major_sstable_only))) {
+  if (OB_FAIL(refresh_read_tables_from_tablet(snapshot_version, allow_no_ready_read, major_sstable_only, need_split_src_table, need_split_dst_table))) {
     LOG_WARN("failed to refresh read tables", K(ret), K(snapshot_version), K(allow_no_ready_read), K(major_sstable_only), KPC(this));
   } else {
     while(OB_SUCC(ret)) {

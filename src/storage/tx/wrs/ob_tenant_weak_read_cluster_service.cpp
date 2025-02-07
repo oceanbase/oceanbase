@@ -194,6 +194,7 @@ int ObTenantWeakReadClusterService::query_cluster_version_range_(SCN &cur_min_ve
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::TX_GET_WEAK_READ_VERSION_RANGE);
     ObMySQLResult *result = NULL;
     uint64_t tenant_id = MTL_ID();
     const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
@@ -297,6 +298,7 @@ int ObTenantWeakReadClusterService::persist_version_if_need_(const SCN last_min_
   // check if need update
   // NOTE：min_version <= max_version
   if (new_min_version > last_min_version && new_min_version >= last_max_version) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::TX_UPDATE_WEAK_READ_VERSION);
     if (OB_ISNULL(mysql_proxy_)) {
       ret = OB_NOT_INIT;
     } else if (OB_FAIL(build_update_version_sql_(last_min_version, last_max_version,
@@ -497,7 +499,7 @@ int ObTenantWeakReadClusterService::get_cluster_version(SCN &version, SCN &min_v
   int ret = OB_SUCCESS;
   static const int64_t GET_CLUSTER_VERSION_RDLOCK_TIMEOUT = 100;
   SCN ret_version;
-  int64_t rdlock_wait_time = GET_CLUSTER_VERSION_RDLOCK_TIMEOUT;
+  int64_t rdlock_wait_time = ObTimeUtility::current_time() + GET_CLUSTER_VERSION_RDLOCK_TIMEOUT;
 
   // Lock wait time is necessary to prevent 'deadlock'
   //
@@ -1012,7 +1014,7 @@ int ObTenantWeakReadClusterService::update_server_version(const common::ObAddr &
   int ret = OB_SUCCESS;
   int64_t cur_leader_epoch = 0;
   bool is_new_server = false;
-  int64_t rdlock_wait_time = PROCESS_CLUSTER_HEARTBEAT_RPC_RDLOCK_TIMEOUT;
+  int64_t rdlock_wait_time = PROCESS_CLUSTER_HEARTBEAT_RPC_RDLOCK_TIMEOUT + ObTimeUtility::current_time();
 
   // rpc worker can not hang, overtime should be set
   // bug:

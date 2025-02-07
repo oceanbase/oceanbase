@@ -15,6 +15,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -52,7 +53,8 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
-int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
+int ObSelectIntoItem::deep_copy(ObIAllocator &allocator,
+                                ObIRawExprCopier &copier,
                                 const ObSelectIntoItem &other)
 {
   int ret = OB_SUCCESS;
@@ -71,6 +73,8 @@ int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
   user_vars_.assign(other.user_vars_);
   if (OB_FAIL(copier.copy(other.file_partition_expr_, file_partition_expr_))) {
     LOG_WARN("deep copy file partition expr failed", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.external_properties_, external_properties_))) {
+    LOG_WARN("failed to deep copy string", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other.pl_vars_.count(); ++i) {
     ObRawExpr* pl_var;
@@ -262,6 +266,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     has_reverse_link_ = other.has_reverse_link_;
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
+    is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
   }
   return ret;
 }
@@ -358,6 +363,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     has_reverse_link_ = other.has_reverse_link_;
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
+    is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -367,7 +373,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
         LOG_WARN("failed to allocate select into item", K(ret));
       } else {
         temp_into_item = new(ptr) ObSelectIntoItem();
-        if (OB_FAIL(temp_into_item->deep_copy(expr_copier, *other.into_item_))) {
+        if (OB_FAIL(temp_into_item->deep_copy(allocator, expr_copier, *other.into_item_))) {
           LOG_WARN("deep copy into item failed", K(ret));
         } else {
           into_item_ = temp_into_item;
@@ -574,6 +580,7 @@ ObSelectStmt::ObSelectStmt()
   has_reverse_link_ = false;
   is_expanded_mview_ = false;
   is_select_straight_join_ = false;
+  is_implicit_distinct_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()
@@ -703,12 +710,14 @@ const ObSelectStmt* ObSelectStmt::get_real_stmt() const
   return cur_stmt;
 }
 
-int ObSelectStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts) const
+int ObSelectStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts,
+                                          bool contain_lateral_table/* =true */) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(child_stmts.assign(set_query_))) {
     LOG_WARN("failed to assign child query", K(ret));
-  } else if (OB_FAIL(ObDMLStmt::get_from_subquery_stmts(child_stmts))) {
+  } else if (OB_FAIL(ObDMLStmt::get_from_subquery_stmts(child_stmts,
+                                                        contain_lateral_table))) {
     LOG_WARN("get from subquery stmts failed", K(ret));
   }
   return ret;
@@ -770,7 +779,8 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            K_(check_option),
            K_(dblink_id),
            K_(is_reverse_link),
-           K_(is_expanded_mview)
+           K_(is_expanded_mview),
+           K_(is_implicit_distinct)
              );
     }
   } else {
@@ -784,7 +794,8 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
          N_SELECT, select_items_,
          K(child_stmts),
          K_(dblink_id),
-         K_(is_reverse_link));
+         K_(is_reverse_link),
+         K_(is_implicit_distinct));
   }
   J_OBJ_END();
   return ret;
@@ -801,9 +812,13 @@ int ObSelectStmt::check_and_get_same_aggr_item(ObRawExpr *expr,
   } else {
     bool is_existed = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < agg_items_.count(); ++i) {
+      bool need_check_status = (i + 1) % 1000 == 0;
       if (OB_ISNULL(agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("failed to check status", K(ret));
       } else if (agg_items_.at(i)->same_as(*expr)) {
         is_existed = true;
         same_aggr = agg_items_.at(i);
@@ -813,17 +828,33 @@ int ObSelectStmt::check_and_get_same_aggr_item(ObRawExpr *expr,
   return ret;
 }
 
-ObWinFunRawExpr *ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr)
+int ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr, ObWinFunRawExpr *&win_expr)
 {
-  ObWinFunRawExpr *win_expr = NULL;
-  for (int64_t i = 0; i < win_func_exprs_.count(); ++i) {
-    if (win_func_exprs_.at(i) != NULL && expr != NULL &&
-        expr->same_as(*win_func_exprs_.at(i))) {
-      win_expr = win_func_exprs_.at(i);
-      break;
+  int ret = OB_SUCCESS;
+  win_expr = NULL;
+  if (OB_ISNULL(query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    ObQuestionmarkEqualCtx cmp_ctx;
+    bool is_existed = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_existed && i < win_func_exprs_.count(); ++i) {
+      bool need_check_status = (i + 1) % 1000 == 0;
+      if (win_func_exprs_.at(i) != NULL && expr != NULL &&
+          expr->same_as(*win_func_exprs_.at(i), &cmp_ctx)) {
+        win_expr = win_func_exprs_.at(i);
+        is_existed = true;
+      } else if (need_check_status &&
+                 OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("failed to check status", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
+                                       cmp_ctx.equal_pairs_))) {
+      LOG_WARN("failed to append equal param info", K(ret));
     }
   }
-  return win_expr;
+  return ret;
 }
 
 bool ObSelectStmt::has_for_update() const
@@ -1519,4 +1550,186 @@ int ObSelectStmt::check_is_simple_lock_stmt(bool &is_valid) const
     is_valid = contain_lock_expr;
   }
   return ret;
+}
+
+/**
+ * @brief ObSelectStmt::formalize_implicit_distinct
+ *
+ * 1. Check current stmt is legal for implicit distinct
+ * 2. Set implicit distinct for subquery
+ */
+int ObSelectStmt::formalize_implicit_distinct()
+{
+  int ret = OB_SUCCESS;
+  if (!is_implicit_distinct_allowed()) {
+    reset_implicit_distinct();
+  }
+  if (OB_FAIL(ObDMLStmt::formalize_implicit_distinct())) {
+    LOG_WARN("failed to do formalize implicit distinct", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObSelectStmt::check_from_dup_insensitive
+ *
+ * Stmt contains duplicate-insensitive aggregation or DISTINCT, making it
+ * insensitive to duplicate values ​​in From Scope.
+ *
+ * e.g.
+ * SELECT DISTINCT * FROM T1, T2;
+ * SELECT MAX(C1), MIN(C2) FROM T3;
+ * SELECT * FROM T4 LIMIT 1;
+ */
+int ObSelectStmt::check_from_dup_insensitive(bool &is_from_dup_insens) const
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  bool is_has_rownum = false;
+  bool is_dup_insens_aggr = false;
+  is_from_dup_insens = false;
+  // basic validity check
+  if (is_set_stmt() || is_hierarchical_query()) {
+    is_valid = false;
+  } else if (OB_FAIL(check_relation_exprs_deterministic(is_valid))) {
+    LOG_WARN("failed to check relation exprs deterministic", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(has_rownum(is_has_rownum))) {
+    LOG_WARN("failed to check has rownum", K(ret));
+  } else if (is_has_rownum) {
+    is_valid = false;
+  }
+
+  // check whether stmt has aggregation duplicate-insensitive
+  if (OB_FAIL(ret) || !is_valid) {
+    // do nothing
+  } else if (OB_FAIL(is_duplicate_insensitive_aggregation(is_dup_insens_aggr))) {
+    LOG_WARN("failed to check has duplicate-insensitive aggregation", K(ret));
+  } else if (is_dup_insens_aggr) {
+    is_from_dup_insens = true;
+  } else if (has_group_by() || has_window_function()) {
+    is_valid = false;
+  }
+
+  // check whether stmt has distinct duplicate-insensitive
+  if (OB_FAIL(ret) || !is_valid || is_from_dup_insens) {
+    // do nothing
+  } else if (!(is_distinct() || is_implicit_distinct())) {
+    // do nothing
+  } else {
+    is_from_dup_insens = true;
+  }
+
+  // check whether stmt has limit 1
+  if (OB_FAIL(ret) || !is_valid || is_from_dup_insens) {
+    // do nothing
+  } else if (NULL == limit_count_expr_
+             || NULL != limit_offset_expr_
+             || NULL != limit_percent_expr_) {
+    // do nothing
+  } else if (T_INT != limit_count_expr_->get_expr_type()
+             || 1 != static_cast<const ObConstRawExpr *>(limit_count_expr_)->get_value().get_int()) {
+    // do nothing
+  } else {
+    is_from_dup_insens = true;
+  }
+  return ret;
+}
+
+/**
+ * @brief ObSelectStmt::is_duplicate_insensitive_aggregation
+ *
+ * Check whether the select stmt has duplicate-insensitive aggregation.
+ * The stmt should have group by and only contain aggregate function listed: BIT_AND(),
+ * BIT_OR(), MAX(), MIN() APPROX_COUNT_DISTINCT(), and other aggr func with DISTINCT.
+ *
+ * @param is_dup_insens_aggr True if select stmt has duplicate-insensitive aggregation.
+ */
+int ObSelectStmt::is_duplicate_insensitive_aggregation(bool &is_dup_insens_aggr) const
+{
+  int ret = OB_SUCCESS;
+  is_dup_insens_aggr = false;
+  if (!has_group_by()) {
+    // do nothing
+  } else {
+    is_dup_insens_aggr = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_dup_insens_aggr && i < get_aggr_item_size(); ++i) {
+      const ObAggFunRawExpr *agg_expr = get_aggr_item(i);
+      if (OB_ISNULL(agg_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("agg expr is null", K(ret));
+      } else if (agg_expr->get_expr_type() == T_FUN_SYS_BIT_AND
+                 || agg_expr->get_expr_type() == T_FUN_SYS_BIT_OR
+                 || agg_expr->get_expr_type() == T_FUN_MAX
+                 || agg_expr->get_expr_type() == T_FUN_MIN
+                 || agg_expr->get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT
+                 || agg_expr->get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS) {
+        // do nothing, it is valid aggregate function
+      } else if (agg_expr->is_param_distinct()) {
+        // do nothing, it is valid aggregate function
+      } else {
+        is_dup_insens_aggr = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectStmt::is_query_deterministic(bool &is_deterministic) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> relation_exprs;
+  is_deterministic = true;
+  if (OB_FAIL(get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < relation_exprs.count(); i++) {
+      if (OB_ISNULL(relation_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null expr");
+      } else {
+        is_deterministic = relation_exprs.at(i)->is_deterministic();
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < set_query_.count(); i++) {
+      if (OB_ISNULL(set_query_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got null expr");
+      } else if (OB_FAIL(SMART_CALL(set_query_.at(i)->is_query_deterministic(is_deterministic)))) {
+        LOG_WARN("failed to check set query deterministic", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_deterministic && i < get_table_size(); ++i) {
+      const TableItem *table_item = get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_item is null", K(i));
+      } else if (table_item->is_basic_table() ||
+                 table_item->is_values_table() ||
+                 table_item->is_json_table() ||
+                 table_item->is_function_table() ||
+                 table_item->is_fake_cte_table()) {
+        /* do nothing */
+      } else if (table_item->is_generated_table() ||
+                 table_item->is_lateral_table() ||
+                 table_item->is_temp_table()) {
+        if (OB_FAIL(SMART_CALL(table_item->ref_query_->is_query_deterministic(is_deterministic)))) {
+          LOG_WARN("failed to check table item deterministic", K(ret));
+        }
+      } else {
+        is_deterministic = false;
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObSelectStmt::is_implicit_distinct_allowed() const
+{
+  return !(is_unpivot_select()
+           || is_hierarchical_query()
+           || has_for_update()
+           || has_limit());
 }

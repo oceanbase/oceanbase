@@ -74,7 +74,7 @@ class ObWinbufWholeMsg
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<ObWinbufWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<ObWinbufPieceMsg, ObWinbufWholeMsg>;
 public:
   ObWinbufWholeMsg() : ready_state_(0), is_empty_(true), is_datum_(false),
       row_store_(), datum_store_("PXDhWinbuf"), assign_allocator_()
@@ -178,7 +178,7 @@ class SPWinFuncPXWholeMsg: public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_SP_WIN
 {
   OB_UNIS_VERSION_V(1);
 public:
-  using WholeMsgProvider = ObWholeMsgProvider<SPWinFuncPXWholeMsg>;
+  using WholeMsgProvider = ObWholeMsgProvider<SPWinFuncPXPieceMsg, SPWinFuncPXWholeMsg>;
 public:
   SPWinFuncPXWholeMsg(const common::ObMemAttr &mem_attr) :
     assign_allocator_(mem_attr), is_empty_(true), row_meta_(&assign_allocator_),

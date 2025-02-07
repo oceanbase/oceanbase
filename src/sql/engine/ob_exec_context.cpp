@@ -26,6 +26,7 @@
 #include "ob_operator.h"
 #include "observer/ob_server.h"
 #include "storage/lob/ob_lob_persistent_reader.h"
+#include "sql/executor/ob_memory_tracker.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -111,8 +112,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     mem_context_(nullptr),
     pwj_map_(nullptr),
     group_pwj_map_(nullptr),
-    calc_type_(CALC_NORMAL),
-    fixed_id_(OB_INVALID_ID),
     check_status_times_(0),
     vt_ift_(nullptr),
     px_batch_id_(0),
@@ -139,7 +138,9 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     table_level_slice_idx_(0),
     slice_row_idx_(0),
     autoinc_range_interval_(0),
-    lob_access_ctx_(nullptr)
+    lob_access_ctx_(nullptr),
+    auto_dop_map_(),
+    force_local_plan_(false)
 {
 }
 
@@ -212,6 +213,7 @@ ObExecContext::~ObExecContext()
     lob_access_ctx_->~ObLobAccessCtx();
     lob_access_ctx_ = nullptr;
   }
+  auto_dop_map_.destroy();
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -506,6 +508,8 @@ int ObExecContext::check_status()
     LOG_WARN("px execution was interrupted", K(ic), K(ret));
   } else if (lib::Worker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
     ret = OB_KILLED_BY_THROTTLING;
+  } else if (OB_UNLIKELY((OB_SUCCESS != (ret = CHECK_MEM_STATUS())))) {
+    LOG_WARN("Exceeded memory usage limit", K(ret));
   }
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = check_extra_status())) {
@@ -749,6 +753,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
 {
   int ret = OB_SUCCESS;
   int64_t foreign_key_checks = 0;
+  uint64_t tenant_data_version = 0;
+  bool supprt_check_pdml_affected_row = false;
   if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_) || OB_ISNULL(sql_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K_(phy_plan_ctx), K_(my_session), K(ret));
@@ -788,6 +794,10 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       } else {
         consistency = STRONG;
       }
+      if (stmt::T_INSERT == plan.get_stmt_type()) {
+        bool is_direct_load = plan.get_enable_append();
+        phy_plan_ctx_->set_is_direct_insert_plan(is_direct_load);
+      }
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(start_time + plan_timeout);
       phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());
@@ -795,6 +805,15 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       phy_plan_ctx_->set_ignore_stmt(plan.is_ignore());
       phy_plan_ctx_->set_foreign_key_checks(0 != foreign_key_checks);
       phy_plan_ctx_->set_table_row_count_list_capacity(plan.get_access_table_num());
+      if (plan.is_use_pdml() && GCONF.enable_defensive_check()) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(my_session_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if ((DATA_VERSION_4_3_5_0 <= tenant_data_version)) {
+          // ([4.3.5, ...)) support check pdml affected_rows
+          supprt_check_pdml_affected_row = true;
+        }
+      }
+      phy_plan_ctx_->set_check_pdml_affected_rows(supprt_check_pdml_affected_row);
       THIS_WORKER.set_timeout_ts(phy_plan_ctx_->get_timeout_timestamp());
 #ifdef OB_BUILD_SPM
       if (sql_ctx_ != NULL && sql_ctx_->spm_ctx_.need_spm_timeout_) {
@@ -1204,6 +1223,22 @@ int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSubS
   return ret;
 }
 
+int ObExecContext::get_enumset_meta_by_subschema_id(uint16_t subschema_id,
+                                                    const ObEnumSetMeta *&meta) const
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_subschema_id(subschema_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "reserved subschema id not used in enumset meta", K(ret), K(lbt()));
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_enumset_meta_by_subschema_id(subschema_id, meta);
+  }
+  return ret;
+}
+
 int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                               uint16_t &subschema_id,
                                               share::schema::ObSchemaGetterGuard *schema_guard)
@@ -1231,6 +1266,44 @@ int ObExecContext::get_subschema_id_by_collection_elem_type(ObNestedType coll_ty
     SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
   } else {
     ret = phy_plan_ctx_->get_subschema_id_by_collection_elem_type(coll_type, elem_type, subschema_id);
+  }
+  return ret;
+}
+
+bool ObExecContext::support_enum_set_type_subschema(ObSQLSessionInfo &session)
+{
+  // Considering compatibility, enumset subschema is only supported in versions [4_2_5, 4_3_0) and
+  // versions 4_3_5 at least.
+  bool bret = true;
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_0) ||
+        (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
+          && min_cluster_version < CLUSTER_VERSION_4_3_5_0)) {
+    bret = false;
+  } else {
+    // tenant configuration Control
+    if (!session.is_enable_enum_set_with_subschema()) {
+      bret = false;
+    }
+    // hint control
+    if (OB_NOT_NULL(stmt_factory_) && OB_NOT_NULL(stmt_factory_->get_query_ctx())) {
+      stmt_factory_->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+          ObOptParamHint::ENABLE_ENUM_SET_SUBSCHEMA, bret);
+    }
+  }
+  return bret;
+}
+
+int ObExecContext::get_subschema_id_by_type_info(const ObObjMeta &obj_meta,
+                                                 const ObIArray<common::ObString> &type_info,
+                                                 uint16_t &subschema_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_subschema_id_by_type_info(obj_meta, type_info, subschema_id);
   }
   return ret;
 }

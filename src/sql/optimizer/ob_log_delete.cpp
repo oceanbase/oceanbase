@@ -111,6 +111,15 @@ int ObLogDelete::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
+int ObLogDelete::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(is_dml_fixed_expr(expr, get_index_dml_infos(), is_fixed))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
+  return ret;
+}
+
 int ObLogDelete::generate_multi_part_partition_id_expr()
 {
   int ret = OB_SUCCESS;
@@ -176,8 +185,29 @@ int ObLogDelete::get_plan_item_info(PlanText &plan_text,
       ret = BUF_PRINTF(", ");
       ret = BUF_PRINTF("with_barrier");
     }
+    if (OB_SUCC(ret) && get_das_dop() > 0) {
+      ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
+    }
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item. special_predicates_len_);
+  }
+  return ret;
+}
+
+int ObLogDelete::op_is_update_pk_with_dop(bool &is_update)
+{
+  int ret = OB_SUCCESS;
+  is_update = false;
+  if (!index_dml_infos_.empty()) {
+    IndexDMLInfo *index_dml_info = index_dml_infos_.at(0);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(index_dml_infos_));
+    } else if (!is_pdml_update_split_) {
+      // is_update = false;
+    } else if (index_dml_info->is_update_primary_key_ && (is_pdml() || get_das_dop() > 1)) {
+      is_update = true;
+    }
   }
   return ret;
 }

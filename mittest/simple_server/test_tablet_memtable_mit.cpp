@@ -179,7 +179,11 @@ void TestTabletMemtable::basic_test() {
   // *********** DO TABLET FREEZE ************
   ObFreezer *freezer = nullptr;
   ASSERT_NE(nullptr, freezer = ls->get_freezer());
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /* need_rewrite_meta */, true /* is_sync */, 0));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID,
+                                          true,
+                                          0,
+                                          false, /* need_rewrite_meta */
+                                          ObFreezeSourceFlag::TEST_MODE));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_boundary_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, memtable_handle.get_tablet_memtable(memtable));
@@ -197,7 +201,11 @@ void TestTabletMemtable::basic_test() {
 
   // *********** CONCURRENT TABLET FREEZE ************
   int64_t freeze_start_time = ObClockGenerator::getClock();
-  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID, false /*need_rewrite_meta*/, false /*is_sync*/, INT64_MAX));
+  ASSERT_EQ(OB_SUCCESS, ls->tablet_freeze(TABLET_ID,
+                                          false /*is_sync*/,
+                                          0,
+                                          false, /*need_rewrite_meta*/
+                                          ObFreezeSourceFlag::TEST_MODE));
 
   sleep(2);
   ASSERT_EQ(TabletMemtableFreezeState::ACTIVE, memtable->get_freeze_state());
@@ -239,7 +247,10 @@ void TestTabletMemtable::basic_test() {
   ASSERT_EQ(0, memtable_for_direct_load->get_write_ref());
 
   // *********** DO LOGSTREAM FREEZE ************
-  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID, true /* is_sync */));
+  ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze(checkpoint::INVALID_TRACE_ID,
+                                             true, /* is_sync */
+                                             0,
+                                             ObFreezeSourceFlag::TEST_MODE));
   STORAGE_LOG(INFO, "finish logstream freeze");
 
   // *********** CHECK LOGSTREAM FREEZE RESULT ************

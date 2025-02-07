@@ -44,6 +44,7 @@ public:
   share::SCN transfer_start_scn_;
   int64_t transfer_seq_;
   bool has_transfer_table_;
+  static const int64_t TRANSFER_INIT_SEQ = 0;
 private:
   static const int64_t TRANSFER_INIT_LS_ID = 0;
 };

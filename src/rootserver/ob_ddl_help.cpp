@@ -87,17 +87,21 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(database_id), K(table_item));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_item.database_name_), to_cstring(table_item.table_name_));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(table_item.database_name_),
+                                           helper.convert(table_item.table_name_));
         LOG_WARN("table not exist!", KR(ret), K(tenant_id), K(database_id), K(table_item));
       } else if (is_inner_table(table_schema->get_table_id())) {
         //the tablegroup of sys table must be oceanbase
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("sys table's tablegroup should be oceanbase", KR(ret), K(arg), KPC(table_schema));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set the tablegroup of system table besides oceanbase");
-      } else if (table_schema->has_mlog_table()) {
+      } else if (table_schema->required_by_mview_refresh()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of table with materialized view log is");
+        LOG_WARN("alter tablegroup of table required by materialized view refresh is not supported",
+                 KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "alter tablegroup of table required by materialized view refresh is");
       } else if (table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("alter tablegroup of materialized view log is not supported", KR(ret));
@@ -219,7 +223,7 @@ int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *f
   const uint64_t tenant_id = table.get_tenant_id();
   const uint64_t tablegroup_id = table.get_tablegroup_id();
   const ObTablegroupSchema *tablegroup = NULL;
-  if (OB_INVALID_ID == tablegroup_id) {
+  if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_id is invalid", KR(ret), K(tablegroup_id));
   } else if (is_sys_tablegroup_id(tablegroup_id)) {

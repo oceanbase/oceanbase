@@ -1,14 +1,46 @@
-/**
- * Copyright (c) 2023 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
+
+/* A Bison parser, made by GNU Bison 2.4.1.  */
+
+/* Skeleton implementation for Bison's Yacc-like parsers in C
+
+      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Free Software Foundation, Inc.
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* As a special exception, you may create a larger work that contains
+   part or all of the Bison parser skeleton and distribute that work
+   under terms of your choice, so long as that work isn't itself a
+   parser generator using the skeleton or a modified version thereof
+   as a parser skeleton.  Alternatively, if you modify or redistribute
+   the parser skeleton itself, you may (at your option) remove this
+   special exception, which will cause the skeleton and the resulting
+   Bison output files to be licensed under the GNU General Public
+   License without this special exception.
+
+   This special exception was added by the Free Software Foundation in
+   version 2.2 of Bison.  */
+
+/* C LALR(1) parser skeleton written by Richard Stallman, by
+   simplifying the original so-called "semantic" parser.  */
+
+/* All symbols defined below should begin with yy or YY, to avoid
+   infringing on user name space.  This should be done even for local
+   variables, as they might otherwise be expanded by user macros.
+   There are some unavoidable exceptions within include files to
+   define necessary library symbols; they are noted "INFRINGES ON
+   USER NAME SPACE" below.  */
 
 /* Identify Bison output.  */
 #define YYBISON 1
@@ -31,6 +63,27 @@
 /* Using locations.  */
 #define YYLSP_NEEDED 1
 
+/* "%code top" blocks.  */
+
+/* Line 171 of yacc.c  */
+#line 14 "../../../src/observer/table/htable_filter_tab.yxx"
+
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+
+
+/* Line 171 of yacc.c  */
+#line 87 "../../../src/observer/table/htable_filter_tab.cxx"
 /* Substitute the variable and function names.  */
 #define yyparse         ob_hfilter_parse
 #define yylex           ob_hfilter_lex
@@ -44,7 +97,7 @@
 /* Copy the first part of user declarations.  */
 
 /* Line 189 of yacc.c  */
-#line 10 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 36 "../../../src/observer/table/htable_filter_tab.yxx"
 
 #define USING_LOG_PREFIX SERVER
 #include <stdint.h>
@@ -59,7 +112,7 @@ using namespace oceanbase::common;
 
 
 /* Line 189 of yacc.c  */
-#line 95 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 116 "../../../src/observer/table/htable_filter_tab.cxx"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -79,6 +132,27 @@ using namespace oceanbase::common;
 # define YYTOKEN_TABLE 0
 #endif
 
+/* "%code requires" blocks.  */
+
+/* Line 209 of yacc.c  */
+#line 1 "../../../src/observer/table/htable_filter_tab.yxx"
+
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+
+
+/* Line 209 of yacc.c  */
+#line 156 "../../../src/observer/table/htable_filter_tab.cxx"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
@@ -93,28 +167,44 @@ using namespace oceanbase::common;
      SingleColumnValueFilter = 261,
      PageFilter = 262,
      ColumnCountGetFilter = 263,
-     CheckAndMutateFilter = 264,
-     PrefixFilter = 265,
-     TableCompareFilter = 266,
-     LESS = 267,
-     LESS_OR_EQUAL = 268,
-     EQUAL = 269,
-     NOT_EQUAL = 270,
-     GREATER = 271,
-     GREATER_OR_EQUAL = 272,
-     NO_OP = 273,
-     IS = 274,
-     IS_NOT = 275,
-     BOOL_VALUE = 276,
-     STRING_VALUE = 277,
-     INT_VALUE = 278,
-     OR = 279,
-     AND = 280,
-     T_OR = 281,
-     T_AND = 282,
-     WHILE = 283,
-     SKIP = 284,
-     ERROR = 285
+     ColumnPrefixFilter = 264,
+     ColumnPaginationFilter = 265,
+     FirstKeyValueMatchingQualifiersFilter = 266,
+     CheckAndMutateFilter = 267,
+     PrefixFilter = 268,
+     FirstKeyOnlyFilter = 269,
+     KeyOnlyFilter = 270,
+     TimestampsFilter = 271,
+     MultiRowRangeFilter = 272,
+     InclusiveStopFilter = 273,
+     FuzzyRowFilter = 274,
+     ColumnValueFilter = 275,
+     TableCompareFilter = 276,
+     RandomRowFilter = 277,
+     DependentColumnFilter = 278,
+     SingleColumnValueExcludeFilter = 279,
+     ColumnRangeFilter = 280,
+     MultipleColumnPrefixFilter = 281,
+     FamilyFilter = 282,
+     LESS = 283,
+     LESS_OR_EQUAL = 284,
+     EQUAL = 285,
+     NOT_EQUAL = 286,
+     GREATER = 287,
+     GREATER_OR_EQUAL = 288,
+     NO_OP = 289,
+     IS = 290,
+     IS_NOT = 291,
+     BOOL_VALUE = 292,
+     STRING_VALUE = 293,
+     INT_VALUE = 294,
+     OR = 295,
+     AND = 296,
+     T_OR = 297,
+     T_AND = 298,
+     WHILE = 299,
+     SKIP = 300,
+     ERROR = 301
    };
 #endif
 
@@ -125,18 +215,23 @@ typedef union YYSTYPE
 {
 
 /* Line 214 of yacc.c  */
-#line 24 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 50 "../../../src/observer/table/htable_filter_tab.yxx"
 
     int32_t ival;
     int64_t lval;
     oceanbase::table::hfilter::CompareOperator cmp_op;
     oceanbase::table::ObHTableFilterParser::SimpleString sval;
     oceanbase::table::hfilter::Filter *fval;
+    oceanbase::table::KeyRange *rval;
+    oceanbase::common::ObSEArray<oceanbase::ObString, 8> *sarray;
+    oceanbase::common::ObSEArray<int64_t, 8> *array;
+    oceanbase::common::ObSEArray<oceanbase::table::KeyRange*, 8> *range_array;
+    oceanbase::common::ObSEArray<oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString>*, 8> *fuzzy_array;
 
 
 
 /* Line 214 of yacc.c  */
-#line 172 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 235 "../../../src/observer/table/htable_filter_tab.cxx"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -161,7 +256,7 @@ typedef struct YYLTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 197 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 260 "../../../src/observer/table/htable_filter_tab.cxx"
 
 #ifdef short
 # undef short
@@ -376,22 +471,22 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  28
+#define YYFINAL  60
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   98
+#define YYLAST   220
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  34
+#define YYNTOKENS  50
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  8
+#define YYNNTS  14
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  32
+#define YYNRULES  62
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  96
+#define YYNSTATES  217
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   285
+#define YYMAXUTOK   301
 
 #define YYTRANSLATE(YYX)						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -403,7 +498,7 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      31,    32,     2,     2,    33,     2,     2,     2,     2,     2,
+      47,    48,     2,     2,    49,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -427,46 +522,71 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
       15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
-      25,    26,    27,    28,    29,    30
+      25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
+      35,    36,    37,    38,    39,    40,    41,    42,    43,    44,
+      45,    46
 };
 
 #if YYDEBUG
 /* YYPRHS[YYN] -- Index of the first RHS symbol of rule number YYN in
    YYRHS.  */
-static const yytype_uint8 yyprhs[] =
+static const yytype_uint16 yyprhs[] =
 {
        0,     0,     3,     6,    10,    14,    18,    22,    25,    28,
-      30,    34,    41,    48,    55,    60,    75,    86,    91,    96,
-     109,   116,   118,   120,   122,   124,   126,   128,   130,   132,
-     134,   136,   138
+      30,    34,    41,    48,    55,    60,    75,    86,   101,   110,
+     123,   128,   133,   138,   145,   152,   156,   161,   166,   173,
+     184,   189,   194,   199,   204,   211,   216,   221,   234,   241,
+     243,   245,   247,   249,   251,   253,   255,   257,   259,   261,
+     263,   265,   267,   271,   275,   281,   283,   287,   295,   297,
+     301,   303,   307
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      35,     0,    -1,    36,     0,    -1,    36,    25,    36,    -1,
-      36,    24,    36,    -1,    36,    27,    36,    -1,    36,    26,
-      36,    -1,    29,    36,    -1,    28,    36,    -1,    37,    -1,
-      31,    36,    32,    -1,     3,    31,    40,    33,    41,    32,
-      -1,     5,    31,    40,    33,    41,    32,    -1,     4,    31,
-      40,    33,    41,    32,    -1,    10,    31,    22,    32,    -1,
-       6,    31,    38,    33,    39,    33,    40,    33,    41,    33,
-      21,    33,    21,    32,    -1,     6,    31,    38,    33,    39,
-      33,    40,    33,    41,    32,    -1,     7,    31,    23,    32,
-      -1,     8,    31,    23,    32,    -1,     9,    31,    40,    33,
-      41,    33,    38,    33,    39,    33,    21,    32,    -1,    11,
-      31,    40,    33,    41,    32,    -1,    22,    -1,    22,    -1,
-      12,    -1,    13,    -1,    14,    -1,    15,    -1,    16,    -1,
-      17,    -1,    18,    -1,    19,    -1,    20,    -1,    22,    -1
+      51,     0,    -1,    52,     0,    -1,    52,    41,    52,    -1,
+      52,    40,    52,    -1,    52,    43,    52,    -1,    52,    42,
+      52,    -1,    45,    52,    -1,    44,    52,    -1,    53,    -1,
+      47,    52,    48,    -1,     3,    47,    56,    49,    57,    48,
+      -1,     5,    47,    56,    49,    57,    48,    -1,     4,    47,
+      56,    49,    57,    48,    -1,    13,    47,    38,    48,    -1,
+       6,    47,    54,    49,    55,    49,    56,    49,    57,    49,
+      37,    49,    37,    48,    -1,     6,    47,    54,    49,    55,
+      49,    56,    49,    57,    48,    -1,    24,    47,    54,    49,
+      55,    49,    56,    49,    57,    49,    37,    49,    37,    48,
+      -1,    23,    47,    54,    49,    55,    49,    37,    48,    -1,
+      23,    47,    54,    49,    55,    49,    37,    49,    56,    49,
+      57,    48,    -1,     7,    47,    39,    48,    -1,    22,    47,
+      39,    48,    -1,     9,    47,    38,    48,    -1,    10,    47,
+      39,    49,    39,    48,    -1,    10,    47,    39,    49,    38,
+      48,    -1,    14,    47,    48,    -1,    15,    47,    37,    48,
+      -1,    19,    47,    59,    48,    -1,    16,    47,    60,    49,
+      37,    48,    -1,    20,    47,    54,    49,    55,    49,    56,
+      49,    57,    48,    -1,    17,    47,    62,    48,    -1,    18,
+      47,    38,    48,    -1,    25,    47,    62,    48,    -1,    26,
+      47,    63,    48,    -1,    27,    47,    56,    49,    57,    48,
+      -1,     8,    47,    39,    48,    -1,    11,    47,    58,    48,
+      -1,    12,    47,    56,    49,    57,    49,    54,    49,    55,
+      49,    37,    48,    -1,    21,    47,    56,    49,    57,    48,
+      -1,    38,    -1,    38,    -1,    28,    -1,    29,    -1,    30,
+      -1,    31,    -1,    32,    -1,    33,    -1,    34,    -1,    35,
+      -1,    36,    -1,    38,    -1,    38,    -1,    58,    49,    38,
+      -1,    38,    49,    38,    -1,    59,    49,    38,    49,    38,
+      -1,    39,    -1,    60,    49,    39,    -1,    38,    49,    37,
+      49,    38,    49,    37,    -1,    61,    -1,    62,    49,    61,
+      -1,    38,    -1,    63,    49,    38,    -1,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,    55,    55,    62,    83,   104,   125,   146,   161,   176,
-     183,   185,   207,   229,   251,   273,   301,   329,   344,   359,
-     383,   405,   408,   411,   412,   413,   414,   415,   416,   417,
-     418,   419,   422
+       0,    91,    91,    98,   119,   140,   161,   182,   197,   212,
+     219,   221,   243,   265,   287,   309,   337,   365,   393,   411,
+     434,   449,   465,   480,   498,   516,   531,   546,   565,   580,
+     603,   618,   648,   663,   678,   700,   715,   730,   754,   776,
+     779,   782,   783,   784,   785,   786,   787,   788,   789,   790,
+     793,   797,   813,   827,   845,   864,   880,   894,   910,   926,
+     940,   967,   991
 };
 #endif
 
@@ -477,13 +597,20 @@ static const char *const yytname[] =
 {
   "\"end of file\"", "error", "$undefined", "RowFilter", "ValueFilter",
   "QualifierFilter", "SingleColumnValueFilter", "PageFilter",
-  "ColumnCountGetFilter", "CheckAndMutateFilter", "PrefixFilter",
-  "TableCompareFilter", "LESS", "LESS_OR_EQUAL", "EQUAL", "NOT_EQUAL",
-  "GREATER", "GREATER_OR_EQUAL", "NO_OP", "IS", "IS_NOT", "BOOL_VALUE",
-  "STRING_VALUE", "INT_VALUE", "OR", "AND", "T_OR", "T_AND", "WHILE",
-  "SKIP", "ERROR", "'('", "')'", "','", "$accept", "result_filter",
-  "filter", "simple_filter", "family", "qualifier", "compare_op",
-  "comparator", 0
+  "ColumnCountGetFilter", "ColumnPrefixFilter", "ColumnPaginationFilter",
+  "FirstKeyValueMatchingQualifiersFilter", "CheckAndMutateFilter",
+  "PrefixFilter", "FirstKeyOnlyFilter", "KeyOnlyFilter",
+  "TimestampsFilter", "MultiRowRangeFilter", "InclusiveStopFilter",
+  "FuzzyRowFilter", "ColumnValueFilter", "TableCompareFilter",
+  "RandomRowFilter", "DependentColumnFilter",
+  "SingleColumnValueExcludeFilter", "ColumnRangeFilter",
+  "MultipleColumnPrefixFilter", "FamilyFilter", "LESS", "LESS_OR_EQUAL",
+  "EQUAL", "NOT_EQUAL", "GREATER", "GREATER_OR_EQUAL", "NO_OP", "IS",
+  "IS_NOT", "BOOL_VALUE", "STRING_VALUE", "INT_VALUE", "OR", "AND", "T_OR",
+  "T_AND", "WHILE", "SKIP", "ERROR", "'('", "')'", "','", "$accept",
+  "result_filter", "filter", "simple_filter", "family", "qualifier",
+  "compare_op", "comparator", "param_list", "fuzzy_list", "timestamp_list",
+  "range", "range_list", "prefix_list", 0
 };
 #endif
 
@@ -495,26 +622,33 @@ static const yytype_uint16 yytoknum[] =
        0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
      265,   266,   267,   268,   269,   270,   271,   272,   273,   274,
      275,   276,   277,   278,   279,   280,   281,   282,   283,   284,
-     285,    40,    41,    44
+     285,   286,   287,   288,   289,   290,   291,   292,   293,   294,
+     295,   296,   297,   298,   299,   300,   301,    40,    41,    44
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    34,    35,    36,    36,    36,    36,    36,    36,    36,
-      37,    37,    37,    37,    37,    37,    37,    37,    37,    37,
-      37,    38,    39,    40,    40,    40,    40,    40,    40,    40,
-      40,    40,    41
+       0,    50,    51,    52,    52,    52,    52,    52,    52,    52,
+      53,    53,    53,    53,    53,    53,    53,    53,    53,    53,
+      53,    53,    53,    53,    53,    53,    53,    53,    53,    53,
+      53,    53,    53,    53,    53,    53,    53,    53,    53,    54,
+      55,    56,    56,    56,    56,    56,    56,    56,    56,    56,
+      57,    58,    58,    59,    59,    60,    60,    61,    62,    62,
+      63,    63,    63
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
        0,     2,     2,     3,     3,     3,     3,     2,     2,     1,
-       3,     6,     6,     6,     4,    14,    10,     4,     4,    12,
-       6,     1,     1,     1,     1,     1,     1,     1,     1,     1,
-       1,     1,     1
+       3,     6,     6,     6,     4,    14,    10,    14,     8,    12,
+       4,     4,     4,     6,     6,     3,     4,     4,     6,    10,
+       4,     4,     4,     4,     6,     4,     4,    12,     6,     1,
+       1,     1,     1,     1,     1,     1,     1,     1,     1,     1,
+       1,     1,     3,     3,     5,     1,     3,     7,     1,     3,
+       1,     3,     0
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -523,44 +657,70 @@ static const yytype_uint8 yyr2[] =
 static const yytype_uint8 yydefact[] =
 {
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     9,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     8,     7,     0,     1,     2,
-       0,     0,     0,     0,    23,    24,    25,    26,    27,    28,
-      29,    30,    31,     0,     0,     0,    21,     0,     0,     0,
-       0,     0,     0,    10,     4,     3,     6,     5,     0,     0,
-       0,     0,    17,    18,     0,    14,     0,    32,     0,     0,
-       0,    22,     0,     0,     0,    11,    13,    12,     0,     0,
-      20,     0,     0,     0,     0,     0,     0,    16,     0,     0,
-       0,     0,     0,    19,     0,    15
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     9,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,    62,     0,     8,     7,     0,
+       1,     2,     0,     0,     0,     0,    41,    42,    43,    44,
+      45,    46,    47,    48,    49,     0,     0,     0,    39,     0,
+       0,     0,     0,     0,    51,     0,     0,     0,    25,     0,
+      55,     0,     0,    58,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,    60,     0,     0,    10,     4,     3,
+       6,     5,     0,     0,     0,     0,    20,    35,    22,     0,
+      36,     0,     0,    14,    26,     0,     0,    30,     0,    31,
+       0,    27,     0,     0,     0,    21,     0,     0,    32,    33,
+       0,     0,    50,     0,     0,     0,    40,     0,     0,     0,
+      52,     0,     0,    56,     0,    59,    53,     0,     0,     0,
+       0,     0,    61,     0,    11,    13,    12,     0,    24,    23,
+       0,    28,     0,     0,     0,    38,     0,     0,    34,     0,
+       0,     0,    54,     0,     0,     0,     0,     0,     0,     0,
+      18,     0,     0,     0,     0,    57,     0,     0,     0,    16,
+       0,     0,    29,     0,     0,     0,     0,     0,     0,     0,
+      37,    19,     0,     0,     0,    15,    17
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
-static const yytype_int8 yydefgoto[] =
+static const yytype_int16 yydefgoto[] =
 {
-      -1,    13,    14,    15,    47,    72,    43,    68
+      -1,    29,    30,    31,    79,   147,    75,   143,    85,    97,
+      91,    93,    94,   105
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -43
-static const yytype_int8 yypact[] =
+#define YYPACT_NINF -127
+static const yytype_int16 yypact[] =
 {
-       5,   -25,    -8,     4,    15,    16,    17,    18,    23,    24,
-       5,     5,     5,    25,     2,   -43,    50,    50,    50,    22,
-      33,    34,    50,    36,    50,   -43,   -43,    13,   -43,   -43,
-       5,     5,     5,     5,   -43,   -43,   -43,   -43,   -43,   -43,
-     -43,   -43,   -43,    26,    27,    38,   -43,    39,    41,    42,
-      43,    45,    46,   -43,    -6,   -23,    -6,   -23,    53,    53,
-      53,    56,   -43,   -43,    53,   -43,    53,   -43,    48,    49,
-      51,   -43,    52,    54,    57,   -43,   -43,   -43,    50,    22,
-     -43,    55,    58,    53,    56,    10,    59,   -43,    61,    63,
-      60,    62,    65,   -43,    64,   -43
+      30,   -38,   -21,   -17,   -15,    26,    31,    45,    59,    60,
+      61,    63,    64,    65,    66,    67,    68,    69,    70,    71,
+      72,    73,    74,    75,    77,    78,    30,    30,    30,   109,
+      22,  -127,    55,    55,    55,    88,    89,    90,    92,    93,
+      95,    55,    97,    79,    33,    98,   100,   101,   102,    88,
+      55,   103,    88,    88,   100,   105,    55,  -127,  -127,   -27,
+    -127,  -127,    30,    30,    30,    30,  -127,  -127,  -127,  -127,
+    -127,  -127,  -127,  -127,  -127,    82,    87,    96,  -127,    99,
+     104,   106,   107,   108,  -127,   -20,   110,   112,  -127,   113,
+    -127,   114,   115,  -127,    18,   117,   118,    20,   119,   120,
+     122,   123,   124,    23,  -127,    50,   125,  -127,   -23,    38,
+     -23,    38,   111,   111,   111,   128,  -127,  -127,  -127,    62,
+    -127,   133,   111,  -127,  -127,   -12,   116,  -127,   100,  -127,
+     137,  -127,   138,   128,   111,  -127,   128,   128,  -127,  -127,
+     139,   111,  -127,   130,   131,   132,  -127,   134,   136,   140,
+    -127,   141,   143,  -127,   144,  -127,  -127,   145,   146,   148,
+     149,   150,  -127,   152,  -127,  -127,  -127,    55,  -127,  -127,
+      88,  -127,   147,   151,    55,  -127,   155,    55,  -127,   153,
+     154,   156,  -127,   157,    54,   158,   111,   128,   160,   111,
+    -127,    55,   111,    56,   159,  -127,   161,   162,   163,  -127,
+     164,   167,  -127,   111,   173,   165,   168,   169,   166,   176,
+    -127,  -127,   181,   171,   172,  -127,  -127
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -43,   -43,    20,   -43,    11,    14,   -17,   -42
+    -127,  -127,    32,  -127,   -47,  -126,   -33,  -110,  -127,  -127,
+    -127,    19,   127,  -127
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -570,30 +730,56 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -1
 static const yytype_uint8 yytable[] =
 {
-      44,    45,    29,    32,    33,    50,    16,    52,     1,     2,
-       3,     4,     5,     6,     7,     8,     9,    69,    70,    31,
-      32,    33,    73,    17,    74,    28,    30,    31,    32,    33,
-      25,    26,    27,    10,    11,    18,    12,    30,    31,    32,
-      33,    85,    87,    88,    46,    53,    19,    20,    21,    22,
-      54,    55,    56,    57,    23,    24,    48,    49,    51,    58,
-      59,    81,    34,    35,    36,    37,    38,    39,    40,    41,
-      42,    60,    61,    62,    63,    67,    64,    65,    71,    66,
-      75,    76,    90,    77,    91,    78,    94,    79,    83,    80,
-      82,    84,    89,    92,    93,     0,    95,     0,    86
+      76,    77,    98,   144,   145,   101,   102,   158,    86,    32,
+     160,   161,   151,    62,    63,    64,    65,    99,    63,    64,
+      65,   107,    61,   106,   159,   152,    33,   153,   120,   121,
+      34,   163,    35,     1,     2,     3,     4,     5,     6,     7,
+       8,     9,    10,    11,    12,    13,    14,    15,    16,    17,
+      18,    19,    20,    21,    22,    23,    24,    25,    57,    58,
+      59,   194,    62,    63,    64,    65,   127,   128,   131,   132,
+      89,   138,   128,    36,    26,    27,   193,    28,    37,   196,
+      64,    65,   198,    66,    67,    68,    69,    70,    71,    72,
+      73,    74,    38,   207,   108,   109,   110,   111,   139,   140,
+     148,   149,   190,   191,   199,   200,    39,    40,    41,    60,
+      42,    43,    44,    45,    46,    47,    48,    49,    50,    51,
+      52,    53,    54,   180,    55,    56,    78,    88,    80,    81,
+      82,   112,    83,    84,   179,    87,   113,    90,    92,    95,
+      96,   183,   100,   104,   185,   114,     0,   155,   115,   142,
+       0,     0,   116,   154,   117,   118,     0,   119,   197,   122,
+     123,   124,     0,   125,   126,   129,   146,   130,   133,   134,
+     135,   150,   136,   137,   141,   156,   157,   162,   164,   165,
+     166,   103,     0,   167,   168,   181,     0,     0,   169,   182,
+     170,   171,   184,   172,   173,   174,   175,   195,   176,   177,
+     178,   205,   186,   187,   206,   188,   189,   192,   201,   202,
+     208,   203,   204,   213,   209,   212,   210,   211,   214,   215,
+     216
 };
 
-static const yytype_int8 yycheck[] =
+static const yytype_int16 yycheck[] =
 {
-      17,    18,     0,    26,    27,    22,    31,    24,     3,     4,
-       5,     6,     7,     8,     9,    10,    11,    59,    60,    25,
-      26,    27,    64,    31,    66,     0,    24,    25,    26,    27,
-      10,    11,    12,    28,    29,    31,    31,    24,    25,    26,
-      27,    83,    32,    33,    22,    32,    31,    31,    31,    31,
-      30,    31,    32,    33,    31,    31,    23,    23,    22,    33,
-      33,    78,    12,    13,    14,    15,    16,    17,    18,    19,
-      20,    33,    33,    32,    32,    22,    33,    32,    22,    33,
-      32,    32,    21,    32,    21,    33,    21,    33,    33,    32,
-      79,    33,    33,    33,    32,    -1,    32,    -1,    84
+      33,    34,    49,   113,   114,    52,    53,   133,    41,    47,
+     136,   137,   122,    40,    41,    42,    43,    50,    41,    42,
+      43,    48,     0,    56,   134,    37,    47,    39,    48,    49,
+      47,   141,    47,     3,     4,     5,     6,     7,     8,     9,
+      10,    11,    12,    13,    14,    15,    16,    17,    18,    19,
+      20,    21,    22,    23,    24,    25,    26,    27,    26,    27,
+      28,   187,    40,    41,    42,    43,    48,    49,    48,    49,
+      37,    48,    49,    47,    44,    45,   186,    47,    47,   189,
+      42,    43,   192,    28,    29,    30,    31,    32,    33,    34,
+      35,    36,    47,   203,    62,    63,    64,    65,    48,    49,
+      38,    39,    48,    49,    48,    49,    47,    47,    47,     0,
+      47,    47,    47,    47,    47,    47,    47,    47,    47,    47,
+      47,    47,    47,   170,    47,    47,    38,    48,    39,    39,
+      38,    49,    39,    38,   167,    38,    49,    39,    38,    38,
+      38,   174,    39,    38,   177,    49,    -1,   128,    49,    38,
+      -1,    -1,    48,    37,    48,    48,    -1,    49,   191,    49,
+      48,    48,    -1,    49,    49,    48,    38,    49,    49,    49,
+      48,    38,    49,    49,    49,    38,    38,    38,    48,    48,
+      48,    54,    -1,    49,    48,    38,    -1,    -1,    48,    38,
+      49,    48,    37,    49,    49,    49,    48,    37,    49,    49,
+      48,    37,    49,    49,    37,    49,    49,    49,    49,    48,
+      37,    49,    49,    37,    49,    49,    48,    48,    37,    48,
+      48
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
@@ -601,15 +787,27 @@ static const yytype_int8 yycheck[] =
 static const yytype_uint8 yystos[] =
 {
        0,     3,     4,     5,     6,     7,     8,     9,    10,    11,
-      28,    29,    31,    35,    36,    37,    31,    31,    31,    31,
-      31,    31,    31,    31,    31,    36,    36,    36,     0,     0,
-      24,    25,    26,    27,    12,    13,    14,    15,    16,    17,
-      18,    19,    20,    40,    40,    40,    22,    38,    23,    23,
-      40,    22,    40,    32,    36,    36,    36,    36,    33,    33,
-      33,    33,    32,    32,    33,    32,    33,    22,    41,    41,
-      41,    22,    39,    41,    41,    32,    32,    32,    33,    33,
-      32,    40,    38,    33,    33,    41,    39,    32,    33,    33,
-      21,    21,    33,    32,    21,    32
+      12,    13,    14,    15,    16,    17,    18,    19,    20,    21,
+      22,    23,    24,    25,    26,    27,    44,    45,    47,    51,
+      52,    53,    47,    47,    47,    47,    47,    47,    47,    47,
+      47,    47,    47,    47,    47,    47,    47,    47,    47,    47,
+      47,    47,    47,    47,    47,    47,    47,    52,    52,    52,
+       0,     0,    40,    41,    42,    43,    28,    29,    30,    31,
+      32,    33,    34,    35,    36,    56,    56,    56,    38,    54,
+      39,    39,    38,    39,    38,    58,    56,    38,    48,    37,
+      39,    60,    38,    61,    62,    38,    38,    59,    54,    56,
+      39,    54,    54,    62,    38,    63,    56,    48,    52,    52,
+      52,    52,    49,    49,    49,    49,    48,    48,    48,    49,
+      48,    49,    49,    48,    48,    49,    49,    48,    49,    48,
+      49,    48,    49,    49,    49,    48,    49,    49,    48,    48,
+      49,    49,    38,    57,    57,    57,    38,    55,    38,    39,
+      38,    57,    37,    39,    37,    61,    38,    38,    55,    57,
+      55,    55,    38,    57,    48,    48,    48,    49,    48,    48,
+      49,    48,    49,    49,    49,    48,    49,    49,    48,    56,
+      54,    38,    38,    56,    37,    56,    49,    49,    49,    49,
+      48,    49,    49,    57,    55,    37,    57,    56,    57,    48,
+      49,    49,    48,    49,    49,    37,    37,    57,    37,    49,
+      48,    48,    49,    37,    37,    48,    48
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1463,7 +1661,7 @@ yyreduce:
         case 2:
 
 /* Line 1455 of yacc.c  */
-#line 55 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 91 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                    parse_ctx->set_result_filter((yyvsp[(1) - (2)].fval));
                    YYACCEPT;
@@ -1473,7 +1671,7 @@ yyreduce:
   case 3:
 
 /* Line 1455 of yacc.c  */
-#line 63 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 99 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1499,7 +1697,7 @@ yyreduce:
   case 4:
 
 /* Line 1455 of yacc.c  */
-#line 84 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 120 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1525,7 +1723,7 @@ yyreduce:
   case 5:
 
 /* Line 1455 of yacc.c  */
-#line 105 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 141 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1551,7 +1749,7 @@ yyreduce:
   case 6:
 
 /* Line 1455 of yacc.c  */
-#line 126 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 162 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::FilterListBase *filter_list = nullptr;
@@ -1577,7 +1775,7 @@ yyreduce:
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 147 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 183 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::SkipFilter, parse_ctx->allocator(), (yyvsp[(2) - (2)].fval));
@@ -1597,7 +1795,7 @@ yyreduce:
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 162 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 198 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::WhileMatchFilter, parse_ctx->allocator(), (yyvsp[(2) - (2)].fval));
@@ -1617,7 +1815,7 @@ yyreduce:
   case 9:
 
 /* Line 1455 of yacc.c  */
-#line 177 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 213 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     (yyval.fval) = (yyvsp[(1) - (1)].fval);
                 ;}
@@ -1626,14 +1824,14 @@ yyreduce:
   case 10:
 
 /* Line 1455 of yacc.c  */
-#line 184 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 220 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.fval) = (yyvsp[(2) - (3)].fval); ;}
     break;
 
   case 11:
 
 /* Line 1455 of yacc.c  */
-#line 186 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 222 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1660,7 +1858,7 @@ yyreduce:
   case 12:
 
 /* Line 1455 of yacc.c  */
-#line 208 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 244 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1687,7 +1885,7 @@ yyreduce:
   case 13:
 
 /* Line 1455 of yacc.c  */
-#line 230 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 266 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1714,7 +1912,7 @@ yyreduce:
   case 14:
 
 /* Line 1455 of yacc.c  */
-#line 252 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 288 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1741,7 +1939,7 @@ yyreduce:
   case 15:
 
 /* Line 1455 of yacc.c  */
-#line 274 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 310 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1774,7 +1972,7 @@ yyreduce:
   case 16:
 
 /* Line 1455 of yacc.c  */
-#line 302 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 338 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1807,7 +2005,91 @@ yyreduce:
   case 17:
 
 /* Line 1455 of yacc.c  */
-#line 330 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 366 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator((yyvsp[(9) - (14)].sval), comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family((yyvsp[(3) - (14)].sval).len_, (yyvsp[(3) - (14)].sval).str_);
+                        ObString qualifier((yyvsp[(5) - (14)].sval).len_, (yyvsp[(5) - (14)].sval).str_);
+                        bool filter_if_missing = ((yyvsp[(11) - (14)].ival) == 1);
+                        bool latest_version_only = ((yyvsp[(13) - (14)].ival) == 1);
+                        hfilter::SingleColumnValueExcludeFilter *filter = NULL;
+                        (yyval.fval) = filter = OB_NEWx(hfilter::SingleColumnValueExcludeFilter, parse_ctx->allocator(), family, qualifier, (yyvsp[(7) - (14)].cmp_op), comparable);
+                        if (nullptr == (yyval.fval)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        } else {
+                            filter->set_filter_if_missing(filter_if_missing);
+                            filter->set_latest_version_only(latest_version_only);
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse SingleColumnValueExcludeFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 18:
+
+/* Line 1455 of yacc.c  */
+#line 394 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString family((yyvsp[(3) - (8)].sval).len_, (yyvsp[(3) - (8)].sval).str_);
+                    ObString qualifier((yyvsp[(5) - (8)].sval).len_, (yyvsp[(5) - (8)].sval).str_);
+                    bool drop_dependent_column = ((yyvsp[(7) - (8)].ival) == 1);
+                    (yyval.fval) = OB_NEWx(hfilter::DependentColumnFilter, parse_ctx->allocator(), family, qualifier, drop_dependent_column);
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse DependentColumnFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 19:
+
+/* Line 1455 of yacc.c  */
+#line 412 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator((yyvsp[(11) - (12)].sval), comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family((yyvsp[(3) - (12)].sval).len_, (yyvsp[(3) - (12)].sval).str_);
+                        ObString qualifier((yyvsp[(5) - (12)].sval).len_, (yyvsp[(5) - (12)].sval).str_);
+                        bool drop_dependent_column = ((yyvsp[(7) - (12)].ival) == 1);
+                        (yyval.fval) = OB_NEWx(hfilter::DependentColumnFilter, parse_ctx->allocator(), family, qualifier, drop_dependent_column, (yyvsp[(9) - (12)].cmp_op), comparable);
+                        if (nullptr == (yyval.fval)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse DependentColumnFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 20:
+
+/* Line 1455 of yacc.c  */
+#line 435 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::PageFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
@@ -1824,10 +2106,331 @@ yyreduce:
                 ;}
     break;
 
-  case 18:
+  case 21:
 
 /* Line 1455 of yacc.c  */
-#line 345 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 450 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    float_t chance = *(reinterpret_cast<float_t*>(&((yyvsp[(3) - (4)].lval))));
+                    (yyval.fval) = OB_NEWx(hfilter::RandomRowFilter, parse_ctx->allocator(), chance);
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse RandomRowFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 22:
+
+/* Line 1455 of yacc.c  */
+#line 466 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPrefixFilter, parse_ctx->allocator(), parse_ctx->create_ob_string((yyvsp[(3) - (4)].sval)));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPrefixFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 23:
+
+/* Line 1455 of yacc.c  */
+#line 481 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].lval), (yyvsp[(5) - (6)].lval));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ((yyvsp[(3) - (6)].lval) < 0 || (yyvsp[(5) - (6)].lval) < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 24:
+
+/* Line 1455 of yacc.c  */
+#line 499 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].lval), parse_ctx->create_ob_string((yyvsp[(5) - (6)].sval)));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ((yyvsp[(3) - (6)].lval) < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnPaginationFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 25:
+
+/* Line 1455 of yacc.c  */
+#line 517 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::FirstKeyOnlyFilter, parse_ctx->allocator());
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse FirstKeyOnlyFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 26:
+
+/* Line 1455 of yacc.c  */
+#line 532 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::KeyOnlyFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].ival));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse KeyOnlyFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 27:
+
+/* Line 1455 of yacc.c  */
+#line 547 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (nullptr != parse_ctx->allocator() && nullptr != (yyvsp[(3) - (4)].fuzzy_array)) {
+                        (yyval.fval) = OB_NEWx(hfilter::FuzzyRowFilter, parse_ctx->allocator(), (*parse_ctx->allocator()), *(yyvsp[(3) - (4)].fuzzy_array));
+                    } else {
+                        (yyval.fval) = nullptr;
+                    }
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse FuzzyRowFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 28:
+
+/* Line 1455 of yacc.c  */
+#line 566 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::TimestampsFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].array), (yyvsp[(5) - (6)].ival));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse TimestampsFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 29:
+
+/* Line 1455 of yacc.c  */
+#line 581 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator((yyvsp[(9) - (10)].sval), comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        ObString family((yyvsp[(3) - (10)].sval).len_, (yyvsp[(3) - (10)].sval).str_);
+                        ObString qualifier((yyvsp[(5) - (10)].sval).len_, (yyvsp[(5) - (10)].sval).str_);
+                        hfilter::ColumnValueFilter *filter = NULL;
+                        (yyval.fval) = filter = OB_NEWx(hfilter::ColumnValueFilter, parse_ctx->allocator(), family, qualifier, (yyvsp[(7) - (10)].cmp_op), comparable);
+                        if (nullptr == (yyval.fval)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnValueFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 30:
+
+/* Line 1455 of yacc.c  */
+#line 604 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::MultiRowRangeFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].range_array));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse MultiRowRangeFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 31:
+
+/* Line 1455 of yacc.c  */
+#line 619 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    RangeArray* arr = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    KeyRange* range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == arr || nullptr == range) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_max(parse_ctx->create_ob_string((yyvsp[(3) - (4)].sval)));
+                        range->set_max_inclusive(true);
+                        if (OB_FAIL(arr->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        } else {
+                            (yyval.fval) = OB_NEWx(hfilter::InclusiveStopFilter, parse_ctx->allocator(), arr, parse_ctx->create_ob_string((yyvsp[(3) - (4)].sval)));
+                        }
+                        if (nullptr == (yyval.fval)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse InclusiveStopFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 32:
+
+/* Line 1455 of yacc.c  */
+#line 649 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::ColumnRangeFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].range_array));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse ColumnRangeFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 33:
+
+/* Line 1455 of yacc.c  */
+#line 664 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::MultipleColumnPrefixFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].range_array));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse MultipleColumnPrefixFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 34:
+
+/* Line 1455 of yacc.c  */
+#line 679 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    hfilter::Comparable *comparable = nullptr;
+                    if (OB_FAIL(parse_ctx->create_comparator((yyvsp[(5) - (6)].sval), comparable))) {
+                        LOG_WARN("failed to create comparator", K(ret));
+                    } else {
+                        (yyval.fval) = OB_NEWx(hfilter::FamilyFilter, parse_ctx->allocator(), (yyvsp[(3) - (6)].cmp_op), comparable);
+                        if (nullptr == (yyval.fval)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(static_cast<hfilter::FamilyFilter*>((yyval.fval))->check_arguments())) {
+                            LOG_WARN("failed to check arguments", K(ret));
+                        } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                            LOG_WARN("failed to store filter", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse FamilyFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 35:
+
+/* Line 1455 of yacc.c  */
+#line 701 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     (yyval.fval) = OB_NEWx(hfilter::ColumnCountGetFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].lval));
@@ -1844,10 +2447,30 @@ yyreduce:
                 ;}
     break;
 
-  case 19:
+  case 36:
 
 /* Line 1455 of yacc.c  */
-#line 360 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 716 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fval) = OB_NEWx(hfilter::FirstKeyValueMatchingQualifiersFilter, parse_ctx->allocator(), (yyvsp[(3) - (4)].sarray));
+                    if (nullptr == (yyval.fval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter((yyval.fval)))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse FirstKeyValueMatchingQualifiersFilter");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 37:
+
+/* Line 1455 of yacc.c  */
+#line 731 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1873,10 +2496,10 @@ yyreduce:
                 ;}
     break;
 
-  case 20:
+  case 38:
 
 /* Line 1455 of yacc.c  */
-#line 384 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 755 "../../../src/observer/table/htable_filter_tab.yxx"
     {
                     int &ret = parse_ctx->error_code_ = OB_SUCCESS;
                     hfilter::Comparable *comparable = nullptr;
@@ -1898,94 +2521,350 @@ yyreduce:
                 ;}
     break;
 
-  case 21:
+  case 39:
 
 /* Line 1455 of yacc.c  */
-#line 405 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 776 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
-  case 22:
+  case 40:
 
 /* Line 1455 of yacc.c  */
-#line 408 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 779 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
     break;
 
-  case 23:
+  case 41:
 
 /* Line 1455 of yacc.c  */
-#line 411 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 782 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::LESS; ;}
     break;
 
-  case 24:
+  case 42:
 
 /* Line 1455 of yacc.c  */
-#line 412 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 783 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::LESS_OR_EQUAL; ;}
     break;
 
-  case 25:
+  case 43:
 
 /* Line 1455 of yacc.c  */
-#line 413 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 784 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::EQUAL; ;}
     break;
 
-  case 26:
+  case 44:
 
 /* Line 1455 of yacc.c  */
-#line 414 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 785 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::NOT_EQUAL; ;}
     break;
 
-  case 27:
+  case 45:
 
 /* Line 1455 of yacc.c  */
-#line 415 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 786 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::GREATER; ;}
     break;
 
-  case 28:
+  case 46:
 
 /* Line 1455 of yacc.c  */
-#line 416 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 787 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::GREATER_OR_EQUAL; ;}
     break;
 
-  case 29:
+  case 47:
 
 /* Line 1455 of yacc.c  */
-#line 417 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 788 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::NO_OP; ;}
     break;
 
-  case 30:
+  case 48:
 
 /* Line 1455 of yacc.c  */
-#line 418 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 789 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::IS; ;}
     break;
 
-  case 31:
+  case 49:
 
 /* Line 1455 of yacc.c  */
-#line 419 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 790 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.cmp_op) = hfilter::CompareOperator::IS_NOT; ;}
     break;
 
-  case 32:
+  case 50:
 
 /* Line 1455 of yacc.c  */
-#line 423 "../../../src/observer/table/htable_filter_tab.yxx"
+#line 794 "../../../src/observer/table/htable_filter_tab.yxx"
     { (yyval.sval) = (yyvsp[(1) - (1)].sval); ;}
+    break;
+
+  case 51:
+
+/* Line 1455 of yacc.c  */
+#line 798 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<ObString, 8> param_array;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.sarray) = OB_NEWx(param_array, parse_ctx->allocator());
+                    if (nullptr == (yyval.sarray)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyval.sarray)->push_back(parse_ctx->create_ob_string((yyvsp[(1) - (1)].sval))))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 52:
+
+/* Line 1455 of yacc.c  */
+#line 814 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL((yyvsp[(1) - (3)].sarray)->push_back(parse_ctx->create_ob_string((yyvsp[(3) - (3)].sval))))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    (yyval.sarray) = (yyvsp[(1) - (3)].sarray);
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 53:
+
+/* Line 1455 of yacc.c  */
+#line 828 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString> FuzzyKey;
+                    typedef ObSEArray<FuzzyKey*, 8> ParamArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.fuzzy_array) = OB_NEWx(ParamArray, parse_ctx->allocator());
+                    FuzzyKey *pair = OB_NEWx(FuzzyKey, parse_ctx->allocator(), parse_ctx->create_ob_string((yyvsp[(1) - (3)].sval)), parse_ctx->create_ob_string((yyvsp[(3) - (3)].sval)));
+                    if (nullptr == (yyval.fuzzy_array) || nullptr == pair) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyval.fuzzy_array)->push_back(pair))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 54:
+
+/* Line 1455 of yacc.c  */
+#line 846 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef oceanbase::table::hfilter::ObPair<oceanbase::ObString, oceanbase::ObString> FuzzyKey;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    FuzzyKey *pair = OB_NEWx(FuzzyKey, parse_ctx->allocator(), parse_ctx->create_ob_string((yyvsp[(3) - (5)].sval)), parse_ctx->create_ob_string((yyvsp[(5) - (5)].sval)));
+                    if (nullptr == pair) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyvsp[(1) - (5)].fuzzy_array)->push_back(pair))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    (yyval.fuzzy_array) = (yyvsp[(1) - (5)].fuzzy_array);
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse param list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 55:
+
+/* Line 1455 of yacc.c  */
+#line 865 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<int64_t, 8> i64_array;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.array) = OB_NEWx(i64_array, parse_ctx->allocator());
+                    if (nullptr == (yyval.array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyval.array)->push_back((yyvsp[(1) - (1)].lval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 56:
+
+/* Line 1455 of yacc.c  */
+#line 881 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL((yyvsp[(1) - (3)].array)->push_back((yyvsp[(3) - (3)].lval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    (yyval.array) = (yyvsp[(1) - (3)].array);
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse timestamp list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 57:
+
+/* Line 1455 of yacc.c  */
+#line 895 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.rval) = OB_NEWx(KeyRange, parse_ctx->allocator(), parse_ctx->create_ob_string((yyvsp[(1) - (7)].sval)), (yyvsp[(3) - (7)].ival), parse_ctx->create_ob_string((yyvsp[(5) - (7)].sval)), (yyvsp[(7) - (7)].ival));
+                    if (nullptr == (yyval.rval)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse range");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 58:
+
+/* Line 1455 of yacc.c  */
+#line 911 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.range_array) = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    if (nullptr == (yyval.range_array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL((yyval.range_array)->push_back((yyvsp[(1) - (1)].rval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse range list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 59:
+
+/* Line 1455 of yacc.c  */
+#line 927 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    if (OB_FAIL((yyvsp[(1) - (3)].range_array)->push_back((yyvsp[(3) - (3)].rval)))) {
+                        LOG_WARN("failed to push back", K(ret));
+                    }
+                    (yyval.range_array) = (yyvsp[(1) - (3)].range_array);
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse range list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 60:
+
+/* Line 1455 of yacc.c  */
+#line 941 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString prefix = parse_ctx->create_ob_string((yyvsp[(1) - (1)].sval));
+                    KeyRange *range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == (yyval.range_array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_min(prefix);
+                        range->set_min_inclusive(true);
+                        (yyval.range_array) = OB_NEWx(RangeArray, parse_ctx->allocator());
+                        if (nullptr == (yyval.range_array)) {
+                            ret = OB_ALLOCATE_MEMORY_FAILED;
+                            LOG_WARN("no memory", K(ret));
+                        } else if (OB_FAIL(ObHTableUtils::get_prefix_key_range(*parse_ctx->allocator(), prefix, range))) {
+                            LOG_WARN("failed to create key range", K(ret));
+                        } else if (OB_FAIL((yyval.range_array)->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        }
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse prefix list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 61:
+
+/* Line 1455 of yacc.c  */
+#line 968 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    ObString prefix = parse_ctx->create_ob_string((yyvsp[(3) - (3)].sval));
+                    KeyRange *range = OB_NEWx(KeyRange, parse_ctx->allocator());
+                    if (nullptr == (yyval.range_array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else {
+                        range->set_min(prefix);
+                        range->set_min_inclusive(true);
+                        if (OB_FAIL(ObHTableUtils::get_prefix_key_range(*parse_ctx->allocator(), prefix, range))) {
+                            LOG_WARN("failed to create key range", K(ret));
+                        } else if (OB_FAIL((yyvsp[(1) - (3)].range_array)->push_back(range))) {
+                            LOG_WARN("failed to push back", K(ret));
+                        }
+                        (yyval.range_array) = (yyvsp[(1) - (3)].range_array);
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse prefix list");
+                        YYABORT;
+                    }
+                ;}
+    break;
+
+  case 62:
+
+/* Line 1455 of yacc.c  */
+#line 991 "../../../src/observer/table/htable_filter_tab.yxx"
+    {
+                    typedef ObSEArray<KeyRange*, 8> RangeArray;
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    (yyval.range_array) = OB_NEWx(RangeArray, parse_ctx->allocator());
+                    if (nullptr == (yyval.range_array)) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&((yyloc)), parse_ctx, "failed to parse prefix list");
+                        YYABORT;
+                    }
+                ;}
     break;
 
 
 
 /* Line 1455 of yacc.c  */
-#line 2021 "../../../src/observer/table/htable_filter_tab.cxx"
+#line 2868 "../../../src/observer/table/htable_filter_tab.cxx"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -2204,6 +3083,5 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 425 "../../../src/observer/table/htable_filter_tab.yxx"
-
+#line 1005 "../../../src/observer/table/htable_filter_tab.yxx"
 

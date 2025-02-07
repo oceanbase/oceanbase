@@ -65,6 +65,9 @@ int ObLinkedMacroBlockReader::init(const MacroBlockId &entry_block, const ObMemA
 int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
 {
   int ret = OB_SUCCESS;
+  // Need to pay attention!!!
+  // The allocator is used to allocate io data buffer, and its memory life cycle needs to be longer than the object handle.
+  common::ObArenaAllocator allocator;
   ObMacroBlockCommonHeader common_header;
   ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
@@ -72,7 +75,6 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   read_info.mtl_tenant_id_ = MTL_ID();
 
@@ -81,7 +83,6 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
     int64_t handle_pos = 0;
     MacroBlockId previous_block_id;
     handles_[handle_pos].reset();
-    common::ObArenaAllocator allocator;
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
@@ -131,7 +132,6 @@ int ObLinkedMacroBlockReader::prefetch_block()
     read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
     read_info.macro_block_id_ = macros_handle_.at(prefetch_macro_block_idx_);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
@@ -180,7 +180,6 @@ int ObLinkedMacroBlockReader::pread_block(const ObMetaDiskAddr &addr, ObStorageO
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
   read_info.buf_ = item_buf;
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   read_info.mtl_tenant_id_ = MTL_ID();
   if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
@@ -203,7 +202,6 @@ int ObLinkedMacroBlockReader::read_block_by_id(
   read_info.size_ = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
   read_info.macro_block_id_ = block_id;
   read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;

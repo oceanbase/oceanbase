@@ -32,7 +32,9 @@ public:
 
   static int gather_index_stats(ObExecContext &ctx,
                                 const ObOptStatGatherParam &param,
-                                ObIArray<ObOptTableStat *> &all_index_stats);
+                                ObIArray<ObOptStat> &opt_stats,
+                                ObIArray<ObOptTableStat *> &all_index_stats,
+                                ObIArray<ObOptColumnStat *> &all_column_stats);
 private:
 
   static int init_opt_stats(ObIAllocator &allocator,

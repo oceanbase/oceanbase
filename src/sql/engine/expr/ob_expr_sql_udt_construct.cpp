@@ -24,6 +24,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_sdo_geo_object.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
@@ -182,7 +183,8 @@ int ObExprUdtConstruct::eval_udt_construct(const ObExpr &expr, ObEvalCtx &ctx, O
   ObDatum *null_bit = NULL;
   bool is_null = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, N_PRIV_SQL_UDT_CONSTRUCT);
   ObSqlUdtNullBitMap sub_nested_bitmap;
   const ObExprUdtConstructInfo *info
                   = static_cast<ObExprUdtConstructInfo *>(expr.extra_info_);
@@ -190,7 +192,7 @@ int ObExprUdtConstruct::eval_udt_construct(const ObExpr &expr, ObEvalCtx &ctx, O
   if (expr.arg_cnt_ < 1) {
     ret = OB_ERR_CALL_WRONG_ARG;
     LOG_WARN("invalid params cnt", K(ret), K(expr.arg_cnt_));
-  } else if (OB_FAIL(expr.args_[0]->eval(ctx, null_bit))) {
+  } else if (OB_FAIL(temp_allocator.eval_arg(expr.args_[0], ctx, null_bit))) {
     LOG_WARN("eval null bitmap failed", K(ret));
   } else if (null_bit->is_null()) {
     is_null = true;
@@ -201,6 +203,7 @@ int ObExprUdtConstruct::eval_udt_construct(const ObExpr &expr, ObEvalCtx &ctx, O
                                                                  CS_TYPE_BINARY, true,
                                                                  raw_data))) {
       LOG_WARN("failed to get udt raw data", K(ret), K(info->udt_id_));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(raw_data.length()))) {
     } else if (OB_FAIL(eval_sdo_geom_udt_access(temp_allocator, expr, ctx, raw_data, info->udt_id_, res))) {
       LOG_WARN("failed to eval sdo_geom udt access", K(ret), K(info->udt_id_));
     }
@@ -297,7 +300,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
 #else
   uint16_t subschema_id;
   ObSqlUDTMeta sql_udt_meta;
-  ObSdoGeoObject sdo_geo;
+  ObSdoGeoObject sdo_geo(allocator);
   ObString res_str;
   ObExprStrResAlloc expr_res_alloc(expr, ctx);
   // pl obj should use this allocator

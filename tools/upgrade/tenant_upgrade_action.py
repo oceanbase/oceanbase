@@ -236,8 +236,6 @@ def run_upgrade_job(conn, cur, job_name, timeout):
       ori_enable_ddl = actions.get_ori_enable_ddl(cur, timeout)
       if ori_enable_ddl == 0:
         actions.set_parameter(cur, 'enable_ddl', 'True', timeout)
-      # enable_sys_table_ddl
-      actions.set_parameter(cur, 'enable_sys_table_ddl', 'True', timeout)
       # get max_used_job_id
       max_used_job_id = get_max_used_job_id(cur)
       # run upgrade job
@@ -246,8 +244,6 @@ def run_upgrade_job(conn, cur, job_name, timeout):
       cur.execute(sql)
       # check upgrade job result
       check_upgrade_job_result(cur, job_name, timeout, max_used_job_id)
-      # reset enable_sys_table_ddl
-      actions.set_parameter(cur, 'enable_sys_table_ddl', 'False', timeout)
       # reset enable_ddl
       if ori_enable_ddl == 0:
         actions.set_parameter(cur, 'enable_ddl', 'False', timeout)

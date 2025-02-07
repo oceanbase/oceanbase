@@ -29,6 +29,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/meta_mem/ob_external_tablet_cnt_map.h"
+#include "storage/meta_mem/ob_flying_tablet_pointer_map.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer_map.h"
 #include "storage/meta_mem/ob_tablet_pointer_handle.h"
@@ -265,7 +266,9 @@ public:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       int64_t &tablet_version,
+      int64_t &tablet_transfer_seq,
       bool &allow_tablet_version_gc);
+  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int64_t transfer_seq, bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
@@ -481,6 +484,7 @@ private:
   static const int64_t DEFAULT_MINOR_SSTABLE_SET_COUNT = 49999;
   static const int64_t SSTABLE_GC_MAX_TIME = 500; // 500us
   static const int64_t LEAK_CHECKER_CONFIG_REFRESH_TIMEOUT = 10000000 * 10; // 10s
+  static const int64_t FLYING_TABLET_THRESHOLD = 100000;
   typedef common::ObBinaryHeap<CandidateTabletInfo, HeapCompare, DEFAULT_TABLET_WASH_HEAP_COUNT> Heap;
   typedef common::ObDList<ObMetaObjBufferNode> TabletBufferList;
   typedef common::hash::ObHashSet<MinMinorSSTableInfo, common::hash::NoPthreadDefendMode> SSTableSet;
@@ -523,6 +527,7 @@ private:
   void batch_gc_memtable_();
   void batch_destroy_memtable_(memtable::ObMemtableSet *memtable_set);
   bool is_tablet_handle_leak_checker_enabled();
+  int push_tablet_pointer_to_fly_map_if_need_(const ObTabletMapKey &key);
 
 private:
   common::SpinRWLock wash_lock_;
@@ -531,6 +536,7 @@ private:
   ObBucketLock bucket_lock_;
   ObFullTabletCreator full_tablet_creator_;
   ObTabletPointerMap tablet_map_;
+  ObFlyingTabletPointerMap flying_tablet_map_;
   ObExternalTabletCntMap external_tablet_cnt_map_;
   int tg_id_;
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.

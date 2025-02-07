@@ -77,7 +77,8 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
   int num_args = expr.arg_cnt_;
   ObDatum *datum = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, func_name);
   ObIWkbPoint *point = NULL;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
@@ -90,19 +91,20 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
   ObObjType datum_type = ObMaxType;
 
   // get wkb
-  if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
+  if (OB_FAIL(temp_allocator.eval_arg(expr.args_[0], ctx, datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
   } else if (datum->is_null()) {
     is_null_result = true;
   } else {
     ObString wkb = datum->get_string();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *datum,
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(temp_allocator, *datum,
               expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (FALSE_IT(temp_allocator.set_baseline_size(wkb.length()))) {
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, func_name))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb,
-        geo, srs, func_name, ObGeoBuildFlag::GEO_CORRECT | ObGeoBuildFlag::GEO_CHECK_RANGE))) {
+        geo, srs, func_name, ObGeoBuildFlag::GEO_CORRECT | ObGeoBuildFlag::GEO_CHECK_RANGE | GEO_NOT_COPY_WKB))) {
       LOG_WARN("failed to create geometry object with raw wkb", K(ret));
     } else if (ObGeoType::POINT != geo->type()) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
@@ -135,7 +137,7 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
     double d = is_long_res ? point->x() : point->y();
     res.set_double(d);
   } else if (num_args == 2) {
-    if (OB_FAIL(expr.args_[1]->eval(ctx, datum))) {
+    if (OB_FAIL(temp_allocator.eval_arg(expr.args_[1], ctx, datum))) {
       LOG_WARN("failed to eval", K(ret));
     } else if (datum->is_null()) {
       res.set_null();

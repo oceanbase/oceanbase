@@ -76,6 +76,7 @@ private:
   int find_item(const ObIOMode mode, const int64_t size, int64_t &item_idx) const;
 private:
   MeasureItemArray measure_items_[static_cast<int>(ObIOMode::MAX_MODE)];
+
 };
 
 class ObIOBenchRunner : public lib::TGRunnable
@@ -138,7 +139,7 @@ public:
   int refresh(const bool only_refresh, const ObIArray<ObIOBenchResult> &items);
   int execute_benchmark();
   int get_benchmark_status(int64_t &start_ts, int64_t &finish_ts, int &ret_code);
-  bool is_valid() { return io_ability_.is_valid(); }
+  bool is_valid() { DRWLock::RDLockGuard guard(lock_); return io_ability_.is_valid(); }
 private:
   ObIOCalibration();
   ~ObIOCalibration();

@@ -105,7 +105,10 @@ struct ListBase// erase List Type
     int64_t list_len = 0;
     while (OB_NOT_NULL(iter)) {
       if (list_len < MAX_PRINT_COUNT) {
-        common::databuff_printf(buf, buf_len, pos, "[%s]<->", to_cstring(*iter));
+        common::databuff_printf(buf, buf_len, pos, "[");
+        common::databuff_printf(buf, buf_len, pos, *iter);
+        common::databuff_printf(buf, buf_len, pos, "]<->");
+
       } else if(list_len == MAX_PRINT_COUNT) {
         common::databuff_printf(buf, buf_len, pos, "...");
       }

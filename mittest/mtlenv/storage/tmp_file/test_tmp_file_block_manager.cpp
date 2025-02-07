@@ -47,8 +47,7 @@ TEST_F(TestTmpFileBlock, test_block_manager_op)
 {
   int ret = OB_SUCCESS;
   ObTmpFileBlockManager block_mgr;
-  static const int64_t META_DEFAULT_LIMIT = 15 * 1024L * 1024L * 1024L;
-  ret = block_mgr.init(MTL_ID(), META_DEFAULT_LIMIT);
+  ret = block_mgr.init(MTL_ID());
   ASSERT_EQ(OB_SUCCESS, ret);
 
   int64_t begin_page_id = 0;
@@ -188,8 +187,7 @@ TEST_F(TestTmpFileBlock, test_block_manager_stat)
 {
   int ret = OB_SUCCESS;
   ObTmpFileBlockManager block_mgr;
-  static const int64_t META_DEFAULT_LIMIT = 15 * 1024L * 1024L * 1024L;
-  ret = block_mgr.init(MTL_ID(), META_DEFAULT_LIMIT);
+  ret = block_mgr.init(MTL_ID());
   ASSERT_EQ(OB_SUCCESS, ret);
 
   int64_t begin_page_id = 0;

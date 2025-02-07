@@ -64,14 +64,14 @@ int ObFreezeReentrantThread::try_idle(
     if (is_paused()) {
       LOG_INFO("this thread is paused", KR(ret), K(idle_time_us), "epoch", get_epoch());
       while (!stop_ && is_paused()) {
-        get_cond().wait(idle_time_us / 1000);
+        idle_wait(idle_time_us / 1000);
         // if in paused state, we also need to update run_ts. otherwise, the checker may
         // mark this thread as hang.
         update_last_run_timestamp();
       }
       LOG_INFO("this thread is not paused", KR(ret), K(idle_time_us), "epoch", get_epoch());
     } else {
-      get_cond().wait(idle_time_us / 1000);
+      idle_wait(idle_time_us / 1000);
     }
   }
   return ret;

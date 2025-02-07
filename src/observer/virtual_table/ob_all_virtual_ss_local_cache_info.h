@@ -86,6 +86,7 @@ private:
   int add_micro_cache_inst_();
   int add_tmpfile_cache_inst_();
   int add_major_macro_cache_inst_();
+  int add_private_macro_cache_inst_();
   int set_local_cache_insts_();
 
 private:

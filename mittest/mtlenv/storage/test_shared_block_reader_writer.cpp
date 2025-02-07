@@ -1,3 +1,6 @@
+// owner: gaishun.gs
+// owner group: storage
+
 /**
  * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -73,6 +76,7 @@ void TestSharedBlockRWriter::TearDown()
 void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
 {
   ObTabletCreateSSTableParam param;
+  param.set_init_value_for_column_store_();
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
   MEMSET(param.encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
@@ -103,12 +107,19 @@ void TestSharedBlockRWriter::create_empty_sstable(ObSSTable &empty_sstable)
   param.occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
+  param.tx_data_recycle_scn_.set_min();
   param.original_size_ = 0;
   param.ddl_scn_.set_min();
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.column_cnt_ = 1;
   param.table_backup_flag_.reset();
   param.table_shared_flag_.reset();
+  param.sstable_logic_seq_ = 0;
+  param.row_count_ = 0;
+  param.recycle_version_ = 0;
+  param.root_macro_seq_ = 0;
+  param.nested_size_ = 0;
+  param.nested_offset_ = 0;
   OK(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   OK(empty_sstable.init(param, &allocator_));
 }
@@ -438,7 +449,6 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_object)
   read_info.size_ = io_buf_size;
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   read_info.macro_block_id_ = block_id;
   read_info.buf_ = static_cast<char *>(allocator_.alloc(io_buf_size));

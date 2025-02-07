@@ -1136,7 +1136,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* UDT */
     ObTimestampType,  /*  ObDecimalIntType */
     ObMaxType,        /* COLLECTION */
-    ObTimestampType,  /* MySQLDateType */
+    ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
     ObMaxType,        /* RoaringBitmap */
   },
@@ -3003,8 +3003,8 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* UDT */
     ObDecimalIntType,     /* ObDecimalIntType */
     ObMaxType,         /* COLLECTION */
-    ObMaxType,  /* MySQLDateType */
-    ObMaxType,  /* MySQLDateTimeType */
+    ObMySQLDateType,  /* MySQLDateType */
+    ObMySQLDateTimeType,  /* MySQLDateTimeType */
     ObMaxType,        /* RoaringBitmap */
   },
   /*ObCollectionSQLType*/
@@ -3085,7 +3085,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMySQLDateType,      /* NumberType  */
     ObMySQLDateType,      /* UNumberType  */
     ObMySQLDateTimeType,  /* DateTimeType  */
-    ObTimestampType,      /* TimestampType  */
+    ObMySQLDateTimeType,      /* TimestampType  */
     ObMySQLDateType,      /* DateType  */
     ObMySQLDateTimeType,  /* TimeType  */
     ObVarcharType,        /* YearType  */
@@ -3117,7 +3117,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
     ObMaxType,            /* UDT */
-    ObMaxType,            /* ObDecimalIntType */
+    ObMySQLDateType,      /* ObDecimalIntType */
     ObMaxType,            /* COLLECTION */
     ObMySQLDateType,      /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
@@ -3175,7 +3175,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObJsonType,           /* ObJsonType */
     ObMaxType,            /* ObGeometryType */
     ObMaxType,            /* UDT */
-    ObMaxType,            /* ObDecimalIntType */
+    ObMySQLDateTimeType,  /* ObDecimalIntType */
     ObMaxType,            /* COLLECTION */
     ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */

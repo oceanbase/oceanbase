@@ -96,12 +96,18 @@ public:
   int compare(const ObBLKey &other) const
   {
     int ret = 0;
-    uint64_t hash_1 = hash();
-    uint64_t hash_2 = other.hash();
-    if (hash_1 > hash_2) {
+    if (this == &other) {
+      ret = 0;
+    } else if (0 != (ret = server_.compare(other.get_server()))) {
+      // do nothing
+    } else if (0 != (ret = ls_id_.compare(other.get_ls_id()))) {
+      // do nothing
+    } else if (tenant_id_ > other.tenant_id_) {
       ret = 1;
-    } else if (hash_1 < hash_2) {
+    } else if (tenant_id_ < other.tenant_id_) {
       ret = -1;
+    } else {
+      ret = 0;
     }
     return ret;
   }

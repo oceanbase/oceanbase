@@ -234,6 +234,20 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
               OZ (fill_row_cells(show_user_id, result));
               OZ (scanner_.add_row(cur_row_));
+
+#ifdef OB_BUILD_TDE_SECURITY
+              // print encrypt / decrypt privs
+              if (OB_SUCC(ret)
+                  && OB_PRIV_ALL == (privs & OB_PRIV_ALL)
+                  && 0 != (privs & (OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT))) {
+                pos = 0;
+                have_priv.priv_set_ = (privs & ~OB_PRIV_ALL);
+                OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
+                OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
+                OZ (fill_row_cells(show_user_id, result));
+                OZ (scanner_.add_row(cur_row_));
+              }
+#endif
             }
           }
 
@@ -757,7 +771,8 @@ int ObShowGrants::print_privs_to_buff(
          SERVER_LOG(WARN, "print obj privs failed", K(ret));
       }
     } else {
-      if (0 == (priv_set & priv_all) && (priv_key_array == NULL || priv_key_array->empty())) {
+      if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT))
+          && (priv_key_array == NULL || priv_key_array->empty())) {
         ret = databuff_printf(buf, buf_len, pos, " USAGE");
       } else if (priv_all == (priv_set & priv_all)) {
         ret = databuff_printf(buf, buf_len, pos, " ALL PRIVILEGES");
@@ -904,6 +919,14 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_TRIGGER) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" TRIGGER,");
         }
+#ifdef OB_BUILD_TDE_SECURITY
+        if ((priv_set & OB_PRIV_ENCRYPT) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" ENCRYPT,");
+        }
+        if ((priv_set & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" DECRYPT,");
+        }
+#endif
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

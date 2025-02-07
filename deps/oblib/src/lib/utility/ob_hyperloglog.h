@@ -109,10 +109,11 @@ inline int ObHyperLogLogCalculator::init(ObIAllocator *alloc, int64_t n_bit)
     n_bit_ = n_bit;
     n_bucket_ = 1 << n_bit_;
     buckets_ = (char*)alloc_->alloc(n_bucket_ * sizeof(char));
-    memset(buckets_, 0, n_bucket_ * sizeof(char));
     if (OB_ISNULL(buckets_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to allocate buckets", K(ret), K(n_bucket_));
+    } else {
+      memset(buckets_, 0, n_bucket_ * sizeof(char));
     }
   }
   return ret;

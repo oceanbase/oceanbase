@@ -204,12 +204,12 @@ public:
   static int get_occupied_size(
       const int64_t row_cnt,
       const int64_t col_cnt,
-      const ObIArray<share::schema::ObColDesc> *col_descs,
+      const storage::ObITableReadInfo *table_read_info,
       int64_t &size);
   static int construct_rowkey_vector(
       const int64_t row_cnt,
       const int64_t col_cnt,
-      const ObIArray<share::schema::ObColDesc> *col_descs,
+      const storage::ObITableReadInfo *table_read_info,
       char *buf,
       int64_t &pos,
       const int64_t buf_size,
@@ -221,7 +221,7 @@ public:
       int64_t &pos,
       const int64_t buf_size,
       ObRowkeyVector *rowkey_vector);
-  static bool is_all_integer_cols(const int64_t col_cnt, const ObIArray<share::schema::ObColDesc> *col_descs);
+  static bool is_all_integer_cols(const int64_t col_cnt, const storage::ObITableReadInfo *table_read_info);
   DECLARE_TO_STRING;
 private:
   int compare_datum_rowkey(
