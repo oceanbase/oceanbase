@@ -446,7 +446,7 @@ public:
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
-      uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS;
+      uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS; // FARM COMPAT WHITELIST
       uint32_t mv_available_flag_ : TM_MV_AVAILABLE_BITS;
       uint32_t table_referenced_by_mv_flag_ : TM_TABLE_REFERENCED_BY_MV_BITS;
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;

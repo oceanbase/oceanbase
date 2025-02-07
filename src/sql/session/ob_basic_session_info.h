@@ -2208,7 +2208,7 @@ private:
     // base_data 是 ObSysVariables 里的 hardcode 变量值
     static SysVarsCacheData base_data_;
     SysVarsCacheData inc_data_;
-    union {
+    union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
       struct {
         bool inc_auto_increment_increment_:1;

@@ -219,7 +219,7 @@ public:
   }
   TO_STRING_KV(K_(row_mark), K_(rowkey));
 private:
-  union {
+  union { // FARM COMPAT WHITELIST
     struct {
       uint8_t row_lock_checked_  : 1;
       uint8_t row_exist_checked_ : 1;

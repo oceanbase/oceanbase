@@ -207,7 +207,7 @@ struct ObCurTraceId
             uint8_t is_user_request_: 1;
             uint8_t is_ipv6_: 1;
             uint16_t reserved_: 2;
-            uint16_t inner_sql_id_: 4;
+            uint16_t inner_sql_id_: 4; // FARM COMPAT WHITELIST
             uint16_t sub_task_: 8;
           };
           uint32_t bytes_no_ip_;

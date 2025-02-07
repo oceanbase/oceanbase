@@ -324,7 +324,7 @@ public:
   //all flags
   union {
     uint64_t flags_;
-    struct {
+    struct { // FARM COMPAT WHITELIST
       uint64_t execute_directly_                : 1;
       uint64_t enable_rich_format_              : 1;
       uint64_t do_gts_opt_                      : 1;

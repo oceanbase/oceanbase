@@ -120,7 +120,7 @@ public:
 
       union {
         uint64_t flag_;
-        struct {
+        struct { // FARM COMPAT WHITELIST
           bool is_ready_:1;
           bool is_first_:1;
           // whether need to sync wait

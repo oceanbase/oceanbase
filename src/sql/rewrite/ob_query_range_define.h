@@ -77,10 +77,10 @@ public:
       uint32_t include_end_:    1;
       uint32_t contain_in_:     1;
       uint32_t is_phy_rowid_:   1;
-      uint32_t is_domain_node_: 1;
+      uint32_t is_domain_node_: 1; // FARM COMPAT WHITELIST
       uint32_t is_not_in_node_: 1;
       uint32_t reserved_:      24;
-    };
+  };
   };
   int64_t column_cnt_;
   int64_t* start_keys_;

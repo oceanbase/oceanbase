@@ -268,8 +268,8 @@ public:
     int64_t third_id_;
     struct {
       uint64_t backup_set_id_ : BACKUP_SET_ID_BIT;
-      uint64_t aligned_offset_ : BACKUP_OFFSET_BIT;
-      uint64_t aligned_length_ : BACKUP_LENGTH_BIT;
+      uint64_t aligned_offset_ : BACKUP_OFFSET_BIT; // FARM COMPAT WHITELIST
+      uint64_t aligned_length_ : BACKUP_LENGTH_BIT; // FARM COMPAT WHITELIST
     };
   };
 };
