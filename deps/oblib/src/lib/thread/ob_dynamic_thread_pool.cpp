@@ -475,8 +475,8 @@ void ObSimpleDynamicThreadPool::try_inc_thread_count(int64_t cnt)
       // decrease thread count
       new_thread_count = max(cur_thread_count + cnt, min_thread_cnt_);
     }
-    COMMON_LOG(INFO, "try inc thread count", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
     if (new_thread_count != cur_thread_count) {
+      COMMON_LOG(INFO, "try inc thread count", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
       if (OB_FAIL(Threads::set_thread_count(new_thread_count))) {
         COMMON_LOG(ERROR, "set thread count failed", K(*this), K(cur_thread_count), K(cnt), K(new_thread_count));
       } else {
