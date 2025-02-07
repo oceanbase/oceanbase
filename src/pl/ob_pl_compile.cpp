@@ -569,6 +569,7 @@ int ObPLCompiler::compile(
                                                                             session_info_));
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                && func_ast.get_can_cached()
+                               && !func_ast.has_incomplete_rt_dep_error()
                                && !cg.get_profile_mode()
                                && !cg.get_debug_mode()
                                && !exist_same_name_obj_with_public_synonym

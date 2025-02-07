@@ -507,7 +507,7 @@ int ObPLObjectValue::need_check_schema_version(ObPLCacheCtx &pc_ctx,
       LOG_INFO("need check schema", K(new_schema_version), K(cached_tenant_schema_version));
     }
     if (new_schema_version != cached_tenant_schema_version
-      && ObLibCacheNameSpace::NS_PRCR == pl_routine_obj_-> get_ns()
+      && (pl_routine_obj_->is_prcr() || pl_routine_obj_->is_sfc())
       && static_cast<ObPLCompileUnit*>(pl_routine_obj_)->has_incomplete_rt_dep_error()) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_WARN("Need to remove cache obj which dependency routine has error schema.", K(ret));
