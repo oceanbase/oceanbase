@@ -13508,5 +13508,34 @@ int ObNotifyStartArchiveArg::assign(const ObNotifyStartArchiveArg &other)
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObRebuildTabletArg, tenant_id_, ls_id_, tablet_id_array_, dest_, src_);
+
+bool ObRebuildTabletArg::is_valid() const
+{
+  return tenant_id_ > 0
+      && ls_id_.is_valid()
+      && !tablet_id_array_.empty()
+      && dest_.is_valid()
+      && src_.is_valid();
+}
+
+int ObRebuildTabletArg::assign(const ObRebuildTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(tablet_id_array_.assign(arg.tablet_id_array_))) {
+    LOG_WARN("failed to assign tablet id array", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    ls_id_ = arg.ls_id_;
+    dest_ = arg.dest_;
+    src_ = arg.src_;
+  }
+  return ret;
+}
+
 }//end namespace obrpc
 }//end namespace oceanbase

@@ -287,4 +287,5 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 #endif
     RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
+    RPC_PROCESSOR(rootserver::ObRpcRebuildTabletP, *gctx_.root_service_);
 }

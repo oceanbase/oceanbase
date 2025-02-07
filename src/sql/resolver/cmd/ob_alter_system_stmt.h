@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_clean_struct.h"
 #include "rootserver/ob_transfer_partition_command.h"
 #include "share/ob_service_name_proxy.h"
+#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "share/table/ob_redis_importer.h"
 
 namespace oceanbase
@@ -1501,6 +1502,54 @@ public:
   share::ObServiceNameArg &get_arg() { return arg_; }
 private:
   share::ObServiceNameArg arg_;
+};
+
+class ObRebuildTabletStmt : public ObSystemCmdStmt
+{
+public:
+  ObRebuildTabletStmt():
+      ObSystemCmdStmt(stmt::T_REBUILD_TABLET),
+      tenant_id_(OB_INVALID_ID),
+      ls_id_(),
+      tablet_id_array_(),
+      src_(),
+      dest_()
+  {
+  }
+  virtual ~ObRebuildTabletStmt() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const common::ObSArray<common::ObTabletID> &get_tablet_ids() const { return tablet_id_array_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const share::ObRebuildTabletLocation &get_dest_location() const  {return dest_; }
+  const share::ObRebuildTabletLocation &get_src_location() const { return src_; }
+  int set_param(const uint64_t tenant_id,
+      const share::ObLSID &ls_id, const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const share::ObRebuildTabletLocation &dest, const share::ObRebuildTabletLocation &src)
+  {
+    int ret = common::OB_SUCCESS;
+
+    if (tenant_id == OB_INVALID_ID || !ls_id.is_valid() || tablet_id_array.empty() || !src.is_valid()
+        || !dest.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid args", K(tenant_id), K(ls_id), K(tablet_id_array), K(src), K(dest));
+    } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
+      LOG_WARN("failed to assign tablet id array", K(ret), K(tenant_id), K(tablet_id_array));
+    } else {
+      tenant_id_ = tenant_id;
+      ls_id_ = ls_id;
+      dest_ = dest;
+      src_ = src;
+    }
+    return ret;
+  }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(tablet_id_array), K_(src), K_(dest));
+
+private:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObSArray<common::ObTabletID> tablet_id_array_;
+  share::ObRebuildTabletLocation src_;
+  share::ObRebuildTabletLocation dest_;
 };
 
 class ObModuleDataStmt : public ObSystemCmdStmt

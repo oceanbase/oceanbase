@@ -16,6 +16,7 @@
 #include "sql/resolver/cmd/ob_system_cmd_resolver.h"
 #include "sql/session/ob_sql_session_info.h" // ObSqlSessionInfo
 #include "share/ls/ob_ls_i_life_manager.h" //OB_LS_MAX_SCN_VALUE
+#include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 
 namespace oceanbase
 {
@@ -348,6 +349,41 @@ private:
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelCloneResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObChangeExternalStorageDestResolver);
+
+class ObRebuildTabletResolver : public ObSystemCmdResolver
+{
+public:
+  ObRebuildTabletResolver(ObResolverParams &params);
+  virtual ~ObRebuildTabletResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+
+private:
+  static const int64_t MAX_CHILD_NUM = 5;
+  static const int64_t MAX_TABLET_LIST_EXPR_SIZE = 1024;
+  int resolve_by_type_(
+      const ParseNode &parse_tree);
+  int resolve_tenant_id_(
+      const ParseNode *node);
+  int resolve_ls_id_(
+      const ParseNode *node);
+  int resolve_tablet_list_expr_(
+      const ParseNode *node);
+  int resolve_src_(
+      const ParseNode *node);
+  int resolve_dest_(
+      const ParseNode *node);
+
+  int resolve_tablet_list_(const ObString &tablet_list_expr, common::ObIArray<common::ObTabletID> &tablet_id_array);
+  int generate_tablet_id_(const char *buf,
+      common::ObIArray<common::ObTabletID> &tablet_id_array);
+private:
+  uint64_t target_tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObArray<common::ObTabletID> tablet_id_array_;
+  share::ObRebuildTabletLocation dest_;
+  share::ObRebuildTabletLocation src_;
+};
+
 
 #undef DEF_SIMPLE_CMD_RESOLVER
 

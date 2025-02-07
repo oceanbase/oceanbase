@@ -372,15 +372,17 @@ public:
     const int64_t transfer_seq,
     const bool need_check_sstable,
     const bool need_check_transfer_seq,
-    const bool need_replace_remote_sstable);
+    const bool need_replace_remote_sstable,
+    const bool is_only_replace_major);
   ~ObHATableStoreParam() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable));
+  TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
 public:
   int64_t transfer_seq_;
   bool need_check_sstable_;
   bool need_check_transfer_seq_;
   bool need_replace_remote_sstable_; // only true for restore replace sstable.
+  bool is_only_replace_major_;
 };
 
 struct ObCompactionTableStoreParam final
@@ -471,7 +473,6 @@ struct ObUpdateTableStoreParam
   const blocksstable::ObSSTable *sstable_;
   bool allow_duplicate_sstable_;
   UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
-  bool need_replace_remote_sstable_;
 };
 
 struct ObSplitTableStoreParam final

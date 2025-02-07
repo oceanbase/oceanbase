@@ -2619,7 +2619,7 @@ int ObTabletRestoreTask::build_copy_sstable_info_mgr_()
     param.tablet_id_ = tablet_restore_ctx_->tablet_id_;
     param.is_leader_restore_ = tablet_restore_ctx_->is_leader_;
     param.restore_action_ = tablet_restore_ctx_->action_;
-    param.local_rebuild_seq_ = ls_rebuild_seq_;
+    param.src_ls_rebuild_seq_ = ls_rebuild_seq_;
     param.need_check_seq_ = need_check_seq_;
     param.meta_index_store_ = tablet_restore_ctx_->meta_index_store_;
     param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_;
@@ -2660,11 +2660,21 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_tablet_meta(
       tablet_restore_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter,
-      tablet_restore_ctx_->action_, src_tablet_meta, tablet_restore_ctx_, tablet_restore_ctx_->is_leader_))) {
-    LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_),
-        KPC(tablet_restore_ctx_));
+  } else {
+    ObTabletCopyFinishTaskParam param;
+    param.ls_ = ls_;
+    param.tablet_id_ = tablet_restore_ctx_->tablet_id_;
+    param.copy_tablet_ctx_ = tablet_restore_ctx_;
+    param.reporter_ = reporter;
+    param.restore_action_ = tablet_restore_ctx_->action_;
+    param.src_tablet_meta_ = src_tablet_meta;
+    param.is_leader_restore_ = tablet_restore_ctx_->is_leader_;
+    param.is_only_replace_major_ = false;
+    if (OB_FAIL(tablet_copy_finish_task->init(param))) {
+      LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+    }
   }
+
   return ret;
 }
 

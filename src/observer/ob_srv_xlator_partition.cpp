@@ -169,6 +169,9 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObGetMicroBlockCacheInfoP);
   RPC_PROCESSOR(ObGetMigrationCacheJobInfoP);
 #endif
+
+  //rebuild tablet
+  RPC_PROCESSOR(ObRebuildTabletSSTableInfoP, gctx_.bandwidth_throttle_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {

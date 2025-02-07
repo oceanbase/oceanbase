@@ -106,6 +106,7 @@ ob_set_subtarget(ob_rootserver common
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
+  ob_root_rebuild_tablet.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

@@ -1111,13 +1111,15 @@ ObMigrationOpArg::ObMigrationOpArg()
     dst_(),
     data_src_(),
     paxos_replica_number_(0),
-    prioritize_same_zone_src_(false)
+    prioritize_same_zone_src_(false),
+    tablet_id_array_()
 {
 }
 
 bool ObMigrationOpArg::is_valid() const
 {
-  return ls_id_.is_valid()
+  bool b_ret = false;
+  b_ret = ls_id_.is_valid()
       && type_>= 0 && type_ < ObMigrationOpType::MAX_LS_OP
       && cluster_id_ > 0
       && src_.is_valid()
@@ -1125,6 +1127,13 @@ bool ObMigrationOpArg::is_valid() const
       && (paxos_replica_number_ > 0 || ObMigrationOpType::REBUILD_LS_OP == type_)
       && (ObMigrationOpType::MIGRATE_LS_OP == type_ ?
          (src_.get_server() != dst_.get_server()) : true);
+
+  if (b_ret) {
+    if (ObMigrationOpType::REBUILD_TABLET_OP == type_ && tablet_id_array_.empty()) {
+      b_ret = false;
+    }
+  }
+  return b_ret;
 }
 
 void ObMigrationOpArg::reset()
@@ -1138,6 +1147,7 @@ void ObMigrationOpArg::reset()
   data_src_.reset();
   paxos_replica_number_ = 0;
   prioritize_same_zone_src_ = false;
+  tablet_id_array_.reset();
 }
 
 /******************ObTabletsTransferArg*********************/
@@ -1772,10 +1782,18 @@ void ObLSRebuildInfo::reset()
 
 bool ObLSRebuildInfo::is_valid() const
 {
-  return status_.is_valid()
+  bool b_ret = false;
+  b_ret = status_.is_valid()
       && type_.is_valid()
       && ((ObLSRebuildStatus::NONE == status_ && ObLSRebuildType::NONE == type_)
           || (ObLSRebuildStatus::NONE != status_ && ObLSRebuildType::NONE != type_));
+
+  if (b_ret) {
+    if (ObLSRebuildType::TABLET == type_) {
+      b_ret = !tablet_id_array_.empty() && src_.is_valid();
+    }
+  }
+  return b_ret;
 }
 
 bool ObLSRebuildInfo::is_in_rebuild() const

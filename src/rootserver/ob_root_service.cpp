@@ -620,7 +620,8 @@ ObRootService::ObRootService()
     disaster_recovery_task_executor_(),
     disaster_recovery_task_mgr_(),
     global_ctx_task_(*this),
-    alter_log_external_table_task_(*this)
+    alter_log_external_table_task_(*this),
+    root_rebuild_tablet_()
 {
 }
 
@@ -873,7 +874,11 @@ int ObRootService::init(ObServerConfig &config,
                                                       &sql_proxy_,
                                                       schema_service_))) {
     FLOG_WARN("init disaster recovery task mgr failed", KR(ret));
+  } else if (OB_FAIL(root_rebuild_tablet_.init(rpc_proxy_, unit_manager_))) {
+    // init root rebuild tablet
+    FLOG_WARN("init root_rebuild_tablet_ failed", KR(ret));
   }
+
   if (OB_SUCC(ret)) {
     inited_ = true;
     FLOG_INFO("[ROOTSERVICE_NOTICE] init rootservice success", KR(ret), K_(inited));
@@ -12392,6 +12397,24 @@ int ObRootService::check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSet
       LOG_WARN("config invalid", KR(ret), K(value), K(item), K(tenant_id));
     }
   }
+  return ret;
+}
+
+int ObRootService::root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("rebuild tablet request", K(arg));
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(root_rebuild_tablet_.try_rebuild_tablet(arg))) {
+    LOG_WARN("minor freeze failed", K(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("root_service", "rebuild tablet", K(ret), K(arg));
   return ret;
 }
 

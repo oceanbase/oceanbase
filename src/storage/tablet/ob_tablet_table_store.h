@@ -473,6 +473,11 @@ private:
   int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   template<typename ...Args>
   int init_minor_sstable_array_with_check(ObSSTableArray &minor_sstable_array, Args&& ...args);
+  int only_replace_major_(
+      common::ObArenaAllocator &allocator,
+      const ObTabletTableStore &old_store,
+      const ObIArray<ObITable *> &tables_array,
+      int64_t &inc_base_snapshot_version);
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;

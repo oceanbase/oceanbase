@@ -1106,7 +1106,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"optimizer_costs", OPTIMIZER_COSTS},
   {"micro_index_clustered", MICRO_INDEX_CLUSTERED},
   {"unnest", UNNEST},
-  {"tenant_sts_credential", TENANT_STS_CREDENTIAL}
+  {"tenant_sts_credential", TENANT_STS_CREDENTIAL},
+  {"tablets", TABLETS}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

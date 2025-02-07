@@ -936,6 +936,24 @@ private:
 };
 #endif
 
+struct ObRebuildTabletSSTableInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRebuildTabletSSTableInfoArg();
+  ~ObRebuildTabletSSTableInfoArg();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      K_(dest_major_sstable_snapshot), K_(version));
+
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  int64_t dest_major_sstable_snapshot_;
+  uint64_t version_;
+};
+
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
 {
@@ -953,6 +971,8 @@ public:
   RPC_SS(PR5 fetch_micro_block, OB_HA_FETCH_MICRO_BLOCK, (ObMigrateWarmupKeySet), common::ObDataBuffer);
   RPC_SS(PR5 fetch_replica_prewarm_micro_block, OB_REPLICA_PREWARM_FETCH_MICRO_BLOCK, (ObSSLSFetchMicroBlockArg), common::ObDataBuffer);
 #endif
+  RPC_SS(PR5 fetch_rebuild_tablet_sstable_info, OB_HA_REBUILD_TABLET_SSTABLE_INFO, (ObRebuildTabletSSTableInfoArg), common::ObDataBuffer);
+  //single
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
   RPC_S(PR5 fetch_ls_info, OB_HA_FETCH_LS_INFO, (ObCopyLSInfoArg), ObCopyLSInfo);
@@ -973,6 +993,7 @@ public:
   RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetMicroBlockCacheInfoArg), ObGetMicroBlockCacheInfoRes);
   RPC_S(PR5 get_migration_cache_job_info, OB_HA_GET_MIGRATION_CACHE_JOB_INFO, (ObGetMigrationCacheJobInfoArg), ObGetMigrationCacheJobInfoRes);
 #endif
+
 
   // RPC_AP stands for asynchronous RPC.
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
@@ -1458,6 +1479,18 @@ protected:
   int process();
 };
 #endif
+
+class ObRebuildTabletSSTableInfoP :
+    public ObStorageStreamRpcP<OB_HA_REBUILD_TABLET_SSTABLE_INFO>
+{
+public:
+  explicit ObRebuildTabletSSTableInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObRebuildTabletSSTableInfoP() {}
+protected:
+  int process();
+private:
+  int build_sstable_info_(ObLS *ls);
+};
 
 } // obrpc
 

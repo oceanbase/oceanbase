@@ -48,7 +48,9 @@ ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
     second_meta_index_store_(nullptr),
     need_sort_macro_meta_(true),
     need_check_seq_(false),
-    ls_rebuild_seq_(-1)
+    ls_rebuild_seq_(-1),
+    macro_block_reuse_mgr_(nullptr),
+    extra_info_(nullptr)
 {
 }
 
@@ -99,6 +101,7 @@ void ObPhysicalCopyTaskInitParam::reset()
   need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
+  extra_info_ = nullptr;
 }
 
 
@@ -711,8 +714,8 @@ int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
     // sstable is not major or is meta major, skip reuse
     LOG_INFO("sstable is not major, skip update major sstable reuse info", K(ret), K(copy_ctx_));
   } else if (OB_ISNULL(copy_ctx_.macro_block_reuse_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro block reuse mgr should not be NULL when migrate or restore major sstable", K(ret), KP(copy_ctx_.macro_block_reuse_mgr_), K(copy_ctx_));
+    //do nothing
+    LOG_WARN("macro block reuse mgr is null, skip update major sstbale reuse info", K(ret), KP(copy_ctx_.macro_block_reuse_mgr_), K(copy_ctx_));
   } else if (OB_FAIL(ls_->ha_get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task_->get_sstable(sstable_param_->table_key_, table_handle))) {
@@ -743,7 +746,6 @@ int ObSSTableCopyFinishTask::update_major_sstable_reuse_info_()
 int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(copy_ctx_.extra_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy ctx extra info is NULL", K(ret), K(copy_ctx_));
@@ -753,7 +755,8 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
 
     if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
       // skip
-    } else if (OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
+    } else if (OB_NOT_NULL(copy_ctx_.macro_block_reuse_mgr_) &&
+         OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
       LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
     } else {
       copy_ctx_.extra_info_->inc_major_count();

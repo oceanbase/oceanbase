@@ -2984,6 +2984,7 @@ int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartition
   }
   return ret;
 }
+
 int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
 {
   int ret = OB_SUCCESS;
@@ -3025,6 +3026,35 @@ int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknown service operation", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObRebuildTabletExecutor::execute(ObExecContext &ctx, ObRebuildTabletStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  ObCommonRpcProxy *common_proxy = NULL;
+  common::ObCurTraceId::mark_user_request();
+
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else {
+    LOG_INFO("ObRebuildTabletExecutor::execute", K(stmt), K(ctx));
+    obrpc::ObRebuildTabletArg arg;
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.ls_id_ = stmt.get_ls_id();
+    arg.dest_ = stmt.get_dest_location();
+    arg.src_ = stmt.get_src_location();
+    if (OB_FAIL(arg.tablet_id_array_.assign(stmt.get_tablet_ids()))) {
+      LOG_WARN("failed to assign tablet ids", K(ret), K(stmt));
+    } else if (OB_FAIL(common_proxy->root_rebuild_tablet(arg))) {
+      LOG_WARN("rebuild tablet rpc failed", K(ret), K(arg), "dst", common_proxy->get_server());
+    }
   }
   return ret;
 }

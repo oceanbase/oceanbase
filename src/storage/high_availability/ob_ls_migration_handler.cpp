@@ -20,6 +20,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "ob_rebuild_service.h"
 #include "observer/omt/ob_tenant.h"
+#include "ob_ha_rebuild_tablet.h"
 
 namespace oceanbase
 {
@@ -747,6 +748,8 @@ int ObLSMigrationHandler::do_build_ls_status_()
   bool need_generate_dag_net = false;
 
   DEBUG_SYNC(BEFORE_MIGRATION_DO_BUILD_LS_STATUS);
+  bool is_exist = false;
+  ObLSMigrationTask task;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -755,8 +758,16 @@ int ObLSMigrationHandler::do_build_ls_status_()
     LOG_WARN("failed to check task exist", K(ret), K(status), KPC(ls_));
   } else if (!need_generate_dag_net) {
     //do nothing
-  } else if (OB_FAIL(generate_build_ls_dag_net_())) {
-    LOG_WARN("failed to generate build ls dag net", K(ret), K(status), KPC(ls_));
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
+    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  } else if (ObMigrationOpType::REBUILD_TABLET_OP == task.arg_.type_) {
+    if (OB_FAIL(generate_build_tablet_dag_net_())) {
+      LOG_WARN("failed to generate build tablet dag net", K(ret), KPC(ls_));
+    }
+  } else {
+    if (OB_FAIL(generate_build_ls_dag_net_())) {
+      LOG_WARN("failed to generate build ls dag net", K(ret), K(status), KPC(ls_));
+    }
   }
   return ret;
 }
@@ -766,6 +777,7 @@ int ObLSMigrationHandler::do_complete_ls_status_()
   int ret = OB_SUCCESS;
   const ObLSMigrationHandlerStatus status = ObLSMigrationHandlerStatus::COMPLETE_LS;
   bool is_exist = false;
+  ObLSMigrationTask task;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -778,8 +790,18 @@ int ObLSMigrationHandler::do_complete_ls_status_()
         LOG_WARN("failed to cancel current task", K(ret), K(status), KPC(ls_));
       }
     }
-  } else if (OB_FAIL(generate_complete_ls_dag_net_())) {
-    LOG_WARN("failed to generate complete ls dag net", K(ret), K(status), KPC(ls_));
+    //do nothing
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
+    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  } else if (ObMigrationOpType::REBUILD_TABLET_OP == task.arg_.type_) {
+    const int32_t result = OB_SUCCESS;
+    if (OB_FAIL(switch_next_stage(result))) {
+      LOG_WARN("failed to switch next stage", K(ret), KPC(ls_));
+    }
+  } else {
+    if (OB_FAIL(generate_complete_ls_dag_net_())) {
+      LOG_WARN("failed to generate complete ls dag net", K(ret), K(status), KPC(ls_));
+    }
   }
   return ret;
 }
@@ -1079,7 +1101,8 @@ int ObLSMigrationHandler::inner_report_result_(
   } else if (!task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner report result get invalid argument", K(ret), K(task));
-  } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
+  } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_
+      || ObMigrationOpType::REBUILD_TABLET_OP == task.arg_.type_) {
     if (OB_FAIL(report_to_rebuild_service_())) {
       LOG_WARN("failed to report to rebuild service", K(ret), K(task));
     }
@@ -1408,6 +1431,58 @@ int ObLSMigrationHandler::get_ha_src_info_(ObStorageHASrcInfo &src_info) const
   } else {
     common::SpinRLockGuard guard(lock_);
     src_info = chosen_src_;
+  }
+  return ret;
+}
+
+int ObLSMigrationHandler::generate_build_tablet_dag_net_()
+{
+  int ret = OB_SUCCESS;
+  ObLSMigrationTask ls_migration_task;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (OB_FAIL(get_ls_migration_task_(ls_migration_task))) {
+    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  } else if (!ls_migration_task.is_valid()
+      || ObMigrationOpType::REBUILD_TABLET_OP != ls_migration_task.arg_.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration task is not valid", K(ret), K(ls_migration_task), KPC(ls_));
+  } else if (OB_FAIL(schedule_build_tablet_dag_net_(ls_migration_task))) {
+    LOG_WARN("failed to schedule build ls dag net", K(ret), K(ls_migration_task), KPC(ls_));
+  }
+  return ret;
+}
+
+int ObLSMigrationHandler::schedule_build_tablet_dag_net_(
+    const ObLSMigrationTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else if (!task.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schedule build ls dag net get invalid argument", K(ret), K(task));
+  } else {
+    ObTenantDagScheduler *scheduler = nullptr;
+    ObRebuildTabletDagNetInitParam param;
+    param.arg_ = task.arg_;
+    param.task_id_ = task.task_id_;
+    param.bandwidth_throttle_ = bandwidth_throttle_;
+    param.storage_rpc_ = storage_rpc_;
+    param.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.sql_proxy_ = sql_proxy_;
+
+    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+    } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObRebuildTabletDagNet>(&param))) {
+      LOG_WARN("failed to create and add migration dag net", K(ret), K(task), KPC(ls_));
+    } else {
+      LOG_INFO("success to create rebuild tablet dag net", K(ret), K(task));
+    }
   }
   return ret;
 }

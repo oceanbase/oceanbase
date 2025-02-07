@@ -373,7 +373,8 @@ int ObStorageHADagUtils::deal_with_fo(
   } else if (0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "MIGRATE")
       && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "RESTORE")
       && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "BACKFILL_TX")
-      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "TRANSFER")) {
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "TRANSFER")
+      && 0 != STRCMP(OB_DAG_TYPES[dag->get_type()].dag_module_str_, "REBUILD_TABLET")) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag type is unexpected", K(ret), KPC(dag));
   } else if (OB_ISNULL(ha_dag = static_cast<ObStorageHADag *>(dag))) {
@@ -961,6 +962,7 @@ int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &
   }
   return ret;
 }
+
 }
 }
 

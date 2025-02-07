@@ -1212,6 +1212,39 @@ int ObUpdateTransferMetaInfoArg::assign(const ObUpdateTransferMetaInfoArg &other
 
 OB_SERIALIZE_MEMBER(ObUpdateTransferMetaInfoArg, tenant_id_, dest_ls_id_, transfer_meta_info_);
 
+ObRebuildTabletSSTableInfoArg::ObRebuildTabletSSTableInfoArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    tablet_id_(),
+    dest_major_sstable_snapshot_(0),
+    version_(OB_INVALID_ID)
+{
+}
+
+ObRebuildTabletSSTableInfoArg::~ObRebuildTabletSSTableInfoArg()
+{
+}
+
+void ObRebuildTabletSSTableInfoArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  tablet_id_.reset();
+  dest_major_sstable_snapshot_ = 0;
+  version_ = OB_INVALID_ID;
+}
+
+bool ObRebuildTabletSSTableInfoArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid()
+      && tablet_id_.is_valid()
+      && dest_major_sstable_snapshot_ > 0
+      && version_ != OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObRebuildTabletSSTableInfoArg,
+    tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_);
 
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
@@ -4207,6 +4240,95 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
 }
 
 #endif
+
+ObRebuildTabletSSTableInfoP::ObRebuildTabletSSTableInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle)
+{
+}
+
+int ObRebuildTabletSSTableInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = nullptr;
+    char * buf = NULL;
+    ObCopyTabletSSTableInfo sstable_info;
+    ObMigrationStatus migration_status;
+    ObLS *ls = nullptr;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
+    LOG_INFO("start to fetch tablet sstable info", K(arg_));
+
+    last_send_time_ = this->get_receive_timestamp();
+
+    if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc rebuild tablet data buffer.", K(ret));
+    } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed set data to result", K(ret));
+    } else if (OB_ISNULL(bandwidth_throttle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
+                  KP_(bandwidth_throttle));
+    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("fail to get log stream", KR(ret), K(arg_));
+    } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(arg_));
+    } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
+      ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+      STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
+    } else if (OB_FAIL(build_sstable_info_(ls))) {
+      LOG_WARN("failed to build sstable info", K(ret), K(arg_));
+    }
+    LOG_INFO("finish fetch sstable info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
+  }
+  return ret;
+}
+
+int ObRebuildTabletSSTableInfoP::build_sstable_info_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObRebuildTabletSSTableProducer producer;
+  obrpc::ObCopyTabletSSTableInfo sstable_info;
+  obrpc::ObCopyTabletSSTableHeader tablet_sstable_header;
+
+  if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build sstable info get invalid argument", K(ret), K(arg_), KP(ls));
+  } else if (OB_FAIL(producer.init(arg_, ls))) {
+    LOG_WARN("failed to init copy sstable info ob producer", K(ret), K(arg_));
+  } else if (OB_FAIL(producer.get_copy_tablet_sstable_header(tablet_sstable_header))) {
+    LOG_WARN("failed to get copy tablet sstable header", K(ret), K(arg_));
+  } else if (OB_FAIL(fill_data(tablet_sstable_header))) {
+    LOG_WARN("failed to fill tablet sstable header", K(ret), K(arg_));
+  } else if (0 == tablet_sstable_header.sstable_count_) {
+    //do nothing
+  } else {
+    while (OB_SUCC(ret)) {
+      sstable_info.reset();
+      if (OB_FAIL(producer.get_next_sstable_info(sstable_info))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next sstable info", K(ret), K(arg_));
+        }
+      } else if (OB_FAIL(fill_data(sstable_info))) {
+        STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(sstable_info));
+      }
+    }
+  }
+  return ret;
+}
 
 } //namespace obrpc
 

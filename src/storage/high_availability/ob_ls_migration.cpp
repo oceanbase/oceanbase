@@ -43,7 +43,7 @@ ObMigrationCtx::ObMigrationCtx()
     tenant_id_(OB_INVALID_ID),
     arg_(),
     local_clog_checkpoint_scn_(SCN::min_scn()),
-    local_rebuild_seq_(-1),
+    src_ls_rebuild_seq_(-1),
     start_ts_(0),
     finish_ts_(0),
     task_id_(),
@@ -73,7 +73,7 @@ void ObMigrationCtx::reset()
   tenant_id_ = OB_INVALID_ID;
   arg_.reset();
   local_clog_checkpoint_scn_.set_min();
-  local_rebuild_seq_ = -1;
+  src_ls_rebuild_seq_ = -1;
   start_ts_ = 0;
   finish_ts_ = 0;
   task_id_.reset();
@@ -120,7 +120,7 @@ int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
 void ObMigrationCtx::reuse()
 {
   local_clog_checkpoint_scn_.set_min();
-  local_rebuild_seq_ = -1;
+  src_ls_rebuild_seq_ = -1;
   minor_src_.reset();
   major_src_.reset();
   src_ls_meta_package_.reset();
@@ -1173,7 +1173,6 @@ int ObStartMigrationTask::deal_with_local_ls_()
       LOG_WARN("failed to get ls meta", K(ret), "arg", ctx_->arg_);
     } else {
       ctx_->local_clog_checkpoint_scn_ = local_ls_meta.get_clog_checkpoint_scn();
-      ctx_->local_rebuild_seq_ = local_ls_meta.get_rebuild_seq();
     }
   }
 #ifdef ERRSIM
@@ -1383,8 +1382,8 @@ int ObStartMigrationTask::update_ls_()
     }
 
     if (OB_SUCC(ret)) {
-      ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
-      LOG_INFO("update rebuild seq", "old_ls_rebuld_seq", ctx_->local_rebuild_seq_,
+      ctx_->src_ls_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
+      LOG_INFO("update rebuild seq", "old_ls_rebuld_seq", ctx_->src_ls_rebuild_seq_,
           "new_ls_rebuild_seq", ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq(), K(lbt()));
     }
   }
@@ -1570,7 +1569,7 @@ int ObStartMigrationTask::build_ls_()
     SERVER_EVENT_ADD("storage_ha", "after_choose_src",
                       "tenant_id", ctx_->tenant_id_,
                       "ls_id", ctx_->arg_.ls_id_.id(),
-                      "local_rebuild_seq", ctx_->local_rebuild_seq_,
+                      "src_ls_rebuild_seq", ctx_->src_ls_rebuild_seq_,
                       "transfer_scn", ctx_->src_ls_meta_package_.ls_meta_.get_transfer_scn());
     DEBUG_SYNC(ALTER_LS_CHOOSE_SRC);
   }
@@ -1653,7 +1652,7 @@ int ObStartMigrationTask::create_all_tablets_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
   } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
+      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ha_tablets_builder.create_all_tablets(need_check_tablet_limit, ob_reader, dag_net,
@@ -1776,7 +1775,7 @@ int ObStartMigrationTask::create_all_tablets_with_4_1_rpc_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
   } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
+      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ha_tablets_builder.create_all_tablets_with_4_1_rpc(dag_net,
@@ -2029,7 +2028,7 @@ int ObSysTabletsMigrationTask::init()
     } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->sys_tablet_id_array_, tablet_id_array))) {
       LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-        ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
+        ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_, ctx_->arg_.type_,
         ls_handle_.get_ls(), &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {
@@ -2943,7 +2942,7 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
     } else if (FALSE_IT(init_param.ls_ = ls)) {
     } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
     } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
-    } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
+    } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_)) {
     } else if (FALSE_IT(init_param.macro_block_reuse_mgr_ = ObITable::is_major_sstable(copy_table_key.table_type_) ? &copy_tablet_ctx_->macro_block_reuse_mgr_ : nullptr)) {
     } else if (FALSE_IT(init_param.extra_info_ = &copy_tablet_ctx_->extra_info_)) {
     } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
@@ -3027,7 +3026,7 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     param.ls_id_ = ctx_->arg_.ls_id_;
     param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     param.is_leader_restore_ = false;
-    param.local_rebuild_seq_ = ctx_->local_rebuild_seq_;
+    param.src_ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_;
     param.meta_index_store_ = nullptr;
     param.second_meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
@@ -3114,11 +3113,21 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(check_transfer_seq_equal_(src_tablet_meta))) {
     LOG_WARN("failed to check transfer seq equal", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(
-      copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_, is_leader_restore))) {
-    LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
-    LOG_INFO("generate tablet copy finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
+    ObTabletCopyFinishTaskParam param;
+    param.ls_ = ls;
+    param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
+    param.copy_tablet_ctx_ = copy_tablet_ctx_;
+    param.reporter_ = reporter;
+    param.restore_action_ = restore_action;
+    param.src_tablet_meta_ = src_tablet_meta;
+    param.is_leader_restore_ = false;
+    param.is_only_replace_major_ = false;
+    if (OB_FAIL(tablet_copy_finish_task->init(param))) {
+      LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
+    } else {
+      LOG_INFO("generate tablet copy finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
+    }
   }
   return ret;
 }
@@ -3189,7 +3198,7 @@ int ObTabletMigrationTask::try_update_tablet_()
   } else if (OB_FAIL(dag->get_ls(ls))) {
     LOG_WARN("failed to get ls", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
+      ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_, ctx_->arg_.type_,
       ls, &ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
   } else {
@@ -3802,7 +3811,7 @@ int ObDataTabletsMigrationTask::init()
         } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->data_tablet_id_array_, tablet_id_array))) {
           LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
         } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-            ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_,
+            ctx_->tenant_id_, tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_,
             ctx_->arg_.type_, ls_handle_.get_ls(), &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
           LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
         } else {
@@ -4648,7 +4657,7 @@ int ObTabletGroupMigrationTask::init(
     } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(tablet_id_array, tmp_tablet_id_array))) {
       LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObLSMigrationUtils::init_ha_tablets_builder(
-        ctx_->tenant_id_, tmp_tablet_id_array, ctx_->minor_src_, ctx_->local_rebuild_seq_, ctx_->arg_.type_,
+        ctx_->tenant_id_, tmp_tablet_id_array, ctx_->minor_src_, ctx_->src_ls_rebuild_seq_, ctx_->arg_.type_,
         ls_handle_.get_ls(), &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {

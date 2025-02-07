@@ -365,7 +365,7 @@ END_P SET_VAR DELIMITER
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
-        TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL
+        TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL TABLETS
 
         UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED
@@ -564,6 +564,8 @@ END_P SET_VAR DELIMITER
 %type <node> create_server_stmt server_options_list server_option alter_server_stmt drop_server_stmt create_logfile_group_stmt logfile_group_info add_log_file lg_undofile lg_redofile logfile_group_options  opt_ts_initial_size opt_ts_undo_buffer_size opt_ts_redo_buffer_size opt_ts_engine opt_ts_comment
 %type <node> alter_logfile_group_stmt alter_logfile_group_info alter_logfile_group_option_list alter_logfile_group_options alter_logfile_group_option drop_logfile_group_stmt drop_ts_options_list drop_ts_options drop_ts_option opt_ts_nodegroup logfile_group_option logfile_group_option_list
 %type <node> service_name_stmt service_op
+%type <node> rebuild_tablet_id_list_expr rebuild_tablet_destination rebuild_tablet_source
+
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> vector_distance_expr vector_distance_metric
@@ -20031,6 +20033,12 @@ SET DECRYPTION IDENTIFIED BY string_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_DECRYPTION, 1, string_list_node);
 }
 |
+alter_with_opt_hint SYSTEM REBUILD TABLET ls rebuild_tablet_id_list_expr rebuild_tablet_destination rebuild_tablet_source opt_tenant_name
+{
+ (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REBUILD_TABLET, 5, $5, $6, $7, $8, $9);
+}
+|
 alter_with_opt_hint SYSTEM RESET alter_system_reset_parameter_actions
 {
   (void)($1);
@@ -21542,6 +21550,30 @@ NAME_OB opt_config_scope opt_tenant_name
                           $3  /* tenant */
                           );
   $$->value_ = $2[0];
+}
+;
+
+rebuild_tablet_id_list_expr:
+TABLETS opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
+}
+;
+
+rebuild_tablet_destination:
+DESTINATION opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
+}
+;
+
+rebuild_tablet_source:
+SOURCE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
 }
 ;
 
@@ -24914,6 +24946,7 @@ ACCESS_INFO
 |       TABLET_MAX_SIZE
 |       TASK
 |       TASK_ID
+|       TABLETS
 |       TEMPLATE
 |       TEMPORARY
 |       TEMPTABLE

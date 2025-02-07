@@ -60,6 +60,7 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "storage/high_availability/ob_rebuild_service.h"
 
 namespace oceanbase
 {
@@ -3523,6 +3524,7 @@ int ObRefreshServiceNameP::process()
   }
   return ret;
 }
+
 int ObResourceLimitCalculatorP::process()
 {
   int ret = OB_SUCCESS;
@@ -3983,6 +3985,50 @@ int ObSetSSCkptCompressorP::process()
   return ret;
 }
 #endif
+
+int ObRebuildTabletP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg_), K(ret));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
+                     "data_src", arg_.src_, "dest", arg_.dest_);
+
+    MTL_SWITCH(tenant_id) {
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      ObRebuildService *rebuild_service = nullptr;
+      ObLSRebuildInfo rebuild_info;
+      rebuild_info.src_ = arg_.src_;
+      rebuild_info.status_ = ObLSRebuildStatus::INIT;
+      rebuild_info.type_ = ObLSRebuildType::TABLET;
+      if (OB_FAIL(rebuild_info.tablet_id_array_.assign(arg_.tablet_id_array_))) {
+        LOG_WARN("failed to assign tablet id array", K(ret), K(arg_));
+      } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg_));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(ls->set_rebuild_info(rebuild_info))) {
+        LOG_WARN("failed to set rebuild info", K(ret), K(rebuild_info));
+      } else if (OB_ISNULL(rebuild_service = (MTL(ObRebuildService *)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rebuild service not be NULL", K(ret), KP(rebuild_service));
+      } else {
+        rebuild_service->wakeup();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_ADD("storage_ha", "schedule_rebuild_tablet failed", "ls_id", arg_.ls_id_.id(), "result", ret);
+    }
+  }
+  return ret;
+}
 
 int ObNotifySharedStorageInfoP::process()
 {

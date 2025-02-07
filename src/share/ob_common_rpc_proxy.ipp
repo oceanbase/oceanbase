@@ -304,3 +304,5 @@
   RPC_S(PR5 reload_master_key, obrpc::OB_RELOAD_MASTER_KEY, (obrpc::ObReloadMasterKeyArg), obrpc::ObReloadMasterKeyResult);
 #endif
   RPC_S(PRD alter_user_proxy, obrpc::OB_ALTER_USER_PROXY, (ObAlterUserProxyArg), obrpc::ObAlterUserProxyRes);
+  //Rebuild Tablet
+  RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));

@@ -626,7 +626,5 @@ int ObPhysicalCopyTask::record_server_event_()
   return ret;
 }
 
-
-
 }
 }

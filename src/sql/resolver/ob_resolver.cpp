@@ -1299,6 +1299,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
       }
+      case T_REBUILD_TABLET: {
+        REGISTER_STMT_RESOLVER(RebuildTablet);
+        break;
+      }
       case T_GRANT_PROXY:
       case T_REVOKE_PROXY: {
         REGISTER_STMT_RESOLVER(Mock);
