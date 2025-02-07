@@ -1304,6 +1304,7 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
                    "tenant_id", provider_->get_tenant_id(),
                    "ls_id", provider_->get_ls_id().id(),
                    "src_addr", src_info.src_addr_,
+                   "dst_addr", arg.dst_.get_server(),
                    "op_type", ObMigrationOpType::get_str(provider_->get_type()));
   return ret;
 }
