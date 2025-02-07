@@ -838,8 +838,6 @@ int ObTabletBackfillTXTask::check_major_sstable_(
   } else if (OB_ISNULL(tablet) || !table_store_wrapper.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check major sstable get invalid argument", K(ret), KP(tablet), K(table_store_wrapper));
-  } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-    //skip check tablet sstable when tablet in restore status
   } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
     // do nothing
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
