@@ -763,13 +763,15 @@ l_new:
         char *data = block->data();
         int32_t cls = bin_size/AOBJECT_CELL_BYTES;
         AObject *freelist = NULL;
+        AObject *cur = NULL;
         for (int i = 0; i < block->max_cnt_; i++) {
-          AObject *cur = new (data + bin_size * i) AObject();
+          cur = new (data + bin_size * i) AObject();
           cur->nobjs_ = cls;
           cur->obj_offset_ = cls * i;
           cur->next_ = freelist;
           freelist = cur;
         }
+        cur->nobjs_ = ablock_size/AOBJECT_CELL_BYTES - cur->obj_offset_;
         block->status_ = ABlock::FULL;
         local_free = freelist;
         goto l_local;

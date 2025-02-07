@@ -358,7 +358,7 @@ int parse_block_meta(AChunk *chunk, ABlock *block, BlockFunc b_func, ObjectFunc 
     int loop_cnt = 0;
     AObject *object = (AObject*)(block->data());
     while (OB_SUCC(ret)) {
-      if ((char*)object + AOBJECT_HEADER_SIZE > block_end ||
+      if ((char*)object + AOBJECT_META_SIZE > block_end ||
           !object->is_valid() || loop_cnt++ >= AllocHelper::cells_per_block(block->ablock_size_)) {
         break;
       }
