@@ -17,6 +17,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_context.h"
+#include "share/ash/ob_di_util.h"
 #include "observer/ob_server_struct.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 
@@ -148,40 +149,48 @@ bool ObAllVirtualSqlStatIter::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSes
 
     ObExecutingSqlStatRecord &executing_sql_stat_record = sess_info->get_executing_sql_stat_record();
     ObExecutedSqlStatRecord *value = nullptr;
-    if (!key.is_valid()) {
-      // do nothing
-    } else if (OB_FAIL(executing_sql_stat_record.record_sqlstat_end_value())){
-      LOG_WARN("failed to record sqlstat end value in query virtual table", K(ret));
-    } else if (OB_SUCC(tmp_sql_stat_map_.get_refactored(key, value))) {
-      if (OB_FAIL(value->sum_stat_value(executing_sql_stat_record))) {
-        LOG_WARN("sql_stat_value sum value failed", KR(ret));
-      }
-    } else if (OB_HASH_NOT_EXIST == ret) {
-      void *buf = nullptr;
-      ObString sql = ObString::make_empty_string();
-      if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
-          obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
-          obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
-          obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
-        sql = sess_info->get_current_query_string();
-      }
+    SMART_VAR(common::ObDISessionCollect, session_collect) {
+      if (!key.is_valid()) {
+        // do nothing
+      } else if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(sess_info->get_sessid(), session_collect))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("Fail to get tenant latch stat", KR(ret));
+        }
+      } else if (OB_FAIL(executing_sql_stat_record.record_sqlstat_end_value(&(session_collect.base_value_)))) {
+        LOG_WARN("failed to record sqlstat end value in query virtual table", K(ret));
+      } else if (OB_SUCC(tmp_sql_stat_map_.get_refactored(key, value))) {
+        if (OB_FAIL(value->sum_stat_value(executing_sql_stat_record))) {
+          LOG_WARN("sql_stat_value sum value failed", KR(ret));
+        }
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        void *buf = nullptr;
+        ObString sql = ObString::make_empty_string();
+        if (obmysql::COM_QUERY == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_EXECUTE == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_PREPARE == sess_info->get_mysql_cmd() ||
+            obmysql::COM_STMT_PREXECUTE == sess_info->get_mysql_cmd()) {
+          sql = sess_info->get_current_query_string();
+        }
 
-      if (OB_ISNULL(allocator_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("alloc is null", K(ret));
-      } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObExecutedSqlStatRecord), ObMemAttr(MTL_ID(), "TmpSqlStatMgr")))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc failed", K(ret));
-      } else if (FALSE_IT(value = new(buf) ObExecutedSqlStatRecord())) {
-      } else if (OB_FAIL(value->get_sql_stat_info().init(key, *sess_info, sql, nullptr /*phy_plan*/))) {
-        LOG_WARN("failed to init sql stat info", K(ret));
-      } else if (OB_FAIL(value->sum_stat_value(executing_sql_stat_record))) {
-        LOG_WARN("sql_stat_value sum value failed", KR(ret));
-      } else if (OB_FAIL(tmp_sql_stat_map_.set_refactored(key, value))) {
-        LOG_WARN("tmp_sql_stat_map_ set refactored failed", KR(ret));
+        if (OB_ISNULL(allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alloc is null", K(ret));
+        } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObExecutedSqlStatRecord), ObMemAttr(MTL_ID(), "TmpSqlStatMgr")))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed", K(ret));
+        } else if (FALSE_IT(value = new(buf) ObExecutedSqlStatRecord())) {
+        } else if (OB_FAIL(value->get_sql_stat_info().init(key, *sess_info, sql, nullptr /*phy_plan*/))) {
+          LOG_WARN("failed to init sql stat info", K(ret));
+        } else if (OB_FAIL(value->sum_stat_value(executing_sql_stat_record))) {
+          LOG_WARN("sql_stat_value sum value failed", KR(ret));
+        } else if (OB_FAIL(tmp_sql_stat_map_.set_refactored(key, value))) {
+          LOG_WARN("tmp_sql_stat_map_ set refactored failed", KR(ret));
+        }
+      } else {
+        LOG_WARN("get_refactored fail", KR(ret), K(key));
       }
-    } else {
-      LOG_WARN("get_refactored fail", KR(ret), K(key));
     }
   }
   return true;
