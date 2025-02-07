@@ -107,7 +107,8 @@ public:
       flags_(0),
       domain_id_idxs_(alloc),
       domain_types_(alloc),
-      domain_tids_(alloc)
+      domain_tids_(alloc),
+      pre_range_graph_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -188,6 +189,7 @@ public:
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
   ObFixedArray<int64_t, common::ObIAllocator> domain_types_;
   ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
+  ObPreRangeGraph pre_range_graph_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef

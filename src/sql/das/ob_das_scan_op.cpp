@@ -71,7 +71,9 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     partition_infos_,
                     domain_id_idxs_,
                     domain_types_,
-                    domain_tids_);
+                    domain_tids_,
+                    pre_query_range_,
+                    pre_range_graph_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
