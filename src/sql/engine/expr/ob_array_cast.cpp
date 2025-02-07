@@ -392,6 +392,7 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
           LOG_WARN("not supported", K(ret));
           break;
         }
+        case ObUFloatType:
         case ObFloatType: {
           double val;
           ObArrayFixedSize<float> *dst_arr = static_cast<ObArrayFixedSize<float> *>(dst);
@@ -404,6 +405,7 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
           }
           break;
         }
+        case ObUDoubleType:
         case ObDoubleType: {
           double val;
           ObArrayFixedSize<double> *dst_arr = static_cast<ObArrayFixedSize<double> *>(dst);

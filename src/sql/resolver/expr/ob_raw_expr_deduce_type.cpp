@@ -3609,7 +3609,7 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("internal order expr is null", K(ret));
       } else if (order_expr->get_result_type().get_type() == ObCollectionSQLType) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("array type used for sorting isn't supported", K(ret));
       }
     }

@@ -65,21 +65,13 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
     if (type1.is_collection_sql_type() && type2.is_collection_sql_type()) {
       ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
       ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
-      if (type1.get_subschema_id() != type2.get_subschema_id()) {
-        ObExprResType coll_calc_type = type;
-        if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
-          LOG_WARN("failed to check array compatibilty", K(ret));
-        } else {
-          type1.set_calc_meta(coll_calc_type);
-          type2.set_calc_meta(coll_calc_type);
-          type.set_collection(coll_calc_type.get_subschema_id());
-        }
+      ObExprResType coll_calc_type = type;
+      if (OB_FAIL(ObExprResultTypeUtil::get_array_calc_type(exec_ctx, type1, type2, coll_calc_type))) {
+        LOG_WARN("failed to check array compatibilty", K(ret));
       } else {
-        // subschem id in calc_meta is set to uint16_max in ObArithExprOperator::calc_result_type2
-        // set real subschema id to calc_meta from meta
-        type1.set_calc_meta(type1);
-        type2.set_calc_meta(type2);
-        type.set_collection(type1.get_subschema_id());
+        type1.set_calc_meta(coll_calc_type);
+        type2.set_calc_meta(coll_calc_type);
+        type.set_collection(coll_calc_type.get_subschema_id());
       }
     } else {
       // only support vector/array/varchar - vector/array/varchar now // array and varchar need cast to array(float)
