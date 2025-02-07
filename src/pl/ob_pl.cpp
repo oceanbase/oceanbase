@@ -211,6 +211,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_get_parent_allocator));
   jit::ObLLVMHelper::add_symbol(ObString("spi_get_current_expr_allocator"),
                                 (void*)(sql::ObSPIService::spi_get_current_expr_allocator));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_adjust_error_trace"),
+                                (void*)(sql::ObSPIService::spi_adjust_error_trace));
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));

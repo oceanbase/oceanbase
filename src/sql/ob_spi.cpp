@@ -4306,6 +4306,22 @@ int ObSPIService::dbms_cursor_close(ObExecContext &exec_ctx, ObPLCursorInfo &cur
   return ret;
 }
 
+int ObSPIService::spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  UNUSEDx(ctx, level);
+#else
+  ObPLContext *pl_ctx = NULL;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
+  CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
+  OZ (pl_ctx->get_call_stack_trace()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
+#endif
+  return ret;
+}
+
 int ObSPIService::spi_set_pl_exception_code(
   pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level)
 {
