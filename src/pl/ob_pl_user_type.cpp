@@ -243,7 +243,8 @@ int ObUserDefinedType::deep_copy_obj(
 
   if (OB_SUCC(ret)) {
     switch (src.get_meta().get_extend_type()) {
-    case PL_CURSOR_TYPE: {
+    case PL_CURSOR_TYPE:
+    case PL_REF_CURSOR_TYPE: {
       OZ (ObRefCursorType::deep_copy_cursor(allocator, src, dst));
     }
       break;
@@ -261,7 +262,7 @@ int ObUserDefinedType::deep_copy_obj(
 
     default: {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected type to deep copy", K(src), K(ret));
+      LOG_WARN("Unexpected type to deep copy", K(src), K(ret), K(src.get_meta().get_extend_type()));
     }
       break;
     }

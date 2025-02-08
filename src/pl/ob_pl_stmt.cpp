@@ -3926,7 +3926,7 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
         const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(user_type);
         CK (OB_NOT_NULL(coll_type));
         OX (final_type = coll_type->get_element_type());
-        OX(access_obj_type = !final_type.is_user_type());
+        OX (access_obj_type = !final_type.is_user_type());
       }
     }
   }
@@ -3949,7 +3949,10 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
     if (OB_SUCC(ret)) {
       if (final_type.is_cursor_type() || final_type.is_opaque_type()) {
         ObDataType ext_type;
-        ext_type.set_obj_type(ObExtendType);
+        ObObjMeta meta_type;
+        meta_type.set_type(ObExtendType);
+        meta_type.set_extend_type(final_type.get_type());
+        ext_type.set_meta_type(meta_type);
         if (final_type.is_opaque_type()) {
           ext_type.set_udt_id(final_type.get_user_type_id());
         }
