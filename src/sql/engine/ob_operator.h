@@ -581,6 +581,9 @@ private:
   virtual int inner_drain_exch() { return common::OB_SUCCESS; };
 
   bool enable_get_next_row() const;
+  int try_push_stash_rows(const int64_t max_row_cnt);
+  int push_stash_rows(const int64_t max_row_cnt, const int64_t output_row_cnt);
+  int pop_stash_rows(const int64_t max_row_cnt);
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -620,6 +623,11 @@ protected:
   ObBatchRows brs_;
   ObBatchRowIter *br_it_ = nullptr;
   ObBatchResultHolder *brs_checker_= nullptr;
+
+  // handling cases where inner_get_next_batch output row cnt more than max_row_cnt.
+  ObBatchRows stash_brs_;
+  int64_t stash_rows_cnt_ = 0;
+  int64_t stash_rows_idx_ = 0;
 
   inline void begin_cpu_time_counting()
   {
@@ -769,6 +777,20 @@ inline int ObOperator::try_check_status_by_rows(const int64_t rows)
   if (try_check_tick_ > CHECK_STATUS_ROWS) {
     try_check_tick_ = 0;
     ret = check_status();
+  }
+  return ret;
+}
+
+inline int ObOperator::try_push_stash_rows(const int64_t max_row_cnt)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(brs_.size_ > max_row_cnt)) {
+    // When the number of unskipped rows in brs_ exceeds max_row_cnt,
+    // stash brs_.skip index to ensure emitted rows to the upper operator comply with the max_row_cnt limit.
+    int64_t output_row_cnt = brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_);
+    if (output_row_cnt > max_row_cnt && OB_FAIL(push_stash_rows(max_row_cnt, output_row_cnt))) {
+      SQL_ENG_LOG(WARN, "try push stash rows failed", K(ret));
+    }
   }
   return ret;
 }
