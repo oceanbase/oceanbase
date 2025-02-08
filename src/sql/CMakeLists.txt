@@ -847,6 +847,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_calc_odps_size.cpp
   engine/expr/ob_expr_to_pinyin_tab.cpp
   engine/expr/ob_expr_to_pinyin.cpp
+  engine/expr/ob_expr_demote_cast.cpp
   engine/expr/ob_expr_array_max.cpp
   engine/expr/ob_expr_array_avg.cpp
   engine/expr/ob_expr_array_first.cpp
@@ -1440,6 +1441,7 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_util.cpp
   resolver/expr/ob_raw_expr_wrap_enum_set.cpp
   resolver/expr/ob_shared_expr_resolver.cpp
+  resolver/expr/ob_raw_expr_type_demotion.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_prepare

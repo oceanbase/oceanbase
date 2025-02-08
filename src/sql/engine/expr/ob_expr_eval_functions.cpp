@@ -418,6 +418,7 @@
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
 #include "ob_expr_to_pinyin.h"
+#include "ob_expr_demote_cast.h"
 #include "ob_expr_array_sum.h"
 #include "ob_expr_array_length.h"
 #include "ob_expr_array_position.h"
@@ -1350,8 +1351,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
   NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
   ObExprVecIVFPQCenterVector::generate_pq_center_vector,              /* 817 */
-  NULL, // ObExprDemoteCast::eval_demoted_val,                        /* 818 */
-  NULL, // ObExprRangePlacement::eval_range_placement,                /* 819 */
+  ObExprDemoteCast::eval_demoted_val,                                 /* 818 */
+  ObExprRangePlacement::eval_range_placement,                         /* 819 */
   NULL, // ObExprInnerTypeToEnumSet::eval_inner_type_to_enumset,      /* 820 */
   ObExprIsNot::json_is_not_false,                                     /* 821 */
   ObExprIsNot::json_is_not_true,                                      /* 822 */

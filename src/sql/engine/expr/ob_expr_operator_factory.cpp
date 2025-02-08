@@ -490,6 +490,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 #include "sql/engine/expr/ob_expr_to_pinyin.h"
+#include "sql/engine/expr/ob_expr_demote_cast.h"
 #include "sql/engine/expr/ob_expr_array_sum.h"
 #include "sql/engine/expr/ob_expr_array_length.h"
 #include "sql/engine/expr/ob_expr_array_position.h"
@@ -1138,6 +1139,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTMakePoint);
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprArray);
+    REG_OP(ObExprDemoteCast);
+    REG_OP(ObExprRangePlacement);
     /* vector index */
     REG_OP(ObExprVecIVFCenterID);
     REG_OP(ObExprVecIVFCenterVector);

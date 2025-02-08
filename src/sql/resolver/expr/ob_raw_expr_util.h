@@ -1287,6 +1287,12 @@ public:
   static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
                                     ObAggFunRawExpr *&expr);
+  static int build_demote_cast_expr(ObRawExprFactory &expr_factory,
+                                    const ObSQLSessionInfo *session_info,
+                                    const ObItemType expr_type,
+                                    const ObConstRawExpr *const_expr,
+                                    const ObExprResType &column_type,
+                                    ObSysFunRawExpr *&new_expr);
 
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLMode sql_mode,

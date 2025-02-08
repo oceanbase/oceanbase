@@ -986,6 +986,17 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && 0 <= val.get_int();
       break;
     }
+    case ENABLE_CONSTANT_TYPE_DEMOTION: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case NON_STANDARD_COMPARISON_LEVEL: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("none")
+                                      || 0 == val.get_varchar().case_compare("equal")
+                                      || 0 == val.get_varchar().case_compare("range"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

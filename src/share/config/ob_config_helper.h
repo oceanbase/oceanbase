@@ -1026,6 +1026,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
 };
 
+class ObConfigNonStdCmpLevelChecker: public ObConfigChecker
+{
+public:
+  ObConfigNonStdCmpLevelChecker()
+  {}
+  virtual ~ObConfigNonStdCmpLevelChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigNonStdCmpLevelChecker);
+};
+
 class ObConfigJavaParamsChecker
   : public ObConfigChecker
 {

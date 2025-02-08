@@ -342,6 +342,7 @@ _enable_choose_migration_source_policy
 _enable_column_store
 _enable_compaction_diagnose
 _enable_compatible_monotonic
+_enable_constant_type_demotion
 _enable_convert_real_to_decimal
 _enable_das_batch_rescan_flag
 _enable_das_keep_order
@@ -454,6 +455,7 @@ _min_malloc_sample_interval
 _multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
+_non_standard_comparison_level
 _no_logging
 _object_storage_io_timeout
 _obkv_feature_mode

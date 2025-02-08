@@ -15,6 +15,7 @@
 #include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/engine/expr/ob_expr_demote_cast.h"
 #include "lib/geo/ob_sdo_geo_object.h"
 
 namespace oceanbase
@@ -2796,6 +2797,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_XMLCAST:
       case T_FUN_SYS_TREAT:
+      case T_FUN_SYS_DEMOTE_CAST:
+      case T_FUN_SYS_RANGE_PLACEMENT:
       case T_FUN_SYS_CAST: {
         if (2 != expr->get_param_count()) {
           ret = OB_ERR_UNEXPECTED;

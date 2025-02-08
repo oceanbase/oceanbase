@@ -159,6 +159,7 @@ public:
                                   const common::ObCollationType& from_collation,
                                   const common::ObString &from_string,
                                   common::ObString &dest_string);
+  static int get_real_expr_without_cast(const ObExpr *expr, const ObExpr *&out_expr);
 
 private:
   static int get_int64_from_num(common::number::ObNumber &nmb,

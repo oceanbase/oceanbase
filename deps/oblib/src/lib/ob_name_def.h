@@ -1171,6 +1171,8 @@
 #define N_BM25                              "bm25"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"
+#define N_DEMOTE_CAST                       "demote_cast"
+#define N_RANGE_PLACEMENT                   "range_placement"
 #define N_SYS_LAST_REFRESH_SCN              "last_refresh_scn"
 #define N_PRIV_ST_MAKEENVELOPE              "_st_makeenvelope"
 #define N_PRIV_ST_CLIPBYBOX2D               "_st_clipbybox2d"

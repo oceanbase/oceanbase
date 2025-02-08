@@ -6566,6 +6566,11 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
                            && dst_type.get_precision() >= child_type.get_precision());
           }
         }
+      } else if (ObEnumSetTC == child_tc) {
+        if (ObStringTC == dst_tc || ObTextTC == dst_tc || ObNumberTC == dst_tc
+            || ObDoubleTC == dst_tc) {
+          is_lossless = true;
+        }
       }
     } else {
       if (ObIntTC == child_tc || ObUIntTC == child_tc) {

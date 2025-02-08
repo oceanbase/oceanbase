@@ -253,6 +253,7 @@ public:
   int add_explain_note();
   int add_parallel_explain_note();
   int add_direct_load_explain_note();
+  int add_non_standard_comparison_explain_note();
 
   int adjust_final_plan_info(ObLogicalOperator *&op);
 

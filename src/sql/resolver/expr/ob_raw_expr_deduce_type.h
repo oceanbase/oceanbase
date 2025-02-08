@@ -13,6 +13,7 @@
 #ifndef _OB_RAW_EXPR_DEDUCE_TYPE_H
 #define _OB_RAW_EXPR_DEDUCE_TYPE_H 1
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/resolver/expr/ob_raw_expr_type_demotion.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/udt/ob_collection_type.h"
 #include "common/ob_accuracy.h"
@@ -28,24 +29,23 @@ class ObRawExprDeduceType: public ObRawExprVisitor
 {
 public:
   ObRawExprDeduceType(const ObSQLSessionInfo *my_session,
+                      ObRawExprFactory *expr_factory,
                       bool solidify_session_vars,
                       const ObLocalSessionVar *local_vars,
-                      int64_t local_vars_id)
+                      int64_t local_vars_id,
+                      ObRawExprTypeDemotion &type_demotion)
     : ObRawExprVisitor(),
       my_session_(my_session),
       alloc_(),
-      expr_factory_(NULL),
+      expr_factory_(expr_factory),
       my_local_vars_(local_vars),
       local_vars_id_(local_vars_id),
-      solidify_session_vars_(solidify_session_vars)
+      solidify_session_vars_(solidify_session_vars),
+      type_demotion_(type_demotion)
   {}
   virtual ~ObRawExprDeduceType()
   {
     alloc_.reset();
-  }
-  void set_expr_factory(ObRawExprFactory *expr_factory)
-  {
-    expr_factory_ = expr_factory;
   }
   int deduce(ObRawExpr &expr);
   /// interface of ObRawExprVisitor
@@ -169,6 +169,7 @@ private:
   const ObLocalSessionVar *my_local_vars_;
   int64_t local_vars_id_;
   bool solidify_session_vars_;
+  ObRawExprTypeDemotion &type_demotion_;
   // data members
 };
 

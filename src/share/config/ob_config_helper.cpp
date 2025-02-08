@@ -1572,6 +1572,16 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigNonStdCmpLevelChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("none")
+          || 0 == tmp_str.case_compare("equal")
+          || 0 == tmp_str.case_compare("range"));
+  return bret;
+}
+
 bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
 {
   bool bret = false;

@@ -449,6 +449,20 @@ DEF_STR_WITH_CHECKER(_use_hash_rollup, OB_TENANT_PARAMETER, "AUTO",
         "DISABLED: hash rollup plan is disabled;",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+//
+DEF_BOOL(_enable_constant_type_demotion, OB_TENANT_PARAMETER, "True",
+         "Controls whether to enable constant type demotion to optimize comparisons between "
+         "constants and columns by downgrading the constant's type to match the column's type.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_non_standard_comparison_level, OB_TENANT_PARAMETER, "NONE",
+        common::ObConfigNonStdCmpLevelChecker,
+        "Enable non-standard comparisons to optimize filtering by aligning constants with column "
+        "types. Currently only affects comparisons between string columns and int constants "
+        "NONE: all comparison types use standard comparison. "
+        "EQUAL: non-standard comparisons rules will applied in equal conditions. "
+        "RANGE: non-standard comparisons rules will applied in range conditions. ",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "

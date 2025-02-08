@@ -3746,6 +3746,7 @@ public:
   void set_dblink_id(int64_t dblink_id) { dblink_id_ = dblink_id; }
   int64_t get_dblink_id() const { return dblink_id_; }
   bool is_dblink_sys_func() const { return common::OB_INVALID_ID != dblink_id_; }
+  int get_type_demotion_name(char *buf, int64_t buf_len, int64_t &pos, ExplainType type) const;
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,

@@ -1264,6 +1264,10 @@ static OB_INLINE int common_string_year(const ObExpr &expr,
   } else {
     if (CAST_FAIL(common_int_year(expr, tmp_int, res_datum, warning))) {
       LOG_WARN("common_int_year failed", K(ret), K(tmp_int));
+    } else if (CM_IS_DEMOTE_CAST(expr.extra_) && (OB_ERR_DATA_TRUNCATED == warning)) {
+      // demote cast can accept the string result after truncate, for example, '2020-02-30' can be
+      // treated as '2020', '2020abc' can be treated as '2020'.
+      ret = OB_SUCCESS;
     } else {
       int tmp_warning = warning;
       UNUSED(CAST_FAIL(tmp_warning));
@@ -2945,7 +2949,9 @@ template <typename IN_TYPE>
 static int common_floating_number(const IN_TYPE in_val,
                                   const ob_gcvt_arg_type arg_type,
                                   ObIAllocator &alloc,
-                                  number::ObNumber &number)
+                                  number::ObNumber &number,
+                                  ObEvalCtx &ctx,
+                                  const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
   char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
@@ -2961,7 +2967,8 @@ static int common_floating_number(const IN_TYPE in_val,
   ObScale res_scale; // useless
   ObPrecision res_precision;
   if (OB_FAIL(number.from_sci_opt(str.ptr(), str.length(), alloc,
-                                  &res_precision, &res_scale))) {
+                                  &res_precision, &res_scale, true/*do_rounding*/,
+                                  CM_IS_DEMOTE_CAST(cast_mode)))) {
     LOG_WARN("fail to from str to number", K(ret), K(str));
   }
   return ret;
@@ -3074,7 +3081,7 @@ static OB_INLINE int common_double_datetime(const ObExpr &expr,
     if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
       LOG_WARN("get time zone info failed", K(ret));
     } else {
-      if (OB_FAIL(common_floating_number(val_double, OB_GCVT_ARG_DOUBLE, tmp_alloc, number))) {
+      if (OB_FAIL(common_floating_number(val_double, OB_GCVT_ARG_DOUBLE, tmp_alloc, number, ctx, expr.extra_))) {
         LOG_WARN("cast float to number failed", K(ret), K(expr.extra_));
         if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
           ret = OB_SUCCESS;
@@ -5359,7 +5366,7 @@ CAST_FUNC_NAME(float, number)
       number::ObNumber number;
       if (ObUNumberType == out_type && CAST_FAIL(numeric_negative_check(in_val))) {
         LOG_WARN("numeric_negative_check failed", K(ret), K(out_type), K(in_val));
-      } else if (OB_FAIL(common_floating_number(in_val, OB_GCVT_ARG_FLOAT, tmp_alloc, number))) {
+      } else if (OB_FAIL(common_floating_number(in_val, OB_GCVT_ARG_FLOAT, tmp_alloc, number, ctx, expr.extra_))) {
         LOG_WARN("common_float_number failed", K(ret), K(in_val));
       } else {
         res_datum.set_number(number);
@@ -5706,7 +5713,7 @@ CAST_FUNC_NAME(double, number)
       number::ObNumber number;
       if (ObUNumberType == out_type && CAST_FAIL(numeric_negative_check(in_val))) {
         LOG_WARN("numeric_negative_check failed", K(ret), K(out_type), K(in_val));
-      } else if (OB_FAIL(common_floating_number(in_val, OB_GCVT_ARG_DOUBLE, tmp_alloc, number))) {
+      } else if (OB_FAIL(common_floating_number(in_val, OB_GCVT_ARG_DOUBLE, tmp_alloc, number, ctx, expr.extra_))) {
         LOG_WARN("common_float_number failed", K(ret), K(in_val));
       } else {
         res_datum.set_number(number);

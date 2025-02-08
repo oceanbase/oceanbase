@@ -197,7 +197,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(t1.col_int, DECIMAL(11, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=16
+  0 - output([CASE WHEN t1.col_int = demote_cast('1', INT(11, 0)) THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=16
       access([t1.col_int]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

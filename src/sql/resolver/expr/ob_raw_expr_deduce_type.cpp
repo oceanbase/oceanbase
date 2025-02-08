@@ -886,6 +886,8 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     expr.set_result_type(result_type);
+  } else if (OB_FAIL(type_demotion_.demote_type(expr))) {
+    LOG_WARN("fail to demote comparison type", K(ret), K(expr));
   } else {
     ObExprOperator *op = expr.get_op();
     if (NULL == op) {

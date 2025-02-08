@@ -273,7 +273,7 @@ int ObNumber::from_(const char *str, IAllocator &allocator, int16_t *precision, 
  * This function converts a scientific notation string into the internal number format
  * It's more efficient to call from_ if the string is a normal numeric string */
 int ObNumber::from_sci_(const char *str, const int64_t length, IAllocator &allocator, int &warning,
-     int16_t *precision, int16_t *scale, const bool do_rounding)
+     int16_t *precision, int16_t *scale, const bool do_rounding, const bool catch_trunc_err)
 {
   int ret = OB_SUCCESS;
   char full_str[MAX_PRINTABLE_SIZE] = {0};
@@ -414,6 +414,9 @@ int ObNumber::from_sci_(const char *str, const int64_t length, IAllocator &alloc
       }
       if ((valid_len >= 0 && (e_value + valid_len <= MIN_SCI_SIZE))
           ||(valid_len < 0 && (e_value - dec_n_zero <= MIN_SCI_SIZE))) {
+        if (catch_trunc_err) {
+          warning = OB_ERR_DATA_TRUNCATED;
+        }
         as_zero = true;
       } else if (e_value + valid_len > MAX_SCI_SIZE) {
         ret = OB_NUMERIC_OVERFLOW;

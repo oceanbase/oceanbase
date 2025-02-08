@@ -12183,6 +12183,8 @@ int ObLogPlan::add_explain_note()
     LOG_WARN("fail to add parallel explain note", K(ret));
   } else if (OB_FAIL(add_direct_load_explain_note())) {
     LOG_WARN("fail to add direct load explain note", K(ret));
+  } else if (OB_FAIL(add_non_standard_comparison_explain_note())) {
+    LOG_WARN("fail to add non standard comparsion explain note", K(ret));
   }
   return ret;
 }
@@ -12252,6 +12254,36 @@ int ObLogPlan::add_parallel_explain_note()
     parallel_str = has_valid_table_parallel_hint ? PARALLEL_ENABLED_BY_TABLE_HINT : parallel_str;
     if (OB_NOT_NULL(parallel_str)) {
       opt_ctx.add_plan_note(parallel_str, opt_ctx.get_max_parallel());
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::add_non_standard_comparison_explain_note()
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = opt_ctx.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(opt_ctx.get_query_ctx()));
+  } else if (query_ctx->type_demotion_flag_inited_) {
+    ObObj non_std_cmp_level;
+    if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_opt_param(
+        ObOptParamHint::NON_STANDARD_COMPARISON_LEVEL, non_std_cmp_level))) {
+      LOG_WARN("fail to get hint", K(ret));
+    } else if (non_std_cmp_level.is_varchar()) {
+      if (query_ctx->non_standard_range_comparison_) {
+        opt_ctx.add_plan_note(NON_STANDARD_COMPARISON_SETTING, "range", "hint");
+      } else if (query_ctx->non_standard_equal_comparison_) {
+        opt_ctx.add_plan_note(NON_STANDARD_COMPARISON_SETTING, "equal", "hint");
+      }
+    } else {
+      if (query_ctx->non_standard_range_comparison_) {
+        opt_ctx.add_plan_note(NON_STANDARD_COMPARISON_SETTING, "range", "configuration");
+      } else if (query_ctx->non_standard_equal_comparison_) {
+        opt_ctx.add_plan_note(NON_STANDARD_COMPARISON_SETTING, "equal", "configuration");
+      }
     }
   }
   return ret;

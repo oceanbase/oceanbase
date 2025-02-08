@@ -9907,6 +9907,39 @@ int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::build_demote_cast_expr(ObRawExprFactory &expr_factory,
+                                           const ObSQLSessionInfo *session_info,
+                                           const ObItemType expr_type,
+                                           const ObConstRawExpr *const_expr,
+                                           const ObExprResType &column_type,
+                                           ObSysFunRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *column_type_expr = NULL;
+  if (OB_ISNULL(session_info) || OB_ISNULL(const_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), KP(session_info), KP(const_expr));
+  } else if (!IS_TYPE_DEMOTION_FUN(expr_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected expr type", K(ret), K(expr_type));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(expr_type, new_expr))) {
+    LOG_WARN("create inner row cmp value expr failed", K(ret));
+  } else if (OB_FAIL(create_type_expr(expr_factory, column_type_expr, column_type))) {
+    LOG_WARN("create type expr failed", K(ret), K(column_type));
+  } else if (OB_FAIL(new_expr->add_param_expr(const_cast<ObConstRawExpr*>(const_expr)))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(column_type_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->formalize(session_info))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else {
+    new_expr->set_func_name((T_FUN_SYS_DEMOTE_CAST == expr_type) ?
+                              N_DEMOTE_CAST : N_RANGE_PLACEMENT);
+    new_expr->add_flag(IS_INNER_ADDED_EXPR);
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
                                          const ObSQLMode sql_mode,
                                          ObColumnSchemaV2 &gen_col)

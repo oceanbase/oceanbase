@@ -1394,7 +1394,11 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
     int ret = OB_SUCCESS;
     //由于cast对于某些时间类型的某些值域有特殊处理，导致A cast B，不一定可逆，
     //一个表达式能够抽取，需要双向都满足cast单调
-    if (OB_FAIL(ObObjCaster::is_cast_monotonic(col_type.get_type(),
+    if ((T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) && col_type.is_enum_or_set()
+        && (calc_type.is_string_or_lob_locator_type() || calc_type.is_double()
+            || calc_type.is_number())) {
+      // do nothing
+    } else if (OB_FAIL(ObObjCaster::is_cast_monotonic(col_type.get_type(),
                                                  calc_type.get_type(),
                                                  is_cast_monotonic))) {
       LOG_WARN("check is cast monotonic failed", K(ret));
