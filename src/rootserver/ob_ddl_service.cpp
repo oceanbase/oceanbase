@@ -4757,6 +4757,7 @@ int ObDDLService::check_support_alter_pk_and_columns(
 
 int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
                                           ObDDLType &ddl_type,
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                           bool &has_drop_and_add_index)
 {
   int ret = OB_SUCCESS;
@@ -4766,17 +4767,84 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
   bool has_drop_index = false;
   bool has_create_index = false;
   bool is_add_many_fts_indexes = false;
+  bool is_drop_fts_or_multivalue_or_vector_index = false;
+  common::ObArray<ObString> dropping_indexes;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const int64_t data_table_id = alter_table_arg.alter_table_schema_.get_table_id();
+  const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
   has_drop_and_add_index = false;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the table schema is null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
     ObIndexArg *index_arg = const_cast<ObIndexArg *>(index_arg_list.at(i));
-    ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
-    if (OB_ISNULL(index_arg) || OB_ISNULL(create_index_arg)) {
+    if (OB_ISNULL(index_arg)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("index arg should not be null", K(ret));
     } else {
       const ObIndexArg::IndexActionType type = index_arg->index_action_type_;
-      bool is_add_fts_or_multivalue_index = share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_)
-                                            &&  ObIndexArg::ADD_INDEX == type;
+      ObCreateIndexArg *create_index_arg = nullptr;
+      bool is_add_fts_or_multivalue_index = false;
+      bool is_drop_fts_or_multivalue_index = false;
+      if (ObIndexArg::ADD_INDEX == type) {
+        ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+        if (OB_ISNULL(create_index_arg)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the create index arg is null", K(ret));
+        } else {
+          is_add_fts_or_multivalue_index = share::schema::is_fts_or_multivalue_index(create_index_arg->index_type_);
+        }
+      } else if (ObIndexArg::DROP_INDEX == type) {
+        ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
+        ObTableSchema *index_schema = nullptr;
+        if (OB_ISNULL(drop_index_arg)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the drop index arg is null", K(ret));
+        } else {
+          const share::schema::ObTableSchema *index_schema = nullptr;
+          const int64_t index_table_id = drop_index_arg->index_table_id_;
+          if (OB_FAIL(get_index_schema_by_name(data_table_id,
+                                               table_schema->get_database_id(),
+                                               *drop_index_arg,
+                                               schema_guard,
+                                               index_schema))) {
+            LOG_WARN("fail to get index schema by name",
+                K(ret), K(data_table_id), K(table_schema->get_database_id()), KPC(drop_index_arg));
+          } else if (OB_ISNULL(index_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(index_table_id));
+          } else {
+            is_drop_fts_or_multivalue_or_vector_index = index_schema->is_fts_or_multivalue_index()
+                                                        || index_schema->is_vec_index();
+            if (is_drop_fts_or_multivalue_or_vector_index &&
+                OB_FAIL(dropping_indexes.push_back(drop_index_arg->index_name_))) {
+              LOG_WARN("fail to push back", K(ret), K(drop_index_arg->index_name_));
+            }
+          }
+        }
+      } else if (ObIndexArg::RENAME_INDEX == type) {
+        ObRenameIndexArg *rename_index_arg = static_cast<ObRenameIndexArg *>(index_arg);
+        if (OB_ISNULL(rename_index_arg)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the rename index arg is null", K(ret));
+        } else {
+          ObString &new_index_name = rename_index_arg->new_index_name_;
+          for (int64_t i = 0; OB_SUCC(ret) && i < dropping_indexes.count(); ++i) {
+            ObString &dropping_index_name = dropping_indexes.at(i);
+            if (ObIndexNameHashWrapper(dropping_index_name) == ObIndexNameHashWrapper(new_index_name)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("dropping an fts or multivalue index and renaming another index " \
+                  "to the droped index name in a single ALTER TABLE statement is not surppted", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping an fts or multivalue index and renaming another index " \
+                  "to the droped index name in a single ALTER TABLE statement");
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
       switch(type) {
         case ObIndexArg::DROP_PRIMARY_KEY: {
           if (!is_invalid_ddl_type(ddl_type)) {
@@ -4866,6 +4934,7 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
           LOG_WARN("Unknown index action type!", K(type), K(ret));
         }
       }
+      }
       if (OB_SUCC(ret)) {
         if (!has_drop_index) {
           has_drop_index = ObIndexArg::DROP_INDEX == type;
@@ -4884,6 +4953,7 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
               "adding many fulltext or multivalue indexes at the same time is a high-risk operation, which is");
         }
+
       }
     }
   }
@@ -15343,7 +15413,10 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
     const ObDDLType alter_table_ddl_type = ddl_type;
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
-        && OB_FAIL(check_alter_table_index(alter_table_arg, ddl_type, has_drop_and_add_index))) {
+        && OB_FAIL(check_alter_table_index(alter_table_arg,
+                                           ddl_type,
+                                           schema_guard,
+                                           has_drop_and_add_index))) {
       LOG_WARN("fail to check alter table index", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_
