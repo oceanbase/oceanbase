@@ -205,13 +205,6 @@ public:
       const schema::ObTableSchema &table_schema,
       const ObString &index_column_name,
       bool &is_valid);
-static int check_ivf_vector_index_by_column_name(
-      ObSchemaGetterGuard &schema_guard,
-      const schema::ObTableSchema &table_schema,
-      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
-      const ObString &index_column_name,
-      const ObVectorIndexAlgorithmType ivf_type,
-      bool &is_valid);
   static int get_vector_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,

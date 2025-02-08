@@ -2001,77 +2001,6 @@ int ObVectorIndexUtil::check_vec_aux_index_deleted(
   return ret;
 }
 
-int ObVectorIndexUtil::check_ivf_vector_index_by_column_name(ObSchemaGetterGuard &schema_guard,
-                                                             const schema::ObTableSchema &table_schema,
-                                                             const ObIArray<ObAuxTableMetaInfo> &simple_index_infos,
-                                                             const ObString &index_column_name,
-                                                             const ObVectorIndexAlgorithmType ivf_type,
-                                                             bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-
-  const int64_t tenant_id = table_schema.get_tenant_id();
-  bool ivf_first_table_is_valid = false;
-  bool ivf_second_table_is_valid = false;
-  bool ivf_third_table_is_valid = false;
-  bool ivf_forth_table_is_valid = false;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    const ObTableSchema *index_schema = nullptr;
-    const int64_t table_id = simple_index_infos.at(i).table_id_;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, index_schema))) {
-      LOG_WARN("fail to get index table schema", K(ret), K(tenant_id), K(table_id));
-    } else if (OB_ISNULL(index_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
-    } else if (!index_schema->is_vec_index()) {
-      // skip none vector index
-    } else {
-      ObIndexType index_type = index_schema->get_index_type();
-      if (share::schema::is_vec_domain_index(index_type)) {
-        if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
-          // skip
-        } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-          ivf_first_table_is_valid = true;
-        }
-      } else if (share::schema::is_vec_ivfflat_cid_vector_index(index_type) ||
-                 share::schema::is_vec_ivfsq8_meta_index(index_type) ||
-                 share::schema::is_vec_ivfpq_pq_centroid_index(index_type)) {
-        if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-          ivf_second_table_is_valid = true;
-        }
-      } else if (share::schema::is_vec_ivfflat_rowkey_cid_index(index_type) ||
-                 share::schema::is_vec_ivfsq8_cid_vector_index(index_type) ||
-                 share::schema::is_vec_ivfpq_code_index(index_type)) {
-        if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-          ivf_third_table_is_valid = true;
-        }
-      } else if (share::schema::is_vec_ivfsq8_rowkey_cid_index(index_type) ||
-                 share::schema::is_vec_ivfpq_rowkey_cid_index(index_type)) {
-        if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-          ivf_forth_table_is_valid = true;
-        }
-      }
-    }
-  }
-
-  if ((ivf_type == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT && ivf_first_table_is_valid &&
-       ivf_second_table_is_valid && ivf_third_table_is_valid) ||
-      (ivf_first_table_is_valid && ivf_second_table_is_valid && ivf_third_table_is_valid &&
-       ivf_forth_table_is_valid)) {
-    is_valid = true;
-  } else {
-    is_valid = false;
-    LOG_WARN("vector index is not all valid",
-             K(ivf_first_table_is_valid),
-             K(ivf_second_table_is_valid),
-             K(ivf_third_table_is_valid),
-             K(ivf_forth_table_is_valid));
-  }
-
-  return ret;
-}
-
 int ObVectorIndexUtil::check_vector_index_by_column_name(
     ObSchemaGetterGuard &schema_guard,
     const schema::ObTableSchema &table_schema,
@@ -2082,6 +2011,8 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
   const int64_t data_table_id = table_schema.get_table_id();
   const int64_t database_id = table_schema.get_database_id();
   const int64_t tenant_id = table_schema.get_tenant_id();
+
+  bool is_hnsw = false;
   bool vid_rowkey_table_is_valid = false;
   bool rowkey_vid_table_is_valid = false;
   bool delta_buffer_table_is_valid = false;
@@ -2089,7 +2020,11 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
   bool snapshot_table_is_valid = false;
 
   bool is_ivf = false;
-  ObVectorIndexParam index_param;
+  bool ivf_first_table_is_valid = false;
+  bool ivf_second_table_is_valid = false;
+  bool ivf_third_table_is_valid = false;
+  bool ivf_forth_table_is_valid = true;
+
   is_valid = false;
 
   if (index_column_name.empty() ||
@@ -2112,42 +2047,61 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
           LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
         } else if (!index_schema->is_vec_index()) {
           // skip none vector index
-        } else if (index_schema->is_vec_rowkey_vid_type()) {
-          if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-            rowkey_vid_table_is_valid = true;
-          }
-        } else if (index_schema->is_vec_vid_rowkey_type()) {
-          if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-            vid_rowkey_table_is_valid = true;
-          }
-        } else if (index_schema->is_vec_delta_buffer_type()) {
-          if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
-            // skip
-          } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-            delta_buffer_table_is_valid = true;
-          }
-        } else if (index_schema->is_vec_index_id_type()) {
-          if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
-            // skip
-          } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-            index_id_table_is_valid = true;
-          }
-        } else if (index_schema->is_vec_index_snapshot_data_type()) {
-          if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
-            // skip
-          } else if (index_schema->can_read_index() && index_schema->is_index_visible()) {
-            snapshot_table_is_valid = true;
+        } else if (index_schema->is_vec_hnsw_index()) {
+          if (index_schema->is_vec_rowkey_vid_type()) {
+            rowkey_vid_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          } else if (index_schema->is_vec_vid_rowkey_type()) {
+            vid_rowkey_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          } else if (index_schema->is_vec_delta_buffer_type()) {
+            if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
+              // skip
+            } else {
+              is_hnsw = true;
+              delta_buffer_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+            }
+          } else if (index_schema->is_vec_index_id_type()) {
+            if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
+              // skip
+            } else {
+              is_hnsw = true;
+              index_id_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+            }
+          } else if (index_schema->is_vec_index_snapshot_data_type()) {
+            if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
+              // skip
+            } else {
+              is_hnsw = true;
+              snapshot_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+            }
           }
         } else if (index_schema->is_vec_ivf_index()) {
-          if (OB_FAIL(parser_params_from_string(index_schema->get_index_params(), ObVectorIndexType::VIT_IVF_INDEX, index_param))) {
-            LOG_WARN("fail to get index params", K(index_schema->get_index_params()));
-          } else {
-            is_ivf = true;
+          if (index_schema->is_vec_domain_index()) {
+            if (!is_match_index_column_name(table_schema, *index_schema, index_column_name)) {
+              // skip
+            } else {
+              is_ivf = true;
+              ivf_first_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+            }
+          } else if (index_schema->is_vec_ivfflat_cid_vector_index() ||
+                     index_schema->is_vec_ivfsq8_meta_index() ||
+                     index_schema->is_vec_ivfpq_pq_centroid_index()) {
+            ivf_second_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          } else if (index_schema->is_vec_ivfflat_rowkey_cid_index() ||
+                     index_schema->is_vec_ivfsq8_cid_vector_index() ||
+                     index_schema->is_vec_ivfpq_code_index()) {
+            ivf_third_table_is_valid = index_schema->can_read_index() && index_schema->is_index_visible();
+          } else if (index_schema->is_vec_ivfsq8_rowkey_cid_index() || index_schema->is_vec_ivfpq_rowkey_cid_index()) {
+            ivf_forth_table_is_valid = index_schema->can_read_index() || !index_schema->is_index_visible();
           }
         }
       }
+
       if(OB_FAIL(ret)){
-      } else if (!is_ivf) {
+      } else if (is_hnsw && is_ivf) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("only one vector index can be created on a vector column.", K(ret),
+                  K(index_column_name), K(data_table_id), K(tenant_id), K(database_id));
+      } else if (is_hnsw) {
         if (rowkey_vid_table_is_valid && vid_rowkey_table_is_valid && delta_buffer_table_is_valid &&
             index_id_table_is_valid && snapshot_table_is_valid) {
           is_valid = true;
@@ -2159,13 +2113,16 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
                    K(index_id_table_is_valid),
                    K(snapshot_table_is_valid));
         }
-      } else if (OB_FAIL(check_ivf_vector_index_by_column_name(schema_guard,
-                                                               table_schema,
-                                                               simple_index_infos,
-                                                               index_column_name,
-                                                               index_param.type_,
-                                                               is_valid))) {
-        LOG_WARN("fail check ivf index valid", K(index_column_name), K(index_param));
+      } else if (is_ivf) {
+        if (ivf_first_table_is_valid && ivf_second_table_is_valid && ivf_third_table_is_valid && ivf_forth_table_is_valid) {
+          is_valid = true;
+        } else {
+          LOG_WARN("vector index is not all valid",
+                  K(ivf_first_table_is_valid),
+                  K(ivf_second_table_is_valid),
+                  K(ivf_third_table_is_valid),
+                  K(ivf_forth_table_is_valid));
+        }
       }
     }
   }
