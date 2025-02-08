@@ -803,7 +803,7 @@ OB_INLINE int ObExprDateFormat::calc_year_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
-    year = dt_yday = usec = 0; // USEC_ONLY, YEAR_ONLY
+    year = dt_yday = usec = hour = minute = sec = fsec = 0; // USEC_ONLY, YEAR_ONLY
   } else {
     ObTimeConverter::days_to_year(date, year);
     calc_time_parts(usec);
@@ -824,7 +824,7 @@ OB_INLINE int ObExprDateFormat::calc_yday_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
-    year = dt_yday = usec = 0; // USEC_ONLY, YEAR_ONLY, YDAY_ONLY
+    year = dt_yday = usec = hour = minute = sec = fsec =  0; // USEC_ONLY, YEAR_ONLY, YDAY_ONLY
   } else {
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     calc_time_parts(usec);
@@ -845,7 +845,7 @@ OB_INLINE int ObExprDateFormat::calc_week_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
-    dt_wday = usec = 0; // USEC_ONLY, WEEK_ONLY
+    dt_wday = usec = hour = minute = sec = fsec = 0; // USEC_ONLY, WEEK_ONLY
   } else {
     dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
     calc_time_parts(usec);
@@ -862,7 +862,7 @@ OB_INLINE int ObExprDateFormat::calc_year_month(COMMON_PART_FORMAT_FUNC_ARG_DECL
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset,lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
-    year = month = usec = dt_yday = dt_mday = 0;  // USEC_ONLY, YEAR_ONLY, YEAR_MONTH
+    year = month = usec = dt_yday = dt_mday = hour = minute = sec = fsec = 0;  // USEC_ONLY, YEAR_ONLY, YEAR_MONTH
   } else {
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
     ObTimeConverter::ydays_to_month_mdays(year, dt_yday, month, dt_mday);
@@ -880,7 +880,7 @@ OB_INLINE int ObExprDateFormat::calc_year_week(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
-    year = date = usec = dt_yday = dt_wday = 0; // USEC_ONLY, YEAR_ONLY, WEEK_ONLY, YEAR_WEEK
+    year = date = usec = dt_yday = dt_wday = hour = minute = sec = fsec = 0; // USEC_ONLY, YEAR_ONLY, WEEK_ONLY, YEAR_WEEK
   } else {
     dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
@@ -899,7 +899,7 @@ OB_INLINE int ObExprDateFormat::calc_year_month_week(COMMON_PART_FORMAT_FUNC_ARG
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
     // USEC_ONLY, YEAR_ONLY, YEAR_MONTH, WEEK_ONLY, YEAR_WEEK, YEAR_MONTH_WEEK
-    year = month = date = usec = dt_yday = dt_mday = dt_wday = 0;
+    year = month = date = usec = dt_yday = dt_mday = dt_wday = hour = minute = sec = fsec = 0;
   } else {
     dt_wday = WDAY_OFFSET[date % DAYS_PER_WEEK][4];
     ObTimeConverter::days_to_year_ydays(date, year, dt_yday);
