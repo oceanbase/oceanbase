@@ -213,12 +213,7 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx,
                && types_.at(var_idx) != PL_CURSOR_TYPE
                && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
-      if (OB_FAIL(ret)) {
-      } else if (PL_RECORD_TYPE == types_.at(var_idx)) {
-        OZ (ObUserDefinedType::reset_record(vars_.at(var_idx), NULL));
-      } else {
-        OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, true));
-      }
+      OZ (ObUserDefinedType::reset_composite(vars_.at(var_idx), NULL));
     } else {
       vars_.at(var_idx) = value;
     }

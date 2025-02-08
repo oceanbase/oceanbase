@@ -249,11 +249,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
               // set basic type value inside symbol table to null
               OZ (package_state.set_package_var_val(var_idx, value, resolve_ctx, false));
             } else {
-              if (var_type.is_record_type() && PL_RECORD_TYPE == value.get_meta().get_extend_type()) {
-                OZ (ObUserDefinedType::reset_record(value, NULL));
-              } else {
-                OZ (ObUserDefinedType::destruct_obj(value, &(resolve_ctx.session_info_), true));
-              }
+              OZ (ObUserDefinedType::reset_composite(value, &(resolve_ctx.session_info_)));
             }
             OZ (var_type.deserialize(resolve_ctx,
                                     var_type.is_cursor_type() ?
