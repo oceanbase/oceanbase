@@ -1381,7 +1381,7 @@ int ObBackupTaskScheduler::check_alive_(int64_t &last_check_task_on_server_ts, b
 
       if (OB_SUCC(ret) && is_exist) {
         if (OB_FAIL(queue_.update_task_last_alive_time(task))) {
-          LOG_ERROR("failed to update task last check alive time", K(ret), KPC(task));
+          LOG_WARN("failed to update task last check alive time", K(ret), KPC(task));
         } else {
           LOG_INFO("update task last alive time", KPC(task));
         }
