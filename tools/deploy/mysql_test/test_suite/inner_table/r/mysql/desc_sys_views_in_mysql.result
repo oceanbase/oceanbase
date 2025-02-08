@@ -4606,6 +4606,7 @@ cnt
 1
 desc oceanbase.GV$OB_SQL_PLAN;
 Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
 SVR_IP	varchar(46)	NO		NULL	
 SVR_PORT	bigint(20)	NO		NULL	
 PLAN_ID	bigint(20)	NO		NULL	
@@ -4649,6 +4650,7 @@ cnt
 1
 desc oceanbase.V$OB_SQL_PLAN;
 Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO			
 SQL_ID	varchar(32)	NO			
 DB_ID	bigint(20)	NO			
 PLAN_HASH	bigint(20) unsigned	NO			
