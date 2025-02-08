@@ -169,6 +169,7 @@ int ObMViewRefreshExecutor::do_refresh()
       while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
         ObMViewTransaction trans;
         ObMViewRefresher refresher;
+        const int64_t subtask_start_time = ObTimeUtil::current_time();
         if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
           LOG_WARN("fail to start trans", KR(ret));
         } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
@@ -187,6 +188,20 @@ int ObMViewRefreshExecutor::do_refresh()
         }
         refresh_ctx.trans_ = nullptr;
         if (OB_FAIL(ret)) {
+          // if failed,retry_id will inc, when success,
+          // the last success record with new retry_id
+          if (OB_NOT_NULL(refresh_stats_collection)) {
+            int tmp_ret = OB_SUCCESS;
+            const int64_t fail_time = ObTimeUtil::current_time();
+            ObMViewRefreshStats stat = refresh_stats_collection->refresh_stats_;
+            stat.set_start_time(subtask_start_time);
+            stat.set_end_time(fail_time);
+            stat.set_elapsed_time((fail_time - subtask_start_time) / 1000 / 1000);
+            stat.set_result(ret);
+            if (OB_TMP_FAIL(ObMViewRefreshStats::insert_refresh_stats(stat))) {
+              LOG_WARN("fail to insert refresh stats in trans", K(ret), K(tmp_ret), K(stat));
+            }
+          }
           if (ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(ret)) {
             ret = OB_SUCCESS;
             refresh_ctx.reuse();

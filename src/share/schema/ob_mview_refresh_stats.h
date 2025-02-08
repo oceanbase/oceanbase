@@ -194,6 +194,7 @@ public:
 #undef DEFINE_GETTER_AND_SETTER
 
   int gen_insert_refresh_stats_dml(uint64_t tenant_id, share::ObDMLSqlSplicer &dml) const;
+  static int insert_refresh_stats(const ObMViewRefreshStats &refresh_stats);
   static int insert_refresh_stats(ObISQLClient &sql_client,
                                   const ObMViewRefreshStats &refresh_stats);
   static int drop_all_refresh_stats(ObISQLClient &sql_client, uint64_t tenant_id,

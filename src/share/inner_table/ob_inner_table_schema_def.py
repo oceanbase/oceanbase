@@ -37287,6 +37287,7 @@ def_table_schema(
           oceanbase.__all_virtual_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
+          AND C1.RESULT = 0
         GROUP BY TENANT_ID, REFRESH_ID
       ) C
     WHERE A.TENANT_ID = B.TENANT_ID
@@ -37341,6 +37342,7 @@ def_table_schema(
           oceanbase.__all_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
+          AND C1.RESULT = 0
         GROUP BY TENANT_ID, REFRESH_ID
       ) C
     WHERE A.TENANT_ID = B.TENANT_ID
@@ -37389,6 +37391,7 @@ def_table_schema(
       AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
+      AND C.RESULT = 0
 """.replace("\n", " ")
 )
 
@@ -37431,6 +37434,7 @@ def_table_schema(
       AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
+      AND C.RESULT = 0
 """.replace("\n", " ")
 )
 

@@ -62,6 +62,7 @@ int ObMViewRefresher::init(ObExecContext &ctx, ObMViewRefreshCtx &refresh_ctx,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_MVIEW_REFRESH)
 int ObMViewRefresher::refresh()
 {
   int ret = OB_SUCCESS;
@@ -105,6 +106,11 @@ int ObMViewRefresher::refresh()
     }
     LOG_INFO("mview refresh finish", KR(ret), K(refresh_param_));
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_FAIL(ERRSIM_MVIEW_REFRESH)) {
+    LOG_WARN("errsim mview refresh", K(ret));
+  }
+#endif
   return ret;
 }
 
