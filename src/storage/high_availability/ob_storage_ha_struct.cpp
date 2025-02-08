@@ -447,6 +447,15 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_(
       if (OB_SUCC(ret) && !allow_gc) {
         LOG_INFO("transfer dest ls replay on src ls, do not allow gc", "src_ls", ls_id, "dest_ls", ls->get_ls_id(),
             K(transfer_meta_info));
+#ifdef ERRSIM
+        const uint64_t tenant_id = MTL_ID();
+        SERVER_EVENT_ADD("storage_ha", "transfer_ls_gc",
+                         "tenant_id", tenant_id,
+                         "src_ls_id", ls_id.id(),
+                         "dest_ls_id", ls->get_ls_id().id(),
+                         "addr", GCTX.self_addr(),
+                         "comment", "transfer src ls do not allow gc");
+#endif
         break;
       }
     }
@@ -459,6 +468,7 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
     bool &allow_gc)
 {
   int ret = OB_SUCCESS;
+  allow_gc = false;
   if (!is_valid(status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("allow transfer src ls gc get invalid argument", K(ret), K(status));
@@ -468,6 +478,8 @@ int ObMigrationStatusHelper::allow_transfer_src_ls_gc_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
       && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
     allow_gc = true;
+  } else {
+    allow_gc = false;
   }
   return ret;
 }

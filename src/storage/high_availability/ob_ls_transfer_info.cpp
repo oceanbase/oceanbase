@@ -18,7 +18,7 @@ using namespace oceanbase;
 using namespace share;
 using namespace storage;
 
-
+ERRSIM_POINT_DEF(EN_LS_TRANSFER_INFO_DATA_VERSION);
 ObLSTransferInfo::ObLSTransferInfo()
   : ls_id_(TRANSFER_INIT_LS_ID),
     transfer_start_scn_(share::SCN::invalid_scn())
@@ -208,6 +208,9 @@ ObLSTransferMetaInfo::ObLSTransferMetaInfo()
     tablet_id_array_(),
     data_version_(DEFAULT_MIN_DATA_VERSION)
 {
+#ifdef ERRSIM
+  data_version_ = EN_LS_TRANSFER_INFO_DATA_VERSION ? DATA_CURRENT_VERSION : DEFAULT_MIN_DATA_VERSION;
+#endif
 }
 
 int ObLSTransferMetaInfo::set_transfer_info(
