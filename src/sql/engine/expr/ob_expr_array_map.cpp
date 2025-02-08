@@ -202,7 +202,6 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
                                           uint32_t idx)
 {
   int ret = OB_SUCCESS;
-  ObIArrayType *child_obj = NULL;
   for (uint32_t j = 0; j < info->param_num_ && OB_SUCC(ret); j++) {
     ObExpr *lambda_para = info->param_exprs_[j];
     uint32_t para_idx = info->param_idx_[j];
@@ -281,12 +280,12 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
           break;
         }
         case ObCollectionSQLType: {
+          ObIArrayType *child_obj = NULL;
           ObArrayNested *nest_array = static_cast<ObArrayNested *>(arr_obj[para_idx]);
           ObIArrayType *child_type = nest_array->get_child_array();
           ObString elem_str;
-          if (child_obj == NULL && OB_FAIL(child_type->clone_empty(alloc, child_obj, false))) {
+          if (OB_FAIL(child_type->clone_empty(alloc, child_obj, false))) {
             LOG_WARN("clone empty failed", K(ret));
-          } else if (FALSE_IT(child_obj->clear())) {
           } else if (OB_FAIL(nest_array->at(idx, *child_obj))) {
             LOG_WARN("get array element failed", K(ret), K(idx));
           } else if (OB_FAIL(ObArrayExprUtils::set_array_res(child_obj, child_obj->get_raw_binary_len(), *lambda_para, ctx, elem_str))) {
