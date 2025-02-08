@@ -206,6 +206,7 @@ int ObLockTable::get_table_schema_(
     LOG_WARN("failed to add column", K(ret), K(value_column));
   } else {
     schema.set_micro_index_clustered(false);
+    schema.set_enable_macro_block_bloom_filter(false);
   }
   return ret;
 }

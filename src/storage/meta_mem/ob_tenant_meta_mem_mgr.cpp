@@ -239,6 +239,12 @@ int ObTenantMetaMemMgr::init()
     is_inited_ = true;
   }
 
+  // Init for persistent bloom filter load tg.
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(bf_load_tg_.init())) {
+    LOG_WARN("fail to init bloom filter load tg", K(ret));
+  }
+
   if (OB_UNLIKELY(!is_inited_)) {
     destroy();
   }
@@ -308,6 +314,8 @@ int ObTenantMetaMemMgr::start()
   } else if (OB_FAIL(TG_SCHEDULE(
       tg_id_, tablet_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule tablet gc task", K(ret));
+  } else if (OB_FAIL(bf_load_tg_.start())) {
+    LOG_WARN("fail to lstart bloom filter load tg", K(ret));
   } else {
     LOG_INFO("successfully to start t3m's three tasks", K(ret), K(tg_id_));
   }
@@ -316,6 +324,7 @@ int ObTenantMetaMemMgr::start()
 
 void ObTenantMetaMemMgr::stop()
 {
+  bf_load_tg_.stop();
   // When the observer exits by kill -15, the release of meta is triggered by prepare_safe_destory
   // called by ObLSService::stop(), then the ObLSService::wait() infinitely check if all meta release completed,
   // so t3m can't stop gc thread until check_all_meta_mem_released is true in ObTenantMetaMemMgr::wait()
@@ -345,6 +354,9 @@ void ObTenantMetaMemMgr::wait()
     TG_STOP(tg_id_);
 
     TG_WAIT(tg_id_);
+
+    // Wait for bloom filter load tg.
+    bf_load_tg_.wait();
   }
 }
 
@@ -378,6 +390,10 @@ void ObTenantMetaMemMgr::destroy()
     pool_arr_[i] = nullptr;
   }
   meta_cache_io_allocator_.destroy();
+
+  // Destroy for bloom filter load tg.
+  bf_load_tg_.destroy();
+
   is_inited_ = false;
 }
 
@@ -2044,6 +2060,18 @@ int ObTenantMetaMemMgr::dec_external_tablet_cnt(const uint64_t tablet_id, const 
   const ObDieingTabletMapKey dieing_key(tablet_id, tablet_transfer_seq);
   if (OB_FAIL(external_tablet_cnt_map_.unreg_tablet(dieing_key))) {
     LOG_WARN("fail to dec external tablet cnt", K(ret), K(dieing_key));
+  }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,
+                                                  const share::ObLSID &ls_id,
+                                                  const MacroBlockId &macro_id,
+                                                  const ObCommonDatumRowkey &common_rowkey)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(bf_load_tg_.add_load_task(sstable_key, ls_id, macro_id, common_rowkey))) {
+    LOG_WARN("fail to add bloom filter load task", K(ret), K(sstable_key), K(macro_id));
   }
   return ret;
 }

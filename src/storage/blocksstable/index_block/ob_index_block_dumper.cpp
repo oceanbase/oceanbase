@@ -575,11 +575,11 @@ void ObIndexTreeBlockDumper::clean_status()
 }
 
 ////////////////////////////////////// Index Block Loader //////////////////////////////////////////
-ObIndexBlockLoader::ObIndexBlockLoader(): macro_io_handle_(), micro_reader_helper_(), cur_micro_block_(),
-    micro_iter_(), row_allocator_("IndexBlkLoader"), micro_reader_(nullptr), index_block_info_(nullptr),
-    macro_id_array_(nullptr), io_allocator_(nullptr), io_buf_(),
-    curr_block_row_idx_(-1), curr_block_row_cnt_(-1),
-    cur_block_idx_(-1), prefetch_idx_(-1), is_inited_(false)
+ObIndexBlockLoader::ObIndexBlockLoader()
+    : macro_io_handle_(), micro_reader_helper_(), cur_micro_block_(), micro_iter_(), row_allocator_("IndexBlkLoader"),
+      micro_reader_(nullptr), index_block_info_(nullptr), macro_id_array_(nullptr), io_allocator_(nullptr), io_buf_(),
+      curr_block_row_idx_(-1), curr_block_row_cnt_(-1), cur_block_idx_(-1), prefetch_idx_(-1),
+      data_version_(0), is_inited_(false)
 {
 }
 
@@ -605,6 +605,7 @@ void ObIndexBlockLoader::reset()
   curr_block_row_cnt_ = -1;
   cur_block_idx_ = -1;
   prefetch_idx_ = -1;
+  data_version_ = 0;
   macro_id_array_ = nullptr;
   io_allocator_ = nullptr;
   is_inited_ = false;
@@ -622,12 +623,16 @@ void ObIndexBlockLoader::reuse()
   macro_id_array_ = nullptr;
 }
 
-int ObIndexBlockLoader::init(common::ObIAllocator &allocator)
+int ObIndexBlockLoader::init(common::ObIAllocator &allocator, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "Init twice", K(ret));
+  } else if (OB_UNLIKELY(data_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to init index block loader, invalid major working cluster version",
+             K(ret), K(data_version));
   } else if (OB_FAIL(micro_reader_helper_.init(allocator))) {
     STORAGE_LOG(WARN, "Fail to init micro reader helper");
   } else {
@@ -644,6 +649,7 @@ int ObIndexBlockLoader::init(common::ObIAllocator &allocator)
       curr_block_row_cnt_ = -1;
       cur_block_idx_ = -1;
       prefetch_idx_ = -1;
+      data_version_ = data_version;
       is_inited_ = true;
     }
   }
@@ -684,8 +690,8 @@ int ObIndexBlockLoader::get_next_array_row(ObDatumRow &row)
   } else {
     row_allocator_.reuse();
     const ObDataMacroBlockMeta *macro_meta = index_block_info_->macro_meta_list_->at(curr_block_row_idx_);
-    if (OB_FAIL(macro_meta->build_row(row, row_allocator_))) {
-      STORAGE_LOG(WARN, "fail to build row", K(ret), KPC(macro_meta));
+    if (OB_FAIL(macro_meta->build_row(row, row_allocator_, data_version_))) {
+      STORAGE_LOG(WARN, "fail to build row", K(ret), K(data_version_), KPC(macro_meta));
     } else {
       curr_block_row_idx_++;
       STORAGE_LOG(DEBUG, "loader get next array row", K(ret),

@@ -1516,6 +1516,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     // filed for micro_index_clustered
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, micro_index_clustered, table_schema,
         true/*skip null error*/, true/*ignore_column_error*/, false);
+    // fill macro block bloom filter
+    EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, enable_macro_block_bloom_filter, table_schema,
+        true/*skip null error*/, true/*ignore_column_error*/, false);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_properties, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(

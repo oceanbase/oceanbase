@@ -1717,6 +1717,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       micro_index_clustered_ = src_schema.micro_index_clustered_;
+      enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
       mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));

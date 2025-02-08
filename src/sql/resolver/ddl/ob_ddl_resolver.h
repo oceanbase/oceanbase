@@ -1130,6 +1130,7 @@ protected:
   common::ObString index_params_;
   common::ObString vec_column_name_;
   ObIndexType vec_index_type_;
+  bool enable_macro_block_bloom_filter_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

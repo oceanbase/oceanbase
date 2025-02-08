@@ -435,6 +435,12 @@ int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObT
   return ret;
 }
 
+int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema)
+{
+  table_schema.set_enable_macro_block_bloom_filter(false);
+  return OB_SUCCESS;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -668,6 +674,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(set_default_micro_index_clustered_(table_schema))) {
               SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
+            } else if (OB_FAIL(set_default_enable_macro_block_bloom_filter_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set table options (enable_macro_block_bloom_filter) failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {

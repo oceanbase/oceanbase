@@ -1170,6 +1170,7 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
       blocksstable::ObDatumRow macro_meta_row;
       common::ObArenaAllocator meta_row_allocator; // use temporary allocator to get datum row
       int64_t pos = 0;
+      uint64_t data_version = 0;
 
       if (OB_ISNULL(copy_macro_block_handle_[handle_idx_].macro_meta_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1177,11 +1178,13 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
       } else if (!copy_macro_block_handle_[handle_idx_].macro_meta_->is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("macro meta is not valid", K(ret), KPC(copy_macro_block_handle_[handle_idx_].macro_meta_));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+        LOG_WARN("fail to get min data version", K(ret), K(MTL_ID()), K(data_version));
       } else if (OB_FAIL(macro_meta_row.init(copy_macro_block_handle_[handle_idx_].macro_meta_->get_meta_val().rowkey_count_ + 1))) {
         // meta row's cell: all row keys (key) + value column
         LOG_WARN("failed to init macro meta row", K(ret), KPC(copy_macro_block_handle_[handle_idx_].macro_meta_));
-      } else if (OB_FAIL(copy_macro_block_handle_[handle_idx_].macro_meta_->build_row(macro_meta_row, meta_row_allocator))) {
-        LOG_WARN("failed to build macro row", K(ret), KPC(copy_macro_block_handle_[handle_idx_].macro_meta_));
+      } else if (OB_FAIL(copy_macro_block_handle_[handle_idx_].macro_meta_->build_row(macro_meta_row, meta_row_allocator, data_version))) {
+        LOG_WARN("failed to build macro row", K(ret), KPC(copy_macro_block_handle_[handle_idx_].macro_meta_), K(data_version));
       } else if (OB_FAIL(meta_row_buf_.write_serialize(macro_meta_row))) {
         LOG_WARN("failed to write serialize macro meta row into meta row buf", K(ret), K(macro_meta_row), K_(meta_row_buf));
       } else if (FALSE_IT(occupy_size = meta_row_buf_.length())) {

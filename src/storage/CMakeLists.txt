@@ -15,6 +15,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_micro_block_header.cpp
   blocksstable/ob_macro_block.cpp
   blocksstable/ob_macro_block_bare_iterator.cpp
+  blocksstable/ob_macro_block_bloom_filter.cpp
   blocksstable/ob_macro_block_checker.cpp
   blocksstable/ob_macro_block_common_header.cpp
   blocksstable/ob_macro_block_handle.cpp
@@ -708,6 +709,7 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_tenant_meta_obj_pool.cpp
   utl_file/ob_utl_file_handler.cpp
   blockstore/ob_shared_object_reader_writer.cpp
+  blocksstable/ob_bloom_filter_load_task.cpp
   concurrency_control/ob_multi_version_garbage_collector.cpp
   concurrency_control/ob_trans_stat_row.cpp
   concurrency_control/ob_data_validation_service.cpp

@@ -1,6 +1,7 @@
 storage_dml_unittest(test_bloom_filter_cache)
 storage_dml_unittest(test_block_cache)
 storage_dml_unittest(test_clustered_index_writer)
+storage_dml_unittest(test_macro_block_bloom_filter)
 storage_dml_unittest(test_index_block_row_struct)
 storage_dml_unittest(test_index_block_tree_cursor)
 storage_dml_unittest(test_index_block_row_scanner)

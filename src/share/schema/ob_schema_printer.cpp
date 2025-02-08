@@ -1859,7 +1859,19 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print use bloom filter", K(ret), K(table_schema));
     }
   }
-
+  if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)
+      && !table_schema.is_external_table()) {
+    uint64_t compat_version = OB_INVALID_VERSION;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      SHARE_SCHEMA_LOG(WARN, "get min data_version failed", K(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_3_5_1) {
+      // do nothing
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENABLE_MACRO_BLOCK_BLOOM_FILTER = %s ",
+                                       table_schema.get_enable_macro_block_bloom_filter() ? "TRUE" : "FALSE"))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print enable_macro_block_bloom_filter",
+                       K(ret), K(table_schema.get_enable_macro_block_bloom_filter()));
+    }
+  }
   if (OB_SUCCESS == ret && !is_index_tbl && table_schema.is_enable_row_movement()
       && !is_no_table_options(sql_mode) && !table_schema.is_external_table()) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENABLE ROW MOVEMENT "))) {
@@ -2422,6 +2434,18 @@ int ObSchemaPrinter::print_table_definition_table_options(
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "USE_BLOOM_FILTER = %s ",
                                 table_schema.is_use_bloomfilter() ? "TRUE" : "FALSE"))) {
       OB_LOG(WARN, "fail to print use bloom filter", K(ret), K(table_schema));
+    }
+  }
+  if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl) {
+    uint64_t compat_version = OB_INVALID_VERSION;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      SHARE_SCHEMA_LOG(WARN, "get min data_version failed", K(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_3_5_1) {
+      // do nothing
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENABLE_MACRO_BLOCK_BLOOM_FILTER = %s ",
+                                       table_schema.get_enable_macro_block_bloom_filter() ? "TRUE" : "FALSE"))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print enable_macro_block_bloom_filter",
+                       K(ret), K(table_schema.get_enable_macro_block_bloom_filter()));
     }
   }
   if (OB_SUCCESS == ret && !strict_compat_ && !is_index_tbl) {

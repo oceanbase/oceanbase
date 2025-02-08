@@ -137,6 +137,7 @@ private:
   int check_max_row_data_length(const ObTableSchema &table_schema);
   int create_default_partition_for_table(ObTableSchema &table_schema);
   int set_default_micro_index_clustered_(share::schema::ObTableSchema &table_schema);
+  int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
 
 private:

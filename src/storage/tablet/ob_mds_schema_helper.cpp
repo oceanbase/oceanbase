@@ -231,6 +231,8 @@ int ObMdsSchemaHelper::build_table_schema(
     table_schema.set_row_store_type(ObRowStoreType::FLAT_ROW_STORE);
     table_schema.set_table_name(MDS_TABLE_NAME);
     table_schema.set_schema_version(MDS_SCHEMA_VERSION);
+    // Disable macro block bloom filter for mds table.
+    table_schema.set_enable_macro_block_bloom_filter(false);
   }
 
   if (OB_FAIL(ret)) {

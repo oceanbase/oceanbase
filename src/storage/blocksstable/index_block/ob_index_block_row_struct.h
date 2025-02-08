@@ -91,15 +91,34 @@ public:
   bool is_last_row_last_flag_;
   bool is_serialized_agg_row_;
   bool is_clustered_index_;
+  bool has_macro_block_bloom_filter_;
 
-  TO_STRING_KV(KP_(data_store_desc), KP_(aggregated_row), K_(row_key), K_(macro_id),
-      K_(logic_micro_id), K_(shared_data_macro_id), K_(data_checksum),
-      K_(block_offset), K_(row_count), K_(row_count_delta),
-      K_(max_merged_trans_version), K_(block_size),
-      K_(macro_block_count), K_(micro_block_count), K_(row_offset),
-      K_(is_deleted), K_(contain_uncommitted_row), K_(is_data_block),
-      K_(is_secondary_meta), K_(is_macro_node), K_(has_string_out_row), K_(has_lob_out_row),
-      K_(is_last_row_last_flag), K_(is_serialized_agg_row), K_(is_clustered_index));
+  TO_STRING_KV(KP_(data_store_desc),
+               KP_(aggregated_row),
+               K_(row_key),
+               K_(macro_id),
+               K_(logic_micro_id),
+               K_(shared_data_macro_id),
+               K_(data_checksum),
+               K_(block_offset),
+               K_(row_count),
+               K_(row_count_delta),
+               K_(max_merged_trans_version),
+               K_(block_size),
+               K_(macro_block_count),
+               K_(micro_block_count),
+               K_(row_offset),
+               K_(is_deleted),
+               K_(contain_uncommitted_row),
+               K_(is_data_block),
+               K_(is_secondary_meta),
+               K_(is_macro_node),
+               K_(has_string_out_row),
+               K_(has_lob_out_row),
+               K_(is_last_row_last_flag),
+               K_(is_serialized_agg_row),
+               K_(is_clustered_index),
+               K_(has_macro_block_bloom_filter));
 };
 
 struct ObIndexBlockRowHeader
@@ -142,14 +161,12 @@ struct ObIndexBlockRowHeader
   {
     bool aggregation_valid = (is_pre_aggregated() && is_major_node()) || !is_pre_aggregated();
     bool version_valid = INDEX_BLOCK_HEADER_V1 == version_ || INDEX_BLOCK_HEADER_V2 == version_;
-    bool macro_id_valid =
-        (get_macro_id() == DEFAULT_IDX_ROW_MACRO_ID) ||
-        !is_data_block() ||
-        !is_data_index() ||
-        (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() &&
-         is_data_index() /* clustered index */);
+    bool macro_id_valid
+        = (get_macro_id() == DEFAULT_IDX_ROW_MACRO_ID) || !is_data_block() || !is_data_index()
+          || (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() && is_data_index() /* clustered index */);
     bool logic_id_valid = !(has_logic_micro_id() && has_shared_data_macro_id());
-    return aggregation_valid && version_valid && macro_id_valid && logic_id_valid;
+    bool bloom_filter_valid = (!has_macro_block_bloom_filter() || is_macro_node());
+    return aggregation_valid && version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
   }
 
   OB_INLINE uint64_t get_version() const { return version_; }
@@ -254,6 +271,7 @@ struct ObIndexBlockRowHeader
   OB_INLINE bool has_logic_micro_id() const { return 1 == has_logic_micro_id_; }
   OB_INLINE bool has_shared_data_macro_id() const { return 1 == has_shared_data_macro_id_; }
 
+  OB_INLINE bool has_macro_block_bloom_filter() const { return 1 == has_macro_block_bloom_filter_; }
   OB_INLINE void set_data_block() { is_data_block_ = 1; }
   OB_INLINE void set_leaf_block() { is_leaf_block_ = 1; }
   OB_INLINE void set_major_node() { is_major_node_ = 1; }
@@ -273,22 +291,23 @@ struct ObIndexBlockRowHeader
     uint64_t pack_;
     struct
     {
-      uint64_t version_:8;                  // Version number of index block row header
-      uint64_t row_store_type_:8;           // Row store type of next level micro block
-      uint64_t compressor_type_:8;          // Compressor type for next micro block
-      uint64_t is_data_index_:1;       // Whether this tree is built for data index
-      uint64_t is_data_block_:1;            // Whether current row point to a data block directly
-      uint64_t is_leaf_block_:1;             // Whether current row point to a leaf index block
-      uint64_t is_major_node_:1;            // Whether this tree is located in a major sstable
-      uint64_t is_pre_aggregated_:1;        // Whether data in children of this row were pre-aggregated
-      uint64_t is_deleted_:1;               // Whether the microblock was pointed was deleted
-      uint64_t contain_uncommitted_row_:1;  // Whether children of this row contains uncommitted row
-      uint64_t is_macro_node_:1;            // Whether this row represent for macro block level meta
-      uint64_t has_string_out_row_ : 1;     // Whether sub-tree of this node has string column out row as lob
-      uint64_t all_lob_in_row_ : 1;         // Whether sub-tree of this node has out row lob column
-      uint64_t has_logic_micro_id_: 1;      // Whether this row has logic micro id
-      uint64_t has_shared_data_macro_id_: 1;// Whether this row has shared storage macro data id
-      uint64_t reserved_:28;
+      uint64_t version_ : 8;                      // Version number of index block row header
+      uint64_t row_store_type_ : 8;               // Row store type of next level micro block
+      uint64_t compressor_type_ : 8;              // Compressor type for next micro block
+      uint64_t is_data_index_ : 1;                // Whether this tree is built for data index
+      uint64_t is_data_block_ : 1;                // Whether current row point to a data block directly
+      uint64_t is_leaf_block_ : 1;                // Whether current row point to a leaf index block
+      uint64_t is_major_node_ : 1;                // Whether this tree is located in a major sstable
+      uint64_t is_pre_aggregated_ : 1;            // Whether data in children of this row were pre-aggregated
+      uint64_t is_deleted_ : 1;                   // Whether the micro block was pointed was deleted
+      uint64_t contain_uncommitted_row_ : 1;      // Whether children of this row contains uncommitted row
+      uint64_t is_macro_node_ : 1;                // Whether this row represent for macro block level
+      uint64_t has_string_out_row_ : 1;           // Whether sub-tree of this node has string column out row as lob
+      uint64_t all_lob_in_row_ : 1;               // Whether sub-tree of this node has out row lob column
+      uint64_t has_logic_micro_id_ : 1;           // Whether this row has logic micro id
+      uint64_t has_shared_data_macro_id_ : 1;     // Whether this row has shared storage macro data id
+      uint64_t has_macro_block_bloom_filter_ : 1; // Whether this macro block has bloom filter (only in macro level)
+      uint64_t reserved_ : 27;
     };
   };
   int64_t macro_id_first_id_; // Physical macro block id, set to default in leaf node
@@ -305,15 +324,36 @@ struct ObIndexBlockRowHeader
   uint64_t macro_block_count_;              // Macro block count this index row covered
   uint64_t micro_block_count_;              // Micro block count this index row covered
 
-  TO_STRING_KV(
-      K_(version), K_(row_store_type), K_(compressor_type),
-      K_(is_data_index), K_(is_data_block),K_(is_leaf_block),
-      K_(is_major_node), K_(is_pre_aggregated),K_(is_deleted), K_(contain_uncommitted_row),
-      K_(is_macro_node), K_(has_string_out_row), K_(all_lob_in_row), K_(has_logic_micro_id),
-      K(get_macro_id()), K_(block_offset), K_(block_size),
-      K_(master_key_id), K_(encrypt_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(row_count), K_(schema_version), K_(macro_block_count), K_(micro_block_count),
-      K_(logic_micro_id), K_(data_checksum), K_(shared_data_macro_id), K_(has_shared_data_macro_id));
+  TO_STRING_KV(K_(version),
+               K_(row_store_type),
+               K_(compressor_type),
+               K_(is_data_index),
+               K_(is_data_block),
+               K_(is_leaf_block),
+               K_(is_major_node),
+               K_(is_pre_aggregated),
+               K_(is_deleted),
+               K_(contain_uncommitted_row),
+               K_(is_macro_node),
+               K_(has_string_out_row),
+               K_(all_lob_in_row),
+               K_(has_logic_micro_id),
+               K_(has_shared_data_macro_id),
+               K_(has_macro_block_bloom_filter),
+               K(get_macro_id()),
+               K_(block_offset),
+               K_(block_size),
+               K_(master_key_id),
+               K_(encrypt_id),
+               KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+               K_(row_count),
+               K_(schema_version),
+               K_(macro_block_count),
+               K_(micro_block_count),
+               K_(logic_micro_id),
+               K_(data_checksum),
+               K_(shared_data_macro_id),
+               K_(has_shared_data_macro_id));
 
 private:
   // The macro block id of old verison has only three ids, but a fourth id is added since OB4.3.3.
@@ -489,6 +529,11 @@ public:
   {
     OB_ASSERT(nullptr != row_header_);
     return row_header_->has_valid_shared_macro_id();
+  }
+  OB_INLINE bool has_macro_block_bloom_filter() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->has_macro_block_bloom_filter();
   }
   OB_INLINE const ObLogicMicroBlockId &get_logic_micro_id() const
   {

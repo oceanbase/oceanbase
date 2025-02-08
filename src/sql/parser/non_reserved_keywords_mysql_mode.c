@@ -1110,7 +1110,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"micro_index_clustered", MICRO_INDEX_CLUSTERED},
   {"unnest", UNNEST},
   {"tenant_sts_credential", TENANT_STS_CREDENTIAL},
-  {"tablets", TABLETS}
+  {"tablets", TABLETS},
+  {"enable_macro_block_bloom_filter", ENABLE_MACRO_BLOCK_BLOOM_FILTER},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

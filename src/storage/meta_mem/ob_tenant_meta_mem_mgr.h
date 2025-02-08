@@ -24,6 +24,7 @@
 #include "share/ob_ls_id.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/blocksstable/ob_bloom_filter_load_task.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/memtable/ob_memtable.h"
@@ -310,6 +311,10 @@ public:
   int dec_ref_in_leak_checker(const int32_t index);
   int inc_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
   int dec_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
+  int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,
+                                const share::ObLSID &ls_id,
+                                const MacroBlockId &macro_id,
+                                const ObCommonDatumRowkey &common_rowkey);
 
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
@@ -566,6 +571,9 @@ private:
   common::ObConcurrentFIFOAllocator meta_cache_io_allocator_;
   int64_t last_access_tenant_config_ts_;
   ObT3MResourceLimitCalculatorHandler t3m_limit_calculator_;
+
+  // For some compelling reason, we can only place persistent bloom filter load tg in t3m.
+  ObMacroBlockBloomFilterLoadTG bf_load_tg_;
 
   bool is_tablet_leak_checker_enabled_;
   bool is_inited_;

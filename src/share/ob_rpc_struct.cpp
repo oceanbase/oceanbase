@@ -10438,16 +10438,17 @@ DEF_TO_STRING(ObCreateTabletInfo)
 
 OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_, create_commit_versions_, has_cs_replica_);
 
-int ObCreateTabletExtraInfo::init(
-    const uint64_t tenant_data_version,
-    const bool need_create_empty_major,
-    const bool micro_index_clustered,
-    const ObTabletID &split_src_tablet_id)
+int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
+                                  const bool need_create_empty_major,
+                                  const bool micro_index_clustered,
+                                  const ObTabletID &split_src_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_data_version), K(need_create_empty_major), K(micro_index_clustered), K(split_src_tablet_id));
+    LOG_WARN("invalid arg",
+             K(ret), K(tenant_data_version), K(need_create_empty_major),
+             K(micro_index_clustered), K(split_src_tablet_id));
   } else {
     tenant_data_version_ = tenant_data_version;
     need_create_empty_major_ = need_create_empty_major;

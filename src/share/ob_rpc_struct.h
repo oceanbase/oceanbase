@@ -2446,7 +2446,8 @@ public:
         || alter_table_schema_.alter_option_bitset_.has_member(STORAGE_FORMAT_VERSION)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_ROUND)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_NUM)
-        || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION);
+        || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION)
+        || alter_table_schema_.alter_option_bitset_.has_member(ENABLE_MACRO_BLOCK_BLOOM_FILTER);
   }
   bool is_split_partition() const {
     return is_manual_split_partition() ||
@@ -4516,7 +4517,9 @@ public:
   ObCreateTabletExtraInfo() { reset(); }
   ~ObCreateTabletExtraInfo() { reset(); }
   int init(const uint64_t tenant_data_version,
+
            const bool need_create_empty_major,
+
            const bool micro_index_clustered,
            const ObTabletID &split_src_tablet_id);
   void reset();

@@ -5918,6 +5918,9 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
     access_param.is_inited_ = true;
     access_param.iter_param_.table_id_ = data_table.get_table_id();
     access_param.iter_param_.tablet_id_ = data_table.tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
+    if (nullptr != data_table.tablet_iter_.get_tablet()) {
+      access_param.iter_param_.ls_id_ = data_table.tablet_iter_.get_tablet()->get_tablet_meta().ls_id_;
+    }
     access_param.iter_param_.read_info_ = read_info;
     access_param.iter_param_.cg_read_infos_ = schema_param->get_cg_read_infos();
     access_param.iter_param_.out_cols_project_ = &out_col_pros;

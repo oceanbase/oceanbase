@@ -17,6 +17,11 @@
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 
 namespace oceanbase {
+
+namespace storage {
+class ObSSTableReadHandle;
+}
+
 namespace blocksstable {
 
 class ObMicroBlockRowLockChecker : public ObMicroBlockRowScanner {
@@ -40,7 +45,7 @@ public:
   {
     check_exist_ = check_eixst;
   }
-  void inc_empty_read(int64_t empty_read_prefix);
+  void inc_empty_read(const ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
       bool &row_lock_checked,
@@ -71,7 +76,7 @@ public:
       const int64_t rowkey_begin_idx,
       const int64_t rowkey_end_idx,
       ObRowsInfo &rows_info);
-   void inc_empty_read();
+   void inc_empty_read(const ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
       bool &row_lock_checked,

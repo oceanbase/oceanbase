@@ -77,6 +77,10 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("fail to init clustered index writer, init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(compaction::is_mds_merge(data_store_desc.get_merge_type()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, mds merge should not init clustered index writer",
+             K(ret), K(data_store_desc), K(data_store_desc.get_merge_type()));
   } else if (OB_FAIL(clustered_index_store_desc_.shallow_copy(leaf_block_desc))) {
     LOG_WARN("fail to set clustered index store desc", K(ret));
   } else {
@@ -116,7 +120,6 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
   }
   // Build clustered row builder.
   if (OB_SUCC(ret)) {
-    // TODO(baichangmin): row_builder use task_allocator?
     if (OB_FAIL(row_builder_.init(*task_allocator_, *data_store_desc_, *leaf_block_desc_))) {
       LOG_WARN("fail to init row builder for clustered writer", K(ret));
     } else {
@@ -426,7 +429,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
   ObIMicroBlockReader *micro_block_reader = nullptr;
   const ObMicroBlockHeader *micro_block_header =
       reinterpret_cast<const ObMicroBlockHeader *>(micro_block_data.get_buf());
-  int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
+  const int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
   if (OB_FAIL(micro_reader_helper.init(temp_allocator))) {
     LOG_WARN("fail to init micro reader helper", K(ret));
   } else if (OB_FAIL(micro_reader_helper.get_reader(
@@ -442,7 +445,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
     LOG_WARN("unexpected clustered micro writer row count, should be 0", K(ret),
              K(micro_writer_->get_row_count()));
   }
-  // Iterator index row and transfer it to clustered index row.
+  // Iterate index row and transfer it to clustered index row.
   int64_t row_count = 0;
   ObDatumRow row;
   if (OB_FAIL(ret)) {
@@ -593,7 +596,9 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
     LOG_WARN("unexpected clustered micro writer row count, should be 0", K(ret),
              K(micro_writer_->get_row_count()));
   }
-  // Iterator index info and transfer it to clustered index row.
+  // Iterator index info and transfer it to clustered index row. We cannot reuse clustered index micro block through
+  // `append_micro_block` or `append_index_micro_block`, because this clustered micro block is transformed in
+  // `ObIndexBlockTreeCursor` (dispatch IO + reuse clustered micro block is worse).
   ObMicroIndexInfo index_info;
   ObArenaAllocator row_key_allocator(common::ObMemAttr(MTL_ID(), "MakeClustRK"));
   while (OB_SUCC(ret)) {

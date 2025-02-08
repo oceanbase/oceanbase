@@ -30,7 +30,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     macro_block_count_(0), micro_block_count_(0), row_offset_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
     is_secondary_meta_(false), is_macro_node_(false), has_string_out_row_(false), has_lob_out_row_(false),
-    is_last_row_last_flag_(false), is_serialized_agg_row_(false), is_clustered_index_(false)
+    is_last_row_last_flag_(false), is_serialized_agg_row_(false), is_clustered_index_(false), has_macro_block_bloom_filter_(false)
 {
 }
 
@@ -40,7 +40,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc)
     block_size_(0), macro_block_count_(0), micro_block_count_(0), row_offset_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
     is_secondary_meta_(false), is_macro_node_(false), has_string_out_row_(false), has_lob_out_row_(false),
-    is_last_row_last_flag_(false), is_serialized_agg_row_(false), is_clustered_index_(false)
+    is_last_row_last_flag_(false), is_serialized_agg_row_(false), is_clustered_index_(false), has_macro_block_bloom_filter_(false)
 {
 }
 
@@ -347,6 +347,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->is_data_block_ = desc.is_data_block_;
     header_->is_leaf_block_ = desc.is_macro_node_;
     header_->is_macro_node_ = desc.is_macro_node_;
+    header_->has_macro_block_bloom_filter_ = desc.has_macro_block_bloom_filter_;
     header_->is_major_node_ = desc.get_data_store_desc()->is_major_or_meta_merge_type();
     header_->has_string_out_row_ = desc.has_string_out_row_;
     header_->all_lob_in_row_ = !desc.has_lob_out_row_;

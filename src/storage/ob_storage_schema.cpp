@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_storage_schema.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 
@@ -551,6 +553,7 @@ int ObStorageSchema::init(
   } else {
     is_column_table_schema_ = is_column_table_schema;
     is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
+    enable_macro_block_bloom_filter_ = input_schema.get_enable_macro_block_bloom_filter();
     is_inited_ = true;
   }
 
@@ -640,6 +643,7 @@ int ObStorageSchema::init(
     } else {
       is_column_table_schema_ = old_schema.is_column_table_schema_;
       is_cs_replica_compat_ = is_cg_array_generated_in_cs_replica();
+      enable_macro_block_bloom_filter_ = old_schema.get_enable_macro_block_bloom_filter();
       is_inited_ = true;
     }
   }

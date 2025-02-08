@@ -1034,6 +1034,9 @@ int ObRestoreMacroBlockIdMgr::get_macro_block_index_list_from_iter_(
       logic_id = data_macro_block_meta.get_logic_id();
       if (OB_FAIL(macro_id.set(data_macro_block_meta.get_macro_id()))) {
         LOG_WARN("failed to set macro id", K(ret), K(data_macro_block_meta.get_macro_id()));
+      } else if (macro_id.block_type_ != backup::ObBackupDeviceMacroBlockId::DATA_BLOCK) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, invalid block type", K(ret), K(data_macro_block_meta), K(macro_id));
       } else if (OB_FAIL(restore_macro_id.set(logic_id, macro_id))) {
         LOG_WARN("failed to set restore macro id", K(ret), K(logic_id), K(macro_id));
       } else if (OB_FAIL(macro_id_list.push_back(restore_macro_id))) {

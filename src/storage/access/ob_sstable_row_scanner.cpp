@@ -390,7 +390,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
           if (ObStoreRowIterator::IteratorRowLockAndDuplicationCheck == type_ ||
               ObStoreRowIterator::IteratorRowLockCheck == type_) {
             ObMicroBlockRowLockChecker *checker = static_cast<ObMicroBlockRowLockChecker *>(micro_scanner_);
-            checker->inc_empty_read(read_handle.get_rowkey().get_datum_cnt());
+            checker->inc_empty_read(read_handle);
           }
           LOG_DEBUG("[INDEX BLOCK] Open data block handle iter end", K(ret),
                     K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));

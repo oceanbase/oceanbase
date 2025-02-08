@@ -313,6 +313,7 @@ public:
                  ObIndexBlockRowDesc &row_desc);
   int close(ObIAllocator &allocator, ObIndexTreeInfo &tree_info);
   void reset();
+  static uint64_t get_data_version(const ObDataStoreDesc &data_store_desc);
   static void block_to_row_desc(
       const ObMicroBlockDesc &micro_block_desc,
       ObIndexBlockRowDesc &row_desc);
@@ -573,7 +574,8 @@ public:
         common::ObIAllocator &allocator,
         IndexTreeRootCtxList &roots,
         const int64_t meta_row_column_count,
-        const bool is_cg);
+        const bool is_cg,
+        const uint64_t data_version);
     int get_next_macro_block(ObDataMacroBlockMeta &macro_meta);
     int64_t get_macro_block_count() const { return block_cnt_; }
     void reuse();

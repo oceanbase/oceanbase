@@ -1734,6 +1734,7 @@ int ObIndexBuilder::generate_schema(
   }
   if (OB_SUCC(ret)) {
     schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
+    schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
   }
   if (OB_SUCC(ret) && OB_FAIL(ObDDLService::set_dbms_job_exec_env(arg, schema))) {
     LOG_WARN("fail to set dbms_job exec_env", K(ret), K(arg));

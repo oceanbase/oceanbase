@@ -583,17 +583,20 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc
   int ret = OB_SUCCESS;
 
   UNUSED(curr_macro_desc);
-  STORAGE_LOG(DEBUG, "append row", K(row));
+  LOG_DEBUG("append row", K(row));
 
   if (OB_UNLIKELY(nullptr == data_store_desc_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened", K(ret));
+    LOG_WARN("The ObMacroBlockWriter has not been opened", K(ret));
   } else if (OB_FAIL(append_row(row, data_store_desc_->get_micro_block_size()))) {
-    STORAGE_LOG(WARN, "Fail to append row", K(ret));
+    LOG_WARN("Fail to append row", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(try_active_flush_macro_block())) {
-    STORAGE_LOG(WARN, "Fail to try_active_flush_macro_block", K(ret));
+    LOG_WARN("Fail to try_active_flush_macro_block", K(ret));
   } else {
-    STORAGE_LOG(DEBUG, "Success to append row, ", "tablet_id", data_store_desc_->get_tablet_id(), K(row));
+    LOG_DEBUG("Success to append row, ", "tablet_id", data_store_desc_->get_tablet_id(), K(row));
   }
   return ret;
 }
@@ -797,6 +800,7 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
   } else if (!data_store_desc_->is_cg() && OB_FAIL(check_order(row))) {
     STORAGE_LOG(WARN, "macro block writer fail to check order", K(row), KPC(data_store_desc_));
   }
+
   if (OB_SUCC(ret)) {
     is_macro_or_micro_block_reused_ = false;
     bool is_split = false;
@@ -882,6 +886,7 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, cons
         STORAGE_LOG(WARN, "build_micro_block_desc failed", K(ret), K(micro_block));
       } else if (OB_FAIL(agg_micro_block(*micro_block.micro_index_info_))) {
         STORAGE_LOG(WARN, "Failed to eval aggregated data from reused micro block", K(ret));
+      // Insert micro block into macro block bloom filter.
       } else if (OB_FAIL(write_micro_block(micro_block_desc))) {
         STORAGE_LOG(WARN, "Failed to write micro block, ", K(ret), K(micro_block_desc));
       } else {
@@ -891,14 +896,26 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, cons
       if (OB_SUCC(ret) && nullptr != data_aggregator_) {
         data_aggregator_->reuse();
       }
+
+      // Insert micro block into macro block bloom filter.
+      if (OB_FAIL(ret)) {
+      } else if (data_store_desc_->enable_macro_block_bloom_filter()
+                 && OB_FAIL(
+                     macro_blocks_[current_index_].get_macro_block_bloom_filter()->insert_micro_block(micro_block))) {
+        LOG_WARN("fail to insert micro block to bloom filter",
+                K(ret), K(micro_block), KPC(macro_blocks_[current_index_].get_macro_block_bloom_filter()));
+      }
     }
   } else {
+    // We don't need to insert into bloom filter specially during the `merge_micro_block`, as it is performed by
+    // `append_row`, and `append_row` will automatically insert row into bloom filter.
     if (OB_FAIL(merge_micro_block(micro_block))) {
       STORAGE_LOG(WARN, "merge_micro_block failed", K(micro_block), K(ret));
     } else {
       STORAGE_LOG(TRACE, "merge micro block", K(micro_block));
     }
   }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(try_active_flush_macro_block())) {
       STORAGE_LOG(WARN, "Fail to try_active_flush_macro_block", K(ret));
@@ -922,9 +939,23 @@ int ObMacroBlockWriter::append_micro_block(
     STORAGE_LOG(WARN, "fail to aggregate micro block", K(ret), K(micro_index_info));
   } else if (OB_FAIL(write_micro_block(micro_block_desc))) {
     STORAGE_LOG(WARN, "fail to write micro block", K(ret), K(micro_block_desc));
-  } else if (nullptr != data_aggregator_) {
+  }
+
+  if (OB_SUCC(ret) && nullptr != data_aggregator_) {
     data_aggregator_->reuse();
   }
+
+  // Insert micro block into macro block bloom filter.
+  if (OB_FAIL(ret)) {
+  } else if (data_store_desc_->enable_macro_block_bloom_filter()
+             && OB_FAIL(
+                 macro_blocks_[current_index_].get_macro_block_bloom_filter()->insert_micro_block(micro_block_desc,
+                                                                                                  micro_index_info))) {
+    LOG_WARN("fail to insert micro block to bloom filter",
+            K(ret), K(micro_block_desc), K(micro_index_info),
+            KPC(macro_blocks_[current_index_].get_macro_block_bloom_filter()));
+  }
+
   return ret;
 }
 
@@ -1255,6 +1286,11 @@ int ObMacroBlockWriter::append_row_and_hash_index(const ObDatumRow &row)
     if (ret != OB_BUF_NOT_ENOUGH) {
       STORAGE_LOG(WARN, "Failed to append row in micro writer", K(ret), K(row));
     }
+  // Insert row into macro block bloom filter if `append_row` succeed.
+  } else if (data_store_desc_->enable_macro_block_bloom_filter()
+             && OB_FAIL(macro_blocks_[current_index_].get_macro_block_bloom_filter()->insert_row(datum_row_))) {
+    LOG_WARN("fail to insert row to bloom filter",
+             K(ret), K(datum_row_), KPC(macro_blocks_[current_index_].get_macro_block_bloom_filter()));
   } else if (hash_index_builder_.is_valid()) {
     if (OB_FAIL(hash_index_builder_.add(row))) {
       if (ret != OB_NOT_SUPPORTED) {
@@ -1574,6 +1610,7 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
         }
       }
     }
+
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(micro_block_desc.macro_id_ = macro_handles_[current_index_].get_macro_id())) {
     } else if (OB_FAIL(macro_blocks_[current_index_].write_micro_block(micro_block_desc, data_offset))) {

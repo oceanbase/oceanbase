@@ -141,7 +141,7 @@ static int print_meta_root(const ObIndexBlockInfo& index_block_info)
   ObDatumRow my_row;
   ObDataMacroBlockMeta my_macro_meta;
 
-  if (OB_FAIL(my_loader.init(my_allocator))) {
+  if (OB_FAIL(my_loader.init(my_allocator, CLUSTER_CURRENT_VERSION))) {
     LOG_ERROR("cooper init loader", K(ret));
   } else if (OB_FAIL(my_loader.open(index_block_info))) {
     LOG_ERROR("cooper open loader", K(ret));
@@ -183,7 +183,7 @@ TEST_F(TestIndexDumper, test_deep_copy_micro)
     tmp_ret = meta_iter.get_next(data_macro_meta);
     STORAGE_LOG(DEBUG, "Got next data macro block meta", K(tmp_ret), K(data_macro_meta));
     if (OB_SUCCESS == tmp_ret) {
-      ASSERT_EQ(OB_SUCCESS, data_macro_meta.build_row(leaf_row, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_meta.build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
       ASSERT_EQ(OB_SUCCESS, micro_writer->append_row(leaf_row));
     }
   }
@@ -244,7 +244,7 @@ TEST_F(TestIndexDumper, append_single_meta)
 
   char char_value[4096];
   int64_t pos = 0;
-  ASSERT_EQ(OB_SUCCESS, val.serialize(char_value, 4096, pos));
+  ASSERT_EQ(OB_SUCCESS, val.serialize(char_value, 4096, pos, CLUSTER_CURRENT_VERSION));
   meta_row.storage_datums_[6].set_string(char_value, pos);
 
   ASSERT_EQ(OB_SUCCESS, dumper.append_row(meta_row));
@@ -295,7 +295,7 @@ TEST_F(TestIndexDumper, get_from_mem)
   STORAGE_LOG(INFO, "test print metas count", K(data_macro_metas.count()));
   for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
     ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
-    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(meta_row));
   }
   // close
@@ -309,7 +309,7 @@ TEST_F(TestIndexDumper, get_from_mem)
   ObDatumRow load_row;
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
   ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   tmp_ret = OB_SUCCESS;
@@ -318,7 +318,7 @@ TEST_F(TestIndexDumper, get_from_mem)
     tmp_ret = index_block_loader.get_next_row(load_row);
     STORAGE_LOG(INFO, "loader get next row", K(tmp_ret), K(load_row));
     if (OB_SUCCESS == tmp_ret) {
-      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
       for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
         ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], meta_row.storage_datums_[i]));
       }
@@ -371,7 +371,7 @@ TEST_F(TestIndexDumper, get_from_mem_and_change_row_store_type)
   for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
     ObIndexBlockRowDesc row_desc(mem_desc);
     ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
-    ASSERT_EQ(OB_SUCCESS, meta.build_row(index_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(index_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, ObBaseIndexBlockBuilder::meta_to_row_desc(meta, mem_desc, nullptr, row_desc));
     ASSERT_EQ(OB_SUCCESS, index_tree_dumper.append_row(row_desc));
   }
@@ -402,7 +402,7 @@ TEST_F(TestIndexDumper, get_from_mem_and_change_row_store_type)
   ObWholeDataStoreDesc desc;
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
   ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   tmp_ret = OB_SUCCESS;
@@ -485,7 +485,7 @@ TEST_F(TestIndexDumper, get_from_disk)
   STORAGE_LOG(INFO, "test print metas count", K(data_macro_metas.count()));
   for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
     ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
-    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(meta_row));
     if (i != data_macro_metas.count() - 1) {
       ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.build_and_append_block());
@@ -505,7 +505,7 @@ TEST_F(TestIndexDumper, get_from_disk)
   ObDatumRow load_row;
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
   ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   tmp_ret = OB_SUCCESS;
@@ -514,7 +514,7 @@ TEST_F(TestIndexDumper, get_from_disk)
     tmp_ret = index_block_loader.get_next_row(load_row);
     STORAGE_LOG(INFO, "loader get next row", K(tmp_ret), K(load_row));
     if (OB_SUCCESS == tmp_ret) {
-      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
       for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
         ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], meta_row.storage_datums_[i]));
       }
@@ -582,7 +582,7 @@ TEST_F(TestIndexDumper, get_from_array)
   STORAGE_LOG(INFO, "test print metas count", K(data_macro_metas.count()));
   for (int64_t i = 0; i < data_macro_metas.count(); ++i) {
     ObDataMacroBlockMeta &meta = data_macro_metas.at(i);
-    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, meta.build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(meta_row));
   }
   // close
@@ -596,7 +596,7 @@ TEST_F(TestIndexDumper, get_from_array)
   ObDatumRow load_row;
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info));
   ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   tmp_ret = OB_SUCCESS;
@@ -605,7 +605,7 @@ TEST_F(TestIndexDumper, get_from_array)
     tmp_ret = index_block_loader.get_next_row(load_row);
     STORAGE_LOG(INFO, "loader get next row", K(iter_cnt), K(tmp_ret), K(load_row));
     if (OB_SUCCESS == tmp_ret) {
-      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_));
+      ASSERT_EQ(OB_SUCCESS, data_macro_metas.at(iter_cnt).build_row(meta_row, allocator_, CLUSTER_CURRENT_VERSION));
       STORAGE_LOG(INFO, "data macro meta", K(meta_row), K(data_macro_metas.at(iter_cnt)));
       for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
         ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], meta_row.storage_datums_[i]));

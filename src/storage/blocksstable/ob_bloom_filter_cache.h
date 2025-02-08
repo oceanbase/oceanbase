@@ -23,6 +23,7 @@ namespace storage
 {
 class ObRowsInfo;
 class ObRowKeysInfo;
+class ObSSTableReadHandle;
 }
 namespace blocksstable
 {
@@ -30,9 +31,12 @@ namespace blocksstable
 class ObBloomFilter
 {
 public:
+  static constexpr double BLOOM_FILTER_FALSE_POSITIVE_PROB = 0.01;
+
+public:
   ObBloomFilter();
   ~ObBloomFilter();
-  int init(int64_t element_count, double false_positive_prob = BLOOM_FILTER_FALSE_POSITIVE_PROB);
+  int init_by_row_count(const int64_t element_count, const double false_positive_prob = BLOOM_FILTER_FALSE_POSITIVE_PROB);
   void destroy();
   void clear();
   int deep_copy(const ObBloomFilter &other);
@@ -41,6 +45,7 @@ public:
   int insert(const uint32_t key_hash);
   int may_contain(const uint32_t key_hash, bool &is_contain) const;
   int64_t calc_nbyte(const int64_t nbit) const;
+  double calc_nhash(const double false_positive_prob) const;
   OB_INLINE bool is_valid() const { return NULL != bits_ && nbit_ > 0 && nhash_ > 0; }
   OB_INLINE int64_t get_nhash() const { return nhash_; }
   OB_INLINE int64_t get_nbit() const { return nbit_; }
@@ -48,10 +53,9 @@ public:
   OB_INLINE uint8_t *get_bits() { return bits_; }
   OB_INLINE const uint8_t *get_bits() const { return bits_; }
   TO_STRING_KV(K_(nhash), K_(nbit), KP_(bits));
-  INLINE_NEED_SERIALIZE_AND_DESERIALIZE;
+  NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilter);
-  static constexpr double BLOOM_FILTER_FALSE_POSITIVE_PROB = 0.01;
   common::ObArenaAllocator allocator_;
   int64_t nhash_;
   int64_t nbit_;
@@ -94,6 +98,7 @@ public:
   virtual int deep_copy(char *buf, const int64_t buf_len, common::ObIKVCacheValue *&value) const;
   virtual int deep_copy(ObBloomFilterCacheValue &bf_cache_value) const;
   int init(const int64_t rowkey_column_cnt, const int64_t row_cnt);
+  int init(const ObBloomFilter &bloom_filter, const int64_t rowkey_column_cnt);
   int insert(const uint32_t hash);
   int may_contain(const uint32_t hash, bool &is_contain) const;
   bool is_valid() const;
@@ -189,8 +194,11 @@ public:
   int inc_empty_read(
       const uint64_t tenant_id,
       const uint64_t table_id,
+      const share::ObLSID &ls_id,
+      const storage::ObITable::TableKey &sstable_key,
       const MacroBlockId &macro_id,
       const int64_t empty_read_prefix,
+      const ObSSTableReadHandle * read_handle = nullptr,
       const int64_t empty_read_cnt = 1);
   int get_sstable_bloom_filter(
       const uint64_t tenant_id,

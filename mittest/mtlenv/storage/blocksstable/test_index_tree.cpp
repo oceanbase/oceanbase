@@ -895,7 +895,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
   ObDatumRow meta_row;
-  OK(index_block_loader.init(allocator_));
+  OK(index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   OK(index_block_loader.open(sstable_builder.roots_[0]->meta_block_info_));
   OK(meta_row.init(allocator_, sstable_builder.container_store_desc_.get_row_column_count()));
   OK(index_block_loader.get_next_row(meta_row));
@@ -1193,7 +1193,7 @@ TEST_F(TestIndexTree, test_multi_writers_with_close)
   sstable_builder.clean_status();
   OK(sstable_builder.trim_empty_roots());
   OK(sstable_builder.sort_roots());
-  OK(sstable_builder.index_block_loader_.init(sstable_builder.self_allocator_));
+  OK(sstable_builder.index_block_loader_.init(sstable_builder.self_allocator_, CLUSTER_CURRENT_VERSION));
   OK(res.prepare_column_checksum_array(sstable_builder.index_store_desc_.get_desc().get_full_stored_col_cnt()));
   int64_t tmp_seq = 0;
   const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
@@ -1261,7 +1261,7 @@ TEST_F(TestIndexTree, test_merge_info_build_row)
     ASSERT_NE(nullptr, info);
     ObDataBlockMetaVal &info_val = info->val_;
     ASSERT_TRUE(info->is_valid());
-    ASSERT_EQ(OB_SUCCESS, info->build_row(datum_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, info->build_row(datum_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(i, datum_row.storage_datums_[0].get_int());
     ObDataMacroBlockMeta parsed_meta;
     ASSERT_EQ(OB_SUCCESS, parsed_meta.parse_row(datum_row));
@@ -1508,10 +1508,10 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   ASSERT_EQ(test_row_num, merge_info_list->count());
   // test unorder
   ObDataMacroBlockMeta *info = merge_info_list->at(merge_info_list->count() - 1);
-  ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_));
+  ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(leaf_row));
   info = merge_info_list->at(0);
-  ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_));
+  ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_ROWKEY_ORDER_ERROR, macro_meta_dumper.append_row(leaf_row));
 
   macro_meta_dumper.reset();
@@ -1524,7 +1524,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   // genenrate order row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
     ObDataMacroBlockMeta *info = merge_info_list->at(i);
-    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(leaf_row));
   }
   // close
@@ -1533,7 +1533,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   ASSERT_EQ(merge_info_list->count(), meta_block_info_.get_row_count());
   ASSERT_EQ(1, meta_block_info_.get_micro_block_count());
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info_));
   ObDataMacroBlockMeta macro_meta;
   ObDatumRow load_row;
@@ -1544,7 +1544,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
     tmp_ret = index_block_loader.get_next_row(load_row);
     STORAGE_LOG(DEBUG, "loader get next row", K(tmp_ret), K(load_row));
     if (OB_SUCCESS == tmp_ret) {
-      ASSERT_EQ(OB_SUCCESS, merge_info_list->at(iter_cnt)->build_row(leaf_row, allocator_));
+      ASSERT_EQ(OB_SUCCESS, merge_info_list->at(iter_cnt)->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
       for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
         ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], leaf_row.storage_datums_[i]));
       }
@@ -1587,7 +1587,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   // genenrate row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
     ObDataMacroBlockMeta *info = merge_info_list->at(i);
-    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(leaf_row));
     if (i != 0 && i % 10 == 0) {
       ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.build_and_append_block());
@@ -1601,7 +1601,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   ASSERT_EQ(test_row_num / 10, meta_block_info_.block_write_ctx_->get_macro_block_count());
 
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info_));
 
   ObDataMacroBlockMeta macro_meta;
@@ -1609,7 +1609,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   ASSERT_EQ(OB_SUCCESS, load_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   for (int64_t j = 0; j < meta_block_info_.get_row_count(); j++) {
     ASSERT_EQ(OB_SUCCESS, index_block_loader.get_next_row(load_row));
-    ASSERT_EQ(OB_SUCCESS, merge_info_list->at(j)->build_row(leaf_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, merge_info_list->at(j)->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
     for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
       ASSERT_TRUE(ObDatum::binary_equal(load_row.storage_datums_[i], leaf_row.storage_datums_[i]));
     }
@@ -1648,7 +1648,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   // genenrate row
   for (int64_t i = 0; nullptr != merge_info_list && i < merge_info_list->count(); ++i) {
     ObDataMacroBlockMeta *info = merge_info_list->at(i);
-    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_));
+    ASSERT_EQ(OB_SUCCESS, info->build_row(leaf_row, allocator_, CLUSTER_CURRENT_VERSION));
     ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.append_row(leaf_row));
     if (i != 0 && i % 10 == 0) {
       ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.build_and_append_block());
@@ -1661,7 +1661,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   ASSERT_EQ(test_row_num / 10, meta_block_info_.block_write_ctx_->get_macro_block_count());
 
   ObIndexBlockLoader index_block_loader;
-  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   ASSERT_EQ(OB_SUCCESS, index_block_loader.open(meta_block_info_));
   ObMicroBlockDesc load_micro_block_desc;
   for (int64_t j = 0; j < meta_block_info_.get_micro_block_count(); j++) {
@@ -1738,7 +1738,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObDataMacroBlockMeta macro_meta;
   ObDatumRow meta_row;
   ObIndexBlockLoader index_block_loader;
-  OK(index_block_loader.init(allocator_));
+  OK(index_block_loader.init(allocator_, CLUSTER_CURRENT_VERSION));
   OK(index_block_loader.open(sstable_builder.roots_[0]->meta_block_info_));
   OK(meta_row.init(allocator_, sstable_builder.container_store_desc_.get_row_column_count()));
   OK(index_block_loader.get_next_row(meta_row));
@@ -2184,9 +2184,9 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   ASSERT_GT(macro_header_.fixed_header_.meta_block_size_, 0);
   ASSERT_GE(estimate_meta_block_size, macro_header_.fixed_header_.meta_block_size_);
   ObDataMacroBlockMeta *macro_meta = &data_writer.builder_->macro_meta_;
-  const int64_t val_max_size = macro_meta->val_.get_max_serialize_size();
+  const int64_t val_max_size = macro_meta->val_.get_max_serialize_size(CLUSTER_CURRENT_VERSION);
   macro_meta->val_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID;
-  ASSERT_GE(macro_meta->val_.get_serialize_size() + estimate_meta_block_size - val_max_size,
+  ASSERT_GE(macro_meta->val_.get_serialize_size(CLUSTER_CURRENT_VERSION) + estimate_meta_block_size - val_max_size,
             macro_header_.fixed_header_.meta_block_size_);
   LOG_INFO("FINISH TestIndexTree.test_estimate_meta_block_size");
 }

@@ -3101,6 +3101,9 @@ int ObTableSqlService::gen_table_dml(
     } else if (data_version < DATA_VERSION_4_3_3_0 && table.get_micro_index_clustered()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can't set micro_index_clustered in current version", KR(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_3_5_1 && table.get_enable_macro_block_bloom_filter()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set enable_macro_block_bloom_filter in current version", KR(ret), K(table));
     } else if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
       LOG_WARN("fail to gen local session var str", K(ret));
@@ -3225,6 +3228,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("micro_index_clustered", table.get_micro_index_clustered())))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
+        || (data_version >= DATA_VERSION_4_3_5_1
+            && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3307,6 +3312,9 @@ int ObTableSqlService::gen_table_options_dml(
     } else if (data_version < DATA_VERSION_4_1_0_0 && OB_UNLIKELY(table.view_column_filled())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("option is not support before 4.1", K(ret), K(table));
+    } else if (data_version < DATA_VERSION_4_3_5_1 && table.get_enable_macro_block_bloom_filter()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't set enable_macro_block_bloom_filter in current version", KR(ret), K(table));
     } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(table));
@@ -3392,6 +3400,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("mv_mode", table.get_mv_mode())))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
+        || (data_version >= DATA_VERSION_4_3_5_1
+            && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }

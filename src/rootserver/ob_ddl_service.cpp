@@ -1341,6 +1341,11 @@ int ObDDLService::generate_schema(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
+  } else if (compat_version < DATA_VERSION_4_3_5_1 && arg.schema_.get_enable_macro_block_bloom_filter()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
+             KR(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
@@ -3027,6 +3032,11 @@ int ObDDLService::set_raw_table_options(
         case ObAlterTableArg::STORE_FORMAT: {
           new_table_schema.set_row_store_type(alter_table_schema.get_row_store_type());
           new_table_schema.set_store_format(alter_table_schema.get_store_format());
+          need_update_index_table = true;
+          break;
+        }
+        case ObAlterTableArg::ENABLE_MACRO_BLOCK_BLOOM_FILTER: {
+          new_table_schema.set_enable_macro_block_bloom_filter(alter_table_schema.get_enable_macro_block_bloom_filter());
           need_update_index_table = true;
           break;
         }

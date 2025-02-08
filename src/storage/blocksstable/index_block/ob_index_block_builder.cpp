@@ -727,14 +727,15 @@ int ObSSTableIndexBuilder::ObMacroMetaIter::init(
     common::ObIAllocator &allocator,
     IndexTreeRootCtxList &roots,
     const int64_t meta_row_column_count,
-    const bool is_cg)
+    const bool is_cg,
+    const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "Init twice", K(ret));
-  } else if (OB_FAIL(index_block_loader_.init(allocator))) {
-    STORAGE_LOG(WARN, "fail to init index block loader", K(ret));
+  } else if (OB_FAIL(index_block_loader_.init(allocator, data_version))) {
+    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), K(data_version));
   } else if (OB_FAIL(meta_row_.init(allocator, meta_row_column_count))) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(meta_row_column_count));
   } else {
@@ -805,6 +806,7 @@ int ObSSTableIndexBuilder::ObMacroMetaIter::get_next_macro_block(ObDataMacroBloc
 int ObSSTableIndexBuilder::init_meta_iter(common::ObIAllocator &allocator, ObMacroMetaIter &iter)
 {
   int ret = OB_SUCCESS;
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(data_store_desc_.get_desc());
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "invalid sstable builder", K(ret), K_(is_inited));
@@ -812,9 +814,12 @@ int ObSSTableIndexBuilder::init_meta_iter(common::ObIAllocator &allocator, ObMac
     STORAGE_LOG(WARN, "fail to trim empty roots", K(ret));
   } else if (OB_FAIL(sort_roots())) {
     STORAGE_LOG(WARN, "fail to sort roots", K(ret));
-  } else if (OB_FAIL(iter.init(allocator, roots_,
-      container_store_desc_.get_row_column_count(), index_store_desc_.get_desc().is_cg()))) {
-    STORAGE_LOG(WARN, "fail to init iter", K(ret));
+  } else if (OB_FAIL(iter.init(allocator,
+                               roots_,
+                               container_store_desc_.get_row_column_count(),
+                               index_store_desc_.get_desc().is_cg(),
+                               data_version))) {
+    STORAGE_LOG(WARN, "fail to init iter", K(ret), K(data_version));
   }
   return ret;
 }
@@ -1034,7 +1039,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_meta_block(ObSSTableMergeRes &r
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "unexpected clustered index write ctx", K(ret), KP(clustered_index_write_ctx));
           } else if (FALSE_IT(res.index_blocks_cnt_ += clustered_index_write_ctx->get_macro_block_count())) {
-          } else if (OB_FAIL(clustered_index_write_ctx->get_macro_id_array(res.other_block_ids_ /* TODO(baichangmin): here, data or other? */))) {
+          } else if (OB_FAIL(clustered_index_write_ctx->get_macro_id_array(res.other_block_ids_))) {
             STORAGE_LOG(WARN, "fail to get macro ids from clustered index block writer",
                 K(ret), K(res.other_block_ids_), KPC(clustered_index_write_ctx));
           }
@@ -1171,6 +1176,7 @@ int ObSSTableIndexBuilder::build_cg_meta_tree()
   ObDatumRow meta_row;
   ObDatumRow cg_meta_row;
   ObDataMacroBlockMeta macro_meta;
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(data_store_desc_.get_desc());
   if (OB_FAIL(meta_row.init(self_allocator_, container_store_desc_.get_row_column_count()))) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(container_store_desc_.get_row_column_count()));
   } else if (OB_FAIL(cg_meta_row.init(self_allocator_, container_store_desc_.get_row_column_count()))) {
@@ -1196,8 +1202,8 @@ int ObSSTableIndexBuilder::build_cg_meta_tree()
           } else if (OB_FAIL(macro_meta.parse_row(meta_row))) {
             STORAGE_LOG(WARN, "fail to parse row", K(ret), K(meta_row));
           } else if (FALSE_IT(macro_meta.end_key_.datums_[0].set_int(macro_meta.val_.row_count_ + row_idx))) {
-          } else if (OB_FAIL(macro_meta.build_row(cg_meta_row, row_allocator_))) {
-            STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta));
+          } else if (OB_FAIL(macro_meta.build_row(cg_meta_row, row_allocator_, data_version))) {
+            STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
           } else if (OB_FAIL(meta_tree_builder_.append_leaf_row(cg_meta_row))) {
             STORAGE_LOG(WARN, "fail to append leaf row", K(ret), K(cg_meta_row));
           } else {
@@ -1562,6 +1568,7 @@ int ObSSTableIndexBuilder::close_with_macro_seq(
   int ret = OB_SUCCESS;
   res.reset();
   ObArenaAllocator load_allocator("IndexLoader", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(data_store_desc_.get_desc());
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "invalid sstable builder", K(ret), K_(is_inited));
@@ -1575,8 +1582,8 @@ int ObSSTableIndexBuilder::close_with_macro_seq(
     if (OB_FAIL(res.assign(res_))) {
       STORAGE_LOG(WARN, "fail to assign res", K(ret), K_(res));
     }
-  } else if (OB_FAIL(index_block_loader_.init(load_allocator))) {
-    STORAGE_LOG(WARN, "fail to init index block loader", K(ret));
+  } else if (OB_FAIL(index_block_loader_.init(load_allocator, data_version))) {
+    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), K(data_version));
   } else if (FALSE_IT(device_handle_ = device_handle)) {
   } else if (OB_FAIL(res.prepare_column_checksum_array(index_store_desc_.get_desc().get_full_stored_col_cnt()))) {
     STORAGE_LOG(WARN, "fail to prepare column checksum array", K(ret));
@@ -1893,6 +1900,7 @@ int ObSSTableIndexBuilder::change_single_macro_meta_for_small_sstable(const ObDa
   int ret = OB_SUCCESS;
   ObBaseIndexBlockDumper macro_meta_dumper;
   ObDatumRow meta_row;
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(data_store_desc_.get_desc());
   if (OB_UNLIKELY(!macro_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid macro meta", K(ret), K(macro_meta));
@@ -1901,8 +1909,8 @@ int ObSSTableIndexBuilder::change_single_macro_meta_for_small_sstable(const ObDa
     STORAGE_LOG(WARN, "fail to init macro meta dumper", K(ret));
   } else if (OB_FAIL(meta_row.init(self_allocator_, container_store_desc_.get_row_column_count()))) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(container_store_desc_.get_row_column_count()));
-  } else if (OB_FAIL(macro_meta.build_row(meta_row, row_allocator_))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta));
+  } else if (OB_FAIL(macro_meta.build_row(meta_row, row_allocator_, data_version))) {
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
   } else if (OB_FAIL(macro_meta_dumper.append_row(meta_row))) {
     STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(macro_meta));
   } else if (FALSE_IT(roots_[0]->meta_block_info_.reset())) {
@@ -2310,6 +2318,17 @@ int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_bui
   return ret;
 }
 
+uint64_t ObBaseIndexBlockBuilder::get_data_version(const ObDataStoreDesc &data_store_desc)
+{
+  uint64_t data_version = 0;
+  if (data_store_desc.is_major_merge_type()) {
+    data_version = data_store_desc.get_major_working_cluster_version();
+  } else {
+    data_version = CLUSTER_CURRENT_VERSION;
+  }
+  return data_version;
+}
+
 /* below three functions should keep pace with each other */
 void ObBaseIndexBlockBuilder::block_to_row_desc(
     const ObMicroBlockDesc &micro_block_desc, ObIndexBlockRowDesc &row_desc) {
@@ -2331,6 +2350,8 @@ void ObBaseIndexBlockBuilder::block_to_row_desc(
   row_desc.is_last_row_last_flag_ = micro_block_desc.is_last_row_last_flag_;
   row_desc.aggregated_row_ = micro_block_desc.aggregated_row_;
   row_desc.is_serialized_agg_row_ = false;
+  // This flag only valid in macro level.
+  row_desc.has_macro_block_bloom_filter_ = 0;
 }
 
 int ObBaseIndexBlockBuilder::meta_to_row_desc(
@@ -2391,6 +2412,13 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
       static_desc->encrypt_id_ = macro_meta.val_.encrypt_id_;
       MEMCPY(static_desc->encrypt_key_, macro_meta.val_.encrypt_key_, sizeof(static_desc->encrypt_key_));
       static_desc->schema_version_ = macro_meta.val_.schema_version_;
+    }
+
+    // Set macro block bloom filter flag for macro row.
+    if (macro_meta.val_.macro_block_bf_size_ > 0) {
+      row_desc.has_macro_block_bloom_filter_ = 1;
+    } else {
+      row_desc.has_macro_block_bloom_filter_ = 0;
     }
 
     row_desc.row_key_ = macro_meta.end_key_;
@@ -2825,16 +2853,19 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
     meta_row_allocator_.reuse();
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(macro_meta.build_estimate_row(meta_row_,
-                                                     meta_row_allocator_))) {
-      STORAGE_LOG(WARN, "fail to build meta row", K(ret), K(macro_meta));
+                                                     meta_row_allocator_,
+                                                     leaf_store_desc_->get_major_working_cluster_version()))) {
+      STORAGE_LOG(WARN, "fail to build meta row",
+                  K(ret), K(macro_meta), K(leaf_store_desc_->get_major_working_cluster_version()));
     } else {
       meta_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       meta_block_writer_->reuse();
       if (OB_FAIL(meta_block_writer_->append_row(meta_row_))) {
         STORAGE_LOG(WARN, "fail to append meta row", K(ret), K_(meta_row));
       } else {
-        const int64_t max_agg_data_size =
-            index_block_aggregator_.get_max_agg_size();
+        const int64_t max_agg_data_size = index_block_aggregator_.get_max_agg_size();
+        const int64_t max_macro_block_bf_size
+            = data_store_desc_->enable_macro_block_bloom_filter() ? 64 * 1024 /* max 64KB for bf */ : 0;
         // for cs_encoding, the estimate_block_size calculated by build_block
         // may less than the real block_size, because the the cs_encoding has
         // compression for string column and the real macro meta data may has
@@ -2843,7 +2874,7 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
         if (ObStoreFormat::is_row_store_type_with_cs_encoding(
                 index_store_desc_->row_store_type_)) {
           estimate_meta_block_size =
-              meta_block_writer_->get_original_size() + max_agg_data_size;
+              meta_block_writer_->get_original_size() + max_agg_data_size + max_macro_block_bf_size;
 #ifdef OB_BUILD_TDE_SECURITY
           const int64_t encrypted_size =
               share::ObEncryptionUtil::encrypted_length(
@@ -2867,7 +2898,8 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
           } else {
             estimate_meta_block_size = meta_block_desc.buf_size_ +
                                        meta_block_desc.header_->header_size_ +
-                                       max_agg_data_size;
+                                       max_agg_data_size +
+                                       max_macro_block_bf_size;
 #ifdef OB_BUILD_TDE_SECURITY
             const int64_t encrypted_size =
                 share::ObEncryptionUtil::encrypted_length(
@@ -2969,6 +3001,7 @@ int ObDataIndexBlockBuilder::append_macro_block(
   int ret = OB_SUCCESS;
   ObMicroBlockDesc *clustered_micro_desc = nullptr;
   const ObMicroIndexInfo *clustered_micro_index_info = nullptr;
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(*leaf_store_desc_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "Not inited", K(ret));
@@ -2978,8 +3011,8 @@ int ObDataIndexBlockBuilder::append_macro_block(
   } else {
     meta_row_.reuse();
     meta_row_allocator_.reuse();
-    if (OB_FAIL(macro_meta.build_row(meta_row_, meta_row_allocator_))) {
-      STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta));
+    if (OB_FAIL(macro_meta.build_row(meta_row_, meta_row_allocator_, data_version))) {
+      STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
     } else if (OB_FAIL(macro_meta_dumper_.append_row(meta_row_))) {
       STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(meta_row_));
     } else if (micro_index_clustered()) {
@@ -3012,6 +3045,7 @@ int ObDataIndexBlockBuilder::write_meta_block(
   meta_block_writer_->reuse();
   meta_row_.reuse();
   meta_row_allocator_.reuse();
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(*leaf_store_desc_);
 
   if (OB_UNLIKELY(!macro_row_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3031,20 +3065,18 @@ int ObDataIndexBlockBuilder::write_meta_block(
                                       meta_row_allocator_))) {
     STORAGE_LOG(WARN, "fail to convert macro row descriptor to meta", K(ret),
                 K(macro_row_desc));
-  } else if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta));
+  } else if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_, data_version))) {
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), K(data_version));
   } else if (OB_FAIL(meta_block_writer_->append_row(meta_row_))) {
     STORAGE_LOG(WARN, "fail to append macro row", K(ret), K(meta_row_));
-  } else if (OB_FAIL(
-                 meta_block_writer_->build_micro_block_desc(meta_block_desc))) {
+  } else if (OB_FAIL(meta_block_writer_->build_micro_block_desc(meta_block_desc))) {
     STORAGE_LOG(WARN, "fail to build meta block", K(ret));
   } else if (FALSE_IT(meta_block_desc.last_rowkey_ = last_rowkey_)) {
-  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(
-                 meta_block_desc, macro_block.get_current_macro_seq(),
-                 macro_block.get_data_size()))) {
+  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(meta_block_desc,
+                                                                macro_block.get_current_macro_seq(),
+                                                                macro_block.get_data_size()))) {
     STORAGE_LOG(WARN, "fail to compress and encrypt micro block", K(ret));
-  } else if (OB_FAIL(macro_block.write_index_micro_block(meta_block_desc, false,
-                                                         data_offset))) {
+  } else if (OB_FAIL(macro_block.write_index_micro_block(meta_block_desc, false, data_offset))) {
     STORAGE_LOG(WARN, "fail to write meta index block", K(ret),
                 K(meta_block_desc));
   }
@@ -3052,8 +3084,8 @@ int ObDataIndexBlockBuilder::write_meta_block(
     macro_meta_.val_.macro_id_ = block_id; // real macro id
     meta_block_offset_ = data_offset;
     meta_block_size_ = meta_block_desc.get_block_size();
-    if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_))) {
-      STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta));
+    if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_, data_version))) {
+      STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), K(data_version));
     } else if (OB_FAIL(macro_meta_dumper_.append_row(meta_row_))) {
       STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K_(macro_meta));
     } else {
@@ -3698,7 +3730,7 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
   blocksstable::ObMacroSeqParam macro_seq_param;
   macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
   macro_seq_param.start_ = 0;
-  // TODO(baichangmin): no pre-warm in rebuilder?
+  // No need pre_warmer in rebuilder.
   share::ObPreWarmerParam pre_warm_param(PRE_WARM_TYPE_NONE);
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -3848,7 +3880,7 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
       LOG_INFO("succeed to init ObIndexBlockRebuilder",
                "task_idx", index_tree_root_ctx_->task_idx_,
                "task_type", index_tree_root_ctx_->task_type_,
-               KP(device_handle_), KPC(index_store_desc_), KPC(container_store_desc));
+               KP(device_handle_), KPC(index_store_desc_), KPC(container_store_desc), KP(&sstable_builder));
       is_inited_ = true;
     }
   }
@@ -4060,6 +4092,7 @@ int ObIndexBlockRebuilder::get_meta_block(
   }
   return ret;
 }
+
 int ObIndexBlockRebuilder::add_macro_block_meta(const ObDataMacroBlockMeta &macro_meta,
                                                 const int64_t absolute_row_offset)
 {
@@ -4067,11 +4100,12 @@ int ObIndexBlockRebuilder::add_macro_block_meta(const ObDataMacroBlockMeta &macr
   ObIndexBlockRowDesc row_desc(meta_store_desc_);
   row_allocator_.reuse();
   meta_row_.reuse();
+  const uint64_t data_version = ObBaseIndexBlockBuilder::get_data_version(*index_store_desc_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "index tree root ctx not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(macro_meta.build_row(meta_row_, row_allocator_))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta));
+  } else if (OB_FAIL(macro_meta.build_row(meta_row_, row_allocator_, data_version))) {
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
   } else if (OB_FAIL(meta_tree_dumper_->append_row(meta_row_))) {
     STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(macro_meta));
   } else if (need_index_tree_dumper()) {

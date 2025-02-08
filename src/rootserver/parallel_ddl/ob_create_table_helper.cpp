@@ -876,6 +876,11 @@ int ObCreateTableHelper::generate_table_schema_()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(QUEUING_MODE_NOT_COMPAT_WARN_STR, K(ret), K_(tenant_id), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR);
+  } else if (compat_version < DATA_VERSION_4_3_5_1 && arg_.schema_.get_enable_macro_block_bloom_filter()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support enable_macro_block_bloom_filter for this version",
+             KR(ret), K(tenant_id_), K(compat_version), K(arg_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support enable_macro_block_bloom_filter");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",

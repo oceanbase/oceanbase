@@ -103,7 +103,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     mocked_external_table_column_ids_(),
     index_params_(),
     vec_column_name_(),
-    vec_index_type_(INDEX_TYPE_MAX)
+    vec_index_type_(INDEX_TYPE_MAX),
+    enable_macro_block_bloom_filter_(false)
 {
   table_mode_.reset();
 }
@@ -2994,6 +2995,34 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_ENABLE_MACRO_BLOCK_BLOOM_FILTER: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.5.1, enable_macro_block_bloom_filter is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.1, enable_macro_block_bloom_filter is not supported");
+        } else if (OB_ISNULL(option_node->children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
+        } else {
+          const bool enable_macro_block_bloom_filter = static_cast<bool>(option_node->children_[0]->value_);
+          if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+            arg.schema_.set_enable_macro_block_bloom_filter(enable_macro_block_bloom_filter);
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+            ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+            arg.alter_table_schema_.set_enable_macro_block_bloom_filter(enable_macro_block_bloom_filter);
+            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::ENABLE_MACRO_BLOCK_BLOOM_FILTER))) {
+              LOG_WARN("fail to set enable_macro_block_bloom_filter to bitset in ob ddl resolver", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+          }
+        }
+        break;
+      }
       case T_EXTERNAL_TABLE_AUTO_REFRESH: {
          if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
@@ -5465,6 +5494,7 @@ void ObDDLResolver::reset() {
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
   index_params_.reset();
+  enable_macro_block_bloom_filter_ = false;
 }
 
 bool ObDDLResolver::is_valid_prefix_key_type(const ObObjTypeClass column_type_class)
