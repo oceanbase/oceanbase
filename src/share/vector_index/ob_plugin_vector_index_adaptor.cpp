@@ -1059,11 +1059,15 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPH"));
       TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, incr_vid_count, reinterpret_cast<uint64_t *>(incr_vids)));
+      for (int64_t i = 0; OB_SUCC(ret) && i < incr_vid_count; i++) {
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, incr_vids[i]));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < del_vid_count; i++) {
         ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(incr_data_->bitmap_->insert_bitmap_, del_vids[i]));
       }
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, null_vid_count, null_vids));
+      for (int64_t i = 0; OB_SUCC(ret) && i < null_vid_count; i++) {
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, null_vids[i]));
+      }
     }
   }
 
@@ -1398,7 +1402,9 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
       if (OB_SUCC(ret)) {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
         TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
-        ROARING_TRY_CATCH(roaring64_bitmap_add_many(incr_data_->bitmap_->insert_bitmap_, count, vids));
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
+        }
       }
 
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
@@ -1578,8 +1584,12 @@ int ObPluginVectorIndexAdaptor::write_into_index_mem(int64_t dim, SCN read_scn,
     TCWLockGuard wr_vbit_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
     roaring::api::roaring64_bitmap_t *ibitmap = vbitmap_data_->bitmap_->insert_bitmap_;
     roaring::api::roaring64_bitmap_t *dbitmap = vbitmap_data_->bitmap_->delete_bitmap_;
-    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(ibitmap, i_vids.count(), i_vids.get_data()));
-    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add_many(dbitmap, d_vids.count(), d_vids.get_data()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count(); i++) {
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap, i_vids[i]));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(dbitmap, d_vids[i]));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
       ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ibitmap, d_vids.at(i)));
     }
