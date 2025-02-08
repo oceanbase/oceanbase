@@ -1083,7 +1083,8 @@ int ObSchemaRetrieveUtils::retrieve_column_group_mapping(
             }
             if (FAILEDx(column_group->add_column_id(last_column_id))) {
               LOG_WARN("fail to add column_id", KR(ret), K(last_column_group_id), K(last_column_id),
-                K(table_id), KPC(column_group));
+                                                         K(curr_column_group_id), K(curr_column_id),
+                                                         K(table_id), KPC(column_group), KPC(table_schema));
             }
           }
         }
