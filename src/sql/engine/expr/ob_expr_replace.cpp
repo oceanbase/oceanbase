@@ -157,37 +157,19 @@ int ObExprReplace::replace(ObString &ret_str,
   } else {
     ObSEArray<uint32_t, 4> locations(common::ObModIds::OB_SQL_EXPR_REPLACE,
                                      common::OB_MALLOC_NORMAL_BLOCK_SIZE);
-    struct Functor {
-      Functor(const ObCollationType cs_type,
-              ObSEArray<uint32_t, 4> &locations,
-              const ObString text,
-              const ObString pattern)
-          : cs_type_(cs_type), locations_(locations), text_(text), pattern_(pattern) {
-            pattern_char_length = ObCharset::strlen_char(cs_type_, pattern_.ptr(), pattern_.length());
-          }
-      const ObCollationType cs_type_;
-      ObSEArray<uint32_t, 4> &locations_;
-      const ObString text_;
-      const ObString pattern_;
-      size_t pattern_char_length;
-      int skip = 0; // once found matching substr, skip the matched word, since we are going to replace it
-      int operator() (const ObString &str, ob_wc_t wchar) {
-        int ret = OB_SUCCESS;
-        if(skip) {
-          skip--;
-          return ret;
-        }
-        if (0 == MEMCMP(str.ptr(), pattern_.ptr(), pattern_.length())) {
-          ret = locations_.push_back(str.ptr() - text_.ptr());
-          skip = pattern_char_length - 1;
-        }
-        return ret;
-      };
-    };
-
-    Functor temp_handler(cs_type, locations, text, from);
-    ObCharsetType charset_type = ObCharset::charset_type_by_coll(cs_type);
-    OZ(ObFastStringScanner::foreach_char(text, charset_type, temp_handler, false));
+    ObString mb;
+    int32_t wc;
+    ObStringScanner scanner(text, cs_type, ObStringScanner::IGNORE_INVALID_CHARACTER);
+    while (OB_SUCC(ret) && scanner.get_remain_str().length() >= from.length()) {
+      if (0 == MEMCMP(scanner.get_remain_str().ptr(), from.ptr(), from.length())) {
+        ret = locations.push_back(scanner.get_remain_str().ptr() - text.ptr());
+        scanner.forward_bytes(from.length());
+      } else if (OB_FAIL(scanner.next_character(mb, wc))) {
+        LOG_WARN("get next character failed", K(ret));
+      } else {
+        //do nothing
+      }
+    }
 
     int64_t tot_length = 0;
     if (OB_FAIL(ret)) {
