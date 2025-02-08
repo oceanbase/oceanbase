@@ -2356,6 +2356,7 @@ DEFINE_ERROR_DEP(OB_ERR_TMP_FILE_ALREADY_SEALED, -9134, -1, "HY000", "tmp file h
 DEFINE_ERROR_DEP(OB_TMP_FILE_EXCEED_DISK_QUOTA, -9135, -1, "HY000", "tmp file exceeds disk quota");
 DEFINE_ERROR(OB_BACKUP_MISSING_MVIEW_DEP_TABLET_SSTABLE, -9136, -1, "HY000", "Backup missing mview dependent tablet sstable, sstable maybe recycled");
 DEFINE_ERROR_DEP(OB_ERR_DUPLICATE_INDEX, -9137, ER_DUP_INDEX, "HY000", "Duplicate index \'%s\' defined on the table \'%s.%s\'");
+DEFINE_ERROR(OB_NO_LS_REPLICA_CAN_DO_BACKUP, -9138, -1, "HY000", "No suitable replica found to perform backup");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

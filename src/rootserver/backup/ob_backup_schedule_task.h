@@ -274,6 +274,11 @@ public:
       const share::ObBackupLSTaskAttr &ls_attr);
   int deep_copy(const ObBackupDataBaseTask &that);
   int set_optional_servers_(const ObIArray<common::ObAddr> &black_servers);
+  int check_replica_status_for_backup(
+      const share::ObLSReplica &replica,
+      char *buf,
+      const int64_t size,
+      bool &can_do_backup);
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
       share::ObTaskId &trace_id) final override;
