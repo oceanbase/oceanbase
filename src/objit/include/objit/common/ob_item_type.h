@@ -2736,6 +2736,7 @@ typedef enum ObItemType
   T_ORGANIZATION_HEAP = 4795,
   T_PARSE_HEADER = 4796,
   T_SP_OBJ_PERSISTABLE = 4797,
+  T_FLASHBACK_STANDBY_LOG = 4798,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

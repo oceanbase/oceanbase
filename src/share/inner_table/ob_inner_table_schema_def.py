@@ -7904,6 +7904,7 @@ def_table_schema(**all_ncomp_dll_v2)
 # 538: __all_catalog_history
 # 539: __all_catalog_privilege
 # 540: __all_catalog_privilege_history
+# 541: __all_tenant_flashback_log_scn
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15772,6 +15773,8 @@ def_table_schema(
 # 12520: __all_virtual_sswriter_group_stat
 # 12521: __all_virtual_sswriter_lease_mgr
 
+# 12522: __all_virtual_tenant_flashback_log_scn
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16310,6 +16313,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15499: __all_virtual_sswriter_lease_mgr
 # 15500: __idx_15494_idx_catalog_name_real_agent
 # 15501: __idx_15495_idx_catalog_priv_catalog_name_real_agent
+# 15502: __all_virtual_tenant_flashback_log_scn
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -40200,6 +40204,8 @@ def_table_schema(
 # 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
 # 21636: V$OB_PLUGINS
+# 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
+# 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -61423,6 +61429,8 @@ def_table_schema(
     FROM DBA_SCHEDULER_JOBS WHERE OWNER = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
 )
+
+# 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 
 #
 # 余留位置（此行之前占位）
