@@ -17,8 +17,24 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/mb_wc.h"
 #include "lib/charset/ob_ctype_gbk_tab.h"
-#include "lib/charset/ob_cypte_gb18030_tab.h"
+#include "lib/charset/ob_ctype_gb18030_tab.h"
 #include "lib/charset/ob_ctype_latin1_tab.h"
+#include "lib/charset/ob_ctype_ascii_tab.h"
+#include "lib/charset/ob_ctype_tis620_tab.h"
+#include "lib/charset/ob_ctype_sjis_tab.h"
+#include "lib/charset/ob_ctype_big5_tab.h"
+#include "lib/charset/ob_ctype_hkscs_tab.h"
+#include "lib/charset/ob_ctype_hkscs31_tab.h"
+#include "lib/charset/ob_ctype_dec8_tab.h"
+#include "lib/charset/ob_ctype_gb2312_tab.h"
+#include "lib/charset/ob_ctype_ujis_tab.h"
+#include "lib/charset/ob_ctype_euckr_tab.h"
+#include "lib/charset/ob_ctype_eucjpms_tab.h"
+#include "lib/charset/ob_ctype_cp932_tab.h"
+#include "lib/charset/ob_ctype_cp850_tab.h"
+#include "lib/charset/ob_ctype_hp8_tab.h"
+#include "lib/charset/ob_ctype_macroman_tab.h"
+#include "lib/charset/ob_ctype_swe7_tab.h"
 
 
 namespace oceanbase
@@ -30,19 +46,6 @@ namespace common
 template<ObCharsetType cs_type>
 inline int ob_charset_char_len(const unsigned char *s, const unsigned char *e) {
   return OB_LIKELY(s < e) ? 1 : OB_CS_TOOSMALL;
-}
-
-//inlined charset decode functions
-template<ObCharsetType cs_type>
-inline int ob_charset_decode_unicode(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
-  unicode_value = 0;
-  return ob_charset_char_len<CHARSET_BINARY>(s, e);
-}
-
-//inlined charset encode functions
-template<ObCharsetType cs_type>
-inline int ob_charset_encode_unicode(ob_wc_t unicode_value, unsigned char *buf, unsigned char *buf_end) {
-  return OB_CS_ILUNI;
 }
 
 //UTF8
@@ -70,6 +73,487 @@ inline int ob_charset_char_len<CHARSET_UTF8MB4>(const unsigned char *s, const un
   }
   return mb_len; /* Illegal mb head */;
 }
+
+//SJIS
+template<>
+inline int ob_charset_char_len<CHARSET_SJIS>(const unsigned char *s, const unsigned char *e) {
+  int mb_len = OB_CS_TOOSMALL;
+  if (OB_LIKELY(s < e)) {
+    if(issjishead((uchar)*s) && (e - s) > 1 && issjistail((uchar)s[1])) {
+      mb_len = 2;
+    } else {
+      mb_len = 1;
+    }
+  }
+  return mb_len;
+}
+
+//BIG5
+template<>
+inline int ob_charset_char_len<CHARSET_BIG5>(const unsigned char *s, const unsigned char *e) {
+  if (s >= e) return OB_CS_TOOSMALL;
+  return (hasbig5head(*(s)) && (e) - (s) > 1 && hasbig5tail(*((s) + 1)) ? 2 : 1);
+}
+
+//HKSCS
+template<>
+inline int ob_charset_char_len<CHARSET_HKSCS>(const unsigned char *s, const unsigned char *e) {
+  if (s >= e) return OB_CS_TOOSMALL;
+  return (ishkscshead(*(s)) && (e) - (s) > 1 && ishkscstail(*((s) + 1)) ? 2 : 1);
+}
+
+//GB2312
+template<>
+inline int ob_charset_char_len<CHARSET_GB2312>(const unsigned char *s, const unsigned char *e) {
+  if (s >= e) return OB_CS_TOOSMALL;
+  return (isgb2312head(*(s)) && (e) - (s) > 1 && isgb2312tail(*((s) + 1)) ? 2
+                                                                          : 1);
+}
+
+//HKSCS31
+template<>
+inline int ob_charset_char_len<CHARSET_HKSCS31>(const unsigned char *s, const unsigned char *e) {
+  if (s >= e) return OB_CS_TOOSMALL;
+  return (ishkscshead(*(s)) && (e) - (s) > 1 && ishkscstail(*((s) + 1)) ? 2 : 1);
+}
+
+//UJIS
+template<>
+inline int ob_charset_char_len<CHARSET_UJIS>(const unsigned char *s, const unsigned char *e) {
+  if (s >= e) return OB_CS_TOOSMALL;
+  return ((static_cast<uint8_t>(*s) < 0x80)
+              ? 1
+              : isujis(*(s)) && (e) - (s) > 1 && isujis(*((s) + 1))
+                    ? 2
+                    : isujis_ss2(*(s)) && (e) - (s) > 1 && iskata(*((s) + 1))
+                          ? 2
+                          : isujis_ss3(*(s)) && (e) - (s) > 2 &&
+                                    isujis(*((s) + 1)) && isujis(*((s) + 2))
+                                ? 3
+                                : 1);
+}
+
+//EUCKR
+template<>
+inline int ob_charset_char_len<CHARSET_EUCKR>(const unsigned char *s, const unsigned char *e) {
+  return ((static_cast<uint8_t>(*s) < 0x80)
+              ? 1
+              : iseuc_kr_head(*(s)) && (e) - (s) > 1 &&
+                        iseuc_kr_tail(*((s) + 1))
+                    ? 2
+                    : 1);
+}
+
+//CP932
+template<>
+inline int ob_charset_char_len<CHARSET_CP932>(const unsigned char *s, const unsigned char *e) {
+  return (iscp932head((uint8_t)*s) && (e - s) > 1 && iscp932tail((uint8_t)s[1])
+              ? 2
+              : 1);
+}
+
+//EUCJPMS
+template<>
+inline int ob_charset_char_len<CHARSET_EUCJPMS>(const unsigned char *s, const unsigned char *e) {
+  return ((static_cast<uint8_t>(*s) < 0x80)
+              ? 1
+              : iseucjpms(*(s)) && (e) - (s) > 1 && iseucjpms(*((s) + 1))
+                    ? 2
+                    : iseucjpms_ss2(*(s)) && (e) - (s) > 1 && iskata(*((s) + 1))
+                          ? 2
+                          : iseucjpms_ss3(*(s)) && (e) - (s) > 2 &&
+                                    iseucjpms(*((s) + 1)) &&
+                                    iseucjpms(*((s) + 2))
+                                ? 3
+                                : 1);
+}
+
+//GBK
+template<>
+inline int ob_charset_char_len<CHARSET_GBK>(const unsigned char *s, const unsigned char *e) {
+  int mb_len = OB_CS_TOOSMALL;
+  if (OB_LIKELY(s < e)) {
+    if (0x81 <= *s && *s <= 0xFE) {
+      if (OB_LIKELY(s + 1 < e)) {
+        mb_len = 2;
+      }
+    } else {
+      mb_len = 1;
+    }
+  }
+  return mb_len;
+}
+
+//utf16
+#define OB_UTF16_HIGH_HEAD(x)  ((((uchar) (x)) & 0xFC) == 0xD8)
+#define OB_UTF16_LOW_HEAD(x)   ((((uchar) (x)) & 0xFC) == 0xDC)
+#define OB_UTF16_SURROGATE(x)  (((x) & 0xF800) == 0xD800)
+#define OB_UTF16_WC2(a, b)       ((a << 8) + b)
+#define OB_UTF16_WC4(a, begin, c, d) (((a & 3) << 18) + (begin << 10) + \
+                                  ((c & 3) << 8) + d + 0x10000)
+
+template<>
+inline int ob_charset_char_len<CHARSET_UTF16>(const unsigned char *s, const unsigned char *e)
+{
+  int mb_len = OB_CS_TOOSMALL;
+  if (OB_LIKELY(s + 1 < e)) {
+    if (OB_UTF16_HIGH_HEAD(*s)) {
+      if (s + 3 < e) {
+        mb_len = 4;
+      }
+    } else {
+      mb_len = 2;
+    }
+  }
+  return mb_len;
+}
+
+//UTF16LE
+template<>
+inline int ob_charset_char_len<CHARSET_UTF16LE>(const unsigned char *s, const unsigned char *e) {
+  int mb_len = OB_CS_TOOSMALL;
+  if (OB_LIKELY(s + 1 < e)) {
+    if (OB_UTF16_HIGH_HEAD(*(s+ 1))) {
+      if (s + 3 < e) {
+        mb_len = 4;
+      }
+    } else {
+      mb_len = 2;
+    }
+  }
+  return mb_len;
+}
+
+template<>
+inline int ob_charset_char_len<CHARSET_GB18030>(const unsigned char *s, const unsigned char *e) {
+  int mb_len = OB_CS_TOOSMALL;
+  if (OB_LIKELY(s < e)) {
+    unsigned char high_c = *s;
+    if (!(0x81 <= high_c && high_c <= 0xFE)) {
+      mb_len = 1;
+    } else if (OB_LIKELY(s + 1 < e)) {
+      unsigned char low_c = *(s + 1);
+      if ((0x40 <= low_c && low_c <= 0x7E) || (0x80 <= low_c && low_c <= 0xFE)) {
+        mb_len = 2;
+      } else if (0x30 <= low_c && low_c <= 0x39) {
+        if (OB_LIKELY(s + 3 < e)) {
+          mb_len = 4;
+        }
+      } else {
+        mb_len = 1; /* Illegal low_c */
+      }
+    }
+  }
+  return mb_len;
+}
+
+//inlined charset decode functions
+template<ObCharsetType cs_type>
+inline int ob_charset_decode_unicode(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  unicode_value = 0;
+  return ob_charset_char_len<CHARSET_BINARY>(s, e);
+}
+
+//inlined charset encode functions
+template<ObCharsetType cs_type>
+inline int ob_charset_encode_unicode(ob_wc_t unicode_value, unsigned char *buf, unsigned char *buf_end) {
+  return OB_CS_ILUNI;
+}
+
+//BINARY
+template<>
+inline int ob_charset_decode_unicode<CHARSET_BINARY>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  unicode_value = *s;
+  return ob_charset_char_len<CHARSET_BINARY>(s, e);
+}
+
+//ASCII
+template<>
+inline int ob_charset_decode_unicode<CHARSET_ASCII>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_ascii_general_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+//TIS620
+template<>
+inline int ob_charset_decode_unicode<CHARSET_TIS620>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = cs_to_uni_tis620[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_SJIS>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) /* ASCII: [00..7F] -> [U+0000..U+007F] */
+  {
+    unicode_value = hi;
+    return 1;
+  }
+
+  /* JIS-X-0201 Half width Katakana: [A1..DF] -> [U+FF61..U+FF9F] */
+  if (hi >= 0xA1 && hi <= 0xDF) {
+    unicode_value = sjis_to_unicode[hi];
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  /* JIS-X-0208 [81..9F,E0..FC][40..7E,80..FC] */
+  if (!(unicode_value = sjis_to_unicode[(hi << 8) + s[1]]))
+    return (issjishead(hi) && issjistail(s[1])) ? -2 : OB_CS_ILSEQ;
+
+  return 2;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_BIG5>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  if (!(unicode_value = func_big5_uni_onechar((hi << 8) + s[1]))) return -2;
+
+  return 2;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_HKSCS>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  if (!(unicode_value = func_hkscs_uni_onechar((hi << 8) + s[1]))) return -2;
+
+  return 2;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_HKSCS31>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  if (!(unicode_value = func_hkscs31_uni_onechar((hi << 8) + s[1]))) return -2;
+
+  return 2;
+}
+
+//DEC8
+template<>
+inline int ob_charset_decode_unicode<CHARSET_DEC8>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_dec8_swedish_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_GB2312>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  if (!(unicode_value = func_gb2312_uni_onechar(((hi << 8) + s[1]) & 0x7F7F)))
+    return -2;
+
+  return 2;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_UJIS>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) /* ASCII code set: [00..7F] -> [U+0000..U+007F] */
+  {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (hi >= 0xA1 && hi <= 0xFE) /* JIS-X-0208 code set: [A1..FE][A1..FE] */
+  {
+    if (s + 2 > e) return OB_CS_TOOSMALL2;
+    return (unicode_value = jisx0208_eucjp_to_unicode[(hi << 8) + s[1]])
+               ? 2
+               : (s[1] < 0xA1 || s[1] > 0xFE) ? OB_CS_ILSEQ : -2;
+  }
+
+  /* JIS-X-0201 HALF WIDTH KATAKANA: [8E][A1..DF] -> [U+FF61..U+FF9F] */
+  if (hi == 0x8E) {
+    if (s + 2 > e) return OB_CS_TOOSMALL2;
+    if (s[1] < 0xA1 || s[1] > 0xDF) return OB_CS_ILSEQ;
+    unicode_value = 0xFEC0 + s[1]; /* 0xFFC0 = 0xFF61 - 0xA1 */
+    return 2;
+  }
+
+  if (hi == 0x8F) /* JIS X 0212 code set: [8F][A1..FE][A1..FE] */
+  {
+    if (s + 3 > e) return OB_CS_TOOSMALL3;
+    return (unicode_value = jisx0212_eucjp_to_unicode[(((int)s[1]) << 8) + s[2]])
+               ? 3
+               : (s[1] < 0xA1 || s[1] > 0xFE || s[2] < 0xA1 || s[2] > 0xFE)
+                     ? OB_CS_ILSEQ
+                     : -3;
+  }
+
+  return OB_CS_ILSEQ;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_EUCKR>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  if (!(unicode_value = func_ksc5601_uni_onechar((hi << 8) + s[1]))) return -2;
+
+  return 2;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_EUCJPMS>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  int hi;
+
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  if ((hi = s[0]) < 0x80) /* ASCII code set: [00..7F] -> [U+0000..U+007F] */
+  {
+    unicode_value = hi;
+    return 1;
+  }
+
+  if (hi >= 0xA1 && hi <= 0xFE) /* JIS X 0208 code set: [A1..FE][A1..FE] */
+  {
+    if (s + 2 > e) return OB_CS_TOOSMALL2;
+    return (unicode_value = jisx0208_eucjpms_to_unicode[(hi << 8) + s[1]])
+               ? 2
+               : (s[1] < 0xA1 || s[1] > 0xFE) ? OB_CS_ILSEQ : -2;
+  }
+
+  /* JIS-X-0201 HALF WIDTH KATAKANA: [8E][A1..DF] -> [U+FF61..U+FF9F] */
+  if (hi == 0x8E) {
+    if (s + 2 > e) return OB_CS_TOOSMALL2;
+    if (s[1] < 0xA1 || s[1] > 0xDF) return OB_CS_ILSEQ;
+    unicode_value = 0xFEC0 + s[1]; /* 0xFFC0 = 0xFF61 - 0xA1 */
+    return 2;
+  }
+
+  if (hi == 0x8F) /* JIS X 0212 code set: [8F][A1..FE][A1..FE] */
+  {
+    if (s + 3 > e) return OB_CS_TOOSMALL3;
+    return (unicode_value = jisx0212_eucjpms_to_unicode[(((int)s[1]) << 8) + s[2]])
+               ? 3
+               : (s[1] < 0xA1 || s[1] > 0xFE || s[2] < 0xA1 || s[2] > 0xFE)
+                     ? OB_CS_ILSEQ
+                     : -3;
+  }
+
+  return OB_CS_ILSEQ;
+}
+
+template<>
+inline int ob_charset_decode_unicode<CHARSET_CP932>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  int hi = s[0];
+  if (hi < 0x80) /* ASCII: [00-7F] -> [U+0000..U+007F] */
+  {
+    unicode_value = hi;
+    return 1;
+  }
+
+  /* JIS-X-0201 Half width Katakana: [A1..DF] -> [U+FF61..U+FF9F] */
+  if (hi >= 0xA1 && hi <= 0xDF) {
+    unicode_value = cp932_to_unicode[hi];
+    return 1;
+  }
+
+  if (s + 2 > e) return OB_CS_TOOSMALL2;
+
+  /* JIS-X-0208-MS [81..9F,E0..FC][40..7E,80..FC] */
+  if (!(unicode_value = cp932_to_unicode[(hi << 8) + s[1]]))
+    return (iscp932head(hi) && iscp932tail(s[1])) ? -2 : OB_CS_ILSEQ;
+
+  return 2;
+}
+//CP850
+template<>
+inline int ob_charset_decode_unicode<CHARSET_CP850>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_cp850_general_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+//HP8
+template<>
+inline int ob_charset_decode_unicode<CHARSET_HP8>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_hp8_english_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+//MACROMAN
+template<>
+inline int ob_charset_decode_unicode<CHARSET_MACROMAN>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_macroman_general_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
+//SWE7
+template<>
+inline int ob_charset_decode_unicode<CHARSET_SWE7>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value) {
+  if (s >= e) return OB_CS_TOOSMALL;
+
+  unicode_value = to_uni_swe7_swedish_ci[*s];
+  return (!unicode_value && s[0]) ? -1 : 1;
+}
+
 
 template<>
 inline int ob_charset_decode_unicode<CHARSET_UTF8MB4>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value)
@@ -110,23 +594,6 @@ inline int ob_charset_encode_unicode<CHARSET_UTF8MB4>(ob_wc_t unicode_value, uns
     ret = bytes;
   }
   return ret;
-}
-
-
-//GBK
-template<>
-inline int ob_charset_char_len<CHARSET_GBK>(const unsigned char *s, const unsigned char *e) {
-  int mb_len = OB_CS_TOOSMALL;
-  if (OB_LIKELY(s < e)) {
-    if (0x81 <= *s && *s <= 0xFE) {
-      if (OB_LIKELY(s + 1 < e)) {
-        mb_len = 2;
-      }
-    } else {
-      mb_len = 1;
-    }
-  }
-  return mb_len;
 }
 
 template<>
@@ -182,28 +649,6 @@ inline int ob_charset_encode_unicode<CHARSET_GBK>(ob_wc_t unicode_value, unsigne
 #define MIN_MB_EVEN_BYTE_4 0x30
 #define UNI2_TO_GB4_DIFF 7456
 
-template<>
-inline int ob_charset_char_len<CHARSET_GB18030>(const unsigned char *s, const unsigned char *e) {
-  int mb_len = OB_CS_TOOSMALL;
-  if (OB_LIKELY(s < e)) {
-    unsigned char high_c = *s;
-    if (!(0x81 <= high_c && high_c <= 0xFE)) {
-      mb_len = 1;
-    } else if (OB_LIKELY(s + 1 < e)) {
-      unsigned char low_c = *(s + 1);
-      if ((0x40 <= low_c && low_c <= 0x7E) || (0x80 <= low_c && low_c <= 0xFE)) {
-        mb_len = 2;
-      } else if (0x30 <= low_c && low_c <= 0x39) {
-        if (OB_LIKELY(s + 3 < e)) {
-          mb_len = 4;
-        }
-      } else {
-        mb_len = 1; /* Illegal low_c */
-      }
-    }
-  }
-  return mb_len;
-}
 
 template<>
 inline int ob_charset_decode_unicode<CHARSET_GB18030>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value)
@@ -525,29 +970,6 @@ inline int ob_charset_decode_unicode<CHARSET_LATIN1>(const unsigned char *s, con
   return mb_len;
 }
 
-//utf16
-#define OB_UTF16_HIGH_HEAD(x)  ((((uchar) (x)) & 0xFC) == 0xD8)
-#define OB_UTF16_LOW_HEAD(x)   ((((uchar) (x)) & 0xFC) == 0xDC)
-#define OB_UTF16_SURROGATE(x)  (((x) & 0xF800) == 0xD800)
-#define OB_UTF16_WC2(a, b)       ((a << 8) + b)
-#define OB_UTF16_WC4(a, begin, c, d) (((a & 3) << 18) + (begin << 10) + \
-                                  ((c & 3) << 8) + d + 0x10000)
-
-template<>
-inline int ob_charset_char_len<CHARSET_UTF16>(const unsigned char *s, const unsigned char *e)
-{
-  int mb_len = OB_CS_TOOSMALL;
-  if (OB_LIKELY(s + 1 < e)) {
-    if (OB_UTF16_HIGH_HEAD(*s)) {
-      if (s + 3 < e) {
-        mb_len = 4;
-      }
-    } else {
-      mb_len = 2;
-    }
-  }
-  return mb_len;
-}
 
 template<>
 inline int ob_charset_decode_unicode<CHARSET_UTF16>(const unsigned char *s, const unsigned char *e, ob_wc_t &unicode_value)
@@ -602,11 +1024,41 @@ inline int ob_charset_encode_unicode<CHARSET_UTF16>(ob_wc_t unicode_value, unsig
   return OB_CS_ILUNI;
 }
 
+#define OB_UTF16_SURROGATE_HIGH_FIRST 0xD800
+#define OB_UTF16_SURROGATE_LOW_FIRST 0xDC00
+#define OB_UTF16_SURROGATE_LOW_LAST 0xDFFF
+template<>
+inline int ob_charset_decode_unicode<CHARSET_UTF16LE>(const unsigned char *str, const unsigned char *end, ob_wc_t &unicode_value) {
+  ob_wc_t lo;
+
+  if (str + 2 > end) return OB_CS_TOOSMALL2;
+
+  if ((unicode_value = uint2korr(str)) < OB_UTF16_SURROGATE_HIGH_FIRST ||
+      (unicode_value > OB_UTF16_SURROGATE_LOW_LAST))
+    return 2; /* [0000-D7FF,E000-FFFF] */
+
+  if (unicode_value >= OB_UTF16_SURROGATE_LOW_FIRST)
+    return OB_CS_ILSEQ; /* [DC00-DFFF] Low surrogate part without high part */
+
+  if (str + 4 > end) return OB_CS_TOOSMALL4;
+
+  str += 2;
+
+  if ((lo = uint2korr(str)) < OB_UTF16_SURROGATE_LOW_FIRST ||
+      lo > OB_UTF16_SURROGATE_LOW_LAST)
+    return OB_CS_ILSEQ; /* Expected low surrogate part, got something else */
+
+  unicode_value = 0x10000 + (((unicode_value & 0x3FF) << 10) | (lo & 0x3FF));
+  return 4;
+}
 #undef OB_UTF16_HIGH_HEAD
 #undef OB_UTF16_LOW_HEAD
 #undef OB_UTF16_SURROGATE
 #undef OB_UTF16_WC2
 #undef OB_UTF16_WC4
+#undef OB_UTF16_SURROGATE_HIGH_FIRST
+#undef OB_UTF16_SURROGATE_LOW_FIRST
+#undef OB_UTF16_SURROGATE_LOW_LAST
 
 /* Fast string scanner according to the charset
  * The basic idea is to make the decode function ObCharset::mb_wc inline
@@ -685,6 +1137,11 @@ public:
             foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
           : foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
+    case CHARSET_GB2312:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_GB2312, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_GB2312, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
     case CHARSET_GB18030:
       ret = convert_unicode ?
             foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
@@ -710,6 +1167,26 @@ public:
             foreach_char_prototype<CHARSET_SJIS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
           : foreach_char_prototype<CHARSET_SJIS, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
+    case CHARSET_UJIS:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_UJIS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_UJIS, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_EUCKR:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_EUCKR, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_EUCKR, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_EUCJPMS:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_EUCJPMS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_EUCJPMS, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_CP932:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_CP932, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_CP932, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
     case CHARSET_HKSCS:
       ret = convert_unicode ?
             foreach_char_prototype<CHARSET_HKSCS, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
@@ -724,6 +1201,26 @@ public:
       ret = convert_unicode ?
             foreach_char_prototype<CHARSET_DEC8, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
           : foreach_char_prototype<CHARSET_DEC8, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_CP850:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_CP850, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_CP850, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_HP8:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_HP8, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_HP8, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_MACROMAN:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_MACROMAN, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_MACROMAN, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_SWE7:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_SWE7, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_SWE7, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_BIG5:
       ret = convert_unicode ?

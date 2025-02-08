@@ -12,6 +12,7 @@
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_ctype_tis620_tab.h"
+#include "lib/charset/ob_ctype_tis620.h"
 #include "lib/allocator/ob_malloc.h"
 
 /*

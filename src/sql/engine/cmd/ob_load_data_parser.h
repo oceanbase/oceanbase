@@ -17,6 +17,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/string/ob_string.h"
 #include "lib/json/ob_json.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 
 namespace oceanbase
@@ -309,6 +310,26 @@ public:
       ret = scan_proto<common::CHARSET_GBK, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
+    case common::CHARSET_GB2312:
+      ret = scan_proto<common::CHARSET_GB2312, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_UJIS:
+      ret = scan_proto<common::CHARSET_UJIS, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_EUCKR:
+      ret = scan_proto<common::CHARSET_EUCKR, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_EUCJPMS:
+      ret = scan_proto<common::CHARSET_EUCJPMS, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
+    case common::CHARSET_CP932:
+      ret = scan_proto<common::CHARSET_CP932, handle_func, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      break;
     case common::CHARSET_GB18030:
     case common::CHARSET_GB18030_2022:
       ret = scan_proto<common::CHARSET_GB18030, handle_func, NEED_ESCAPED_RESULT>(
@@ -338,12 +359,6 @@ public:
 
 private:
   int init_opt_variables();
-  template<common::ObCharsetType cs_type>
-  inline int mbcharlen(const char *ptr, const char *end) {
-    UNUSED(ptr);
-    UNUSED(end);
-    return 1;
-  }
 
   int handle_irregular_line(int field_idx,
                             int line_no,
@@ -419,70 +434,6 @@ protected:
   OptParams opt_param_;
 };
 
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_UTF8MB4>(const char *ptr, const char *end) {
-  int mb_len = 1;
-  UNUSED(end);
-  unsigned char c = *ptr;
-  if (c < 0x80) {
-    mb_len = 1;
-  } else if (c < 0xc2) {
-    mb_len = 1; /* Illegal mb head */
-  } else if (c < 0xe0) {
-    mb_len = 2;
-  } else if (c < 0xf0) {
-    mb_len = 3;
-  } else if (c < 0xf8) {
-    mb_len = 4;
-  }
-  return mb_len; /* Illegal mb head */;
-}
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_GBK>(const char *ptr, const char *end) {
-  UNUSED(end);
-  unsigned char c = *ptr;
-  return (0x81 <= c && c <= 0xFE) ? 2 : 1;
-}
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_SJIS>(const char *ptr, const char *end) {
-  UNUSED(end);
-  unsigned char c = *ptr;
-  return ((0x81 <= (c) && (c) <= 0x9f) || ((0xe0 <= (c)) && (c) <= 0xfc)) ? 2 : 1;
-}
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_BIG5>(const char *ptr, const char *end) {
-  UNUSED(end);
-  unsigned char c = *ptr;
-  return (0xa1 <= c && c <= 0xf9) ? 2 : 1;
-}
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_HKSCS>(const char *ptr, const char *end) {
-  UNUSED(end);
-  unsigned char c = *ptr;
-  return (0x81 <= c && c <= 0xfe) ? 2 : 1;
-}
-
-template<>
-inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_GB18030>(const char *ptr, const char *end) {
-  int mb_len = 1;
-  if (end - ptr > 1) {
-    unsigned char low_c = static_cast<unsigned char>(*(ptr + 1));
-    unsigned char high_c = static_cast<unsigned char>(*ptr);
-    if (!(0x81 <= high_c && high_c <= 0xFE)) {
-      mb_len = 1;
-    } else if ((0x40 <= low_c && low_c <= 0x7E) || (0x80 <= low_c && low_c <= 0xFE)) {
-      mb_len = 2;
-    } else if (0x30 <= low_c && low_c <= 0x39) {
-      mb_len = 4;
-    }
-  }
-  return mb_len;
-}
 
 template<common::ObCharsetType cs_type, typename handle_func, bool NEED_ESCAPED_RESULT>
 int ObCSVGeneralParser::scan_proto(const char *&str,
@@ -579,7 +530,10 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
                     && (!is_enclosed || (str - 1 == last_end_enclosed));
 
           if (!is_term) {
-            int mb_len = mbcharlen<cs_type>(str, end);
+            int mb_len = ob_charset_char_len<cs_type>((const unsigned char *)str, (const unsigned char*)end);
+            if (mb_len < 0) {
+              mb_len = 1;
+            }
             str += mb_len;
           }
         }

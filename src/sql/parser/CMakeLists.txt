@@ -6,9 +6,23 @@
 set(ob_sql_parser_charset_object_list
     ob_ctype_bin.cc
     ob_ctype.cc
+    ob_ctype_gbk_tab.cpp
     ob_ctype_gbk.cc
+    ob_ctype_latin1_tab.cpp
     ob_ctype_latin1.cc
+    ob_ctype_ascii_tab.cpp
+    ob_ctype_gb2312_tab.cpp
+    ob_ctype_gb2312.cc
+    ob_ctype_ujis_tab.cpp
+    ob_ctype_ujis.cc
+    ob_ctype_euckr_tab.cpp
+    ob_ctype_euckr.cc
+    ob_ctype_eucjpms_tab.cpp
+    ob_ctype_eucjpms.cc
+    ob_ctype_cp932_tab.cpp
+    ob_ctype_cp932.cc
     ob_ctype_ascii.cc
+    ob_ctype_tis620_tab.cpp
     ob_ctype_tis620.cc
     ob_ctype_mb.cc
     ob_ctype_simple.cc
@@ -16,6 +30,7 @@ set(ob_sql_parser_charset_object_list
     ob_dtoa.cc
     ob_ctype_utf16.cc
     ob_ctype_uca.cc
+    ob_ctype_gb18030_tab.cpp
     ob_ctype_gb18030.cc
     uca900_ja_tbls.cc
     uca900_zh_tbls.cc

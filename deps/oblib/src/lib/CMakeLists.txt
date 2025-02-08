@@ -21,25 +21,49 @@ ob_set_subtarget(oblib_lib_extra ALONE
 ob_set_subtarget(oblib_lib charset
   charset/ob_ctype_bin.cc
   charset/ob_ctype.cc
+  charset/ob_ctype_gb18030_tab.cpp
   charset/ob_ctype_gb18030.cc
+  charset/ob_ctype_gbk_tab.cpp
   charset/ob_ctype_gbk.cc
+  charset/ob_ctype_latin1_tab.cpp
   charset/ob_ctype_latin1.cc
+  charset/ob_ctype_ascii_tab.cpp
+  charset/ob_ctype_gb2312_tab.cpp
+  charset/ob_ctype_gb2312.cc
   charset/ob_ctype_ascii.cc
+  charset/ob_ctype_tis620_tab.cpp
   charset/ob_ctype_tis620.cc
   charset/ob_ctype_mb.cc
   charset/ob_ctype_simple.cc
   charset/ob_ctype_uca.cc
   charset/ob_ctype_utf8.cc
   charset/ob_ctype_utf16.cc
+  charset/ob_ctype_ujis_tab.cpp
+  charset/ob_ctype_ujis.cc
+  charset/ob_ctype_euckr_tab.cpp
+  charset/ob_ctype_euckr.cc
+  charset/ob_ctype_eucjpms_tab.cpp
+  charset/ob_ctype_eucjpms.cc
+  charset/ob_ctype_cp932_tab.cpp
+  charset/ob_ctype_cp932.cc
   charset/ob_dtoa.cc
   charset/uca900_ja_tbls.cc
   charset/uca900_zh_tbls.cc
   charset/uca900_zh2_tbls.cc
   charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
+  charset/ob_ctype_sjis_tab.cpp
   charset/ob_ctype_sjis.cc
+  charset/ob_ctype_big5_tab.cpp
   charset/ob_ctype_big5.cc
+  charset/ob_ctype_hkscs_tab.cpp
+  charset/ob_ctype_hkscs31_tab.cpp
   charset/ob_ctype_hkscs.cc
+  charset/ob_ctype_dec8_tab.cpp
+  charset/ob_ctype_cp850_tab.cpp
+  charset/ob_ctype_hp8_tab.cpp
+  charset/ob_ctype_macroman_tab.cpp
+  charset/ob_ctype_swe7_tab.cpp
   charset/ob_ctype_extra.cc
 )
 

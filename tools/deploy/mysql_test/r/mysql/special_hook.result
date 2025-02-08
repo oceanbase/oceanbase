@@ -30,10 +30,20 @@ gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
 gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
 gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
 gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+gb2312_chinese_ci	gb2312	24	Yes	Yes	1
+gb2312_bin	gb2312	86		Yes	1
 ascii_general_ci	ascii	11	Yes	Yes	1
 ascii_bin	ascii	65		Yes	1
 tis620_thai_ci	tis620	18	Yes	Yes	1
 tis620_bin	tis620	89		Yes	1
+ujis_japanese_ci	ujis	12	Yes	Yes	1
+ujis_bin	ujis	91		Yes	1
+euckr_korean_ci	euckr	19	Yes	Yes	1
+euckr_bin	euckr	85		Yes	1
+eucjpms_japanese_ci	eucjpms	97	Yes	Yes	1
+eucjpms_bin	eucjpms	98		Yes	1
+cp932_japanese_ci	cp932	95	Yes	Yes	1
+cp932_bin	cp932	96		Yes	1
 utf16le_general_ci	utf16le	56	Yes	Yes	1
 utf16le_bin	utf16le	62		Yes	1
 sjis_japanese_ci	sjis	13	Yes	Yes	1
@@ -92,6 +102,14 @@ utf8mb4_unicode_520_ci	utf8mb4	246		Yes	8
 utf8mb4_vietnamese_ci	utf8mb4	247		Yes	8
 dec8_swedish_ci	dec8	3	Yes	Yes	8
 dec8_bin	dec8	69		Yes	8
+cp850_general_ci	cp850	4	Yes	Yes	8
+cp850_bin	cp850	80		Yes	8
+hp8_english_ci	hp8	6	Yes	Yes	8
+hp8_bin	hp8	72		Yes	8
+macroman_general_ci	macroman	39	Yes	Yes	8
+macroman_bin	macroman	53		Yes	8
+swe7_swedish_ci	swe7	10	Yes	Yes	8
+swe7_bin	swe7	82		Yes	8
 utf8mb4_0900_ai_ci	utf8mb4	255		Yes	0
 utf8mb4_de_pb_0900_ai_ci	utf8mb4	256		Yes	0
 utf8mb4_is_0900_ai_ci	utf8mb4	257		Yes	0
@@ -163,13 +181,22 @@ gbk	GBK charset	gbk_chinese_ci	2
 utf16	UTF-16 Unicode	utf16_general_ci	4
 gb18030	GB18030 charset	gb18030_chinese_ci	4
 latin1	cp1252 West European	latin1_swedish_ci	1
+gb2312	GB2312 Simplified Chinese	gb2312_chinese_ci	2
 gb18030_2022	GB18030-2022 charset	gb18030_2022_chinese_ci	4
 ascii	US ASCII	ascii_general_ci	1
 tis620	TIS620 Thai	tis620_thai_ci	1
+ujis	EUC-JP Japanese	ujis_japanese_ci	3
+euckr	EUC-KR Korean	euckr_korean_ci	2
+eucjpms	UJIS for Windows Japanese	eucjpms_japanese_ci	3
+cp932	SJIS for Windows Japanese	cp932_japanese_ci	2
 utf16le	UTF-16LE Unicode	utf16le_general_ci	4
 sjis	SJIS	sjis_japanese_ci	2
 big5	BIG5	big5_chinese_ci	2
 hkscs	HKSCS	hkscs_bin	2
 hkscs31	HKSCS-ISO UNICODE 31	hkscs31_bin	2
 dec8	DEC West European	dec8_swedish_ci	1
+cp850	DOS West European	cp850_general_ci	1
+hp8	HP West European	hp8_english_ci	1
+macroman	Mac West European	macroman_general_ci	1
+swe7	7bit West European	swe7_swedish_ci	1
 SET NAMES latin1;

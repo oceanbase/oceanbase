@@ -606,6 +606,12 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "charset not supported when data_version < 4_2_5_0 or between [430,434)",K(charset_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5 or between [430,434), charset is");
+  } else if ((CHARSET_GB2312 == charset_type || CHARSET_UJIS == charset_type || CHARSET_EUCKR == charset_type || CHARSET_EUCJPMS == charset_type || CHARSET_CP932 == charset_type
+              || CHARSET_CP850 == charset_type || CHARSET_HP8 == charset_type || CHARSET_MACROMAN == charset_type || CHARSET_SWE7 == charset_type)
+              && ((data_version < MOCK_DATA_VERSION_4_2_5_0) || (DATA_VERSION_4_3_0_0 <= data_version && data_version < DATA_VERSION_4_3_5_1)) ) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "charset not supported when data_version < 4_2_5_0 or between [430,435.1)",K(charset_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5 or between [430,435.1), charset is");
   }
   return ret;
 }
