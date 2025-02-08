@@ -2697,7 +2697,7 @@ ObExprVecIvfCenterIdCache* ObVectorIndexUtil::get_ivf_center_id_cache_ctx(const 
       void *cache_ctx_buf = NULL;
       ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObExprVecIvfCenterIdCtx), cache_ctx_buf);
       if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
-        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx(exec_ctx->get_allocator());
+        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx();
       }
     }
   }
@@ -2715,7 +2715,7 @@ void ObVectorIndexUtil::get_ivf_pq_center_id_cache_ctx(const uint64_t& id, sql::
       void *cache_ctx_buf = NULL;
       ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObExprVecIvfCenterIdCtx), cache_ctx_buf);
       if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
-        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx(exec_ctx->get_allocator());
+        cache_ctx = new (cache_ctx_buf) ObExprVecIvfCenterIdCtx();
       }
     }
   }
@@ -2747,7 +2747,8 @@ int ObVectorIndexUtil::get_ivf_aux_info(share::ObPluginVectorIndexService *servi
           LOG_WARN("failed to get centers from cache", K(ret));
         }
       } else {
-        if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, allocator, centers))) {
+        cache->reuse();
+        if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, cache->get_allocator(), centers))) {
           LOG_WARN("failed to get centers", K(ret));
         } else if (OB_FAIL(cache->update_cache(table_id, tablet_id, centers))) {
           LOG_WARN("failed to update ivf center id cache", K(ret));

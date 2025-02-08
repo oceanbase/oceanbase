@@ -122,10 +122,11 @@ public:
 class ObExprVecIvfCenterIdCache
 {
 public:
-  ObExprVecIvfCenterIdCache(common::ObIAllocator &allocator)
+  ObExprVecIvfCenterIdCache()
     : table_id_(ObCommonID::INVALID_ID),
       tablet_id_(),
-      centers_()
+      centers_(),
+      allocator_("IvfCIdCache", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
   virtual ~ObExprVecIvfCenterIdCache() {}
   bool hit(ObTableID table_id, ObTabletID tablet_id) { return table_id == table_id_ && tablet_id == tablet_id_; }
@@ -136,10 +137,13 @@ public:
     tablet_id_ = tablet_id;
     return centers_.assign(centers);
   }
+  ObArenaAllocator &get_allocator() { return allocator_; }
+  void reuse() { table_id_ = ObCommonID::INVALID_ID; tablet_id_.reset(); centers_.reuse(); allocator_.reuse(); }
 private:
   ObTableID table_id_;
   ObTabletID tablet_id_;
   ObSEArray<float*, 8> centers_;
+  ObArenaAllocator allocator_;
 };
 
 class ObVectorIndexUtil final
@@ -147,10 +151,10 @@ class ObVectorIndexUtil final
   class ObExprVecIvfCenterIdCtx : public sql::ObExprOperatorCtx
   {
   public:
-    ObExprVecIvfCenterIdCtx(common::ObIAllocator &allocator)
+    ObExprVecIvfCenterIdCtx()
       : ObExprOperatorCtx(),
-        cache_(allocator),
-        pq_cache_(allocator)
+        cache_(),
+        pq_cache_()
     {}
     virtual ~ObExprVecIvfCenterIdCtx() {}
     ObExprVecIvfCenterIdCache *get_cache() { return &cache_; }
