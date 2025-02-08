@@ -20,6 +20,9 @@
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "observer/ob_server.h"
+#include "share/ob_io_device_helper.h"
+#include "lib/restore/ob_object_device.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

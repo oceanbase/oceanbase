@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace storage
 {
-
+class ObDMLRunningCtx;
 class ObLobTabletDmlHelper
 {
 public:

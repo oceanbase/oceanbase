@@ -53,6 +53,9 @@
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif

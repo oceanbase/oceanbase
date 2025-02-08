@@ -17,6 +17,7 @@
 #include "lib/container/ob_array_serialization.h"
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace table
 {
-
+class ObTableCreateCbFunctor;
 struct ObTableTransParam final
 {
 public:

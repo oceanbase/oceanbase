@@ -19,6 +19,7 @@
 #include "observer/table/redis/cmd/ob_redis_cmd.h"
 #include "observer/table/hbase/ob_hbase_group_struct.h"
 #include "observer/table/hbase/ob_hbase_group_processor.h"
+#include "observer/table/group/ob_table_group_execute.h"
 namespace oceanbase
 {
 

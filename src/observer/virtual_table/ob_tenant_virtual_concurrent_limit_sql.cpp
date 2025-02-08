@@ -16,6 +16,8 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "common/row/ob_row.h"
 #include "lib/utility/utility.h"
+#include "common/ob_smart_call.h"
+
 namespace oceanbase
 {
 namespace observer

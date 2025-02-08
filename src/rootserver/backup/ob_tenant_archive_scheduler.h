@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/backup/ob_tenant_archive_round.h"
 #include "share/backup/ob_archive_checkpoint.h"
+#include "share/backup/ob_backup_struct.h"
 
 namespace oceanbase
 {
@@ -66,7 +67,7 @@ private:
   int do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info);
   int check_archive_dest_validity_(const int64_t dest_no);
   int get_max_checkpoint_scn_(const uint64_t tenant_id, share::SCN &max_checkpoint_scn) const;
-  int check_allow_force_stop_(const ObTenantArchiveRoundAttr &round, bool &allow_force_stop) const;
+  int check_allow_force_stop_(const share::ObTenantArchiveRoundAttr &round, bool &allow_force_stop) const;
 
 private:
   static const int64_t ALLOW_FORCE_STOP_THRESHOLD = 10_min;

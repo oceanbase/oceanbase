@@ -26,6 +26,8 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_stat_item.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#include "storage/direct_load/ob_direct_load_sstable.h"
 
 namespace oceanbase
 {

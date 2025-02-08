@@ -30,7 +30,10 @@ namespace omt
 {
 class ObTenant;
 }
-
+namespace common
+{
+class ObDiagnosticInfo;
+}
 namespace observer
 {
 

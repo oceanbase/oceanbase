@@ -17,6 +17,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 
 #define USING_LOG_PREFIX SERVER
 

@@ -34,7 +34,7 @@ class ObMySQLLockTableExecutor : public ObLockExecutor
 {
 public:
   int execute(sql::ObExecContext &ctx,
-              const ObIArray<ObMySQLLockNode> &lock_node_list);
+              const ObIArray<sql::ObMySQLLockNode> &lock_node_list);
 private:
   int lock_tables_(sql::ObSQLSessionInfo *session,
                    const transaction::ObTxParam &tx_param,

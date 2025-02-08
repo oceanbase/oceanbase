@@ -21,6 +21,7 @@
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_force_print_log.h"
 #include "logservice/palf/log_define.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {

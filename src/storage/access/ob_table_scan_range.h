@@ -16,6 +16,7 @@
 #include "common/ob_common_types.h"
 #include "share/ob_simple_batch.h"
 #include "storage/blocksstable/ob_datum_range.h"
+#include "src/storage/access/ob_store_row_iterator.h"
 
 namespace oceanbase
 {

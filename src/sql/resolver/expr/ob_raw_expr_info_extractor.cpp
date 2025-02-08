@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+
 namespace oceanbase
 {
 using namespace common;

@@ -23,6 +23,7 @@ namespace oceanbase {
 using namespace common;
 using namespace memtable;
 using namespace transaction;
+using namespace lockwaitmgr;
 namespace storage {
 int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &param,
                                            storage::ObTableAccessContext &context,

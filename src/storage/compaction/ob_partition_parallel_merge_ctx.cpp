@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {

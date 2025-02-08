@@ -30,7 +30,7 @@
 
 namespace oceanbase
 {
-namespace conmmon
+namespace common
 {
   class ObConcurrentFIFOAllocator;
   class ObDlQueue;

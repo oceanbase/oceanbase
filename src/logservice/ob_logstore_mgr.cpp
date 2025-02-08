@@ -19,6 +19,7 @@
 #include "share/config/ob_server_config.h"      // GCONF
 #include "rpc/obrpc/ob_rpc_net_handler.h"       // CLUSTER_ID
 #include "grpc/ob_grpc_keepalive.h"             // grpc_keepalive
+#include "src/logservice/ob_log_grpc_adapter.h"
 
 namespace oceanbase
 {
@@ -112,8 +113,8 @@ int ObLogstoreMgr::get_logstore_service_status(ObAddr &logstore_service_addr, bo
 int ObLogstoreMgr::get_logstore_service_info(LogstoreServiceInfo &logstore_info)
 {
   int ret = OB_SUCCESS;
-  GetLogStoreInfoReq req;
-  GetLogStoreInfoResp resp;
+  newlogstorepb::GetLogStoreInfoReq req;
+  newlogstorepb::GetLogStoreInfoResp resp;
   req.set_epoch(1);  // mock unused epoch
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

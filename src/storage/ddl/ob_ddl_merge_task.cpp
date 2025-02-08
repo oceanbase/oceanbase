@@ -32,6 +32,8 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_sim_point.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;

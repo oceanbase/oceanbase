@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_create_mds_helper.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {

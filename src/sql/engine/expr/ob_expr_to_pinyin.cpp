@@ -15,6 +15,7 @@
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_to_pinyin_tab.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -23,8 +24,6 @@ namespace oceanbase
 {
 namespace sql
 {
-#include "sql/engine/expr/ob_expr_to_pinyin_tab.h"
-
 
 ObExprToPinyin::ObExprToPinyin(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_TO_PINYIN, N_TO_PINYIN, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)

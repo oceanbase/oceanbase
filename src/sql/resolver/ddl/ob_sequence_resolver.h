@@ -79,7 +79,7 @@ int ObSequenceResolver<T>::resolve_sequence_options(uint64_t tenant_id, T *stmt,
       if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
         LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
       } else if (compat_version >= DATA_VERSION_4_2_3_0) {
-        stmt->option().set_cache_order_mode(NEW_ACTION);
+        stmt->option().set_cache_order_mode(share::NEW_ACTION);
       }
 
       // conflict check

@@ -19,6 +19,7 @@
 #include "storage/tx/ob_tx_log.h"    // ObTransID
 #include "ob_log_utils.h"            // _G_, _M_
 #include "ob_cdc_lob_ctx.h"
+#include "ob_log_resource_recycle_task.h"
 
 namespace oceanbase
 {

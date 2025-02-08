@@ -20,6 +20,9 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/allocator/ob_tc_malloc.h"
+#include "lib/alloc/memory_sanity.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
+#include "lib/alloc/alloc_func.h"
 #include <signal.h>
 namespace oceanbase
 {
@@ -30,6 +33,7 @@ struct LabelItem;
 }
 namespace lib
 {
+extern bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr);
 class ObTenantCtxAllocator
     : public common::ObIAllocator,
       private common::ObLink
@@ -358,16 +362,64 @@ private:
     }
     return ret;
   }
+public:
+  template <typename T>
+  static void* common_realloc(const void *ptr, const int64_t size, const ObMemAttr &attr,
+      ObTenantCtxAllocator& ta, T &allocator)
+  {
+    ObDisableDiagnoseGuard disable_diagnose_guard;
+    SANITY_DISABLE_CHECK_RANGE();
+    if (!attr.label_.is_valid()) {
+      LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
+    }
+    void *nptr = NULL;
+    if (errsim_alloc(attr)) {
+      // do-nothing
+    } else {
+      AObject *obj = NULL; // original object
+      AObject *nobj = NULL; // newly allocated object
+      ObMemAttr inner_attr = attr;
+      if (NULL != ptr) {
+        obj = reinterpret_cast<AObject*>((char*)ptr - AOBJECT_HEADER_SIZE);
+        on_free(*obj);
+      }
+      ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
+          && ObCtxIds::GLIBC != attr.ctx_id_);
+      BASIC_TIME_GUARD(time_guard, "ObMalloc");
+      DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
+      bool sample_allowed = malloc_sample_allowed(size, inner_attr);
+      inner_attr.alloc_extra_info_ = sample_allowed;
+      nobj = allocator.realloc_object(obj, size, inner_attr);
+      if (OB_ISNULL(nobj)) {
+        int64_t total_size = 0;
+        if (g_alloc_failed_ctx().need_wash_block()) {
+          total_size += ta.sync_wash();
+          BASIC_TIME_GUARD_CLICK("WASH_BLOCK_END");
+        } else if (g_alloc_failed_ctx().need_wash_chunk()) {
+          total_size += CHUNK_MGR.sync_wash();
+          BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
+        }
+        if (total_size > 0) {
+          nobj = allocator.realloc_object(obj, size, inner_attr);
+        }
+      }
+      if (OB_UNLIKELY(NULL == nobj && NULL != obj)) {
+        SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+      }
+      if (OB_NOT_NULL(nobj)) {
+        on_alloc(*nobj, inner_attr);
+        nptr = nobj->data_;
+      }
+    }
+    if (NULL == nptr) {
+      print_alloc_failed_msg();
+    }
+    return nptr;
+  }
+  static void common_free(void *ptr);
 private:
   static void on_alloc(AObject& obj, const ObMemAttr& attr);
   static void on_free(AObject& obj);
-public:
-  template <typename T>
-  static void* common_realloc(const void *ptr, const int64_t size,
-                              const ObMemAttr &attr, ObTenantCtxAllocator& ta,
-                              T &allocator);
-
-  static void common_free(void *ptr);
 
 private:
   ObTenantResourceMgrHandle resource_handle_;

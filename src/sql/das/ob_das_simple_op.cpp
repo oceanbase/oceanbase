@@ -14,6 +14,7 @@
 #include "sql/das/ob_das_simple_op.h"
 #include "sql/das/ob_das_ref.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

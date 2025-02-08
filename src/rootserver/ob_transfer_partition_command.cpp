@@ -23,7 +23,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 #include "share/ls/ob_ls_i_life_manager.h"//START/END_TRANSACTION
 #include "storage/tablelock/ob_lock_utils.h"//table_lock
-
+#include "share/location_cache/ob_location_service.h"
 
 namespace oceanbase
 {

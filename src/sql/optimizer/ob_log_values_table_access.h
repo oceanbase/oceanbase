@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ValuesTablePath;
 class ObLogValuesTableAccess : public ObLogicalOperator
   {
   public:

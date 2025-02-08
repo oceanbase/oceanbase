@@ -12,10 +12,12 @@
 
 #define USING_LOG_PREFIX LIB_CHARSET
 #include "lib/charset/ob_charset.h"
+#include "lib/charset/ob_ctype.h"
 #include "lib/utility/serialization.h"
 #include "lib/ob_define.h"
 #include "lib/worker.h"
 #include "common/ob_common_utility.h"
+#include "sql/engine/expr/ob_expr_util.h"
 #include "lib/charset/str_uca_type.h"
 
 namespace oceanbase
@@ -3871,7 +3873,7 @@ int ObCharset::init_charset_and_arr() {
   }
 
   if (OB_SUCC(ret)) {
-    for (int i = 0; OB_SUCC(ret) && i < array_elements(euro_collations); ++i) {
+    for (int i = 0; OB_SUCC(ret) && euro_collations[i] != nullptr; ++i) {
       ObCharsetInfo *cs = euro_collations[i];
       if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
         LOG_WARN("fail to init collation", K(ret));
@@ -3881,7 +3883,7 @@ int ObCharset::init_charset_and_arr() {
     }
   }
   if (OB_SUCC(ret)) {
-    for (int i = 0; OB_SUCC(ret) && i < array_elements(uca900_collations); ++i) {
+    for (int i = 0; OB_SUCC(ret) && uca900_collations[i] != nullptr; ++i) {
       ObCharsetInfo *cs = uca900_collations[i];
       if (OB_FAIL(init_charset_info_coll_info(cs, loader))) {
         LOG_WARN("fail to init collation", K(ret));

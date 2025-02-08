@@ -10,7 +10,9 @@
  * See the Mulan PubL v2 for more details.
  * This file contains interface define for the xml util abstraction.
  */
-
+#ifndef USING_LOG_PREFIX
+#define USING_LOG_PREFIX SQL_ENG
+#endif
 #ifndef OCEANBASE_SQL_OB_XML_UTIL
 #define OCEANBASE_SQL_OB_XML_UTIL
 
@@ -538,6 +540,22 @@ public:
   template <typename T, typename... Args>
   static ObXmlNode* clone_new_node(ObIAllocator* allocator, Args &&... args);
 };
+
+template <typename T, typename... Args>
+ObXmlNode* ObXmlUtil::clone_new_node(ObIAllocator* allocator, Args &&... args)
+{
+  void *buf = allocator->alloc(sizeof(T));
+  T *new_node = NULL;
+
+  if (OB_ISNULL(buf)) {
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for ObXmlNode");
+  } else {
+    new_node = new(buf)T(std::forward<Args>(args)...);
+  }
+
+  return static_cast<ObXmlNode *>(new_node);
+
+}
 
 class ObMulModeFactory
 {

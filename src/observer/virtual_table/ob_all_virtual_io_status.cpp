@@ -12,6 +12,10 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_all_virtual_io_status.h"
+#include "src/share/io/ob_io_define.h"
+#include "share/io/ob_io_manager.h"
+#include "observer/ob_server_struct.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase
 {

@@ -558,7 +558,7 @@ int ObLogRestoreProxyUtil::construct_server_ip_list(const common::ObSqlString &s
     LOG_WARN("sql is empty", KR(ret), K(sql));
   } else {
     RESTORE_RETRY(SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      ObMySQLResult *res = NULL;
+      common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
         LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id_), K(sql));
       } else if (OB_ISNULL(res = result.get_result())) {

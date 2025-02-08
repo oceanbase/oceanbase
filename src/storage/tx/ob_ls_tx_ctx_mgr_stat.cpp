@@ -12,6 +12,7 @@
 
 #include "ob_ls_tx_ctx_mgr_stat.h"
 #include "ob_trans_ctx.h"
+#include "storage/tx/ob_tx_log_cb_define.h"
 
 namespace oceanbase
 {

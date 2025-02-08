@@ -28,6 +28,7 @@
 #include "share/ob_unit_table_operator.h"
 #include "share/backup/ob_backup_server_mgr.h"
 #include "share/ob_srv_rpc_proxy.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 namespace oceanbase
 

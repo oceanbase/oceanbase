@@ -15,6 +15,8 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_fd_item.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 namespace oceanbase
 {
 using namespace common;

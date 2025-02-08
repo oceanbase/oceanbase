@@ -18,6 +18,7 @@
 #include "common/ob_zone.h"
 #include "share/ob_lease_struct.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_status.h"
 
 namespace oceanbase
 {

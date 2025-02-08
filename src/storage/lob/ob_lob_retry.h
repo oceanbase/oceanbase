@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_LOB_RETRY_H_
 #define OCEANBASE_STORAGE_OB_LOB_RETRY_H_
 
+#include "storage/lob/ob_lob_access_param.h"
+
 namespace oceanbase
 {
 namespace storage

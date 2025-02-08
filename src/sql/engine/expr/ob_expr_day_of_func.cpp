@@ -19,6 +19,7 @@
 #include "share/ob_time_utility2.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "lib/locale/ob_locale_type.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::sql;

@@ -44,19 +44,19 @@ int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
         KR(ret), K(session_info->get_service_name()));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "This session is created via service_name, service name related command is");
   } else if (arg.is_create_service()) {
-    if (OB_FAIL(ObServiceNameCommand::create_service(tenant_id, service_name_str))) {
+    if (OB_FAIL(rootserver::ObServiceNameCommand::create_service(tenant_id, service_name_str))) {
       LOG_WARN("fail to create service", KR(ret), K(tenant_id), K(service_name_str));
     }
   } else if (arg.is_delete_service()) {
-    if (OB_FAIL(ObServiceNameCommand::delete_service(tenant_id, service_name_str))) {
+    if (OB_FAIL(rootserver::ObServiceNameCommand::delete_service(tenant_id, service_name_str))) {
       LOG_WARN("fail to delete service", KR(ret), K(tenant_id), K(service_name_str));
     }
   } else if (arg.is_start_service()) {
-    if (OB_FAIL(ObServiceNameCommand::start_service(tenant_id, service_name_str))) {
+    if (OB_FAIL(rootserver::ObServiceNameCommand::start_service(tenant_id, service_name_str))) {
       LOG_WARN("fail to start service", KR(ret), K(tenant_id), K(service_name_str));
     }
   } else if (arg.is_stop_service()) {
-    if (OB_FAIL(ObServiceNameCommand::stop_service(tenant_id, service_name_str))) {
+    if (OB_FAIL(rootserver::ObServiceNameCommand::stop_service(tenant_id, service_name_str))) {
       LOG_WARN("fail to stop service", KR(ret), K(tenant_id), K(service_name_str));
     }
   } else {

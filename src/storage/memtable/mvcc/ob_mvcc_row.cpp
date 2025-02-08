@@ -40,6 +40,7 @@ using namespace share;
 using namespace transaction;
 using namespace common;
 using namespace share;
+using namespace lockwaitmgr;
 namespace memtable
 {
 
@@ -573,7 +574,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
         if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled() && !is_non_unique_local_index_cb)) {
           CorrectHashHolderOp op(LockHashHelper::hash_rowkey(tablet_id, *key),
                                   *iter,
-                                  MTL(ObLockWaitMgr*)->get_row_holder());
+                                  MTL(lockwaitmgr::ObLockWaitMgr*)->get_row_holder());
           iter->trans_elr(op);
         } else {
           DummyHashHolderOp op;
@@ -587,7 +588,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     if (NULL != key) {
       wakeup_waiter(tablet_id, *key);
     } else {
-      MTL(ObLockWaitMgr*)->wakeup(tx_id);
+      MTL(lockwaitmgr::ObLockWaitMgr*)->wakeup(tx_id);
     }
   }
   return ret;
@@ -673,8 +674,8 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObLockWaitMgr *lwm = NULL;
-  if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
+  lockwaitmgr::ObLockWaitMgr *lwm = NULL;
+  if (OB_ISNULL(lwm = MTL(lockwaitmgr::ObLockWaitMgr*))) {
     tmp_ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
   } else {

@@ -14,8 +14,11 @@
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_H_
 #include "stdint.h"
 #include  "lib/utility/ob_print_utils.h"
+#include "storage/ob_i_store.h"
 namespace oceanbase
 {
+using namespace common;
+using namespace storage;
 namespace blocksstable
 {
 struct ObMicroBlockHeader

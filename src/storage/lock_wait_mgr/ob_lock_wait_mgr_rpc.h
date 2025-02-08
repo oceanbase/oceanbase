@@ -115,6 +115,78 @@ int handle_lock_wait_mgr_msg_cb(int status,
                                 rpc::NodeID node_id,
                                 const common::ObAddr &receiver_addr);
 
+template<ObRpcPacketCode PC>
+inline int ObLockWaitMgrRpcCB<PC>::handle_lock_wait_mgr_msg_cb_(const int status, const ObAddr &dst)
+{
+  return handle_lock_wait_mgr_msg_cb(status,
+                                     msg_type_,
+                                     hash_,
+                                     node_id_,
+                                     dst);
+}
+
+ERRSIM_POINT_DEF(ERRSIM_LOCK_WAIT_MGR_DST_ENQUEUE_RPC_TIMEOUT);
+ERRSIM_POINT_DEF(ERRSIM_LOCK_WAIT_MGR_LOCK_RELEASE_RPC_TIMEOUT);
+
+template<ObRpcPacketCode PC>
+int ObLockWaitMgrRpcCB<PC>::process()
+{
+  #define PRINT_WRAPPER K(rcode), K(dst), K_(msg_type), K_(tenant_id), K_(hash), K_(node_id), K_(sender_addr)
+  int ret = OB_SUCCESS;
+  const typename ObLockWaitMgrRpcProxy::AsyncCB<PC>::Response &result =
+    ObLockWaitMgrRpcProxy::AsyncCB<PC>::result_;
+  const ObAddr &dst = ObLockWaitMgrRpcProxy::AsyncCB<PC>::dst_;
+  ObRpcResultCode &rcode = ObLockWaitMgrRpcProxy::AsyncCB<PC>::rcode_;
+  int status = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if ((OB_TMP_FAIL(ERRSIM_LOCK_WAIT_MGR_DST_ENQUEUE_RPC_TIMEOUT) && msg_type_ == lockwaitmgr::LWM_DST_ENQUEUE)
+   || (OB_TMP_FAIL(ERRSIM_LOCK_WAIT_MGR_LOCK_RELEASE_RPC_TIMEOUT) && msg_type_ == lockwaitmgr::LWM_LOCK_RELEASE)) {
+    status = OB_TIMEOUT;
+    on_timeout();
+  } else if (!is_valid_tenant_id(tenant_id_)) {
+      TRANS_LOG(WARN, "tenant_id is invalid", PRINT_WRAPPER);
+      ret = OB_ERR_UNEXPECTED;
+  } else {
+    MTL_SWITCH(tenant_id_) {
+      if (OB_SUCCESS != rcode.rcode_) {
+        status = rcode.rcode_;
+        TRANS_LOG(WARN, "transaction rpc error", PRINT_WRAPPER);
+      } else {
+        status = result.get_status();
+      }
+      if (OB_FAIL(handle_lock_wait_mgr_msg_cb_(status, dst))) {
+        TRANS_LOG(WARN, "handle transaction msg callback error", PRINT_WRAPPER);
+      }
+    }
+  }
+  TRANS_LOG(TRACE, "lock wait mgr rpc callback", PRINT_WRAPPER);
+  return OB_SUCCESS;
+  #undef PRINT_WRAPPER
+}
+
+template<ObRpcPacketCode PC>
+void ObLockWaitMgrRpcCB<PC>::on_timeout()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObAddr &dst = ObLockWaitMgrRpcProxy::AsyncCB<PC>::dst_;
+  int status = OB_TIMEOUT;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    TRANS_LOG(WARN, "tenant_id is invalid", K_(tenant_id), K(dst));
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    MTL_SWITCH(tenant_id_) {
+      if (OB_SUCCESS != (tmp_ret = handle_lock_wait_mgr_msg_cb_(status, dst))) {
+        TRANS_LOG(WARN, "transaction rpc error",
+                  K_(msg_type), K_(tenant_id), K_(hash), K_(node_id), K_(sender_addr));
+        ret = tmp_ret;
+      }
+    }
+  }
+  TRANS_LOG_RET(WARN, OB_TIMEOUT, "lock wait mgr rpc timeout",
+                K_(msg_type), K_(tenant_id), K_(hash), K_(node_id), K_(sender_addr));
+}
+
 } // obrpc
 
 namespace lockwaitmgr

@@ -81,7 +81,6 @@
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/ob_heartbeat_handler.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
-
 namespace oceanbase
 {
 namespace rootserver

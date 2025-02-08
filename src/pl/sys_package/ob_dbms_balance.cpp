@@ -19,6 +19,7 @@
 #include "share/ob_balance_define.h"
 #include "share/balance/ob_object_balance_weight_operator.h" // ObObjectBalanceWeightOperator
 #include "rootserver/ob_tenant_event_def.h" // TENANT_EVENT
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {

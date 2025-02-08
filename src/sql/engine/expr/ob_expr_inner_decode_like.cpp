@@ -15,6 +15,7 @@
 #include "ob_expr_inner_decode_like.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {

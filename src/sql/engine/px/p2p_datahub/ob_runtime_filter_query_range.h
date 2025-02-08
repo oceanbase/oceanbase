@@ -18,6 +18,7 @@
 #include "lib/container/ob_fixed_array.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/ob_serializable_function.h"
+#include "sql/engine/expr/ob_expr.h"
 
 // !!!!!!! CAUTION !!!!!!!
 // This file is only for compatibility, the feature only implemented in version above 4.3

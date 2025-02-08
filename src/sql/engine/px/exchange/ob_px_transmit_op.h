@@ -128,7 +128,6 @@ protected:
   }
   int send_rows_one_by_one(ObSliceIdxCalc &sc);
   int send_rows_in_batch(ObSliceIdxCalc &sc);
-
   int broadcast_rows(ObSliceIdxCalc &slice_calc);
 
   // for dynamic sample

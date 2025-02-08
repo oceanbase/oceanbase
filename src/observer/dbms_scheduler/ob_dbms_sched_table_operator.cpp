@@ -33,7 +33,7 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
-
+#include "share/stat/ob_dbms_stats_maintenance_window.h"
 
 namespace oceanbase
 {

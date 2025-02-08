@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "src/storage/blocksstable/ob_block_manager.h"
 #include "src/share/io/ob_io_manager.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase {
 namespace common {

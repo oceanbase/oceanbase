@@ -15,6 +15,7 @@
 #include "ob_logical_operator.h"
 #include "ob_log_del_upd.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {

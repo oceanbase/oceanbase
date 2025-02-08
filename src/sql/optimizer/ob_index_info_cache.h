@@ -16,6 +16,7 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "sql/ob_sql_define.h"
+#include "sql/optimizer/ob_sharding_info.h"
 
 namespace oceanbase
 {

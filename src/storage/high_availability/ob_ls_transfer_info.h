@@ -17,6 +17,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/scn.h"
 #include "lib/container/ob_array_serialization.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -101,7 +102,7 @@ public:
     return pos;
   }
 private:
-  static const int64_t MAX_TABLET_COUNT = OB_MAX_TRANSFER_BINDING_TABLET_CNT;
+  static const int64_t MAX_TABLET_COUNT = share::schema::OB_MAX_TRANSFER_BINDING_TABLET_CNT;
   int64_t count_;
   common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };

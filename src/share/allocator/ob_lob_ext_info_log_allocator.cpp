@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_lob_ext_info_log_allocator.h"
+#include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/throttle/ob_share_resource_throttle_tool.h"
 
 namespace oceanbase {
 namespace share {

@@ -13,6 +13,8 @@
 #pragma once
 
 #include "common/ob_tablet_id.h"
+#include "lib/hash/ob_hashset.h"
+#include "src/share/table/ob_table_load_row_array.h"
 
 namespace oceanbase
 {

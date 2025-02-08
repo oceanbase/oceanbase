@@ -21,6 +21,7 @@
 #include "log_meta.h"                                  // LogMeta
 #include "log_define.h"
 #include "log_io_utils.h"                              // LogSyncMode
+#include "log_shared_queue_thread.h"
 
 namespace oceanbase
 {

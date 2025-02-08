@@ -15,6 +15,7 @@
 #include <cmath>
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_array_iterator.h"
+#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
 
 namespace oceanbase
 {
@@ -289,7 +290,7 @@ void ObEncodingHashTableFactory::clear()
 int build_column_encoding_ctx(ObEncodingHashTable *ht,
                               const ObObjTypeStoreClass store_class,
                               const int64_t type_store_size,
-                              ObColumnEncodingCtx &col_ctx)
+                              observer::table_load_backup_v_3_x::ObColumnEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
   if (NULL == ht) {

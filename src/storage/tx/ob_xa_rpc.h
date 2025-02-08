@@ -32,7 +32,6 @@ struct ObGlobalContext;
 namespace obrpc
 {
 static const int64_t OB_XA_RPC_TIMEOUT = 5000000;
-
 class ObXAPrepareRPCRequest
 {
   OB_UNIS_VERSION(1);
@@ -456,6 +455,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObXATerminateP);
 };
 
+void ob_xa_rpc_cb_statistics(uint64_t tenant_id_, int64_t start_ts_);
 template <ObRpcPacketCode PC>
 class ObXARPCCB : public ObXARpcProxy::AsyncCB<PC>
 {
@@ -532,7 +532,10 @@ public:
     }
     statistics();
   }
-  void statistics();
+  void statistics()
+  {
+    ob_xa_rpc_cb_statistics(tenant_id_, start_ts_);
+  }
 private:
   bool is_inited_;
   transaction::ObTransCond *cond_;

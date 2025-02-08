@@ -1258,7 +1258,6 @@ int64_t ObRawExprUtils::get_expr_idx(const common::ObIArray<T> &exprs, const ObR
   }
   return expr_idx;
 }
-
 }
 }
 

@@ -12,6 +12,7 @@
 
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
+#include "share/schema/ob_table_param.h"
 
 #define USING_LOG_PREFIX STORAGE
 

@@ -2024,7 +2024,7 @@ int ObTransService::tx_sanity_check(ObTxDesc &tx)
   return tx_sanity_check_(tx);
 }
 
-OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
+int ObTransService::tx_sanity_check_(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   if (tx.expire_ts_ <= ObClockGenerator::getClock()) {

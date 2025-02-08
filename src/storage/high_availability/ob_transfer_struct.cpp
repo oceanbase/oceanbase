@@ -22,11 +22,12 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 using namespace oceanbase;
 using namespace share;
 using namespace storage;
-
+using namespace transaction;
 
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
@@ -1359,15 +1360,15 @@ int ObTransferStorageSchemaMgr::build_tablet_storage_schema_(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(task_info.tenant_id_, data_version))) {
     LOG_WARN("failed to get data version", K(ret), K(task_info));
   } else {
-    //TODO(lixia) using same code from ObMediumCompactionInfo::init_data_version()
+    //TODO(lixia) using same code from compaction::ObMediumCompactionInfo::init_data_version()
     if (data_version < DATA_VERSION_4_2_0_0) {
-      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
+      medium_compat_version = compaction::ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
     } else if (data_version < DATA_VERSION_4_2_1_0) {
-      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+      medium_compat_version = compaction::ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
     } else if (data_version < DATA_VERSION_4_2_1_2) {
-      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
+      medium_compat_version = compaction::ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
     } else {
-      medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
+      medium_compat_version = compaction::ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
     }
 
     buffer = allocator_.alloc(sizeof(ObStorageSchema));

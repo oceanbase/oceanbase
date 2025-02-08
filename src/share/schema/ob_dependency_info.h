@@ -16,8 +16,6 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_fixed_array.h"
 #include "lib/hash/ob_hashset.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-
 
 namespace oceanbase
 {
@@ -57,7 +55,7 @@ namespace share
 {
 namespace schema
 {
-
+class ObMultiVersionSchemaService;
 class ObSchemaService;
 class ObReferenceObjTable;
 extern const char *ob_object_type_str(const ObObjectType object_type);

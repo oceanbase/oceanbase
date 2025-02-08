@@ -15,6 +15,7 @@
 
 #include "lib/oblog/ob_log_module.h"
 #include "common/ob_field.h"
+#include "lib/enumset/ob_enum_set_meta.h"
 
 namespace oceanbase
 {

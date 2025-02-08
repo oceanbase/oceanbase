@@ -9,6 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#ifndef USING_LOG_PREFIX
+#define USING_LOG_PREFIX SQL_ENG
+#endif
 #ifndef __SQL_ENG_P2P_DH_MGR_H__
 #define __SQL_ENG_P2P_DH_MGR_H__
 #include "lib/ob_define.h"
@@ -110,6 +113,37 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObP2PDatahubManager);
 };
+
+template<typename T>
+int ObP2PDatahubManager::alloc_msg(int64_t tenant_id, T *&msg_ptr)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = nullptr;
+  ObMemAttr attr(tenant_id, "PxP2PDhMsg", common::ObCtxIds::DEFAULT_CTX_ID);
+  if (OB_ISNULL(ptr = (ob_malloc(sizeof(T), attr)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
+  } else {
+    msg_ptr = new(ptr) T();
+  }
+  return ret;
+}
+
+template<typename T>
+int ObP2PDatahubManager::alloc_msg(
+    common::ObIAllocator &allocator,
+    T *&msg_ptr)
+{
+  int ret = OB_SUCCESS;
+  void *ptr = nullptr;
+  if (OB_ISNULL(ptr = (allocator.alloc(sizeof(T))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
+  } else {
+    msg_ptr = new(ptr) T();
+  }
+  return ret;
+}
 
 #define PX_P2P_DH (::oceanbase::sql::ObP2PDatahubManager::instance())
 

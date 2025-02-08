@@ -30,6 +30,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "share/config/ob_config_helper.h"
+#include "src/pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {

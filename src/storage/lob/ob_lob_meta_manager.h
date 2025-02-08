@@ -13,12 +13,19 @@
 #ifndef OCEABASE_STORAGE_OB_LOB_META_MANAGER_
 #define OCEABASE_STORAGE_OB_LOB_META_MANAGER_
 
+#include <cstdint>
+#include "lib/ob_errno.h"
+#include "storage/lob/ob_lob_access_param.h"
+#include "storage/lob/ob_lob_persistent_adaptor.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-
+class ObLobMetaSingleGetter;
+class ObLobMetaInfo;
+class ObLobMetaWriteIter;
+class ObLobMetaScanIter;
 class ObLobMetaManager {
 public:
   explicit ObLobMetaManager(const uint64_t tenant_id) :

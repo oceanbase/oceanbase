@@ -18,9 +18,10 @@
 #include "lib/hash/ob_hashset.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
+#include "src/share/schema/ob_dependency_info.h"
+
 namespace oceanbase
 {
-
 namespace observer
 {
 class ObGlobalContext;

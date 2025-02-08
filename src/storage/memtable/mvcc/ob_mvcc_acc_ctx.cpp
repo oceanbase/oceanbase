@@ -14,6 +14,7 @@
 #include "storage/memtable/ob_memtable_context.h"
 namespace oceanbase
 {
+using namespace transaction;
 namespace memtable
 {
 int ObMvccAccessCtx::check_txn_status_if_read_uncommitted()

@@ -12,7 +12,6 @@
 #include "storage/blocksstable/ob_data_macro_block_merge_writer.h"
 #include "lib/utility/ob_macro_utils.h"
 
-
 namespace oceanbase
 {
 namespace blocksstable

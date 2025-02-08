@@ -18,7 +18,7 @@
 #include "lib/list/ob_list.h"
 #include "lib/lock/ob_spin_rwlock.h"
 #include "sql/monitor/ob_exec_stat.h"
-
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {

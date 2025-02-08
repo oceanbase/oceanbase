@@ -85,9 +85,9 @@ private:
       cur_special_count_(0)
     {}
     int init(uint64_t tenant_id);
-    int get_current_val(schema::ObSchemaGetterGuard &schema_guard,
+    int get_current_val(share::schema::ObSchemaGetterGuard &schema_guard,
                         uint64_t tenant_id,
-                        ObSysVarClassType var_id,
+                        share::ObSysVarClassType var_id,
                         uint64_t &val);
     int update_expect_length();
 

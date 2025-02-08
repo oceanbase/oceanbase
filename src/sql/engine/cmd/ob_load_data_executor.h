@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOAD_DATA_EXECUTOR_H_
 #define OCEANBASE_LOAD_DATA_EXECUTOR_H_
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 namespace oceanbase
 {
 namespace sql

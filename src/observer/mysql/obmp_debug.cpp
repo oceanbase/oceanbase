@@ -15,7 +15,7 @@
 #include "observer/mysql/obmp_debug.h"
 #include "observer/mysql/obmp_utils.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
-
+#include "observer/mysql/ob_mysql_result_set.h"
 
 namespace oceanbase
 {

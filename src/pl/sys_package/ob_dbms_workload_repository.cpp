@@ -149,7 +149,7 @@ int ObDbmsWorkloadRepository::check_snapshot_task_success_for_snap_id(
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, res)
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s where "
                                   "cluster_id=%ld and snap_id=%ld and status!=%ld",
               OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, cluster_id, snap_id, ObWrSnapshotStatus::SUCCESS))) {
@@ -274,7 +274,7 @@ int ObDbmsWorkloadRepository::check_drop_task_success_for_snap_id_range(
     ObSqlString sql;
     SMART_VAR(ObISQLClient::ReadResult, res)
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s where "
                                   "cluster_id=%ld and snap_id between %ld and %ld and (status=%ld or status=%ld)",
               OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, cluster_id, low_snap_id, high_snap_id, ObWrSnapshotStatus::DELETED, ObWrSnapshotStatus::SUCCESS))) {
@@ -1108,7 +1108,7 @@ int ObDbmsWorkloadRepository::get_ash_begin_and_end_time(
     const uint64_t tenant_id = MTL_ID();
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append("SELECT MIN(SAMPLE_TIME) AS ASH_BEGIN_TIME, MAX(SAMPLE_TIME)"
                                     " AS ASH_END_TIME  FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
@@ -1168,7 +1168,7 @@ int ObDbmsWorkloadRepository::get_ash_num_samples_and_events(
     const uint64_t tenant_id = MTL_ID();
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql_string.append_fmt(
               "SELECT COUNT(1) AS NUM_SAMPLES, COUNT(1) AS NUM_EVENTS FROM   ("))) {
         LOG_WARN("append sql failed", K(ret));
@@ -1370,7 +1370,7 @@ int ObDbmsWorkloadRepository::print_ash_top_active_tenants(const AshReportParams
         "Wait Event Count", "On CPU Count", "Avg Active Sessions", "% Activity", "Equivalent Client Load"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       //If the ratio between client total time and db time is below the minimum activity level,
       //we consider that particular client session to be inactive.
       //In this case, when calculating the load for that client session,
@@ -1553,7 +1553,7 @@ int ObDbmsWorkloadRepository::print_ash_top_node_load(const AshReportParams &ash
       //without taking into account any idle time within it.
       //see it:SUM(CASE WHEN (0.1 * TM_DELTA_TIME > 1000000) THEN 1000000 ELSE TM_DELTA_TIME END)
       //min_active_ratio=0.1
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -1679,7 +1679,7 @@ int ObDbmsWorkloadRepository::print_ash_foreground_db_time(const AshReportParams
         "Event Name", "Wait Class", "Event Count", "Avg Active Sessions", "% Activity"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -1816,7 +1816,7 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
     ObArrayWrap<int32_t> tm_flags_wrap(tm_flags, 17);
     HEAP_VARS_3((ObISQLClient::ReadResult, res), (ObSqlString, sql_string), (ObSqlString, tm_view))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -1958,7 +1958,7 @@ int ObDbmsWorkloadRepository::print_ash_background_db_time(const AshReportParams
         "Program", "Module", "Action", "Event Name", "Wait Class", "Event Samples", " % Activity", "Avg Active Sessions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2102,7 +2102,7 @@ int ObDbmsWorkloadRepository::print_ash_top_sessions(const AshReportParams &ash_
         "Event Name", "Wait Class", "% Event", "SQL ID", "Plan Hash", "% SQL ID", "Sql Executions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2289,7 +2289,7 @@ int ObDbmsWorkloadRepository::print_ash_top_group(const AshReportParams &ash_rep
         "Group Name", "Group Samples", "% Activity", "Avg Active Sessions", "Program", "% Program", "Module", "% Module", "Action", "% Action"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths, true))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2511,7 +2511,7 @@ int ObDbmsWorkloadRepository::print_ash_top_latches(const AshReportParams &ash_r
         "Latch Wait Event", "Event Count", "% Activity", "Avg Active Sessions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2628,7 +2628,7 @@ int ObDbmsWorkloadRepository::print_ash_activity_over_time(const AshReportParams
         "Event Count", "% Activity", "Avg Active Sessions"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths, true))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2771,7 +2771,7 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_db_time(
         "Wait Event Count", "On CPU Count", "% Activity", "SQL Text"};
     HEAP_VARS_2((ObISQLClient::ReadResult, res), (ObSqlString, sql_string))
     {
-      ObMySQLResult *result = nullptr;
+      common::sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(print_section_column_header(
               ash_report_params, buff, column_size, column_headers, column_widths))) {
         LOG_WARN("failed to format row", K(ret));

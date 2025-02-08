@@ -17,6 +17,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "lib/mysqlclient/ob_mysql_prepared_param.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 
 namespace oceanbase
 {

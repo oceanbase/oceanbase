@@ -13,8 +13,12 @@
 #ifndef OCEANBASE_SHARE_TABLE_OB_TABLE_OBJECT_
 #define OCEANBASE_SHARE_TABLE_OB_TABLE_OBJECT_
 
+#include "common/object/ob_object.h"
+#include "common/ob_range.h"
+
 namespace oceanbase
 {
+using namespace common;
 namespace table
 {
 

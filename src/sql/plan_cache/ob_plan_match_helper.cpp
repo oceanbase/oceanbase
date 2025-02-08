@@ -15,6 +15,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/plan_cache/ob_plan_set.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 using namespace oceanbase::share;
 

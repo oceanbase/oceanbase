@@ -24,7 +24,7 @@ using namespace oceanbase::sql::stmt;
 using namespace oceanbase::transaction;
 using namespace oceanbase::rpc;
 
-void __attribute__((weak)) request_finish_callback();
+// void __attribute__((weak)) request_finish_callback();
 int ObTableTransParam::init(const ObTableConsistencyLevel consistency_level,
                             const ObLSID &ls_id,
                             int64_t timeout_ts,

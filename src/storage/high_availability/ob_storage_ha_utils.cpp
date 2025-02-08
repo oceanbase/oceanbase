@@ -37,6 +37,10 @@
 #include "ob_storage_ha_diagnose_mgr.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
 #include "common/ob_role.h"
+#include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant.h"
+#include "storage/access/ob_table_read_info.h"
+#include "share/ob_io_device_helper.h"
 
 using namespace oceanbase::share;
 

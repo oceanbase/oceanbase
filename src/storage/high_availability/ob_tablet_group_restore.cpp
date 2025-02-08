@@ -21,6 +21,7 @@
 #include "storage/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {

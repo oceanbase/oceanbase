@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace obrpc
 {
-const int easy_head_size = 16;
+extern const int easy_head_size = 16;
 
 common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy) {
   return proxy.get_compressor_type();

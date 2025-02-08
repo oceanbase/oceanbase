@@ -27,6 +27,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "observer/ob_server.h"
+#include "share/resource_manager/ob_resource_manager_proxy.h"
+#include "share/resource_manager/ob_resource_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;

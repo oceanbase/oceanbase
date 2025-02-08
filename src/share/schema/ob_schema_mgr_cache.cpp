@@ -18,6 +18,7 @@
 #include "share/config/ob_server_config.h"
 #include "common/ob_clock_generator.h"
 #include "lib/oblog/ob_log.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {

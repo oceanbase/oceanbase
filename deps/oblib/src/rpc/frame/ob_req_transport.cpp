@@ -26,6 +26,7 @@
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "rpc/frame/ob_net_easy.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace easy
 {

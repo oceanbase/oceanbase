@@ -28,6 +28,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/compaction/ob_medium_list_checker.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {

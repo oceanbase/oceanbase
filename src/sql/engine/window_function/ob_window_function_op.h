@@ -33,6 +33,7 @@ namespace sql
 {
 class ObRDWFPieceMsgCtx;
 class ObRDWFPartialInfo;
+const int64_t CHECK_STATUS_INTERVAL = 10000;
 class WinFuncInfo
 {
   OB_UNIS_VERSION_V(1);

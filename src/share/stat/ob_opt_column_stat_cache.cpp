@@ -13,6 +13,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_column_stat_cache.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX  SQL_ENG
+#define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_from_unix_time.h"
 #include "lib/allocator/ob_allocator.h"

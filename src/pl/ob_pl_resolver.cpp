@@ -34,6 +34,7 @@
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/schema/ob_trigger_info.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "pl/ob_pl_compile.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_warning.h"
 #include "pl/ob_pl_udt_object_manager.h"

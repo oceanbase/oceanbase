@@ -12,6 +12,7 @@
 
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "storage/tablelock/ob_lock_executor.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

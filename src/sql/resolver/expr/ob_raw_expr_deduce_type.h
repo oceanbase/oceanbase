@@ -16,6 +16,9 @@
 #include "lib/container/ob_iarray.h"
 #include "common/ob_accuracy.h"
 #include "share/ob_i_sql_expression.h"
+#include "ob_raw_expr_util.h"
+#include "share/ob_define.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -150,6 +153,66 @@ private:
   int64_t local_vars_id_;
   bool solidify_session_vars_;
   // data members
+};
+
+template<typename RawExprType>
+int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
+                                           int64_t child_idx,
+                                           const ObExprResType &input_type,
+                                           const ObCastMode &cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *child_ptr = NULL;
+  if (OB_ISNULL(my_session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("my_session_ is NULL", K(ret));
+  } else if (OB_UNLIKELY(parent.get_param_count() <= child_idx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("child_idx is invalid", K(ret), K(parent.get_param_count()), K(child_idx));
+  } else if (OB_ISNULL(child_ptr = parent.get_param_expr(child_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child_ptr raw expr is NULL", K(ret));
+  } else {
+    ObRawExpr *new_expr = NULL;
+    OZ(try_add_cast_expr_above_for_deduce_type(*child_ptr, new_expr, input_type,
+                                               cast_mode));
+    CK(NULL != new_expr);
+    if (OB_SUCC(ret) && child_ptr != new_expr) { // cast expr added
+      ObObjTypeClass ori_tc = ob_obj_type_class(child_ptr->get_data_type());
+      ObObjTypeClass expect_tc = ob_obj_type_class(input_type.get_calc_type());
+      if (T_FUN_UDF == parent.get_expr_type()
+          && ObNumberTC == ori_tc
+          && ((ObTextTC == expect_tc && lib::is_oracle_mode()) || ObLobTC == expect_tc)) {
+        // oracle mode can not cast number to text, but mysql mode can
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("cast to lob type not allowed", K(ret));
+      }
+
+      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
+      if (ObStringTC == ori_tc && ObJsonTC == expect_tc && IS_JSON_COMPATIBLE_OP(parent.get_expr_type())) {
+        uint64_t extra = new_expr->get_extra();
+        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
+      }
+      OZ(parent.replace_param_expr(child_idx, new_expr));
+      if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("ps prepare phase ignores type deduce error");
+      }
+      //add local vars to cast expr
+      if (OB_SUCC(ret)) {
+        if (solidify_session_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+            LOG_WARN("fail to set session vars", K(ret), KPC(new_expr));
+          }
+        } else if (NULL != my_local_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+            LOG_WARN("fail to set local vars", K(ret), KPC(new_expr));
+          }
+        }
+      }
+    }
+  }
+  return ret;
 };
 
 } // end namespace sql

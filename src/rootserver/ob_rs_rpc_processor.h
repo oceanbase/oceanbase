@@ -27,7 +27,7 @@ namespace oceanbase
 {
 namespace rootserver
 {
-bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
+inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
 {
   return obrpc::OB_TRUNCATE_TABLE_V2 == pcode
          || obrpc::OB_PARALLEL_CREATE_TABLE == pcode
@@ -38,7 +38,7 @@ bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
 }
 
 // precondition: enable_ddl = false
-bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg)
+inline bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg)
 {
   bool bret = false;
   if (OB_ISNULL(ddl_arg)) {
@@ -57,7 +57,7 @@ bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::
   return bret;
 }
 
-bool is_allow_when_create_tenant(const obrpc::ObRpcPacketCode pcode)
+inline bool is_allow_when_create_tenant(const obrpc::ObRpcPacketCode pcode)
 {
   bool bret = false;
   if (obrpc::OB_CREATE_TENANT == pcode
@@ -70,7 +70,7 @@ bool is_allow_when_create_tenant(const obrpc::ObRpcPacketCode pcode)
   }
   return bret;
 }
-bool is_allow_when_drop_tenant(const obrpc::ObRpcPacketCode pcode)
+inline bool is_allow_when_drop_tenant(const obrpc::ObRpcPacketCode pcode)
 {
   bool bret = false;
   if (obrpc::OB_DROP_TENANT == pcode

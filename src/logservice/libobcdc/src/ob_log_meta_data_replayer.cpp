@@ -15,6 +15,7 @@
 #include "ob_log_part_trans_task.h"
 #include "ob_log_instance.h"
 #include "ob_log_resource_collector.h"
+#include "ob_log_trace_id.h"
 
 #define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
 #define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)

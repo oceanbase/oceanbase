@@ -11,6 +11,7 @@
  */
 
 #include "ob_reconfig_checker_adapter.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {

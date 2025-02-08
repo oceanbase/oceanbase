@@ -21,6 +21,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_force_print_log.h"
 #include "lib/container/ob_rbtree.h"
+#include "share/scheduler/ob_dag_scheduler.h"
 
 namespace oceanbase
 {
@@ -407,8 +408,8 @@ int ObTabletTTLScheduler::generate_ttl_dag(ObTTLTaskInfo &task_info, TTLParamT &
   int ret = OB_SUCCESS;
   TTLDagT *dag = nullptr;
   TTLTaskT *delete_task = nullptr;
-  ObTenantDagScheduler *dag_scheduler = nullptr;
-  if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+  share::ObTenantDagScheduler *dag_scheduler = nullptr;
+  if (OB_ISNULL(dag_scheduler = MTL(share::ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "dag scheduler must not be NULL", K(ret));
   } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {

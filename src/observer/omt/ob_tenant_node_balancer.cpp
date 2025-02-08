@@ -37,6 +37,8 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/resource_manager/ob_resource_mapping_rule_manager.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif

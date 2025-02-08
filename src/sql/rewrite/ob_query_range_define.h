@@ -21,6 +21,7 @@
 #include "sql/rewrite/ob_query_range_provider.h"
 #include "lib/hash/ob_placement_hashmap.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/rewrite/ob_query_range.h"
 
 
 

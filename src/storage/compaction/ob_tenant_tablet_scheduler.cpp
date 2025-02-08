@@ -42,6 +42,7 @@
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/ob_gc_upper_trans_helper.h"
+#include "share/schema/ob_tenant_schema_service.h"
 
 namespace oceanbase
 {

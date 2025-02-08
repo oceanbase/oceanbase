@@ -13,9 +13,18 @@
 #pragma once
 
 #include "lib/container/ob_iarray.h"
+#include "lib/compress/ob_compress_util.h"
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObTableSchema;
+}
+}
 namespace observer
 {
 class ObTableLoadExecCtx;
@@ -25,6 +34,7 @@ class ObTableLoadInstance;
 namespace sql
 {
 class ObExecContext;
+class ObPhysicalPlan;
 
 class ObTableDirectInsertCtx
 {

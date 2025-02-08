@@ -81,37 +81,6 @@ int ObP2PDatahubManager::process_msg(ObP2PDatahubMsgBase &msg)
   return ret;
 }
 
-template<typename T>
-int ObP2PDatahubManager::alloc_msg(int64_t tenant_id, T *&msg_ptr)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  ObMemAttr attr(tenant_id, "PxP2PDhMsg", common::ObCtxIds::DEFAULT_CTX_ID);
-  if (OB_ISNULL(ptr = (ob_malloc(sizeof(T), attr)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
-  } else {
-    msg_ptr = new(ptr) T();
-  }
-  return ret;
-}
-
-template<typename T>
-int ObP2PDatahubManager::alloc_msg(
-    common::ObIAllocator &allocator,
-    T *&msg_ptr)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  if (OB_ISNULL(ptr = (allocator.alloc(sizeof(T))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for p2p dh msg", K(ret));
-  } else {
-    msg_ptr = new(ptr) T();
-  }
-  return ret;
-}
-
 int ObP2PDatahubManager::alloc_msg(
     common::ObIAllocator &allocator,
     ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,

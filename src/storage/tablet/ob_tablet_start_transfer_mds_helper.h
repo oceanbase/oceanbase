@@ -26,6 +26,7 @@ namespace share
 class SCN;
 class ObLSID;
 struct ObTransferTabletInfo;
+class ObLSRestoreStatus;
 }
 namespace transaction {
 enum class ObTxDataSourceType : int64_t;

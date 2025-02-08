@@ -15,6 +15,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
+#include "share/schema/ob_table_param.h"
 
 using namespace oceanbase::transaction;
 

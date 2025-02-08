@@ -12,16 +12,20 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_admin_drtask_util.h"
+#include "ob_disaster_recovery_info.h"
 #include "logservice/ob_log_service.h" // for ObLogService
 #include "share/ob_locality_parser.h" // for ObLocalityParser
 #include "storage/tx_storage/ob_ls_service.h" // for ObLSService
 #include "storage/ls/ob_ls.h" // for ObLS
 #include "observer/ob_server_event_history_table_operator.h" // for SERVER_EVENT_ADD
+#include "rootserver/ob_disaster_recovery_task.h"
+#include "src/share/ls/ob_ls_table_operator.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
+using namespace drtasklog;
 static const char* obadmin_drtask_ret_comment_strs[] = {
   "succeed to send ob_admin command",
   "invalid tenant_id or ls_id in command",

@@ -12,8 +12,13 @@
 
 #ifndef OCEANBASE_ROOTSERVICE_OBADMIN_DRTASK_UTIL_H_
 #define OCEANBASE_ROOTSERVICE_OBADMIN_DRTASK_UTIL_H_
+
+#include "logservice/palf/palf_handle_impl.h" // for PalfStat
+#include "share/ob_rpc_struct.h"
+
 namespace oceanbase
 {
+using namespace obrpc;
 namespace rootserver
 {
 

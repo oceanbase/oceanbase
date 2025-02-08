@@ -1455,7 +1455,7 @@ int ObDRTaskMgr::check_tenant_enable_parallel_migration_(
       if (!is_user_tenant(tenant_id)) {
         // sys and meta tenant is primary tenant
         enable_parallel_migration = false;
-      } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(GCTX.sql_proxy_, tenant_id, tenant_role))) {
+      } else if (OB_FAIL(share::ObAllTenantInfoProxy::get_tenant_role(GCTX.sql_proxy_, tenant_id, tenant_role))) {
         LOG_WARN("fail to get tenant_role", KR(ret), K(tenant_id));
       } else if (!tenant_role.is_valid()) {
         ret = OB_ERR_UNEXPECTED;

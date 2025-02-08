@@ -447,7 +447,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
   int64_t srs_cnt = 0;
   const int TOTAL_SRS_CNT = 5152;
 
-  if (OB_FAIL(ObSRSImporter::get_srs_cnt(sql_proxy_, tenant_id, srs_cnt))) {
+  if (OB_FAIL(table::ObSRSImporter::get_srs_cnt(sql_proxy_, tenant_id, srs_cnt))) {
     LOG_WARN("get srs cnt failed", K(ret));
   } else if (srs_cnt < TOTAL_SRS_CNT) {
     if (srs_cnt > 1) {

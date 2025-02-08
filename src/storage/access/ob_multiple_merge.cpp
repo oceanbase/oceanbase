@@ -30,6 +30,8 @@
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {

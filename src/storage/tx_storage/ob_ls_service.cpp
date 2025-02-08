@@ -34,6 +34,7 @@
 #include "rootserver/ob_tenant_info_loader.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx/ob_trans_service.h"
+#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {

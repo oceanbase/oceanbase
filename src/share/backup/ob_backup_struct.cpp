@@ -26,6 +26,7 @@
 #include "share/backup/ob_archive_struct.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 
 using namespace oceanbase;

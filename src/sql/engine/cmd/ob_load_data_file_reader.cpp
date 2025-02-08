@@ -18,6 +18,7 @@
 #include "rpc/obmysql/ob_i_cs_mem_pool.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_local_infile.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

@@ -25,6 +25,7 @@
 #include "share/ob_debug_sync.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "share/ob_tenant_id_schema_version.h"
+#include "lib/utility/ob_sort.h"
 
 namespace oceanbase
 {

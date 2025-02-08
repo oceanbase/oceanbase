@@ -12,6 +12,7 @@
 
 #include "ob_all_virtual_sys_parameter_stat.h"
 #include "observer/ob_server_utils.h"
+#include "src/sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {

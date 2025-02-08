@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_SQL_RESOLVER_DML_OB_STANDARD_GROUP_CHECKER_H_
 #include "lib/hash/ob_hashset.h"
 #include "lib/container/ob_array.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 namespace oceanbase
 {
 namespace sql
@@ -22,6 +23,8 @@ class ObRawExpr;
 class ObColumnRefRawExpr;
 class ObSelectStmt;
 class ObFdItemFactory;
+class ObSchemaChecker;
+class ObRawExprFactory;
 class ObStandardGroupChecker
 {
 public:

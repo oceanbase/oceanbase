@@ -16,6 +16,8 @@ ob_set_subtarget(ob_share_extra ALONE
   datum/ob_datum_funcs_compilation_13.cpp
   datum/ob_datum_funcs_compilation_14.cpp
   datum/ob_datum_funcs_compilation_15.cpp
+  ob_srv_rpc_proxy.cpp
+  ob_common_rpc_proxy.cpp
 )
 
 ob_set_subtarget(ob_share ALONE

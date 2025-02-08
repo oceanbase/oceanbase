@@ -165,8 +165,7 @@ void test_fast_parser()
       "select * from t;",
       "select  * from t;",
       "select t1.a from t1 join t2 where b = udf_func(3) and c = 'hello';",
-      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = "
-      "'hello';"};
+      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = 'hello';"};
   const char* expected_sql_ids[test_sql_cnt] = {
     "1FE1379FE2A31B8D16219655761820A2",
     "99B8023929C1482A458CB071ADE822AC",
@@ -234,8 +233,7 @@ void test_sql_parser()
       "select * from t;",
       "select  * from t;",
       "select t1.a from t1 join t2 where b = udf_func(3) and c = 'hello';",
-      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = "
-      "'hello';"};
+      "select t1.a from t1 join t2 where b = udf_func(3.1231232) and c = 'hello';"};
 
   for (int i = 0; i < test_sql_cnt; i++) {
     const char *input_sql = test_sqls[i];

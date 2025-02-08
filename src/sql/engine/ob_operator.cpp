@@ -1399,7 +1399,7 @@ void ObOperator::set_pushdown_param_null(const ObIArray<ObDynamicParamSetter> &r
   }
 }
 
-inline int ObOperator::get_next_row_vectorizely()
+int ObOperator::get_next_row_vectorizely()
 {
   int ret = OB_SUCCESS;
   //init br_it_ at the 1st time

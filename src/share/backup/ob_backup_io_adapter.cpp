@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "share/ob_errno.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 namespace oceanbase
 {

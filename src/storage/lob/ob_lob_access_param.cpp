@@ -15,6 +15,7 @@
 #include "storage/lob/ob_lob_util.h"
 #include "storage/lob/ob_lob_meta.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {

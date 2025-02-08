@@ -15,6 +15,7 @@
 
 #include "sql/resolver/cmd/ob_transfer_partition_stmt.h"
 #include "sql/resolver/cmd/ob_system_cmd_stmt.h"
+#include "sql/resolver/cmd/ob_system_cmd_resolver.h"
 
 
 namespace oceanbase

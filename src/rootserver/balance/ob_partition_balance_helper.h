@@ -16,7 +16,6 @@
 #include "lib/hash/ob_hashmap.h" // ObHashMap
 #include "share/balance/ob_balance_job_table_operator.h" // ObBalanceJob
 #include "share/balance/ob_balance_task_table_operator.h" // ObBalanceTask
-#include "share/transfer/ob_transfer_info.h" // ObTransferTaskKey
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatusInfoIArray
 
 namespace oceanbase
@@ -24,6 +23,10 @@ namespace oceanbase
 namespace common
 {
 class ObMySQLProxy;
+}
+namespace share
+{
+class ObTransferTaskKey;
 }
 namespace rootserver
 {
@@ -125,9 +128,9 @@ private:
       uint64_t &ls_group_id);
   int optimize_transfer_path_for_weight_balance();
   int gen_part_map_by_transfer_map_(
-      hash::ObHashMap<ObTransferPartInfo, ObArray<ObTransferTaskKey>> &part_map);
+      hash::ObHashMap<share::ObTransferPartInfo, ObArray<share::ObTransferTaskKey>> &part_map);
   int merge_transfer_task_for_each_part_(
-      hash::ObHashMap<ObTransferPartInfo, ObArray<ObTransferTaskKey>> &part_map);
+      hash::ObHashMap<share::ObTransferPartInfo, ObArray<share::ObTransferTaskKey>> &part_map);
 
 private:
   static const int64_t HASH_MAP_SIZE = 128;

@@ -23,6 +23,9 @@ int32_t ObMallocSampleLimiter::max_malloc_sample_interval = 256;
 int32_t ObMallocSampleLimiter::min_malloc_sample_interval = 10000;
 int32_t ObMallocSampleLimiter::max_malloc_sample_interval = 10000;
 #endif
-
+bool malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
+{
+  return ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
+}
 } // end of namespace lib
 } // end of namespace oceanbase

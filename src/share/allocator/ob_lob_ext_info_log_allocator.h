@@ -15,6 +15,7 @@
 
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "share/throttle/ob_share_throttle_define.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase {
 namespace share {

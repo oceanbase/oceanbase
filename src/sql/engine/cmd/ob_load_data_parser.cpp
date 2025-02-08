@@ -18,6 +18,10 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_hex_utils_base.h"
 #include "deps/oblib/src/lib/list/ob_dlist.h"
+#include "share/schema/ob_column_schema.h"
+#include "src/share/ob_encryption_util.h"
+#include "src/sql/engine/ob_exec_context.h"
+#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

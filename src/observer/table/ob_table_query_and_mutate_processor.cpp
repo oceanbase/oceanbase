@@ -54,7 +54,7 @@ int ObTableQueryAndMutateP::deserialize()
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
     {
       ObITableEntity *entity = nullptr;
-      ObTableOperation &mutation = const_cast<ObTableOperation&>(mutations.at(i));
+      table::ObTableOperation &mutation = const_cast<table::ObTableOperation&>(mutations.at(i));
       if (OB_FAIL(mutation.get_entity(entity))) {
         LOG_WARN("failed to get entity", K(ret), K(i));
       } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
@@ -120,25 +120,25 @@ int ObTableQueryAndMutateP::before_process()
   return ParentType::before_process();
 }
 
-int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check_and_execute, ObTableOperationType::Type type)
+int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check_and_execute, table::ObTableOperationType::Type type)
 {
   int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
 
   if (is_hkv) {
     switch (type) {
-      case ObTableOperationType::DEL: {
+      case table::ObTableOperationType::DEL: {
         process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
         break;
       }
-      case ObTableOperationType::INSERT_OR_UPDATE: {
+      case table::ObTableOperationType::INSERT_OR_UPDATE: {
         process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
         break;
       }
-      case ObTableOperationType::INCREMENT: {
+      case table::ObTableOperationType::INCREMENT: {
         process_type = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
         break;
       }
-      case ObTableOperationType::APPEND: {
+      case table::ObTableOperationType::APPEND: {
         process_type = ObTableProccessType::TABLE_API_HBASE_APPEND;
         break;
       }

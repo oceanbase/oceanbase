@@ -31,6 +31,7 @@
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 using namespace oceanbase::common;
 

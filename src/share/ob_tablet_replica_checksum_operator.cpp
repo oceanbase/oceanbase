@@ -26,6 +26,7 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 
 namespace oceanbase
 {
@@ -1895,7 +1896,7 @@ int ObTabletReplicaChecksumOperator::is_higher_ver_tablet_rep_ckm_exist(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = nullptr;
+      sqlclient::ObMySQLResult *result = nullptr;
       uint64_t compaction_scn_val = compaction_scn.get_val_for_inner_table_field();
       if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS cnt FROM %s WHERE tenant_id = '%lu' AND "
             "tablet_id = %lu AND compaction_scn > %lu", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME,

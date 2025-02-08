@@ -11,6 +11,7 @@
  */
 
 #include "storage/memtable/mvcc/ob_mvcc_define.h"
+#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
 namespace oceanbase
 {

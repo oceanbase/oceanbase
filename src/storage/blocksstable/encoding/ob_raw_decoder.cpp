@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "deps/oblib/src/lib/oblog/ob_log_module.h"
 #include "ob_raw_decoder.h"
-
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "ob_bit_stream.h"
 #include "ob_integer_array.h"
@@ -22,11 +22,11 @@
 
 namespace oceanbase
 {
+using namespace common;
 namespace blocksstable
 {
 
 class ObIRowIndex;
-using namespace common;
 const ObColumnHeader::Type ObRawDecoder::type_;
 
 // define fast batch decode function family

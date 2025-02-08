@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/backup/ob_backup_change_external_storage_dest_resolver.h"
 #include "lib/string/ob_string.h"
 #include "share/backup/ob_backup_struct.h"
@@ -18,7 +18,6 @@
 #include "sql/resolver/cmd/ob_system_cmd_stmt.h"
 #include "lib/string/ob_sql_string.h"
 
-#define USING_LOG_PREFIX SQL_RESV
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase

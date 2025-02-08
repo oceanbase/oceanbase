@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"     // DISALLOW_COPY_AND_ASSIGN
 #include "lib/utility/ob_print_utils.h"     // TOS_TRING_KV
 #include "lib/net/ob_addr.h"                // ObAddr
+#include "share/config/ob_server_config.h"
 namespace oceanbase
 {
 namespace logservice

@@ -20,6 +20,8 @@
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "ob_opt_cost_model_parameter.h"
+#include "sql/optimizer/ob_opt_est_cost_model_vector.h"
+#include "sql/optimizer/ob_opt_est_parameter_vector.h"
 #include <math.h>
 #define DEFAULT_BATCH_SIZE  256
 using namespace oceanbase::common;

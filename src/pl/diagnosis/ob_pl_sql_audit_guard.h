@@ -79,13 +79,13 @@ public:
 class ObPLSqlAuditRecord
 {
 public:
-  ObPLSqlAuditRecord(ExecType exec_type_) {
+  ObPLSqlAuditRecord(sql::ExecType exec_type_) {
     exec_timestamp_.exec_type_ = exec_type_;
   }
 public:
-  ObExecRecord exec_record_;
-  ObExecutingSqlStatRecord sqlstat_record_;
-  ObExecTimestamp exec_timestamp_;
+  sql::ObExecRecord exec_record_;
+  sql::ObExecutingSqlStatRecord sqlstat_record_;
+  sql::ObExecTimestamp exec_timestamp_;
   ObPLTimeRecord time_record_;
 };
 
@@ -93,8 +93,8 @@ class ObPLSqlAuditGuard
 {
 public:
   ObPLSqlAuditGuard(sql::ObExecContext &exec_ctx,
-                    ObSQLSessionInfo &session_info,
-                    ObSPIResultSet &spi_result,
+                    sql::ObSQLSessionInfo &session_info,
+                    sql::ObSPIResultSet &spi_result,
                     ObPLSqlAuditRecord &record,
                     int &ret,
                     ObString ps_sql,
@@ -116,7 +116,7 @@ private:
   ObTotalWaitGuard *total_wait_guard_;
   char memory1[sizeof(ObMaxWaitGuard)];
   char memory2[sizeof(ObTotalWaitGuard)];
-  ObSPIResultSet &spi_result_;
+  sql::ObSPIResultSet &spi_result_;
   ObPLSqlAuditRecord &record_;
 
   int &ret_;

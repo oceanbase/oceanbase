@@ -934,7 +934,7 @@ int ObLogExchange::find_need_drop_expr_idxs(ObLogicalOperator *op,
   if (OB_ISNULL(op->get_child(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
-  } else if (OB_FAIL(op->get_child(0)->check_has_op_below(LOG_EXCHANGE, left_has_exchange))) {
+  } else if (OB_FAIL(op->get_child(0)->check_has_op_below(log_op_def::LOG_EXCHANGE, left_has_exchange))) {
     LOG_WARN("fail to check has exchange below");
   } else if (!left_has_exchange) {
     if (type == log_op_def::LOG_SUBPLAN_FILTER) {

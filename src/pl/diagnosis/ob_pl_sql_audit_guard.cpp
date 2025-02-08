@@ -29,7 +29,7 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     ObPLSqlAuditRecord &record,
     int &ret,
     ObString ps_sql,
-    ObQueryRetryCtrl &retry_ctrl,
+    observer::ObQueryRetryCtrl &retry_ctrl,
     ObPLSPITraceIdGuard &traceid_guard)
   : exec_ctx_(exec_ctx),
     session_info_(session_info),
@@ -88,7 +88,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
       ObExecRecord record_bak = session_info_.get_raw_audit_record().exec_record_;
       session_info_.get_raw_audit_record().try_cnt_ = retry_ctrl_.get_retry_times();
       session_info_.get_raw_audit_record().pl_trace_id_.set(traceid_guard_.origin_trace_id_);
-      ObInnerSQLConnection::process_record(*(spi_result_.get_result_set()),
+      observer::ObInnerSQLConnection::process_record(*(spi_result_.get_result_set()),
                                             spi_result_.get_sql_ctx(),
                                             session_info_,
                                             record_.time_record_,

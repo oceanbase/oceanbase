@@ -115,38 +115,26 @@ private:
     return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos, __VA_ARGS__); \
   }
 
-DEFINE_PRINT_ID_VALUE(1);
-DEFINE_PRINT_ID_VALUE(2);
-DEFINE_PRINT_ID_VALUE(3);
-DEFINE_PRINT_ID_VALUE(4);
-DEFINE_PRINT_ID_VALUE(5);
-DEFINE_PRINT_ID_VALUE(6);
-DEFINE_PRINT_ID_VALUE(7);
-DEFINE_PRINT_ID_VALUE(8);
-DEFINE_PRINT_ID_VALUE(9);
-DEFINE_PRINT_ID_VALUE(10);
-DEFINE_PRINT_ID_VALUE(11);
-DEFINE_PRINT_ID_VALUE(12);
-DEFINE_PRINT_ID_VALUE(13);
-DEFINE_PRINT_ID_VALUE(14);
-DEFINE_PRINT_ID_VALUE(15);
-DEFINE_PRINT_ID_VALUE(16);
-DEFINE_PRINT_ID_VALUE(17);
-DEFINE_PRINT_ID_VALUE(18);
-DEFINE_PRINT_ID_VALUE(19);
-DEFINE_PRINT_ID_VALUE(20);
-DEFINE_PRINT_ID_VALUE(21);
-DEFINE_PRINT_ID_VALUE(22);
-DEFINE_PRINT_ID_VALUE(23);
-DEFINE_PRINT_ID_VALUE(24);
-DEFINE_PRINT_ID_VALUE(25);
-DEFINE_PRINT_ID_VALUE(26);
-DEFINE_PRINT_ID_VALUE(27);
-DEFINE_PRINT_ID_VALUE(28);
-DEFINE_PRINT_ID_VALUE(29);
-DEFINE_PRINT_ID_VALUE(30);
-DEFINE_PRINT_ID_VALUE(31);
-DEFINE_PRINT_ID_VALUE(32);
+template <typename T>
+int databuff_print_id_value(char *buf, const int64_t buf_len, int64_t &pos,
+                            oceanbase::yson::ElementKeyType key,
+                            T &&obj)
+{
+  return ::oceanbase::common::databuff_print_json_kv(buf, buf_len, pos, (::oceanbase::name::get_name(key)), std::forward<T>(obj));
+}
+
+template <typename T, typename ...ARGS>
+int databuff_print_id_value(char *buf, const int64_t buf_len, int64_t &pos,
+                            oceanbase::yson::ElementKeyType head_key,
+                            T &&head,
+                            ARGS &&...others)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(databuff_print_id_value(buf, buf_len, pos, head_key, std::forward<T>(head)))) {
+    ret = databuff_print_id_value(buf, buf_len, pos, std::forward<ARGS>(others)...);
+  }
+  return ret;
+};
 
 } // end namespace common
 } // end namespace oceanbase

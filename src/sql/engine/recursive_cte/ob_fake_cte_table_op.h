@@ -81,7 +81,7 @@ public:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   inline void set_empty() { empty_ = true; }
-  inline void update_status();
+  void update_status();
   int get_next_single_row();
   int get_next_bulk_row();
   int get_next_single_batch(const int64_t max_row_cnt);

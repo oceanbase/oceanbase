@@ -27,22 +27,6 @@ ObBasicStatsEstimator::ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &a
   : ObStatsEstimator(ctx, allocator)
 {}
 
-template<class T>
-int ObBasicStatsEstimator::add_stat_item(const T &item)
-{
-  int ret = OB_SUCCESS;
-  ObStatItem *cpy = NULL;
-  if (!item.is_needed()) {
-    // do nothing
-  } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to copy stat item", K(ret));
-  } else if (OB_FAIL(stat_items_.push_back(cpy))) {
-    LOG_WARN("failed to push back stat item", K(ret));
-  }
-  return ret;
-}
-
 int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
                                     ObIArray<ObOptStat> &dst_opt_stats)
 {

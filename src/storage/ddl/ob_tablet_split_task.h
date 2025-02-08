@@ -38,7 +38,7 @@ public:
   static int convert_datum_rowkey_to_range(
       ObIAllocator &allocator,
       const ObIArray<blocksstable::ObDatumRowkey> & datum_rowkey_list,
-      ObIArray<ObDatumRange> &datum_ranges_array);
+      ObIArray<blocksstable::ObDatumRange> &datum_ranges_array);
 private:
   static const int64_t RECOVER_TABLE_PARALLEL_MIN_TASK_SIZE = 2 * 1024 * 1024L; /*2MB*/
 };

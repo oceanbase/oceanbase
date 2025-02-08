@@ -15,8 +15,7 @@
 
 using namespace oceanbase::common;
 
-
-int ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, ObTableEntityType entity_type)
+int ::oceanbase::table::ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, ObTableEntityType entity_type)
 {
   int ret = OB_SUCCESS;
 

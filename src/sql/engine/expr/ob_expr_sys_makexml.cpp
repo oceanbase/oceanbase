@@ -14,6 +14,8 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_sys_makexml.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 

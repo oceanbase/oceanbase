@@ -26,10 +26,12 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace sql;
 namespace share
 {
 

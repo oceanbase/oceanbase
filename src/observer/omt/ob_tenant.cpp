@@ -453,7 +453,7 @@ ERRSIM_POINT_DEF(EN_ACQUIRE_MORE_WORKER_INTERVAL)
 
 inline bool is_dbms_job_group(int64_t group_id)
 {
-  return share::OBCG_DBMS_SCHED_JOB == group_id;
+  return oceanbase::share::OBCG_DBMS_SCHED_JOB == group_id;
 }
 
 void ObResourceGroup::check_worker_count()

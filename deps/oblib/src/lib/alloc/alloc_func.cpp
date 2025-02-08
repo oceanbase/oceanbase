@@ -13,6 +13,8 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/resource/achunk_mgr.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "common/errsim_module/ob_errsim_module_interface.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -204,5 +206,23 @@ int set_req_chunkmgr_parallel(uint64_t tenant_id, uint64_t ctx_id, int32_t paral
   }
   return ret;
 }
+
+bool errsim_alloc(const ObMemAttr &attr)
+{
+  bool bret = OB_SUCCESS != EventTable::EN_4;
+#ifdef ERRSIM
+  const ObErrsimModuleType type = THIS_WORKER.get_module_type();
+  if (is_errsim_module(attr.tenant_id_, type.type_)) {
+    //errsim alloc memory failed.
+    bret = true;
+  }
+#endif
+  if (bret) {
+    AllocFailedCtx &afc = g_alloc_failed_ctx();
+    afc.reason_ = AllocFailedReason::ERRSIM_INJECTION;
+  }
+  return bret;
+}
+
 } // end of namespace lib
 } // end of namespace oceanbase

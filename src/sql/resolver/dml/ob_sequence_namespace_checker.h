@@ -15,8 +15,23 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_array.h"
 #include "lib/string/ob_string.h"
+#include "lib/number/ob_number_v2.h"
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObDbLinkSchema;
+}
+}
+namespace common
+{
+namespace number
+{
+class ObNumber;
+}
+}
 namespace sql
 {
 struct ObResolverParams;
@@ -54,13 +69,13 @@ private:
                                               const ObSchemaChecker *schema_checker,
                                               bool &exists,
                                               uint64_t &sequence_id);
-  int check_link_sequence_exists(const ObDbLinkSchema *dblink_schema,
+  int check_link_sequence_exists(const share::schema::ObDbLinkSchema *dblink_schema,
                                 sql::ObSQLSessionInfo *session_info,
                                 const ObString &database_name,
                                 const ObString &sequence_name,
                                 bool &exists,
                                 bool &has_currval,
-                                number::ObNumber &currval);
+                                common::number::ObNumber &currval);
   int fetch_dblink_sequence_schema(const uint64_t tenant_id,
                                   const uint64_t db_id,
                                   const uint64_t dblink_id,

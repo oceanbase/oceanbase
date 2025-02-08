@@ -309,7 +309,7 @@ void ObEncodingHashTableFactory::clear()
 int build_column_encoding_ctx(ObEncodingHashTable *ht,
                               const ObObjTypeStoreClass store_class,
                               const int64_t type_store_size,
-                              ObColumnEncodingCtx &col_ctx)
+                              blocksstable::ObColumnEncodingCtx &col_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ht)) {

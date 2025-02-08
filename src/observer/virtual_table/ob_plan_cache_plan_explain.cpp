@@ -22,6 +22,7 @@
 #include "sql/ob_sql.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "src/sql/plan_cache/ob_i_lib_cache_object.h"
 using namespace oceanbase;
 using namespace oceanbase::observer;
 using namespace oceanbase::sql;

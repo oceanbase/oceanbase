@@ -48,6 +48,7 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "lib/utility/ob_backtrace.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "rpc/obmysql/packet/ompk_auth_switch.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -549,6 +550,7 @@ inline void reset_inner_proxyro_scramble(
   login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
 }
 
+const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
 {
   LOG_DEBUG("load privilege info");

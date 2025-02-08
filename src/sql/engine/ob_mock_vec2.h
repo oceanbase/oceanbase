@@ -14,6 +14,7 @@
 #define OCEANBASE_ENGINE_OB_MOCK_VEC2_H_
 
 #include "lib/utility/ob_unify_serialize.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

@@ -16,6 +16,8 @@
 #include <gtest/gtest.h>
 
 #define private public
+#define protected public
+#include "share/ob_tenant_mgr.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"

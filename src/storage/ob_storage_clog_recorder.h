@@ -15,11 +15,18 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 namespace oceanbase
 {
+namespace common
+{
+class ObTabletID;
+}
 namespace logservice
 {
 class ObLogHandler;
 } // namespace palf
-
+namespace share
+{
+class ObLSID;
+}
 namespace storage
 {
 class ObIStorageClogRecorder

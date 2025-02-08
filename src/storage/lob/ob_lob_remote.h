@@ -15,12 +15,12 @@
 
 #include "storage/ob_storage_rpc.h"
 #include "storage/lob/ob_lob_rpc_struct.h"
+#include "storage/lob/ob_lob_access_param.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-
 class ObLobQueryRemoteReader
 {
 public:

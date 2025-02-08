@@ -18,6 +18,7 @@
 #include "common/object/ob_object.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "ob_encoding_util.h"
+#include "observer/table_load/backup/v_3_x/ob_table_load_backup_block_sstable_struct.h"
 
 namespace oceanbase
 {
@@ -321,7 +322,7 @@ private:
 
 extern int build_column_encoding_ctx(
     ObEncodingHashTable *ht, const ObObjTypeStoreClass store_class,
-    const int64_t type_store_size, ObColumnEncodingCtx &ctx);
+    const int64_t type_store_size, observer::table_load_backup_v_3_x::ObColumnEncodingCtx &ctx);
 
 } // table_load_backup_v_3_x
 } // namespace observer

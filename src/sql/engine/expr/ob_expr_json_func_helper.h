@@ -28,6 +28,7 @@
 #include "lib/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 

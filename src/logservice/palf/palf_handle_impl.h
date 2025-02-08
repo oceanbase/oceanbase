@@ -37,6 +37,7 @@
 #include "log_io_task_cb_utils.h"
 #include "palf_options.h"
 #include "palf_iterator.h"
+#include "log_net_service.h"
 
 namespace oceanbase
 {
@@ -51,7 +52,6 @@ class FlushLogCbCtx;
 class ObMemberChangeCtx;
 class LSN;
 class FetchLogEngine;
-class FlushLogCbCtx;
 class TruncateLogCbCtx;
 class FlushMetaCbCtx;
 class LogIOFlushLogTask;
@@ -63,6 +63,8 @@ class LogIOWorker;
 class LogSharedQueueTh;
 class LogRpc;
 class IPalfEnvImpl;
+class LogEngine;
+class LogCache;
 
 struct PalfStat {
   OB_UNIS_VERSION(1);

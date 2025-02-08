@@ -55,7 +55,7 @@ public:
       const share::ObLSID &dest_ls_id,
       const share::ObTransferTabletInfo &tablet_info,
       mds::BufferCtx &buffer_ctx,
-      ObTxDataSourceType mds_op_type);
+      transaction::ObTxDataSourceType mds_op_type);
 protected:
   virtual bool is_replay_update_tablet_status_() const override
   {
@@ -80,7 +80,7 @@ private:
   share::ObLSID dest_ls_id_;
   share::ObTransferTabletInfo tablet_info_;
   mds::BufferCtx *buffer_ctx_;
-  ObTxDataSourceType mds_op_type_;
+  transaction::ObTxDataSourceType mds_op_type_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferOutReplayExecutor);
 };
 
@@ -104,7 +104,7 @@ int ObTabletStartTransferOutReplayExecutor::init(
     const share::ObLSID &dest_ls_id,
     const share::ObTransferTabletInfo &tablet_info,
     mds::BufferCtx &buffer_ctx,
-    ObTxDataSourceType mds_op_type)
+    transaction::ObTxDataSourceType mds_op_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -148,7 +148,7 @@ int ObTabletStartTransferOutReplayExecutor::do_replay_(ObTabletHandle &tablet_ha
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info_));
   } else {
     user_data.transfer_ls_id_ = dest_ls_id_;
-    if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) {
+    if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) {
       user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT_PREPARE;
     } else {
       user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT;
@@ -186,12 +186,12 @@ int ObTabletStartTransferOutReplayExecutor::check_src_transfer_tablet_(
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info_));
   } else if (scn_ <= tablet->get_tablet_meta().mds_checkpoint_scn_) {
     LOG_INFO("skip replay", K(ret), K_(scn), K(tablet->get_tablet_meta()));
-  } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT && (
+  } else if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT && (
         ObTabletStatus::NORMAL != user_data.tablet_status_ ||
         !is_committed)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is unexpected", K(ret), KPC(tablet), K(tablet_info_), K(user_data));
-  } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && (
+  } else if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && (
         ObTabletStatus::NORMAL != user_data.tablet_status_ ||
         !is_committed)) {
     ret = OB_ERR_UNEXPECTED;
@@ -205,7 +205,7 @@ int ObTabletStartTransferOutReplayExecutor::check_src_transfer_tablet_(
     // TODO(handora.qc): open the case if the MDS node can remember the rec_scn
     // of rollbacked txns
 
-  // } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
+  // } else if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
   //       ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_ ||
   //       is_committed)) {
   //   ret = OB_ERR_UNEXPECTED;
@@ -290,7 +290,7 @@ int ObTabletStartTransferOutHelper::on_register_success_(
                    "tablet_count", tx_start_transfer_out_info.tablet_list_.count());
 #endif
 
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   if (!tx_start_transfer_out_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -430,9 +430,9 @@ int ObTabletStartTransferOutCommonHelper::update_tablet_transfer_out_(
   if (!tablet_info.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check src transfer tablets get invalid argument", K(ret), K(tablet_info), KP(ls));
-  } else if (mds_op_type_ != ObTxDataSourceType::START_TRANSFER_OUT &&
-             mds_op_type_ != ObTxDataSourceType::START_TRANSFER_OUT_PREPARE &&
-             mds_op_type_ != ObTxDataSourceType::START_TRANSFER_OUT_V2) {
+  } else if (mds_op_type_ != transaction::ObTxDataSourceType::START_TRANSFER_OUT &&
+             mds_op_type_ != transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE &&
+             mds_op_type_ != transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mds op type", K(ret), K(mds_op_type_));
   } else if (CLICK_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0,
@@ -443,13 +443,13 @@ int ObTabletStartTransferOutCommonHelper::update_tablet_transfer_out_(
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_info));
   } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info));
-  } else if ((mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT || mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) && (
+  } else if ((mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT || mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) && (
         ObTabletStatus::NORMAL != user_data.tablet_status_ ||
         tablet->get_tablet_meta().transfer_info_.transfer_seq_ != tablet_info.transfer_seq_ ||
         !is_committed)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet user data is unexpected", K(ret), K(mds_op_type_),KPC(tablet), K(tablet_info), K(user_data));
-  } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
+  } else if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
         ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_ ||
         tablet->get_tablet_meta().transfer_info_.transfer_seq_ != tablet_info.transfer_seq_ ||
         is_committed ||
@@ -459,7 +459,7 @@ int ObTabletStartTransferOutCommonHelper::update_tablet_transfer_out_(
   } else {
     mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(ctx);
     user_data.transfer_ls_id_ = dest_ls_id;
-    if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) {
+    if (mds_op_type_ == transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE) {
       user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT_PREPARE;
     } else {
       user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT;
@@ -495,7 +495,7 @@ int ObTabletStartTransferOutHelper::on_replay(
   ObTXStartTransferOutInfo tx_start_transfer_out_info;
   int64_t pos = 0;
   const bool for_replay = true;
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -695,9 +695,9 @@ int ObTabletStartTransferOutCommonHelper::on_replay_success_(
   if (!scn.is_valid() || !tx_start_transfer_out_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on_replay_success_ get invalid argument", K(ret), K(scn), K(tx_start_transfer_out_info));
-  } else if (mds_op_type_ != ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && CLICK_FAIL(try_enable_dest_ls_clog_replay(scn, tx_start_transfer_out_info.dest_ls_id_))) {
+  } else if (mds_op_type_ != transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && CLICK_FAIL(try_enable_dest_ls_clog_replay(scn, tx_start_transfer_out_info.dest_ls_id_))) {
     LOG_WARN("failed to try enable dest ls clog replay", K(ret), K(scn), K(tx_start_transfer_out_info));
-  } else if (mds_op_type_ != ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && CLICK_FAIL(set_transfer_tablets_freeze_flag_(tx_start_transfer_out_info))) {
+  } else if (mds_op_type_ != transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE && CLICK_FAIL(set_transfer_tablets_freeze_flag_(tx_start_transfer_out_info))) {
     LOG_WARN("failed to set transfer src tablets freeze flag", K(ret), K(scn), K(tx_start_transfer_out_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_out_info.tablet_list_.count(); ++i) {
@@ -726,7 +726,7 @@ int ObTabletStartTransferOutPrepareHelper::on_register(
   const bool for_replay = false;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_PREPARE;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
 
   if (OB_ISNULL(buf) || len < 0) {
@@ -759,7 +759,7 @@ int ObTabletStartTransferOutPrepareHelper::on_replay(
   ObTXStartTransferOutInfo tx_start_transfer_out_info;
   int64_t pos = 0;
   const bool for_replay = true;
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_PREPARE;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   const int64_t start_ts = ObTimeUtil::current_time();
 
@@ -804,7 +804,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
   int64_t start_time = ObTimeUtility::current_time();
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(ctx);
   ObTransferOutTxCtx &transfer_tx_ctx = static_cast<ObTransferOutTxCtx&>(ctx);
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_V2;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   bool start_modify = false;
   ObTransferOutTxParam param;
@@ -834,7 +834,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
     param.except_tx_id_ = user_ctx.get_writer().writer_id_;
     param.data_end_scn_ = info.data_end_scn_;
     param.op_scn_ = op_scn;
-    param.op_type_ = NotifyType::REGISTER_SUCC;
+    param.op_type_ = transaction::NotifyType::REGISTER_SUCC;
     param.is_replay_ = false;
     param.dest_ls_id_ = info.dest_ls_id_;
     param.transfer_epoch_ = info.transfer_epoch_;
@@ -854,7 +854,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
   if (OB_FAIL(ret)) {
     // to clean
     int tmp_ret = OB_SUCCESS;
-    param.op_type_ = NotifyType::ON_ABORT;
+    param.op_type_ = transaction::NotifyType::ON_ABORT;
     if (start_modify && !info.empty_tx() && OB_TMP_FAIL(ls->transfer_out_tx_op(param, active_tx_count, block_tx_count))) {
       LOG_ERROR("transfer out clean failed", K(tmp_ret), K(info), K(user_ctx.get_writer().writer_id_));
     }
@@ -879,7 +879,7 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
   int64_t block_tx_count = 0;
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(ctx);
   ObTransferOutTxCtx &transfer_tx_ctx = static_cast<ObTransferOutTxCtx&>(ctx);
-  ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_V2;
+  transaction::ObTxDataSourceType mds_op_type = transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   ObTransferOutTxParam param;
   const int64_t start_ts = ObTimeUtil::current_time();
@@ -909,7 +909,7 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
     param.except_tx_id_ = user_ctx.get_writer().writer_id_;
     param.data_end_scn_ = info.data_end_scn_;
     param.op_scn_ = scn;
-    param.op_type_ = NotifyType::REGISTER_SUCC;
+    param.op_type_ = transaction::NotifyType::REGISTER_SUCC;
     param.is_replay_ = false;
     param.dest_ls_id_ = info.dest_ls_id_;
     param.transfer_epoch_ = info.transfer_epoch_;

@@ -532,7 +532,7 @@ protected:
       brs_.size_ = 0;
     }
   }
-  inline int get_next_row_vectorizely();
+  int get_next_row_vectorizely();
   inline int get_next_batch_with_onlyone_row()
   {
     int ret = OB_SUCCESS;

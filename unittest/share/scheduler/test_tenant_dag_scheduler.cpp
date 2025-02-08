@@ -15,7 +15,6 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
-#include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/scheduler/ob_worker_obj_pool.h"
 #include "lib/atomic/ob_atomic.h"
 #include "observer/omt/ob_tenant_node_balancer.h"

@@ -100,6 +100,7 @@ struct ObPhysicalCopyTaskInitParam final
 };
 
 class ObSSTableCopyFinishTask;
+class ObStorageHAMacroBlockWriter;
 class ObPhysicalCopyTask : public share::ObITask
 {
 public:

@@ -11,7 +11,9 @@
  *
  * Transaction Structures
  */
-
+#ifndef USING_LOG_PREFIX
+#define USING_LOG_PREFIX OBLOG
+#endif
 #ifndef OCEANBASE_LIBOBCDC_TRANS_TASK_H__
 #define OCEANBASE_LIBOBCDC_TRANS_TASK_H__
 
@@ -42,6 +44,7 @@
 #include "lib/allocator/ob_lf_fifo_allocator.h"     // ObConcurrentFIFOAllocator
 #include "ob_log_safe_arena.h"
 #include "ob_log_tic_update_info.h"                 // TICUpdateInfo
+#include "storage/blocksstable/ob_row_reader.h"
 
 namespace oceanbase
 {
@@ -369,6 +372,184 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(MutatorRow);
 };
+
+template<class CDC_INNER_TABLE_SCHEMA>
+int MutatorRow::parse_cols(
+    const CDC_INNER_TABLE_SCHEMA &inner_table_schema_info)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema &table_schema = inner_table_schema_info.get_table_schema();
+
+  if (OB_UNLIKELY(cols_parsed_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("columns has been parsed", KR(ret), K(cols_parsed_));
+  } else if (OB_UNLIKELY(! deserialized_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("row has not been deserialized", KR(ret));
+  }
+
+  // parse value of new column
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
+      LOG_WARN("new row data is empty", K(new_row_),
+          "mutator_row", (const ObMemtableMutatorRow &)(*this));
+      new_cols_.reset();
+    } else if (OB_FAIL(parse_columns_(true/*is_parse_new_col*/, new_row_.data_,
+        new_row_.size_, inner_table_schema_info, new_cols_))) {
+      LOG_ERROR("parse new columns fail", KR(ret), K(new_row_), K(table_schema));
+    } else {
+      // succ
+    }
+  }
+
+  // parse value of old column
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(old_row_.data_) || OB_UNLIKELY(old_row_.size_ <= 0)) {
+      // no old cols
+      old_cols_.reset();
+    } else if (OB_FAIL(parse_columns_(false/*is_parse_new_col*/, old_row_.data_,
+        old_row_.size_, inner_table_schema_info, old_cols_))) {
+      LOG_ERROR("parse old columns fail", KR(ret), K(old_row_), K(table_schema));
+    } else {
+      // succ
+    }
+  }
+
+  // parse rowkey data
+  if (OB_SUCC(ret)) {
+    rowkey_cols_.reset();
+
+    if (OB_FAIL(parse_rowkey_(table_schema, rowkey_, rowkey_cols_))) {
+      LOG_ERROR("parse_rowkey_ fail", KR(ret), K(rowkey_));
+    } else {
+      // succ
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    cols_parsed_ = true;
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int MutatorRow::parse_rowkey_(
+    const TABLE_SCHEMA &table_schema,
+    const common::ObStoreRowkey &rowkey,
+    ColValueList &rowkey_cols)
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+  int64_t rowkey_count = rowkey.get_obj_cnt();
+  const ObObj *rowkey_objs = rowkey.get_obj_ptr();
+
+  if (OB_UNLIKELY(rowkey_count <= 0) || OB_ISNULL(rowkey_objs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("rowkey is invalid", KR(ret), K(rowkey_count), K(rowkey_objs), K(rowkey));
+  } else {
+    for (int64_t index = 0; OB_SUCC(ret) && index < rowkey_count; index++) {
+      ObRowkeyColumn rowkey_col;
+
+      if (OB_FAIL(rowkey_info.get_column(index, rowkey_col))) {
+        LOG_ERROR("rowkey_info get_column failed", KR(ret), K(index), K(rowkey_col));
+      } else if (OB_FAIL(add_column_(rowkey_cols, rowkey_col.column_id_, rowkey_objs + index))) {
+        LOG_ERROR("add_column_ fail", KR(ret), K(rowkey_cols), "column_id", rowkey_col.column_id_,
+            K(index), K(rowkey_objs[index]));
+      }
+    }
+  }
+
+  return ret;
+}
+
+template<class CDC_INNER_TABLE_SCHEMA>
+int MutatorRow::parse_columns_(
+    const bool is_parse_new_col,
+    const char *col_data,
+    const int64_t col_data_size,
+    const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
+    ColValueList &cols)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObRowReader row_reader;
+  blocksstable::ObDatumRow datum_row;
+  const ObArray<share::schema::ObColDesc> &col_des_array = inner_table_schema.get_cols_des_array();
+  const share::schema::ObTableSchema &table_schema = inner_table_schema.get_table_schema();
+
+  // NOTE: Allow obj2str_helper and column_schema to be empty
+  if (OB_ISNULL(col_data) || OB_UNLIKELY(col_data_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(col_data_size), K(col_data));
+  }
+  // Validate cols values
+  else if (OB_UNLIKELY(cols.num_ > 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("column value list is not reseted", KR(ret), K(cols));
+  } else if (OB_FAIL(row_reader.read_row(col_data, col_data_size, nullptr, datum_row))) {
+    LOG_ERROR("Failed to read datum row", KR(ret));
+  } else {
+    OBLOG_FORMATTER_LOG(DEBUG, "parse_columns_", K(is_parse_new_col), K(datum_row));
+
+    // Iterate through all Cells using Cell Reader
+    for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.get_column_count(); i++) {
+      uint64_t column_id = OB_INVALID_ID;
+      const ObObj *value = NULL;
+      blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[i];
+      column_id = col_des_array[i].col_id_;
+
+      if (OB_FAIL(deep_copy_encoded_column_value_(datum))) {
+        LOG_ERROR("deep_copy_encoded_column_value_ failed", KR(ret), "column_stored_idx", i, K(datum), K(is_parse_new_col));
+      } else if (datum.is_nop()) {
+        OBLOG_FORMATTER_LOG(DEBUG, "ignore nop datum", "column_stored_idx", i, K(datum));
+      } else if (OB_INVALID_ID == column_id) {
+        // Note: the column_id obtained here may be invalid
+        // For example a delete statement with only one cell and an invalid column_id in the cell
+        OBLOG_FORMATTER_LOG(DEBUG, "cell column_id is invalid", K(i), K(datum_row), K_(table_id), K_(rowkey));
+      } else {
+        if (OB_SUCC(ret)) {
+          ObObjMeta obj_meta;
+          ObObj obj;
+
+          if (OB_FAIL(set_obj_propertie_(column_id, i, table_schema, obj_meta, obj))) {
+            LOG_ERROR("set_obj_propertie_ failed", K(column_id), K(i), K(obj_meta), K(obj));
+          } else if (OB_FAIL(datum.to_obj_enhance(obj, obj_meta))) {
+            LOG_ERROR("transfer datum to obj failed", KR(ret), K(datum), K(obj_meta));
+          } else {
+            OB_ASSERT(obj.has_lob_header() == false); // debug only
+            if (OB_FAIL(add_column_(cols, column_id, &obj))) {
+              LOG_ERROR("add_column_ fail", K(cols), KR(ret), K(column_id), K(obj));
+            }
+          }
+        }
+      }
+    } // for
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int MutatorRow::set_obj_propertie_(
+    const uint64_t column_id,
+    const int64_t column_idx_for_datum_row,
+    const TABLE_SCHEMA &table_schema,
+    ObObjMeta &obj_meta,
+    ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  const auto *column_table_schema = table_schema.get_column_schema(column_id);
+
+  if (OB_ISNULL(column_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column_table_schema is null", KR(ret), K(column_id), K(column_idx_for_datum_row), KPC(column_table_schema));
+  } else {
+    obj_meta = column_table_schema->get_meta_type();
+    obj_meta.set_scale(column_table_schema->get_accuracy().get_scale());
+  }
+
+  return ret;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////
 #define DELIMITER_STR "_"

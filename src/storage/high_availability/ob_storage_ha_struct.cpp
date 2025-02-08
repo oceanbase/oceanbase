@@ -21,6 +21,7 @@
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "logservice/ob_log_service.h"
 #include "share/transfer/ob_transfer_task_operator.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {

@@ -19,10 +19,16 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "share/ob_define.h"
-#include "storage/access/ob_table_read_info.h"
+#include "sql/engine/basic/ob_pushdown_filter.h"
+#include "src/storage/meta_mem/ob_fixed_meta_obj_array.h"
+#include "src/storage/access/ob_table_read_info.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObTableReadInfo;
+}
 namespace share
 {
 namespace schema

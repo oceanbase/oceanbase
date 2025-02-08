@@ -14,6 +14,7 @@
 #include "observer/table/redis/operator/ob_redis_string_operator.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "share/table/redis/ob_redis_util.h"
+#include "share/table/redis/ob_redis_error.h"
 
 namespace oceanbase
 {
