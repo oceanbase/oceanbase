@@ -9956,12 +9956,15 @@ int ObLogPlan::update_plans_interesting_order_info(ObIArray<CandidatePlan> &cand
   return ret;
 }
 
-int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plans)
+int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &all_candidate_plans)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<CandidatePlan, 8> candidate_plans;
   ObSEArray<CandidatePlan, 8> best_plans;
   OPT_TRACE_TITLE("prune and keep best plans");
-  if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+  if (OB_FAIL(remove_match_all_fake_cte_plan(all_candidate_plans, candidate_plans))) {
+    LOG_WARN("failed to remove match all fake cte plan", K(ret));
+  } else if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
     ObQueryCtx* query_ctx = get_optimizer_context().get_query_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
       bool random_flag = !OB_ISNULL(query_ctx) && query_ctx->rand_gen_.get(0, 1) == 1;
@@ -9990,6 +9993,38 @@ int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plan
   return ret;
 }
 
+int ObLogPlan::remove_match_all_fake_cte_plan(ObIArray<CandidatePlan> &all_candidate_plans,
+                                              ObIArray<CandidatePlan> &candidate_plans)
+{
+  int ret = OB_SUCCESS;
+  candidate_plans.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_candidate_plans.count(); i++) {
+    CandidatePlan &candi_plan = all_candidate_plans.at(i);
+    if (OB_ISNULL(candi_plan.plan_tree_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (candi_plan.plan_tree_->get_type() == LOG_SET &&
+               static_cast<ObLogSet*>(candi_plan.plan_tree_)->is_recursive_union()) {
+      ObLogicalOperator* right_child = candi_plan.plan_tree_->get_child(ObLogicalOperator::second_child);
+      if (OB_ISNULL(right_child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (right_child->get_contains_match_all_fake_cte() &&
+                 !candi_plan.plan_tree_->is_remote()) {
+        OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
+      } else if (OB_FAIL(candidate_plans.push_back(candi_plan))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    } else if (candi_plan.plan_tree_->get_contains_match_all_fake_cte() &&
+               !candi_plan.plan_tree_->is_remote()) {
+      OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
+    } else if (OB_FAIL(candidate_plans.push_back(candi_plan))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
                                   const CandidatePlan &new_plan)
 {
@@ -9997,25 +10032,6 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
   bool should_add = true;
   DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
   OPT_TRACE("new candidate plan:", new_plan);
-  if (OB_ISNULL(new_plan.plan_tree_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (new_plan.plan_tree_->get_type() == LOG_SET &&
-             static_cast<ObLogSet*>(new_plan.plan_tree_)->is_recursive_union()) {
-    ObLogicalOperator* right_child = new_plan.plan_tree_->get_child(ObLogicalOperator::second_child);
-    if (OB_ISNULL(right_child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (right_child->get_contains_match_all_fake_cte() &&
-               !new_plan.plan_tree_->is_remote()) {
-      should_add = false;
-      OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
-    }
-  } else if (new_plan.plan_tree_->get_contains_match_all_fake_cte() &&
-             !new_plan.plan_tree_->is_remote()) {
-    should_add = false;
-    OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
-  }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
     OPT_TRACE("compare with current plan:", current_plans.at(i));

@@ -9092,13 +9092,13 @@ int ObTransformPreProcess::extract_idx_from_table_items(ObDMLStmt *sub_stmt,
     LOG_WARN("unexpected null error.", K(ret));
   } else if (table_item->is_joined_table()) {
     const JoinedTable *joined_table = static_cast<const JoinedTable*>(table_item);
-    if (OB_FAIL(extract_idx_from_table_items(sub_stmt,
+    if (OB_FAIL(SMART_CALL(extract_idx_from_table_items(sub_stmt,
                                              joined_table->left_table_,
-                                             rel_ids))) {
+                                             rel_ids)))) {
       LOG_WARN("failed to extract idx from join table.", K(ret));
-    } else if (OB_FAIL(extract_idx_from_table_items(sub_stmt,
+    } else if (OB_FAIL(SMART_CALL(extract_idx_from_table_items(sub_stmt,
                                                     joined_table->right_table_,
-                                                    rel_ids))) {
+                                                    rel_ids)))) {
       LOG_WARN("failed to extract idx from join table.", K(ret));
     } else {}
   } else {

@@ -1468,18 +1468,18 @@ int ObTransformGroupByPushdown::get_null_side_tables(ObDMLStmt &stmt,
   if (OB_SUCC(ret) &&
       (joined_table.is_left_join() || joined_table.is_inner_join()) &&
       joined_table.left_table_->is_joined_table()) {
-    if (OB_FAIL(get_null_side_tables(stmt,
+    if (OB_FAIL(SMART_CALL(get_null_side_tables(stmt,
                                      static_cast<JoinedTable&>(*joined_table.left_table_),
-                                     table_set))) {
+                                     table_set)))) {
       LOG_WARN("failed to get null side tables", K(ret));
     }
   }
   if (OB_SUCC(ret) &&
       (joined_table.is_right_join() || joined_table.is_inner_join()) &&
       joined_table.right_table_->is_joined_table()) {
-    if (OB_FAIL(get_null_side_tables(stmt,
+    if (OB_FAIL(SMART_CALL(get_null_side_tables(stmt,
                                      static_cast<JoinedTable&>(*joined_table.right_table_),
-                                     table_set))) {
+                                     table_set)))) {
       LOG_WARN("failed to get null side tables", K(ret));
     }
   }
@@ -1916,14 +1916,14 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret) && joined_table->left_table_->is_joined_table()) {
-    if (OB_FAIL(distribute_joined_on_conds(
-                         stmt, params, static_cast<JoinedTable*>(joined_table->left_table_)))) {
+    if (OB_FAIL(SMART_CALL(distribute_joined_on_conds(
+                         stmt, params, static_cast<JoinedTable*>(joined_table->left_table_))))) {
       LOG_WARN("failed to distribute join condition to view", K(ret));
     }
   }
   if (OB_SUCC(ret) && joined_table->right_table_->is_joined_table()) {
-    if (OB_FAIL(distribute_joined_on_conds(
-                         stmt, params, static_cast<JoinedTable*>(joined_table->right_table_)))) {
+    if (OB_FAIL(SMART_CALL(distribute_joined_on_conds(
+                         stmt, params, static_cast<JoinedTable*>(joined_table->right_table_))))) {
       LOG_WARN("failed to distribute join condition to view", K(ret));
     }
   }
@@ -2266,17 +2266,17 @@ int ObTransformGroupByPushdown::update_joined_table(TableItem *table,
                            new_table->ref_query_->get_condition_exprs()))) {
         LOG_WARN("failed to remove exprs", K(ret));
       }
-    } else if (OB_FAIL(update_joined_table(joined_table->left_table_,
+    } else if (OB_FAIL(SMART_CALL(update_joined_table(joined_table->left_table_,
                                            old_table,
                                            new_table,
-                                           is_found))) {
+                                           is_found)))) {
       LOG_WARN("failed to update joined table", K(ret));
     } else if (is_found) {
       // do nothing
-    } else if (OB_FAIL(update_joined_table(joined_table->right_table_,
+    } else if (OB_FAIL(SMART_CALL(update_joined_table(joined_table->right_table_,
                                            old_table,
                                            new_table,
-                                           is_found))) {
+                                           is_found)))) {
       LOG_WARN("failed to update joined table", K(ret));
     }
   }

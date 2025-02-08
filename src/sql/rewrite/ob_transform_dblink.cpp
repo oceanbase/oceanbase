@@ -353,9 +353,9 @@ int ObTransformDBlink::reverse_one_link_table(TableItem *table, uint64_t target_
       LOG_WARN("failed to write string", K(ret));
     }
   } else if (table->is_joined_table()) {
-    if (OB_FAIL(reverse_one_link_table(static_cast<JoinedTable*>(table)->left_table_, target_dblink_id))) {
+    if (OB_FAIL(SMART_CALL(reverse_one_link_table(static_cast<JoinedTable*>(table)->left_table_, target_dblink_id)))) {
       LOG_WARN("failed to reverse left_table_", K(ret));
-    } else if (OB_FAIL(reverse_one_link_table(static_cast<JoinedTable*>(table)->right_table_, target_dblink_id))) {
+    } else if (OB_FAIL(SMART_CALL(reverse_one_link_table(static_cast<JoinedTable*>(table)->right_table_, target_dblink_id)))) {
       LOG_WARN("failed to reverse right_table_", K(ret));
     }
   } else {
