@@ -107,6 +107,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
 
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");
+          bool need_enc = true;
           if (OB_SUCC(ret)) {
             if (user_name.empty()) {
               ret = OB_CANNOT_USER;
@@ -122,7 +123,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
             } else {
               password.assign_ptr(user_pass->children_[1]->str_value_,
                                   static_cast<int32_t>(user_pass->children_[1]->str_len_));
-              bool need_enc = (1 == user_pass->children_[2]->value_);
+              need_enc = (1 == user_pass->children_[2]->value_);
               if (need_enc) {
                 need_enc_str = ObString::make_string("YES");
               } else {
@@ -153,7 +154,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
             }
           }
           create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && need_enc) {
             if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
               LOG_WARN("password don't satisfied current policy", K(ret));
             } else if (lib::is_oracle_mode() && OB_FAIL(check_oracle_password_strength(
