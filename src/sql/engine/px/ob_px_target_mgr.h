@@ -79,7 +79,7 @@ public:
   int operator()(hash::HashMapPair<ObAddr, ServerTargetUsage> &entry)
   {
     int ret = common::OB_SUCCESS;
-    if (OB_FAIL(result_.push_peer_target_usage(entry.first, entry.second.get_peer_used()))) {
+    if (OB_FAIL(result_.push_peer_target_usage(entry.first, entry.second.get_peer_used(), entry.second.get_peer_cpu_usage()))) {
       COMMON_LOG(WARN, "push_back peer_used failed", K(ret));
     }
     return ret;
@@ -118,7 +118,7 @@ public:
   // for rpc
   int is_leader(uint64_t tenant_id,  bool &is_leader);
   int get_version(uint64_t tenant_id, uint64_t &version);
-  int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used, uint64_t version);
+  int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used, double cpu_percent, uint64_t version);
   int gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather);
   int reset_leader_statistics(uint64_t tenant_id);
   

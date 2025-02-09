@@ -26,7 +26,7 @@ using namespace obutil;
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER(ServerTargetUsage, peer_target_used_, local_target_used_, report_target_used_);
+OB_SERIALIZE_MEMBER(ServerTargetUsage, peer_target_used_, local_target_used_, report_target_used_, peer_cpu_usage_);
 
 int ObPxTenantTargetMonitor::init(const uint64_t tenant_id, ObAddr &server)
 {
@@ -123,6 +123,19 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
         LOG_WARN("reset statistics failed", K(ret));
       }
       LOG_INFO("refresh global_target_usage_", K(tenant_id_), K(version_), K(server_), K(need_refresh_all));
+    } 
+    if (OB_SUCC(ret)) {
+      // leader needs to update its cpu percent
+      double cpu_percent;
+      ServerTargetUsage target_usage;
+      if (OB_FAIL(GCTX.omt_->get_tenant_cpu_percent(tenant_id_, cpu_percent))) {
+        LOG_WARN("fail to get cpu percent");
+      } else if (OB_FAIL(global_target_usage_.get_refactored(server_, target_usage))){
+        LOG_WARN("fail to get target usage");
+      } else if(OB_FALSE_IT(target_usage.update_peer_cpu_usage(cpu_percent))){
+      } else if (OB_FAIL(global_target_usage_.set_refactored(server_, target_usage, 1))) {
+        LOG_WARN("fail to set target usage");
+      }
     }
   }
   if (!print_debug_log_ && OB_SUCCESS != OB_E(EventTable::EN_PX_PRINT_TARGET_MONITOR_LOG) OB_SUCCESS) {
@@ -244,16 +257,27 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
   SMART_VAR(ObPxRpcFetchStatResponse, result) {
     need_send_refresh_all_ = false;
     if (!args.need_refresh_all()) {
+      ObAddr self_addr = GCTX.self_addr();
       for (hash::ObHashMap<ObAddr, ServerTargetUsage>::iterator it = global_target_usage_.begin();
           OB_SUCC(ret) && it != global_target_usage_.end(); ++it) {
         auto report_local_used = [&](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> int {
           int ret = OB_SUCCESS;
-          // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader 会把这个值加到全局统计中。
-          // 为什么是汇报“增量”呢？因为 entry 机器的资源被多台机器使用，任何一个人都拿不到全量数据
+          // only the cpu_percent of the local machine will be reported to leader
+          double cpu_percent = -1.;
           int64_t local_used = entry.second.get_local_used();
-          if (local_used == entry.second.get_report_used()) {
-            // do nothing
-          } else if (OB_FAIL(args.push_local_target_usage(entry.first, local_used - entry.second.get_report_used()))) {
+
+          if (self_addr == entry.first && OB_FAIL(GCTX.omt_->get_tenant_cpu_percent(tenant_id_, cpu_percent))) {
+            LOG_WARN("fail to get the tenant cpu percent");
+          }
+          // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader
+          // 会把这个值加到全局统计中。 为什么是汇报“增量”呢？因为 entry
+          // 机器的资源被多台机器使用，任何一个人都拿不到全量数据
+          else if (local_used == entry.second.get_report_used()
+                   && (cpu_percent < 0.
+                       || abs(entry.second.get_peer_cpu_usage() - cpu_percent) < 5.)) {
+            // do nothing if the workload of current observer keeps the same
+          } else if (OB_FAIL(args.push_local_target_usage(
+                       entry.first, local_used - entry.second.get_report_used(), cpu_percent))) {
             LOG_WARN("push server and target_usage failed", K(ret));
           } else {
             entry.second.set_report_used(local_used);
@@ -279,7 +303,8 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
       for (int i = 0; OB_SUCC(ret) && i < result.addr_target_array_.count(); i++) {
         ObAddr &server = result.addr_target_array_.at(i).addr_;
         int64_t peer_used_full = result.addr_target_array_.at(i).target_;
-        if (OB_FAIL(update_peer_target_used(server, peer_used_full, UINT64_MAX))) {
+        double peer_cpu_usage = result.addr_target_array_.at(i).cpu_percent_;
+        if (OB_FAIL(update_peer_target_used(server, peer_used_full, peer_cpu_usage, UINT64_MAX))) {
           LOG_WARN("set thread count failed", K(ret), K(server), K(peer_used_full));
         }
       }
@@ -308,21 +333,28 @@ uint64_t ObPxTenantTargetMonitor::get_version()
   return version_;
 }
 
-int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64_t peer_used, uint64_t version)
+int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64_t peer_used, double cpu_percent, uint64_t version)
 {
   int ret = OB_SUCCESS;
   ServerTargetUsage target_usage;
   if (print_debug_log_) {
-    LOG_INFO("update_peer_target_used", K(tenant_id_), K(is_leader()), K(version_), K(server), K(peer_used));
+    LOG_INFO("update_peer_target_used", K(tenant_id_), K(is_leader()), K(version_), K(server), K(peer_used), K(cpu_percent));
   }
   auto update_peer_used = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
     if (is_leader()) {
       entry.second.update_peer_used(peer_used);
+      if (cpu_percent > 0.) {
+        // the observer will only send its current CPU usage. Otherwise, it will send 0
+        entry.second.update_peer_cpu_usage(cpu_percent);
+      }
       if (OB_UNLIKELY(entry.second.get_peer_used() < 0)) {
         LOG_ERROR("peer used negative", K(tenant_id_), K(version_), K(server), K(entry.second), K(peer_used));
       }
     } else {
       entry.second.set_peer_used(peer_used);
+      if (cpu_percent > 0.) {
+        entry.second.set_peer_cpu_usage(cpu_percent);
+      }
     }
   };
   SpinWLockGuard rlock_guard(spin_lock_);
@@ -333,6 +365,9 @@ int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64
     if (ret != OB_HASH_NOT_EXIST) {
     } else {
       target_usage.set_peer_used(peer_used);
+      if (cpu_percent > 0.) {
+        target_usage.update_peer_cpu_usage(cpu_percent);
+      }
       if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
         LOG_WARN("set refactored failed", K(ret));
         if (OB_HASH_EXIST == ret
@@ -546,6 +581,7 @@ int ObPxTenantTargetMonitor::get_all_target_info(common::ObIArray<ObPxTargetInfo
     monitor_info.peer_target_used_ = entry.second.get_peer_used() + (entry.second.get_local_used() - entry.second.get_report_used());
     monitor_info.local_target_used_ = entry.second.get_local_used();
     monitor_info.local_parallel_session_count_ = parallel_session_count_;
+    monitor_info.peer_cpu_usage_ = entry.second.get_peer_cpu_usage();
     if (OB_FAIL(target_info_array.push_back(monitor_info))) {
       LOG_WARN("target_info_array push_back failed", K(ret), K(monitor_info));
     }

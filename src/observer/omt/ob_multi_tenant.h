@@ -152,6 +152,7 @@ public:
   inline double get_attenuation_factor() const;
   inline int64_t get_times_of_workers() const;
   int get_tenant_cpu_usage(const uint64_t tenant_id, double &usage) const;
+  int get_tenant_cpu_percent(const uint64_t tenant_id, double &percent) const;
   int get_tenant_worker_time(const uint64_t tenant_id, int64_t &worker_time) const;
   int get_tenant_cpu_time(const uint64_t tenant_id, int64_t &rusage_time) const;
   int get_tenant_cpu(

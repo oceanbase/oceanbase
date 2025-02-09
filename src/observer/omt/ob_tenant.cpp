@@ -1939,19 +1939,24 @@ void ObTenant::update_token_usage()
   }
 
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
-    //do nothing
-  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {  // every second
+    // for CGROUP, use the delta of real CPU time to estimate the cpu percent
+    int64_t prev_cpu_time = ATOMIC_LOAD(&cpu_time_us_);
+    int64_t cur_cpu_time;
+    if (duration >= 1000 * 1000 && OB_SUCC(GCTX.cgroup_ctrl_->get_cpu_time(id_, cur_cpu_time))) {
+      cpu_percent_ = (cur_cpu_time - prev_cpu_time) / duration / unit_max_cpu_;
+      IGNORE_RETURN ATOMIC_SET(&cpu_time_us_, cur_cpu_time);
+    }
+  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) { // every second
     int64_t cpu_time_inc = 0;
     DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
     {
       Thread *thread = thread_list_node_->get_data();
       int64_t inc = 0;
-      if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
-        cpu_time_inc += inc;
-      }
+      if (OB_SUCC(thread->get_cpu_time_inc(inc))) { cpu_time_inc += inc; }
     }
     thread_list_lock_.unlock();
     IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
+    cpu_percent_ = cpu_time_inc / duration / unit_max_cpu_;
   }
 }
 

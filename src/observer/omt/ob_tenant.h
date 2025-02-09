@@ -483,6 +483,7 @@ public:
   OB_INLINE void disable_user_sched() { disable_user_sched_ = true; }
   OB_INLINE bool user_sched_enabled() const { return !disable_user_sched_; }
   OB_INLINE double get_token_usage() const { return token_usage_; }
+  OB_INLINE double get_cpu_percent() const { return cpu_percent_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
   OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
   int64_t get_rusage_time();
@@ -616,6 +617,7 @@ public:
   lib::ObQueryRateLimiter sql_limiter_;
   // idle time between two checkpoints
   int64_t worker_us_;
+  double cpu_percent_; // [0, 1], represents the cpu use percent during last sampling duration
   int64_t cpu_time_us_ CACHE_ALIGNED;
 }; // end of class ObTenant
 

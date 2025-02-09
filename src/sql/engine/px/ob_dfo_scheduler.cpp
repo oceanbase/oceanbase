@@ -808,7 +808,6 @@ int ObParallelDfoScheduler::dispatch_dtl_data_channel_info(ObExecContext &ctx, O
    * 这么做可以尽可能保证 transmit 发数据的时候 receive 端有人已经在监听，
    * 否则可能出现 transmit 发出的数据一段时间内无人接收，DTL 会疯狂重试影响系统性能
    */
-
   if (OB_SUCC(ret)) {
     if (parent.is_prealloc_receive_channel() && !parent.is_scheduled()) {
       // 因为 parent 中可以包含多个 receive 算子，仅仅对于调度时的场景
@@ -822,7 +821,6 @@ int ObParallelDfoScheduler::dispatch_dtl_data_channel_info(ObExecContext &ctx, O
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     if (child.is_prealloc_transmit_channel() && !child.is_scheduled()) {
       if (OB_FAIL(dispatch_transmit_channel_info_via_sqc(ctx, child, parent))) {

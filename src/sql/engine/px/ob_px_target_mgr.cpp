@@ -301,13 +301,13 @@ int ObPxTargetMgr::get_version(uint64_t tenant_id, uint64_t &version)
 }
 
 int ObPxTargetMgr::update_peer_target_used(uint64_t tenant_id, const ObAddr &server,
-                                           int64_t peer_used, uint64_t version)
+                                           int64_t peer_used, double cpu_percent, uint64_t version)
 {
   int ret = OB_SUCCESS;
   // return OB_HASH_EXIST instead of replacing the element.
   int flag = 0;
   GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->update_peer_target_used(server, peer_used, version))) {
+    if (OB_FAIL(target_monitor->update_peer_target_used(server, peer_used, cpu_percent, version))) {
       LOG_WARN("update peer target_used failed", K(ret), K(tenant_id), K(peer_used));
     } else if (server_ != server && OB_FAIL(alive_server_set_.set_refactored(server, flag))) {
       if (OB_HASH_EXIST == ret) {

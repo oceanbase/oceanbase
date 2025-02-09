@@ -2525,6 +2525,24 @@ int ObMultiTenant::get_tenant_cpu_usage(const uint64_t tenant_id, double &usage)
   return ret;
 }
 
+int ObMultiTenant::get_tenant_cpu_percent(const uint64_t tenant_id, double &percent) const
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = nullptr;
+  percent = 0.;
+  if (!lock_.try_rdlock()) {
+    ret = OB_EAGAIN;
+  } else {
+    if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+    } else {
+      percent = tenant->get_cpu_percent() * 100.;
+    }
+    lock_.unlock();
+  }
+
+  return ret;
+}
+
 int ObMultiTenant::get_tenant_worker_time(const uint64_t tenant_id, int64_t &worker_time) const
 {
   int ret = OB_SUCCESS;

@@ -21,6 +21,8 @@
 #include "storage/ob_locality_manager.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/px/ob_px_tenant_target_monitor.h"
+#include "sql/engine/px/ob_px_target_mgr.h"
 
 
 using namespace oceanbase::common;
@@ -853,6 +855,70 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
   return ret;
 }
 
+int ObPXServerAddrUtil::collect_cpu_usage_info(const uint64_t tenant_id,
+                                               const ObArray<ObAddr> &addrs,
+                                               ObArray<double> &cpu_usages)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObPxTargetInfo> target_info_array;
+  if (OB_FAIL(OB_PX_TARGET_MGR.get_all_target_info(tenant_id, target_info_array))) {
+    LOG_WARN("fail to get all target_info");
+  } else {
+    // when size(addrs) isn't large, nested loop search is more efficient
+    ARRAY_FOREACH_N(target_info_array, i, _)
+    {
+      ARRAY_FOREACH_N(addrs, j, _)
+      {
+        if (addrs.at(j) != target_info_array.at(i).peer_server_) {
+          continue;
+        } else {
+          // the cpu usage will be lifted to 10% if it's too low
+          double adjusted_cpu_usages = std::max(10., target_info_array.at(i).peer_cpu_usage_);
+          if (OB_FAIL(cpu_usages.push_back(adjusted_cpu_usages))) {
+            LOG_WARN("fail to push into array");
+          } else {
+            LOG_TRACE("cpu usage information of SQC", K(addrs.at(j)), K(adjusted_cpu_usages),
+                      K(target_info_array.at(i).peer_cpu_usage_));
+          }
+          break;
+        }
+      }
+    }
+
+    CK(cpu_usages.count() == addrs.count());
+  }
+
+  return ret;
+}
+
+int ObPXServerAddrUtil::check_load_balance(const ObArray<double> &cpu_usages, bool &do_load_balance)
+{
+  int ret = OB_SUCCESS;
+  if (cpu_usages.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cpu usages should not be empty");
+  } else {
+    // do CPU load balance when the standard deviation of cpu usage is too large
+    double mean = 0.0;
+    ARRAY_FOREACH(cpu_usages, idx)
+    {
+      mean += cpu_usages.at(idx);
+    }
+    mean /= cpu_usages.count();
+
+    double stddev = 0.0;
+    ARRAY_FOREACH(cpu_usages, idx)
+    {
+      stddev += std::pow(cpu_usages.at(idx) - mean, 2);
+    }
+    stddev = std::sqrt(stddev / cpu_usages.count());
+
+    do_load_balance = stddev >= 20.0;
+    LOG_TRACE("interm DFO do cpu load balance", K(do_load_balance), K(stddev));
+  }
+  return ret;
+}
+
 int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
     const ObDfo &child, ObDfo &parent)
 {
@@ -872,6 +938,12 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
       OZ(locations.push_back(*tablet_node));
     }
   }
+
+  // collect the workload information and tune the schedule strategy with it
+  // do the load balance iff the cpu usages of observers are skewed
+  ObArray<double> cpu_usage;
+  bool do_load_balance = false;
+
   if (OB_FAIL(ret)) {
   } else if (locations.empty()) {
     // a defensive code, if this SQL does not have a location, still alloc by child
@@ -881,6 +953,11 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
     }
   } else if (OB_FAIL(get_location_addrs<DASTabletLocArray>(locations, addrs))) {
     LOG_WARN("fail get location addrs", K(ret));
+  } else if (OB_FAIL(collect_cpu_usage_info(exec_ctx.get_my_session()->get_effective_tenant_id(),
+                                            addrs, cpu_usage))) {
+    LOG_WARN("fail to collect cpu usage info");
+  } else if (OB_FAIL(check_load_balance(cpu_usage, do_load_balance))) {
+    LOG_WARN("fail to collect cpu usage info");
   } else {
     int64_t parallel = parent.get_assigned_worker_count();
     if (0 >= parallel) {
@@ -889,7 +966,9 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
     ObArray<int64_t> sqc_max_task_counts;
     ObArray<int64_t> sqc_part_counts;
     int64_t total_task_count = 0;
-    if (parallel < addrs.count() && OB_FAIL(do_random_dfo_distribution(addrs, parallel, addrs))) {
+ 
+    if (OB_FAIL(ret)) {
+    }else if (parallel < addrs.count() && OB_FAIL(do_random_dfo_distribution(addrs, parallel, addrs))) {
       LOG_WARN("fail to do random dfo distribution", K(ret));
     } else {
       for (int i = 0; i < addrs.count() && OB_SUCC(ret); ++i) {
@@ -898,9 +977,16 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         }
       }
     }
+
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(split_parallel_into_task(parallel, sqc_part_counts, sqc_max_task_counts))) {
+    } else if (!do_load_balance
+               && OB_FAIL(
+                 split_parallel_into_task(parallel, sqc_part_counts, sqc_max_task_counts))) {
       LOG_WARN("fail to split parallel task", K(ret));
+    } else if (do_load_balance
+               && OB_FAIL(split_parallel_into_task_by_cpu_usage(parallel, sqc_part_counts,
+                                                                cpu_usage, sqc_max_task_counts))) {
+      LOG_WARN("fail to split parallel task by cpu usage", K(ret));
     } else {
       CK(sqc_max_task_counts.count() == addrs.count());
       for (int i = 0; i < sqc_max_task_counts.count() && OB_SUCC(ret); ++i) {
@@ -1109,7 +1195,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
     LOG_WARN("Failed to init base_order_map");
   }
   // 处理insert op 对应的partition location信息
-  if (OB_FAIL(ret) || OB_ISNULL(dml_op)) {
+  if (OB_ISNULL(dml_op)) {
     // pass
   } else {
     ObDASTableLoc *table_loc = nullptr;
@@ -1440,9 +1526,66 @@ int ObPXServerAddrUtil::reorder_all_partitions(
  */
 int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
                                                  const common::ObIArray<int64_t> &sqc_part_count,
-                                                 common::ObIArray<int64_t> &results) {
+                                                 common::ObIArray<int64_t> &results)
+{
+  return split_parallel_into_task_by_weight(
+    parallel, sqc_part_count, results,
+    [&](int64_t idx, int64_t partition, int64_t parallel, const ObPxSqcTaskCountMeta &meta) {
+      UNUSED(idx);
+      return meta.partition_count_ * parallel / partition;
+    });
+}
+
+int ObPXServerAddrUtil::split_parallel_into_task_by_cpu_usage(
+  const int64_t parallel, const common::ObIArray<int64_t> &sqc_part_count,
+  const common::ObIArray<double> &sqc_cpu_usage, common::ObIArray<int64_t> &results)
+{
+  int ret = OB_SUCCESS;
+  // convert the original cpu usage to cpu weight, a.k.a the cpu idle time
+  double normalized_sum = 0.;
+  ARRAY_FOREACH(sqc_cpu_usage, idx)
+  {
+    normalized_sum += 100. - sqc_cpu_usage.at(idx);
+  }
+
+  // normalize the cpu weight
+  common::ObArray<double> cpu_weight;
+  ARRAY_FOREACH_X(sqc_cpu_usage, idx, cnt, OB_SUCC(ret))
+  {
+    double weight = (100. - sqc_cpu_usage.at(idx)) / normalized_sum * 100.;
+    if (OB_FAIL(cpu_weight.push_back(weight))) {
+      LOG_WARN("fail to push into the cpu weight");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (sqc_cpu_usage.count() != sqc_part_count.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("wrong number of cpu usages");
+    } else if (OB_FAIL(split_parallel_into_task_by_weight(
+                 parallel, sqc_part_count, results,
+                 [](int64_t idx, int64_t partition, int64_t parallel,
+                    const ObPxSqcTaskCountMeta &meta, const common::ObIArray<double> &sqc_weight) {
+                   UNUSED(partition);
+                   UNUSED(meta);
+                   return sqc_weight.at(idx) * parallel / 100.0;
+                 },
+                 cpu_weight))) {
+      LOG_WARN("fail to split parallel into task by cpu usage");
+    }
+  }
+
+  return ret;
+}
+
+template <typename Func, typename... Args>
+int ObPXServerAddrUtil::split_parallel_into_task_by_weight(
+  const int64_t parallel, const common::ObIArray<int64_t> &sqc_part_count,
+  common::ObIArray<int64_t> &results, Func weight_provider, Args &&...args)
+{
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcTaskCountMeta> sqc_task_metas;
+
   int64_t total_part_count = 0;
   int64_t total_thread_count = 0;
   int64_t thread_remain = 0;
@@ -1470,10 +1613,8 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
     }
   }
   if (OB_SUCC(ret)) {
-    // 为什么需要调整，因为极端情况下可能有的sqc只能拿到不足一个线程；算法必须保证每个sqc至少
-    // 有一个线程。
-    if (OB_FAIL(adjust_sqc_task_count(sqc_task_metas, parallel, total_part_count))) {
-      LOG_WARN("Failed to adjust sqc task count", K(ret));
+    if (OB_FAIL(adjust_sqc_task_count_by_weight(sqc_task_metas, parallel, total_part_count, weight_provider, std::forward<Args>(args)...))) {
+      LOG_WARN("Failed to adjust sqc task count by weight", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1484,7 +1625,7 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
       meta.time_ = static_cast<double>(meta.partition_count_) / static_cast<double>(meta.thread_count_);
     }
     // 排序，执行时间长的排在前面
-    auto compare_fun_long_time_first = [](ObPxSqcTaskCountMeta a, ObPxSqcTaskCountMeta b) -> bool { return a.time_ > b.time_; };
+    auto compare_fun_long_time_first = [](const ObPxSqcTaskCountMeta& a, const ObPxSqcTaskCountMeta& b) -> bool { return a.time_ > b.time_; };
     lib::ob_sort(sqc_task_metas.begin(),
               sqc_task_metas.end(),
               compare_fun_long_time_first);
@@ -1522,19 +1663,23 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
   return ret;
 }
 
-int ObPXServerAddrUtil::adjust_sqc_task_count(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
-                                              int64_t parallel,
-                                              int64_t partition)
+template <typename Func, typename... Args>
+int ObPXServerAddrUtil::adjust_sqc_task_count_by_weight(
+  common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks, int64_t parallel, int64_t partition,
+  Func weight_provider, Args &&...args)
 {
   int ret = OB_SUCCESS;
   int64_t thread_used = 0;
+  UNUSED(partition);
+
   int64_t partition_remain = partition;
   // 存在partition总数为0 的情况，例如，在gi任务划分中，所有partition都没有宏块的情况。
   int64_t real_partition = NON_ZERO_VALUE(partition);
-  ARRAY_FOREACH(sqc_tasks, idx) {
+  ARRAY_FOREACH(sqc_tasks, idx)
+  {
     ObPxSqcTaskCountMeta &meta = sqc_tasks.at(idx);
     if (!meta.finish_) {
-      meta.thread_count_ = meta.partition_count_ * parallel / real_partition;
+      meta.thread_count_ = weight_provider(idx, real_partition, parallel, meta, std::forward<Args>(args)...);
       if (0 >= meta.thread_count_) {
         // 出现小数个线程或者负数个线程，调整改线程为1，标记为finish，后续不再调整它。
         thread_used++;
@@ -1545,10 +1690,12 @@ int ObPXServerAddrUtil::adjust_sqc_task_count(common::ObIArray<ObPxSqcTaskCountM
     }
   }
   if (thread_used != 0) {
-    if (OB_FAIL(adjust_sqc_task_count(sqc_tasks, parallel - thread_used, partition_remain))) {
+    if (OB_FAIL(adjust_sqc_task_count_by_weight(sqc_tasks, parallel - thread_used, partition_remain,
+                                                weight_provider, std::forward<Args>(args)...))) {
       LOG_WARN("Failed to adjust sqc task count", K(ret), K(sqc_tasks));
     }
   }
+
   return ret;
 }
 
