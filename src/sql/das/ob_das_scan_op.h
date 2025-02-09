@@ -19,6 +19,7 @@
 #include "sql/das/ob_group_scan_iter.h"
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_partition_id_row_pair.h"
 
@@ -126,6 +127,12 @@ public:
     }
     return has_pl_udf;
   }
+  const ObQueryRangeProvider& get_query_range_provider() const
+  {
+    return is_new_query_range_ ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
+                               : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
+  }
+
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(ref_table_id),
                        K_(access_column_ids),
@@ -149,7 +156,8 @@ public:
                        K_(vec_vid_idx),
                        K_(index_merge_idx),
                        K_(pre_query_range),
-                       K_(is_index_merge));
+                       K_(is_index_merge),
+                       K_(pre_range_graph));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -183,7 +191,8 @@ public:
     uint64_t flags_;
     struct {
       uint64_t is_index_merge_               : 1; // whether used for index merge
-      uint64_t reserved_                     : 63;
+      uint64_t is_new_query_range_           : 1; // whether use new query range
+      uint64_t reserved_                     : 62;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
@@ -335,10 +344,11 @@ public:
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const;
   ObDASScanRtDef *get_lookup_rtdef();
-  int get_aux_lookup_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_doc_rowkey_tablet_id(common::ObTabletID &tablet_id) const;
   int get_table_lookup_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_doc_tablet_id(common::ObTabletID &tablet_id) const;
   int get_rowkey_vid_tablet_id(common::ObTabletID &tablet_id) const;
+  int get_fts_tablet_ids(common::ObIArray<ObDASFTSTabletID> &fts_tablet_ids, ObDASBaseRtDef *rtdef);
   int get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int init_scan_param();
   int rescan();
@@ -346,10 +356,6 @@ public:
   void reset_access_datums_ptr(int64_t capacity = 0);
   void reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity);
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
-  int get_base_text_ir_tablet_ids(
-      common::ObTabletID &inv_idx_tablet_id,
-      common::ObTabletID &fwd_idx_tablet_id,
-      common::ObTabletID &doc_id_idx_tablet_id);
   int get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids);
   int get_ivf_ir_tablet_ids(
       common::ObTabletID &vec_row_tid,

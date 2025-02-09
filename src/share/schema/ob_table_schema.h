@@ -1417,7 +1417,9 @@ public:
   int add_subpartition_key(const common::ObString &column_name);
   int add_zone(const common::ObString &zone);
   int set_view_definition(const common::ObString &view_definition);
+  int set_parser_name_and_properties(const common::ObString &parser_name, const common::ObString &parser_properties);
   int set_parser_name(const common::ObString &parser_name) { return deep_copy_str(parser_name, parser_name_); }
+  int set_parser_properties(const common::ObString &parser_properties) { return deep_copy_str(parser_properties, parser_properties_); }
   int set_rowkey_info(const ObColumnSchemaV2 &column);
   int set_foreign_key_infos(const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos_);
   void clear_foreign_key_infos();
@@ -1545,6 +1547,7 @@ public:
   inline bool is_read_only() const { return read_only_; }
   inline const char *get_parser_name() const { return extract_str(parser_name_); }
   inline const common::ObString &get_parser_name_str() const { return parser_name_; }
+  inline const common::ObString &get_parser_property_str() const { return parser_properties_; }
 
   inline uint64_t get_index_attributes_set() const { return index_attributes_set_; }
   inline int64_t get_dop() const  { return table_dop_; }
@@ -2143,6 +2146,7 @@ protected:
   common::ObCompressorType compressor_type_;
   common::ObString expire_info_;
   common::ObString parser_name_; //fulltext index parser name
+  common::ObString parser_properties_; // fulltext index parser properties
   common::ObRowStoreType row_store_type_;
   common::ObStoreFormatType store_format_;
   int64_t storage_format_version_;

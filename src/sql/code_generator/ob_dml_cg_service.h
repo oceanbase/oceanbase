@@ -430,6 +430,10 @@ private:
                                        const uint64_t rowkey_domain_tid,
                                        ObDASScanCtDef &scan_ctdef,
                                        ObDASAttachSpec &attach_spec);
+  int check_is_main_table_in_fts_ddl(ObLogicalOperator &op,
+                                     const uint64_t table_id,
+                                     const IndexDMLInfo &index_dml_info,
+                                     ObDASDMLBaseCtDef &das_dml_ctdef);
 private:
   int need_fire_update_event(const ObTableSchema &table_schema,
                             const ObString &update_events,

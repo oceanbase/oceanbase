@@ -533,6 +533,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
     enable_das_keep_order_ = tenant_config->_enable_das_keep_order;
+    enable_index_merge_ = tenant_config->_enable_index_merge;
     enable_hyperscan_regexp_engine_ =
         (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->_regex_engine.str()));
     enable_parallel_das_dml_ = tenant_config->_enable_parallel_das_dml;
@@ -622,6 +623,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_nlj_spf_use_rich_format_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d", enable_index_merge_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_index_merge_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_distributed_das_scan_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_distributed_das_scan_));

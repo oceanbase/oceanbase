@@ -2343,7 +2343,7 @@ int ObJsonBin::init_bin_data()
         if (OB_FAIL(cursor_->read_i32(pos_, &val))) {
           LOG_WARN("read_id32 fail", K(ret), K(pos_));
         } else {
-          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);;
+          meta_.field_type_ = ObJsonBaseUtil::get_time_type(node_type);
           int_val_ = val;
           meta_.bytes_ = sizeof(int32_t);
         }

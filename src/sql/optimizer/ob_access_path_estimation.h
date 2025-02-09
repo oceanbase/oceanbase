@@ -95,6 +95,8 @@ public:
                                const bool is_inner_path,
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                ObBaseTableEstMethod &method);
+  static int inner_estimate_index_merge_rowcount(common::ObIArray<IndexMergePath *> &paths,
+                                                 ObBaseTableEstMethod &method);
   static int inner_estimate_rowcount(ObOptimizerContext &ctx,
                                       common::ObIArray<AccessPath *> &paths,
                                       const bool is_inner_path,
@@ -358,8 +360,9 @@ private:
                                                         ObIArray<AccessPath *> &paths,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
-                             common::ObIArray<AccessPath *> &normal_paths,
-                             common::ObIArray<AccessPath *> &geo_paths);
+                            common::ObIArray<AccessPath *> &normal_paths,
+                            common::ObIArray<AccessPath *> &geo_paths,
+                            common::ObIArray<IndexMergePath *> &index_merge_paths);
 };
 
 class RangePartitionHelper

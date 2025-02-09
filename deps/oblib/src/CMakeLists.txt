@@ -12,6 +12,7 @@ target_include_directories(
   oblib_base_without_pass INTERFACE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/plugin/include
   ${CMAKE_SOURCE_DIR}/deps/easy/src
   ${CMAKE_SOURCE_DIR}/deps/oblib/src
   ${CMAKE_SOURCE_DIR}/deps/oblib/src/common

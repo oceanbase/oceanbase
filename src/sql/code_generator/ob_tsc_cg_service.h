@@ -62,12 +62,17 @@ private:
   struct DASScanCGCtx
   {
     DASScanCGCtx()
-      : curr_func_lookup_idx_(0),
-        is_func_lookup_(false) {}
+      : curr_func_lookup_idx_(OB_INVALID_ID),
+        is_func_lookup_(false),
+        curr_merge_fts_idx_(OB_INVALID_ID),
+        is_merge_fts_index_(false)
+    {}
     void reset()
     {
-      curr_func_lookup_idx_ = 0;
+      curr_func_lookup_idx_ = OB_INVALID_ID;
       is_func_lookup_ = false;
+      curr_merge_fts_idx_ = OB_INVALID_ID;
+      is_merge_fts_index_ = false;
     }
     void set_func_lookup_idx(const int64_t idx)
     {
@@ -78,9 +83,27 @@ private:
     {
       is_func_lookup_ = true;
     }
-    TO_STRING_KV(K_(curr_func_lookup_idx), K_(is_func_lookup));
+    void set_curr_merge_fts_idx(const int64_t idx)
+    {
+      is_merge_fts_index_ = true;
+      curr_merge_fts_idx_ = idx;
+    }
+    void set_is_merge_fts_index()
+    {
+      is_merge_fts_index_ = true;
+    }
+    bool is_rowkey_doc_scan_in_func_lookup() const
+    {
+      return is_func_lookup_ && OB_INVALID_ID == curr_func_lookup_idx_;
+    }
+    TO_STRING_KV(K_(curr_func_lookup_idx), K_(is_func_lookup), K_(curr_merge_fts_idx), K_(is_merge_fts_index));
     int64_t curr_func_lookup_idx_;
     bool is_func_lookup_;
+
+    /* used by fts index in index merge */
+    int64_t curr_merge_fts_idx_;
+    bool is_merge_fts_index_;
+    /* used by fts index in index merge */
   };
   int generate_access_ctdef(const ObLogTableScan &op,
                             const DASScanCGCtx &cg_ctx,
@@ -108,6 +131,7 @@ private:
   int generate_text_ir_ctdef(const ObLogTableScan &op,
                              const DASScanCGCtx &cg_ctx,
                              ObTableScanCtDef &tsc_ctdef,
+                             ObDASScanCtDef &scan_ctdef,
                              ObDASBaseCtDef *&root_ctdef);
   int generate_vec_idx_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
   int calc_enable_use_simplified_scan(const ObLogTableScan &op, const ExprFixedArray &result_outputs, ObDASBaseCtDef *root_ctdef);
@@ -236,17 +260,19 @@ private:
   int mapping_oracle_real_agent_virtual_exprs(const ObLogTableScan &op,
                                               common::ObIArray<ObRawExpr*> &access_exprs);
   int generate_mr_mv_scan_flag(const ObLogTableScan &op, ObQueryFlag &query_flag) const;
-  int generate_index_merge_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASBaseCtDef *&root_ctdef);
+  int generate_index_merge_ctdef(const ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef, ObDASIndexMergeCtDef *&root_ctdef);
   int generate_index_merge_node_ctdef(const ObLogTableScan &op,
+                                      ObTableScanCtDef &tsc_ctdef,
                                       ObIndexMergeNode *node,
                                       common::ObIAllocator &alloc,
-                                      ObDASBaseCtDef *&node_ctdef);
+                                      ObDASIndexMergeCtDef *&root_ctdef);
 
   int generate_functional_lookup_ctdef(const ObLogTableScan &op,
                                        ObTableScanCtDef &tsc_ctdef,
                                        ObDASBaseCtDef *rowkey_scan_ctdef,
                                        ObDASBaseCtDef *main_lookup_ctdef,
                                        ObDASBaseCtDef *&root_ctdef);
+  int check_lookup_iter_type(ObDASBaseCtDef *scan_ctdef, bool &need_proj_relevance_score);
 
 private:
   ObStaticEngineCG &cg_;

@@ -723,6 +723,7 @@ public:
   int get_phy_location_type(ObTableLocationType &location_type);
   virtual int generate_access_exprs();
   int copy_filter_before_index_back();
+  int copy_filter_for_index_merge();
   void set_use_batch(bool use_batch) { use_batch_ = use_batch; }
   bool use_batch() const { return use_batch_; }
   // use group_id_expr_ when batch rescan or keep order for global lookup.
@@ -791,8 +792,11 @@ public:
   int prepare_vector_access_exprs();
   int vector_access_push_rowkey_exprs();
   inline bool has_func_lookup() const { return 0 != lookup_tr_infos_.count(); }
+  inline bool has_merge_fts_index() const { return 0 != merge_tr_infos_.count(); }
   inline ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() { return lookup_tr_infos_; }
   inline const ObIArray<ObTextRetrievalInfo> &get_lookup_tr_infos() const { return lookup_tr_infos_; }
+  inline ObIArray<ObTextRetrievalInfo> &get_merge_tr_infos() { return merge_tr_infos_; }
+  inline const ObIArray<ObTextRetrievalInfo> &get_merge_tr_infos() const { return merge_tr_infos_; }
   inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
   inline bool need_rowkey_doc_expr() const { return is_tsc_with_domain_id() || has_func_lookup(); }
   int prepare_hnsw_vector_access_exprs();
@@ -863,7 +867,7 @@ public:
                                             ObColumnRefRawExpr *&snapshot_key_column,
                                             ObColumnRefRawExpr *&snapshot_data_column);
   int prepare_hnsw_index_id_col();
-  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan(); }
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() || is_hnsw_vec_scan() || has_merge_fts_index(); }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline void set_rowkey_vid_tid(const uint64_t rowkey_vid_tid) { rowkey_vid_tid_ = rowkey_vid_tid;}
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
@@ -923,7 +927,7 @@ public:
   int get_index_filters(int64_t idx, ObIArray<ObRawExpr *> &index_filters) const;
   int get_index_tids(ObIArray<ObTableID> &index_tids) const;
   int get_index_name_list(ObIArray<ObString> &index_name_list) const;
-  bool use_index_merge_by_hint() const;
+  int check_match_union_merge_hint(const LogTableHint *table_hint, bool &is_match) const;
 
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
@@ -955,7 +959,13 @@ private: // member functions
   int prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_info);
   int extract_func_lookup_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
   int get_func_lookup_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+
   int prepare_func_lookup_dep_exprs();
+  /* used for fulltext indexes that as part of index merge */
+  int extract_index_merge_access_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int get_index_merge_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int prepare_index_merge_dep_exprs();
+  /* used for fulltext indexes that as part of index merge */
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
@@ -1106,6 +1116,7 @@ protected: // memeber variables
   ObTextRetrievalInfo text_retrieval_info_;
   // text retrieval as functional lookup
   common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
+  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> merge_tr_infos_;
   ObVecIndexInfo vector_index_info_;
 
   ObPxRFStaticInfo px_rf_info_;

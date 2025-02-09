@@ -1584,6 +1584,9 @@ DEF_BOOL(_enable_das_keep_order, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
          "enable nlj and spf use rich format",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_index_merge, OB_TENANT_PARAMETER, "False",
+         "enable index merge optimization",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          "enable distributed DAS scan",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2419,6 +2422,13 @@ DEF_INT(query_memory_limit_percentage, OB_TENANT_PARAMETER, "50", "[0,100]",
 DEF_INT(package_state_sync_max_size, OB_TENANT_PARAMETER, "8192", "[0, 16777216]",
         "the max sync size of single package state that can sync package var value. If over it, package state will not sync package var value. Range: [0, 16777216] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(plugins_load, OB_CLUSTER_PARAMETER, "",
+                     common::ObConfigPluginsLoadChecker,
+                     "The plugins you want to load when starting observer. "
+                     "Note that plugins cannot be loaded dynamically, you should restart the observer when you change the parameter. "
+                     "Format: 'libsoname1.so:on,libsoname2.so:off' "
+                     "which `on'(default) means the plugin is enabled, `off' means the plugin is disabled(don't load), ",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(ob_enable_java_env, OB_CLUSTER_PARAMETER, "False",
         "Enable or disable java env for external table.",

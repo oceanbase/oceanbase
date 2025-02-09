@@ -217,6 +217,7 @@ plan_cache_evict_interval
 plsql_code_type
 plsql_debug
 plsql_v2_compatibility
+plugins_load
 px_task_size
 px_workers_per_cpu_quota
 query_memory_limit_percentage
@@ -361,6 +362,7 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_index_merge
 _enable_inner_session_mgr
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization

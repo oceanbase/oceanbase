@@ -299,6 +299,7 @@ public:
       ls_id_(),
       related_tablet_ids_(nullptr),
       das_allocator_(nullptr),
+      ft_doc_word_infos_(nullptr),
       dml_param_()
   { }
   int write_tablet(DMLIterator &iter, int64_t &affected_rows);
@@ -321,6 +322,7 @@ public:
   share::ObLSID ls_id_;
   ObTabletIDFixedArray *related_tablet_ids_;
   common::ObIAllocator *das_allocator_;
+  common::ObIArray<ObFTDocWordInfo> *ft_doc_word_infos_;
 private:
   storage::ObDMLBaseParam dml_param_;
 };
@@ -359,10 +361,12 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
         const CtDefType *related_ctdef = static_cast<const CtDefType*>(related_ctdefs_->at(i));
         RtDefType *related_rtdef = static_cast<RtDefType*>(related_rtdefs_->at(i));
         ObTabletID related_tablet_id = related_tablet_ids_->at(i);
+        ObFTDocWordInfo *doc_word_info = nullptr == ft_doc_word_infos_ ? nullptr : &(ft_doc_word_infos_->at(i));
         int64_t index_affected_rows = 0;
         SQL_DAS_LOG(DEBUG, "rewind iterator and write local index tablet",
-                    K(ls_id_), K(related_tablet_id), K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
-        if (OB_FAIL(iter.rewind(related_ctdef))) {
+                    K(ls_id_), K(related_tablet_id), K(related_ctdef->table_id_), K(related_ctdef->index_tid_),
+                    KPC(doc_word_info));
+        if (OB_FAIL(iter.rewind(related_ctdef, doc_word_info))) {
           SQL_DAS_LOG(WARN, "rewind iterator failed", K(ret));
         } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef, *related_rtdef,
             *snapshot_, write_branch_id_, *das_allocator_, store_ctx_guard, dml_param_))) {
@@ -450,12 +454,13 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
         for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_->count(); ++i) {
           const CtDefType *related_ctdef = static_cast<const CtDefType*>(related_ctdefs_->at(i));
           RtDefType *related_rtdef = static_cast<RtDefType*>(related_rtdefs_->at(i));
+          ObFTDocWordInfo *doc_word_info = nullptr == ft_doc_word_infos_ ? nullptr : &(ft_doc_word_infos_->at(i));
           ObTabletID related_tablet_id = related_tablet_ids_->at(i);
           int64_t index_affected_rows = 0;
           SQL_DAS_LOG(TRACE, "rewind and write index dml row with ignore", KPC(dml_row),
                       K(ls_id_), K(related_tablet_id),
                       K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
-          if (OB_FAIL(single_row_iter.rewind(related_ctdef))) {
+          if (OB_FAIL(single_row_iter.rewind(related_ctdef, doc_word_info))) {
             SQL_DAS_LOG(WARN, "rewind iterator failed", K(ret));
           } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef,
                                                           *related_rtdef,

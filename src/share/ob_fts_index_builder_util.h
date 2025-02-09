@@ -16,6 +16,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "storage/fts/ob_fts_literal.h"
 
 namespace oceanbase
 {
@@ -43,10 +44,12 @@ public:
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int append_fts_index_arg(
+      const share::schema::ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int append_fts_doc_word_arg(
+      const share::schema::ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
@@ -83,9 +86,25 @@ public:
       const share::schema::ObTableSchema &data_schema,
       const share::schema::ObColumnSchemaV2 &column_schema,
       common::ObIArray<uint64_t> &index_column_ids);
-  static int generate_fts_parser_name(
+  static int generate_fts_parser_name_and_property(
+      const share::schema::ObTableSchema &data_schema,
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
+  static int check_need_to_load_dic(
+      const uint64_t tenant_id,
+      const ObString &parser_name,
+      bool &need_to_load_dic);
+  static int try_load_and_lock_dictionary_tables(
+      const ObTableSchema &index_schema,
+      ObMySQLTransaction &trans);
+  static int try_load_dictionary_for_all_tenants();
+  static int check_supportability_for_loader_key(
+        const uint64_t tenant_id,
+        const ObString &parser_name,
+        const ObCharsetType charset_type);
+  static int check_supportability_for_building_index(
+        const ObTableSchema *data_schema,
+        const obrpc::ObCreateIndexArg *index_arg);
 private:
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
@@ -179,6 +198,17 @@ private:
   static int check_fulltext_index_allowed(
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg *index_arg);
+  static bool is_need_dictionary(const ObString &parser_name)
+  {
+    return 0 == parser_name.case_compare(ObFTSLiteral::PARSER_NAME_IK);
+  }
+  static int generate_fts_parser_name(
+      obrpc::ObCreateIndexArg &arg,
+      ObIAllocator &allocator);
+  static int generate_fts_parser_property(
+      const share::schema::ObTableSchema &data_schema,
+      obrpc::ObCreateIndexArg &arg,
+      ObIAllocator &allocator);
 };
 
 class ObMulValueIndexBuilderUtil

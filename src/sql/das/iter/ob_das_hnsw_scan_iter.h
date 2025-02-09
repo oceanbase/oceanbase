@@ -157,7 +157,7 @@ public:
     delta_buf_tablet_id_ = related_tablet_ids.delta_buf_tablet_id_;
     index_id_tablet_id_ = related_tablet_ids.index_id_tablet_id_;
     snapshot_tablet_id_ = related_tablet_ids.snapshot_tablet_id_;
-    vid_rowkey_tablet_id_ = related_tablet_ids.aux_lookup_tablet_id_;
+    vid_rowkey_tablet_id_ = related_tablet_ids.doc_rowkey_tablet_id_;
     com_aux_vec_tablet_id_ = related_tablet_ids.lookup_tablet_id_;
     rowkey_vid_tablet_id_ = related_tablet_ids.rowkey_vid_tablet_id_;
   }

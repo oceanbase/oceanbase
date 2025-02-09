@@ -412,6 +412,8 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.parser_properties_, parser_properties_))) {
+        LOG_WARN("fail to deep copy parser properties", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
         LOG_WARN("deep copy external_file_location failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {

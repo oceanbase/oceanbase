@@ -22,6 +22,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "sql/resolver/ddl/ob_fts_parser_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -114,46 +115,7 @@ ObDDLResolver::~ObDDLResolver()
 }
 
 int ObDDLResolver::append_fts_args(
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg *index_arg,
-    bool &fts_common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg *> &index_arg_list,
-    ObIAllocator *arg_allocator)
-{
-  int ret = OB_SUCCESS;
-  ObSArray<obrpc::ObCreateIndexArg> fts_args;
-  if (OB_ISNULL(arg_allocator) || OB_ISNULL(index_arg)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(arg_allocator), KP(index_arg));
-  } else if (OB_FAIL(append_fts_args(resolve_result,
-                                     *index_arg,
-                                     fts_common_aux_table_exist,
-                                     resolve_results,
-                                     fts_args,
-                                     arg_allocator))) {
-    LOG_WARN("failed to append fts args", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < fts_args.count(); ++i) {
-    ObCreateIndexArg *index_arg = NULL;
-    void *tmp_ptr = NULL;
-    if (NULL == (tmp_ptr = (ObCreateIndexArg *)arg_allocator->alloc(
-            sizeof(obrpc::ObCreateIndexArg)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(ret));
-    } else if (FALSE_IT(index_arg = new (tmp_ptr) ObCreateIndexArg())) {
-    } else if (OB_FAIL(index_arg->assign(fts_args.at(i)))) {
-      LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FAIL(index_arg_list.push_back(index_arg))) {
-      index_arg->~ObCreateIndexArg();
-      arg_allocator->free(index_arg);
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDDLResolver::append_fts_args(
+    const share::schema::ObTableSchema &data_schema,
     const ObPartitionResolveResult &resolve_result,
     const obrpc::ObCreateIndexArg &index_arg,
     bool &fts_common_aux_table_exist,
@@ -168,7 +130,8 @@ int ObDDLResolver::append_fts_args(
   } else if (!fts_common_aux_table_exist) {
     const int64_t num_fts_args = 4;
     // append fts index aux arg first, keep same logic as build fts index on existing table
-    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(index_arg,
+    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(data_schema,
+                                                            index_arg,
                                                             allocator,
                                                             index_arg_list))) {
       LOG_WARN("failed to append fts_index arg", K(ret));
@@ -180,7 +143,8 @@ int ObDDLResolver::append_fts_args(
                                                                         allocator,
                                                                         index_arg_list))) {
       LOG_WARN("failed to append fts_doc_rowkey arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_word_arg(index_arg,
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_word_arg(data_schema,
+                                                                      index_arg,
                                                                       allocator,
                                                                       index_arg_list))) {
       LOG_WARN("failed to append fts_doc_word arg", K(ret));
@@ -195,11 +159,13 @@ int ObDDLResolver::append_fts_args(
     }
   } else {
     const int64_t num_fts_args = 2;
-    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(index_arg,
+    if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_index_arg(data_schema,
+                                                            index_arg,
                                                             allocator,
                                                             index_arg_list))) {
       LOG_WARN("failed to append fts_index arg", K(ret));
-    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_word_arg(index_arg,
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::append_fts_doc_word_arg(data_schema,
+                                                                      index_arg,
                                                                       allocator,
                                                                       index_arg_list))) {
       LOG_WARN("failed to append fts_doc_word arg", K(ret));
@@ -303,49 +269,6 @@ int ObDDLResolver::append_multivalue_args(
   if (OB_SUCC(ret)) {
     common_aux_table_exist = true;
   }
-  return ret;
-}
-
-int ObDDLResolver::append_domain_index_args(
-    const ObTableSchema &table_schema,
-    const ObPartitionResolveResult &resolve_result,
-    const obrpc::ObCreateIndexArg *index_arg,
-    bool &common_aux_table_exist,
-    ObIArray<ObPartitionResolveResult> &resolve_results,
-    ObIArray<ObCreateIndexArg *> &index_arg_list,
-    ObIAllocator *arg_allocator)
-{
-  int ret = OB_SUCCESS;
-
-  const ObColumnSchemaV2 *doc_id_col = nullptr;
-  if (OB_FAIL(ObFtsIndexBuilderUtil::get_doc_id_col(table_schema,
-                                                    doc_id_col))) {
-    LOG_WARN("failed to get doc id col", K(ret));
-  } else if (OB_NOT_NULL(doc_id_col)) {
-    common_aux_table_exist = true;
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (is_multivalue_index_aux(index_arg->index_type_)) {
-    if (OB_FAIL(ObDDLResolver::append_multivalue_args(resolve_result,
-                                                      index_arg,
-                                                      common_aux_table_exist,
-                                                      resolve_results,
-                                                      index_arg_list,
-                                                      arg_allocator))) {
-      LOG_WARN("failed to append multivalue args", K(ret), K(index_arg->index_type_));
-    }
-  } else if (is_fts_index(index_arg->index_type_)) {
-    if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
-                                               index_arg,
-                                               common_aux_table_exist,
-                                               resolve_results,
-                                               index_arg_list,
-                                               arg_allocator))) {
-      LOG_WARN("failed to append fts args", K(ret));
-    }
-  }
-
   return ret;
 }
 
@@ -1878,6 +1801,20 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         } else {
           int32_t str_len = static_cast<int32_t>(option_node->children_[0]->str_len_);
           parser_name_.assign_ptr(option_node->children_[0]->str_value_, str_len);
+        }
+        break;
+      }
+      case T_PARSER_PROPERTIES: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+          // TODO: @jinzhu, add compat case cover this.
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
+        } else if (OB_FAIL(ObFTParserResolverHelper::resolve_parser_properties(*option_node, *allocator_, parser_properties_))) {
+          LOG_WARN("fail to resolve parser properties", K(ret));
         }
         break;
       }
@@ -5461,6 +5398,7 @@ void ObDDLResolver::reset() {
   expire_info_.reset();
   compress_method_.reset();
   parser_name_.reset();
+  parser_properties_.reset();
   comment_.reset();
   tablegroup_name_.reset();
   primary_zone_.reset();
@@ -8722,7 +8660,7 @@ int ObDDLResolver::generate_global_index_schema(
               my_create_index_arg, new_table_schema, *allocator_, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
       } else if (share::schema::is_fts_index(my_create_index_arg.index_type_) &&
-                 OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(my_create_index_arg, allocator_))) {
+                 OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(*table_schema, my_create_index_arg, allocator_))) {
         LOG_WARN("failed to genearte fts parser name", K(ret));
       } else if (share::schema::is_vec_index(my_create_index_arg.index_type_) &&
                  OB_FAIL((ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, my_create_index_arg.index_type_,

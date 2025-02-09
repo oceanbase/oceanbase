@@ -153,6 +153,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id_), K(fulltext_col_id_));
       } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_name_str(), fts_parser_name_))) {
         LOG_WARN("fail to copy fts parser name", K(ret), K(schema->get_parser_name_str()));
+      } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_property_str(), fts_parser_properties_))) {
+        LOG_WARN("fail to copy fts parser properties", K(ret), K(schema->get_parser_property_str()));
       }
     } else if (schema->is_multivalue_index_aux()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
@@ -480,6 +482,7 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(fulltext_col_id),
        K_(index_name),
        K_(fts_parser_name),
+       K_(fts_parser_properties),
        K_(pk_name),
        K_(columns),
        K_(read_info),

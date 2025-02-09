@@ -149,7 +149,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
   int64_t limit_count = -1;
   int64_t offset_count = 0;
   const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(access_path_)) {  // table scan create from CteTablePath
+  if (NULL == access_path_) {  // table scan create from CteTablePath
     card = get_card();
     op_cost = get_op_cost();
     cost = get_cost();
@@ -196,13 +196,17 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     if (param.need_row_count_ > card) {
       param.need_row_count_ = -1;
     }
-    if (OB_FAIL(AccessPath::re_estimate_cost(param,
-                                            *est_cost_info_,
-                                            sample_info_,
-                                            get_plan()->get_optimizer_context(),
-                                            access_path_->can_batch_rescan_,
-                                            card,
-                                            op_cost))) {
+    if (access_path_->is_index_merge_path()) {
+      card = param.need_row_count_ < 0 ? get_card() : std::min(param.need_row_count_, get_card());
+      op_cost = get_op_cost();
+      cost = get_cost();
+    } else if (OB_FAIL(AccessPath::re_estimate_cost(param,
+                                                    *est_cost_info_,
+                                                    sample_info_,
+                                                    get_plan()->get_optimizer_context(),
+                                                    access_path_->can_batch_rescan_,
+                                                    card,
+                                                    op_cost))) {
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
       est_cost_info_->rescan_left_server_list_ = NULL;
@@ -257,6 +261,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to append rowkey doc exprs", K(ret));
   } else if (has_func_lookup() && OB_FAIL(get_func_lookup_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get functional lookup exprs", K(ret));
+  } else if (use_index_merge() && OB_FAIL(get_index_merge_calc_exprs(all_exprs))) {
+    LOG_WARN("failed to get index merge calc exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
@@ -312,6 +318,9 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
     } else if (has_func_lookup()
         && OB_FAIL(get_func_lookup_calc_exprs(tmp_exprs))) {
       LOG_WARN("failed to get func lookup exprs", K(ret));
+    } else if (use_index_merge()
+        && OB_FAIL(get_index_merge_calc_exprs(tmp_exprs))) {
+      LOG_WARN("failed to get index merge calc exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_exprs.count(); ++i) {
       ObRawExpr *expr = tmp_exprs.at(i);
@@ -429,7 +438,12 @@ int ObLogTableScan::copy_filter_before_index_back()
   int ret = OB_SUCCESS;
   ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
-  if (OB_FAIL(filter_before_index_back_set())) {
+  if (use_index_merge()) {
+    // need to copy filter conclude virtual generated column for each index scan in index merge
+    if (OB_FAIL(copy_filter_for_index_merge())) {
+      LOG_WARN("failed to copy filter for index merge", K(ret));
+    }
+  } else if (OB_FAIL(filter_before_index_back_set())) {
     LOG_WARN("Failed to filter_before_index_back_set", K(ret));
   } else if (get_index_back() && !flags.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
@@ -485,6 +499,57 @@ int ObLogTableScan::copy_filter_before_index_back()
   return ret;
 }
 
+int ObLogTableScan::copy_filter_for_index_merge()
+{
+  int ret = OB_SUCCESS;
+  // each index scan only involves range conds for now in index merge
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_range_conds_.count(); i++) {
+    common::ObIArray<ObRawExpr*> &range_conds = index_range_conds_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_conds.count(); ++i) {
+      if (range_conds.at(i)->has_flag(CNT_PL_UDF)) {
+        // do nothing.
+      } else {
+        bool contain_vir_gen_column = false;
+        if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(range_conds.at(i), contain_vir_gen_column))) {
+          LOG_WARN("fail to check contain virtual gen column", K(ret));
+        } else if (contain_vir_gen_column) {
+          ObArray<ObRawExpr *> vir_gen_par_exprs;
+          if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_column_parents(range_conds.at(i), range_conds.at(i), vir_gen_par_exprs))) {
+            LOG_WARN("failed to extract virtual generated column parents", K(ret), K(i));
+          } else {
+            ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+            for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_par_exprs.count(); ++j) {
+              ObRawExpr *copied_expr = NULL;
+              ObRawExpr *old_expr = range_conds.at(i);
+              if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
+                                                vir_gen_par_exprs.at(j)->get_expr_class(),
+                                                vir_gen_par_exprs.at(j)->get_expr_type(),
+                                                copied_expr))) {
+                LOG_WARN("failed to create raw expr", K(ret));
+              } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_par_exprs.at(j)))) {
+                LOG_WARN("failed to assign old expr", K(ret));
+              } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_par_exprs.at(j), copied_expr))) {
+                LOG_WARN("failed to add replaced expr", K(ret));
+              } else if (OB_FAIL(copier.copy_on_replace(range_conds.at(i), range_conds.at(i)))) {
+                LOG_WARN("failed to copy exprs", K(ret));
+              } else if (range_conds.at(i)->get_expr_type() == T_OP_RUNTIME_FILTER) {
+                // record runtime filter, also replace it in join filter use operator
+                get_plan()->gen_col_replacer().add_replace_expr(old_expr, range_conds.at(i));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(copier.copy_on_replace(range_conds.at(i), range_conds.at(i)))) {
+                LOG_WARN("failed to copy exprs", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::find_nearest_rcte_op(ObLogSet *&log_set)
 {
   int ret = OB_SUCCESS;
@@ -521,6 +586,8 @@ int ObLogTableScan::generate_access_exprs()
     LOG_WARN("failed to prepare table scan with doc id info", K(ret));
   } else if (has_func_lookup() && OB_FAIL(prepare_func_lookup_dep_exprs())) {
     LOG_WARN("failed to prepare functional lookup dependent exprs", K(ret));
+  } else if (use_index_merge() && OB_FAIL(prepare_index_merge_dep_exprs())) {
+    LOG_WARN("failed to prepare index merge dependent exprs", K(ret));
   } else if (OB_FAIL(generate_necessary_rowkey_and_partkey_exprs())) {
     LOG_WARN("failed to generate rowkey and part exprs", K(ret));
   } else if (OB_FAIL(allocate_group_id_expr())) {
@@ -711,22 +778,28 @@ int ObLogTableScan::replace_index_back_pushdown_filters(ObRawExprReplacer &repla
 int ObLogTableScan::replace_index_merge_pushdown_filters(ObIndexMergeNode *node, ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || !node->is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index merge node", KPC(node), K(ret));
-  } else if (node->is_leaf_node_) {
-    if (OB_UNLIKELY(node->index_tid_ == ref_table_id_)) {
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null index merge node", K(ret), KPC(node));
+  } else if (node->is_scan_node()) {
+    if (OB_ISNULL(node->ap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null index merge access path", K(ret), KPC(node));
+    } else if (node->ap_->index_id_ == ref_table_id_) {
       // main table participates as a branch of merge
       ObArray<ObRawExpr*> scan_pushdown_filters;
-      if (OB_FAIL(get_index_filters(node->idx_, scan_pushdown_filters))) {
-        LOG_WARN("failed to get index scan pushdown filters", K(node->index_tid_), K(ret));
+      if (OB_FAIL(get_index_filters(node->scan_node_idx_, scan_pushdown_filters))) {
+        LOG_WARN("failed to get index scan pushdown filters", K(node->ap_->index_id_), K(ret));
       } else if (OB_FAIL(replace_exprs_action(replacer, scan_pushdown_filters))) {
         LOG_WARN("failed to replace index scan pushdown filters", K(ret));
       }
     }
-  } else if (OB_FAIL(SMART_CALL(replace_index_merge_pushdown_filters(node->left_node_, replacer))) ||
-             OB_FAIL(SMART_CALL(replace_index_merge_pushdown_filters(node->right_node_, replacer)))) {
-    LOG_WARN("failed to set index merge pushdown filters", K(ref_table_id_), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(replace_index_merge_pushdown_filters(node->children_.at(i), replacer)))) {
+        LOG_WARN("failed to replace index merge pushdown filters", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1136,6 +1209,9 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   } else if (has_func_lookup()
       && OB_FAIL(extract_func_lookup_access_exprs(domain_exprs_))) {
     LOG_WARN("failed to extract functional lookup access exprs", K(ret));
+  } else if (use_index_merge()
+      && OB_FAIL(extract_index_merge_access_exprs(domain_exprs_))) {
+    LOG_WARN("failed to extract index merge access exprs", K(ret));
   } else if (is_heap_table && is_index_global_ && index_back_ &&
              OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
     LOG_WARN("failed to get part column exprs", K(ret));
@@ -1307,17 +1383,22 @@ int ObLogTableScan::set_table_scan_filters(const common::ObIArray<ObRawExpr *> &
 int ObLogTableScan::set_index_merge_scan_filters(const AccessPath *path)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(path) || !path->is_index_merge_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KPC(path));
+  if (OB_ISNULL(path) || OB_UNLIKELY(!path->is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected index merge path", K(ret), KPC(path));
   } else {
-    const IndexMergePath *root_path = static_cast<const IndexMergePath*>(path);
-    if (OB_FAIL(full_filters_.assign(root_path->filters_))) {
+    const IndexMergePath *index_merge_path = static_cast<const IndexMergePath*>(path);
+    if (OB_ISNULL(index_merge_path->root_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null index merge node", K(ret), KPC(index_merge_path));
+    } else if (OB_FAIL(get_filter_exprs().assign(index_merge_path->est_cost_info_.table_filters_))) {
       LOG_WARN("failed to assign filters array", K(ret));
-    } else if (OB_FAIL(index_range_conds_.prepare_allocate(root_path->index_cnt_)) ||
-               OB_FAIL(index_filters_.prepare_allocate(root_path->index_cnt_))) {
+    } else if (OB_FAIL(full_filters_.assign(index_merge_path->est_cost_info_.table_filters_))) {
+      LOG_WARN("failed to assign filters array", K(ret));
+    } else if (OB_FAIL(index_range_conds_.prepare_allocate(index_merge_path->index_cnt_)) ||
+               OB_FAIL(index_filters_.prepare_allocate(index_merge_path->index_cnt_))) {
       LOG_WARN("failed to prepare allocate index range filters", K(ret));
-    } else if (OB_FAIL(set_index_table_scan_filters(root_path->root_))) {
+    } else if (OB_FAIL(set_index_table_scan_filters(index_merge_path->root_))) {
       LOG_WARN("failed to set index table scan filters", K(ret));
     }
   }
@@ -1328,10 +1409,10 @@ int ObLogTableScan::set_index_merge_scan_filters(const AccessPath *path)
 int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || !node->is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KPC(node));
-  } else if (node->is_leaf_node_) {
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KPC(node));
+  } else if (node->is_scan_node()) {
     bool is_get = false;
     ObOptimizerContext *opt_ctx = nullptr;
     ObSqlSchemaGuard *schema_guard = nullptr;
@@ -1356,8 +1437,8 @@ int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(is_table_get(is_get))) {
       LOG_WARN("failed to check is table get", K(ret));
-    } else if ((index_schema->is_ordered() || is_get) && NULL != ap->pre_query_range_) {
-      const ObIArray<ObRawExpr *> &range_exprs = ap->pre_query_range_->get_range_exprs();
+    } else if ((index_schema->is_ordered() || is_get) && NULL != ap->get_query_range_provider()) {
+      const ObIArray<ObRawExpr *> &range_exprs = ap->get_query_range_provider()->get_range_exprs();
       ObArray<ObRawExpr *> scan_pushdown_filters;
       ObArray<bool> filter_before_index_back;
       ObArray<uint64_t> index_column_ids;
@@ -1396,26 +1477,28 @@ int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
           if (scan_pushdown_filters.at(i) == range_exprs.at(j)) {
             //有重复表达式，忽略掉
             found_expr = true;
-          } else { /* Do nothing */ }
+          } else { /* do nothing */ }
         }
         // for virtual table, even if we extract query range, we need to maintain the condition into the filter
         if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
-          if (OB_FAIL(index_filters_.at(node->idx_).push_back(scan_pushdown_filters.at(i)))) {
+          if (OB_FAIL(index_filters_.at(node->scan_node_idx_).push_back(scan_pushdown_filters.at(i)))) {
             LOG_WARN("add filter expr failed", KPC(node), K(ret));
-          } else { /* Do nothing */ }
+          } else { /* do nothing */ }
         }
         if (OB_SUCC(ret) && found_expr) {
-          if (OB_FAIL(index_range_conds_.at(node->idx_).push_back(scan_pushdown_filters.at(i)))) {
+          if (OB_FAIL(index_range_conds_.at(node->scan_node_idx_).push_back(scan_pushdown_filters.at(i)))) {
             LOG_WARN("failed to push back expr", K(ret));
-          } else { /*do nothing*/}
+          } else { /* do nothing */}
         }
       } //end for
     }
-  } else if (OB_FAIL(SMART_CALL(set_index_table_scan_filters(node->left_node_))) ||
-             OB_FAIL(SMART_CALL(set_index_table_scan_filters(node->right_node_)))) {
-    LOG_WARN("failed to set index table filters", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(set_index_table_scan_filters(node->children_.at(i))))) {
+        LOG_WARN("failed to set index table filters", K(ret));
+      }
+    }
   }
-
   return ret;
 }
 
@@ -2235,6 +2318,8 @@ int ObLogTableScan::print_range_annotation(char *buf,
           } else { /* Do nothing */ }
         }
       }
+      const ObIArray<ObRawExpr*> &lookup_filter = full_filters_;
+      EXPLAIN_PRINT_EXPRS(lookup_filter, type);
     }
   } else {
     ObArray<ObRawExpr *> range_key;
@@ -2475,6 +2560,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
     const LogTableHint *table_hint = plan_hint.get_log_table_hint(table_id_);
     const ObHint *hint = plan_hint.get_normal_hint(T_USE_LATE_MATERIALIZATION);
     int64_t idx = OB_INVALID_INDEX;
+    bool is_match_union_match_hint = false;
     if (NULL != hint
         && ((need_late_materialization() && hint->is_enable_hint()) ||
             (!need_late_materialization() && hint->is_disable_hint()))
@@ -2498,8 +2584,9 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
                && use_column_store() == table_hint->use_column_store_hint_->is_enable_hint()
                && OB_FAIL(table_hint->use_column_store_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print use column_store hint", K(ret));
-    } else if (NULL != table_hint->union_merge_hint_
-               && use_index_merge_by_hint() == table_hint->union_merge_hint_->is_enable_hint()
+    } else if (OB_FAIL(check_match_union_merge_hint(table_hint, is_match_union_match_hint))) {
+      LOG_WARN("failed to check match union merge hint", K(ret));
+    } else if (is_match_union_match_hint
                && OB_FAIL(table_hint->union_merge_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print use union merge hint", K(ret));
     } else if (table_hint->index_list_.empty()) {
@@ -3218,6 +3305,30 @@ int ObLogTableScan::get_func_lookup_calc_exprs(ObIArray<ObRawExpr *> &all_exprs)
   for (int64_t i = 0; OB_SUCC(ret) && i < lookup_tr_infos_.count(); ++i) {
     if (OB_FAIL(get_text_retrieval_calc_exprs(lookup_tr_infos_.at(i), all_exprs))) {
       LOG_WARN("failed to get text retrieval calc expr", K(ret), K(i), K(lookup_tr_infos_.at(i)));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogTableScan::extract_index_merge_access_exprs(ObIArray<ObRawExpr *> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_tr_infos_.count(); ++i) {
+    if (OB_FAIL(extract_text_retrieval_access_expr(merge_tr_infos_.at(i), all_exprs))) {
+      LOG_WARN("failed to extract text retrieval access expr", K(ret), K(i), K(merge_tr_infos_.at(i)));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogTableScan::get_index_merge_calc_exprs(ObIArray<ObRawExpr *> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_tr_infos_.count(); ++i) {
+    if (OB_FAIL(get_text_retrieval_calc_exprs(merge_tr_infos_.at(i), all_exprs))) {
+      LOG_WARN("failed to get text retrieval calc expr", K(ret), K(i), K(merge_tr_infos_.at(i)));
     }
   }
 
@@ -4376,6 +4487,19 @@ int ObLogTableScan::prepare_func_lookup_dep_exprs()
   return ret;
 }
 
+int ObLogTableScan::prepare_index_merge_dep_exprs()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_tr_infos_.count(); ++i) {
+    if (OB_FAIL(prepare_text_retrieval_dep_exprs(merge_tr_infos_.at(i)))) {
+      LOG_WARN("failed to prepare text retrieval dependent exprs",
+          K(ret), K(i), K(merge_tr_infos_.at(i)));
+    }
+  }
+
+  return ret;
+}
+
 int ObLogTableScan::get_card_without_filter(double &card)
 {
   int ret = OB_SUCCESS;
@@ -4609,19 +4733,49 @@ bool ObLogTableScan::use_index_merge() const
 {
   bool bret = false;
   if (OB_NOT_NULL(access_path_)) {
-    bret = access_path_->is_index_merge_;
+    bret = access_path_->is_index_merge_path();
   }
   return bret;
 }
 
-bool ObLogTableScan::use_index_merge_by_hint() const
+int ObLogTableScan::check_match_union_merge_hint(const LogTableHint *table_hint,
+                                                 bool &is_match) const
 {
-  bool bret = false;
-  if (use_index_merge()) {
-    bret = static_cast<IndexMergePath*>(access_path_)->force_used_by_hint_;
+  int ret = OB_SUCCESS;
+  const ObIndexMergeNode *root = NULL;
+  is_match = false;
+  if (OB_ISNULL(access_path_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null access path", K(ret), K(access_path_));
+  } else if (NULL == table_hint || NULL == table_hint->union_merge_hint_
+             || !access_path_->is_index_merge_path()) {
+    // do nothing
+  } else if (OB_ISNULL(root = static_cast<const IndexMergePath*>(access_path_)->root_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null index merge node", K(ret), KPC(access_path_));
+  } else if (root->children_.count() != table_hint->union_merge_list_.count()) {
+    // do nothing
+  } else {
+    is_match = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < root->children_.count(); ++i) {
+      const ObIndexMergeNode *child = root->children_.at(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null index merge node", K(ret), K(i), KPC(root));
+      } else if (!child->is_scan_node()) {
+        is_match = false;
+      } else if (OB_ISNULL(child->ap_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null access path", K(ret), KPC(child));
+      } else if (child->ap_->index_id_ != table_hint->union_merge_list_.at(i)) {
+        is_match = false;
+      }
+    }
   }
-  return bret;
+
+  return ret;
 }
+
 
 int ObLogTableScan::get_index_range_conds(int64_t idx, ObIArray<ObRawExpr *> &index_range_conds) const
 {
@@ -4652,15 +4806,14 @@ int ObLogTableScan::get_index_filters(int64_t idx, ObIArray<ObRawExpr *> &index_
 int ObLogTableScan::get_index_tids(ObIArray<ObTableID> &index_tids) const
 {
   int ret = OB_SUCCESS;
+  const ObIndexMergeNode* root_node = NULL;
   index_tids.reuse();
-  if (OB_ISNULL(access_path_) || !access_path_->is_index_merge_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected null index merge path", KPC(access_path_));
-  } else {
-    IndexMergePath *index_merge_path = static_cast<IndexMergePath*>(access_path_);
-    if (OB_FAIL(index_tids.assign(index_merge_path->index_table_ids_))) {
-      LOG_WARN("failed to assign index merge table ids", K(ret));
-    }
+  if (OB_ISNULL(access_path_) || OB_UNLIKELY(!access_path_->is_index_merge_path())
+      || OB_ISNULL(root_node = static_cast<IndexMergePath*>(access_path_)->root_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null index merge path", K(ret), KPC(access_path_));
+  } else if (OB_FAIL(root_node->get_all_index_ids(index_tids))) {
+    LOG_WARN("failed to get all index ids", K(ret));
   }
   return ret;
 }
@@ -4668,14 +4821,38 @@ int ObLogTableScan::get_index_tids(ObIArray<ObTableID> &index_tids) const
 int ObLogTableScan::get_index_name_list(ObIArray<ObString> &index_name_list) const
 {
   int ret = OB_SUCCESS;
+  const ObIndexMergeNode *root_node = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *index_schema = NULL;
   index_name_list.reuse();
-  if (OB_ISNULL(access_path_) || !access_path_->is_index_merge_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected null index merge path", KPC(access_path_));
-  } else {
-    IndexMergePath *index_merge_path = static_cast<IndexMergePath*>(access_path_);
-    if (OB_FAIL(index_name_list.assign(index_merge_path->index_name_list_))) {
-      LOG_WARN("failed to assign index merge table names", K(ret));
+  if (OB_ISNULL(access_path_) || OB_UNLIKELY(!access_path_->is_index_merge_path())
+      || OB_ISNULL(root_node = static_cast<const IndexMergePath*>(access_path_)->root_)
+      || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
+      || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL",K(ret), KPC(access_path_), KPC(root_node), K(get_plan()), K(get_stmt()), K(schema_guard));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < root_node->children_.count(); ++i) {
+    const ObIndexMergeNode *child_node = root_node->children_.at(i);
+    ObString index_name;
+    if (OB_ISNULL(child_node) || OB_ISNULL(child_node->ap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected NULL",K(ret), KPC(child_node), K(i));
+    } else if (ref_table_id_ == child_node->ap_->index_id_) {
+      index_name = ObIndexHint::PRIMARY_KEY;
+    } else if (OB_FAIL(schema_guard->get_table_schema(table_id_,
+                                                      child_node->ap_->index_id_,
+                                                      get_stmt(),
+                                                      index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(child_node->ap_->index_id_), K(i));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null schema",K(ret), K(child_node->ap_->index_id_), K(i));
+    } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
+      LOG_WARN("failed to get index name", K(ret), K(child_node->ap_->index_id_), K(i));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(index_name_list.push_back(index_name))) {
+      LOG_WARN("failed to push back index name", K(ret));
     }
   }
   return ret;

@@ -28,6 +28,8 @@
 #include "share/ob_ddl_sim_point.h"
 #include "share/restore/ob_import_util.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "share/ob_fts_index_builder_util.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
 
 namespace oceanbase
@@ -749,6 +751,16 @@ void ObDDLScheduler::DDLScanTask::runTimerTask()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ddl_scheduler_.recover_task())) {
     LOG_WARN("failed to recover ddl tasks", K(ret));
+  }
+
+  if (OB_FAIL(ObFtsIndexBuilderUtil::try_load_dictionary_for_all_tenants())) {
+    // overwrite ret
+    LOG_WARN("fail to load dictionary for all tenants", K(ret));
+  }
+
+  if (OB_FAIL(ObGenDicLoader::get_instance().destroy_dic_loader_for_tenant())) {
+    // overwrite ret
+    LOG_WARN("fail to destroy dic loader for some tenants", K(ret));
   }
 }
 
@@ -1809,6 +1821,8 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
+      LOG_WARN("fail to check supportability for building index", K(ret));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),

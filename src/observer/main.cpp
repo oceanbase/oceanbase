@@ -75,6 +75,7 @@ static void print_help()
   MPRINT("  -6,--ipv6 USE_IPV6       server use ipv6 address");
   MPRINT("  -m,--mode MODE server mode");
   MPRINT("  -f,--scn flashback_scn");
+  MPRINT("  -L,--plugins_load plugins to load");
 }
 
 static void print_version()
@@ -165,6 +166,7 @@ static void get_opts_setting(
       {"version", 'V', 0},
       {"ipv6", '6', 0},
       {"local_ip", 'I', 1},
+      {"plugins_load", 'L', 1},
   };
 
   size_t opts_cnt = sizeof(ob_opts) / sizeof(ob_opts[0]);
@@ -284,6 +286,11 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
   case 'I':
     MPRINT("local_ip: %s", value);
     opts.local_ip_ = value;
+    break;
+
+  case 'L':
+    MPRINT("plugins_load: %s", value);
+    opts.plugins_load_ = value;
     break;
 
   case 'h':

@@ -337,6 +337,7 @@ public:
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
   inline const ObString &get_parser_name() const { return parser_name_; }
+  inline const ObString &get_parser_property() const { return parser_properties_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
 
@@ -411,6 +412,7 @@ private:
   int64_t rowid_version_;
   Projector rowid_projector_;
   ObString parser_name_;
+  ObString parser_properties_;
   // if min cluster version < 4.1 use lob locator v1, else use lob locator v2.
   // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
   bool enable_lob_locator_v2_;

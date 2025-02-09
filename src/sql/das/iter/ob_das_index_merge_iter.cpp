@@ -19,14 +19,23 @@ using namespace common;
 namespace sql
 {
 
-int ObDASIndexMergeIter::RowStore::init(common::ObIAllocator &allocator)
+int ObDASIndexMergeIter::IndexMergeRowStore::init(common::ObIAllocator &allocator,
+                                                  const common::ObIArray<ObExpr*> *exprs,
+                                                  ObEvalCtx *eval_ctx,
+                                                  int64_t max_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(store_rows_ =
-      static_cast<LastDASStoreRow*>(allocator.alloc(max_size_ * sizeof(LastDASStoreRow))))) {
+  if (OB_ISNULL(exprs) || OB_ISNULL(eval_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr for init index merge row store", K(ret));
+  } else if (OB_ISNULL(store_rows_ =
+      static_cast<LastDASStoreRow*>(allocator.alloc(max_size * sizeof(LastDASStoreRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K_(max_size), K(ret));
+    LOG_WARN("failed to allocate memory", K(max_size), K(ret));
   } else {
+    exprs_ = exprs;
+    eval_ctx_ = eval_ctx;
+    max_size_ = max_size;
     for (int64_t i = 0; i < max_size_; i++) {
       new (store_rows_ + i) LastDASStoreRow(allocator);
       store_rows_[i].reuse_ = true;
@@ -36,7 +45,7 @@ int ObDASIndexMergeIter::RowStore::init(common::ObIAllocator &allocator)
   return ret;
 }
 
-int ObDASIndexMergeIter::RowStore::save(bool is_vectorized, int64_t size)
+int ObDASIndexMergeIter::IndexMergeRowStore::save(bool is_vectorized, int64_t size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(size > max_size_) || OB_ISNULL(store_rows_)) {
@@ -64,43 +73,38 @@ int ObDASIndexMergeIter::RowStore::save(bool is_vectorized, int64_t size)
   return ret;
 }
 
-int ObDASIndexMergeIter::RowStore::to_expr(bool is_vectorized, int64_t size)
+int ObDASIndexMergeIter::IndexMergeRowStore::to_expr()
 {
   int ret = OB_SUCCESS;
-  if (is_vectorized) {
-    if (cur_idx_ + size > saved_size_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument, exceeds saved size", K_(cur_idx), K(size), K_(saved_size), K(ret));
-    } else {
-      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
-      batch_info_guard.set_batch_size(size);
-      for (int64_t i = 0; OB_SUCC(ret) && i < size; i++) {
-        batch_info_guard.set_batch_idx(i);
-        OZ(store_rows_[cur_idx_ + i].store_row_->to_expr<true>(*exprs_, *eval_ctx_));
-      }
-      cur_idx_ += size;
-    }
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
+  batch_info_guard.set_batch_size(1);
+  batch_info_guard.set_batch_idx(0);
+  // use deep copy to avoid storage layer sanity check
+  if (OB_FAIL(store_rows_[cur_idx_].store_row_->to_expr<true>(*exprs_, *eval_ctx_))) {
+    LOG_WARN("index merge iter failed to convert store row to expr", K(ret));
   } else {
-    OZ(store_rows_[cur_idx_].store_row_->to_expr<false>(*exprs_, *eval_ctx_));
     cur_idx_++;
   }
-
   return ret;
 }
 
-const ObDatum *ObDASIndexMergeIter::RowStore::cur_datums()
+const ObDatum *ObDASIndexMergeIter::IndexMergeRowStore::cur_datums()
 {
-  OB_ASSERT(cur_idx_ < saved_size_);
-  return store_rows_ != nullptr ? store_rows_[cur_idx_].store_row_->cells() : nullptr;
+  const ObDatum *datums = nullptr;
+  if (OB_LIKELY(cur_idx_ < saved_size_) && OB_NOT_NULL(store_rows_) && OB_NOT_NULL(store_rows_[cur_idx_].store_row_)) {
+    datums = store_rows_[cur_idx_].store_row_->cells();
+  }
+  return datums;
 }
 
-void ObDASIndexMergeIter::RowStore::reuse()
+void ObDASIndexMergeIter::IndexMergeRowStore::reuse()
 {
   cur_idx_ = OB_INVALID_INDEX;
   saved_size_ = 0;
+  iter_end_ = false;
 }
 
-void ObDASIndexMergeIter::RowStore::reset()
+void ObDASIndexMergeIter::IndexMergeRowStore::reset()
 {
   if (OB_NOT_NULL(store_rows_)) {
     for (int64_t i = 0; i < max_size_; i++) {
@@ -113,6 +117,61 @@ void ObDASIndexMergeIter::RowStore::reset()
   max_size_ = 1;
   saved_size_ = 0;
   cur_idx_ = OB_INVALID_INDEX;
+  iter_end_ = false;
+}
+
+int ObDASIndexMergeIter::MergeResultBuffer::init(int64_t max_size,
+                                                 ObEvalCtx *eval_ctx,
+                                                 const common::ObIArray<ObExpr*> *exprs,
+                                                 common::ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(max_size <= 0) || OB_ISNULL(eval_ctx) || OB_ISNULL(exprs)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(max_size), K(eval_ctx), K(exprs), K(ret));
+  } else if (OB_FAIL(result_store_.init(UINT64_MAX, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID, "DASIndexMerge"))) {
+    LOG_WARN("failed to init result store", K(ret));
+  } else {
+    result_store_.set_allocator(alloc);
+    max_size_ = max_size;
+    eval_ctx_ = eval_ctx;
+    exprs_ = exprs;
+  }
+  return ret;
+}
+
+int ObDASIndexMergeIter::MergeResultBuffer::add_row()
+{
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
+  batch_info_guard.set_batch_size(1);
+  batch_info_guard.set_batch_idx(0);
+  return result_store_.add_row(*exprs_, eval_ctx_);
+}
+
+int ObDASIndexMergeIter::MergeResultBuffer::to_expr(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  int64_t read_size = 0;
+  if (OB_FAIL(result_store_.begin(result_store_iter_))) {
+    LOG_WARN("failed to begin iterate result store", K(ret));
+  } else if (OB_UNLIKELY(!(result_store_iter_.is_valid() && result_store_iter_.has_next()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected no available rows", K(ret));
+  } else if (OB_FAIL(result_store_iter_.get_next_batch<true>(*exprs_, *eval_ctx_, max_size_, read_size))) {
+    LOG_WARN("failed to get next batch from result store", K(ret));
+  } else if (OB_UNLIKELY(size != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected read size not equal to actually size", K(ret));
+  }
+  return ret;
+}
+
+void ObDASIndexMergeIter::MergeResultBuffer::reuse() { reset(); }
+
+void ObDASIndexMergeIter::MergeResultBuffer::reset()
+{
+  result_store_iter_.reset();
+  result_store_.reset();
 }
 
 int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
@@ -124,11 +183,7 @@ int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
   } else {
     ObDASIndexMergeIterParam &index_merge_param = static_cast<ObDASIndexMergeIterParam&>(param);
     merge_type_ = index_merge_param.merge_type_;
-    left_iter_ = index_merge_param.left_iter_;
-    right_iter_ = index_merge_param.right_iter_;
     rowkey_exprs_ = index_merge_param.rowkey_exprs_;
-    left_output_ = index_merge_param.left_output_;
-    right_output_ = index_merge_param.right_output_;
     get_next_row_ = (merge_type_ == INDEX_MERGE_UNION) ?
         &ObDASIndexMergeIter::union_get_next_row : &ObDASIndexMergeIter::intersect_get_next_row;
     get_next_rows_ = (merge_type_ == INDEX_MERGE_UNION) ?
@@ -138,43 +193,67 @@ int ObDASIndexMergeIter::inner_init(ObDASIterParam &param)
     tx_desc_ = index_merge_param.tx_desc_;
     snapshot_ = index_merge_param.snapshot_;
     is_reverse_ = index_merge_param.is_reverse_;
-    is_left_child_leaf_node_ = index_merge_param.is_left_child_leaf_node_;
-    if (is_left_child_leaf_node_) {
-      OB_ASSERT(merge_rtdef_->children_[0]->op_type_ == DAS_OP_TABLE_SCAN ||
-                (merge_rtdef_->children_[0]->op_type_ == DAS_OP_SORT &&
-                 merge_rtdef_->children_[0]->children_[0]->op_type_ == DAS_OP_TABLE_SCAN));
-      left_scan_rtdef_ = merge_rtdef_->children_[0]->op_type_ == DAS_OP_TABLE_SCAN ?
-          static_cast<ObDASScanRtDef*>(merge_rtdef_->children_[0]) :
-          static_cast<ObDASScanRtDef*>(merge_rtdef_->children_[0]->children_[0]);
-      OB_ASSERT(left_scan_rtdef_ != nullptr);
-      left_scan_ctdef_ = static_cast<const ObDASScanCtDef*>(left_scan_rtdef_->ctdef_);
-    }
-    OB_ASSERT(merge_rtdef_->children_[1]->op_type_ == DAS_OP_TABLE_SCAN ||
-              (merge_rtdef_->children_[1]->op_type_ == DAS_OP_SORT &&
-               merge_rtdef_->children_[1]->children_[0]->op_type_ == DAS_OP_TABLE_SCAN));
-    right_scan_rtdef_ = merge_rtdef_->children_[1]->op_type_ == DAS_OP_TABLE_SCAN ?
-        static_cast<ObDASScanRtDef*>(merge_rtdef_->children_[1]) :
-        static_cast<ObDASScanRtDef*>(merge_rtdef_->children_[1]->children_[0]);
-    OB_ASSERT(right_scan_rtdef_ != nullptr);
-    right_scan_ctdef_ = static_cast<const ObDASScanCtDef*>(right_scan_rtdef_->ctdef_);
 
     lib::ContextParam context_param;
     context_param.set_mem_attr(MTL_ID(), "DASIndexMerge", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_ctx_, context_param))) {
+    if (OB_UNLIKELY(merge_type_ != INDEX_MERGE_UNION)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid merge type", K(merge_type_));
+    } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_ctx_, context_param))) {
       LOG_WARN("failed to create index merge memctx", K(ret));
     } else {
-      const common::ObIArray<ObExpr*> *left_exprs = (merge_type_ == INDEX_MERGE_UNION) ?
-          rowkey_exprs_ : left_output_;
-      const common::ObIArray<ObExpr*> *right_exprs = (merge_type_ == INDEX_MERGE_UNION) ?
-          rowkey_exprs_ : right_output_;
       common::ObArenaAllocator &alloc = mem_ctx_->get_arena_allocator();
-      if (OB_ISNULL(left_row_store_ = OB_NEWx(RowStore, &alloc, left_exprs, eval_ctx_, max_size_)) ||
-          OB_ISNULL(right_row_store_ = OB_NEWx(RowStore, &alloc, right_exprs, eval_ctx_, max_size_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate row store", K(max_size_), K(ret));
-      } else if (OB_FAIL(left_row_store_->init(alloc)) || OB_FAIL(right_row_store_->init(alloc))) {
-        LOG_WARN("failed to init row store", K(ret));
+      child_iters_.set_allocator(&alloc);
+      child_stores_.set_allocator(&alloc);
+      child_scan_rtdefs_.set_allocator(&alloc);
+      child_scan_params_.set_allocator(&alloc);
+      child_tablet_ids_.set_allocator(&alloc);
+      child_match_against_exprs_.set_allocator(&alloc);
+      int64_t child_cnt = index_merge_param.child_iters_->count();
+      if (OB_FAIL(child_iters_.assign(*index_merge_param.child_iters_))) {
+        LOG_WARN("failed to assign child iters", K(ret));
+      } else if (OB_FAIL(child_scan_rtdefs_.assign(*index_merge_param.child_scan_rtdefs_))) {
+        LOG_WARN("failed to assign child scan rtdefs", K(ret));
+      } else if (OB_FAIL(child_stores_.prepare_allocate(child_cnt))) {
+        LOG_WARN("failed to prepare allocate child stores", K(ret));
+      } else if (OB_FAIL(child_scan_params_.prepare_allocate(child_cnt))) {
+        LOG_WARN("failed to prepare allocate child scan params", K(ret));
+      } else if (OB_FAIL(child_tablet_ids_.prepare_allocate(child_cnt))) {
+        LOG_WARN("failed to prepare allocate child tablet ids", K(ret));
+      } else if (OB_FAIL(child_match_against_exprs_.prepare_allocate(child_cnt))) {
+        LOG_WARN("failed to prepare allocate child match against exprs", K(ret));
+      } else {
+        ObArray<ObExpr*> match_against_exprs;
+        for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; i++) {
+          ObDASIter *child = child_iters_.at(i);
+          IndexMergeRowStore &row_store = child_stores_.at(i);
+          ObDASScanRtDef *child_scan_rtdef = child_scan_rtdefs_.at(i);
+          ObTableScanParam *&child_scan_param = child_scan_params_.at(i);
+          ExprFixedArray &child_match_against_expr = child_match_against_exprs_.at(i);
+          if (OB_ISNULL(child) || OB_ISNULL(child->get_output())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid child iter", K(i), K(child), K(ret));
+          } else if (OB_FAIL(row_store.init(alloc, child->get_output(), eval_ctx_, max_size_))) {
+            LOG_WARN("failed to init row store", K(ret));
+          } else if (OB_FAIL(extract_match_against_exprs(*child->get_output(), match_against_exprs))) {
+            LOG_WARN("failed to extract match against exprs", K(ret));
+          } else if (FALSE_IT(child_match_against_expr.set_allocator(&alloc))) {
+          } else if (OB_FAIL(child_match_against_expr.assign(match_against_exprs))) {
+            LOG_WARN("failed to assign match against exprs", K(ret));
+          } else if (child_scan_rtdef != nullptr) {
+            // need to prepare scan param for normal scan node
+            if (OB_ISNULL(child_scan_param = OB_NEWx(ObTableScanParam, &alloc))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate child scan param", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(result_buffer_.init(max_size_, eval_ctx_, output_, mem_ctx_->get_malloc_allocator()))) {
+            LOG_WARN("failed to init merge result buffer", K(ret));
+          }
+        }
       }
     }
   }
@@ -198,7 +277,7 @@ int ObDASIndexMergeIter::init_scan_param(const share::ObLSID &ls_id,
     scan_param.ss_key_ranges_.set_attr(ObMemAttr(tenant_id, "ScanParamSSKR"));
     scan_param.tx_lock_timeout_ = rtdef->tx_lock_timeout_;
     scan_param.index_id_ = ctdef->ref_table_id_;
-    scan_param.is_get_ = false; // scan
+    scan_param.is_get_ = ctdef->is_get_;
     scan_param.is_for_foreign_check_ = false;
     scan_param.timeout_ = rtdef->timeout_ts_;
     scan_param.scan_flag_ = rtdef->scan_flag_;
@@ -283,59 +362,115 @@ void ObDASIndexMergeIter::reset_datum_ptr(const common::ObIArray<ObExpr*> *exprs
   }
 }
 
+int ObDASIndexMergeIter::extract_match_against_exprs(const common::ObIArray<ObExpr*> &exprs,
+                                                     common::ObIArray<ObExpr*> &match_against_exprs)
+{
+  int ret = OB_SUCCESS;
+  match_against_exprs.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr expr", K(ret));
+    } else if (T_FUN_MATCH_AGAINST == expr->type_) {
+      if (OB_FAIL(match_against_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back match against expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeIter::fill_default_values_for_union(const common::ObIArray<ObExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr) || OB_UNLIKELY(T_FUN_MATCH_AGAINST != expr->type_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid expr to fill default value", KP(expr), K(ret));
+    } else {
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
+      batch_info_guard.set_batch_size(1);
+      batch_info_guard.set_batch_idx(0);
+      ObDatum &datum = expr->locate_datum_for_write(*eval_ctx_);
+      datum.set_double(0.0);
+      expr->set_evaluated_flag(*eval_ctx_);
+      expr->set_evaluated_projected(*eval_ctx_);
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeIter::save_row_to_result_buffer()
+{
+  return result_buffer_.add_row();
+}
+
 int ObDASIndexMergeIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  if (is_left_child_leaf_node_) {
-    OB_ASSERT(left_scan_ctdef_ != nullptr && left_scan_rtdef_ != nullptr);
-    if (OB_FAIL(init_scan_param(ls_id_, left_tablet_id_, left_scan_ctdef_, left_scan_rtdef_, left_scan_param_))) {
-      LOG_WARN("failed to init left scan param", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
+    ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
+    ObDASIter *iter = child_iters_.at(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr iter", K(ret));
+    } else if (scan_rtdef != nullptr) {
+      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+      ObTableScanParam *scan_param = child_scan_params_.at(i);
+      if (OB_ISNULL(scan_ctdef) || OB_ISNULL(scan_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr child scan info", K(scan_ctdef), K(scan_param), K(ret));
+      } else if (OB_FAIL(init_scan_param(ls_id_, child_tablet_ids_.at(i), scan_ctdef, scan_rtdef, *scan_param))) {
+        LOG_WARN("failed to init child scan param", K(ret));
+      } else if (OB_FAIL(iter->do_table_scan())) {
+        LOG_WARN("child iter failed to do table scan", K(ret));
+      }
+    } else if (OB_FAIL(iter->do_table_scan())) {
+      LOG_WARN("child iter failed to do table scan", K(ret));
     }
   }
-
-  if (OB_SUCC(ret)) {
-    OB_ASSERT(right_scan_ctdef_ != nullptr && right_scan_rtdef_ != nullptr);
-    if (OB_FAIL(init_scan_param(ls_id_, right_tablet_id_, right_scan_ctdef_, right_scan_rtdef_, right_scan_param_))) {
-      LOG_WARN("failed to init right scan param", K(ret));
-    } else if (OB_FAIL(left_iter_->do_table_scan())) {
-      LOG_WARN("left iter failed to do table scan", K(ret));
-    } else if (OB_FAIL(right_iter_->do_table_scan())) {
-      LOG_WARN("right iter failed to do table scan", K(ret));
-    }
-  }
-
   return ret;
 }
 
 int ObDASIndexMergeIter::rescan()
 {
   int ret = OB_SUCCESS;
-  if (is_left_child_leaf_node_) {
-    left_scan_param_.tablet_id_ = left_tablet_id_;
-    left_scan_param_.ls_id_ = ls_id_;
-    if (OB_FAIL(prepare_scan_ranges(left_scan_param_, left_scan_rtdef_))) {
-      LOG_WARN("failed to prepare left rescan ranges", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
+    ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
+    ObDASIter *iter = child_iters_.at(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr iter", K(ret));
+    } else if (scan_rtdef != nullptr) {
+      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+      ObTableScanParam *scan_param = child_scan_params_.at(i);
+      if (OB_ISNULL(scan_ctdef) || OB_ISNULL(scan_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr child scan info", K(scan_ctdef), K(scan_param), K(ret));
+      } else {
+        scan_param->tablet_id_ = child_tablet_ids_.at(scan_ctdef->index_merge_idx_);
+        scan_param->ls_id_ = ls_id_;
+        if (OB_FAIL(prepare_scan_ranges(*scan_param, scan_rtdef))) {
+          LOG_WARN("failed to prepare scan ranges", K(ret));
+        } else if (OB_FAIL(iter->rescan())) {
+          LOG_WARN("child iter failed to rescan", K(ret));
+        }
+      }
+    } else if (OB_FAIL(iter->rescan())) {
+      LOG_WARN("child iter failed to rescan", K(ret));
     }
-  }
-  right_scan_param_.tablet_id_ = right_tablet_id_;
-  right_scan_param_.ls_id_ = ls_id_;
-  if (FAILEDx(prepare_scan_ranges(right_scan_param_, right_scan_rtdef_))) {
-    LOG_WARN("failed to prepare right rescan ranges", K(ret));
-  } else if (OB_FAIL(left_iter_->rescan())) {
-    LOG_WARN("left iter failed to rescan", K(ret));
-  } else if (OB_FAIL(right_iter_->rescan())) {
-    LOG_WARN("left iter failed to rescan", K(ret));
   }
   return ret;
 }
 
 void ObDASIndexMergeIter::clear_evaluated_flag()
 {
-  if (OB_NOT_NULL(left_iter_)) {
-    left_iter_->clear_evaluated_flag();
-  }
-  if (OB_NOT_NULL(right_iter_)) {
-    right_iter_->clear_evaluated_flag();
+  for (int64_t i = 0; i < child_iters_.count(); ++i) {
+    if (OB_NOT_NULL(child_iters_.at(i))) {
+      child_iters_.at(i)->clear_evaluated_flag();
+    }
   }
 }
 
@@ -343,71 +478,85 @@ int ObDASIndexMergeIter::set_ls_tablet_ids(const ObLSID &ls_id, const ObDASRelat
 {
   int ret = OB_SUCCESS;
   ls_id_ = ls_id;
-  if (is_left_child_leaf_node_) {
-    OB_ASSERT(left_scan_ctdef_ != nullptr);
-    left_tablet_id_ = related_tablet_ids.index_merge_tablet_ids_.at(left_scan_ctdef_->index_merge_idx_);
+  const ObIArray<ObTabletID> &index_merge_tablet_ids = related_tablet_ids.index_merge_tablet_ids_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
+    ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
+    if (scan_rtdef != nullptr) {
+      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+      if (OB_ISNULL(scan_ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr scan ctdef", K(ret));
+      } else {
+        child_tablet_ids_.at(i) = index_merge_tablet_ids.at(scan_ctdef->index_merge_idx_);
+      }
+    }
   }
-  OB_ASSERT(right_scan_ctdef_ != nullptr);
-  right_tablet_id_ = related_tablet_ids.index_merge_tablet_ids_.at(right_scan_ctdef_->index_merge_idx_);
   return ret;
 }
 
 int ObDASIndexMergeIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
-  if (is_left_child_leaf_node_) {
-    const ObTabletID &old_left_tablet_id = left_scan_param_.tablet_id_;
-    left_scan_param_.need_switch_param_ = left_scan_param_.need_switch_param_ ||
-        (old_left_tablet_id.is_valid() && old_left_tablet_id != left_tablet_id_);
-    left_scan_param_.key_ranges_.reuse();
-    left_scan_param_.ss_key_ranges_.reuse();
-    left_scan_param_.mbr_filters_.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_scan_rtdefs_.count(); ++i) {
+    ObDASScanRtDef *scan_rtdef = child_scan_rtdefs_.at(i);
+    ObDASIter *iter = child_iters_.at(i);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr iter", K(ret));
+    } else if (scan_rtdef != nullptr) {
+      const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+      ObTableScanParam *scan_param = child_scan_params_.at(i);
+      if (OB_ISNULL(scan_ctdef) || OB_ISNULL(scan_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr child scan info", K(scan_ctdef), K(scan_param), K(ret));
+      } else {
+        const ObTabletID &new_tablet_id = child_tablet_ids_.at(scan_ctdef->index_merge_idx_);
+        const ObTabletID &old_tablet_id = scan_param->tablet_id_;
+        scan_param->need_switch_param_ = scan_param->need_switch_param_ ||
+            (old_tablet_id.is_valid() && old_tablet_id != new_tablet_id);
+        scan_param->key_ranges_.reuse();
+        scan_param->ss_key_ranges_.reuse();
+        scan_param->mbr_filters_.reuse();
+        if (OB_FAIL(iter->reuse())) {
+          LOG_WARN("child iter failed to reuse", K(ret));
+        }
+      }
+    } else if (OB_FAIL(iter->reuse())) {
+      LOG_WARN("child iter failed to reuse", K(ret));
+    }
   }
-  const ObTabletID &old_right_tablet_id = right_scan_param_.tablet_id_;
-  right_scan_param_.need_switch_param_ = right_scan_param_.need_switch_param_ ||
-      (old_right_tablet_id.is_valid() && old_right_tablet_id != right_tablet_id_);
-  right_scan_param_.key_ranges_.reuse();
-  right_scan_param_.ss_key_ranges_.reuse();
-  right_scan_param_.mbr_filters_.reuse();
-
-  if (OB_FAIL(left_iter_->reuse())) {
-    LOG_WARN("index merge iter failed to reuse left iter", K(ret));
-  } else if (OB_FAIL(right_iter_->reuse())) {
-    LOG_WARN("index merge iter failed to reuse right iter", K(ret));
+  for (int64_t i = 0; i < child_stores_.count(); ++i) {
+    child_stores_.at(i).reuse();
   }
-  if (OB_NOT_NULL(left_row_store_)) {
-    left_row_store_->reuse();
-  }
-  if (OB_NOT_NULL(right_row_store_)) {
-    right_row_store_->reuse();
-  }
-  left_iter_end_ = false;
-  right_iter_end_ = false;
-  state_ = FILL_LEFT_ROW;
-
+  result_buffer_.reuse();
   return ret;
 }
 
 int ObDASIndexMergeIter::inner_release()
 {
+
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(left_row_store_)) {
-    left_row_store_->reset();
-    left_row_store_ = nullptr;
+  child_iters_.reset();
+  child_scan_rtdefs_.reset();
+  child_tablet_ids_.reset();
+  for (int64_t i = 0; i < child_stores_.count(); ++i) {
+    child_stores_.at(i).reset();
   }
-  if (OB_NOT_NULL(right_row_store_)) {
-    right_row_store_->reset();
-    right_row_store_ = nullptr;
+  child_stores_.reset();
+  for (int64_t i = 0; i < child_scan_params_.count(); ++i) {
+    ObTableScanParam *scan_param = child_scan_params_.at(i);
+    if (scan_param != nullptr) {
+      scan_param->destroy_schema_guard();
+      scan_param->snapshot_.reset();
+      scan_param->destroy();
+    }
   }
-  left_iter_end_ = false;
-  right_iter_end_ = false;
-  left_scan_param_.destroy_schema_guard();
-  left_scan_param_.snapshot_.reset();
-  left_scan_param_.destroy();
-  right_scan_param_.destroy_schema_guard();
-  right_scan_param_.snapshot_.reset();
-  right_scan_param_.destroy();
-  if (OB_NOT_NULL(mem_ctx_))  {
+  for (int64_t i = 0; i < child_match_against_exprs_.count(); ++i) {
+    child_match_against_exprs_.at(i).reset();
+  }
+  child_match_against_exprs_.reset();
+  result_buffer_.reset();
+  if (OB_NOT_NULL(mem_ctx_)) {
     mem_ctx_->reset_remain_one_page();
     DESTROY_CONTEXT(mem_ctx_);
     mem_ctx_ = nullptr;
@@ -443,39 +592,41 @@ int ObDASIndexMergeIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   return ret;
 }
 
-int ObDASIndexMergeIter::compare(int &cmp_ret)
+int ObDASIndexMergeIter::compare(int64_t cur_idx, int64_t &output_idx, int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(left_row_store_) ||
-      OB_ISNULL(right_row_store_) ||
-      !left_row_store_->have_data() ||
-      !right_row_store_->have_data()) {
+  cmp_ret = 0;
+  if (cur_idx == OB_INVALID_INDEX || !child_stores_.at(cur_idx).have_data()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KPC_(left_row_store), KPC_(right_row_store));
+    LOG_WARN("invalid idx", K(cur_idx), K(ret));
+  } else if (output_idx == OB_INVALID_INDEX) {
+    output_idx = cur_idx;
   } else {
-    const ObDatum *left_datums = left_row_store_->cur_datums();
-    const ObDatum *right_datums = right_row_store_->cur_datums();
-    if (OB_ISNULL(left_datums) || OB_ISNULL(right_datums)) {
+    const ObDatum *cur_datums = child_stores_.at(cur_idx).cur_datums();
+    const ObDatum *output_datums = child_stores_.at(output_idx).cur_datums();
+    if (OB_ISNULL(cur_datums) || OB_ISNULL(output_datums)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", K(left_datums), K(right_datums));
+      LOG_WARN("unexpected nullptr", K(cur_datums), K(output_datums));
     }
-    bool end_compare = false;
-    ObObj left_obj;
-    ObObj right_obj;
-    for (int64_t i = 0; !end_compare && OB_SUCC(ret) && i < rowkey_exprs_->count(); i++) {
+    ObObj cur_obj;
+    ObObj output_obj;
+    for (int64_t i = 0; (cmp_ret == 0) && OB_SUCC(ret) && i < rowkey_exprs_->count(); i++) {
       const ObExpr *expr = rowkey_exprs_->at(i);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
-      } else if (OB_FAIL(left_datums[i].to_obj(left_obj, expr->obj_meta_, expr->obj_datum_map_))) {
+      } else if (OB_FAIL(cur_datums[i].to_obj(cur_obj, expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("failed to convert left datum to obj", K(i), KPC(expr), K(ret));
-      } else if (OB_FAIL(right_datums[i].to_obj(right_obj, expr->obj_meta_, expr->obj_datum_map_))) {
+      } else if (OB_FAIL(output_datums[i].to_obj(output_obj, expr->obj_meta_, expr->obj_datum_map_))) {
         LOG_WARN("failed to convert right datum to obj", K(i), KPC(expr), K(ret));
-      } else if (OB_FAIL(left_obj.check_collation_free_and_compare(right_obj, cmp_ret))) {
+      } else if (OB_FAIL(cur_obj.check_collation_free_and_compare(output_obj, cmp_ret))) {
           LOG_WARN("failed to compare cur obj with output obj", K(ret));
       } else if (cmp_ret != 0) {
-        end_compare =  true;
-        cmp_ret = OB_UNLIKELY(is_reverse_) ? -cmp_ret : cmp_ret;
+        if (cmp_ret < 0) {
+          output_idx = OB_UNLIKELY(is_reverse_) ? output_idx : cur_idx;
+        } else {
+          output_idx = OB_UNLIKELY(is_reverse_) ? cur_idx : output_idx;
+        }
       }
     }
   }
@@ -485,86 +636,72 @@ int ObDASIndexMergeIter::compare(int &cmp_ret)
 int ObDASIndexMergeIter::intersect_get_next_row()
 {
   int ret = OB_SUCCESS;
-  bool got_next_row = false;
-  do {
-    switch(state_) {
-      case FILL_LEFT_ROW: {
-        while (OB_SUCC(ret) && !left_iter_end_ && !left_row_store_->have_data()) {
-          if (OB_FAIL(left_iter_->get_next_row())) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next row from left iter", K(ret));
-            } else {
-              left_iter_end_ = true;
-              ret = OB_SUCCESS;
-            }
-          } else if (OB_FAIL(left_row_store_->save(false, 1))) {
-            LOG_WARN("failed to save left row", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = left_iter_end_ ? FINISHED : FILL_RIGHT_ROW;
-        }
-        break;
-      }
-
-      case FILL_RIGHT_ROW: {
-        while (OB_SUCC(ret) && !right_iter_end_ && !right_row_store_->have_data()) {
-          if (OB_FAIL(right_iter_->get_next_row())) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next row from right iter", K(ret));
-            } else {
-              right_iter_end_ = true;
-              ret = OB_SUCCESS;
-            }
-          } else if (OB_FAIL(right_row_store_->save(false, 1))) {
-            LOG_WARN("failed to save right row", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = right_iter_end_ ? FINISHED : MERGE_AND_OUTPUT;
-        }
-        break;
-      }
-
-      case MERGE_AND_OUTPUT: {
-        if (OB_SUCC(ret)) {
-          int cmp_ret = 0;
-          if (!left_row_store_->have_data() || !left_row_store_->have_data()) {
+  bool got_row = false;
+  while (OB_SUCC(ret) && !got_row) {
+      /* try to fill each child store */
+    int64_t output_idx = OB_INVALID_INDEX;
+    int cmp_ret = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+      IndexMergeRowStore &child_store = child_stores_.at(i);
+      if (!child_store.have_data()) {
+        if (!child_store.iter_end_) {
+          ObDASIter *child_iter = child_iters_.at(i);
+          if (OB_ISNULL(child_iter)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected no data in left_row or right_row", K_(left_row_store), K_(right_row_store));
-          } else if (OB_FAIL(compare(cmp_ret))) {
-            LOG_WARN("failed to compare left row and right row", K(ret));
-          } else if (cmp_ret > 0) {
-            state_ = FILL_RIGHT_ROW;
-          } else if (cmp_ret < 0) {
-            state_ = FILL_LEFT_ROW;
-          } else {
-            if (OB_FAIL(left_row_store_->to_expr(false, 1))) {
-              LOG_WARN("failed to convert left store row to expr", K(ret));
-            } else if (OB_FAIL(right_row_store_->to_expr(false, 1))) {
-              LOG_WARN("failed to convert right store row to expr", K(ret));
+            LOG_WARN("unexpected nullptr", K(i));
+          } else if (OB_FAIL(child_iter->get_next_row())) {
+            if (OB_ITER_END == ret) {
+              child_store.iter_end_ = true;
+              ret = OB_SUCCESS;
             } else {
-              state_ = FILL_LEFT_ROW;
-              got_next_row = true;
+              LOG_WARN("failed to get next row from child iter", K(ret));
             }
+          } else if (OB_FAIL(child_store.save(false, 1))) {
+            LOG_WARN("failed to save child row", K(ret));
+          } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+            LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
           }
         }
-        break;
-      }
-
-      case FINISHED: {
-        ret = OB_ITER_END;
-        break;
-      }
-
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index merge state", K_(state));
+      } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+        LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
       }
     }
-  } while (!got_next_row && OB_SUCC(ret));
+
+    if (OB_FAIL(ret)) {
+    } else if (output_idx == OB_INVALID_INDEX) {
+      /* no available row, stop the entire process */
+      ret = OB_ITER_END;
+    } else {
+      /* find all available rows */
+      bool all_matched = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+        if (output_idx == i) {
+          /* skip */
+        } else if (child_stores_.at(i).iter_end_ || !child_stores_.at(i).have_data()) {
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+            LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+        } else if (cmp_ret == 0) {
+          // FIXME: only one store will project data in intersect get next row(s).
+          child_stores_.at(i).cur_idx_++;
+        } else {
+          all_matched = false;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (all_matched) {
+          /* found available row in each child store, output */
+          if (OB_FAIL(child_stores_.at(output_idx).to_expr())) {
+            LOG_WARN("index merge failed to convert row to expr", K(ret));
+          } else {
+            got_row = true;
+          }
+        } else {
+          child_stores_.at(output_idx).cur_idx_++;
+        }
+      }
+    }
+  }
 
   return ret;
 }
@@ -572,95 +709,80 @@ int ObDASIndexMergeIter::intersect_get_next_row()
 int ObDASIndexMergeIter::intersect_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  bool got_next_rows = false;
-  int64_t left_count = 0;
-  int64_t right_count = 0;
-  do {
-    switch(state_) {
-      case FILL_LEFT_ROW: {
-        while (OB_SUCC(ret) && !left_iter_end_ && !left_row_store_->have_data()) {
-          if (OB_FAIL(left_iter_->get_next_rows(left_count, capacity))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next rows from left iter", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-              if (left_count == 0) {
-                left_iter_end_ = true;
-              }
-            }
-          }
-          if (OB_SUCC(ret) && !left_iter_end_ && OB_FAIL(left_row_store_->save(true, left_count))) {
-            LOG_WARN("failed to save left rows", K(left_count), K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = left_iter_end_ ? FINISHED : FILL_RIGHT_ROW;
-        }
-        break;
-      }
-
-      case FILL_RIGHT_ROW: {
-        while (OB_SUCC(ret) && !right_iter_end_ && !right_row_store_->have_data()) {
-          if (OB_FAIL(right_iter_->get_next_rows(right_count, capacity))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next rows from right iter", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-              if (right_count == 0) {
-                right_iter_end_ = true;
-              }
-            }
-          }
-          if (OB_SUCC(ret) && !right_iter_end_ && OB_FAIL(right_row_store_->save(true, right_count))) {
-            LOG_WARN("failed to save right rows", K(right_count), K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = right_iter_end_ ? FINISHED : MERGE_AND_OUTPUT;
-        }
-        break;
-      }
-
-      case MERGE_AND_OUTPUT: {
-        if (OB_SUCC(ret)) {
-          int cmp_ret = 0;
-          if (!left_row_store_->have_data()) {
-            state_ = FILL_LEFT_ROW;
-          } else if (!right_row_store_->have_data()) {
-            state_ = FILL_RIGHT_ROW;
-          } else if (OB_FAIL(compare(cmp_ret))) {
-            LOG_WARN("failed to compare left row and right row", K(ret));
-          } else if (cmp_ret > 0) {
-            state_ = FILL_RIGHT_ROW;
-          } else if (cmp_ret < 0) {
-            state_ = FILL_LEFT_ROW;
+  bool got_row = false;
+  while (OB_SUCC(ret) && count < capacity) {
+      /* try to fill each child store */
+    int64_t output_idx = OB_INVALID_INDEX;
+    int cmp_ret = 0;
+    int64_t child_rows_cnt = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+      IndexMergeRowStore &child_store = child_stores_.at(i);
+      if (!child_store.have_data()) {
+        if (!child_store.iter_end_) {
+          ObDASIter *child_iter = child_iters_.at(i);
+          if (OB_ISNULL(child_iter)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr", K(i));
           } else {
-            if (OB_FAIL(left_row_store_->to_expr(false, 1))) {
-              LOG_WARN("failed to convert left store row to expr", K(ret));
-            } else if (OB_FAIL(right_row_store_->to_expr(false, 1))) {
-              LOG_WARN("failed to convert right store row to expr", K(ret));
+            ret = child_iter->get_next_rows(child_rows_cnt, capacity);
+            if (OB_ITER_END == ret && child_rows_cnt > 0) {
+              ret = OB_SUCCESS;
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(child_store.save(true, child_rows_cnt))) {
+                LOG_WARN("failed to save child rows", K(child_rows_cnt), K(ret));
+              } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+                LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+              } else if (child_iter->get_type() == DAS_ITER_SORT) {
+                reset_datum_ptr(child_iter->get_output(), child_rows_cnt);
+              }
+            } else if (OB_ITER_END == ret) {
+              child_store.iter_end_ = true;
+              ret = OB_SUCCESS;
             } else {
-              count = 1;
-              got_next_rows = true;
+              LOG_WARN("failed to get next rows from child iter", K(ret));
             }
           }
         }
-        break;
-      }
-
-      case FINISHED: {
-        ret = OB_ITER_END;
-        break;
-      }
-
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index merge state", K_(state));
+      } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+        LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
       }
     }
-  } while (!got_next_rows && OB_SUCC(ret));
+
+    if (OB_FAIL(ret)) {
+    } else if (output_idx == OB_INVALID_INDEX) {
+      /* no available row, stop the entire process */
+      ret = OB_ITER_END;
+    } else {
+      /* find all available rows */
+      bool all_matched = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+        if (output_idx == i) {
+          /* skip */
+        } else if (child_stores_.at(i).iter_end_ || !child_stores_.at(i).have_data()) {
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+            LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+        } else if (cmp_ret == 0) {
+          child_stores_.at(i).cur_idx_++;
+        } else {
+          all_matched = false;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (all_matched) {
+          /* found available row in each child store, output */
+          if (OB_FAIL(child_stores_.at(output_idx).to_expr())) {
+            LOG_WARN("index merge failed to convert row to expr", K(ret));
+          } else {
+            count += 1;
+          }
+        } else {
+          child_stores_.at(output_idx).cur_idx_++;
+        }
+      }
+    }
+  }
 
   return ret;
 }
@@ -668,263 +790,176 @@ int ObDASIndexMergeIter::intersect_get_next_rows(int64_t &count, int64_t capacit
 int ObDASIndexMergeIter::union_get_next_row()
 {
   int ret = OB_SUCCESS;
-  bool got_next_row = false;
-  do {
-    switch(state_) {
-      case FILL_LEFT_ROW: {
-        while (OB_SUCC(ret) && !left_iter_end_ && !left_row_store_->have_data()) {
-          if (OB_FAIL(left_iter_->get_next_row())) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next row from left iter", K(ret));
-            } else {
-              left_iter_end_ = true;
-              ret = OB_SUCCESS;
-            }
-          } else if (OB_FAIL(left_row_store_->save(false, 1))) {
-            LOG_WARN("failed to save left row", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = FILL_RIGHT_ROW;
-        }
-        break;
-      }
-
-      case FILL_RIGHT_ROW: {
-        while (OB_SUCC(ret) && !right_iter_end_ && !right_row_store_->have_data()) {
-          if (OB_FAIL(right_iter_->get_next_row())) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next row from right iter", K(ret));
-            } else {
-              right_iter_end_ = true;
-              ret = OB_SUCCESS;
-            }
-          } else if (OB_FAIL(right_row_store_->save(false, 1))) {
-            LOG_WARN("failed to save right row", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = MERGE_AND_OUTPUT;
-        }
-        break;
-      }
-
-      case MERGE_AND_OUTPUT: {
-        if (OB_SUCC(ret)) {
-          if (left_iter_end_ && right_iter_end_) {
-            state_ = FINISHED;
-          } else if (left_iter_end_) {
-            if (right_row_store_->have_data()) {
-              if (OB_FAIL(right_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to convert right store row to expr", K(ret));
-              } else {
-                got_next_row = true;
-                state_ = FILL_RIGHT_ROW;
-              }
-            } else {
-              state_ = FILL_RIGHT_ROW;
-            }
-          } else if (right_iter_end_) {
-            if (left_row_store_->have_data()) {
-              if (OB_FAIL(left_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to convert left store row to expr", K(ret));
-              } else {
-                got_next_row = true;
-                state_ = FILL_LEFT_ROW;
-              }
-            } else {
-              state_ = FILL_LEFT_ROW;
-            }
+  /* try to fill each child store */
+  int64_t output_idx = OB_INVALID_INDEX;
+  int cmp_ret = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+    IndexMergeRowStore &child_store = child_stores_.at(i);
+    if (!child_store.have_data()) {
+      if (!child_store.iter_end_) {
+        ObDASIter *child_iter = child_iters_.at(i);
+        if (OB_ISNULL(child_iter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr", K(i));
+        } else if (OB_FAIL(child_iter->get_next_row())) {
+          if (OB_ITER_END == ret) {
+            child_store.iter_end_ = true;
+            ret = OB_SUCCESS;
           } else {
-            int cmp_ret = 0;
-            if (OB_FAIL(compare(cmp_ret))) {
-              LOG_WARN("failed to compare left row and right row", K(ret));
-            } else if (cmp_ret < 0) {
-              if (OB_FAIL(left_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to convert left store row to expr", K(ret));
-              } else {
-                got_next_row = true;
-                state_ = FILL_LEFT_ROW;
-              }
-            } else if (cmp_ret > 0) {
-              if (OB_FAIL(right_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to convert right store row to expr", K(ret));
-              } else {
-                got_next_row = true;
-                state_ = FILL_RIGHT_ROW;
-              }
-            } else {
-              if (OB_FAIL(left_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to convert store row to expr", K(ret));
-              } else if (OB_FAIL(right_row_store_->to_expr(false, 1))) {
-                LOG_WARN("failed to ");
-              } else {
-                got_next_row = true;
-                state_ = FILL_LEFT_ROW;
-              }
-            }
+            LOG_WARN("failed to get next row from child iter", K(ret));
           }
+        } else if (OB_FAIL(child_store.save(false, 1))) {
+          LOG_WARN("failed to save child row", K(ret));
+        } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+          LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
         }
-
-        break;
       }
+    } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+      LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+    }
+  }
 
-      case FINISHED: {
-        ret = OB_ITER_END;
-        break;
+  // TODO: use min-heap optimization
+  if (OB_FAIL(ret)) {
+  } else if (output_idx == OB_INVALID_INDEX) {
+    /* no available row, stop the entire process */
+    ret = OB_ITER_END;
+  } else {
+    /* find all available rows */
+    bool need_fill_default_value = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+      need_fill_default_value = false;
+      if (output_idx == i) {
+        /* skip */
+      } else if (child_stores_.at(i).have_data()) {
+        if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+          LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+        } else if (cmp_ret == 0) {
+          if (OB_FAIL(child_stores_.at(i).to_expr())) {
+            LOG_WARN("failed to convert store row to expr", K(ret));
+          }
+        } else {
+          // this child does not have a corresponding rowkey
+          need_fill_default_value = true;
+        }
+      } else {
+        // this child does not have available rows
+        need_fill_default_value = true;
       }
-
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index merge state", K_(state));
+      if (OB_SUCC(ret) && need_fill_default_value) {
+        if (OB_FAIL(fill_default_values_for_union(child_match_against_exprs_.at(i)))) {
+          LOG_WARN("failed to fill default values for union", K(ret), K(i));
+        }
       }
     }
-  } while (!got_next_row && OB_SUCC(ret));
-
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(child_stores_.at(output_idx).to_expr())) {
+        LOG_WARN("failed to convert store row to expr", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
 int ObDASIndexMergeIter::union_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  bool got_next_rows = false;
-  int64_t left_count = 0;
-  int64_t right_count = 0;
-  do {
-    switch(state_) {
-      case FILL_LEFT_ROW: {
-        while (OB_SUCC(ret) && !left_iter_end_ && !left_row_store_->have_data()) {
-          if (OB_FAIL(left_iter_->get_next_rows(left_count, capacity))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next rows from left iter", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-              if (left_count == 0) {
-                left_iter_end_ = true;
-              }
-            }
-          }
-          if (OB_SUCC(ret) && !left_iter_end_ && OB_FAIL(left_row_store_->save(true, left_count))) {
-            LOG_WARN("failed to save left rows", K(left_count), K(ret));
-          }
-          if (left_iter_->get_type() == DAS_ITER_SORT) {
-            reset_datum_ptr(left_output_, left_count);
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = FILL_RIGHT_ROW;
-        }
-        break;
-      }
-
-      case FILL_RIGHT_ROW: {
-        while (OB_SUCC(ret) && !right_iter_end_ && !right_row_store_->have_data()) {
-          if (OB_FAIL(right_iter_->get_next_rows(right_count, capacity))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get next rows from right iter", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-              if (right_count == 0) {
-                right_iter_end_ = true;
-              }
-            }
-          }
-          if (OB_SUCC(ret) && !right_iter_end_ && OB_FAIL(right_row_store_->save(true, right_count))) {
-            LOG_WARN("failed to save right rows", K(right_count), K(ret));
-          }
-          if (right_iter_->get_type() == DAS_ITER_SORT) {
-            reset_datum_ptr(right_output_, right_count);
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          state_ = MERGE_AND_OUTPUT;
-        }
-        break;
-      }
-
-      case MERGE_AND_OUTPUT: {
-        if (OB_SUCC(ret)) {
-          if (left_iter_end_ && right_iter_end_) {
-            state_ = FINISHED;
-          } else if (left_iter_end_) {
-            if (right_row_store_->have_data()) {
-              int64_t right_rows_cnt = right_row_store_->rows_cnt();
-              if (OB_FAIL(right_row_store_->to_expr(true, right_rows_cnt))) {
-                LOG_WARN("failed to convert right store rows to expr", K(right_rows_cnt), K(ret));
-              } else {
-                count = right_rows_cnt;
-                got_next_rows = true;
-                state_ = FILL_RIGHT_ROW;
-              }
-            } else {
-              state_ = FILL_RIGHT_ROW;
-            }
-          } else if (right_iter_end_) {
-            if (left_row_store_->have_data()) {
-              int64_t left_rows_cnt = left_row_store_->rows_cnt();
-              if (OB_FAIL(left_row_store_->to_expr(true, left_rows_cnt))) {
-                LOG_WARN("failed to convert left store rows to expr", K(left_rows_cnt), K(ret));
-              } else {
-                count = left_rows_cnt;
-                got_next_rows = true;
-                state_ = FILL_LEFT_ROW;
-              }
-            } else {
-              state_ = FILL_LEFT_ROW;
-            }
+  count = 0;
+  result_buffer_.reuse();
+  while (OB_SUCC(ret) && count < capacity) {
+    /* try to fill each child store */
+    int64_t output_idx = OB_INVALID_INDEX;
+    int cmp_ret = 0;
+    int64_t child_rows_cnt = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+      IndexMergeRowStore &child_store = child_stores_.at(i);
+      if (!child_store.have_data()) {
+        if (!child_store.iter_end_) {
+          ObDASIter *child_iter = child_iters_.at(i);
+          if (OB_ISNULL(child_iter)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr", K(i));
           } else {
-            int cmp_ret = 0;
-            if (OB_FAIL(compare(cmp_ret))) {
-              LOG_WARN("failed to compare left row and right row", K(ret));
-            } else if (cmp_ret < 0) {
-              if (OB_FAIL(left_row_store_->to_expr(true, 1))) {
-                LOG_WARN("failed to convert left store row to expr", K(ret));
-              } else {
-                got_next_rows = true;
-                state_ = FILL_LEFT_ROW;
-              }
-            } else if (cmp_ret > 0) {
-              if (OB_FAIL(right_row_store_->to_expr(true, 1))) {
-                LOG_WARN("failed to convert right store row to expr", K(ret));
-              } else {
-                got_next_rows = true;
-                state_ = FILL_RIGHT_ROW;
-              }
-            } else {
-              if (OB_FAIL(left_row_store_->to_expr(true, 1))) {
-                LOG_WARN("failed to convert left store row to expr", K(ret));
-              } else if (OB_FAIL(right_row_store_->to_expr(true, 1))) {
-                LOG_WARN("failed to convert right store row to expr", K(ret));
-              } else {
-                got_next_rows = true;
-                state_ = FILL_LEFT_ROW;
-              }
+            ret = child_iter->get_next_rows(child_rows_cnt, capacity);
+            if (OB_ITER_END == ret && child_rows_cnt > 0) {
+              ret = OB_SUCCESS;
             }
-            if (OB_SUCC(ret) && got_next_rows) {
-              count = 1;
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(child_store.save(true, child_rows_cnt))) {
+                LOG_WARN("failed to save child rows", K(child_rows_cnt), K(ret));
+              } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+                LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+              } else if (child_iter->get_type() == DAS_ITER_SORT) {
+                reset_datum_ptr(child_iter->get_output(), child_rows_cnt);
+              }
+            } else if (OB_ITER_END == ret) {
+              child_store.iter_end_ = true;
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to get next rows from child iter", K(ret));
             }
           }
         }
-
-        break;
-      }
-
-      case FINISHED: {
-        ret = OB_ITER_END;
-        break;
-      }
-
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index merge state", K_(state));
+      } else if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+        LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
       }
     }
-  } while (!got_next_rows && OB_SUCC(ret));
 
+    if (OB_FAIL(ret)) {
+    } else if (output_idx == OB_INVALID_INDEX) {
+      /* no available row, stop the entire process */
+      ret = OB_ITER_END;
+    } else {
+      /* find all available rows */
+      bool need_fill_default_value = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
+        need_fill_default_value = false;
+        if (output_idx == i) {
+          /* skip */
+        } else if (child_stores_.at(i).have_data()) {
+          if (OB_FAIL(compare(i, output_idx, cmp_ret))) {
+            LOG_WARN("index merge failed to compare row", K(i), K(output_idx), K(ret));
+          } else if (cmp_ret == 0) {
+            if (OB_FAIL(child_stores_.at(i).to_expr())) {
+              LOG_WARN("failed to convert store row to expr", K(ret));
+            }
+          } else {
+            // this child does not have a corresponding rowkey
+            need_fill_default_value = true;
+          }
+        } else {
+          // this child does not have available rows
+          need_fill_default_value = true;
+        }
+        if (OB_SUCC(ret) && need_fill_default_value) {
+          if (OB_FAIL(fill_default_values_for_union(child_match_against_exprs_.at(i)))) {
+            LOG_WARN("failed to fill default values for union", K(ret), K(i));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(child_stores_.at(output_idx).to_expr())) {
+          LOG_WARN("failed to convert store row to expr", K(ret));
+        } else {
+          // now we get a available result row, save it to result buffer
+          if (OB_FAIL(save_row_to_result_buffer())) {
+            LOG_WARN("failed to save row to result buffer", K(ret));
+          } else {
+            count += 1;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_ITER_END == ret && count > 0) {
+    ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret) && count > 0) {
+    if (OB_FAIL(result_buffer_.to_expr(count))) {
+      LOG_WARN("failed to convert result buffer to exprs", K(ret));
+    }
+  }
   return ret;
 }
 

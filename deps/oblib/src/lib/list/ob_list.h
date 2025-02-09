@@ -12,13 +12,13 @@
 
 #ifndef  OCEANBASE_COMMON_LIST_H_
 #define  OCEANBASE_COMMON_LIST_H_
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <pthread.h>
-#include <new>
 #include "lib/hash/ob_hashutils.h"
 #include "lib/utility/ob_print_utils.h"
+
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 namespace oceanbase
 {
 namespace common
@@ -429,6 +429,11 @@ public:
   {
     return const_iterator(root_.next);
   };
+
+  OB_INLINE iterator last() { return iterator(root_.prev); };
+
+  OB_INLINE const_iterator last() const { return const_iterator(root_.prev); };
+
   OB_INLINE iterator end()
   {
     return iterator(root_);

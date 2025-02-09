@@ -1495,6 +1495,9 @@ public:
   int prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup_match_exprs,
                                     const ObIArray<uint64_t> &lookup_index_ids,
                                     ObLogicalOperator *scan);
+  int prepare_text_retrieval_merge(const ObIArray<ObRawExpr *> &merge_match_exprs,
+                                   const ObIArray<uint64_t> &merge_index_ids,
+                                   ObLogicalOperator *scan);
   int prepare_vector_index_info(AccessPath *ap, ObLogicalOperator *scan);
   int prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                     const ObTableSchema &table_schema,

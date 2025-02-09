@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_iter_utils.h"
+#include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
 #include "sql/das/iter/ob_das_hnsw_scan_iter.h"
 #include "sql/das/iter/ob_das_ivf_scan_iter.h"
 
@@ -262,14 +263,15 @@ int ObDASIterUtils::create_group_fold_iter(const ObTableScanCtDef &tsc_ctdef,
 }
 
 int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_ctdef,
+                                                   ObDASBaseRtDef *attach_rtdef,
                                                   const ObDASRelatedTabletID &related_tablet_ids,
                                                   const ObLSID &ls_id,
                                                   ObDASIter *root_iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(root_iter)) {
+  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef) || OB_ISNULL(root_iter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(root_iter));
+    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(attach_rtdef), KP(root_iter));
   } else {
     bool need_set_child = false;
     const ObDASIterType &iter_type = root_iter->get_type();
@@ -286,6 +288,18 @@ int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_
       }
       break;
     }
+    case ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP: {
+      if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_LOCAL_LOOKUP)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+      } else {
+        ObDASCacheLookupIter *lookup_iter = static_cast<ObDASCacheLookupIter *>(root_iter);
+        lookup_iter->set_ls_id(ls_id);
+        lookup_iter->set_tablet_id(related_tablet_ids.lookup_tablet_id_);
+        need_set_child = true;
+      }
+      break;
+    }
     case ObDASOpType::DAS_OP_IR_AUX_LOOKUP: {
       if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_LOCAL_LOOKUP)) {
         ret = OB_ERR_UNEXPECTED;
@@ -293,7 +307,7 @@ int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_
       } else {
         ObDASLocalLookupIter *aux_lookup_iter = static_cast<ObDASLocalLookupIter *>(root_iter);
         aux_lookup_iter->set_ls_id(ls_id);
-        aux_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+        aux_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         need_set_child = true;
       }
       break;
@@ -314,11 +328,8 @@ int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_
       } else {
         ObDASTextRetrievalMergeIter *tr_merge_iter = static_cast<ObDASTextRetrievalMergeIter *>(root_iter);
         need_set_child = false;
-        ObDASFTSTabletID fts_tablet_ids;
-        fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
-        fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
-        fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.doc_id_idx_tablet_id_;
-        if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, fts_tablet_ids))) {
+        int64_t fts_idx = static_cast<ObDASIRScanRtDef *>(attach_rtdef)->fts_idx_;
+        if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, related_tablet_ids.fts_tablet_ids_.at(fts_idx)))) {
           LOG_WARN("failed to set related tablet ids", K(ret));
         }
       }
@@ -339,6 +350,7 @@ int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_
       for (int64_t i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
         if (OB_FAIL(set_text_retrieval_related_ids(
             attach_ctdef->children_[i],
+            attach_rtdef->children_[i],
             related_tablet_ids,
             ls_id,
             root_iter->get_children()[i]))) {
@@ -351,14 +363,15 @@ int ObDASIterUtils::set_text_retrieval_related_ids(const ObDASBaseCtDef *attach_
 }
 
 int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctdef,
+                                                ObDASBaseRtDef *attach_rtdef,
                                                 const ObDASRelatedTabletID &related_tablet_ids,
                                                 const ObLSID &ls_id,
                                                 ObDASIter *root_iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(root_iter)) {
+  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef) || OB_ISNULL(root_iter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(root_iter));
+    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(attach_rtdef), KP(root_iter));
   } else {
     bool need_set_child = false;
     const ObDASIterType &iter_type = root_iter->get_type();
@@ -375,6 +388,18 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
         }
         break;
       }
+      case ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP: {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_LOCAL_LOOKUP)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+        } else {
+          ObDASCacheLookupIter *lookup_iter = static_cast<ObDASCacheLookupIter *>(root_iter);
+          lookup_iter->set_ls_id(ls_id);
+          lookup_iter->set_tablet_id(related_tablet_ids.lookup_tablet_id_);
+          need_set_child = true;
+        }
+        break;
+      }
       case ObDASOpType::DAS_OP_INDEX_MERGE: {
         if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE)) {
           ret = OB_ERR_UNEXPECTED;
@@ -384,7 +409,51 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
           if (OB_FAIL(merge_iter->set_ls_tablet_ids(ls_id, related_tablet_ids))) {
             LOG_WARN("failed to set related tablet ids", K(ret));
           }
+          need_set_child = false;
+        }
+        break;
+      }
+      case ObDASOpType::DAS_OP_IR_AUX_LOOKUP: {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_LOCAL_LOOKUP)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+        } else {
+          ObDASLocalLookupIter *aux_lookup_iter = static_cast<ObDASLocalLookupIter *>(root_iter);
+          aux_lookup_iter->set_ls_id(ls_id);
+          aux_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
           need_set_child = true;
+        }
+        break;
+      }
+      case ObDASOpType::DAS_OP_SORT: {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_SORT)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+        } else {
+          need_set_child = true;
+        }
+        break;
+      }
+      case ObDASOpType::DAS_OP_IR_SCAN: {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_TEXT_RETRIEVAL_MERGE)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+        } else {
+          ObDASTextRetrievalMergeIter *tr_merge_iter = static_cast<ObDASTextRetrievalMergeIter *>(root_iter);
+          int64_t fts_index_idx = static_cast<ObDASIRScanRtDef*>(attach_rtdef)->fts_idx_;
+          if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, related_tablet_ids.fts_tablet_ids_.at(fts_index_idx)))) {
+            LOG_WARN("failed to set related tablet ids", K(ret));
+          }
+          need_set_child = false;
+        }
+        break;
+      }
+      case ObDASOpType::DAS_OP_TABLE_SCAN: {
+        if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_SCAN)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+        } else {
+          need_set_child = false;
         }
         break;
       }
@@ -403,6 +472,7 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
         if (OB_FAIL(set_index_merge_related_ids(attach_ctdef->children_[i],
+                                                attach_rtdef->children_[i],
                                                 related_tablet_ids,
                                                 ls_id,
                                                 root_iter->get_children()[i]))) {
@@ -415,15 +485,15 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
 }
 
 int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attach_ctdef,
+                                                     ObDASBaseRtDef *attach_rtdef,
                                                      const ObDASRelatedTabletID &related_tablet_ids,
                                                      const ObLSID &ls_id,
-                                                     int64_t flag,
                                                      ObDASIter *root_iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(root_iter)) {
+  if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef) || OB_ISNULL(root_iter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(root_iter));
+    LOG_WARN("unexpected nullptr", K(ret), KP(attach_ctdef), KP(attach_rtdef), KP(root_iter));
   } else {
     const ObDASIterType &iter_type = root_iter->get_type();
     bool need_set_child = false;
@@ -433,7 +503,7 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("iter type not match", K(ret), K(iter_type));
       } else {
-        ObDASLocalLookupIter *local_lookup_iter = static_cast<ObDASLocalLookupIter *>(root_iter);
+        ObDASCacheLookupIter *local_lookup_iter = static_cast<ObDASCacheLookupIter *>(root_iter);
         local_lookup_iter->set_tablet_id(related_tablet_ids.rowkey_doc_tablet_id_);
         local_lookup_iter->set_ls_id(ls_id);
         need_set_child = true;
@@ -446,6 +516,7 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
         LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
       } else {
         const ObDASFuncLookupCtDef *func_lookup_ctdef = static_cast<const ObDASFuncLookupCtDef *>(attach_ctdef);
+        ObDASFuncLookupRtDef *func_lookup_rtdef = static_cast<ObDASFuncLookupRtDef *>(attach_rtdef);
         const int64_t func_lookup_cnt = func_lookup_ctdef->func_lookup_cnt_;
         ObDASFuncLookupIter *func_lookup_iter = static_cast<ObDASFuncLookupIter *>(root_iter);
         ObDASFuncDataIter *merge_iter = static_cast<ObDASFuncDataIter *>(root_iter->get_children()[1]);
@@ -456,9 +527,9 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
         for (int64_t i = 0; OB_SUCC(ret) && i < func_lookup_cnt; ++i) {
           if (OB_FAIL(set_func_lookup_iter_related_ids(
               func_lookup_ctdef->get_func_lookup_scan_ctdef(i),
+              func_lookup_rtdef->get_func_lookup_scan_rtdef(i),
               related_tablet_ids,
               ls_id,
-              i,
               merge_iter->get_children()[i]))) {
             LOG_WARN("failed to set text retrieval related ids", K(ret));
           }
@@ -474,7 +545,7 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
       } else {
         ObDASLocalLookupIter *aux_lookup_iter = static_cast<ObDASLocalLookupIter *>(root_iter);
         aux_lookup_iter->set_ls_id(ls_id);
-        aux_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+        aux_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         need_set_child = true;
       }
       break;
@@ -494,17 +565,8 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
         LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
       } else {
         ObDASTextRetrievalMergeIter *tr_merge_iter = static_cast<ObDASTextRetrievalMergeIter *>(root_iter);
-        ObDASFTSTabletID fts_tablet_ids;
-        if (flag >= 0) {
-          fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[flag].inv_idx_tablet_id_;
-          fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[flag].fwd_idx_tablet_id_;
-          fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[flag].doc_id_idx_tablet_id_;
-        } else {
-          fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
-          fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
-          fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.doc_id_idx_tablet_id_;
-        }
-        if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, fts_tablet_ids))) {
+        int64_t fts_index_idx = static_cast<ObDASIRScanRtDef*>(attach_rtdef)->fts_idx_;
+        if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, related_tablet_ids.fts_tablet_ids_.at(fts_index_idx)))) {
           LOG_WARN("failed to set related tablet ids", K(ret));
         }
         need_set_child = false;
@@ -517,6 +579,19 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
         LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
       } else {
         need_set_child = false;
+      }
+      break;
+    }
+    case ObDASOpType::DAS_OP_INDEX_MERGE: {
+      if (OB_UNLIKELY(iter_type != ObDASIterType::DAS_ITER_INDEX_MERGE)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter type not match with ctdef", K(ret), K(attach_ctdef->op_type_), K(iter_type));
+      } else {
+        ObDASIndexMergeIter *merge_iter = static_cast<ObDASIndexMergeIter *>(root_iter);
+        if (OB_FAIL(merge_iter->set_ls_tablet_ids(ls_id, related_tablet_ids))) {
+          LOG_WARN("failed to set related tablet ids", K(ret));
+        }
+        need_set_child = true;
       }
       break;
     }
@@ -535,9 +610,9 @@ int ObDASIterUtils::set_func_lookup_iter_related_ids(const ObDASBaseCtDef *attac
       for (int64_t i = 0; OB_SUCC(ret) && i < attach_ctdef->children_cnt_; ++i) {
         if (OB_FAIL(set_func_lookup_iter_related_ids(
             attach_ctdef->children_[i],
+            attach_rtdef->children_[i],
             related_tablet_ids,
             ls_id,
-            -1,
             root_iter->get_children()[i]))) {
           LOG_WARN("failed to set text retrieval related ids", K(ret));
         }
@@ -570,7 +645,7 @@ int ObDASIterUtils::set_vec_lookup_related_ids(const ObDASBaseCtDef *attach_ctde
         ObDASLocalLookupIter *local_lookup_iter = static_cast<ObDASLocalLookupIter *>(iter);
         local_lookup_iter->set_ls_id(ls_id);
         if (is_shortcut_scan) {
-          local_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+          local_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         } else {
           local_lookup_iter->set_tablet_id(related_tablet_ids.lookup_tablet_id_);
         }
@@ -578,7 +653,7 @@ int ObDASIterUtils::set_vec_lookup_related_ids(const ObDASBaseCtDef *attach_ctde
     } else if (is_shortcut_scan) {
       ObDASLocalLookupIter *aux_lookup_iter = static_cast<ObDASLocalLookupIter *>(root_iter);
       aux_lookup_iter->set_ls_id(ls_id);
-      aux_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+      aux_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
 
       if (ObDASIterType::DAS_ITER_HNSW_SCAN == aux_lookup_iter->get_children()[0]->get_type()) {
         ObDASHNSWScanIter *hnsw_scan_iter = static_cast<ObDASHNSWScanIter *>(aux_lookup_iter->get_children()[0]);
@@ -597,7 +672,7 @@ int ObDASIterUtils::set_vec_lookup_related_ids(const ObDASBaseCtDef *attach_ctde
       if (ObDASIterType::DAS_ITER_LOCAL_LOOKUP == local_lookup_iter->get_children()[0]->get_type()) {
         ObDASLocalLookupIter *aux_lookup_iter = static_cast<ObDASLocalLookupIter *>(local_lookup_iter->get_children()[0]);
         aux_lookup_iter->set_ls_id(ls_id);
-        aux_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+        aux_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         if (ObDASIterType::DAS_ITER_HNSW_SCAN == aux_lookup_iter->get_children()[0]->get_type()) {
           ObDASHNSWScanIter *hnsw_scan_iter = static_cast<ObDASHNSWScanIter *>(aux_lookup_iter->get_children()[0]);
           hnsw_scan_iter->set_ls_id(ls_id);
@@ -774,8 +849,10 @@ int ObDASIterUtils::create_local_lookup_sub_tree(ObTableScanParam &scan_param,
       local_lookup_iter_output = &lookup_ctdef->result_output_;
     }
   } else {
-    if (OB_UNLIKELY(ObDASOpType::DAS_OP_TABLE_LOOKUP != attach_ctdef->op_type_ || attach_ctdef->children_cnt_ < 2)
-        || OB_UNLIKELY(ObDASOpType::DAS_OP_TABLE_LOOKUP != attach_rtdef->op_type_ || attach_rtdef->children_cnt_ < 2)) {
+    if (OB_UNLIKELY((ObDASOpType::DAS_OP_TABLE_LOOKUP != attach_ctdef->op_type_ && ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP != attach_ctdef->op_type_)
+                  || attach_ctdef->children_cnt_ < 2)
+     || OB_UNLIKELY((ObDASOpType::DAS_OP_TABLE_LOOKUP != attach_rtdef->op_type_ && ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP != attach_rtdef->op_type_)
+                  || attach_rtdef->children_cnt_ < 2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, table lookup ctdef or rtdef isn't table lookup or children cnt isn't 2", K(ret), KPC(attach_ctdef), KPC(attach_rtdef));
     } else {
@@ -884,15 +961,13 @@ int ObDASIterUtils::create_text_retrieval_tree(ObTableScanParam &scan_param,
   ObDASIter *text_retrieval_result = nullptr;
   ObDASIter *sort_result = nullptr;
   ObDASIter *root_iter = nullptr;
-  const bool has_lookup = ObDASOpType::DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_;
+  const bool has_lookup = ObDASOpType::DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_ ||
+                          ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_;
   int64_t token_cnt = 0;
   bool taat_mode = false;
-  ObDASFTSTabletID fts_tablet_ids;
-  fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
-  fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
-  fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.doc_id_idx_tablet_id_;
   if (OB_UNLIKELY(attach_ctdef->op_type_ != ObDASOpType::DAS_OP_IR_SCAN
       && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_TABLE_LOOKUP
+      && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP
       && attach_ctdef->op_type_ != ObDASOpType::DAS_OP_SORT)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected text retrieval root attach def type", K(ret), KPC(attach_ctdef));
@@ -908,7 +983,8 @@ int ObDASIterUtils::create_text_retrieval_tree(ObTableScanParam &scan_param,
       alloc,
       ir_scan_ctdef,
       ir_scan_rtdef,
-      fts_tablet_ids,
+      related_tablet_ids.fts_tablet_ids_.at(ir_scan_rtdef->fts_idx_),
+      false,
       trans_desc,
       snapshot,
       text_retrieval_result))) {
@@ -993,22 +1069,25 @@ int ObDASIterUtils::create_text_retrieval_tree(ObTableScanParam &scan_param,
   return ret;
 }
 
-int ObDASIterUtils::create_functional_text_retrieval_sub_tree(const ObLSID &ls_id,
-                                                              common::ObIAllocator &alloc,
-                                                              const ObDASIRScanCtDef *ir_scan_ctdef,
-                                                              ObDASIRScanRtDef *ir_scan_rtdef,
-                                                              const ObDASFTSTabletID &related_tablet_ids,
-                                                              transaction::ObTxDesc *trans_desc,
-                                                              transaction::ObTxReadSnapshot *snapshot,
-                                                              ObDASIter *&retrieval_result)
+int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
+                                                  common::ObIAllocator &alloc,
+                                                  const ObDASIRScanCtDef *ir_scan_ctdef,
+                                                  ObDASIRScanRtDef *ir_scan_rtdef,
+                                                  const ObDASFTSTabletID &related_tablet_ids,
+                                                  const bool is_func_lookup,
+                                                  transaction::ObTxDesc *trans_desc,
+                                                  transaction::ObTxReadSnapshot *snapshot,
+                                                  ObDASIter *&retrieval_result)
           {
   int ret = OB_SUCCESS;
+  ObExpr *search_text = ir_scan_ctdef->search_text_;
+  const ObCollationType &cs_type = search_text->datum_meta_.cs_type_;
   ObDASTextRetrievalMergeIterParam merge_iter_param;
   ObDASTextRetrievalMergeIter *tr_merge_iter = nullptr;
   ObDASScanIterParam doc_cnt_agg_param;
   ObDASScanIter *doc_cnt_agg_iter = nullptr;
   bool taat_mode = false;
-  bool need_inv_idx_agg_reset = false;
+  bool need_inv_idx_agg_reset = !is_func_lookup;
 
   merge_iter_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
   merge_iter_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
@@ -1018,63 +1097,76 @@ int ObDASIterUtils::create_functional_text_retrieval_sub_tree(const ObLSID &ls_i
   merge_iter_param.ir_rtdef_ = ir_scan_rtdef;
   merge_iter_param.tx_desc_ = trans_desc;
   merge_iter_param.snapshot_ = snapshot;
-  merge_iter_param.force_return_docid_ = true;
+  merge_iter_param.force_return_docid_ = is_func_lookup;
 
   if (0 != merge_iter_param.query_tokens_.count()) {
     merge_iter_param.query_tokens_.reuse();
   }
+  ObFtsEvalNode *root_node = nullptr;
+  ObMatchAgainstMode mode = ir_scan_ctdef->mode_flag_;
 
-  if (OB_FAIL(ObDASTextRetrievalMergeIter::build_query_tokens(ir_scan_ctdef, ir_scan_rtdef, alloc, merge_iter_param.query_tokens_))) {
+  if (OB_FAIL(ObDASTextRetrievalMergeIter::build_query_tokens(ir_scan_ctdef, ir_scan_rtdef, alloc, merge_iter_param.query_tokens_, root_node))) {
     LOG_WARN("failed to get query tokens for text retrieval", K(ret));
-  } else if (!ir_scan_ctdef->need_proj_relevance_score()) {
+  } else if (OB_LIKELY(!ir_scan_ctdef->need_proj_relevance_score() && is_func_lookup)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("functional lookup without relevance score not supported", K(ret));
-  } else if (merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) {
+  } else if (BOOLEAN_MODE == mode && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("boolean mode with too many tokens not supported", K(ret));
+  } else if ((is_func_lookup && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) ||
+              (!is_func_lookup && (merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT || !ir_scan_ctdef->need_proj_relevance_score()))) {
     need_inv_idx_agg_reset = true;
     if (!ir_scan_ctdef->need_estimate_total_doc_cnt()) {
-      doc_cnt_agg_param.scan_ctdef_ = ir_scan_ctdef->get_doc_id_idx_agg_ctdef();
+      init_scan_iter_param(doc_cnt_agg_param, ir_scan_ctdef->get_doc_id_idx_agg_ctdef(), ir_scan_rtdef);
       doc_cnt_agg_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      doc_cnt_agg_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-      doc_cnt_agg_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-      doc_cnt_agg_param.output_ = &ir_scan_ctdef->get_doc_id_idx_agg_ctdef()->result_output_;
       if (OB_FAIL(create_das_iter(alloc, doc_cnt_agg_param, doc_cnt_agg_iter))) {
         LOG_WARN("failed to create doc cnt agg scan iter", K(ret));
       } else {
         merge_iter_param.doc_cnt_iter_ = doc_cnt_agg_iter;
       }
     }
-    ObDASTRTaatLookupIter *fts_merge_iter = nullptr;
+    ObDASTRTaatIter *fts_merge_iter = nullptr;
+    ObDASTRTaatLookupIter *fts_lookup_merge_iter = nullptr;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
+    } else if (!is_func_lookup && OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
+      LOG_WARN("failed to create text retrieval merge iter", K(ret));
+    } else if (is_func_lookup && OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_lookup_merge_iter))) {
       LOG_WARN("failed to create text retrieval merge iter", K(ret));
     } else {
-      tr_merge_iter = fts_merge_iter;
+      tr_merge_iter = is_func_lookup ? fts_lookup_merge_iter : fts_merge_iter;
       taat_mode = true;
     }
   } else {
     if (ir_scan_ctdef->need_calc_relevance() && !ir_scan_ctdef->need_estimate_total_doc_cnt()) {
-      doc_cnt_agg_param.scan_ctdef_ = ir_scan_ctdef->get_doc_id_idx_agg_ctdef();
+      init_scan_iter_param(doc_cnt_agg_param, ir_scan_ctdef->get_doc_id_idx_agg_ctdef(), ir_scan_rtdef);
       doc_cnt_agg_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      doc_cnt_agg_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-      doc_cnt_agg_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-      doc_cnt_agg_param.output_ = &ir_scan_ctdef->get_doc_id_idx_agg_ctdef()->result_output_;
       if (OB_FAIL(create_das_iter(alloc, doc_cnt_agg_param, doc_cnt_agg_iter))) {
         LOG_WARN("failed to create doc cnt agg scan iter", K(ret));
       } else {
         merge_iter_param.doc_cnt_iter_ = doc_cnt_agg_iter;
       }
     }
-    ObDASTRDaatLookupIter *fts_merge_iter = nullptr;
+    ObDASTRDaatIter *fts_merge_iter = nullptr;
+    ObDASTRDaatLookupIter *fts_lookup_merge_iter = nullptr;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
+    } else if (!is_func_lookup && OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
+      LOG_WARN("failed to create text retrieval merge iter", K(ret));
+    } else if (is_func_lookup && OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_lookup_merge_iter))) {
       LOG_WARN("failed to create text retrieval merge iter", K(ret));
     } else {
-      tr_merge_iter = fts_merge_iter;
+      tr_merge_iter = is_func_lookup ? fts_lookup_merge_iter : fts_merge_iter;
       taat_mode = false;
     }
   }
+
   if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(root_node)) {
+      root_node->release();
+    }
   } else {
+    if (BOOLEAN_MODE == mode) {
+      tr_merge_iter->set_boolean_compute_node(root_node);
+    }
     ObSEArray<ObDASIter *, 16> iters;
     const ObIArray<ObString> &query_tokens = tr_merge_iter->get_query_tokens();
     int64_t size = taat_mode && query_tokens.count() != 0 ? 1 : query_tokens.count();
@@ -1090,195 +1182,6 @@ int ObDASIterUtils::create_functional_text_retrieval_sub_tree(const ObLSID &ls_i
       retrieval_param.tx_desc_ = trans_desc;
       retrieval_param.snapshot_ = snapshot;
       retrieval_param.need_inv_idx_agg_reset_ = need_inv_idx_agg_reset;
-
-      ObDASScanIterParam inv_idx_scan_iter_param;
-      ObDASScanIter *inv_idx_scan_iter = nullptr;
-      inv_idx_scan_iter_param.scan_ctdef_ = ir_scan_ctdef->get_inv_idx_scan_ctdef();
-      inv_idx_scan_iter_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      inv_idx_scan_iter_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-      inv_idx_scan_iter_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-      inv_idx_scan_iter_param.output_ = &ir_scan_ctdef->get_inv_idx_scan_ctdef()->result_output_;
-      ObDASScanIterParam inv_idx_agg_iter_param;
-      ObDASScanIter *inv_idx_agg_iter = nullptr;
-      if (ir_scan_ctdef->need_inv_idx_agg()) {
-        inv_idx_agg_iter_param.scan_ctdef_ = ir_scan_ctdef->get_inv_idx_agg_ctdef();
-        inv_idx_agg_iter_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-        inv_idx_agg_iter_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-        inv_idx_agg_iter_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-        inv_idx_agg_iter_param.output_ = &ir_scan_ctdef->get_inv_idx_agg_ctdef()->result_output_;
-      }
-      ObDASScanIterParam fwd_idx_iter_param;
-      ObDASScanIter *fwd_idx_iter = nullptr;
-      if (ir_scan_ctdef->need_fwd_idx_agg()) {
-        fwd_idx_iter_param.scan_ctdef_ = ir_scan_ctdef->get_fwd_idx_agg_ctdef();
-        fwd_idx_iter_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-        fwd_idx_iter_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-        fwd_idx_iter_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-        fwd_idx_iter_param.output_ = &ir_scan_ctdef->get_fwd_idx_agg_ctdef()->result_output_;
-      }
-      if (OB_FAIL(create_das_iter(alloc, inv_idx_scan_iter_param, inv_idx_scan_iter))) {
-        LOG_WARN("failed to create inv idx iter", K(ret));
-      } else if (ir_scan_ctdef->need_inv_idx_agg()
-          && OB_FAIL(create_das_iter(alloc, inv_idx_agg_iter_param, inv_idx_agg_iter))) {
-        LOG_WARN("failed to create inv idx agg iter", K(ret));
-      } else if (ir_scan_ctdef->need_fwd_idx_agg()
-          && OB_FAIL(create_das_iter(alloc, fwd_idx_iter_param, fwd_idx_iter))) {
-        LOG_WARN("failed to create fwd idx iter", K(ret));
-      } else {
-        retrieval_param.inv_idx_scan_iter_ = inv_idx_scan_iter;
-        retrieval_param.inv_idx_agg_iter_ = inv_idx_agg_iter;
-        retrieval_param.fwd_idx_iter_ = fwd_idx_iter;
-        const int64_t inv_idx_iter_cnt = ir_scan_ctdef->need_inv_idx_agg() ? 2 : 1;
-        const int64_t fwd_idx_iter_cnt = ir_scan_ctdef->need_fwd_idx_agg() ? 1 : 0;
-        const int64_t tr_children_cnt = inv_idx_iter_cnt + fwd_idx_iter_cnt;
-        if (taat_mode) {
-          if (OB_FAIL(create_das_iter(alloc, retrieval_param, retrieval_iter))) {
-            LOG_WARN("failed to create text retrieval iter", K(ret));
-          }
-        } else {
-          ObDASTRCacheIter *tr_iter = nullptr;
-          if (OB_FAIL(create_das_iter(alloc, retrieval_param, tr_iter))) {
-            LOG_WARN("failed to create text retrieval iter", K(ret));
-          } else {
-            retrieval_iter = tr_iter;
-          }
-        }
-        if (OB_FAIL(ret)) {
-        // set query_token and range in do_table_scan
-        } else if (OB_FAIL(create_iter_children_array(tr_children_cnt, alloc, retrieval_iter))) {
-          LOG_WARN("failed to create iter children array", K(ret));
-        } else {
-          retrieval_iter->get_children()[0] = inv_idx_scan_iter;
-          if (ir_scan_ctdef->need_inv_idx_agg()) {
-            retrieval_iter->get_children()[1] = inv_idx_agg_iter;
-          }
-          if (ir_scan_ctdef->need_fwd_idx_agg()) {
-            retrieval_iter->get_children()[2] = fwd_idx_iter;
-          }
-          retrieval_iter->set_ls_tablet_ids(
-              ls_id,
-              related_tablet_ids.inv_idx_tablet_id_,
-              related_tablet_ids.fwd_idx_tablet_id_);
-          if (OB_FAIL(iters.push_back(retrieval_iter))) {
-            LOG_WARN("failed append retrieval iter to array", K(ret));
-          }
-        }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tr_merge_iter->set_merge_iters(iters))) {
-      LOG_WARN("failed to set merge iters for text retrieval", K(ret));
-    } else if (OB_FAIL(tr_merge_iter->set_related_tablet_ids(ls_id, related_tablet_ids))) {
-      LOG_WARN("failed to set related tabelt ids", K(ret));
-    } else {
-      ObDASIter **&tr_merge_children = tr_merge_iter->get_children();
-      const bool need_do_total_doc_cnt = (ir_scan_ctdef->need_calc_relevance()) && !ir_scan_ctdef->need_estimate_total_doc_cnt();
-      const int64_t tr_merge_children_cnt = need_do_total_doc_cnt ? iters.count() + 1 : iters.count();
-      if (0 != tr_merge_children_cnt
-          && OB_FAIL(create_iter_children_array(tr_merge_children_cnt, alloc, tr_merge_iter))) {
-        LOG_WARN("failed to alloc text retrieval merge iter children", K(ret), K(tr_merge_children_cnt));
-      } else {
-        for (int64_t i = 0; i < iters.count(); ++i) {
-          tr_merge_children[i] = iters.at(i);
-        }
-        if (need_do_total_doc_cnt) {
-          tr_merge_children[iters.count()] = doc_cnt_agg_iter;
-        }
-        tr_merge_iter->set_doc_id_idx_tablet_id(related_tablet_ids.doc_id_idx_tablet_id_);
-        tr_merge_iter->set_ls_id(ls_id);
-        retrieval_result = tr_merge_iter;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
-                                                  common::ObIAllocator &alloc,
-                                                  const ObDASIRScanCtDef *ir_scan_ctdef,
-                                                  ObDASIRScanRtDef *ir_scan_rtdef,
-                                                  const ObDASFTSTabletID &related_tablet_ids,
-                                                  transaction::ObTxDesc *trans_desc,
-                                                  transaction::ObTxReadSnapshot *snapshot,
-                                                  ObDASIter *&retrieval_result)
-          {
-  int ret = OB_SUCCESS;
-  ObDASTextRetrievalMergeIterParam merge_iter_param;
-  ObDASTextRetrievalMergeIter *tr_merge_iter = nullptr;
-  ObDASScanIterParam doc_cnt_agg_param;
-  ObDASScanIter *doc_cnt_agg_iter = nullptr;
-  bool taat_mode = false;
-
-  merge_iter_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-  merge_iter_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-  merge_iter_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-  merge_iter_param.output_ = &ir_scan_ctdef->result_output_;
-  merge_iter_param.ir_ctdef_ = ir_scan_ctdef;
-  merge_iter_param.ir_rtdef_ = ir_scan_rtdef;
-  merge_iter_param.tx_desc_ = trans_desc;
-  merge_iter_param.snapshot_ = snapshot;
-  if (0 != merge_iter_param.query_tokens_.count()) {
-    merge_iter_param.query_tokens_.reuse();
-  }
-
-  if (OB_FAIL(ObDASTextRetrievalMergeIter::build_query_tokens(ir_scan_ctdef, ir_scan_rtdef, alloc, merge_iter_param.query_tokens_))) {
-    LOG_WARN("failed to get query tokens for text retrieval", K(ret));
-  } else if (merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT
-    || !ir_scan_ctdef->need_proj_relevance_score()) {
-    if (!ir_scan_ctdef->need_estimate_total_doc_cnt()) {
-      init_scan_iter_param(doc_cnt_agg_param, ir_scan_ctdef->get_doc_id_idx_agg_ctdef(), ir_scan_rtdef);
-      doc_cnt_agg_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      if (OB_FAIL(create_das_iter(alloc, doc_cnt_agg_param, doc_cnt_agg_iter))) {
-        LOG_WARN("failed to create doc cnt agg scan iter", K(ret));
-      } else {
-        merge_iter_param.doc_cnt_iter_ = doc_cnt_agg_iter;
-      }
-    }
-    ObDASTRTaatIter *fts_merge_iter = nullptr;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
-      LOG_WARN("failed to create text retrieval merge iter", K(ret));
-    } else {
-      tr_merge_iter = fts_merge_iter;
-      taat_mode = true;
-    }
-  } else {
-    if (ir_scan_ctdef->need_calc_relevance() && !ir_scan_ctdef->need_estimate_total_doc_cnt()) {
-      init_scan_iter_param(doc_cnt_agg_param, ir_scan_ctdef->get_doc_id_idx_agg_ctdef(), ir_scan_rtdef);
-      doc_cnt_agg_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      if (OB_FAIL(create_das_iter(alloc, doc_cnt_agg_param, doc_cnt_agg_iter))) {
-        LOG_WARN("failed to create doc cnt agg scan iter", K(ret));
-      } else {
-        merge_iter_param.doc_cnt_iter_ = doc_cnt_agg_iter;
-      }
-    }
-    ObDASTRDaatIter *fts_merge_iter = nullptr;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_das_iter(alloc, merge_iter_param, fts_merge_iter))) {
-      LOG_WARN("failed to create text retrieval merge iter", K(ret));
-    } else {
-      tr_merge_iter = fts_merge_iter;
-      taat_mode = false;
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-    ObSEArray<ObDASIter *, 16> iters;
-    const ObIArray<ObString> &query_tokens = tr_merge_iter->get_query_tokens();
-    int64_t size = taat_mode && query_tokens.count() != 0 ? 1 : query_tokens.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-      ObDASTextRetrievalIterParam retrieval_param;
-      ObDASTextRetrievalIter *retrieval_iter = nullptr;
-      retrieval_param.max_size_ = ir_scan_rtdef->eval_ctx_->max_batch_size_;
-      retrieval_param.eval_ctx_ = ir_scan_rtdef->eval_ctx_;
-      retrieval_param.exec_ctx_ = &ir_scan_rtdef->eval_ctx_->exec_ctx_;
-      retrieval_param.output_ = &ir_scan_ctdef->result_output_;
-      retrieval_param.ir_ctdef_ = ir_scan_ctdef;
-      retrieval_param.ir_rtdef_ = ir_scan_rtdef;
-      retrieval_param.tx_desc_ = trans_desc;
-      retrieval_param.snapshot_ = snapshot;
-      retrieval_param.need_inv_idx_agg_reset_ = true;
 
       ObDASScanIterParam inv_idx_scan_iter_param;
       ObDASScanIter *inv_idx_scan_iter = nullptr;
@@ -1322,7 +1225,7 @@ int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(retrieval_iter->set_query_token(query_tokens.at(i)))) {
+        } else if (!is_func_lookup && OB_FAIL(retrieval_iter->set_query_token(query_tokens.at(i)))) {
           LOG_WARN("failed to set query token for text retrieval iter", K(ret));
         } else if (OB_FAIL(create_iter_children_array(tr_children_cnt, alloc, retrieval_iter))) {
           LOG_WARN("failed to create iter children array", K(ret));
@@ -1694,7 +1597,7 @@ int ObDASIterUtils::create_domain_lookup_sub_tree(ObTableScanParam &scan_param,
         doc_id_lookup_iter->get_children()[0] = doc_id_iter;
         doc_id_lookup_iter->get_children()[1] = doc_id_table_iter;
         doc_id_table_iter->set_scan_param(doc_id_lookup_iter->get_lookup_param());
-        doc_id_lookup_iter->set_tablet_id(related_tablet_ids.doc_id_idx_tablet_id_);
+        doc_id_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         doc_id_lookup_iter->set_ls_id(ls_id);
       }
     }
@@ -1772,7 +1675,8 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       LOG_WARN("unexpected nullptr to ctdef", K(ret), KP(func_lookup_ctdef));
     } else if (OB_UNLIKELY(rowkey_scan_ctdef->op_type_ != ObDASOpType::DAS_OP_IR_AUX_LOOKUP
         && rowkey_scan_ctdef->op_type_ != ObDASOpType::DAS_OP_TABLE_SCAN
-        && rowkey_scan_ctdef->op_type_ != ObDASOpType::DAS_OP_SORT)) {
+        && rowkey_scan_ctdef->op_type_ != ObDASOpType::DAS_OP_SORT
+        && rowkey_scan_ctdef->op_type_ != ObDASOpType::DAS_OP_INDEX_MERGE)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("unexpected rowkey scan type", K(ret), KPC(rowkey_scan_ctdef));
     }
@@ -1792,10 +1696,6 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     ObDASIter *sort_result = nullptr;
     bool taat_mode = false;
 
-    ObDASFTSTabletID fts_tablet_ids;
-    fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
-    fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
-    fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.doc_id_idx_tablet_id_;
     const bool need_rewind = true;
     const bool need_distinct = false;
     if (OB_FAIL(ObDASUtils::find_target_das_def(
@@ -1810,7 +1710,8 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
         alloc,
         ir_scan_ctdef,
         ir_scan_rtdef,
-        fts_tablet_ids,
+        related_tablet_ids.fts_tablet_ids_.at(ir_scan_rtdef->fts_idx_),
+        false,
         trans_desc,
         snapshot,
         text_retrieval_result))) {
@@ -1870,7 +1771,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
           doc_id_lookup_iter->get_children()[0] = rowkey_scan_iter;
           doc_id_lookup_iter->get_children()[1] = docid_rowkey_table_iter;
           docid_rowkey_table_iter->set_scan_param(doc_id_lookup_iter->get_lookup_param());
-          doc_id_lookup_iter->set_tablet_id(related_tablet_ids.doc_id_idx_tablet_id_);
+          doc_id_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
           doc_id_lookup_iter->set_ls_id(scan_param.ls_id_);
           rowkey_scan_iter = doc_id_lookup_iter;
         }
@@ -1933,6 +1834,21 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     } else {
       rowkey_scan_iter = sort_result;
       rowkey_scan_ouput_exprs = &scan_ctdef->pd_expr_spec_.access_exprs_;
+    }
+  } else if (ObDASOpType::DAS_OP_INDEX_MERGE == rowkey_scan_ctdef->op_type_) {
+    ObDASIter *index_merge_root = nullptr;
+    if (OB_FAIL(create_index_merge_sub_tree(scan_param,
+                                            alloc,
+                                            rowkey_scan_ctdef,
+                                            rowkey_scan_rtdef,
+                                            related_tablet_ids,
+                                            trans_desc,
+                                            snapshot,
+                                            index_merge_root))) {
+      LOG_WARN("failed to create index merge sub tree", K(ret));
+    } else {
+      rowkey_scan_iter = index_merge_root;
+      rowkey_scan_ouput_exprs = index_merge_root->get_output();
     }
   }
 
@@ -2004,7 +1920,10 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
     root_lookup_param.snapshot_ = snapshot;
     root_lookup_param.rowkey_exprs_ = &static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_doc_id_lookup_scan_ctdef())->rowkey_exprs_;
     root_lookup_param.lookup_rtdef_->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
-    if (OB_FAIL(create_das_iter(alloc, root_lookup_param, root_lookup_iter))) {
+    if (idx_proj_lookup_ctdef->index_scan_proj_exprs_.count() > 0 &&
+        OB_FAIL(root_lookup_param.index_scan_proj_exprs_.assign(idx_proj_lookup_ctdef->index_scan_proj_exprs_))) {
+      LOG_WARN("failed to assign index scan proj exprs", K(ret));
+    } else if (OB_FAIL(create_das_iter(alloc, root_lookup_param, root_lookup_iter))) {
       LOG_WARN("failed to create das iter", K(ret));
     } else if (OB_FAIL(create_iter_children_array(2, alloc, root_lookup_iter))) {
       LOG_WARN("failed to create iter children array", K(ret));
@@ -2057,18 +1976,17 @@ int ObDASIterUtils::create_functional_lookup_sub_tree(ObTableScanParam &scan_par
     data_table_iters = static_cast<ObDASIter **>(buf);
     for (int64_t i = 0; OB_SUCC(ret) && i < func_lookup_cnt; i++) {
       data_table_iters[i] = nullptr;
-      ObDASFTSTabletID fts_tablet_ids;
-      fts_tablet_ids.inv_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[i].inv_idx_tablet_id_;
-      fts_tablet_ids.fwd_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[i].fwd_idx_tablet_id_;
-      fts_tablet_ids.doc_id_idx_tablet_id_ = related_tablet_ids.fts_tablet_ids_[i].doc_id_idx_tablet_id_;
-      if (OB_FAIL(create_functional_text_retrieval_sub_tree(scan_param.ls_id_,
-                                                            alloc,
-                                                            static_cast<const ObDASIRScanCtDef *>(func_lookup_ctdef->get_func_lookup_scan_ctdef(i)),
-                                                            static_cast<ObDASIRScanRtDef *>(func_lookup_rtdef->get_func_lookup_scan_rtdef(i)),
-                                                            fts_tablet_ids,
-                                                            trans_desc,
-                                                            snapshot,
-                                                            data_table_iters[i]))) {
+      const ObDASIRScanCtDef *ir_ctdef = static_cast<const ObDASIRScanCtDef*>(func_lookup_ctdef->get_func_lookup_scan_ctdef(i));
+      ObDASIRScanRtDef *ir_rtdef = static_cast<ObDASIRScanRtDef*>(func_lookup_rtdef->get_func_lookup_scan_rtdef(i));
+      if (OB_FAIL(create_text_retrieval_sub_tree(scan_param.ls_id_,
+                                                 alloc,
+                                                 ir_ctdef,
+                                                 ir_rtdef,
+                                                 related_tablet_ids.fts_tablet_ids_.at(ir_rtdef->fts_idx_),
+                                                 true,
+                                                 trans_desc,
+                                                 snapshot,
+                                                 data_table_iters[i]))) {
         LOG_WARN("failed to create text retrieval sub tree", K(ret));
       }
     }
@@ -2140,6 +2058,9 @@ int ObDASIterUtils::create_functional_lookup_sub_tree(ObTableScanParam &scan_par
     rowkey_docid_param.eval_ctx_ = rtdef->eval_ctx_;
     rowkey_docid_param.exec_ctx_ = &rtdef->eval_ctx_->exec_ctx_;
     rowkey_docid_param.output_ = &ctdef->result_output_;
+    if (lookup_keep_order) {
+      rtdef->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+    }
     if (OB_FAIL(create_das_iter(alloc, rowkey_docid_param, rowkey_docid_iter))) {
       LOG_WARN("failed to create data table lookup scan iter", K(ret));
     } else {
@@ -2259,7 +2180,7 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
         mvi_lookup_iter->get_children()[1] = docid_rowkey_table_iter;
         index_table_iter->set_scan_param(scan_param);
         docid_rowkey_table_iter->set_scan_param(mvi_lookup_iter->get_lookup_param());
-        mvi_lookup_iter->set_tablet_id(related_tablet_ids.aux_lookup_tablet_id_);
+        mvi_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         mvi_lookup_iter->set_ls_id(scan_param.ls_id_);
       }
     }
@@ -2516,11 +2437,12 @@ int ObDASIterUtils::create_index_merge_iter_tree(ObTableScanParam &scan_param,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret));
   } else {
-    const bool need_lookup = attach_ctdef->op_type_ == DAS_OP_TABLE_LOOKUP;
+    const bool need_lookup = (attach_ctdef->op_type_ == ObDASOpType::DAS_OP_TABLE_LOOKUP) ||
+                             (attach_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP);
     const ObDASBaseCtDef *index_merge_ctdef = need_lookup ? attach_ctdef->children_[0] : attach_ctdef;
     ObDASBaseRtDef *index_merge_rtdef = need_lookup ? attach_rtdef->children_[0] : attach_rtdef;
     ObDASIter *index_merge_root = nullptr;
-    if (OB_FAIL(create_index_merge_sub_tree(scan_param.ls_id_,
+    if (OB_FAIL(create_index_merge_sub_tree(scan_param,
                                             alloc,
                                             index_merge_ctdef,
                                             index_merge_rtdef,
@@ -2529,13 +2451,44 @@ int ObDASIterUtils::create_index_merge_iter_tree(ObTableScanParam &scan_param,
                                             snapshot,
                                             index_merge_root))) {
       LOG_WARN("failed to create index merge iter tree", K(ret));
+    } else if (OB_ISNULL(index_merge_root)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null index merge root", KPC(attach_ctdef), K(ret));
     } else if (need_lookup) {
-      const ObDASTableLookupCtDef *table_lookup_ctdef = static_cast<const ObDASTableLookupCtDef *>(attach_ctdef);
-      ObDASTableLookupRtDef *table_lookup_rtdef = static_cast<ObDASTableLookupRtDef *>(attach_rtdef);
-      if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, index_merge_ctdef, index_merge_rtdef, table_lookup_ctdef->get_lookup_scan_ctdef(),
-                                               table_lookup_rtdef->get_lookup_scan_rtdef(), table_lookup_ctdef, table_lookup_rtdef, related_tablet_ids,
-                                               tx_desc, snapshot, related_tablet_ids.lookup_tablet_id_, index_merge_root, iter_tree))) {
-        LOG_WARN("failed to create local lookup iter tree", K(ret));
+      const ObDASScanCtDef *lookup_ctdef = static_cast<const ObDASScanCtDef*>(attach_ctdef->children_[1]);
+      ObDASScanRtDef *lookup_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef->children_[1]);
+      if (attach_ctdef->op_type_ == ObDASOpType::DAS_OP_TABLE_LOOKUP) {
+        ObDASLocalLookupIter *lookup_iter = nullptr;
+        if (OB_FAIL(create_local_lookup_sub_tree(scan_param,
+                                                alloc,
+                                                index_merge_ctdef,
+                                                index_merge_rtdef,
+                                                lookup_ctdef,
+                                                lookup_rtdef,
+                                                tx_desc,
+                                                snapshot,
+                                                index_merge_root,
+                                                related_tablet_ids.lookup_tablet_id_,
+                                                lookup_iter))) {
+          LOG_WARN("failed to create lookup iter for index merge", K(ret));
+        } else {
+          iter_tree = lookup_iter;
+        }
+      } else if (attach_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP) {
+        ObDASCacheLookupIter *lookup_iter = nullptr;
+        if (OB_FAIL(create_cache_lookup_sub_tree(scan_param,
+                                                alloc,
+                                                attach_ctdef,
+                                                attach_rtdef,
+                                                tx_desc,
+                                                snapshot,
+                                                index_merge_root,
+                                                related_tablet_ids.lookup_tablet_id_,
+                                                lookup_iter))) {
+          LOG_WARN("failed to create lookup iter for index merge", K(ret));
+        } else {
+          iter_tree = lookup_iter;
+        }
       }
     } else {
       iter_tree = index_merge_root;
@@ -2545,7 +2498,180 @@ int ObDASIterUtils::create_index_merge_iter_tree(ObTableScanParam &scan_param,
   return ret;
 }
 
-int ObDASIterUtils::create_index_merge_sub_tree(const ObLSID &ls_id,
+int ObDASIterUtils::create_local_lookup_sub_tree(ObTableScanParam &scan_param,
+                                                 common::ObIAllocator &alloc,
+                                                 const ObDASBaseCtDef *index_ctdef,
+                                                 ObDASBaseRtDef *index_rtdef,
+                                                 const ObDASScanCtDef *lookup_ctdef,
+                                                 ObDASScanRtDef *lookup_rtdef,
+                                                 transaction::ObTxDesc *trans_desc,
+                                                 transaction::ObTxReadSnapshot *snapshot,
+                                                 ObDASIter *index_iter,
+                                                 const ObTabletID &lookup_tablet_id,
+                                                 ObDASLocalLookupIter *&lookup_iter,
+                                                 const bool lookup_keep_order,
+                                                 const int64_t lookup_batch_size)
+{
+  int ret = OB_SUCCESS;
+  ObDASScanIterParam data_table_param;
+  ObDASScanIter *data_table_iter = nullptr;
+  data_table_param.scan_ctdef_ = lookup_ctdef;
+  data_table_param.max_size_ = lookup_rtdef->eval_ctx_->is_vectorized() ? lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
+  data_table_param.eval_ctx_ = lookup_rtdef->eval_ctx_;
+  data_table_param.exec_ctx_ = &lookup_rtdef->eval_ctx_->exec_ctx_;
+  data_table_param.output_ = &lookup_ctdef->result_output_;
+  if (OB_FAIL(create_das_iter(alloc, data_table_param, data_table_iter))) {
+    LOG_WARN("failed to create data table iter", K(ret));
+  } else {
+    ObDASLocalLookupIterParam lookup_param;
+    lookup_param.max_size_ = lookup_rtdef->eval_ctx_->is_vectorized() ? lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
+    lookup_param.eval_ctx_ = lookup_rtdef->eval_ctx_;
+    lookup_param.exec_ctx_ = &lookup_rtdef->eval_ctx_->exec_ctx_;
+    lookup_param.output_ = &lookup_ctdef->result_output_;
+    lookup_param.default_batch_row_count_ = lookup_batch_size;
+    lookup_param.index_ctdef_ = index_ctdef;
+    lookup_param.index_rtdef_ = index_rtdef;
+    lookup_param.lookup_ctdef_ = lookup_ctdef;
+    lookup_param.lookup_rtdef_ = lookup_rtdef;
+    lookup_param.index_table_iter_ = index_iter;
+    lookup_param.data_table_iter_ = data_table_iter;
+    lookup_param.trans_desc_ = trans_desc;
+    lookup_param.snapshot_ = snapshot;
+    lookup_param.rowkey_exprs_ = &lookup_ctdef->rowkey_exprs_;
+    if (OB_LIKELY(lookup_keep_order)) {
+      lookup_param.lookup_rtdef_->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+    }
+    if (OB_FAIL(create_das_iter(alloc, lookup_param, lookup_iter))) {
+      LOG_WARN("failed to create local lookup iter", K(ret));
+    } else if (OB_FAIL(create_iter_children_array(2, alloc, lookup_iter))) {
+      LOG_WARN("failed to create iter children array", K(ret));
+    } else {
+      lookup_iter->get_children()[0] = index_iter;
+      lookup_iter->get_children()[1] = data_table_iter;
+      data_table_iter->set_scan_param(lookup_iter->get_lookup_param());
+      lookup_iter->set_tablet_id(lookup_tablet_id);
+      lookup_iter->set_ls_id(scan_param.ls_id_);
+    }
+  }
+  return ret;
+}
+
+int ObDASIterUtils::create_cache_lookup_sub_tree(ObTableScanParam &scan_param,
+                                                 common::ObIAllocator &alloc,
+                                                 const ObDASBaseCtDef *attach_ctdef,
+                                                 ObDASBaseRtDef *attach_rtdef,
+                                                 transaction::ObTxDesc *trans_desc,
+                                                 transaction::ObTxReadSnapshot *snapshot,
+                                                 ObDASIter *index_iter,
+                                                 const ObTabletID &lookup_tablet_id,
+                                                 ObDASCacheLookupIter *&lookup_iter,
+                                                 const bool lookup_keep_order,
+                                                 const int64_t lookup_batch_size)
+{
+  int ret = OB_SUCCESS;
+  ObDASScanIterParam data_table_param;
+  ObDASScanIter *data_table_iter = nullptr;
+  const ObDASIndexProjLookupCtDef *idx_proj_lookup_ctdef = nullptr;
+  ObDASIndexProjLookupRtDef *idx_proj_lookup_rtdef = nullptr;
+  const ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
+  ObDASIRAuxLookupRtDef *aux_lookup_rtdef = nullptr;
+  const ObDASBaseCtDef *index_ctdef = nullptr;
+  ObDASBaseRtDef *index_rtdef = nullptr;
+  const ObDASScanCtDef *lookup_ctdef = nullptr;
+  ObDASScanRtDef *lookup_rtdef = nullptr;
+
+  if (attach_ctdef->op_type_ == DAS_OP_INDEX_PROJ_LOOKUP) {
+    idx_proj_lookup_ctdef = static_cast<const ObDASIndexProjLookupCtDef *>(attach_ctdef);
+    idx_proj_lookup_rtdef = static_cast<ObDASIndexProjLookupRtDef *>(attach_rtdef);
+    if (OB_ISNULL(idx_proj_lookup_ctdef) || OB_ISNULL(idx_proj_lookup_rtdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to attach def", K(ret), KP(attach_ctdef), KP(attach_rtdef));
+    } else {
+      lookup_ctdef = idx_proj_lookup_ctdef->get_lookup_scan_ctdef();
+      lookup_rtdef = idx_proj_lookup_rtdef->get_lookup_scan_rtdef();
+      index_ctdef = idx_proj_lookup_ctdef->get_rowkey_scan_ctdef();
+      index_rtdef = idx_proj_lookup_rtdef->get_rowkey_scan_rtdef();
+    }
+  } else if (attach_ctdef->op_type_ == DAS_OP_IR_AUX_LOOKUP) {
+    aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef*>(attach_ctdef);
+    aux_lookup_rtdef = static_cast<ObDASIRAuxLookupRtDef*>(attach_rtdef);
+    if (OB_ISNULL(aux_lookup_ctdef) || OB_ISNULL(aux_lookup_rtdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to attach def", K(ret), KP(attach_ctdef), KP(attach_rtdef));
+    } else {
+      lookup_ctdef = aux_lookup_ctdef->get_lookup_scan_ctdef();
+      lookup_rtdef = aux_lookup_rtdef->get_lookup_scan_rtdef();
+      index_ctdef = aux_lookup_ctdef->get_doc_id_scan_ctdef();
+      index_rtdef = aux_lookup_rtdef->get_doc_id_scan_rtdef();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(lookup_ctdef) || OB_ISNULL(lookup_rtdef) ||
+      OB_ISNULL(index_ctdef) || OB_ISNULL(index_rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(lookup_ctdef), KP(lookup_rtdef), KP(index_ctdef), KP(index_rtdef));
+  } else {
+    data_table_param.scan_ctdef_ = lookup_ctdef;
+    data_table_param.max_size_ = lookup_rtdef->eval_ctx_->is_vectorized() ? lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
+    data_table_param.eval_ctx_ = lookup_rtdef->eval_ctx_;
+    data_table_param.exec_ctx_ = &lookup_rtdef->eval_ctx_->exec_ctx_;
+    data_table_param.output_ = &lookup_ctdef->result_output_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(create_das_iter(alloc, data_table_param, data_table_iter))) {
+    LOG_WARN("failed to create data table iter", K(ret));
+  } else {
+    ObDASCacheLookupIterParam lookup_param;
+    lookup_param.max_size_ = lookup_rtdef->eval_ctx_->is_vectorized() ? lookup_rtdef->eval_ctx_->max_batch_size_ : 1;
+    lookup_param.eval_ctx_ = lookup_rtdef->eval_ctx_;
+    lookup_param.exec_ctx_ = &lookup_rtdef->eval_ctx_->exec_ctx_;
+    lookup_param.default_batch_row_count_ = lookup_batch_size;
+    lookup_param.index_ctdef_ = index_ctdef;
+    lookup_param.index_rtdef_ = index_rtdef;
+    lookup_param.lookup_ctdef_ = lookup_ctdef;
+    lookup_param.lookup_rtdef_ = lookup_rtdef;
+    lookup_param.index_table_iter_ = index_iter;
+    lookup_param.data_table_iter_ = data_table_iter;
+    lookup_param.trans_desc_ = trans_desc;
+    lookup_param.snapshot_ = snapshot;
+    lookup_param.rowkey_exprs_ = &lookup_ctdef->rowkey_exprs_;
+    if (OB_LIKELY(lookup_keep_order)) {
+      lookup_param.lookup_rtdef_->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+    }
+    if (idx_proj_lookup_ctdef != nullptr) {
+      lookup_param.output_ =  &idx_proj_lookup_ctdef->result_output_;
+      if (idx_proj_lookup_ctdef->index_scan_proj_exprs_.count() > 0 &&
+          OB_FAIL(lookup_param.index_scan_proj_exprs_.assign(idx_proj_lookup_ctdef->index_scan_proj_exprs_))) {
+        LOG_WARN("failed to assign index scan proj exprs", K(ret));
+      }
+    } else if (aux_lookup_ctdef != nullptr) {
+      lookup_param.output_ =  &aux_lookup_ctdef->result_output_;
+      if (aux_lookup_ctdef->relevance_proj_col_ != nullptr &&
+          OB_FAIL(lookup_param.index_scan_proj_exprs_.push_back(aux_lookup_ctdef->relevance_proj_col_))) {
+        LOG_WARN("failed to pushback relevance proj col to index scan proj exprs", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_das_iter(alloc, lookup_param, lookup_iter))) {
+      LOG_WARN("failed to create local lookup iter", K(ret));
+    } else if (OB_FAIL(create_iter_children_array(2, alloc, lookup_iter))) {
+      LOG_WARN("failed to create iter children array", K(ret));
+    } else {
+      lookup_iter->get_children()[0] = index_iter;
+      lookup_iter->get_children()[1] = data_table_iter;
+      data_table_iter->set_scan_param(lookup_iter->get_lookup_param());
+      lookup_iter->set_tablet_id(lookup_tablet_id);
+      lookup_iter->set_ls_id(scan_param.ls_id_);
+    }
+  }
+
+  return ret;
+}
+
+int ObDASIterUtils::create_index_merge_sub_tree(ObTableScanParam &scan_param,
                                                 common::ObIAllocator &alloc,
                                                 const ObDASBaseCtDef *ctdef,
                                                 ObDASBaseRtDef *rtdef,
@@ -2555,114 +2681,199 @@ int ObDASIterUtils::create_index_merge_sub_tree(const ObLSID &ls_id,
                                                 ObDASIter *&iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ctdef), K(rtdef));
-  } else if (ctdef->op_type_ == DAS_OP_TABLE_SCAN) {
-    ObDASScanIterParam scan_param;
-    init_scan_iter_param(scan_param, static_cast<const ObDASScanCtDef*>(ctdef), rtdef);
-
-    ObDASScanIter *scan_iter = nullptr;
-    if (OB_FAIL(create_das_iter(alloc, scan_param, scan_iter))) {
-      LOG_WARN("failed to create das scan iter", K(ret));
-    } else {
-      iter = scan_iter;
-    }
-  } else if (ctdef->op_type_ == DAS_OP_SORT) {
-    const ObDASSortCtDef *sort_ctdef = static_cast<const ObDASSortCtDef*>(ctdef);
-    ObDASSortRtDef *sort_rtdef = static_cast<ObDASSortRtDef*>(rtdef);
-    OB_ASSERT(ctdef->children_ != nullptr &&
-              ctdef->children_cnt_ == 1 &&
-              ctdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN);
-    const ObDASScanCtDef *scan_ctdef = static_cast<ObDASScanCtDef*>(ctdef->children_[0]);
-    ObDASScanIterParam child_scan_param;
-    init_scan_iter_param(child_scan_param, scan_ctdef, rtdef);
-
-    ObDASScanIter *child_scan_iter = nullptr;
-    ObDASIter *sort_iter = nullptr;
-    if (OB_FAIL(create_das_iter(alloc, child_scan_param, child_scan_iter))) {
-      LOG_WARN("failed to create das scan iter", K(ret));
-    } else if (OB_FAIL(create_sort_sub_tree(alloc, sort_ctdef, sort_rtdef, false/*need_rewind*/, false/*need_distinct*/, child_scan_iter, sort_iter))) {
-      LOG_WARN("failed to create das sort iter", K(ret));
-    } else {
-      iter = sort_iter;
-    }
-  } else if (ctdef->op_type_ == DAS_OP_INDEX_MERGE) {
+if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef) || ctdef->op_type_ != DAS_OP_INDEX_MERGE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ctdef), K(rtdef));
+  } else {
     const ObDASIndexMergeCtDef *merge_ctdef = static_cast<const ObDASIndexMergeCtDef*>(ctdef);
     ObDASIndexMergeRtDef *merge_rtdef = static_cast<ObDASIndexMergeRtDef*>(rtdef);
-    const ObDASBaseCtDef *left_ctdef = merge_ctdef->children_[0];
-    const ObDASBaseCtDef *right_ctdef = merge_ctdef->children_[1];
-    const ObDASScanCtDef *right_scan_ctdef = nullptr;
-    OB_ASSERT(right_ctdef->op_type_ == DAS_OP_TABLE_SCAN || right_ctdef->op_type_ == DAS_OP_SORT);
-    if (right_ctdef->op_type_ == DAS_OP_TABLE_SCAN) {
-      right_scan_ctdef = static_cast<const ObDASScanCtDef*>(right_ctdef);
-    } else {
-      OB_ASSERT(right_ctdef->children_ != nullptr &&
-                right_ctdef->children_cnt_ == 1 &&
-                right_ctdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN);
-      right_scan_ctdef = static_cast<const ObDASScanCtDef*>(right_ctdef->children_[0]);
+    ObArray<ObDASIter*> child_iters;
+    ObArray<ObDASScanIter*> child_scan_iters;
+    ObArray<ObDASScanRtDef*> child_scan_rtdefs;
+    int64_t children_cnt = ctdef->children_cnt_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
+      ObDASIter *child_iter = nullptr;
+      ObDASScanIter *child_scan_iter = nullptr;
+      ObDASScanRtDef *child_scan_rtdef = nullptr;
+      const ObDASBaseCtDef *child_ctdef = merge_ctdef->children_[i];
+      ObDASBaseRtDef *child_rtdef = merge_rtdef->children_[i];
+      if (OB_ISNULL(child_ctdef) || OB_ISNULL(child_rtdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null child ctdef or rtdef", K(ret));
+      } else if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_UNION
+                 || merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_INTERSECT) {
+        if (OB_FAIL(create_index_merge_sub_tree(scan_param,
+                                                alloc,
+                                                child_ctdef,
+                                                child_rtdef,
+                                                related_tablet_ids,
+                                                tx_desc,
+                                                snapshot,
+                                                child_iter))) {
+          LOG_WARN("failed to create index merge sub tree", K(ret));
+        }
+      } else if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_SCAN) {
+        ObDASScanRtDef *scan_rtdef = nullptr;
+        if (child_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
+          scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef);
+        } else if (child_rtdef->op_type_ == DAS_OP_SORT) {
+          if (child_rtdef->children_cnt_ == 1 && OB_NOT_NULL(child_rtdef->children_[0]) &&
+                child_rtdef->children_[0]->op_type_ == DAS_OP_TABLE_SCAN) {
+            scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]);
+          }
+        }
+        if (OB_ISNULL(scan_rtdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null scan rtdef", K(ret));
+        } else {
+          child_scan_rtdef = scan_rtdef;
+          ObDASScanIterParam scan_param;
+          ObDASScanIter *scan_iter = nullptr;
+          const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+          scan_param.scan_ctdef_ = scan_ctdef;
+          scan_param.max_size_ = rtdef->eval_ctx_->is_vectorized() ? rtdef->eval_ctx_->max_batch_size_ : 1;
+          scan_param.eval_ctx_ = rtdef->eval_ctx_;
+          scan_param.exec_ctx_ = &rtdef->eval_ctx_->exec_ctx_;
+          scan_param.output_ = &scan_ctdef->result_output_;
+          if (OB_FAIL(create_das_iter(alloc, scan_param, scan_iter))) {
+            LOG_WARN("failed to create das scan iter", K(ret));
+          } else {
+            child_scan_iter = scan_iter;
+            child_iter = scan_iter;
+          }
+        }
+      } else if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_FTS_INDEX) {
+        ObDASIRScanRtDef *ir_rtdef = nullptr;
+        const ObDASIRScanCtDef *ir_ctdef = nullptr;
+        ObDASIter *ir_iter = nullptr;
+        const ObDASBaseCtDef *ctdef = (child_ctdef->op_type_ == DAS_OP_SORT) ? child_ctdef->children_[0] : child_ctdef;
+        ObDASBaseRtDef *rtdef = (child_rtdef->op_type_ == DAS_OP_SORT) ? child_rtdef->children_[0] : child_rtdef;
+        if (OB_NOT_NULL(ctdef) && OB_NOT_NULL(rtdef)) {
+          ir_ctdef = static_cast<const ObDASIRScanCtDef*>((ctdef->op_type_ == DAS_OP_IR_AUX_LOOKUP) ? ctdef->children_[0] : ctdef);
+          ir_rtdef = static_cast<ObDASIRScanRtDef *>((rtdef->op_type_ == DAS_OP_IR_AUX_LOOKUP) ? rtdef->children_[0] : rtdef);
+        }
+        if (OB_ISNULL(ir_ctdef) || OB_ISNULL(ir_rtdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ir ctdef or rtdef", K(ret));
+        } else if (OB_FAIL(create_text_retrieval_sub_tree(scan_param.ls_id_,
+                                                          alloc,
+                                                          ir_ctdef,
+                                                          ir_rtdef,
+                                                          related_tablet_ids.fts_tablet_ids_.at(ir_rtdef->fts_idx_),
+                                                          false,
+                                                          tx_desc,
+                                                          snapshot,
+                                                          ir_iter))) {
+          LOG_WARN("failed to create text retrieval sub tree", K(ret));
+        } else if (rtdef->op_type_ == DAS_OP_IR_AUX_LOOKUP) {
+          ObDASScanRtDef *lookup_rtdef = static_cast<ObDASIRAuxLookupRtDef*>(rtdef)->get_lookup_scan_rtdef();
+          if (OB_ISNULL(lookup_rtdef)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null doc id lookup rtdef", K(ret));
+          } else if (ir_ctdef->need_proj_relevance_score()) {
+            ObDASCacheLookupIter *doc_id_lookup_iter = nullptr;
+            if (OB_FAIL(create_cache_lookup_sub_tree(scan_param,
+                                                    alloc,
+                                                    ctdef,
+                                                    rtdef,
+                                                    tx_desc,
+                                                    snapshot,
+                                                    ir_iter,
+                                                    related_tablet_ids.doc_rowkey_tablet_id_,
+                                                    doc_id_lookup_iter))) {
+              LOG_WARN("failed to create local lookup sub tree", K(ret));
+            } else {
+              child_iter = doc_id_lookup_iter;
+            }
+          } else {
+            ObDASLocalLookupIter *doc_id_lookup_iter = nullptr;
+            if (OB_FAIL(create_local_lookup_sub_tree(scan_param,
+                                                     alloc,
+                                                     ir_rtdef->ctdef_,
+                                                     ir_rtdef,
+                                                     static_cast<const ObDASScanCtDef*>(lookup_rtdef->ctdef_),
+                                                     lookup_rtdef,
+                                                     tx_desc,
+                                                     snapshot,
+                                                     ir_iter,
+                                                     related_tablet_ids.doc_rowkey_tablet_id_,
+                                                     doc_id_lookup_iter))) {
+              LOG_WARN("failed to create local lookup sub tree", K(ret));
+            } else {
+              child_iter = doc_id_lookup_iter;
+            }
+          }
+        } else {
+          child_iter = ir_iter;
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(child_iter)) {
+        if ((merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_SCAN
+             || merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_FTS_INDEX)
+            && child_ctdef->op_type_ == DAS_OP_SORT) {
+          // insert a sort iter, data rows are deep copied in index merge thus the sort iter doesn't need to hold the memory
+          const bool need_rewind = false;
+          const bool need_distinct = false;
+          ObDASIter *sort_iter = nullptr;
+          ObDASSortRtDef *sort_rtdef = static_cast<ObDASSortRtDef*>(child_rtdef);
+          const ObDASSortCtDef *sort_ctdef = static_cast<const ObDASSortCtDef*>(child_ctdef);
+          if (OB_FAIL(create_sort_sub_tree(alloc, sort_ctdef, sort_rtdef, need_rewind, need_distinct, child_iter, sort_iter))) {
+            LOG_WARN("failed to create sort sub tree", K(ret));
+          } else {
+            child_iter = sort_iter;
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(child_iters.push_back(child_iter))) {
+        LOG_WARN("failed to push back child iter", K(ret));
+      } else if (OB_FAIL(child_scan_iters.push_back(child_scan_iter))) {
+        LOG_WARN("failed to push back child scan iter", K(ret));
+      } else if (OB_FAIL(child_scan_rtdefs.push_back(child_scan_rtdef))) {
+        LOG_WARN("failed to push back child scan rtdef", K(ret));
+      }
     }
-    OB_ASSERT(right_scan_ctdef != nullptr);
-    ObDASIter *left_iter = nullptr;
-    ObDASIter *right_iter = nullptr;
-    if (OB_FAIL(create_index_merge_sub_tree(ls_id,
-                                            alloc,
-                                            merge_ctdef->children_[0],
-                                            merge_rtdef->children_[0],
-                                            related_tablet_ids,
-                                            tx_desc,
-                                            snapshot,
-                                            left_iter))) {
-      LOG_WARN("failed to create index merge sub tree", K(ret));
-    } else if (OB_FAIL(create_index_merge_sub_tree(ls_id,
-                                                   alloc,
-                                                   merge_ctdef->children_[1],
-                                                   merge_rtdef->children_[1],
-                                                   related_tablet_ids,
-                                                   tx_desc,
-                                                   snapshot,
-                                                   right_iter))) {
-      LOG_WARN("failed to create index merge sub tree", K(ret));
-    } else {
+
+    if (OB_SUCC(ret)) {
       ObDASIndexMergeIterParam merge_param;
       ObDASIndexMergeIter *merge_iter = nullptr;
       merge_param.max_size_ = merge_rtdef->eval_ctx_->is_vectorized() ?
           merge_rtdef->eval_ctx_->max_batch_size_ : 1;
       merge_param.eval_ctx_ = merge_rtdef->eval_ctx_;
       merge_param.exec_ctx_ = &merge_rtdef->eval_ctx_->exec_ctx_;
-      merge_param.output_ = &right_scan_ctdef->rowkey_exprs_;
+      merge_param.output_ = &merge_ctdef->result_output_;
       merge_param.merge_type_ = merge_ctdef->merge_type_;
-      merge_param.rowkey_exprs_ = &right_scan_ctdef->rowkey_exprs_;
-      merge_param.left_iter_ = left_iter;
-      merge_param.left_output_ = left_iter->get_output();
-      merge_param.right_iter_ = right_iter;
-      merge_param.right_output_ = right_iter->get_output();
       merge_param.ctdef_ = merge_ctdef;
       merge_param.rtdef_ = merge_rtdef;
+      merge_param.child_iters_ = &child_iters;
+      merge_param.child_scan_rtdefs_ = &child_scan_rtdefs;
       merge_param.tx_desc_ = tx_desc;
       merge_param.snapshot_ = snapshot;
       merge_param.is_reverse_ = merge_ctdef->is_reverse_;
-      merge_param.is_left_child_leaf_node_ = (left_iter->get_type() != DAS_ITER_INDEX_MERGE);
+      merge_param.rowkey_exprs_ = &merge_ctdef->rowkey_exprs_;
       if (OB_FAIL(create_das_iter(alloc, merge_param, merge_iter))) {
-        LOG_WARN("failed to create index merge iter", K(merge_param));
-      } else if (OB_FAIL(merge_iter->set_ls_tablet_ids(ls_id, related_tablet_ids))) {
+        LOG_WARN("failed to create das index merge iter", K(ret));
+      } else if (OB_FAIL(merge_iter->set_ls_tablet_ids(scan_param.ls_id_, related_tablet_ids))) {
         LOG_WARN("failed to set ls tablet ids", K(ret));
-      } else if (OB_FAIL(create_iter_children_array(2, alloc, merge_iter))) {
+      } else if (OB_FAIL(create_iter_children_array(children_cnt, alloc, merge_iter))) {
         LOG_WARN("failed to create iter children array", K(ret));
       } else {
-        merge_iter->get_children()[0] = left_iter;
-        merge_iter->get_children()[1] = right_iter;
-        if (left_iter->get_type() != DAS_ITER_INDEX_MERGE) {
-          ObDASScanIter *left_scan_iter = (left_iter->get_type() == DAS_ITER_SCAN) ?
-              static_cast<ObDASScanIter*>(left_iter) : static_cast<ObDASScanIter*>(left_iter->get_children()[0]);
-          OB_ASSERT(left_scan_iter != nullptr);
-          left_scan_iter->set_scan_param(merge_iter->get_left_param());
+        for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
+          merge_iter->get_children()[i] = child_iters[i];
+          ObTableScanParam *child_scan_param = nullptr;
+          if (child_scan_rtdefs.at(i) != nullptr) {
+            if (OB_ISNULL(child_scan_iters.at(i)) || OB_ISNULL(child_scan_param = merge_iter->get_child_scan_param(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null child scan iter or param", K(ret));
+            } else {
+              child_scan_iters.at(i)->set_scan_param(*child_scan_param);
+            }
+          }
         }
-        OB_ASSERT(right_iter->get_type() == DAS_ITER_SCAN || right_iter->get_type() == DAS_ITER_SORT);
-        ObDASScanIter *right_scan_iter = (right_iter->get_type() == DAS_ITER_SCAN) ?
-            static_cast<ObDASScanIter*>(right_iter) : static_cast<ObDASScanIter*>(right_iter->get_children()[0]);
-        OB_ASSERT(right_scan_iter != nullptr);
-        right_scan_iter->set_scan_param(merge_iter->get_right_param());
+      }
+      if (OB_SUCC(ret)) {
         iter = merge_iter;
       }
     }
@@ -2858,7 +3069,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
         } else if (OB_FALSE_IT(hnsw_scan_iter->set_related_tablet_ids(related_tablet_ids))) {
         } else if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, vec_aux_ctdef, vec_aux_rtdef, vid_rowkey_ctdef, vid_rowkey_rtdef,
                                                  nullptr, nullptr, related_tablet_ids, trans_desc, snapshot,
-                                                 related_tablet_ids.aux_lookup_tablet_id_, hnsw_scan_iter, aux_lookup_iter,
+                                                 related_tablet_ids.doc_rowkey_tablet_id_, hnsw_scan_iter, aux_lookup_iter,
                                                  batch_count))) {
           LOG_WARN("failed to create aux local lookup sub tree", K(ret));
         } else if (hnsw_scan_iter->enable_using_simplified_scan() &&

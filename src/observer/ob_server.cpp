@@ -73,7 +73,10 @@
 #endif
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "storage/fts/dict/ob_ft_cache.h"
 #include "common/ob_target_specific.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
+#include "plugin/sys/ob_plugin_mgr.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -83,6 +86,7 @@ using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::transaction;
 using namespace oceanbase::logservice;
+using namespace oceanbase::plugin;
 
 extern "C" void ussl_stop();
 extern "C" void ussl_wait();
@@ -362,6 +366,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init interrupt failed", KR(ret));
     } else if (OB_FAIL(init_zlib_lite_compressor())) {
       LOG_ERROR("init zlib lite compressor failed", KR(ret));
+    } else if (OB_FAIL(init_plugin())) {
+      LOG_ERROR("init plugin failed", KR(ret));
     } else if (OB_FAIL(rs_mgr_.init(&srv_rpc_proxy_, &config_, &sql_proxy_))) {
       LOG_ERROR("init rs_mgr_ failed", KR(ret));
     } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
@@ -404,8 +410,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObMasterKeyGetter::instance().init(&sql_proxy_))) {
       LOG_ERROR("init get master key server failed", KR(ret));
 #endif
-    } else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
-      LOG_ERROR("init fulltext plugins failed", K(ret));
+      //} else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
+      //     LOG_ERROR("init fulltext plugins failed", K(ret));
     } else if (OB_FAIL(init_storage())) {
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
@@ -499,12 +505,17 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init backup index cache failed", KR(ret));
     } else if (OB_FAIL(OB_BACKUP_META_CACHE.init())) {
       LOG_ERROR("init backup meta cache failed", KR(ret));
+    } else if (OB_FAIL(ObDictCache::get_instance().init("dict_cache"))) {
+      LOG_ERROR("init dict cache failed", KR(ret));
     } else if (OB_FAIL(ObActiveSessHistList::get_instance().init())) {
       LOG_ERROR("init ASH failed", KR(ret));
-    } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
+    } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_,
+                                                              net_frame_.get_req_transport()))) {
       LOG_ERROR("init server blacklist failed", KR(ret));
     } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
       LOG_WARN("init longops mgr fail", KR(ret));
+    } else if (OB_FAIL(ObGenDicLoader::get_instance().init())) {
+      LOG_WARN("init dictionary loader failed", K(ret));
     } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
       LOG_WARN("init ddl redo lock failed", K(ret));
 #ifdef ERRSIM
@@ -797,10 +808,6 @@ void ObServer::destroy()
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
 
-    FLOG_INFO("begin to unregister fulltext plugins");
-    ObTenantFTPluginMgr::unregister_plugins();
-    FLOG_INFO("fulltext plugins unregistered");
-
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -820,6 +827,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy backup meta cache");
     OB_BACKUP_META_CACHE.destroy();
     FLOG_INFO("backup meta cache destroyed");
+
+    FLOG_INFO("begin to destroy dict cache");
+    ObDictCache::get_instance().destroy();
+    FLOG_INFO("dict cache destroyed");
 
     FLOG_INFO("begin to destroy log block mgr");
     log_block_mgr_.destroy();
@@ -885,6 +896,8 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy cgroup service");
     cgroup_ctrl_.destroy();
     FLOG_INFO("cgroup service destroyed");
+
+    deinit_plugin();
 
     deinit_zlib_lite_compressor();
 
@@ -2179,6 +2192,11 @@ int ObServer::init_opts_config(bool has_config_file)
     config_.use_ipv6.set_version(start_time_);
   }
 
+  if (opts_.plugins_load_) {
+    config_.plugins_load.set_value(opts_.plugins_load_);
+    config_.plugins_load.set_version(start_time_);
+  }
+
   return ret;
 }
 
@@ -2596,6 +2614,50 @@ int ObServer::init_interrupt()
     LOG_ERROR("fail init interrupt mgr", KR(ret));
   }
   return ret;
+}
+
+int ObServer::init_plugin()
+{
+  int ret = OB_SUCCESS;
+  ObPluginMgr *mgr = nullptr;
+  ObString plugin_dir = ObSysVariables::get_value(ObSysVarsToIdxMap::get_store_idx(SYS_VAR_PLUGIN_DIR));
+
+  if (plugin_dir.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("plugin dir is invalid", KR(ret), K(plugin_dir));
+  } else {
+    LOG_INFO("got plugin dir", K(plugin_dir));
+
+    if (OB_ISNULL(mgr = new ObPluginMgr())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to create plugin manager instance", KR(ret));
+    } else if (OB_FAIL(mgr->init(plugin_dir))) {
+      LOG_ERROR("failed to init plugin manager", KR(ret));
+    } else if (OB_FAIL(mgr->load_builtin_plugins())) {
+      LOG_ERROR("failed to load builtin plugins", KR(ret));
+    } else if (OB_FAIL(mgr->load_dynamic_plugins(config_.plugins_load.get_value()))) {
+      LOG_ERROR("failed to load dynamic plugins", KR(ret));
+    } else {
+      GCTX.plugin_mgr_ = mgr;
+      LOG_INFO("plugin init done");
+    }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(mgr)) {
+    delete mgr;
+  }
+  return ret;
+}
+
+void ObServer::deinit_plugin()
+{
+  ObPluginMgr *mgr = GCTX.plugin_mgr_;
+  if (OB_NOT_NULL(mgr)) {
+    mgr->destroy();
+    delete mgr;
+    GCTX.plugin_mgr_ = nullptr;
+  }
+  LOG_INFO("plugin deinit done");
 }
 
 int ObServer::init_zlib_lite_compressor()

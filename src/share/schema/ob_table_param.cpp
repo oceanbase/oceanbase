@@ -617,6 +617,7 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_projector_(allocator),
     parser_name_(),
+    parser_properties_(),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
     is_fts_index_(false),
@@ -648,6 +649,7 @@ void ObTableParam::reset()
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
   rowid_projector_.reset();
   parser_name_.reset();
+  parser_properties_.reset();
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
@@ -706,6 +708,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_normal_cgs_at_the_end_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ENCODE(parser_properties_);
   }
   return ret;
 }
@@ -807,6 +812,14 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_normal_cgs_at_the_end_);
   }
+  if (OB_SUCC(ret) && is_fts_index_ && pos < data_len) {
+    ObString tmp_parser_properties;
+    if (OB_FAIL(tmp_parser_properties.deserialize(buf, data_len, pos))) {
+      LOG_WARN("Fail to deserialize parser properties", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_parser_properties, parser_properties_))) {
+      LOG_WARN("Fail to ccopy parser name ", K(ret), K_(parser_properties), K(tmp_parser_properties));
+    }
+  }
   return ret;
 }
 
@@ -863,6 +876,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 is_normal_cgs_at_the_end_);
+  }
+  if (OB_SUCC(ret) && is_fts_index_) {
+    OB_UNIS_ADD_LEN(parser_properties_);
   }
   return len;
 }
@@ -1568,6 +1584,8 @@ int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_write_string(allocator_, table_schema.get_parser_name_str(), parser_name_))) {
     LOG_WARN("failed to set parser name from table schema", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_, table_schema.get_parser_property_str(), parser_properties_))) {
+    LOG_WARN("fail to set parser properties from table schema", K(ret));
   }
   return ret;
 }
@@ -1590,6 +1608,7 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(enable_lob_locator_v2),
        K_(is_fts_index),
        K_(parser_name),
+       K_(parser_properties),
        K_(is_vec_index),
        K_(is_column_replica_table),
        K_(is_normal_cgs_at_the_end));

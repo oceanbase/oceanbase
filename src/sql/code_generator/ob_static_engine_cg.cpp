@@ -5601,6 +5601,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
           LOG_WARN("unexpected error, parser name is empty", K(ret), KPC(ddl_table_schema));
         } else {
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
+          OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_property_str(), spec.parser_properties_));
         }
       }
     }

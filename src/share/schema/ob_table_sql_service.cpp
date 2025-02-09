@@ -3082,6 +3082,7 @@ int ObTableSqlService::gen_table_dml(
     const char *kv_attributes = table.get_kv_attributes().empty() ?
         "" : table.get_kv_attributes().ptr();
     ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
+    const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
     ObString local_session_var;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
     if (OB_FAIL(check_table_options(table))) {
@@ -3090,6 +3091,10 @@ int ObTableSqlService::gen_table_dml(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("table flags is not supported when tenant's data version is below 4.1.0.0", KR(ret),
                K(table));
+    } else if (data_version < DATA_VERSION_4_3_5_1 && !table.get_parser_property_str().empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parser properities for full-text search index is not supported "
+               "when tenant's data version is below 4.3.5.1", KP(ret), K(table));
     } else if (data_version < DATA_VERSION_4_3_4_0 &&
                (table.get_part_option().get_auto_part() == true ||
                 table.get_part_option().get_auto_part_size() >= ObPartitionOption::MIN_AUTO_PART_SIZE)) {
@@ -3229,6 +3234,8 @@ int ObTableSqlService::gen_table_dml(
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
         || (data_version >= DATA_VERSION_4_3_5_1
+            && OB_FAIL(dml.add_column("parser_properties", ObHexEscapeSqlStr(parser_properties))))
+        || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         ) {
       LOG_WARN("add column failed", K(ret));
@@ -3296,6 +3303,7 @@ int ObTableSqlService::gen_table_options_dml(
     const char *kv_attributes = table.get_kv_attributes().length() <= 0 ?
         "" : table.get_kv_attributes().ptr();
     ObString index_params = table.get_index_params().empty() ? empty_str : table.get_index_params();
+    const ObString parser_properties = table.get_parser_property_str().empty() ? empty_str : table.get_parser_property_str();
 
     if (OB_FAIL(check_table_options(table))) {
       LOG_WARN("fail to check table option", K(ret), K(table));
@@ -3400,6 +3408,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("mv_mode", table.get_mv_mode())))
         || (data_version >= DATA_VERSION_4_3_3_0
             && OB_FAIL(dml.add_column("index_params", ObHexEscapeSqlStr(index_params))))
+        || (data_version >= DATA_VERSION_4_3_5_1
+            && OB_FAIL(dml.add_column("parser_properties", ObHexEscapeSqlStr(parser_properties))))
         || (data_version >= DATA_VERSION_4_3_5_1
             && OB_FAIL(dml.add_column("enable_macro_block_bloom_filter", table.get_enable_macro_block_bloom_filter())))
         ) {

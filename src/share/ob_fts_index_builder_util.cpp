@@ -10,12 +10,20 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/fts/ob_fts_literal.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 #include <regex>
 #include "ob_fts_index_builder_util.h"
 #include "ob_index_builder_util.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
+#include "storage/fts/dict/ob_dic_lock.h"
+#include "share/ob_server_struct.h"
+#include "rootserver/ob_root_service.h"
+#include "plugin/sys/ob_plugin_helper.h"
+#include "storage/fts/ob_fts_parser_property.h"
 
 namespace oceanbase
 {
@@ -60,6 +68,7 @@ int ObFtsIndexBuilderUtil::append_fts_rowkey_doc_arg(
   } else if (OB_FAIL(fts_rowkey_doc_arg.assign(index_arg))) {
     LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
   } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_name_.reset())) {
+  } else if (FALSE_IT(fts_rowkey_doc_arg.index_option_.parser_properties_.reset())) {
   } else if (FALSE_IT(fts_rowkey_doc_arg.index_type_ =
                         INDEX_TYPE_ROWKEY_DOC_ID_LOCAL)) {
   } else if (OB_FAIL(generate_fts_aux_index_name(fts_rowkey_doc_arg, allocator))) {
@@ -87,6 +96,7 @@ int ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(
     LOG_WARN("failed to assign to fts rowkey doc arg", K(ret));
   } else {
     fts_doc_rowkey_arg.index_option_.parser_name_.reset();
+    fts_doc_rowkey_arg.index_option_.parser_properties_.reset();
     if (is_local_fts_index(index_arg.index_type_) ||
         is_local_multivalue_index(index_arg.index_type_)) {
       fts_doc_rowkey_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
@@ -106,6 +116,7 @@ int ObFtsIndexBuilderUtil::append_fts_doc_rowkey_arg(
 }
 
 int ObFtsIndexBuilderUtil::append_fts_index_arg(
+    const share::schema::ObTableSchema &data_schema,
     const ObCreateIndexArg &index_arg,
     ObIAllocator *allocator,
     ObIArray<ObCreateIndexArg> &index_arg_list)
@@ -128,7 +139,7 @@ int ObFtsIndexBuilderUtil::append_fts_index_arg(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_fts_parser_name(fts_index_arg, allocator))) {
+  } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_index_arg, allocator))) {
     LOG_WARN("fail to generate fts parser name", K(ret));
   } else if (OB_FAIL(generate_fts_aux_index_name(fts_index_arg, allocator))) {
     LOG_WARN("failed to generate fts aux index name", K(ret));
@@ -139,6 +150,7 @@ int ObFtsIndexBuilderUtil::append_fts_index_arg(
 }
 
 int ObFtsIndexBuilderUtil::append_fts_doc_word_arg(
+    const share::schema::ObTableSchema &data_schema,
     const ObCreateIndexArg &index_arg,
     ObIAllocator *allocator,
     ObIArray<ObCreateIndexArg> &index_arg_list)
@@ -161,7 +173,7 @@ int ObFtsIndexBuilderUtil::append_fts_doc_word_arg(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_fts_parser_name(fts_doc_word_arg, allocator))) {
+  } else if (OB_FAIL(generate_fts_parser_name_and_property(data_schema, fts_doc_word_arg, allocator))) {
     LOG_WARN("fail to generate fts parser name", K(ret));
   } else if (OB_FAIL(generate_fts_aux_index_name(fts_doc_word_arg, allocator))) {
     LOG_WARN("failed to generate fts aux index name", K(ret));
@@ -1019,6 +1031,7 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
   } else if (!col_exists) {
     int32_t max_data_length = 0;
     ObCollationType collation_type = CS_TYPE_INVALID;
+    ObCharsetType charset_type = CHARSET_INVALID;
     ObColumnSchemaV2 column_schema;
     SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], ft_expr_def) {
       MEMSET(ft_expr_def, 0, sizeof(ft_expr_def));
@@ -1052,9 +1065,11 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
           if (max_data_length < col_schema->get_data_length()) {
             max_data_length = col_schema->get_data_length();
           }
-          if (CS_TYPE_INVALID == collation_type) {
+          if (CS_TYPE_INVALID == collation_type && CHARSET_INVALID == charset_type) {
             collation_type = col_schema->get_collation_type();
-          } else if (collation_type != col_schema->get_collation_type()) {
+            charset_type = col_schema->get_charset_type();
+          } else if (collation_type != col_schema->get_collation_type()
+                     || charset_type != col_schema->get_charset_type()) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED,
                 "create fulltext index on columns with different collation");
@@ -1084,6 +1099,7 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
           column_schema.set_data_type(ObVarcharType);
           column_schema.set_data_length(max_data_length); //生成列的长度和被分词列的最大长度保持一致
           column_schema.set_collation_type(collation_type); //生成列的collation和被分词列的collation保持一致
+          column_schema.set_charset_type(charset_type);
           column_schema.set_prev_column_id(UINT64_MAX);
           column_schema.set_next_column_id(UINT64_MAX);
           if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
@@ -1670,12 +1686,12 @@ int ObFtsIndexBuilderUtil::push_back_gen_col(
   return ret;
 }
 
-int ObFtsIndexBuilderUtil::generate_fts_parser_name(
+int ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(
+    const share::schema::ObTableSchema &data_schema,
     obrpc::ObCreateIndexArg &arg,
     ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  char *name_buf = nullptr;
   share::schema::ObIndexType type = arg.index_type_;
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1684,7 +1700,25 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_name(
                       && !share::schema::is_fts_doc_word_aux(type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(type));
-  } else if (OB_ISNULL(name_buf = static_cast<char *>(allocator->alloc(OB_PLUGIN_NAME_LENGTH)))) {
+  } else if (OB_FALSE_IT(arg.tenant_id_ = data_schema.get_tenant_id())) {
+  } else if (OB_FAIL(generate_fts_parser_name(arg, *allocator))) {
+    LOG_WARN("fail to generate fts parser name", K(ret), K(arg));
+  } else if (OB_FAIL(generate_fts_parser_property(data_schema, arg, *allocator))) {
+    LOG_WARN("fail to generate fts parser property", K(ret), K(arg));
+  } else {
+    LOG_INFO("succeed to generate fts parser name and property", K(ret), K(arg.index_option_.parser_name_),
+        K(arg.index_option_.parser_properties_));
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::generate_fts_parser_name(
+    obrpc::ObCreateIndexArg &arg,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  char *name_buf = nullptr;
+  if (OB_ISNULL(name_buf = static_cast<char *>(allocator.alloc(OB_PLUGIN_NAME_LENGTH)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc name buffer", K(ret));
   } else {
@@ -1698,16 +1732,238 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_name(
     }
     if (OB_FAIL(parser_name.set_name(name_str))) {
       LOG_WARN("fail to set plugin name", K(ret), KCSTRING(name_str));
-    } else if (OB_FAIL(OB_FT_PLUGIN_MGR.get_ft_parser(parser_name, parser))) {
-      LOG_WARN("fail to get fulltext parser", K(ret), K(parser_name));
+    } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(name_str, parser))) {
+      if (OB_FUNCTION_NOT_DEFINED == ret) {
+        LOG_DEBUG("no such parser", K(name_str));
+      } else {
+        LOG_WARN("fail to get fulltext parser", K(ret), K(parser_name));
+      }
     } else if (OB_FAIL(parser.serialize_to_str(name_buf, OB_PLUGIN_NAME_LENGTH))) {
       LOG_WARN("fail to serialize to cstring", K(ret), K(parser));
     } else {
       arg.index_option_.parser_name_ = common::ObString::make_string(name_buf);
     }
+    if (OB_SUCC(ret)) {
+      bool is_need_load_dic = false; // not using
+      if (OB_FAIL(check_need_to_load_dic(arg.tenant_id_, arg.index_option_.parser_name_, is_need_load_dic))) {
+        LOG_WARN("fail to check need to load dic",
+            K(ret), K(arg.index_option_.parser_name_), K(is_need_load_dic));
+      }
+    }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(name_buf)) {
-    allocator->free(name_buf);
+    allocator.free(name_buf);
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::generate_fts_parser_property(
+    const share::schema::ObTableSchema &data_schema,
+    obrpc::ObCreateIndexArg &arg,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(arg.index_columns_.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(arg.index_columns_));
+  } else {
+    ObCollationType collation_type = CS_TYPE_INVALID;
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
+      const ObString &column_name = arg.index_columns_.at(i).column_name_;
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is empty", K(ret), K(column_name));
+      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+      } else if (CS_TYPE_INVALID == collation_type) {
+        collation_type = col_schema->get_collation_type();
+      } else if (collation_type != col_schema->get_collation_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
+      }
+    }
+
+    storage::ObFTParserJsonProps json_props;
+
+    if (FAILEDx(json_props.init())) {
+      LOG_WARN("fail to init json props", K(ret));
+    } else if (OB_FAIL(json_props.parse_from_valid_str(arg.index_option_.parser_properties_))) {
+      LOG_WARN("fail to parse json props", K(ret), K(arg.index_option_.parser_properties_));
+    } else if (OB_FAIL(json_props.rebuild_props_for_ddl(arg.index_option_.parser_name_,
+                                                        collation_type,
+                                                        true))) {
+      LOG_WARN("fail to rebuild props for ddl",
+               K(ret),
+               K(arg.index_option_.parser_properties_),
+               K(collation_type));
+    } else if (OB_FAIL(json_props.to_format_json(allocator,
+                                                 arg.index_option_.parser_properties_))) {
+      LOG_WARN("fail to to format json", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::check_need_to_load_dic(
+    const uint64_t tenant_id,
+    const ObString &parser_name,
+    bool &need_to_load_dic)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  ObString real_parser_name = parser_name;
+  need_to_load_dic = false;
+  if (!is_valid_tenant_id(tenant_id) || parser_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id is not valid or parser name is empty",
+        K(ret), K(tenant_id), K(parser_name));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (nullptr != real_parser_name.find('.')
+             && OB_FALSE_IT(real_parser_name = real_parser_name.split_on('.'))) {
+  } else if (tenant_data_version >= DATA_VERSION_4_3_5_1
+             && is_need_dictionary(real_parser_name)) {
+    need_to_load_dic = true;
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_1
+             && is_need_dictionary(real_parser_name)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("there are the observers with version lower than 4.3.5.1 in cluster, \
+        the parser is not suppoerted", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+        "there are the observers with version lower than 4.3.5.1 in cluster, the parser is");
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(
+    const ObTableSchema &index_schema,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (index_schema.is_fts_index_aux() || index_schema.is_fts_doc_word_aux()) {
+    bool need_to_load_dic = false;
+    uint64_t tenant_id = index_schema.get_tenant_id();
+    ObCharsetType charset_type = ObCharsetType::CHARSET_UTF8MB4;
+    const ObString &parser_name = index_schema.get_parser_name();
+    ObTableSchema::const_column_iterator tmp_begin = index_schema.column_begin();
+    ObTableSchema::const_column_iterator tmp_end = index_schema.column_end();
+    if (OB_FAIL(check_need_to_load_dic(tenant_id, parser_name, need_to_load_dic))) {
+      LOG_WARN("fail to check need to load dic", K(ret), K(tenant_id), K(parser_name), K(need_to_load_dic));
+    } else if (need_to_load_dic) {
+      for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+        ObColumnSchemaV2 *col = (*tmp_begin);
+        if (OB_ISNULL(col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column schema", K(ret));
+        } else if (ObCharsetType::CHARSET_UTF8MB4 == charset_type
+                   && ObCharsetType::CHARSET_ANY != col->get_charset_type()
+                   && ObCharsetType::CHARSET_INVALID != col->get_charset_type()
+                   && ObCharsetType::CHARSET_UTF8MB4 != col->get_charset_type()) {
+          charset_type = col->get_charset_type();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObTenantDicLoaderHandle dic_loader_handle;
+        if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
+                                                                  parser_name,
+                                                                  charset_type,
+                                                                  dic_loader_handle))) {
+          LOG_WARN("fail to get dic loader",
+              K(ret), K(tenant_id), K(parser_name), K(charset_type));
+        } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
+        } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id))) {
+          LOG_WARN("fail to try load dictionary", K(ret), K(tenant_id), K(dic_loader_handle));
+        } else if (OB_FAIL(storage::ObDicLock::lock_dic_tables_in_trans(tenant_id,
+                                                                        *dic_loader_handle.get_loader(),
+                                                                        transaction::tablelock::SHARE,
+                                                                        trans))) {
+          LOG_WARN("fail to lock all dictionaries", K(ret), K(tenant_id), K(dic_loader_handle));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::try_load_dictionary_for_all_tenants()
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  common::ObArray<uint64_t> all_tenants;
+
+  DEBUG_SYNC(BEFORE_LOAD_DICTIONARY_IN_BACKGROUND);
+
+  if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root service is null", K(ret));
+  } else if (OB_FAIL(GCTX.root_service_->get_schema_service().get_tenant_schema_guard(OB_SYS_TENANT_ID,
+                                                                                      schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_available_tenant_ids(all_tenants))) {
+    LOG_WARN("fail to get available tenant ids", K(ret));
+  } else {
+    for (int64_t i = 0; i < all_tenants.size(); ++i) { // ignore ret to delete other tenant's dic loader
+      const uint64_t tenant_id = all_tenants.at(i);
+      if (is_valid_tenant_id(tenant_id) && is_user_tenant(tenant_id)) {
+        lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+        // overwrite ret
+        if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+          LOG_WARN("fail to get tenant mode", K(ret), K(tenant_id), K(compat_mode));
+        } else if (compat_mode == lib::Worker::CompatMode::MYSQL) {
+          ObTenantDicLoaderHandle dic_loader_handle;
+          if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
+                                                                    ObFTSLiteral::PARSER_NAME_IK,
+                                                                    ObCharsetType::CHARSET_UTF8MB4,
+                                                                    dic_loader_handle))) {
+            LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
+          } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
+          } else if (OB_FAIL(
+                         dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id))) {
+            LOG_WARN("fail to try load dictionary", K(ret), K(tenant_id), K(dic_loader_handle));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::check_supportability_for_loader_key(
+    const uint64_t tenant_id,
+    const ObString &parser_name,
+    const ObCharsetType charset_type)
+{
+  int ret = OB_SUCCESS;
+  ObString real_parser_name = parser_name;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+                  parser_name.empty() ||
+                  CHARSET_INVALID == charset_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("these arguments are not valid", K(ret), K(tenant_id), K(parser_name), K(charset_type));
+  } else {
+    if (nullptr != real_parser_name.find('.')) {
+      real_parser_name = real_parser_name.split_on('.');
+    }
+    if (0 == real_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_IK)) {
+      switch (charset_type)
+      {
+        case ObCharsetType::CHARSET_UTF8MB4: {
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "the charset is");
+          LOG_WARN("not support the charset", K(ret), K(charset_type));
+          break;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1836,6 +2092,45 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
       } else if (collation_type != col_schema->get_collation_type()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::check_supportability_for_building_index(
+    const ObTableSchema *data_schema,
+    const obrpc::ObCreateIndexArg *index_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_arg) || OB_ISNULL(data_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_arg), KPC(data_schema));
+  } else if (static_cast<int64_t>(ObDDLResolver::INDEX_KEYNAME::FTS_KEY) == index_arg->index_key_) {
+    ObCharsetType charset_type = CHARSET_INVALID;
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is empty", K(ret), K(column_name));
+      } else if (OB_ISNULL(col_schema = data_schema->get_column_schema(column_name))) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+            column_name.ptr());
+      } else if (CHARSET_INVALID == charset_type) {
+        charset_type = col_schema->get_charset_type();
+      } else if (charset_type != col_schema->get_charset_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different charset type");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(check_supportability_for_loader_key(index_arg->tenant_id_,
+                                                      index_arg->index_option_.parser_name_,
+                                                      charset_type))) {
+        LOG_WARN("fail to check supportability for loader key",
+            K(index_arg->tenant_id_), K(index_arg->index_option_.parser_name_), K(charset_type));
       }
     }
   }

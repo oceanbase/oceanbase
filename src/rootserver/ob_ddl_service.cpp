@@ -2442,6 +2442,9 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
   uint64_t tenant_data_version = 0;
   ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
   RS_TRACE(create_tables_in_trans_begin);
+
+  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (table_schemas.count() < 1) {
@@ -2554,7 +2557,9 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
 
       for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
         ObTableSchema &table_schema = table_schemas.at(i);
-        if (OB_FAIL(ddl_operator.create_sequence_in_create_table(table_schema,
+        if (OB_FAIL(ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(table_schema, trans))) {
+          LOG_WARN("fail to try load and lock dictionary tables", K(ret));
+        } else if (OB_FAIL(ddl_operator.create_sequence_in_create_table(table_schema,
                                                                  trans,
                                                                  schema_guard,
                                                                  &sequence_ddl_arg))) {
@@ -7366,6 +7371,12 @@ int ObDDLService::create_aux_index(
       LOG_WARN("failed to assign to nonconst data schema", K(ret));
     } else if (OB_FAIL(create_index_arg.assign(arg.create_index_arg_))) {
       LOG_WARN("fail to assign create index arg", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_3_5_1
+        && (share::schema::is_fts_index_aux(create_index_arg.index_type_) || share::schema::is_fts_doc_word_aux(create_index_arg.index_type_))
+        && !create_index_arg.index_option_.parser_properties_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
     /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
     } else if (share::schema::is_fts_index(create_index_arg.index_type_)
       && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,

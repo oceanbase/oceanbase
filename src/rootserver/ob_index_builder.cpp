@@ -2004,9 +2004,13 @@ int ObIndexBuilder::set_index_table_options(const obrpc::ObCreateIndexArg &arg,
                                             share::schema::ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = data_schema.get_tenant_id();
+  uint64_t tenant_data_version = 0;
   if (!ddl_service_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", "ddl_service inited", ddl_service_.is_inited(), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else if (!data_schema.is_valid()) {
     // some items in arg may be invalid, don't check arg
     ret = OB_INVALID_ARGUMENT;
@@ -2028,8 +2032,16 @@ int ObIndexBuilder::set_index_table_options(const obrpc::ObCreateIndexArg &arg,
                "compress method", data_schema.get_compress_func_name());
     } else if (OB_FAIL(schema.set_comment(arg.index_option_.comment_))) {
       LOG_WARN("set_comment failed", "comment", arg.index_option_.comment_, K(ret));
-    } else if ((schema.is_fts_doc_word_aux() || schema.is_fts_index_aux()) && OB_FAIL(schema.set_parser_name(arg.index_option_.parser_name_))) {
-      LOG_WARN("set parser name failed", K(ret), "parser_name", arg.index_option_.parser_name_);
+    } else if (schema.is_fts_doc_word_aux() || schema.is_fts_index_aux()) {
+      if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+        if (OB_FAIL(schema.set_parser_name(arg.index_option_.parser_name_))) {
+          LOG_WARN("set parser name failed", K(ret), "parser_name", arg.index_option_.parser_name_);
+        }
+      } else if (OB_FAIL(schema.set_parser_name_and_properties(arg.index_option_.parser_name_,
+                                                               arg.index_option_.parser_properties_))) {
+        LOG_WARN("fail to set parser name and properties", K(ret), "parser_name", arg.index_option_.parser_name_,
+            "parser_properties", arg.index_option_.parser_properties_);
+      }
     } else if (is_vec_ivf_index(schema.get_index_type()) && FALSE_IT(schema.set_lob_inrow_threshold(OB_MAX_LOB_INROW_THRESHOLD))) {
     }
   }

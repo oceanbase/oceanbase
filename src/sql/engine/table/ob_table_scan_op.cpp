@@ -268,6 +268,16 @@ ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef()
         const int64_t lookup_child_idx = func_lookup_ctdef->get_main_lookup_scan_idx();
         lookup_ctdef = static_cast<ObDASScanCtDef *>(func_lookup_ctdef->children_[lookup_child_idx]);
       }
+    } else if (DAS_OP_TABLE_SCAN == attach_ctdef->children_[1]->op_type_) {
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_ctdef->children_[1]);
+    } else if (DAS_OP_DOC_ID_MERGE == attach_ctdef->children_[1]->op_type_) {
+      ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(attach_ctdef->children_[1]);
+      OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
+    } else if (DAS_OP_VID_MERGE == attach_ctdef->children_[1]->op_type_) {
+      ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(attach_ctdef->children_[1]);
+      OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
     }
   }
   return lookup_ctdef;
@@ -319,6 +329,16 @@ const ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef() const
         const int64_t lookup_child_idx = func_lookup_ctdef->get_main_lookup_scan_idx();
         lookup_ctdef = static_cast<ObDASScanCtDef *>(func_lookup_ctdef->children_[lookup_child_idx]);
       }
+    } else if (DAS_OP_TABLE_SCAN == attach_ctdef->children_[1]->op_type_) {
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_ctdef->children_[1]);
+    } else if (DAS_OP_DOC_ID_MERGE == attach_ctdef->children_[1]->op_type_) {
+      ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(attach_ctdef->children_[1]);
+      OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);
+    } else if (DAS_OP_VID_MERGE == attach_ctdef->children_[1]->op_type_) {
+      ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(attach_ctdef->children_[1]);
+      OB_ASSERT(2 == vid_merge_ctdef->children_cnt_ && vid_merge_ctdef->children_ != nullptr);
+      lookup_ctdef = static_cast<ObDASScanCtDef*>(vid_merge_ctdef->children_[0]);
     }
   }
   return lookup_ctdef;
@@ -345,7 +365,7 @@ ObDASScanCtDef *ObTableScanCtDef::get_rowkey_doc_ctdef()
     if (DAS_OP_DOC_ID_MERGE == attach_ctdef->op_type_) {
       OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
       rowkey_doc_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
-    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
+    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_ || DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_) {
       OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
       if (DAS_OP_DOC_ID_MERGE == attach_ctdef->children_[1]->op_type_) {
         ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(attach_ctdef->children_[1]);
@@ -378,7 +398,7 @@ ObDASScanCtDef *ObTableScanCtDef::get_rowkey_vid_ctdef()
     if (DAS_OP_VID_MERGE == attach_ctdef->op_type_) {
       OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
       rowkey_vid_ctdef = static_cast<ObDASScanCtDef *>(attach_ctdef->children_[1]);
-    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_) {
+    } else if (DAS_OP_TABLE_LOOKUP == attach_ctdef->op_type_ || DAS_OP_INDEX_PROJ_LOOKUP == attach_ctdef->op_type_) {
       OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
       if (DAS_OP_VID_MERGE == attach_ctdef->children_[1]->op_type_) {
         ObDASVIdMergeCtDef *vid_merge_ctdef = static_cast<ObDASVIdMergeCtDef *>(attach_ctdef->children_[1]);
@@ -1513,8 +1533,10 @@ int ObTableScanOp::prepare_index_merge_scan_range(int64_t group_idx)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KPC(attach_rtdef), K(ret));
   } else {
-    ObDASBaseRtDef *index_merge_rtdef = attach_rtdef->op_type_ == DAS_OP_TABLE_LOOKUP ?
-        attach_rtdef->children_[0] : attach_rtdef;
+    ObDASBaseRtDef *index_merge_rtdef = nullptr;
+    if (DAS_OP_TABLE_LOOKUP == attach_rtdef->op_type_ || DAS_OP_INDEX_PROJ_LOOKUP == attach_rtdef->op_type_) {
+      index_merge_rtdef = attach_rtdef->children_[0];
+    }
     if (OB_FAIL(prepare_range_for_each_index(group_idx, range_allocator, index_merge_rtdef))) {
       LOG_WARN("failed to prepare range for each index", KPC(index_merge_rtdef), K(ret));
     }
@@ -1527,94 +1549,104 @@ int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
                                                 ObDASBaseRtDef *rtdef)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(rtdef)) {
+  if (OB_ISNULL(rtdef) || rtdef->op_type_ != DAS_OP_INDEX_MERGE || OB_ISNULL(rtdef->ctdef_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KPC(rtdef), K(ret));
-  } else if (rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
-    ObQueryRangeArray key_ranges;
-    ObQueryRangeArray ss_key_ranges;
-    ObDASScanRtDef *scan_rtdef = static_cast<ObDASScanRtDef*>(rtdef);
-    const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(rtdef->ctdef_);
-    const ObQueryRange &pre_query_range = scan_ctdef->pre_query_range_;
-    scan_rtdef->key_ranges_.reuse();
-    scan_rtdef->ss_key_ranges_.reuse();
-    scan_rtdef->mbr_filters_.reuse();
-    if (OB_UNLIKELY(!pre_query_range.has_range())) {
-      // virtual table, do nothing
-    } else if (pre_query_range.is_contain_geo_filters() &&
-               OB_FAIL(ObSQLUtils::extract_geo_query_range(
-               pre_query_range,
-               allocator,
-               ctx_,
-               key_ranges,
-               scan_rtdef->mbr_filters_,
-               ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
-      LOG_WARN("failed to extract pre query ranges", K(ret));
-    } else if (!pre_query_range.is_contain_geo_filters() &&
-               OB_FAIL(ObSQLUtils::extract_pre_query_range(
-               pre_query_range,
-               allocator,
-               ctx_,
-               key_ranges,
-               ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
-      LOG_WARN("failed to extract pre query ranges", K(ret));
-    } else if (OB_FAIL(pre_query_range.get_ss_tablet_ranges(allocator,
-                                  ctx_,
-                                  ss_key_ranges,
-                                  ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
-      LOG_WARN("failed to final extract index skip query range", K(ret));
-    } else if (!ss_key_ranges.empty()) {
-      // index skip scan, ranges from extract_pre_query_range/get_ss_tablet_ranges,
-      //  prefix range and postfix range is single range
-      if (1 != ss_key_ranges.count() || 1 != key_ranges.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected index skip scan range", K(ret), K(key_ranges), K(ss_key_ranges));
-      } else {
-        key_ranges.at(0)->table_id_ = scan_ctdef->ref_table_id_;
-        key_ranges.at(0)->group_idx_ = group_idx;
-        ss_key_ranges.at(0)->table_id_ = scan_ctdef->ref_table_id_;
-        ss_key_ranges.at(0)->group_idx_ = group_idx;
-        if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_ranges.at(0))) ||
-            OB_FAIL(scan_rtdef->ss_key_ranges_.push_back(*ss_key_ranges.at(0)))) {
-          LOG_WARN("failed to push back ss key range", KPC(scan_rtdef), K(ret));
-        }
-      }
-    } else {
-      ObNewRange whole_range;
-      ObNewRange *key_range = nullptr;
-      whole_range.set_whole_range();
-      whole_range.table_id_ = scan_ctdef->ref_table_id_;
-      whole_range.group_idx_ = group_idx;
-      for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
-        key_range = key_ranges.at(i);
-        key_range->table_id_ = scan_ctdef->ref_table_id_;
-        key_range->group_idx_ = group_idx;
-        if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_range)) ||
-            OB_FAIL(scan_rtdef->ss_key_ranges_.push_back(whole_range))) {
-          LOG_WARN("failed to push back key range", KPC(scan_rtdef), K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
-      OZ(vt_result_converter_->convert_key_ranges(scan_rtdef->key_ranges_));
-    }
-  } else if (rtdef->op_type_ == DAS_OP_SORT) {
-    OB_ASSERT(rtdef->children_ != nullptr && rtdef->children_cnt_ == 1);
-    if (OB_FAIL(prepare_range_for_each_index(group_idx, allocator, rtdef->children_[0]))) {
-      LOG_WARN("failed to prepare scan range for child", K(ret));
-    }
-  } else if (rtdef->op_type_ == DAS_OP_INDEX_MERGE) {
-    OB_ASSERT(rtdef->children_ != nullptr && rtdef->children_cnt_ == 2);
-    if (OB_FAIL(prepare_range_for_each_index(group_idx, allocator, rtdef->children_[0]))) {
-      LOG_WARN("failed to prepare scan range for left tree", K(ret));
-    } else if (OB_FAIL(prepare_range_for_each_index(group_idx, allocator, rtdef->children_[1]))) {
-      LOG_WARN("failed to prepare scan range for right tree", K(ret));
-    }
+    LOG_WARN("invalid index merge rtdef", KPC(rtdef), K(ret));
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected rtdef type", K(rtdef), K(ret));
+    ObDASIndexMergeRtDef *merge_rtdef = static_cast<ObDASIndexMergeRtDef*>(rtdef);
+    const ObDASIndexMergeCtDef *merge_ctdef = static_cast<const ObDASIndexMergeCtDef*>(rtdef->ctdef_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < merge_rtdef->children_cnt_; ++i) {
+      ObDASBaseRtDef *child_rtdef = merge_rtdef->children_[i];
+      ObIndexMergeType node_type = merge_ctdef->merge_node_types_.at(i);
+      if (OB_ISNULL(child_rtdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid index merge rtdef", KPC(child_rtdef), K(ret));
+      } else if (INDEX_MERGE_UNION == node_type || INDEX_MERGE_INTERSECT == node_type) {
+        if (OB_FAIL(SMART_CALL(prepare_range_for_each_index(group_idx, allocator, child_rtdef)))) {
+          LOG_WARN("failed to prepare range for each index", KPC(child_rtdef), K(ret));
+        }
+      } else if (INDEX_MERGE_SCAN == node_type) {
+        ObDASScanRtDef *scan_rtdef = nullptr;
+        if (child_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
+          scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef);
+        } else if (child_rtdef->op_type_ == DAS_OP_SORT) {
+          OB_ASSERT(child_rtdef->children_cnt_ == 1);
+          scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]);
+        }
+        if (OB_ISNULL(scan_rtdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr scan rtdef", KPC(child_rtdef), K(ret));
+        } else {
+          ObQueryRangeArray key_ranges;
+          ObQueryRangeArray ss_key_ranges;
+          const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(scan_rtdef->ctdef_);
+          const ObQueryRangeProvider &query_range_provider = scan_ctdef->get_query_range_provider();
+          scan_rtdef->key_ranges_.reuse();
+          scan_rtdef->ss_key_ranges_.reuse();
+          scan_rtdef->mbr_filters_.reuse();
+          if (OB_UNLIKELY(!query_range_provider.has_range())) {
+            // virtual table, do nothing
+          } else if (query_range_provider.is_contain_geo_filters() &&
+                    OB_FAIL(ObSQLUtils::extract_geo_query_range(
+                    query_range_provider,
+                    allocator,
+                    ctx_,
+                    key_ranges,
+                    scan_rtdef->mbr_filters_,
+                    ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+            LOG_WARN("failed to extract pre query ranges", K(ret));
+          } else if (!query_range_provider.is_contain_geo_filters() &&
+                    OB_FAIL(ObSQLUtils::extract_pre_query_range(
+                    query_range_provider,
+                    allocator,
+                    ctx_,
+                    key_ranges,
+                    ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+            LOG_WARN("failed to extract pre query ranges", K(ret));
+          } else if (OB_FAIL(query_range_provider.get_ss_tablet_ranges(allocator,
+                                        ctx_,
+                                        ss_key_ranges,
+                                        ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+            LOG_WARN("failed to final extract index skip query range", K(ret));
+          } else if (!ss_key_ranges.empty()) {
+            // index skip scan, ranges from extract_pre_query_range/get_ss_tablet_ranges,
+            //  prefix range and postfix range is single range
+            if (1 != ss_key_ranges.count() || 1 != key_ranges.count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected index skip scan range", K(ret), K(key_ranges), K(ss_key_ranges));
+            } else {
+              key_ranges.at(0)->table_id_ = scan_ctdef->ref_table_id_;
+              key_ranges.at(0)->group_idx_ = group_idx;
+              ss_key_ranges.at(0)->table_id_ = scan_ctdef->ref_table_id_;
+              ss_key_ranges.at(0)->group_idx_ = group_idx;
+              if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_ranges.at(0))) ||
+                  OB_FAIL(scan_rtdef->ss_key_ranges_.push_back(*ss_key_ranges.at(0)))) {
+                LOG_WARN("failed to push back ss key range", KPC(scan_rtdef), K(ret));
+              }
+            }
+          } else {
+            ObNewRange whole_range;
+            ObNewRange *key_range = nullptr;
+            whole_range.set_whole_range();
+            whole_range.table_id_ = scan_ctdef->ref_table_id_;
+            whole_range.group_idx_ = group_idx;
+            for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
+              key_range = key_ranges.at(i);
+              key_range->table_id_ = scan_ctdef->ref_table_id_;
+              key_range->group_idx_ = group_idx;
+              if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_range)) ||
+                  OB_FAIL(scan_rtdef->ss_key_ranges_.push_back(whole_range))) {
+                LOG_WARN("failed to push back key range", KPC(scan_rtdef), K(ret));
+              }
+            }
+          }
+          if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
+            OZ(vt_result_converter_->convert_key_ranges(scan_rtdef->key_ranges_));
+          }
+        }
+      }
+    }
   }
-
   return ret;
 }
 
@@ -1709,7 +1741,8 @@ int ObTableScanOp::inner_open()
     LOG_WARN("prepare scan param failed", K(ret));
   } else if (MY_SPEC.is_vt_mapping_ && OB_FAIL(init_converter())) {
     LOG_WARN("failed to init converter", K(ret));
-  } else if (MY_SPEC.is_fts_ddl_ && OB_FAIL(fts_index_.init(MY_SPEC.is_fts_index_aux_, MY_SPEC.parser_name_))) {
+  } else if (MY_SPEC.is_fts_ddl_ && OB_FAIL(fts_index_.init(MY_SPEC.is_fts_index_aux_, MY_SPEC.parser_name_,
+          MY_SPEC.parser_properties_))) {
     LOG_WARN("fail to init fts index cache", K(ret));
   } else {
     if (MY_SPEC.report_col_checksum_) {

@@ -29,18 +29,15 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
                                               ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<AccessPath *, 4> normal_paths;
+  ObSEArray<AccessPath *, 4> normal_paths; // incloud normal path and index merge leaf path
   ObSEArray<AccessPath *, 4> geo_paths;
+  ObSEArray<IndexMergePath *, 4> index_merge_paths;
   ObBaseTableEstMethod geo_method;
 
   if (OB_UNLIKELY(paths.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (is_inner_path) {
-    if (OB_FAIL(inner_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
-      LOG_WARN("failed to do estimate rowcount for paths", K(ret));
-    }
-  } else if (OB_FAIL(classify_paths(paths, normal_paths, geo_paths))) {
+  } else if (OB_FAIL(classify_paths(paths, normal_paths, geo_paths, index_merge_paths))) {
     LOG_WARN("failed to classify paths", K(ret));
   } else if (!normal_paths.empty() &&
              OB_FAIL(inner_estimate_rowcount(ctx, normal_paths, is_inner_path, filter_exprs, method))) {
@@ -48,8 +45,62 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
   } else if (!geo_paths.empty() &&
              OB_FAIL(inner_estimate_rowcount(ctx, geo_paths, is_inner_path, filter_exprs, geo_method))) {
     LOG_WARN("failed to do estimate rowcount for geo paths", K(ret));
-  } else if (normal_paths.empty() && !geo_paths.empty()) {
+  } else if (!index_merge_paths.empty() && inner_estimate_index_merge_rowcount(index_merge_paths, method)) {
+    LOG_WARN("failed to do estimate rowcount for index merge paths", K(ret));
+  } else if (normal_paths.empty() && index_merge_paths.empty() && !geo_paths.empty()) {
     method = geo_method;
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray<IndexMergePath *> &paths,
+                                                                ObBaseTableEstMethod &method)
+{
+  int ret = OB_SUCCESS;
+  const OptSelectivityCtx* sel_ctx = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+    ObSEArray<double, 4> selectivities;
+    double sum_child_sel = 0.0;
+    double sum_child_row = 0.0;
+    const ObTableMetaInfo *table_meta_info = NULL;
+    if (OB_ISNULL(paths.at(i)) || OB_ISNULL(paths.at(i)->root_)
+        || OB_ISNULL(sel_ctx = paths.at(i)->est_cost_info_.sel_ctx_)
+        || OB_ISNULL(table_meta_info = paths.at(i)->est_cost_info_.table_meta_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KPC(paths.at(i)), K(sel_ctx), K(table_meta_info));
+    } else if (OB_FAIL(ObOptEstCost::calculate_filter_selectivity(
+                        paths.at(i)->est_cost_info_,
+                        paths.at(i)->parent_->get_plan()->get_predicate_selectivities()))) {
+      LOG_WARN("failed to calculate filter selectivity", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < paths.at(i)->root_->children_.count(); ++j) {
+      ObIndexMergeNode *child = paths.at(i)->root_->children_.at(j);
+      if (OB_ISNULL(child) || OB_ISNULL(child->ap_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null child node", K(ret), KPC(child));
+      } else if (OB_FAIL(selectivities.push_back(1.0 - child->ap_->est_cost_info_.prefix_filter_sel_))) {
+        LOG_WARN("failed to push back selectivity", K(ret));
+      } else {
+        sum_child_sel += child->ap_->est_cost_info_.prefix_filter_sel_;
+        sum_child_row += child->ap_->est_cost_info_.output_row_count_;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (sum_child_sel < OB_DOUBLE_EPSINON) {
+      paths.at(i)->est_cost_info_.prefix_filter_sel_ = 0.0;
+      paths.at(i)->est_cost_info_.index_back_row_count_ = 1.0;
+      paths.at(i)->est_cost_info_.phy_query_range_row_count_ = 1.0;
+      paths.at(i)->est_cost_info_.logical_query_range_row_count_ = 1.0;
+      paths.at(i)->est_cost_info_.output_row_count_ = 1.0;
+      paths.at(i)->est_cost_info_.est_method_ = method;
+    } else {
+      paths.at(i)->est_cost_info_.prefix_filter_sel_ = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(selectivities);
+      paths.at(i)->est_cost_info_.index_back_row_count_ = (paths.at(i)->est_cost_info_.prefix_filter_sel_ / sum_child_sel) * sum_child_row;
+      paths.at(i)->est_cost_info_.phy_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
+      paths.at(i)->est_cost_info_.logical_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
+      paths.at(i)->est_cost_info_.output_row_count_ = (paths.at(i)->est_cost_info_.table_filter_sel_  / paths.at(i)->est_cost_info_.prefix_filter_sel_) * paths.at(i)->est_cost_info_.index_back_row_count_;
+      paths.at(i)->est_cost_info_.est_method_ = method;
+    }
   }
   return ret;
 }
@@ -2738,13 +2789,20 @@ bool ObAccessPathEstimation::is_retry_ret(int ret)
 
 int ObAccessPathEstimation::classify_paths(ObIArray<AccessPath *> &paths,
                                            ObIArray<AccessPath *> &normal_paths,
-                                           ObIArray<AccessPath *> &geo_paths)
+                                           ObIArray<AccessPath *> &geo_paths,
+                                           ObIArray<IndexMergePath *> &index_merge_paths)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
     if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null path", K(ret));
+    } else if (paths.at(i)->is_index_merge_path()) {
+      if (OB_FAIL(index_merge_paths.push_back(static_cast<IndexMergePath*>(paths.at(i))))) {
+        LOG_WARN("failed to push back index merge path", K(ret));
+      } else if (OB_FAIL(static_cast<IndexMergePath*>(paths.at(i))->get_all_scan_access_paths(normal_paths))) {
+        LOG_WARN("failed to get index merge scan path", K(ret));
+      }
     } else if (paths.at(i)->est_cost_info_.index_meta_info_.is_geo_index_) {
       if (OB_FAIL(geo_paths.push_back(paths.at(i)))) {
         LOG_WARN("failed to push back geo path", K(ret));

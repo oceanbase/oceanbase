@@ -139,6 +139,10 @@ src/observer/observer
 src/sql/parser/*.output
 src/sql/parser/expr_parser.output
 src/sql/parser/sql_parser.output
+src/sql/parser/ftsblex_lex.c
+src/sql/parser/ftsblex_lex.h
+src/sql/parser/ftsparser_tab.c
+src/sql/parser/ftsparser_tab.h
 src/sql/parser/sql_parser_mysql_mode_lex.c
 src/sql/parser/sql_parser_mysql_mode_lex.h
 src/sql/parser/sql_parser_mysql_mode_tab.c

@@ -210,15 +210,18 @@ public:
   ObDASIndexMergeCtDef(common::ObIAllocator &alloc)
     : ObDASAttachCtDef(alloc, DAS_OP_INDEX_MERGE),
       merge_type_(INDEX_MERGE_INVALID),
-      is_reverse_(false)
+      is_reverse_(false),
+      merge_node_types_(alloc),
+      rowkey_exprs_(alloc)
   {}
 
   virtual ~ObDASIndexMergeCtDef() {}
-  const ObDASBaseCtDef *get_left_ctdef() const;
-  const ObDASBaseCtDef *get_right_ctdef() const;
 public:
   ObIndexMergeType merge_type_;
   bool is_reverse_;
+  /* child node types, include NODE_MERGE, NODE_SCAN, NDOE_FTS now */
+  ObFixedArray<ObIndexMergeType, common::ObIAllocator> merge_node_types_;
+  sql::ExprFixedArray rowkey_exprs_;  // merge by rowkey
 };
 
 struct ObDASIndexMergeRtDef : ObDASAttachRtDef

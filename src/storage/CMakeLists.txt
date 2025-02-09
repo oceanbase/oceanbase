@@ -223,13 +223,41 @@ ob_set_subtarget(ob_storage ckpt
 )
 
 ob_set_subtarget(ob_storage fts
+  fts/ob_ik_ft_parser.cpp
   fts/ob_beng_ft_parser.cpp
-  fts/ob_fts_plugin_mgr.cpp
+  fts/ob_fts_doc_word_iterator.cpp
+  fts/ob_fts_parser_property.cpp
   fts/ob_fts_plugin_helper.cpp
   fts/ob_fts_stop_word.cpp
   fts/ob_ngram_ft_parser.cpp
   fts/ob_whitespace_ft_parser.cpp
+  fts/dict/ob_dic_loader.cpp
+  fts/dict/ob_gen_dic_loader.cpp
+  fts/dict/ob_dic_lock.cpp
+  fts/dict/ob_ik_utf8_dic_loader.cpp
+  fts/ob_fts_builtin_parser_register.cpp
 )
+
+ob_set_subtarget(ob_storage ik
+  fts/ik/ob_ik_processor.cpp
+  fts/ik/ob_ik_letter_processor.cpp
+  fts/ik/ob_ik_cjk_processor.cpp
+  fts/ik/ob_ik_quantifier_processor.cpp
+  fts/ik/ob_ik_surrogate_processor.cpp
+  fts/ik/ob_ik_arbitrator.cpp
+  fts/ik/ob_ik_token.cpp
+  fts/dict/ob_ik_dic.cpp
+  fts/dict/ob_ft_dat_dict.cpp
+  fts/dict/ob_ft_dict_def.cpp
+  fts/dict/ob_ft_trie.cpp
+  fts/dict/ob_ft_cache_dict.cpp
+  fts/dict/ob_ft_dict_hub.cpp
+  fts/dict/ob_ft_range_dict.cpp
+  fts/dict/ob_ft_dict_table_iter.cpp
+  fts/dict/ob_ft_cache.cpp
+  fts/utils/unicode_utils.cpp
+)
+
 
 ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_migration.cpp

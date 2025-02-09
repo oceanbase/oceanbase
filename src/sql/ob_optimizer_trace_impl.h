@@ -52,6 +52,7 @@ class ObOptTabletLoc;
 class ObCandiTabletLoc;
 struct ColumnItem;
 struct ObBatchEstTasks;
+struct ObIndexMergeNode;
 
 class ObOptimizerTraceImpl;
 
@@ -350,6 +351,7 @@ public:
   int append(const ObCandiTabletLoc& candi_tablet_loc);
   int append(const ObBatchEstTasks& task);
   int append(const ObTabletID& id);
+  int append(const ObIndexMergeNode *node);
   int append(const ObVersionRange& version_range);
 /***********************************************/
 ////print template type

@@ -7735,9 +7735,10 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
       LOG_WARN("search query is not const expr", K(ret));
-    } else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
+    }  else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_) &&
+                ObMatchAgainstMode::BOOLEAN_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE or BOOLEAN_MODE");
       LOG_WARN("unsupported match against mode", K(ret), K(node->value_));
     } else {
       match_against->set_search_key(search_keywords);

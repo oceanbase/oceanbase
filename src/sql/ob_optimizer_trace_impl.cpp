@@ -565,12 +565,18 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append_ptr(path);
     new_line();
     append("tables:", path->parent_);
+    new_line();
     if (path->is_access_path()) {
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
       const ObIndexMetaInfo &index_info = ap.est_cost_info_.index_meta_info_;
-      append("index id:", ap.index_id_, ",global index:", ap.is_global_index_, ", use column store:", ap.use_column_store_);
+      if (ap.is_index_merge_path()) {
+        const IndexMergePath& index_merge_path = static_cast<const IndexMergePath&>(ap);
+        append("is index merge: True, index merge conditions:", index_merge_path.root_);
+      } else {
+        append("is index merge: False, index id:", ap.index_id_, ", global index:", ap.is_global_index_, ", unique index:", index_info.is_unique_index_);
+      }
       new_line();
-      append("use das:", ap.use_das_, ",unique index:", index_info.is_unique_index_, ",index back:", index_info.is_index_back_);
+      append("use column store:", ap.use_column_store_, ", use das:", ap.use_das_, ", index back:", index_info.is_index_back_);
       new_line();
       append("table rows:", ap.get_table_row_count(), ",phy_query_range_row_count:", ap.get_phy_query_range_row_count());
       new_line();
@@ -934,6 +940,15 @@ int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)
 int ObOptimizerTraceImpl::append(const ObTabletID& id)
 {
   return append(id.id());
+}
+
+int ObOptimizerTraceImpl::append(const ObIndexMergeNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(node)) {
+    append(node->filter_);
+  }
+  return ret;
 }
 
 int ObOptimizerTraceImpl::append(const ObVersionRange& version_range)

@@ -10949,3 +10949,24 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ddl_diagnose_info limit 1;
+desc oceanbase.__all_virtual_plugin_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+name	varchar(64)	YES		NULL	
+status	varchar(64)	YES		NULL	
+type	varchar(80)	YES		NULL	
+library	varchar(128)	YES		NULL	
+library_version	varchar(80)	YES		NULL	
+library_revision	varchar(80)	YES		NULL	
+interface_version	varchar(80)	YES		NULL	
+author	varchar(64)	YES		NULL	
+license	varchar(64)	YES		NULL	
+description	varchar(65535)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_plugin_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_plugin_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_plugin_info limit 1;

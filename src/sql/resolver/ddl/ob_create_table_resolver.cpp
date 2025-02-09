@@ -2608,6 +2608,7 @@ int ObCreateTableResolver::set_index_option_to_arg()
       SQL_RESV_LOG(WARN, "set comment str failed", K(ret));
     } else {
       index_arg_.index_option_.parser_name_ = parser_name_;
+      index_arg_.index_option_.parser_properties_ = parser_properties_;
       index_arg_.index_option_.row_store_type_  = row_store_type_;
       index_arg_.index_option_.store_format_ = store_format_;
       index_arg_.with_rowid_ = with_rowid_;
@@ -3222,7 +3223,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               has_vec_index_ = true;
             }
           } else if (is_fts_index(index_arg_.index_type_)) {
-            if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
+            if (OB_FAIL(ObDDLResolver::append_fts_args(tbl_schema,
+                                                       resolve_result,
                                                        create_index_arg,
                                                        have_generate_fts_arg_,
                                                        resolve_results,

@@ -269,7 +269,8 @@ struct ObCostTableScanInfo
                K_(use_column_store),
                K_(index_back_with_column_store),
                K_(index_scan_column_group_infos),
-               K_(index_back_column_group_infos));
+               K_(index_back_column_group_infos),
+               K_(batch_type));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -828,6 +829,10 @@ public:
   int calc_pred_cost_per_row(const ObRawExpr *expr,
                             double card,
                             double &cost);
+  int cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                      double row_count,
+                      double limit_count,
+                      double &cost);
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,
@@ -879,10 +884,6 @@ protected:
                       double row_count,
                       double &cost);
 
-  int cost_index_back(const ObCostTableScanInfo &est_cost_info,
-                      double row_count,
-                      double limit_count,
-                      double &cost);
   int cost_column_store_index_scan(const ObCostTableScanInfo &est_cost_info,
                                     double row_count,
                                     double &cost);

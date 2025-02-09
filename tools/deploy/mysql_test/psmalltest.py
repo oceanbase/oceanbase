@@ -23,6 +23,7 @@ psmall_test=[
 "inner_table.all_virtual_data_type_class",
 "inner_table.character_sets",
 "inner_table.all_virtual_engine",
+"inner_table.all_virtual_plugin_info",
 "meta_info.meta_func_floor",
 "meta_info.meta_func_ceil",
 "meta_info.meta_const",

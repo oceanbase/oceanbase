@@ -55,6 +55,7 @@ public:
   OB_INLINE int64_t get_doc_id_col_id() const { return doc_id_col_id_; }
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
   OB_INLINE const common::ObString &get_fts_parser_name() const { return fts_parser_name_; }
+  OB_INLINE const common::ObString &get_fts_parser_property() const { return fts_parser_properties_; }
   OB_INLINE uint64_t get_spatial_geo_col_id() const { return spatial_geo_col_id_; }
   OB_INLINE uint64_t get_spatial_cellid_col_id() const { return spatial_cellid_col_id_; }
   OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }
@@ -83,6 +84,7 @@ public:
   OB_INLINE bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
   OB_INLINE bool is_doc_rowkey() const { return share::schema::is_doc_rowkey_aux(index_type_); }
   OB_INLINE bool is_fts_index_aux() const { return share::schema::is_fts_index_aux(index_type_); }
+  OB_INLINE bool is_fts_doc_word_aux() const { return share::schema::is_fts_doc_word_aux(index_type_); }
   OB_INLINE bool is_multivalue_index() const { return share::schema::is_multivalue_index(index_type_); }
   OB_INLINE bool is_multivalue_index_aux() const { return share::schema::is_multivalue_index_aux(index_type_); }
   OB_INLINE bool is_vector_delta_buffer() const { return share::schema::is_vec_delta_buffer_type(index_type_); }
@@ -104,6 +106,7 @@ public:
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
+  OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
   const ObColumnParam * get_column_by_idx(const int64_t idx) const;

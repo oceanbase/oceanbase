@@ -78,9 +78,15 @@ enum ObDASIterTreeType : uint32_t
 struct ObDASFTSTabletID
 {
 public:
+  ObDASFTSTabletID()
+    : inv_idx_tablet_id_(),
+      fwd_idx_tablet_id_(),
+      doc_id_idx_tablet_id_()
+  {}
   common::ObTabletID inv_idx_tablet_id_;
   common::ObTabletID fwd_idx_tablet_id_;
   common::ObTabletID doc_id_idx_tablet_id_;
+
   void reset()
   {
     inv_idx_tablet_id_.reset();
@@ -111,7 +117,7 @@ public:
   { reset(); }
 
   common::ObTabletID lookup_tablet_id_;
-  common::ObTabletID aux_lookup_tablet_id_;
+  common::ObTabletID doc_rowkey_tablet_id_;
   common::ObTabletID rowkey_doc_tablet_id_;
   common::ObTabletID rowkey_vid_tablet_id_;
 
@@ -125,9 +131,9 @@ public:
   common::ObFixedArray<common::ObTabletID, ObIAllocator> index_merge_tablet_ids_;
   /* used by index merge */
 
-  /* used by function lookup index (special fulltext)*/
+  /* record tablet ids for fulltext index, use ir_rtdef->fts_idx_ to locate */
   common::ObSEArray<ObDASFTSTabletID, 2> fts_tablet_ids_;
-  /* used by function lookup index (special fulltext)*/
+  /* record tablet ids for fulltext index */
 
   /* used by domain id merge */
   common::ObFixedArray<common::ObTabletID, ObIAllocator> domain_tablet_ids_;
@@ -147,7 +153,7 @@ public:
   void reset()
   {
     lookup_tablet_id_.reset();
-    aux_lookup_tablet_id_.reset();
+    doc_rowkey_tablet_id_.reset();
     rowkey_doc_tablet_id_.reset();
     rowkey_vid_tablet_id_.reset();
     inv_idx_tablet_id_.reset();

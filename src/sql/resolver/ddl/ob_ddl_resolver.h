@@ -32,6 +32,7 @@ namespace common
 {
 struct ObObjCastParams;
 }
+
 namespace sql
 {
 typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObReducedVisibleColSet;
@@ -175,13 +176,7 @@ public:
   explicit ObDDLResolver(ObResolverParams &params);
   virtual ~ObDDLResolver();
   static int append_fts_args(
-      const ObPartitionResolveResult &resolve_result,
-      const obrpc::ObCreateIndexArg *index_arg,
-      bool &fts_common_aux_table_exist,
-      ObIArray<ObPartitionResolveResult> &resolve_results,
-      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
-      ObIAllocator *arg_allocator);
-  static int append_fts_args(
+      const share::schema::ObTableSchema &data_schema,
       const ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
       bool &fts_common_aux_table_exist,
@@ -202,14 +197,6 @@ public:
       ObIArray<ObPartitionResolveResult> &resolve_results,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator);
-  static int append_domain_index_args(
-      const ObTableSchema &table_schema,
-      const ObPartitionResolveResult &resolve_result,
-      const obrpc::ObCreateIndexArg *index_arg,
-      bool &common_aux_table_exist,
-      ObIArray<ObPartitionResolveResult> &resolve_results,
-      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
-      ObIAllocator *arg_allocator);
   static int check_text_length(ObCharsetType cs_type, ObCollationType co_type,
                                const char *name, ObObjType &type,
                                int32_t &length,
@@ -1074,6 +1061,7 @@ protected:
   common::ObString expire_info_;
   common::ObString compress_method_;
   common::ObString parser_name_;
+  common::ObString parser_properties_;
   common::ObString comment_;
   common::ObString tablegroup_name_;
   common::ObString primary_zone_;

@@ -370,6 +370,35 @@ int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_in
   return ret;
 }
 
+int ObOptEstCost::cost_index_back(const ObCostTableScanInfo &est_cost_info,
+                                  double row_count,
+                                  double limit_count,
+                                  double &index_back_cost,
+                                  const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->cost_index_back(est_cost_info,
+                                     row_count,
+                                     limit_count,
+                                     index_back_cost))) {
+    LOG_WARN("failed to est cost for index back", K(ret));
+  }
+  return ret;
+}
+
+int ObOptEstCost::get_sort_cmp_cost(const common::ObIArray<sql::ObExprResType> &types,
+                                    double &cmp_cost,
+                                    const ObOptimizerContext &opt_ctx)
+{
+  int ret = OB_SUCCESS;
+  GET_COST_MODEL();
+  if (OB_FAIL(model->get_sort_cmp_cost(types, cmp_cost))) {
+    LOG_WARN("failed to get sort cmp cost", K(ret));
+  }
+  return ret;
+}
+
 double ObOptEstCost::cost_late_materialization_table_get(int64_t column_cnt, const ObOptimizerContext &opt_ctx)
 {
   GET_COST_MODEL();

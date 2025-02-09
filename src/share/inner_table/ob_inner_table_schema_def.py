@@ -7893,13 +7893,49 @@ def_table_schema(**all_ncomp_dll_v2)
 
 # 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
-# 531: __ft_dict_ik_utf8
-# 532: __ft_stopword_ik_utf8
-# 533: __ft_quantifier_ik_utf8
+
+def_table_schema(
+  owner = 'youchuan.yc',
+  table_name = '__ft_dict_ik_utf8',
+  table_id = '531',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+    ('word', 'varchar:2048'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [],
+)
+
+def_table_schema(
+  owner = 'youchuan.yc',
+  table_name = '__ft_stopword_ik_utf8',
+  table_id = '532',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+    ('word', 'varchar:2048'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [],
+)
+
+def_table_schema(
+  owner = 'youchuan.yc',
+  table_name = '__ft_quantifier_ik_utf8',
+  table_id = '533',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+    ('word', 'varchar:2048'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [],
+)
+
 # 534: __ft_dict_ik_gbk
 # 535: __ft_stopword_ik_gbk
 # 536: __ft_quantifier_ik_gbk
-
 # 537: __all_catalog
 # 538: __all_catalog_history
 # 539: __all_catalog_privilege
@@ -15740,7 +15776,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
 # 12513: __all_virtual_cs_replica_tablet_stats
-
+# 12514: __all_virtual_ddl_diagnose_info
 def_table_schema(
   owner = 'buming.lj',
   table_name    = '__all_virtual_ddl_diagnose_info',
@@ -15764,6 +15800,32 @@ def_table_schema(
 )
 
 # 12515: __all_virtual_plugin_info
+def_table_schema(
+  owner = 'wangyunlai.wyl',
+  table_name = '__all_virtual_plugin_info',
+  table_id   = '12515',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('name', 'varchar:64', 'true', 'NULL'),               # true means nullable and NULL is the default value
+    ('status', 'varchar:64', 'true', 'NULL'),             # 插件状态：READY, UNINIT, DEAD
+    ('type', 'varchar:80', 'true', 'NULL'),               # 插件类型，比如分词器
+    ('library', 'varchar:128', 'true', 'NULL'),           # 插件动态链接库名称（内置插件没有对应链接库）
+    ('library_version', 'varchar:80', 'true', 'NULL'),    # 插件库自身的版本
+    ('library_revision', 'varchar:80', 'true', 'NULL'),   # 插件库修订版本，比如 git commit id
+    ('interface_version', 'varchar:80', 'true', 'NULL'),  # 该插件实现的具体接口API版本
+    ('author', 'varchar:64', 'true', 'NULL'),             # 插件作者信息
+    ('license', 'varchar:64', 'true', 'NULL'),            # 插件LICENSE
+    ('description', 'varchar:65535', 'true', 'NULL')      # 插件描述信息
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed'
+)
 
 # 12516: __all_virtual_catalog
 # 12517: __all_virtual_catalog_history
@@ -40202,8 +40264,64 @@ def_table_schema(
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21633: DBA_OB_CS_REPLICA_STATS
 # 21634: CDB_OB_CS_REPLICA_STATS
-# 21635: GV$OB_PLUGINS
-# 21636: V$OB_PLUGINS
+
+def_table_schema(
+      owner           = 'wangyunlai.wyl',
+      tablegroup_id   = 'OB_INVALID_ID',
+      table_name      = 'GV$OB_PLUGINS',
+      table_id        = '21635',
+      table_type      = 'SYSTEM_VIEW',
+      gm_columns      = [],
+      rowkey_columns  = [],
+      normal_columns  = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          NAME,
+          STATUS,
+          TYPE,
+          LIBRARY,
+          LIBRARY_VERSION,
+          LIBRARY_REVISION,
+          INTERFACE_VERSION,
+          AUTHOR,
+          LICENSE,
+          DESCRIPTION
+        FROM oceanbase.__all_virtual_plugin_info
+        """.replace("\n", " ")
+)
+def_table_schema(
+      owner = 'wangyunlai.wyl',
+      tablegroup_id   = 'OB_INVALID_ID',
+      table_name      = 'V$OB_PLUGINS',
+      table_id        = '21636',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          NAME,
+          STATUS,
+          TYPE,
+          LIBRARY,
+          LIBRARY_VERSION,
+          LIBRARY_REVISION,
+          INTERFACE_VERSION,
+          AUTHOR,
+          LICENSE,
+          DESCRIPTION
+        FROM oceanbase.GV$OB_PLUGINS WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+        """.replace("\n", " ")
+)
+
 # 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 

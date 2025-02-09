@@ -2168,6 +2168,8 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
     LOG_WARN("get binlog row image failed", K(ret));
   } else if (OB_FAIL(op.op_is_update_pk_with_dop(is_update_uk_parallel))) {
     LOG_WARN("fail to check is update pk parallel", K(ret));
+  } else if (OB_FAIL(check_is_main_table_in_fts_ddl(op, index_tid, index_dml_info, das_dml_ctdef))) {
+    LOG_WARN("fail to check is main table in fts ddl", K(ret), K(index_tid), K(index_dml_info));
   } else {
     das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
     das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
@@ -4425,6 +4427,64 @@ int ObDmlCgService::get_domain_index_col_ids(
         LOG_WARN("fail to append domain id column id", K(ret), K(col_ids));
       }
     }
+  }
+  return ret;
+}
+
+int ObDmlCgService::check_is_main_table_in_fts_ddl(
+    ObLogicalOperator &op,
+    const uint64_t table_id,
+    const IndexDMLInfo &index_dml_info,
+    ObDASDMLBaseCtDef &das_dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *log_plan = op.get_plan();
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const ObDelUpdStmt *dml_stmt = nullptr;
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_schema));
+  } else if (!table_schema->is_user_table()) {
+    das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
+    LOG_TRACE("not user table, nothing to do", K(ret), K(table_id));
+  } else {
+    bool is_main_table_in_fts_ddl = false;
+    int64_t fts_index_aux_count = 0;
+    int64_t fts_doc_word_aux_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_main_table_in_fts_ddl && i < index_dml_info.related_index_ids_.count(); ++i) {
+      const ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_dml_info.related_index_ids_.at(i), index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(i), K(index_dml_info.related_index_ids_));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, index schema is nullptr", K(ret), K(i), K(index_dml_info.related_index_ids_));
+      } else if (index_schema->is_fts_index()) {
+        if (index_schema->is_fts_index_aux()) {
+          ++fts_index_aux_count;
+        } else if (index_schema->is_fts_doc_word_aux()) {
+          ++fts_doc_word_aux_count;
+        }
+        if (!index_schema->can_read_index()) {
+          is_main_table_in_fts_ddl = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_main_table_in_fts_ddl || fts_index_aux_count != fts_doc_word_aux_count) {
+        das_dml_ctdef.is_main_table_in_fts_ddl_ = true;
+      } else {
+        das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
+      }
+    }
+    LOG_TRACE("check is main table in fts ddl", K(ret), K(is_main_table_in_fts_ddl), K(fts_index_aux_count),
+        K(fts_doc_word_aux_count), K(das_dml_ctdef));
   }
   return ret;
 }

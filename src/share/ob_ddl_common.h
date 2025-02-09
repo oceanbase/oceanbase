@@ -162,7 +162,7 @@ enum ObDDLTaskType
   SWITCH_VEC_INDEX_NAME_TASK = 15,
 };
 
-enum ObDDLTaskStatus {
+enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   PREPARE = 0,
   OBTAIN_SNAPSHOT = 1,
   WAIT_TRANS_END = 2,
@@ -321,11 +321,11 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::GENERATE_ROWKEY_DOC_SCHEMA:
       str = "GENERATE_ROWKEY_DOC_SCHEMA";
       break;
-    case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
-      str = "GENERATE_DOC_AUX_SCHEMA";
-      break;
     case ObDDLTaskStatus::LOAD_DICTIONARY:
       str = "LOAD_DICTIONARY";
+      break;
+    case ObDDLTaskStatus::GENERATE_DOC_AUX_SCHEMA:
+      str = "GENERATE_DOC_AUX_SCHEMA";
       break;
     case ObDDLTaskStatus::WAIT_ROWKEY_DOC_TABLE_COMPLEMENT:
       str = "WAIT_ROWKEY_DOC_TABLE_COMPLEMENT";

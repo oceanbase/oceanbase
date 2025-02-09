@@ -38,6 +38,7 @@ static const int64_t SAPTIAL_INDEX_DEFAULT_COL_COUNT = 2;
 typedef common::ObSEArray<blocksstable::ObDatumRow*, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObDomainIndexRow;
 
 class ObDomainDMLIterator;
+class ObFTDocWordInfo;
 struct ObDASDMLBaseRtDef;
 //das dml base compile info definition
 struct ObDASDMLBaseCtDef : ObDASBaseCtDef
@@ -60,6 +61,7 @@ public:
                        K_(is_batch_stmt),
                        K_(is_insert_up),
                        K_(is_table_api),
+                       K_(is_main_table_in_fts_ddl),
                        K_(tz_info),
                        K_(table_param),
                        K_(encrypt_meta));
@@ -490,7 +492,8 @@ public:
       cur_datum_row_(nullptr),
       cur_datum_rows_(nullptr),
       main_ctdef_(das_ctdef),
-      domain_iter_(nullptr)
+      domain_iter_(nullptr),
+      ft_doc_word_info_(nullptr)
   {
     set_ctdef(das_ctdef);
     batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
@@ -500,7 +503,7 @@ public:
   virtual int get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &row_count);
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
   virtual void reset() override { }
-  int rewind(const ObDASDMLBaseCtDef *das_ctdef);
+  int rewind(const ObDASDMLBaseCtDef *das_ctdef, const ObFTDocWordInfo *ft_doc_word_info);
 
 private:
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef);
@@ -516,6 +519,7 @@ private:
   blocksstable::ObDatumRow *cur_datum_rows_;
   const ObDASDMLBaseCtDef *main_ctdef_;
   ObDomainDMLIterator *domain_iter_;
+  const ObFTDocWordInfo *ft_doc_word_info_;
   int64_t batch_size_;
 };
 

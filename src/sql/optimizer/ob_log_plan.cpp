@@ -2889,7 +2889,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       }
     }
     if (OB_SUCC(ret)) {
-      if (ap->domain_idx_info_.has_ir_scan()) {
+      if (ap->domain_idx_info_.has_ir_scan() && !ap->is_index_merge_path()) {
         // For functional lookup with multiple match filters, use only one filter
         //   as index scan and other filters eval after functional lookup
         // TODO: enable multiple fulltext index scan after index merge supported
@@ -2937,6 +2937,42 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
                                                 ap->domain_idx_info_.func_lookup_index_ids_,
                                                 scan))) {
         LOG_WARN("failed to prepare text retrieval lookup", K(ret), KPC(ap));
+      }
+    }
+
+    if (OB_SUCC(ret) && ap->is_index_merge_path()) {
+      /* prepare text retrieval info for index merge */
+      ObIndexMergeNode *index_merge_root = static_cast<IndexMergePath*>(ap)->root_;
+      ObSEArray<ObRawExpr*, 4> merge_match_exprs;
+      ObSEArray<uint64_t, 4> merge_index_ids;
+      if (OB_ISNULL(index_merge_root)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr index merge root", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_merge_root->children_.count(); ++i) {
+        ObIndexMergeNode *child = index_merge_root->children_.at(i);
+        if (OB_ISNULL(child)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null index merge child", K(ret));
+        } else if (child->node_type_ == INDEX_MERGE_FTS_INDEX) {
+          ObRawExpr *match_expr = nullptr;
+          if (OB_ISNULL(child->ap_)
+              || OB_UNLIKELY(1 != child->filter_.count())
+              || OB_ISNULL(child->filter_.at(0))
+              || OB_UNLIKELY(0 >= child->filter_.at(0)->get_param_count())
+              || OB_ISNULL(match_expr = child->filter_.at(0)->get_param_expr(0))
+              || OB_UNLIKELY(!match_expr->has_flag(IS_MATCH_EXPR))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected match expr", K(ret), KPC(child), KPC(match_expr));
+          } else if (OB_FAIL(merge_match_exprs.push_back(match_expr))) {
+            LOG_WARN("failed to push back match expr", K(ret));
+          } else if (OB_FAIL(merge_index_ids.push_back(child->ap_->index_id_))) {
+            LOG_WARN("failed to push back index id", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(prepare_text_retrieval_merge(merge_match_exprs, merge_index_ids, scan))) {
+        LOG_WARN("failed to prepare text retrieval merge", K(ret));
       }
     }
 
@@ -11935,6 +11971,19 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
           LOG_WARN("failed to append index merge table ids", K(index_tids), K(ret));
         } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
           LOG_WARN("failed to append main table id", K(ret));
+        } else if (tsc_op.has_merge_fts_index()) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < tsc_op.get_merge_tr_infos().count(); ++i) {
+            const ObTextRetrievalInfo &curr_tr_info = tsc_op.get_merge_tr_infos().at(i);
+            if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.inv_idx_tid_))) {
+              LOG_WARN("failed to append inverted index table id", K(ret));
+            } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.fwd_idx_tid_))) {
+              LOG_WARN("failed to append foward index table id", K(ret));
+            } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.doc_id_idx_tid_))) {
+              LOG_WARN("failed to append doc_id index table id", K(ret));
+            } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.rowkey_idx_tid_))) {
+              LOG_WARN("failed to append rowkey index table id", K(ret));
+            }
+          }
         }
       }
 
@@ -12125,10 +12174,10 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
     ObLogTableScan *scan = static_cast<ObLogTableScan*>(op);
     if (OB_FAIL(scan->check_das_need_scan_with_domain_id())) {
       LOG_WARN("failed to check das scan with doc id", K(ret));
-    } else if (OB_UNLIKELY(scan->has_func_lookup() && scan->is_tsc_with_domain_id())) {
+    } else if (OB_UNLIKELY((scan->has_func_lookup() || scan->use_index_merge()) && scan->is_tsc_with_domain_id())) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("functional lookup with dml on domain id index not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "functional lookup with dml on fulltext index is");
+      LOG_WARN("complex query with dml on fulltext index / vector index not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext index is");
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
@@ -14814,6 +14863,41 @@ int ObLogPlan::prepare_text_retrieval_lookup(const ObIArray<ObRawExpr *> &lookup
   return ret;
 }
 
+int ObLogPlan::prepare_text_retrieval_merge(const ObIArray<ObRawExpr *> &merge_match_exprs,
+                                            const ObIArray<uint64_t> &merge_index_ids,
+                                            ObLogicalOperator *scan)
+{
+  int ret = OB_SUCCESS;
+  ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(scan);
+  if (OB_ISNULL(table_scan) || OB_UNLIKELY(merge_match_exprs.count() != merge_index_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(table_scan), K(merge_match_exprs), K(merge_index_ids));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < merge_match_exprs.count(); ++i) {
+    ObTextRetrievalInfo tr_info;
+    ObMatchFunRawExpr *curr_match_expr = nullptr;
+    if (OB_ISNULL(curr_match_expr = static_cast<ObMatchFunRawExpr *>(merge_match_exprs.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to merge match exprs", K(ret), K(i), K(merge_match_exprs));
+    } else if (OB_FAIL(prepare_text_retrieval_info(table_scan->get_real_ref_table_id(),
+                                                   merge_index_ids.at(i),
+                                                   curr_match_expr,
+                                                   tr_info))) {
+      LOG_WARN("failed to prepare text retrieval info", K(ret));
+    } else if (OB_FAIL(table_scan->get_merge_tr_infos().push_back(tr_info))) {
+      LOG_WARN("failed to append merge text retrieval infos", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && table_scan->get_merge_tr_infos().count() > 0) {
+    // has fts index as part of index merge, need do doc_id->rowkey lookup
+    const uint64_t doc_rowkey_tid = table_scan->get_merge_tr_infos().at(0).doc_id_idx_tid_;
+    table_scan->set_doc_id_index_table_id(doc_rowkey_tid);
+  }
+  LOG_TRACE("prepare text retrieval merge info", K(merge_match_exprs), K(merge_index_ids));
+  return ret;
+}
+
 int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
                                            const uint64_t index_table_id,
                                            ObMatchFunRawExpr *match_against,
@@ -15340,7 +15424,7 @@ int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
   } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
     // do nothing
   } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
-  } else if (!table_scan->is_text_retrieval_scan()) {
+  } else if (!table_scan->is_text_retrieval_scan() || table_scan->use_index_merge()) {
     // do nothing
   } else if (table_scan->get_filter_exprs().count() != 0 ||
              table_scan->get_pushdown_filter_exprs().count() != 0) {

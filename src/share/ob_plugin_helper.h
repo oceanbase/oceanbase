@@ -15,7 +15,6 @@
 
 #include <dlfcn.h>
 
-#include "lib/ob_plugin.h"
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
@@ -25,25 +24,7 @@ namespace oceanbase
 namespace share
 {
 
-inline void *ob_dlopen(const char *file_name, int flags)
-{
-  return ::dlopen(file_name, flags);
-}
-
-inline void *ob_dlsym(void *__restrict handle, const char *__restrict symbol_name)
-{
-  return ::dlsym(handle, symbol_name);
-}
-
-inline int ob_dlclose(void *handle)
-{
-  return ::dlclose(handle);
-}
-
-inline char *ob_dlerror(void)
-{
-  return ::dlerror();
-}
+constexpr int OB_PLUGIN_NAME_LENGTH = 64;
 
 class ObPluginName final
 {
@@ -80,42 +61,6 @@ public:
   TO_STRING_KV(K_(name));
 private:
   char name_[OB_PLUGIN_NAME_LENGTH];
-};
-
-class ObPluginSoHandler final : public lib::ObIPluginHandler
-{
-public:
-  ObPluginSoHandler();
-  ~ObPluginSoHandler();
-
-  void reset();
-  /**
-   * open dynamic plugin library
-   *  - if file_name is nullptr, then the so handle is for the main program.
-   *
-   * @param[in] plugin_name
-   * @param[in] file_name
-   * @return error code
-   */
-  int open(const char *plugin_name, const char *file_name);
-  int close();
-
-  virtual int get_plugin(lib::ObPlugin *&plugin) const override;
-  virtual int get_plugin_version(int64_t &version) const override;
-  virtual int get_plugin_size(int64_t &size) const override;
-
-  VIRTUAL_TO_STRING_KV(K_(plugin_name), KP_(so_handler), K_(has_opened));
-
-private:
-  int get_symbol_ptr(const char *sym_name, void *&sym_ptr) const;
-
-private:
-  char plugin_name_[OB_PLUGIN_NAME_LENGTH];
-  void *so_handler_;
-  bool has_opened_;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPluginSoHandler);
 };
 
 } // end namespace share

@@ -506,7 +506,7 @@ int ObCreateIndexResolver::resolve_index_option_node(
     if (has_index_using_type_) {
       crt_idx_stmt->set_index_using_type(index_using_type_);
     }
-    if (OB_FAIL(set_table_option_to_stmt(tbl_schema->get_table_id(), is_partitioned))) {
+    if (OB_FAIL(set_table_option_to_stmt(*tbl_schema, tbl_schema->get_table_id(), is_partitioned))) {
       LOG_WARN("fail to set table option to stmt", K(ret));
     } else if (tbl_schema->is_partitioned_table()
         && INDEX_TYPE_SPATIAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
@@ -777,7 +777,12 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-
+  if (OB_SUCC(ret) &&
+      OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
+          data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {
+    LOG_WARN("fail to check supportability for building index",
+        K(data_tbl_schema), K(crt_idx_stmt->get_create_index_arg()));
+  }
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                             session_info_->get_priv_user_id(),
@@ -831,7 +836,10 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem &sort_column)
   return ret;
 }
 
-int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id, bool is_partitioned)
+int ObCreateIndexResolver::set_table_option_to_stmt(
+    const share::schema::ObTableSchema &tbl_schema,
+    const uint64_t data_table_id,
+    bool is_partitioned)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexStmt *create_index_stmt = static_cast<ObCreateIndexStmt*>(stmt_);
@@ -940,6 +948,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     index_arg.index_option_.progressive_merge_num_ = progressive_merge_num_;
     index_arg.index_option_.index_attributes_set_ = index_attributes_set_;
     index_arg.index_option_.parser_name_ = parser_name_;
+    index_arg.index_option_.parser_properties_ = parser_properties_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_schema_.set_data_table_id(data_table_id_);
     index_arg.index_schema_.set_table_id(index_table_id_);
@@ -953,7 +962,7 @@ int ObCreateIndexResolver::set_table_option_to_stmt(const uint64_t data_table_id
     } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
     } else if (FTS_KEY == index_keyname_ &&
-               OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(index_arg,
+               OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(tbl_schema, index_arg,
                                                                        allocator_))) {
       LOG_WARN("generate fts parser name failed", K(ret), K(index_arg));
     }

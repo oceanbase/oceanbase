@@ -65,7 +65,7 @@ int64_t get_norm_bw(const int64_t size, const ObIOMode mode)
   } else {
     norm_bw = static_cast<int64_t>((double)STANDARD_IOPS_SIZE / iops_scale);
   }
-  return max(norm_bw, 1);;
+  return max(norm_bw, 1);
 }
 }  // namespace common
 }  // namespace oceanbase

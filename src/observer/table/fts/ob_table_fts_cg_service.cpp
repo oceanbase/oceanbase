@@ -618,7 +618,7 @@ int ObTableFtsTscCgService::generate_text_ir_pushdown_expr_ctdef(const ObTableCt
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   const uint64_t scan_table_id = scan_ctdef.ref_table_id_;
-  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();;
+  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();
   const ObTextRetrievalInfo *tr_info = nullptr;
   if (!scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown()) {
     // this das scan do not need aggregate pushdown
@@ -912,7 +912,7 @@ int ObTableFtsTscCgService::generate_text_ir_spec_exprs(const ObTableCtx &ctx, O
   int ret = OB_SUCCESS;
   ObSEArray<ObExpr *, 4> result_output;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();;
+  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();
   const ObTextRetrievalInfo *tr_info = nullptr;
   if (OB_ISNULL(fts_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1118,7 +1118,7 @@ int ObTableFtsTscCgService::generate_rowkey_doc_ctdef(ObIAllocator &alloc,
                                                      ObDASScanCtDef *&rowkey_doc_scan_ctdef)
 {
   int ret = OB_SUCCESS;
-  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();;
+  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();
   const ObTableSchema *rowkey_doc_schema = nullptr;
   if (OB_ISNULL(fts_ctx)) {
     ret = OB_ERR_UNEXPECTED;

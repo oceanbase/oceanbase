@@ -17,11 +17,15 @@
 #include "share/config/ob_config_mode_name_def.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "plugin/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
+
 namespace oceanbase
 {
 using namespace share;
 using namespace obrpc;
+using namespace plugin;
+
 namespace common
 {
 
@@ -1569,6 +1573,23 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
   bret = (0 == tmp_str.case_compare("auto")
           || 0 == tmp_str.case_compare("forced")
           || 0 == tmp_str.case_compare("disabled"));
+  return bret;
+}
+
+bool ObConfigPluginsLoadChecker::check(const ObConfigItem& t) const
+{
+  bool bret = false;
+  ObString plugins_load(t.str());
+  ObArray<ObPluginLoadParam> plugin_load_params;
+  ObMemAttr mem_attr(OB_SYS_TENANT_ID, "Config");
+  plugin_load_params.set_attr(mem_attr);
+  int ret = ObPluginLoadParamParser::parse(plugins_load, plugin_load_params);
+  if (OB_FAIL(ret)) {
+    OB_LOG_RET(WARN, OB_INVALID_CONFIG, "failed to parse plugins load config", K(plugins_load));
+    bret = false;
+  } else {
+    bret = true;
+  }
   return bret;
 }
 

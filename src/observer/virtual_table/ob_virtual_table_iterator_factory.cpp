@@ -224,6 +224,7 @@
 #include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
+#include "observer/virtual_table/ob_all_virtual_plugin_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 
@@ -2929,6 +2930,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_PLUGIN_INFO_TID:
+          {
+            ObAllVirtualPluginInfo *plugin_info_table = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualPluginInfo, plugin_info_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualPluginInfo construct failed", K(ret));
+            } else {
+              plugin_info_table->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(plugin_info_table);
+            }
+          } break;
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

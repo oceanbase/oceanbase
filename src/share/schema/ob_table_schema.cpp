@@ -1608,6 +1608,7 @@ int ObSimpleTableSchemaV2::check_if_tablet_exists(const ObTabletID &tablet_id, b
 
 ObTableSchema::ObTableSchema()
     : ObSimpleTableSchemaV2(),
+      parser_properties_(),
       local_session_vars_(get_allocator())
 {
   reset();
@@ -1615,6 +1616,7 @@ ObTableSchema::ObTableSchema()
 
 ObTableSchema::ObTableSchema(ObIAllocator *allocator)
   : ObSimpleTableSchemaV2(allocator),
+    parser_properties_(),
     view_schema_(allocator),
     base_table_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     depend_table_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
@@ -1731,6 +1733,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.parser_properties_, parser_properties_))) {
+        LOG_WARN("fail to deep copy str", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
         LOG_WARN("deep copy external_file_location failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {
@@ -3172,6 +3176,22 @@ int ObTableSchema::set_view_definition(const common::ObString &view_definition)
   return view_schema_.set_view_definition(view_definition);
 }
 
+int ObTableSchema::set_parser_name_and_properties(
+    const common::ObString &parser_name,
+    const common::ObString &parser_properties)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(parser_name.empty() || parser_properties.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(parser_name), K(parser_properties));
+  } else if (OB_FAIL(deep_copy_str(parser_name, parser_name_))) {
+    LOG_WARN("fail to deep copy parser name", K(ret), K(parser_name));
+  } else if (OB_FAIL(deep_copy_str(parser_properties, parser_properties_))) {
+    LOG_WARN("fail to deep copy parser properties", K(ret), K(parser_properties));
+  }
+  return ret;
+}
+
 int ObTableSchema::get_simple_index_infos(
     common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos_array) const
 {
@@ -3653,6 +3673,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += create_host_.length() + 1;
   convert_size += expire_info_.length() + 1;
   convert_size += parser_name_.length() + 1;
+  convert_size += parser_properties_.length() + 1;
   convert_size += view_schema_.get_convert_size() - sizeof(view_schema_);
   convert_size += aux_vp_tid_array_.get_data_size();
   convert_size += base_table_ids_.get_data_size();
@@ -3750,6 +3771,7 @@ void ObTableSchema::reset()
   reset_string(create_host_);
   reset_string(expire_info_);
   reset_string(parser_name_);
+  reset_string(parser_properties_);
   view_schema_.reset();
 
   aux_vp_tid_array_.reset();
@@ -7188,6 +7210,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(micro_index_clustered_);
   OB_UNIS_ENCODE(mv_mode_);
   OB_UNIS_ENCODE(enable_macro_block_bloom_filter_);
+  OB_UNIS_ENCODE(parser_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7428,6 +7451,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(micro_index_clustered_);
   OB_UNIS_DECODE(mv_mode_);
   OB_UNIS_DECODE(enable_macro_block_bloom_filter_);
+  OB_UNIS_DECODE_AND_FUNC(parser_properties_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7568,6 +7592,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(micro_index_clustered_);
   OB_UNIS_ADD_LEN(mv_mode_);
   OB_UNIS_ADD_LEN(enable_macro_block_bloom_filter_);
+  OB_UNIS_ADD_LEN(parser_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

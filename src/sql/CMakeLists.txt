@@ -76,6 +76,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_sort_iter.cpp
   das/iter/ob_das_text_retrieval_iter.cpp
   das/iter/ob_das_text_retrieval_merge_iter.cpp
+  das/iter/ob_das_text_retrieval_eval_node.cpp
   das/iter/ob_das_iter_utils.cpp
   das/iter/ob_das_index_merge_iter.cpp
   das/iter/ob_das_func_data_iter.cpp
@@ -1393,6 +1394,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_use_database_resolver.cpp
   resolver/ddl/ob_create_context_resolver.cpp
   resolver/ddl/ob_drop_context_resolver.cpp
+  resolver/ddl/ob_fts_parser_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

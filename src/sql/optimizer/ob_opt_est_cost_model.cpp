@@ -1829,7 +1829,7 @@ int ObOptEstCostModel::cost_range_get(const ObCostTableScanInfo &est_cost_info,
     double fetch_row_cost = cost_params_.get_fetch_row_rnd_cost(sys_stat_) * row_count;
     OPT_TRACE_COST_MODEL(KV(fetch_row_cost), "=", cost_params_.get_fetch_row_rnd_cost(sys_stat_), "*", KV(row_count));
     range_get_cost = cpu_cost + io_cost + fetch_row_cost + memtable_cost + memtable_merge_cost;
-    OPT_TRACE_COST_MODEL(KV(range_get_cost), "=", KV(cpu_cost), "+", KV(io_cost), "+", KV(fetch_row_cost),
+    OPT_TRACE_COST_MODEL(KV(range_get_cost), "=", KV(cpu_cost), "+", KV(io_cost), "+", KV(fetch_row_cost), "+",
                          KV(memtable_cost), "+", KV(memtable_merge_cost));
     LOG_TRACE("OPT:[COST RANGE GET]", K(is_scan_index), K(row_count), K(range_get_cost),
             K(io_cost), K(cpu_cost), K(fetch_row_cost), K(memtable_cost), K(memtable_merge_cost));

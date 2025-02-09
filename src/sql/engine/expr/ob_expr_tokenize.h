@@ -13,12 +13,17 @@
 #ifndef _OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TOKENIZE_H_
 #define _OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TOKENIZE_H_
 
+#include "lib/allocator/ob_allocator.h"
+#include "lib/allocator/page_arena.h"
+#include "lib/string/ob_string.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "storage/fts/ob_fts_parser_property.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+class MultimodeAlloctor;
 class ObExprTokenize : public ObStringExprOperator
 {
 public:
@@ -42,7 +47,25 @@ public:
 private:
   struct TokenizeParam
   {
+  public:
+    static constexpr const char *CASE_INDICATOR_STR = "case";
+    static constexpr const char *OUTPUT_MODE_STR = "output";
+    static constexpr const char *STOPWORDS_LIST_STR = "stopwords";
+    static constexpr const char *ADDITIONAL_ARGS_STR = "additional_args";
+
+  public:
+    TokenizeParam();
+
+    int parse_json_param(const ObIJsonBase *obj);
+
+    // check and reform parser properties to standard format
+    int reform_parser_properties(const ObString &properties);
+
+  public:
+    // for property and tmp json string
+    mutable ObArenaAllocator allocator_;
     ObString parser_name_;
+    ObString properties_;
     ObCollationType cs_type_;
     ObString fulltext_;
     enum OUTPUT_MODE
@@ -50,11 +73,6 @@ private:
       DEFAULT,
       ALL,
     } output_mode_;
-
-  public:
-    TokenizeParam();
-
-    int parse_json_param(const ObIJsonBase *obj);
   };
 
 private:
@@ -62,14 +80,20 @@ private:
                          ObEvalCtx &ctx,
                          common::ObArenaAllocator &allocator,
                          TokenizeParam &param);
+
+  static int parse_fulltext(const ObExpr &expr, ObEvalCtx &ctx, TokenizeParam &param);
+  static int parse_parser_name(const ObExpr &expr, ObEvalCtx &ctx, TokenizeParam &param);
+  static int parse_parser_properties(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     MultimodeAlloctor &mm_alloc,
+                                     TokenizeParam &param);
+
   static int tokenize_fulltext(const TokenizeParam &param,
                                TokenizeParam::OUTPUT_MODE mode,
                                common::ObIAllocator &allocator,
                                ObIJsonBase *&result);
 
-  static int construct_ft_parser_inner_name(const ObString &input_str,
-                                            char *&parser_name,
-                                            int64_t name_buf_size);
+  static int construct_ft_parser_inner_name(const ObString &input_str, TokenizeParam &param);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprTokenize);

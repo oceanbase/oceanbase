@@ -110,6 +110,11 @@ class ObResourceInnerSQLConnectionPool;
 class ObStartupAccelTaskHandler;
 } // end of namespace observer
 
+namespace plugin
+{
+class ObPluginMgr;
+}
+
 namespace share
 {
 class ObResourcePlanManager;
@@ -148,7 +153,8 @@ public:
       log_level_(0),
       use_ipv6_(false),
       flashback_scn_(0),
-      local_ip_(NULL)
+      local_ip_(NULL),
+      plugins_load_(NULL)
   {
   }
   ObServerOptions(int rpc_port,
@@ -168,7 +174,8 @@ public:
                   const char *mode,
                   bool use_ipv6,
                   int64_t flashback_scn,
-                  const char *local_ip)
+                  const char *local_ip,
+                  const char *plugins_load)
   {
     rpc_port_ = rpc_port;
     elect_port_ = elect_port;
@@ -187,6 +194,7 @@ public:
     use_ipv6_ = use_ipv6;
     flashback_scn_ = flashback_scn;
     local_ip_ = local_ip;
+    plugins_load_ = plugins_load;
   }
   virtual ~ObServerOptions() {}
 
@@ -207,6 +215,7 @@ public:
   bool use_ipv6_;
   int64_t flashback_scn_;
   const char *local_ip_;
+  const char *plugins_load_;
 };
 
 struct ObGlobalContext
@@ -273,6 +282,7 @@ struct ObGlobalContext
   obrpc::ObExtenralTableRpcProxy *external_table_proxy_;
   share::ObWorkloadRepositoryService *wr_service_;
   observer::ObStartupAccelTaskHandler* startup_accel_handler_;
+  plugin::ObPluginMgr *plugin_mgr_ = nullptr;
 
   static ObGlobalContext& get_instance();
   void init();

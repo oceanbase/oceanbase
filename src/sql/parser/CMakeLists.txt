@@ -91,6 +91,14 @@ set(ob_inner_sql_parser_object_list
   sql_parser_mysql_mode_lex.h
   sql_parser_mysql_mode_tab.c
   sql_parser_mysql_mode_tab.h
+  ftsblex_lex.c
+  ftsblex_lex.h
+  ftsparser_tab.c
+  ftsparser_tab.h
+  fts_base.h
+  fts_base.c
+  fts_parse.h
+  fts_parse.c
   non_reserved_keywords_mysql_mode.c
   ob_item_type_str.h
   ob_non_reserved_keywords.c

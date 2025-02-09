@@ -2032,7 +2032,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
               } else if (share::schema::is_fts_index(create_index_arg->index_type_)
-                  && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name(*create_index_arg, allocator_))) {
+                  && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_parser_name_and_property(*table_schema_, *create_index_arg, allocator_))) {
                 LOG_WARN("failed to generate fts parser name", K(ret));
               } else {
                 create_index_arg->index_schema_.set_table_type(USER_INDEX);
@@ -2097,7 +2097,10 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 }
                 if (OB_SUCC(ret)) {
                   create_index_arg->index_key_ = static_cast<int64_t>(index_keyname_);
-                  if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+                  if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(table_schema_, create_index_arg))) {
+                    LOG_WARN("fail to check supportability for building index",
+                        K(ret), KPC(table_schema_), KPC(create_index_arg));
+                  } else if (OB_FAIL(resolve_results.push_back(resolve_result))) {
                     LOG_WARN("fail to push back index_stmt_list", K(ret),
                         K(resolve_result));
                   } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
@@ -2576,6 +2579,7 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.comment_ = comment_;
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
+    index_arg.index_option_.parser_properties_ = parser_properties_;
     if (OB_SUCC(ret)) {
       ObIndexType type = INDEX_TYPE_IS_NOT;
       if (OB_NOT_NULL(table_schema_) && table_schema_->is_oracle_tmp_table()) {

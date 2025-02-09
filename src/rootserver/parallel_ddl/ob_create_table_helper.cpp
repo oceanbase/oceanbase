@@ -25,6 +25,7 @@
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -88,6 +89,7 @@ int ObCreateTableHelper::execute()
 {
   RS_TRACE(create_table_begin);
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(init_())) {
@@ -2077,8 +2079,10 @@ int ObCreateTableHelper::create_tables_()
       ObTableSchema &new_table = new_tables_.at(i);
       const ObString *ddl_stmt_str = (0 == i) ? &arg_.ddl_stmt_str_ : NULL;
       const bool need_sync_schema_version = (new_tables_.count() - 1 == i);
-      if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id_, new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", KR(ret), K_(tenant_id));
+      if (OB_FAIL(ObFtsIndexBuilderUtil::try_load_and_lock_dictionary_tables(new_table, trans_))) {
+        LOG_WARN("fail to try load and lock dictionary tables", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id_, new_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", KR(ret), K_(tenant_id));
       } else if (FALSE_IT(new_table.set_schema_version(new_schema_version))) {
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().create_table(
                  new_table,

@@ -376,6 +376,9 @@
 # 525: __wr_sql_plan
 # 527: __all_kv_redis_table
 # 528: __all_ncomp_dll_v2
+# 531: __ft_dict_ik_utf8
+# 532: __ft_stopword_ik_utf8
+# 533: __ft_quantifier_ik_utf8
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1198,6 +1201,7 @@
 # 12506: __all_virtual_ncomp_dll_v2
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 12514: __all_virtual_ddl_diagnose_info
+# 12515: __all_virtual_plugin_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2391,6 +2395,8 @@
 # 21622: DBA_OB_TEMP_FILES
 # 21623: CDB_OB_TEMP_FILES
 # 21628: proc
+# 21635: GV$OB_PLUGINS
+# 21636: V$OB_PLUGINS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

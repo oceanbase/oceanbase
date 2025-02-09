@@ -1046,6 +1046,7 @@ public:
     enable_var_assign_use_das_(false),
     enable_das_keep_order_(false),
     enable_nlj_spf_use_rich_format_(false),
+    enable_index_merge_(false),
     bloom_filter_ratio_(0),
     enable_hyperscan_regexp_engine_(false),
     realistic_runtime_bloom_filter_size_(false),
@@ -1100,6 +1101,7 @@ public:
   bool enable_var_assign_use_das_;
   bool enable_das_keep_order_;
   bool enable_nlj_spf_use_rich_format_;
+  bool enable_index_merge_;
   int bloom_filter_ratio_;
   bool enable_hyperscan_regexp_engine_;
   bool realistic_runtime_bloom_filter_size_;

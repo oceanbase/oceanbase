@@ -1336,6 +1336,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ObString parser_name_default_val;
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, parser_name, table_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, parser_name_default_val);
+    ObString parser_properties_default_val;
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, parser_properties, table_schema,  true/*skip null error*/, true/*ignore_column_error*/, parser_properties_default_val);
     int64_t tablet_size_default = OB_DEFAULT_TABLET_SIZE;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, tablet_size, table_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, tablet_size_default);
     int64_t pctfree_default = OB_DEFAULT_PCTFREE;

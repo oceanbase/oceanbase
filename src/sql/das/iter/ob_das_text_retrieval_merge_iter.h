@@ -24,6 +24,7 @@ namespace sql
 struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 class ObDASTextRetrievalIterator;
+class ObFtsEvalNode;
 class ObDASTextRetrievalIter;
 
 static const int64_t OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT = 256;
@@ -114,9 +115,9 @@ public:
   virtual int set_merge_iters(const ObIArray<ObDASIter *> &retrieval_iters);
   const ObIArray<ObString> &get_query_tokens() { return query_tokens_; }
   bool is_taat_mode() { return RetrievalProcType::TAAT == processing_type_; }
-  static int build_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef, common::ObIAllocator &alloc, ObArray<ObString> &query_tokens);
+  static int build_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef, common::ObIAllocator &alloc, ObArray<ObString> &query_tokens, ObFtsEvalNode *&root_node);
   virtual int set_rangkey_and_selector(const common::ObIArray<std::pair<ObDocId, int>> &virtual_rangkeys);
-
+  void set_boolean_compute_node(ObFtsEvalNode *root_node) { root_node_ = root_node;}
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
@@ -154,8 +155,10 @@ protected:
   ObDASTokenRetrievalIterArray token_iters_;
   ObFixedArray<ObDocId, ObIAllocator> cache_doc_ids_;
   ObFixedArray<int64_t, ObIAllocator> hints_; // the postion of the cur idx cache doc in output exprs
-  ObFixedArray<double, ObIAllocator> relevances_;
+  ObFixedArray<double, ObIAllocator> cache_relevances_; // cache the relevances_ in func lookup
   ObFixedArray<int64_t, ObIAllocator> reverse_hints_; // the postion of the cur output doc in cache doc
+  ObFixedArray<double, ObIAllocator> boolean_relevances_; // cache the relevances_ in boolean mode
+  ObFtsEvalNode *root_node_;
   int64_t rangekey_size_;
   int64_t next_written_idx_;
   ObDASScanIter *whole_doc_cnt_iter_;
@@ -240,7 +243,7 @@ protected:
               ObDASTextRetrievalIter &iter,
               const int64_t iter_idx,
               ObIRIterLoserTreeItem &item);
-  int next_disjunctive_document(bool batch_mode);
+  int next_disjunctive_document(const bool is_batch, bool &doc_valid);
 protected:
   ObIRIterLoserTreeCmp loser_tree_cmp_;
   ObIRIterLoserTree *iter_row_heap_;
@@ -259,7 +262,6 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
   int next_disjunctive_document(const int capacity);
 };
-
 } // namespace sql
 } // namespace oceanbase
 

@@ -333,7 +333,7 @@ struct LogTableHint
   const ObIndexHint *use_das_hint_;
   const ObIndexHint *use_column_store_hint_;
   const ObUnionMergeHint *union_merge_hint_;
-  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> merge_index_list_;
+  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> union_merge_list_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
