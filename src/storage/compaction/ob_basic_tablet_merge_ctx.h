@@ -66,7 +66,7 @@ public:
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version));
+      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version), K_(for_unittest));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -76,6 +76,7 @@ public:
   bool is_tenant_major_merge_;
   bool is_cs_replica_;
   bool is_backfill_;
+  bool for_unittest_;
   ObMergeLevel merge_level_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;

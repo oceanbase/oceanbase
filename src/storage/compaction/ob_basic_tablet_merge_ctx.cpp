@@ -37,6 +37,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_tenant_major_merge_(false),
     is_cs_replica_(false),
     is_backfill_(false),
+    for_unittest_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
@@ -85,6 +86,7 @@ void ObStaticMergeParam::reset()
   encoding_granularity_ = 0;
   tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   co_base_snapshot_version_ = 0;
+  for_unittest_ = false;
 }
 
 bool ObStaticMergeParam::is_valid() const

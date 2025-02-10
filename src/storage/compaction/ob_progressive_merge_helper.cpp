@@ -141,6 +141,7 @@ int ObProgressiveMergeHelper::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("input progressive mgr is invalid", KR(ret), KPC(mgr));
   } else if (FALSE_IT(reset())) {
+  } else if (static_param.for_unittest_) {
   } else if (static_param.is_full_merge_) {
     full_merge_ = check_macro_need_merge_ = true;
   } else if (merge_param.is_mv_merge()) {

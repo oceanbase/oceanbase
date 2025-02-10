@@ -1617,11 +1617,6 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
         }
       }
     }
-  } else if (curr_row_->is_shadow_row()) {
-    // skip shadow row because compact finished before
-    if (OB_FAIL(inner_next(true /*open_macro*/))) { // read to curr_row_
-      LOG_WARN("Failed to get nex row", K(ret), KPC(this));
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1981,8 +1976,6 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("Unepxcted opened macro block to open", K(ret));
   } else {
-    bool is_first_row = false;
-    bool is_shadow_row = false;
     ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
     iter->reuse();
     if (OB_FAIL(iter->open(
@@ -1993,19 +1986,21 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
                 *reinterpret_cast<ObSSTable *>(table_),
                 last_mvcc_row_already_output_))) {
       LOG_WARN("fail to set context", K(ret));
-    } else if (OB_FAIL(iter->get_first_row_mvcc_info(is_first_row, is_shadow_row))) {
-        LOG_WARN("Fail to check rowkey first row info", K(ret), KPC(iter));
     } else {
       macro_block_opened_ = true;
-      if (!row_queue_.has_next()) {
-        is_rowkey_first_row_already_output_ = !is_first_row;
-      }
       if (last_macro_block_reused() && last_macro_block_recycled_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected merge status", K(ret), K(curr_block_desc_.macro_block_id_), KPC(this));
       } else if (last_macro_block_reused()) {
-        check_committing_trans_compacted_ = is_first_row;
-        is_rowkey_shadow_row_reused_ = !is_first_row && !is_shadow_row;
+        bool is_first_row = false;
+        bool is_shadow_row = false;
+        if (OB_FAIL(iter->get_first_row_mvcc_info(is_first_row, is_shadow_row))) {
+          LOG_WARN("Fail to check rowkey first row info", K(ret), KPC(iter));
+        } else {
+          check_committing_trans_compacted_ = is_first_row;
+          is_rowkey_first_row_already_output_ = !is_first_row;
+          is_rowkey_shadow_row_reused_ = !is_first_row && !is_shadow_row;
+        }
       } else if (last_macro_block_recycled_) {
         last_macro_block_recycled_ = false;
         check_committing_trans_compacted_ = true;
