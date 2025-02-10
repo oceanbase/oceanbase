@@ -15775,7 +15775,30 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12510: __all_virtual_standby_log_transport_stat
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12512: __all_virtual_tablet_mds_info
-# 12513: __all_virtual_cs_replica_tablet_stats
+
+def_table_schema(
+  owner = 'ouyanghongrong.oyh',
+  table_name    = '__all_virtual_cs_replica_tablet_stats',
+  table_id      = '12513',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space=True,
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('macro_block_cnt', 'int'),
+    ('is_cs', 'bool'),
+    ('is_cs_replica', 'bool'),
+    ('available', 'bool'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12514: __all_virtual_ddl_diagnose_info
 def_table_schema(
   owner = 'buming.lj',
@@ -16366,7 +16389,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 # 15490: __all_object_balance_weight
 # 15491: __all_virtual_standby_log_transport_stat
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot
-# 15493: __all_virtual_cs_replica_tablet_stats
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keywords['__all_virtual_cs_replica_tablet_stats']))
 # 15494: __all_catalog
 # 15495: __all_catalog_privilege
 # 15496: __all_virtual_ss_tablet_upload_stat
@@ -40262,8 +40285,61 @@ def_table_schema(
 
 # 21631: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
-# 21633: DBA_OB_CS_REPLICA_STATS
-# 21634: CDB_OB_CS_REPLICA_STATS
+
+def_table_schema(
+  owner = 'ouyanghongrong.oyh',
+  table_name      = 'DBA_OB_CS_REPLICA_STATS',
+  table_id        = '21633',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LS_ID,
+    COUNT(*) AS TOTAL_TABLET_CNT,
+    SUM(CASE WHEN available = TRUE THEN 1 ELSE 0 END) AS AVAILABLE_TABLET_CNT,
+    SUM(macro_block_cnt) AS TOTAL_MACRO_BLOCK_CNT,
+    SUM(CASE WHEN available = TRUE THEN macro_block_cnt ELSE 0 END) AS AVAILABLE_MACRO_BLOCK_CNT,
+    CASE
+      WHEN SUM(CASE WHEN available = FALSE THEN 1 ELSE 0 END) > 0 THEN 'FALSE'
+      ELSE 'TRUE'
+    END AS AVAILABLE
+  FROM oceanbase.__all_virtual_cs_replica_tablet_stats
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+  GROUP BY SVR_IP, SVR_PORT, LS_ID
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'ouyanghongrong.oyh',
+  table_name      = 'CDB_OB_CS_REPLICA_STATS',
+  table_id        = '21634',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    LS_ID,
+    COUNT(*) AS TOTAL_TABLET_CNT,
+    SUM(CASE WHEN available = TRUE THEN 1 ELSE 0 END) AS AVAILABLE_TABLET_CNT,
+    SUM(macro_block_cnt) AS TOTAL_MACRO_BLOCK_CNT,
+    SUM(CASE WHEN available = TRUE THEN macro_block_cnt ELSE 0 END) AS AVAILABLE_MACRO_BLOCK_CNT,
+    CASE
+      WHEN SUM(CASE WHEN available = FALSE THEN 1 ELSE 0 END) > 0 THEN 'FALSE'
+      ELSE 'TRUE'
+    END AS AVAILABLE
+  FROM oceanbase.__all_virtual_cs_replica_tablet_stats
+  GROUP BY TENANT_ID, SVR_IP, SVR_PORT, LS_ID
+""".replace("\n", " ")
+)
 
 def_table_schema(
       owner           = 'wangyunlai.wyl',
@@ -72714,7 +72790,36 @@ def_table_schema(
 
 # 28269: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 28270: V$OB_STANDBY_LOG_TRANSPORT_STAT
-# 28271: DBA_OB_CS_REPLICA_STATS
+
+def_table_schema(
+  owner = 'ouyanghongrong.oyh',
+  table_name      = 'DBA_OB_CS_REPLICA_STATS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28271',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    LS_ID,
+    COUNT(*) AS TOTAL_TABLET_CNT,
+    SUM(CASE WHEN available = 1 THEN 1 ELSE 0 END) AS AVAILABLE_TABLET_CNT,
+    SUM(macro_block_cnt) AS TOTAL_MACRO_BLOCK_CNT,
+    SUM(CASE WHEN available = 1 THEN macro_block_cnt ELSE 0 END) AS AVAILABLE_MACRO_BLOCK_CNT,
+    CASE
+      WHEN SUM(CASE WHEN available = 0 THEN 1 ELSE 0 END) > 0 THEN 'FALSE'
+      ELSE 'TRUE'
+    END AS AVAILABLE
+  FROM SYS.ALL_VIRTUAL_CS_REPLICA_TABLET_STATS
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+  GROUP BY SVR_IP, SVR_PORT, LS_ID
+""".replace("\n", " "),
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

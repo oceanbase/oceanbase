@@ -227,6 +227,7 @@
 #include "observer/virtual_table/ob_all_virtual_plugin_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
+#include "observer/virtual_table/ob_all_virtual_cs_replica_tablet_stats.h"
 
 namespace oceanbase
 {
@@ -2927,6 +2928,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               all_virtual_vector_index_info->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_vector_index_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_TID:
+          {
+            ObAllVirtualCSReplicaTabletStats *all_virtual_cs_replica_tablet_stats = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualCSReplicaTabletStats, all_virtual_cs_replica_tablet_stats))) {
+              SERVER_LOG(ERROR, "ObAllVirtualCSReplicaTabletStats construct failed", K(ret));
+            } else if (OB_FAIL(all_virtual_cs_replica_tablet_stats->init(&allocator, addr_))) {
+              SERVER_LOG(WARN, "failed to init ObAllVirtualCSReplicaTabletStats", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cs_replica_tablet_stats);
             }
             break;
           }

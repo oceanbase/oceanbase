@@ -1200,6 +1200,7 @@
 # 12505: __all_virtual_temp_file
 # 12506: __all_virtual_ncomp_dll_v2
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
+# 12513: __all_virtual_cs_replica_tablet_stats
 # 12514: __all_virtual_ddl_diagnose_info
 # 12515: __all_virtual_plugin_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
@@ -1874,6 +1875,8 @@
 # 15486: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 15489: ALL_VIRTUAL_TABLET_POINTER_STATUS
 # 15489: __all_virtual_tablet_pointer_status  # BASE_TABLE_NAME
+# 15493: ALL_VIRTUAL_CS_REPLICA_TABLET_STATS
+# 15493: __all_virtual_cs_replica_tablet_stats  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2395,6 +2398,8 @@
 # 21622: DBA_OB_TEMP_FILES
 # 21623: CDB_OB_TEMP_FILES
 # 21628: proc
+# 21633: DBA_OB_CS_REPLICA_STATS
+# 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
 # 21636: V$OB_PLUGINS
 # 25001: DBA_SYNONYMS
@@ -2909,6 +2914,7 @@
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
 # 28264: DBA_OB_TEMP_FILES
+# 28271: DBA_OB_CS_REPLICA_STATS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

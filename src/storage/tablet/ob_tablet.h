@@ -108,6 +108,15 @@ struct ObTabletDirectLoadInsertParam;
 struct ObTableStoreCache
 {
 public:
+  enum class ObMajorStoreType : uint8_t
+  {
+    NONE = 0,
+    ROW_STORE = 1,
+    PURE_COLUMN_STORE = 2,
+    REDUNDANT_ROW_STORE = 3,
+    MAX_STORE_TYPE
+  };
+public:
   ObTableStoreCache();
   ~ObTableStoreCache() { reset(); }
   void reset();
@@ -116,10 +125,14 @@ public:
       const ObSSTableArray &minor_tables,
       const bool is_row_store);
   void assign(const ObTableStoreCache &other);
+  inline bool is_last_major_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_
+                                                       || ObMajorStoreType::REDUNDANT_ROW_STORE == last_major_store_type_; }
+  inline bool is_last_major_row_store() const { return ObMajorStoreType::ROW_STORE == last_major_store_type_; }
   TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
       K_(last_major_macro_block_cnt), K_(is_row_store),
-      K_(last_major_compressor_type), K_(last_major_latest_row_store_type));
+      K_(last_major_compressor_type), K_(last_major_latest_row_store_type),
+      K_(last_major_store_type));
 
 public:
   int64_t last_major_snapshot_version_;
@@ -129,9 +142,9 @@ public:
   int64_t last_major_column_count_;
   int64_t last_major_macro_block_cnt_;
   bool is_row_store_;
-  // TODO(chengkong): add bool is_user_tablet_;
   common::ObCompressorType last_major_compressor_type_;
   common::ObRowStoreType last_major_latest_row_store_type_;
+  ObMajorStoreType last_major_store_type_;
 };
 
 class ObTablet final : public ObITabletMdsCustomizedInterface
@@ -179,6 +192,10 @@ public:
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
   inline int64_t get_last_compaction_scn() const { return tablet_meta_.extra_medium_info_.last_medium_scn_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
+  inline bool is_user_tablet() const { return tablet_meta_.tablet_id_.is_user_tablet(); }
+  inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
+  inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }
+  inline bool is_last_major_row_store() const { return table_store_cache_.is_last_major_row_store(); }
   int get_mds_table_rec_scn(share::SCN &rec_scn) const;
   int mds_table_flush(const share::SCN &decided_scn);
   int scan_mds_table_with_op(

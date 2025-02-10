@@ -11095,6 +11095,33 @@ BODY_UTF8	longblob	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.proc limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_CS_REPLICA_STATS;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+LS_ID	bigint(20)	NO		NULL	
+TOTAL_TABLET_CNT	bigint(20)	NO			
+AVAILABLE_TABLET_CNT	decimal(42,0)	NO			
+TOTAL_MACRO_BLOCK_CNT	decimal(42,0)	NO		NULL	
+AVAILABLE_MACRO_BLOCK_CNT	decimal(42,0)	NO			
+AVAILABLE	varchar(5)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_CS_REPLICA_STATS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_CS_REPLICA_STATS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+LS_ID	bigint(20)	NO		NULL	
+TOTAL_TABLET_CNT	bigint(20)	NO			
+AVAILABLE_TABLET_CNT	decimal(42,0)	NO			
+TOTAL_MACRO_BLOCK_CNT	decimal(42,0)	NO		NULL	
+AVAILABLE_MACRO_BLOCK_CNT	decimal(42,0)	NO			
+AVAILABLE	varchar(5)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_CS_REPLICA_STATS limit 1);
+cnt
+1
 desc oceanbase.GV$OB_PLUGINS;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

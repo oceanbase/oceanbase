@@ -66,16 +66,6 @@ int ObCSReplicaUtil::check_local_is_cs_replica(
   return ret;
 }
 
-bool ObCSReplicaUtil::check_need_convert_cs_when_migration(
-    const ObTablet &tablet,
-    const ObStorageSchema& schema_on_tablet)
-{
-  return schema_on_tablet.is_row_store()
-      && schema_on_tablet.is_user_data_table()
-      && tablet.is_row_store()
-      && tablet.get_tablet_id().is_user_tablet();
-}
-
 int ObCSReplicaUtil::check_has_cs_replica(
     const share::ObLSID &ls_id,
     bool &has_column_store_replica)
@@ -298,42 +288,21 @@ int ObCSReplicaUtil::init_cs_replica_tablet_status(
     } else if (tablet.get_last_major_snapshot_version() <= 0) {
       cs_replica_status = ObCSReplicaTabletStatus::NO_MAJOR_SSTABLE;
     } else {
-      ObStorageSchema *storage_schema = nullptr;
-      ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "IniTbltSts"));
-      ObTabletMemberWrapper<ObTabletTableStore> wrapper;
-      const ObTabletTableStore *table_store = nullptr;
-      const ObITable *sstable = nullptr;
-      if (OB_FAIL(tablet.load_storage_schema(arena_allocator, storage_schema))) {
-        LOG_WARN("fail to load storage schema", K(ret), K(tablet));
-      } else if (OB_ISNULL(storage_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("storage schema is nullptr", K(ret), K(tablet));
-      } else if (tablet.is_row_store() != storage_schema->is_row_store()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet and storage schema mismatch", K(ret), K(tablet), K(storage_schema));
-      } else if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
-        LOG_WARN("failed to fetch table store", K(ret), K(tablet));
-      } else if (OB_FAIL(wrapper.get_member(table_store))) {
-        LOG_WARN("fail to fetch table store", K(ret), K(wrapper));
-      } else if (OB_ISNULL(sstable = table_store->get_major_sstables().get_boundary_table(true /*is_last*/))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sstable is nullptr", K(ret), KPC(table_store));
-      } else if (tablet.is_row_store()) {
-        if (ObITable::is_row_store_major_sstable(sstable->get_key().table_type_)) {
+      if (tablet.is_row_store()) {
+        if (tablet.is_last_major_row_store()) {
           cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
         } else {
           cs_replica_status = ObCSReplicaTabletStatus::NEED_CS_STORAGE_SCHEMA;
         }
       } else { // column store
-        if (ObITable::is_row_store_major_sstable(sstable->get_key().table_type_)) {
+        if (tablet.is_last_major_row_store()) {
           cs_replica_status = ObCSReplicaTabletStatus::NEED_CO_CONVERT_MERGE;
         } else {
           cs_replica_status = ObCSReplicaTabletStatus::NORMAL_CS_REPLICA;
         }
       }
-      ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
       if (!is_normal_status(cs_replica_status)) {
-        LOG_INFO("[CS-Replica] Finish init cs replica tablet status", K(ret), K(ls), K(tablet), K(cs_replica_status), K(need_procss_cs_replica), KPC(sstable));
+        LOG_INFO("[CS-Replica] Finish init cs replica tablet status", K(ret), K(ls), K(tablet), K(cs_replica_status), K(need_procss_cs_replica));
       }
     }
   }
@@ -357,17 +326,10 @@ int ObCSReplicaUtil::check_need_process_cs_replica(
   if (tablet.is_cs_replica_compat()) {
     need_process_cs_replica = true;
   } else {
-    ObStorageSchema *storage_schema = nullptr;
-    ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "CheckCSRepl"));
-    if (OB_FAIL(tablet.load_storage_schema(arena_allocator, storage_schema))) {
-      LOG_WARN("fail to load storage schema", K(ret), K(tablet));
-    } else if (OB_ISNULL(storage_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("storage schema is nullptr", K(ret), K(tablet));
-    } else if (OB_FAIL(check_need_generate_cs_replica_cg_array(ls, tablet.get_tablet_id(), *storage_schema, need_process_cs_replica))) {
-      LOG_WARN("fail to check need process cs replica", K(ret), K(ls), K(tablet), KPC(storage_schema));
-    }
-    ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
+    need_process_cs_replica = ls.is_cs_replica()
+                           && tablet.is_user_tablet()
+                           && tablet.is_user_data_table()
+                           && tablet.is_row_store();
   }
   return ret;
 }

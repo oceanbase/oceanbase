@@ -5623,6 +5623,23 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_temp_file runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_cs_replica_tablet_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+macro_block_cnt	bigint(20)	NO		NULL	
+is_cs	tinyint(4)	NO		NULL	
+is_cs_replica	tinyint(4)	NO		NULL	
+available	tinyint(4)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_cs_replica_tablet_stats;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_cs_replica_tablet_stats runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_ddl_diagnose_info;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
