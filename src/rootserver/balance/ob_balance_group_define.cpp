@@ -24,6 +24,7 @@ namespace rootserver
 {
 
 const char* ObBalanceGroup::NON_PART_BG_NAME = "NON_PART_TABLE";
+const char* ObBalanceGroup::DUP_TABLE_BG_NAME = "DUP_TABLE";
 
 int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
     const int64_t max_part_level,
@@ -81,12 +82,19 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
   if (OB_UNLIKELY(is_in_tablegroup && ! table_schema.is_global_index_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table is in tablegroup, should init balance group by tablegroup", KR(ret), K(table_schema));
+  } else if (table_schema.is_duplicate_table()) {
+    // All tenant's duplicate tables belong to the same balance group
+    if (OB_FAIL(bg_name_str.append_fmt("%s", DUP_TABLE_BG_NAME))) {
+      LOG_WARN("assign failed", KR(ret), K(table_schema));
+    } else {
+      id_ = DUP_TABLE_BG_ID;
+    }
   } else if (PARTITION_LEVEL_ZERO == part_level) {
     // All tenant's non-partition table is a balance group
     if (OB_FAIL(bg_name_str.append_fmt("%s", NON_PART_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(table_schema));
     } else {
-      id_ = ObBalanceGroupID(0, 0);
+      id_ = NON_PART_BG_ID;
     }
   } else if (PARTITION_LEVEL_ONE == part_level) {
     // Level one partition table is a single balance group

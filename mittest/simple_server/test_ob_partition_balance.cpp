@@ -23,6 +23,7 @@ namespace oceanbase
 
 namespace rootserver
 {
+#define TEST_INFO(fmt, args...) FLOG_INFO("[TEST] " fmt, ##args)
 
 int g_ls_cnt = 1;
 int ObPartitionBalance::prepare_ls_()
@@ -30,9 +31,10 @@ int ObPartitionBalance::prepare_ls_()
   ls_desc_map_.create(10, lib::Label(""));
   int ls_cnt = g_ls_cnt;
   for (int i = 1; i <= ls_cnt; i++) {
-    auto ls_desc = new ObPartitionBalance::ObLSDesc(ObLSID(i), 0);
+    auto ls_desc = new ObLSDesc(ObLSID(i), 0);
     ls_desc_array_.push_back(ls_desc);
     ls_desc_map_.set_refactored(ls_desc->ls_id_, ls_desc);
+    job_generator_.ls_group_id_map_.set_refactored(ObLSID(i), 1001);
   }
   return OB_SUCCESS;
 }
@@ -40,7 +42,8 @@ int ObPartitionBalance::prepare_ls_()
 int ObPartitionBalance::process()
 {
   int ret = OB_SUCCESS;
-
+  ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
+  ObString balance_strategy("partition balance");
   if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret));
   } else if (OB_FAIL(save_balance_group_stat_())) {
@@ -51,8 +54,8 @@ int ObPartitionBalance::process()
     LOG_WARN("process_balance_partition_extend fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_disk_())) {
     LOG_WARN("process_balance_partition_disk fail", KR(ret));
-  } else if (OB_FAIL(generate_balance_job_from_logical_task_())) {
-    LOG_WARN("generate_balance_job_from_logical_task_ fail", KR(ret));
+  } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
+    LOG_WARN("gen_balance_job_and_tasks fail", KR(ret));
   }
   return ret;
 }
@@ -77,6 +80,12 @@ public:
 
 TestRunCtx RunCtx;
 
+void print_part_map(const ObTransferPartMap &part_map, const char* label) {
+  for (auto iter = part_map.begin(); iter != part_map.end(); iter++) {
+    TEST_INFO("part map", K(label), "task_key", iter->first, "part_cnt", iter->second.count(), "part_list", iter->second);
+  }
+}
+
 class ObBalancePartitionTest : public ObSimpleClusterTestBase
 {
 public:
@@ -96,7 +105,8 @@ public:
     ObPartitionBalance balance_part_job;
     ObCurTraceId::get_trace_id()->set(std::string(std::to_string(ObTimeUtility::current_time()%10000)).c_str());
     ObTenantSwitchGuard guard;
-    LOG_INFO("balance_part_job start>>>>>>>>>>>>>>>>>");
+    ObLSStatusOperator status_op;
+    TEST_INFO("balance_part_job start>>>>>>>>>>>>>>>>>");
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
@@ -105,19 +115,19 @@ public:
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
     } else {
-      std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObPartitionBalance::ObLSDesc* left, const ObPartitionBalance::ObLSDesc* right) {
+      std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObLSDesc* left, const ObLSDesc* right) {
         return left->partgroup_cnt_ < right->partgroup_cnt_;
       });
-      LOG_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
+      TEST_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
       for (auto iter = balance_part_job.bg_map_.begin(); iter != balance_part_job.bg_map_.end(); iter++) {
         for (int i = 0; i < iter->second.count(); i++) {
-          LOG_INFO("balance_part_job bg_map", K(iter->first), K(iter->second.at(i)->ls_id_), K(iter->second.at(i)->part_groups_.count()));
+          TEST_INFO("balance_part_job bg_map", K(iter->first), K(iter->second.at(i)->ls_id_), K(iter->second.at(i)->part_groups_.count()));
         }
       }
-      LOG_INFO("balance_part_job res", "size", balance_part_job.transfer_logical_tasks_.size(), "ls_array", balance_part_job.ls_desc_array_);
-      for (auto iter = balance_part_job.transfer_logical_tasks_.begin(); iter != balance_part_job.transfer_logical_tasks_.end(); iter++) {
-        LOG_INFO("balance_part_job:", "task_key", iter->first, "part_cnt", iter->second.count(), "part_list", iter->second);
-      }
+      print_part_map(balance_part_job.job_generator_.dup_to_normal_part_map_, "dup_to_normal");
+      print_part_map(balance_part_job.job_generator_.normal_to_dup_part_map_, "normal_to_dup");
+      print_part_map(balance_part_job.job_generator_.dup_to_dup_part_map_, "dup_to_dup");
+      print_part_map(balance_part_job.job_generator_.normal_to_normal_part_map_, "normal_to_normal");
       if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)->partgroup_cnt_ - balance_part_job.ls_desc_array_.at(0)->partgroup_cnt_ > 1) {
         ret = -1;
         LOG_WARN("partition not balance", KR(ret), K(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), K(balance_part_job.ls_desc_array_.at(0)));
@@ -129,12 +139,12 @@ public:
 
 TEST_F(ObBalancePartitionTest, observer_start)
 {
-  SERVER_LOG(INFO, "observer_start succ");
+  TEST_INFO("observer_start succ");
 }
 
 TEST_F(ObBalancePartitionTest, empty)
 {
-  LOG_INFO("-----------empty-------------");
+  TEST_INFO("-----------empty-------------");
   for (int i = 1; i <= 2; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -143,7 +153,7 @@ TEST_F(ObBalancePartitionTest, empty)
 // 非分区表整体是一个均衡组，表做平铺
 TEST_F(ObBalancePartitionTest, simple_table)
 {
-  LOG_INFO("-----------simple_table-------------");
+  TEST_INFO("-----------simple_table-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -160,7 +170,7 @@ TEST_F(ObBalancePartitionTest, simple_table)
 // 每个一级分区的表是一个均衡组，一级分区做平铺
 TEST_F(ObBalancePartitionTest, partition)
 {
-  LOG_INFO("-----------partition-------------");
+  TEST_INFO("-----------partition-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   // 创建表
   for (int i = 1; i <= 5; i++) {
@@ -176,7 +186,7 @@ TEST_F(ObBalancePartitionTest, partition)
 
 TEST_F(ObBalancePartitionTest, subpart)
 {
-  LOG_INFO("-----------subpart-------------");
+  TEST_INFO("-----------subpart-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
    // 创建表
    for (int i = 1; i <= 5; i++) {
@@ -192,7 +202,7 @@ TEST_F(ObBalancePartitionTest, subpart)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_none)
 {
-  LOG_INFO("-----------tablegroup_sharding_none-------------");
+  TEST_INFO("-----------tablegroup_sharding_none-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -217,7 +227,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_none)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition1)
 {
-  LOG_INFO("-----------tablegroup_sharding_partition1-------------");
+  TEST_INFO("-----------tablegroup_sharding_partition1-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -236,7 +246,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition1)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition2)
 {
-  LOG_INFO("-----------tablegroup_sharding_partition2-------------");
+  TEST_INFO("-----------tablegroup_sharding_partition2-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -255,7 +265,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition2)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition3)
 {
-  LOG_INFO("-----------tablegroup_sharding_partition3-------------");
+  TEST_INFO("-----------tablegroup_sharding_partition3-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -277,7 +287,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition3)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive1)
 {
-  LOG_INFO("-----------tablegroup_sharding_adaptive1-------------");
+  TEST_INFO("-----------tablegroup_sharding_adaptive1-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -296,7 +306,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive1)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive2)
 {
-  LOG_INFO("-----------tablegroup_sharding_adaptive2-------------");
+  TEST_INFO("-----------tablegroup_sharding_adaptive2-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -315,7 +325,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive2)
 
 TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive3)
 {
-  LOG_INFO("-----------tablegroup_sharding_adaptive3-------------");
+  TEST_INFO("-----------tablegroup_sharding_adaptive3-------------");
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
@@ -331,7 +341,6 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive3)
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
 }
-
 
 TEST_F(ObBalancePartitionTest, end)
 {
@@ -365,7 +374,7 @@ int main(int argc, char **argv)
   oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level(log_level);
 
-  LOG_INFO("main>>>");
+  TEST_INFO("main>>>");
   oceanbase::unittest::RunCtx.time_sec_ = time_sec;
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

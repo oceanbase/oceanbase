@@ -131,7 +131,7 @@ int ObLSAllPartBuilder::build_part_info_(
     const uint64_t table_id = tablet.get_table_id();
 
     // part object id
-    // for non-part table, is 0
+    // for non-part table, is table_id
     // for level-one part table, is partition id
     // for level-two part table, is subpartition id
     uint64_t part_object_id = OB_INVALID_ID;

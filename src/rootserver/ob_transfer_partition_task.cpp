@@ -16,7 +16,7 @@
 #include "rootserver/ob_tenant_balance_service.h"//gather_ls_status
 #include "src/share/tablet/ob_tablet_to_ls_operator.h"
 #include "storage/ob_common_id_utils.h" //gen_unique_id
-
+#include "rootserver/ob_ls_balance_helper.h" // ObLSBalanceTaskHelper
 
 #define ISTAT(fmt, args...) FLOG_INFO("[TRANSFER_PARTITION] " fmt, ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[TRANSFER_PARTITION] " fmt, ##args)
@@ -75,12 +75,10 @@ void ObTransferPartitionHelper::destroy()
   //part_info的内存依赖于task_array，要先于task_array释放
   part_info_.reset();
   task_array_.reset();
-  transfer_logical_tasks_.destroy();
-  balance_tasks_.reset();
   allocator_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
-  balance_job_.reset();
   max_task_id_.reset();
+  job_generator_.reset();
 }
 int ObTransferPartitionHelper::check_inner_stat_()
 {
@@ -460,6 +458,8 @@ int ObTransferPartitionHelper::process_in_trans(
 {
   int ret = OB_SUCCESS;
   ObArray<share::ObTransferPartitionTask> task_array;
+  ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_TRANSFER_PARTITION);
+  ObString balance_strategy = ObString::make_string("manual transfer partition");
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -475,48 +475,22 @@ int ObTransferPartitionHelper::process_in_trans(
     LOG_WARN("failed to load all task", KR(ret), K(tenant_id_), K(max_task_id_));
   } else if (0 == task_array.count()) {
     //no task
+  } else if (OB_FAIL(job_generator_.init(tenant_id_, primary_zone_num, unit_num, sql_proxy_))) {
+    LOG_WARN("init job_generator_ failed", KR(ret), K(tenant_id_), K(primary_zone_num), K(unit_num));
+  } else if (OB_FAIL(job_generator_.prepare_ls(status_info_array))) {
+    LOG_WARN("job_generator_ prepare ls failed", KR(ret), K(status_info_array), K(job_generator_));
   } else if (OB_FAIL(construct_logical_task_(task_array))) {
     LOG_WARN("failed to construct logical task", KR(ret), K(task_array));
-  } else {
-    ObBalanceJobID job_id;
-    ObBalanceJobStatus job_status(ObBalanceJobStatus::BALANCE_JOB_STATUS_DOING);
-    ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_TRANSFER_PARTITION);
-    const char* balance_stradegy = "manual transfer partition"; // TODO
-    ObString comment;
-
-    if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
-      LOG_WARN("gen_unique_id", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(balance_job_.init(tenant_id_, job_id, job_type, job_status,
-            primary_zone_num, unit_num,
-            comment, ObString(balance_stradegy)))) {
-      LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id),
-          K(primary_zone_num), K(unit_num));
-    } else {
-      hash::ObHashMap<ObPartitionBalance::ObTransferTaskKey, ObTransferPartList>::iterator
-        iter = transfer_logical_tasks_.begin();
-      for (; OB_SUCC(ret) && iter != transfer_logical_tasks_.end(); ++iter) {
-        ObLSID src_ls = iter->first.get_src_ls_id();
-        ObLSID dest_ls = iter->first.get_dest_ls_id();
-        uint64_t src_ls_group = 0;
-        uint64_t dest_ls_group = 0;
-        if (OB_FAIL(get_ls_group_id(status_info_array, src_ls, dest_ls,
-                src_ls_group, dest_ls_group))) {
-          LOG_WARN("failed to get ls group", KR(ret), K(status_info_array),
-              K(src_ls), K(dest_ls));
-        } else if (OB_FAIL(ObPartitionBalance::transfer_logical_task_to_balance_task(
-                tenant_id_, balance_job_.get_job_id(), src_ls, dest_ls,
-                src_ls_group, dest_ls_group, iter->second,
-                balance_tasks_))) {
-          LOG_WARN("failed to transfer logical task", KR(ret), K(tenant_id_), K(balance_job_),
-              K(src_ls), K(dest_ls), K(iter->second));
-        }
-      }//end for
-    }
-    if (FAILEDx(ObTransferPartitionTaskTableOperator::set_all_tasks_schedule(
-            tenant_id_, max_task_id_, balance_job_.get_job_id(), task_array.count(), trans))) {
-      LOG_WARN("failed to set all tasks to schedule", KR(ret), K(tenant_id_), K(max_task_id_),
-          K(balance_job_), "count", task_array.count());
-    }
+  } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
+    LOG_WARN("gen balance job and tasks failed", KR(ret), K(job_generator_), K(job_type), K(balance_strategy));
+  } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::set_all_tasks_schedule(
+      tenant_id_,
+      max_task_id_,
+      job_generator_.get_balance_job().get_job_id(),
+      task_array.count(),
+      trans))) {
+    LOG_WARN("failed to set all tasks to schedule", KR(ret), K(tenant_id_), K(max_task_id_),
+        K(job_generator_), "count", task_array.count());
   }
   return ret;
 }
@@ -535,10 +509,6 @@ int ObTransferPartitionHelper::construct_logical_task_(
     LOG_WARN("task array can not larger than part info", KR(ret),
         "part_info count", part_info_.count(), "task_array count", task_array.count(),
         K(part_info_), K(task_array));
-  } else if (OB_FAIL(transfer_logical_tasks_.create(1024,
-                      lib::ObLabel("Trans_Part"), lib::ObLabel("Trans_Part"),
-                      tenant_id_))) {
-    LOG_WARN("map create fail", KR(ret), K(tenant_id_));
   } else {
     //task_array and part_info is order by table_id, object_id
     int64_t part_info_index = 0;
@@ -559,24 +529,11 @@ int ObTransferPartitionHelper::construct_logical_task_(
                       K(task), K(part_info));
           } else {
             found = true;
-            ObPartitionBalance::ObTransferTaskKey key(part_info.get_ls_id(),
-                                                      task.get_dest_ls());
-            ObTransferPartList *tansfer_part_info = transfer_logical_tasks_.get(key);
-            if (OB_ISNULL(tansfer_part_info)) {
-              ObTransferPartList part_arr;
-              if (OB_FAIL(transfer_logical_tasks_.set_refactored(key, part_arr))) {
-                LOG_WARN("fail to init transfer task into map", KR(ret), K(key),
-                         K(part_arr));
-              } else {
-                tansfer_part_info = transfer_logical_tasks_.get(key);
-              }
-            }
-            if (OB_SUCC(ret) && OB_ISNULL(tansfer_part_info)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("fail get transfer task from map", KR(ret), K(key));
-            }
-            if (FAILEDx(tansfer_part_info->push_back(task.get_part_info()))) {
-              LOG_WARN("failed to push back", KR(ret), K(task));
+            if (OB_FAIL(job_generator_.add_need_transfer_part(
+                part_info.get_ls_id(),
+                task.get_dest_ls(),
+                task.get_part_info()))) {
+              LOG_WARN("add need transfer part failed", KR(ret), K(part_info), K(task));
             }
           }
         }
@@ -592,41 +549,6 @@ int ObTransferPartitionHelper::construct_logical_task_(
   return ret;
 }
 
-int ObTransferPartitionHelper::get_ls_group_id(
-    const share::ObLSStatusInfoIArray &status_info_array,
-    const ObLSID &src_ls, const ObLSID &dest_ls,
-    uint64_t &src_ls_group, uint64_t &dest_ls_group)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == status_info_array.count()
-        || !src_ls.is_valid() || !dest_ls.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(status_info_array), K(src_ls), K(dest_ls));
-  }
-  int found_cnt = 0;
-  src_ls_group = OB_INVALID_ID;
-  dest_ls_group = OB_INVALID_ID;
-  for (int64_t i = 0;
-      OB_SUCC(ret) && found_cnt < 2 && i < status_info_array.count(); ++i) {
-    const ObLSStatusInfo &info = status_info_array.at(i);
-    if (info.get_ls_id() == src_ls && OB_INVALID_ID == src_ls_group) {
-      src_ls_group = info.ls_group_id_;
-      found_cnt++;
-    }
-    if (info.get_ls_id() == dest_ls && OB_INVALID_ID == dest_ls_group) {
-      dest_ls_group = info.ls_group_id_;
-      found_cnt++;
-    }
-  }
-  if (OB_SUCC(ret) && (2 != found_cnt || OB_INVALID_ID == src_ls_group
-        || OB_INVALID_ID == dest_ls_group)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dest or src ls not exist", KR(ret), K(found_cnt), K(src_ls),
-        K(dest_ls), K(dest_ls_group), K(src_ls_group),
-        K(status_info_array));
-  }
-  return ret;
-}
 #undef ISTAT
 #undef WSTAT
 

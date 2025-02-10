@@ -770,7 +770,9 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
     // update ls group id in status
     int64_t unit_group_index = OB_INVALID_INDEX_INT64;
     ObLSGroupInfo ls_group_info;
-    if (OB_SUCC(tenant_info.get_ls_group_info(new_ls_group_id, ls_group_info))) {
+    if (0 == new_ls_group_id) { // for dup ls
+      unit_group_id = 0;
+    } else if (OB_SUCC(tenant_info.get_ls_group_info(new_ls_group_id, ls_group_info))) {
        unit_group_id = ls_group_info.unit_group_id_;
     } else if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get ls group info", KR(ret), K(new_ls_group_id));
@@ -1285,7 +1287,7 @@ int ObTenantLSInfo::add_ls_to_ls_group_(const share::ObLSStatusInfo &info)
       } else if (OB_FAIL(ls_group_array_.push_back(group))) {
         LOG_WARN("failed to pushback group", KR(ret), K(group));
       } else if (0 == info.ls_group_id_) {
-        //duplate ls, no need to set to unit group
+        //duplate ls with ls_group_id = 0, no need to set to unit group
       } else if (OB_FAIL(add_ls_group_to_unit_group_(group))) {
         LOG_WARN("failed to add ls group to unit group", KR(ret), K(group));
       }

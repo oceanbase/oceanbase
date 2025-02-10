@@ -28,6 +28,7 @@ class ObTimeoutCtx;
 namespace share
 {
 class ObLSID;
+class ObLSAttr;
 namespace schema
 {
 class ObSimpleTableSchemaV2;
@@ -121,17 +122,19 @@ public:
 private:
   int process_task_(const share::ObTransferTask::TaskStatus &task_stat);
   int process_init_task_(const share::ObTransferTaskID task_id);
-  int check_ls_member_list_(
+  int check_ls_member_list_and_learner_list_(
       common::ObISQLClient &sql_proxy,
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,
       share::ObTransferTaskComment &result_comment);
-  int get_member_lists_by_inner_sql_(
+  int get_member_list_and_learner_list_by_inner_sql_(
       common::ObISQLClient &sql_proxy,
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,
       share::ObLSReplica::MemberList &src_ls_member_list,
-      share::ObLSReplica::MemberList &dest_ls_member_list);
+      share::ObLSReplica::MemberList &dest_ls_member_list,
+      common::GlobalLearnerList &src_ls_learner_list,
+      common::GlobalLearnerList &dest_ls_learner_list);
   int lock_table_and_part_(
       ObMySQLTransaction &trans,
       const share::ObLSID &src_ls,
@@ -229,9 +232,6 @@ private:
       const share::ObTransferTaskID &task_id,
       const share::ObTransferTaskComment &result_comment);
   int64_t get_tablet_count_threshold_() const;
-  int construct_ls_member_list_(
-      common::sqlclient::ObMySQLResult &res,
-      share::ObLSReplica::MemberList &ls_member_list);
   int check_if_need_wait_due_to_last_failure_(
       common::ObISQLClient &sql_proxy,
       const share::ObTransferTask &task,
@@ -243,6 +243,11 @@ private:
       const ObIArray<common::ObTabletID> &tablet_ids,
       const int64_t new_tablet_cnt,
       bool &exceed_threshold);
+  bool is_dup_ls_(const share::ObLSID &ls_id, const ObIArray<share::ObLSAttr> &dup_ls_attrs);
+  int construct_ls_member_list_and_learner_list_(
+      common::sqlclient::ObMySQLResult &res,
+      share::ObLSReplica::MemberList &ls_member_list,
+      common::GlobalLearnerList &ls_learner_list);
 
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s

@@ -55,9 +55,13 @@ class ObTenantBalanceService : public ObTenantThreadHelper,
                            public logservice::ObIReplaySubHandler
 {
 public:
-  ObTenantBalanceService():inited_(false), loaded_(false), tenant_id_(OB_INVALID_TENANT_ID),
-                           primary_zone_num_(OB_INVALID_COUNT), ls_array_(),
-                           unit_group_array_() {}
+  ObTenantBalanceService()
+      : inited_(false),
+        loaded_(false),
+        tenant_id_(OB_INVALID_TENANT_ID),
+        primary_zone_num_(OB_INVALID_COUNT),
+        ls_array_(),
+        unit_group_array_() {}
   virtual ~ObTenantBalanceService() {}
   int init();
   void destroy();

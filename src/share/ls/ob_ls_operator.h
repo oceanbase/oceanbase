@@ -297,12 +297,12 @@ public:
   // get duplicate ls status info
   // @params[in]  for_update, whether to lock line
   // @params[in]  client, sql client to use
-  // @params[out] ls_attr, the result
+  // @params[out] ls_attrs, the result
   // @params[in] only_existing_ls : Mark whether to get the LS that has been deleted or create_abort
   int get_duplicate_ls_attr(
       const bool for_update,
       common::ObISQLClient &client,
-      ObLSAttr &ls_attr,
+      ObIArray<ObLSAttr> &ls_attrs,
       bool only_existing_ls = true);
   /**
    * @description: get ls list from all_ls table
@@ -331,7 +331,8 @@ public:
                                    bool only_existing_ls = true);
   int insert_ls(const ObLSAttr &ls_attr,
                 const ObTenantSwitchoverStatus &working_sw_status,
-                ObMySQLTransaction *trans = NULL);
+                ObMySQLTransaction *trans = NULL,
+                const bool skip_dup_ls_check = false);
   //prevent the concurrency of create and drop ls
   int delete_ls(const ObLSID &id,
                 const share::ObLSStatus &old_status,
@@ -372,7 +373,8 @@ private:
                    const ObTenantSwitchoverStatus &working_sw_status);
   int operator_ls_in_trans_(const ObLSAttr &ls_attr, const common::ObSqlString &sql,
                    const ObTenantSwitchoverStatus &working_sw_status,
-                   ObMySQLTransaction &trans);
+                   ObMySQLTransaction &trans,
+                   const bool skip_dup_ls_check = false);
 private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;

@@ -42,6 +42,7 @@ namespace share
 {
 class ObLSTableOperator;
 class SCN;
+class ObLocationService;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -52,6 +53,11 @@ class ObTenantSchema;
 namespace palf
 {
 struct PalfBaseInfo;
+}
+
+namespace obrpc
+{
+class  ObSrvRpcProxy;
 }
 namespace rootserver
 {
@@ -111,6 +117,31 @@ private:
   uint64_t tenant_id_;
 
 };
+
+class ObDupLSCreateHelper
+{
+public:
+  ObDupLSCreateHelper()
+      : inited_(false),
+        tenant_id_(OB_INVALID_TENANT_ID),
+        sql_proxy_(NULL),
+        srv_rpc_proxy_(NULL),
+        location_service_(NULL) {}
+  virtual ~ObDupLSCreateHelper() {}
+  int init(
+      const uint64_t tenant_id,
+      common::ObISQLClient *sql_proxy,
+      obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+      share::ObLocationService *location_service);
+  int check_and_create_duplicate_ls_if_needed(share::ObLSID &dup_ls_id);
+private:
+  bool inited_;
+  uint64_t tenant_id_;
+  common::ObISQLClient *sql_proxy_;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
+  share::ObLocationService *location_service_;
+};
+
 }
 }
 

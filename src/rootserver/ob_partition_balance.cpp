@@ -16,7 +16,6 @@
 #include "rootserver/ob_partition_balance.h"
 #include "storage/ob_common_id_utils.h"
 
-
 namespace oceanbase
 {
 namespace rootserver
@@ -34,8 +33,13 @@ const int64_t PART_GROUP_SIZE_SEGMENT[] = {
   100 * 1024L * 1024L         // 100M
 };
 
-int ObPartitionBalance::init(uint64_t tenant_id, schema::ObMultiVersionSchemaService *schema_service, common::ObMySQLProxy *sql_proxy,
-    const int64_t primary_zone_num, const int64_t unit_group_num, TaskMode task_mode)
+int ObPartitionBalance::init(
+    uint64_t tenant_id,
+    schema::ObMultiVersionSchemaService *schema_service,
+    common::ObMySQLProxy *sql_proxy,
+    const int64_t primary_zone_num,
+    const int64_t unit_group_num,
+    TaskMode task_mode)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -47,28 +51,20 @@ int ObPartitionBalance::init(uint64_t tenant_id, schema::ObMultiVersionSchemaSer
     LOG_WARN("ObPartitionBalance run", KR(ret), K(tenant_id), K(schema_service), K(sql_proxy), K(task_mode));
   } else if (OB_FAIL(bg_builder_.init(tenant_id, "PART_BALANCE", *this, *sql_proxy, *schema_service))) {
     LOG_WARN("init all balance group builder fail", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(bg_map_.create(40960, lib::ObLabel("PART_BALANCE")))) {
+  } else if (OB_FAIL(bg_map_.create(40960, lib::ObLabel("PART_BALANCE"), ObModIds::OB_HASH_NODE, tenant_id))) {
     LOG_WARN("map create fail", KR(ret));
-  } else if (OB_FAIL(transfer_logical_tasks_.create(1024, lib::ObLabel("PART_BALANCE")))) {
-    LOG_WARN("map create fail", KR(ret));
-  } else if (OB_FAIL(ls_desc_map_.create(10, lib::ObLabel("PART_BALANCE")))) {
+  } else if (OB_FAIL(ls_desc_map_.create(10, lib::ObLabel("PART_BALANCE"), ObModIds::OB_HASH_NODE, tenant_id))) {
     LOG_WARN("map create fail", KR(ret));
   } else if (OB_FAIL(bg_ls_stat_operator_.init(sql_proxy))) {
     LOG_WARN("init balance group ls stat operator fail", KR(ret));
+  } else if (OB_FAIL(job_generator_.init(tenant_id, primary_zone_num, unit_group_num, sql_proxy))) {
+    LOG_WARN("init job generator failed", KR(ret), K(tenant_id),
+        K(primary_zone_num), K(unit_group_num), KP(sql_proxy));
   } else {
     tenant_id_ = tenant_id;
     sql_proxy_ = sql_proxy;
-
-    //reset
-    allocator_.reset();
     cur_part_group_ = NULL;
-    ls_desc_array_.reset();
-    balance_job_.reset();
-    balance_tasks_.reset();
     task_mode_ = task_mode;
-
-    primary_zone_num_ = primary_zone_num;
-    unit_group_num_ = unit_group_num;
     inited_ = true;
   }
   return ret;
@@ -90,27 +86,26 @@ void ObPartitionBalance::destroy()
     iter->second.destroy();
   }
   //reset
+  job_generator_.reset();
   bg_builder_.destroy();
   cur_part_group_ = NULL;
   allocator_.reset();
   ls_desc_array_.reset();
   ls_desc_map_.destroy();
   bg_map_.destroy();
-  transfer_logical_tasks_.destroy();
-  balance_job_.reset();
-  balance_tasks_.reset();
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
+  dup_ls_id_.reset();
   sql_proxy_ = NULL;
   task_mode_ = GEN_BG_STAT;
-  primary_zone_num_ = -1;
-  unit_group_num_ = -1;
 }
 
 int ObPartitionBalance::process()
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
+  ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
+  ObString balance_strategy("partition balance"); //TODO: specify strategy
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
@@ -122,47 +117,66 @@ int ObPartitionBalance::process()
     // finish
   } else if (bg_map_.empty()) {
     LOG_INFO("PART_BALANCE balance group is empty do nothing", K(tenant_id_));
-  } else if (transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_inner_())) {
-    LOG_WARN("process_balance_partition_inner fail", KR(ret), K(tenant_id_));
-  } else if (transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_extend_())) {
-    LOG_WARN("process_balance_partition_extend fail", KR(ret), K(tenant_id_));
-  } else if (!GCTX.is_shared_storage_mode() && // do disk balance only in shared_nothing mode
-             transfer_logical_tasks_.empty() && OB_FAIL(process_balance_partition_disk_())) {
-    LOG_WARN("process_balance_partition_disk fail", KR(ret), K(tenant_id_));
-  } else if (!transfer_logical_tasks_.empty() && OB_FAIL(generate_balance_job_from_logical_task_())) {
-    LOG_WARN("generate_balance_job_from_logical_task_ fail", KR(ret), K(tenant_id_));
+  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_inner_())) {
+     LOG_WARN("process_balance_partition_inner fail", KR(ret), K(tenant_id_));
+  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_extend_())) {
+     LOG_WARN("process_balance_partition_extend fail", KR(ret), K(tenant_id_));
+  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_disk_())) {
+     LOG_WARN("process_balance_partition_disk fail", KR(ret), K(tenant_id_));
   }
+
+  if (OB_FAIL(ret) || GEN_BG_STAT == task_mode_ || !job_generator_.need_gen_job()) {
+    // skip
+  } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
+    LOG_WARN("gen balance job and tasks failed", KR(ret),
+        K(tenant_id_), K(job_type), K(balance_strategy));
+  }
+
   int64_t end_time = ObTimeUtility::current_time();
-  LOG_INFO("PART_BALANCE process", KR(ret), K(tenant_id_), K(task_mode_), "cost", end_time - start_time, "task_cnt", transfer_logical_tasks_.size());
-  return ret;
+  LOG_INFO("PART_BALANCE process", KR(ret), K(tenant_id_), K(task_mode_),
+      "cost", end_time - start_time, "need balance", job_generator_.need_gen_job());
+   return ret;
 }
 
 int ObPartitionBalance::prepare_ls_()
 {
   int ret = OB_SUCCESS;
-  ObLSAttrArray ls_attr_array;
-  ObLSAttrOperator ls_operator(tenant_id_, sql_proxy_);
-  if (!inited_) {
+  ObLSStatusInfoArray ls_stat_array;
+  ObLSStatusOperator status_op;
+  if (!inited_ || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
-  } else if (OB_FAIL(ls_operator.get_all_ls_by_order(ls_attr_array))) {
-    LOG_WARN("get_all_ls fail", KR(ret));
+    LOG_WARN("ObPartitionBalance not init", KR(ret), K(inited_), KP(sql_proxy_));
+  } else if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id_, ls_stat_array, *sql_proxy_))) {
+    LOG_WARN("failed to get status by order", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(job_generator_.prepare_ls(ls_stat_array))) {
+    LOG_WARN("job_generator_ prepare ls failed", KR(ret), K(tenant_id_), K(ls_stat_array));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_attr_array.count(); i++) {
+    ARRAY_FOREACH(ls_stat_array, idx) {
+      const ObLSStatusInfo &ls_stat = ls_stat_array.at(idx);
       ObLSDesc *ls_desc = nullptr;
-      if (0 == ls_attr_array.at(i).get_ls_group_id()) {
-        // skip sys ls and duplicate ls
-      } else if (!ls_attr_array.at(i).ls_is_normal()) { // TODO inclue wait offline status
+      if (ls_stat.get_ls_id().is_sys_ls()) {
+        // only skip sys ls
+      } else if (!ls_stat.is_normal()) {
         ret = OB_STATE_NOT_MATCH;
-        LOG_WARN("ls is not in normal status", KR(ret), K(ls_attr_array.at(i).get_ls_id()));
+        LOG_WARN("ls is not in normal status", KR(ret), K(ls_stat));
       } else if (OB_ISNULL(ls_desc = reinterpret_cast<ObLSDesc*>(allocator_.alloc(sizeof(ObLSDesc))))) {
          ret = OB_ALLOCATE_MEMORY_FAILED;
          LOG_WARN("alloc mem fail", KR(ret));
-      } else if (FALSE_IT(new(ls_desc) ObLSDesc(ls_attr_array.at(i).get_ls_id(), ls_attr_array.at(i).get_ls_group_id()))) {
+      } else if (FALSE_IT(new(ls_desc) ObLSDesc(ls_stat.get_ls_id(), ls_stat.get_ls_group_id()))) {
+      } else if (OB_FAIL(ls_desc_map_.set_refactored(ls_desc->get_ls_id(), ls_desc))) { // need dup ls desc to gen job
+        LOG_WARN("init ls_desc to map fail", KR(ret), K(ls_desc->get_ls_id()));
+      } else if (ls_stat.is_duplicate_ls()) {
+        if (OB_UNLIKELY(dup_ls_id_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("there should be only one dup ls when doing partition balance",
+              KR(ret), K(dup_ls_id_), K(ls_stat), K(idx));
+        } else {
+          dup_ls_id_ = ls_stat.get_ls_id();
+        }
+        // ls_desc_array_ is used to balance partition groups on all user ls.
+        // Paritions on dup ls can not be balanced together.
       } else if (OB_FAIL(ls_desc_array_.push_back(ls_desc))) {
         LOG_WARN("push_back ls_desc to array fail", KR(ret), K(ls_desc->get_ls_id()));
-      } else if (OB_FAIL(ls_desc_map_.set_refactored(ls_desc->get_ls_id(), ls_desc))) {
-        LOG_WARN("init ls_desc to map fail", KR(ret), K(ls_desc->get_ls_id()));
       }
     }
     if (OB_SUCC(ret) && ls_desc_array_.count() == 0) {
@@ -171,7 +185,8 @@ int ObPartitionBalance::prepare_ls_()
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("[PART_BALANCE] prepare_ls", K(tenant_id_), K(ls_desc_array_));
+    LOG_INFO("[PART_BALANCE] prepare_ls", K(tenant_id_), K(dup_ls_id_),
+        K(ls_desc_array_), "ls_desc_map_ size", ls_desc_map_.size(), K(ls_stat_array));
   }
   return ret;
 }
@@ -218,26 +233,26 @@ int ObPartitionBalance::on_new_partition(
   ObBalanceGroup bg = bg_in; // get a copy
   ObLSDesc *src_ls_desc = nullptr;
   ObTransferPartInfo part_info;
+  const bool is_dup_ls_related_part = dup_ls_id_.is_valid() && (src_ls_id == dup_ls_id_ || dest_ls_id == dup_ls_id_);
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not inited", KR(ret), K(inited_));
+  } else if (OB_FAIL(part_info.init(table_id, part_object_id))) {
+    LOG_WARN("part_info init fail", KR(ret), K(table_id), K(part_object_id));
+  } else if (dest_ls_id != src_ls_id) { // need transfer
+    // transfer caused by table duplicate_scope change or tablegroup change
+    if (OB_FAIL(job_generator_.add_need_transfer_part(src_ls_id, dest_ls_id, part_info))) {
+      LOG_WARN("add need transfer part failed",
+          KR(ret), K(src_ls_id), K(dest_ls_id), K(part_info), K(dup_ls_id_));
+    }
+  } else if (is_dup_ls_related_part) {
+    // do not record dup ls related part_info
   } else if (OB_FAIL(ls_desc_map_.get_refactored(src_ls_id, src_ls_desc))) {
     LOG_WARN("get LS desc fail", KR(ret), K(src_ls_id));
   } else if (OB_ISNULL(src_ls_desc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not found LS", KR(ret), K(src_ls_id), KPC(src_ls_desc));
-  } else if (OB_FAIL(part_info.init(table_id, part_object_id))) {
-    LOG_WARN("part_info init fail", KR(ret), K(table_id), K(part_object_id));
-  }
-  // if dest_ls_id differs from src_ls_id, need generate balance task
-  else if (dest_ls_id != src_ls_id) {
-    ObTransferPartGroup tmp_part_group;
-    if (OB_FAIL(tmp_part_group.add_part(part_info, tablet_size))) {
-      LOG_WARN("part group add part fail", KR(ret), K(part_info), K(tablet_size));
-    } else if (OB_FAIL(add_transfer_task_(src_ls_id, dest_ls_id, &tmp_part_group, false/*update_ls_desc_info*/))) {
-      LOG_WARN("add new transfer task fail", KR(ret), K(src_ls_id), K(dest_ls_id));
-    }
   } else {
     // create partition group if in new partition group
     if (in_new_partition_group) {
@@ -409,34 +424,22 @@ int ObPartitionBalance::process_balance_partition_inner_()
 int ObPartitionBalance::add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc)
 {
   int ret = OB_SUCCESS;
-  ObTransferTaskKey task_key(src_ls_id, dest_ls_id);
-  ObTransferPartList *tansfer_part_info = transfer_logical_tasks_.get(task_key);
-  if (OB_ISNULL(tansfer_part_info)) {
-    ObTransferPartList part_arr;
-    if (OB_FAIL(transfer_logical_tasks_.set_refactored(task_key, part_arr))) {
-      LOG_WARN("fail to init transfer task into map", KR(ret), K(task_key), K(part_arr));
-    } else {
-      tansfer_part_info = transfer_logical_tasks_.get(task_key);
-      if (OB_ISNULL(tansfer_part_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail get transfer task from map", KR(ret), K(task_key));
+  if (OB_ISNULL(part_group)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("part group is null", KR(ret), KP(part_group));
+  } else {
+    ARRAY_FOREACH(part_group->get_part_list(), idx) {
+      const ObTransferPartInfo &part_info = part_group->get_part_list().at(idx);
+      if (OB_FAIL(job_generator_.add_need_transfer_part(src_ls_id, dest_ls_id, part_info))) {
+        LOG_WARN("add need transfer part failed", KR(ret), K(src_ls_id), K(dest_ls_id), K(part_info));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_group->get_part_list().count(); i++) {
-      if (OB_FAIL(tansfer_part_info->push_back(part_group->get_part_list().at(i)))) {
-        LOG_WARN("fail to push part info into transfer part array", KR(ret),
-            K(part_group->get_part_list().at(i)));
-      }
+    if (OB_FAIL(ret)) {
+    } else if (modify_ls_desc && OB_FAIL(update_ls_desc_(src_ls_id, -1, part_group->get_data_size() * -1))) {
+    LOG_WARN("update_ls_desc", KR(ret), K(src_ls_id));
+    } else if (modify_ls_desc && OB_FAIL(update_ls_desc_(dest_ls_id, 1, part_group->get_data_size()))) {
+    LOG_WARN("update_ls_desc", KR(ret), K(dest_ls_id));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (modify_ls_desc && OB_FAIL(update_ls_desc_(src_ls_id, -1, part_group->get_data_size() * -1))) {
-   LOG_WARN("update_ls_desc", KR(ret), K(src_ls_id));
-  } else if (modify_ls_desc && OB_FAIL(update_ls_desc_(dest_ls_id, 1, part_group->get_data_size()))) {
-   LOG_WARN("update_ls_desc", KR(ret), K(dest_ls_id));
   }
   return ret;
 }
@@ -677,118 +680,6 @@ int ObPartitionBalance::try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls
   return ret;
 }
 
-int ObPartitionBalance::generate_balance_job_from_logical_task_()
-{
-  int ret = OB_SUCCESS;
-
-  ObBalanceJobID job_id;
-  ObBalanceJobStatus job_status(ObBalanceJobStatus::BALANCE_JOB_STATUS_DOING);
-  ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
-  const char* balance_stradegy = "partition balance"; // TODO
-  ObString comment;
-
-  if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
-    LOG_WARN("gen_unique_id", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(balance_job_.init(tenant_id_, job_id, job_type, job_status, primary_zone_num_, unit_group_num_,
-          comment, ObString(balance_stradegy)))) {
-    LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id));
-  } else {
-    for (auto iter = transfer_logical_tasks_.begin(); OB_SUCC(ret) && iter != transfer_logical_tasks_.end(); iter++) {
-      ObLSDesc *src_ls = nullptr;
-      ObLSDesc *dest_ls = nullptr;
-      if (OB_FAIL(ls_desc_map_.get_refactored(iter->first.get_src_ls_id(), src_ls))) {
-        LOG_WARN("get_refactored", KR(ret), K(iter->first.get_src_ls_id()));
-      } else if (OB_FAIL(ls_desc_map_.get_refactored(iter->first.get_dest_ls_id(), dest_ls))) {
-        LOG_WARN("get_refactored", KR(ret), K(iter->first.get_dest_ls_id()));
-      } else if (OB_ISNULL(src_ls) || OB_ISNULL(dest_ls)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not find ls", KR(ret), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(transfer_logical_task_to_balance_task(tenant_id_,
-          balance_job_.get_job_id(), src_ls->get_ls_id(), dest_ls->get_ls_id(),
-          src_ls->get_ls_group_id(), dest_ls->get_ls_group_id(), iter->second,
-          balance_tasks_))) {
-        LOG_WARN("failed to transfer logical task", KR(ret), K(tenant_id_), K(balance_job_),
-                  KPC(src_ls), KPC(dest_ls), K(iter->second));
-      }
-    }
-  }
-  return ret;
-}
-
-#define GENERATE_TASK(balance_type, src_ls, dest_ls, ls_group_id, part_list)             \
-  do {                                                                        \
-    if (OB_SUCC(ret)) {                                                       \
-      ObBalanceTask task;                                                     \
-      ObBalanceTaskID task_id;                                                \
-      if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id, task_id))) {      \
-        LOG_WARN("gen_unique_id", KR(ret), K(tenant_id));                     \
-      } else if (OB_FAIL(task.simple_init(tenant_id, balance_job_id, task_id, \
-                                          balance_type, ls_group_id, src_ls,   \
-                                          dest_ls, part_list))) {             \
-        LOG_WARN("init task fail", KR(ret), K(tenant_id), K(balance_job_id),  \
-                 K(task_id), K(ls_group_id), K(src_ls), K(dest_ls),           \
-                 K(part_list));                                               \
-      } else if (OB_FAIL(task_array.push_back(task))) {                       \
-        LOG_WARN("push_back fail", KR(ret), K(task));                         \
-      }                                                                       \
-    }                                                                         \
-  } while (0)
-int ObPartitionBalance::transfer_logical_task_to_balance_task(
-    const uint64_t tenant_id,
-    const ObBalanceJobID &balance_job_id,
-    const ObLSID &src_ls, const ObLSID &dest_ls,
-    const uint64_t src_ls_group, const uint64_t dest_ls_group,
-    const ObTransferPartList &part_list,
-    ObArray<ObBalanceTask> &task_array)
-{
-  int ret = OB_SUCCESS;
-  //can not reset task array
-  if (OB_UNLIKELY(!balance_job_id.is_valid() || !src_ls.is_valid()
-      || !dest_ls.is_valid() || OB_INVALID_ID == src_ls_group
-      || OB_INVALID_ID == dest_ls_group || 0 >= part_list.count()
-      || src_ls == dest_ls || !is_valid_tenant_id(tenant_id))
-      || OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(balance_job_id), K(src_ls),
-            K(dest_ls), K(src_ls_group), K(dest_ls_group), K(part_list),
-            K(tenant_id), KP(GCTX.sql_proxy_));
-  } else if (src_ls_group == dest_ls_group) {
-    ObBalanceTaskType task_type(ObBalanceTaskType::BALANCE_TASK_TRANSFER);
-    GENERATE_TASK(task_type, src_ls, dest_ls, src_ls_group, part_list);
-  } else {
-    ObLSID tmp_ls_id;
-    const ObTransferPartList empty_part_list;//for alter and merge
-    ObBalanceTaskType task_type(ObBalanceTaskType::BALANCE_TASK_SPLIT);
-    if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id, tmp_ls_id))) {
-      LOG_WARN("failed to fetch new ls id", KR(ret), K(tenant_id));
-    } else {
-      GENERATE_TASK(task_type, src_ls, tmp_ls_id, src_ls_group, part_list);
-    }
-     // alter
-    if (OB_SUCC(ret)) {
-      ObBalanceTaskType task_type(ObBalanceTaskType::BALANCE_TASK_ALTER);
-      GENERATE_TASK(task_type, tmp_ls_id, tmp_ls_id, dest_ls_group, empty_part_list);
-    }
-    // merge
-    if (OB_SUCC(ret)) {
-      ObBalanceTaskType task_type(ObBalanceTaskType::BALANCE_TASK_MERGE);
-      GENERATE_TASK(task_type, tmp_ls_id, dest_ls, dest_ls_group, empty_part_list);
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionHelper::check_partition_option(const schema::ObSimpleTableSchemaV2 &t1, const schema::ObSimpleTableSchemaV2 &t2, bool is_subpart, bool &is_matched)
-{
-  int ret = OB_SUCCESS;
-  is_matched = false;
-  if (OB_FAIL(share::schema::ObSimpleTableSchemaV2::compare_partition_option(t1, t2, is_subpart, is_matched))) {
-    LOG_WARN("fail to compare partition optition", KR(ret));
-  }
-  return ret;
-}
-
 int ObPartitionBalance::save_balance_group_stat_()
 {
   int ret = OB_SUCCESS;
@@ -847,51 +738,6 @@ int ObPartitionBalance::save_balance_group_stat_()
   }
   int64_t end_time = ObTimeUtility::current_time();
   LOG_INFO("[PART_BALANCE] save_balance_group_stat", K(ret), "cost", end_time - start_time);
-  return ret;
-}
-
-int ObPartitionHelper::get_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, ObPartInfo &part_info)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id;
-  ObObjectID part_id;
-  ObObjectID first_level_part_id;
-  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, -1, tablet_id, part_id, first_level_part_id))) {
-    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx));
-  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
-    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
-  }
-  return ret;
-}
-
-int ObPartitionHelper::get_sub_part_num(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t &sub_part_num)
-{
-  int ret = OB_SUCCESS;
-  const schema::ObPartition *partition = NULL;
-  if (OB_FAIL(table_schema.get_partition_by_partition_index(part_idx, schema::CHECK_PARTITION_MODE_NORMAL, partition))) {
-    LOG_WARN("fail to get partition by part_idx", KR(ret), K(part_idx));
-  } else if (OB_ISNULL(partition)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition not exist", KR(ret), K(table_schema), K(part_idx));
-  } else {
-    sub_part_num = partition->get_sub_part_num();
-  }
-  return ret;
-}
-
-int ObPartitionHelper::get_sub_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t sub_part_idx, ObPartInfo &part_info)
-{
-  int ret = OB_SUCCESS;
-
-  ObTabletID tablet_id;
-  ObObjectID part_id;
-  ObObjectID first_level_part_id;
-  if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(part_idx, sub_part_idx, tablet_id, part_id, first_level_part_id))) {
-    LOG_WARN("fail to get_tablet_and_object_id_by_index", KR(ret), K(table_schema), K(part_idx), K(sub_part_idx));
-  } else if (OB_FAIL(part_info.init(tablet_id, part_id))) {
-    LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
-  }
-
   return ret;
 }
 

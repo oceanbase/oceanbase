@@ -650,14 +650,63 @@ int ObLSStatusOperator::get_duplicate_ls_status_info(
   } else if (OB_FAIL(ls_flag.flag_to_str(flag_str))) {
     LOG_WARN("failed to get flag str", K(ret), K(ls_flag));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "SELECT * FROM %s where tenant_id = %lu and flag like \"%%%s%%\"",
+                 "select * from %s where tenant_id = %lu and flag like \"%%%s%%\" order by ls_id limit 1",
                  OB_ALL_LS_STATUS_TNAME, tenant_id,
                  flag_str.ptr()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(sql));
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
   } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
                                           client, member_list, status_info, arb_member, learner_list, group_id))) {
-    LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
-             get_exec_tenant_id(tenant_id), K(need_member_list));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("tenant does not have duplicate ls", KR(ret), K(tenant_id));
+    } else {
+      LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
+          get_exec_tenant_id(tenant_id), K(need_member_list));
+    }
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::check_transfer_contain_duplicate_ls(
+    const uint64_t tenant_id,
+    ObISQLClient &client,
+    const share::ObLSID &src_ls_id,
+    const share::ObLSID &dst_ls_id,
+    bool &contain)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  bool need_member_list = false;
+  ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
+  ObMember arb_member;
+  share::ObLSStatusInfo status_info;
+  ObLSFlag ls_flag(ObLSFlag::DUPLICATE_FLAG);
+  ObLSFlagStr flag_str;
+  contain = false;
+  status_info.reset();
+
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !src_ls_id.is_valid() || !dst_ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls_id), K(dst_ls_id));
+  } else if (OB_FAIL(ls_flag.flag_to_str(flag_str))) {
+    LOG_WARN("failed to get flag str", K(ret), K(ls_flag));
+  } else if (OB_FAIL(sql.assign_fmt(
+               "select * from %s where tenant_id = %lu and flag like \"%%%s%%\" and (ls_id = %ld or ls_id = %ld) limit 1",
+               OB_ALL_LS_STATUS_TNAME, tenant_id, flag_str.ptr(), src_ls_id.id(), dst_ls_id.id()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
+                                          client, member_list, status_info, arb_member, learner_list, OBCG_DEFAULT))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      contain = false;
+      LOG_INFO("does not have duplicate ls for transfer", KR(ret), K(tenant_id), K(src_ls_id), K(dst_ls_id));
+    } else {
+      LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
+          get_exec_tenant_id(tenant_id), K(need_member_list));
+    }
+  } else {
+    contain = true;
+    LOG_INFO("have duplicate ls for transfer", KR(ret), K(src_ls_id), K(dst_ls_id), K(tenant_id));
   }
   return ret;
 }

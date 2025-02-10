@@ -466,7 +466,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (OB_FAIL(enable_new_transfer(new_transfer))) {
+  } else if (OB_FAIL(enable_new_transfer(task_info.src_ls_id_, task_info.dest_ls_id_, new_transfer))) {
     LOG_WARN("fail to fetch new transfer", K(ret));
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2871,8 +2871,9 @@ int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
   return ret;
 }
 
-// TODO(handora.qc): remove it under 4.3.x later
-int enable_new_transfer(bool &enable)
+int enable_new_transfer(const share::ObLSID src_ls_id,
+                        const share::ObLSID dst_ls_id,
+                        bool &enable)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
@@ -2887,6 +2888,24 @@ int enable_new_transfer(bool &enable)
   } else {
     enable = true;
   }
+
+
+  // TODO(handora.qc): remove later
+  if (OB_SUCC(ret) && enable) {
+    share::ObLSStatusOperator op;
+    bool contain = false;
+    if (OB_FAIL(op.check_transfer_contain_duplicate_ls(MTL_ID(),
+                                                       *GCTX.sql_proxy_,
+                                                       src_ls_id,
+                                                       dst_ls_id,
+                                                       contain))) {
+      LOG_WARN("[TRANSFER] check contain failed", K(ret));
+    } else if (contain) {
+      enable = false;
+      LOG_INFO("[TRANSFER] contain duplicate ls for transfer");
+    }
+  }
+
 
   return ret;
 }

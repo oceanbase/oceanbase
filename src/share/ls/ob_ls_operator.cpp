@@ -279,7 +279,8 @@ int ObLSAttrOperator::operator_ls_in_trans_(
     const ObLSAttr &ls_attr,
     const common::ObSqlString &sql,
     const ObTenantSwitchoverStatus &working_sw_status,
-    ObMySQLTransaction &trans)
+    ObMySQLTransaction &trans,
+    const bool skip_dup_ls_check)
 {
   int ret = OB_SUCCESS;
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
@@ -294,7 +295,7 @@ int ObLSAttrOperator::operator_ls_in_trans_(
     ObLSAttr sys_ls_attr;
     bool skip_sub_trans = false;
     ObAllTenantInfo tenant_info;
-    ObLSAttr duplicate_ls_attr;
+    ObSEArray<ObLSAttr, 1> duplicate_ls_attrs;
     if (ls_attr.get_ls_id().is_sys_ls()) {
       if (OB_LS_NORMAL == ls_attr.get_ls_status()) {
         skip_sub_trans = true;
@@ -319,17 +320,19 @@ int ObLSAttrOperator::operator_ls_in_trans_(
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("ls_status not expected while create ls", KR(ret), K(ls_attr),
           K(sys_ls_attr));
+      } else if (skip_dup_ls_check) {
+        // when split dup ls from normal ls with valid ls_group_id, need skip
       } else if (ls_attr.get_ls_flag().is_duplicate_ls()
-                 && OB_FAIL(get_duplicate_ls_attr(false/*for_update*/, trans, duplicate_ls_attr))) {
+                 && OB_FAIL(get_duplicate_ls_attr(false/*for_update*/, trans, duplicate_ls_attrs))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // good, duplicate ls not exist
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("fail to get duplicate ls info", KR(ret), K(ls_attr));
         }
-      } else if (duplicate_ls_attr.get_ls_flag().is_duplicate_ls()) {
+      } else if (!duplicate_ls_attrs.empty()) {
         ret = OB_LS_EXIST;
-        LOG_WARN("duplicate ls already exist", KR(ret), K(duplicate_ls_attr), K(ls_attr));
+        LOG_WARN("duplicate ls already exist", KR(ret), K(duplicate_ls_attrs), K(ls_attr));
       }
     }
     if (FAILEDx(exec_write(tenant_id_, sql, this, trans))) {
@@ -344,7 +347,8 @@ int ObLSAttrOperator::operator_ls_in_trans_(
 int ObLSAttrOperator::insert_ls(
     const ObLSAttr &ls_attr,
     const ObTenantSwitchoverStatus &working_sw_status,
-    ObMySQLTransaction *trans)
+    ObMySQLTransaction *trans,
+    const bool skip_dup_ls_check)
 {
   int ret = OB_SUCCESS;
   ObLSFlagStr flag_str;
@@ -370,7 +374,7 @@ int ObLSAttrOperator::insert_ls(
         LOG_WARN("failed to operator ls", KR(ret), K(ls_attr), K(sql));
       }
     } else {
-      if (OB_FAIL(operator_ls_in_trans_(ls_attr, sql, working_sw_status, *trans))) {
+      if (OB_FAIL(operator_ls_in_trans_(ls_attr, sql, working_sw_status, *trans, skip_dup_ls_check))) {
         LOG_WARN("failed to operator ls", KR(ret), K(ls_attr), K(sql));
       }
     }
@@ -628,11 +632,11 @@ int ObLSAttrOperator::get_pre_tenant_dropping_ora_rowscn(share::SCN &pre_tenant_
 
 int ObLSAttrOperator::get_duplicate_ls_attr(const bool for_update,
                                             common::ObISQLClient &client,
-                                            ObLSAttr &ls_attr,
+                                            ObIArray<ObLSAttr> &ls_attrs,
                                             bool only_existing_ls)
 {
   int ret = OB_SUCCESS;
-  ls_attr.reset();
+  ls_attrs.reset();
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operation is not valid", KR(ret), "operation", *this);
@@ -648,17 +652,21 @@ int ObLSAttrOperator::get_duplicate_ls_attr(const bool for_update,
       ObLSAttrArray ls_array;
       if (OB_FAIL(exec_read(tenant_id_, sql, client, this, ls_array))) {
         LOG_WARN("failed to get ls array", KR(ret), K(tenant_id_), K(sql));
-      } else if (0 == ls_array.count()) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("failed to ls array", KR(ret), K_(tenant_id));
-      } else if (OB_UNLIKELY(1 != ls_array.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("more than one ls is unexpected", KR(ret), K(ls_array), K(sql));
-      } else if (only_existing_ls && ls_array.at(0).ls_is_dropped_create_abort()) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_INFO("ls is dropped or create abort", KR(ret), K(ls_array));
-      } else if (OB_FAIL(ls_attr.assign(ls_array.at(0)))) {
+      } else if (!only_existing_ls && OB_FAIL(ls_attrs.assign(ls_array))) {
         LOG_WARN("failed to assign ls attr", KR(ret), K(ls_array));
+      } else {
+        ARRAY_FOREACH(ls_array, idx) {
+          const ObLSAttr &ls_attr = ls_array.at(idx);
+          if (ls_attr.ls_is_dropped_create_abort()) {
+            LOG_INFO("ls id dropped or create abort", KR(ret), K(ls_attr));
+          } else if (OB_FAIL(ls_attrs.push_back(ls_attr))) {
+            LOG_WARN("push back failed", KR(ret), K(ls_array));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && ls_attrs.empty()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("has no valid dup ls", KR(ret), K(tenant_id_));
       }
     }
   }

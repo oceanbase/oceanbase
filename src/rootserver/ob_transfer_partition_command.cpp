@@ -174,6 +174,7 @@ int ObTransferPartitionCommand::execute_transfer_partition_(const ObTransferPart
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.get_target_tenant_id();
   const ObLSID &ls_id = arg.get_ls_id();
+  bool is_dup_table = false;
   if (OB_UNLIKELY(!arg.is_valid() || !arg.is_transfer_partition_to_ls())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
@@ -184,10 +185,10 @@ int ObTransferPartitionCommand::execute_transfer_partition_(const ObTransferPart
     LOG_WARN("failed to check tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_data_version_and_config_(tenant_id))) {
     LOG_WARN("fail to check tenant", KR(ret), K(arg));
-  } else if (OB_FAIL(check_table_schema_(tenant_id, arg.get_table_id(), arg.get_object_id()))) {
-    LOG_WARN("fail to execute check_table_schema_", KR(ret), K(arg));
-  } else if (OB_FAIL(check_ls_(tenant_id, ls_id))) {
-    LOG_WARN("fail to execute check_ls_", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(check_table_schema_(tenant_id, arg.get_table_id(), arg.get_object_id(), is_dup_table))) {
+    LOG_WARN("fail to execute check_table_schema_", KR(ret), K(arg), K(is_dup_table));
+  } else if (OB_FAIL(check_ls_(tenant_id, ls_id, is_dup_table))) {
+    LOG_WARN("fail to execute check_ls_", KR(ret), K(tenant_id), K(ls_id), K(is_dup_table));
   } else {
     ObTransferPartInfo part_info(arg.get_table_id(), arg.get_object_id());
     ObMySQLTransaction trans;
@@ -296,9 +297,11 @@ int ObTransferPartitionCommand::check_data_version_for_cancel_(const uint64_t te
 int ObTransferPartitionCommand::check_table_schema_(
     const uint64_t tenant_id,
     const uint64_t table_id,
-    const ObObjectID &object_id)
+    const ObObjectID &object_id,
+    bool &is_dup_table)
 {
   int ret = OB_SUCCESS;
+  is_dup_table = false;
   const uint64_t allocator_tenant_id = is_valid_tenant_id(MTL_ID()) ? MTL_ID() : OB_SYS_TENANT_ID;
   common::ObArenaAllocator tmp_allocator("TABLE_SCHEMA", OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_tenant_id);
   ObSimpleTableSchemaV2* table_schema = NULL;
@@ -348,11 +351,16 @@ int ObTransferPartitionCommand::check_table_schema_(
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Partition not exists");
     }
+  } else {
+    is_dup_table = table_schema->is_duplicate_table();
   }
   return ret;
 }
 
-int ObTransferPartitionCommand::check_ls_(const uint64_t tenant_id, const share::ObLSID &ls_id)
+int ObTransferPartitionCommand::check_ls_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const bool is_dup_table)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -378,10 +386,16 @@ int ObTransferPartitionCommand::check_ls_(const uint64_t tenant_id, const share:
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("ls flag is block_tablet_in", KR(ret), K(ls_attr));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "LS is in BLOCK_TABLET_IN state. Operation is");
-    } else if (OB_UNLIKELY(ls_attr.get_ls_flag().is_duplicate_ls())) {
+    } else if (!is_dup_table && ls_attr.get_ls_flag().is_duplicate_ls()) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("transfer partition to duplicate ls is not allowed", KR(ret), K(ls_attr));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer partition to DUPLICATE LS is");
+      LOG_WARN("transfer partition of nonduplicate table to duplicate ls is not allowed",
+          KR(ret), K(ls_attr), K(is_dup_table));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer partition of non-duplicate table to LS with DUPLICATE flag is");
+    } else if (is_dup_table && !ls_attr.get_ls_flag().is_duplicate_ls()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("transfer partition of duplicate table to normal ls is not allowed",
+          KR(ret), K(ls_attr), K(is_dup_table));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer partition of duplicate table to LS without DUPLICATE flag is");
     }
   }
   return ret;

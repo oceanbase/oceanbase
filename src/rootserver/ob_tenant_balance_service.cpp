@@ -15,6 +15,7 @@
 #include "rootserver/ob_ls_balance_helper.h"//ObLSBalanceTaskHelper
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
 #include "rootserver/ob_transfer_partition_task.h"//ObTransferPartitionHelper
+#include "rootserver/ob_partition_balance.h" // ObPartitionBalance
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
@@ -213,7 +214,7 @@ int ObTenantBalanceService::gather_ls_status_stat(const uint64_t &tenant_id, sha
     LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     //get ls status info
-    //must remove ls group id = 0, those ls no need balance, such as sys ls and duplicate ls
+    //there is no need to balance sys ls, remove it
     ObLSStatusOperator status_op;
     ObLSAttrOperator ls_op(tenant_id, GCTX.sql_proxy_);
     share::ObLSAttrArray ls_attr_array;
@@ -250,8 +251,8 @@ int ObTenantBalanceService::gather_ls_status_stat(const uint64_t &tenant_id, sha
             ret = OB_NEED_WAIT;
             WSTAT("ls status not ready, can not balance", KR(ret), K(ls_info),
                   K(status_info));
-          } else if (0 == status_info.ls_group_id_ || status_info.ls_is_dropping()) {
-            //ls has no ls group such as sys ls, or ls is in dropping, can not fallback, no need to takecare
+          } else if (status_info.get_ls_id().is_sys_ls() || status_info.ls_is_dropping()) {
+            //sys ls and ls is in dropping, can not fallback, no need to takecare
             need_remove_ls = true;
           }
         } else if (status_info.ls_id_ > ls_info.get_ls_id()) {
@@ -707,7 +708,7 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
 
 void ObTenantBalanceService::reset()
 {
-  loaded_ = false;
+  ATOMIC_SET(&loaded_, false);
   unit_group_array_.reset();
   ls_array_.reset();
   primary_zone_num_ = OB_INVALID_COUNT;
