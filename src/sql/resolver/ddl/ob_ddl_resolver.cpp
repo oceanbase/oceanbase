@@ -3653,6 +3653,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                                          attrs_node,
                                                          resolve_stat,
                                                          pk_name,
+                                                         is_modify_column,
+                                                         is_modify_column_visibility,
                                                          allow_has_default))) {
         LOG_WARN("resolve normal column attribute failed", K(ret));
       }
@@ -3675,6 +3677,43 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else {
         // normal column with pos_column
         pos_node = node->children_[3];
+      }
+
+      // Handle invisible column
+      ParseNode *attrs_node = node->children_[2];
+
+      for (int64_t i = 0; attrs_node != NULL && OB_SUCC(ret) && i < attrs_node->num_child_; ++i) {
+        ParseNode *attr_node = attrs_node->children_[i];
+        if (attr_node->type_ == T_VISIBLE || attr_node->type_ == T_INVISIBLE) {
+          if (is_modify_column) { is_modify_column_visibility = true; }
+          if (T_INVISIBLE == attr_node->type_) {
+            const ObTableSchema *table_schema = NULL;
+            if (OB_ISNULL(schema_checker_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("schema checker ptr is null", K(ret));
+            } else if (OB_ISNULL(session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("session_info_ is null", K(ret));
+            } else if (is_modify_column
+                       && OB_FAIL(schema_checker_->get_table_schema(
+                            session_info_->get_effective_tenant_id(), column.get_table_id(),
+                            table_schema))) {
+              LOG_WARN("get_table_schema failed", K(ret), K(column.get_table_id()));
+            } else if (is_modify_column && is_sys_database_id(table_schema->get_database_id())) {
+              // The visibility of a column from a table owned by a SYS user cannot be modified to
+              // invisible, but can be modified to visible
+              ret = OB_ERR_MODIFY_COL_VISIBILITY_BY_SYS_USER;
+              LOG_WARN(
+                "The visibility of a column from a table owned by a SYS user cannot be changed.",
+                K(ret));
+            } else {
+              column.add_column_flag(INVISIBLE_COLUMN_FLAG);
+            }
+          } else {
+            // T_VISIBLE == visiblity_node->type_
+            column.del_column_flag(INVISIBLE_COLUMN_FLAG);
+          }
+        }
       }
     }
     // 解析 visibility_option，仅在 oracle 模式支持
@@ -3959,6 +3998,8 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
                                                    ParseNode *attrs_node,
                                                    ObColumnResolveStat &resolve_stat,
                                                    ObString &pk_name,
+                                                   bool &is_modify_column,
+                                                   bool &is_modify_column_visibility,
                                                    const bool allow_has_default)
 {
   int ret = OB_SUCCESS;
@@ -4258,6 +4299,20 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         }
         break;
       }
+      case T_VISIBLE:
+      case T_INVISIBLE:
+      {
+        if (OB_UNLIKELY(lib::is_oracle_mode())) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "Invisible should not be treated as normal attribute in oracle mode",
+                       K(ret));
+        } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "Oceanbase Version less than 4.2.5 BP3, Invisible column is");
+        }
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
@@ -4524,6 +4579,19 @@ int ObDDLResolver::resolve_generated_column_attribute(ObColumnSchemaV2 &column,
       } else {
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
+      }
+      break;
+    }
+    case T_VISIBLE:
+    case T_INVISIBLE: {
+      if (OB_UNLIKELY(lib::is_oracle_mode())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "Invisible should not be treated as normal attribute in oracle mode",
+                     K(ret));
+      } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "Oceanbase Version less than 4.2.5 BP3, Invisible column is");
       }
       break;
     }

@@ -208,8 +208,9 @@ int ObJoinFilterPartitionSplitter::create_partitions(ObIOEventObserver *io_event
 }
 
 int ObJoinFilterPartitionSplitter::calc_partition_hash_value(
-    const ObBatchRows *brs, ObEvalCtx &eval_ctx, uint64_t *hash_join_hash_values,
-    const bool enable_skip_null, const common::ObIArray<bool> *need_null_flags)
+  const ObBatchRows *brs, ObEvalCtx &eval_ctx, uint64_t *hash_join_hash_values,
+  bool use_hllc_estimate_ndv, ObHyperLogLogCalculator *hllc, const bool enable_skip_null,
+  const common::ObIArray<bool> *need_null_flags)
 {
   int ret = OB_SUCCESS;
   uint64_t seed = ObHashJoinVecOp::HASH_SEED;
@@ -255,7 +256,12 @@ int ObJoinFilterPartitionSplitter::calc_partition_hash_value(
     }
   }
   if (OB_SUCC(ret)) {
-    ObBitVector::flip_foreach(*brs->skip_, brs->size_, MarkHashValueOP(hash_join_hash_values));
+    if (use_hllc_estimate_ndv) {
+      ObBitVector::flip_foreach(*brs->skip_, brs->size_,
+                                MarkHashValueAndSetHyperLogLogOP(hash_join_hash_values, hllc));
+    } else {
+      ObBitVector::flip_foreach(*brs->skip_, brs->size_, MarkHashValueOP(hash_join_hash_values));
+    }
   }
   return ret;
 }

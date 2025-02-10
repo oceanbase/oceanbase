@@ -1576,6 +1576,16 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigPxNodePolicyChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("data")
+          || 0 == tmp_str.case_compare("zone")
+          || 0 == tmp_str.case_compare("cluster"));
+  return bret;
+}
+
 bool ObConfigPluginsLoadChecker::check(const ObConfigItem& t) const
 {
   bool bret = false;

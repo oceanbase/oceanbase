@@ -7138,6 +7138,7 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
   bool is_null_result = false;
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in.get_collation_type())
                                     != ObCharset::charset_type_by_coll(params.expect_obj_collation_));
+  bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
   if (is_different_charset_type) {
     if (OB_FAIL(string_string(expect_type, params, in, tmp_out, cast_mode))) {
       LOG_WARN("fail to cast string to longtext", K(ret), K(in));
@@ -7151,8 +7152,15 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("Failed to get string from in obj", K(ret), K(tmp_out));
   } else { /* do nothing */ }
 
-  if (OB_SUCC(ret) && !is_null_result) {
-    bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));
+  if (OB_FAIL(ret)) {
+  } else if (is_null_result) {
+  } else if (has_lob_header && lib::is_mysql_mode() && nullptr == lob_locator) {
+    // fast path for mysql string_text
+    out = tmp_out; // copy meta
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(params, res_str, expect_type, out))) {
+      LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expect_type), K(in));
+    }
+  } else {
     sql::ObTextStringObObjResult str_result(expect_type, &params, &out, has_lob_header);
     if (lob_locator == NULL) {
       if (OB_FAIL(str_result.init(res_str.length()))) {
@@ -16549,13 +16557,8 @@ int obj_collation_check(const bool is_strict_mode, const ObCollationType cs_type
         if (OB_FAIL(obj.get_string(str))) {
           LOG_WARN("Failed to get payload from string", K(ret), K(obj));
         }
-      } else {
-        ObTextStringIter instr_iter(obj);
-        if (OB_FAIL(instr_iter.init(0, NULL, &allocator))) {
-          LOG_WARN("fail to init lob str iter", K(ret));
-        } else if (OB_FAIL(instr_iter.get_full_data(str))) {
-          LOG_WARN("fail to get full data", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, str))) {
+        LOG_WARN("read_real_string_data fail", K(ret), K(obj));
       }
     }
 

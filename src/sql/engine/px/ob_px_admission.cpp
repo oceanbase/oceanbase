@@ -235,7 +235,7 @@ void ObPxSubAdmission::acquire(int64_t max, int64_t min, int64_t &acquired_cnt)
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "get tenant config failed, use default cpu_quota_concurrency");
       upper_bound = tenant->unit_min_cpu() * 4;
     } else {
-      upper_bound = tenant->unit_min_cpu() * tenant_config->px_workers_per_cpu_quota;
+      upper_bound = tenant->unit_min_cpu() * tenant_config->_max_px_workers_per_cpu;
     }
   }
   acquired_cnt = std::min(max, upper_bound);

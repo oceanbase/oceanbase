@@ -86,6 +86,19 @@ class ObExprIs: public ObExprIsBase
   static int calc_collection_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int calc_vector_is_null(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound);
+  static int calc_vector_is_true(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound);
+  static int calc_vector_is_false(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const EvalBound &bound);
 private:
   // types and constants
 private:
@@ -125,6 +138,19 @@ public:
                                     const ObBitVector &skip, const int64_t batch_size);
   static int decimal_int_is_not_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int decimal_int_is_not_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int calc_vector_is_not_null(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound);
+  static int calc_vector_is_not_true(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound);
+  static int calc_vector_is_not_false(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound);
 private:
   // types and constants
 private:

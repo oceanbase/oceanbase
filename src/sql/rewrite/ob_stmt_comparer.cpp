@@ -323,6 +323,37 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
     } else {
       bret = left.get_value().is_equal(right.get_value(), CS_TYPE_BINARY);
     }
+  } else if (OB_SUCC(ret) && ora_numeric_cmp_for_grouping_items_) {
+    // select (a - 1) from t group by grouping sets(a, 1);
+    // `1` parsed as decimal int in `a - 1`
+    // `1' parsed as number in grouping sets
+    // special comparision is needed here to replace const `1`
+    const ObObj l_obj = left.get_value().is_unknown() ? left.get_result_type().get_param() : left.get_value();
+    const ObObj r_obj = right.get_value().is_unknown() ? right.get_result_type().get_param() : right.get_value();
+    if ((l_obj.is_decimal_int() && r_obj.is_number())
+        || (l_obj.is_number() && r_obj.is_decimal_int())) {
+      ObNumber l_nmb, r_nmb;
+      ObNumStackOnceAlloc tmp_alloc;
+      if (l_obj.is_decimal_int()) {
+        if (OB_FAIL(wide::to_number(l_obj.get_decimal_int(),
+                                    l_obj.get_int_bytes(), l_obj.get_scale(),
+                                    tmp_alloc, l_nmb))) {
+          LOG_WARN("wide::to_number failed", K(ret));
+        } else {
+          r_nmb.shadow_copy(r_obj.get_number());
+        }
+      } else if (OB_FAIL(wide::to_number(r_obj.get_decimal_int(),
+                                         r_obj.get_int_bytes(),
+                                         r_obj.get_scale(), tmp_alloc, r_nmb))) {
+        LOG_WARN("wide::to_number", K(ret));
+      } else {
+        l_nmb.shadow_copy(l_obj.get_number());
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        bret = l_nmb.is_equal(r_nmb);
+      }
+    }
   }
   return bret;
 }

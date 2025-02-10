@@ -3933,6 +3933,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   }
 
   uint64_t min_ver = GET_MIN_CLUSTER_VERSION();
+  spec.use_ndv_runtime_bloom_filter_size_ = (min_ver >= CLUSTER_VERSION_4_3_5_1) && GCONF._ndv_runtime_bloom_filter_size;
   if (min_ver >= CLUSTER_VERSION_4_3_0_1 || min_ver >= MOCK_CLUSTER_VERSION_4_2_3_0
       || (min_ver > MOCK_CLUSTER_VERSION_4_2_1_4 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
     spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
@@ -9556,6 +9557,15 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   }
 
   if (OB_SUCC(ret)) {
+    const ObGlobalHint &global_hint = log_plan.get_optimizer_context().get_global_hint();
+    phy_plan.set_px_node_count(global_hint.px_node_hint_.px_node_count_);
+    phy_plan.set_px_node_policy(global_hint.px_node_hint_.px_node_policy_);
+    if (OB_FAIL(phy_plan.set_px_node_addrs(global_hint.px_node_hint_.px_node_addrs_))) {
+      LOG_WARN("Fail to set px_node_addrs", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
   }
   return ret;
@@ -9623,7 +9633,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         } else if (use_rich_format && use_vec2_merge_gby
                    && aggregate::Processor::all_supported_aggregate_functions(
                      static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs(),
-                     static_cast<ObLogGroupBy *>(&log_op)->get_hash_rollup_info() != nullptr)) {
+                     static_cast<ObLogGroupBy *>(&log_op)->get_hash_rollup_info() != nullptr,
+                     static_cast<ObLogGroupBy *>(&log_op)->has_rollup())) {
           type = PHY_VEC_MERGE_GROUP_BY;
         } else {
           type = PHY_MERGE_GROUP_BY;
@@ -9638,7 +9649,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
               && use_rich_format
               && aggregate::Processor::all_supported_aggregate_functions(
                 static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs(),
-                static_cast<ObLogGroupBy *>(&log_op)->get_hash_rollup_info() != nullptr)) {
+                static_cast<ObLogGroupBy *>(&log_op)->get_hash_rollup_info() != nullptr,
+                static_cast<ObLogGroupBy *>(&log_op)->has_rollup())) {
             type = PHY_VEC_HASH_GROUP_BY;
           }
           break;
@@ -9648,7 +9660,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
           tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SCALAR_GROUP_BY) OB_SUCCESS;
           if (use_rich_format && OB_SUCC(tmp_ret)
               && aggregate::Processor::all_supported_aggregate_functions(
-                static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs(), true)) {
+                   static_cast<ObLogGroupBy *>(&log_op)->get_aggr_funcs(), true,
+                   static_cast<ObLogGroupBy *>(&log_op)->has_rollup())) {
             type = PHY_VEC_SCALAR_AGGREGATE;
           } else {
             type = PHY_SCALAR_AGGREGATE;

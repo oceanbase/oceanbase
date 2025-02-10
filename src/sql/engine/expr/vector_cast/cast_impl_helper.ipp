@@ -82,6 +82,36 @@ public:
     }
     return ret;
   }
+
+public:
+  constexpr static const uint64_t power_of_10[] =
+  {
+      1LL,
+      10LL,
+      100LL,
+      1000LL,
+      10000LL,
+      100000LL,
+      1000000LL,
+      10000000LL,
+      100000000LL,
+      1000000000LL,
+      10000000000LL,
+      100000000000LL,
+      1000000000000LL,
+      10000000000000LL,
+      100000000000000LL,
+      1000000000000000LL,
+      10000000000000000LL,
+      100000000000000000LL,
+      1000000000000000000LL,
+      10000000000000000000ULL
+  };
+  OB_INLINE static uint64_t pow10(int16_t idx)
+  {
+    return (idx >= 0 && idx <= 19) ? power_of_10[idx] : power_of_10[19];
+  }
+
 public:
   OB_INLINE static int64_t fast_strtoll(const ObString &s,
                                         const int64_t precision,
@@ -122,6 +152,238 @@ public:
       }
     }
     return res;
+  }
+
+  ///@fn extract integer part of decimalint, will round up
+  ///@param [in] scale_factor scale_type heavily influence performance.
+  /// 1. divide of wide integer is much slower than native one;
+  /// 2. even the cost of 'if(sf < 10^19)' should be avoided,
+  ///    since it might be operator of wide integer;
+  /// 3. that is, when dividing, scale_factor should be uint64_t.
+  ///@param [in] scale >= 0, negative scale for decimalint is illegal
+  template<typename T, typename scale_type, class = typename std::enable_if<sizeof(T) < sizeof(int128_t)>::type>
+  static inline int64_t scale_to_integer(T &lhs,
+                                         scale_type &scale_factor,
+                                         int16_t scale,
+                                         bool round_up = true) {
+    uint64_t sf = static_cast<int64_t>(scale_factor);
+    int64_t q = lhs;
+    if (OB_LIKELY(sf > 1)) {
+      bool is_neg = lhs < 0;
+      if (is_neg) { q = -lhs; }
+      int64_t r = q % sf;
+      q = q / sf;
+      round_up &= (r >= (sf>>1));
+      if (round_up) { q = q + 1; }
+      if (is_neg) { q = -q; }
+    }
+    return q;
+  }
+  template<unsigned Bits, typename scale_type>
+  static inline int64_t scale_to_integer(const wide::ObWideInteger<Bits> &lhs,
+                                         const scale_type &scale_factor,
+                                         int16_t scale,
+                                         bool round_up = true) {
+    int64_t q = 0;
+    int64_t decint = static_cast<int64_t>(lhs);
+    if (OB_UNLIKELY(scale == 0)) {
+      q = (lhs < INT64_MIN) ? INT64_MIN : (lhs > INT64_MAX ? INT64_MAX : decint);
+    } else if (OB_LIKELY(INT64_MIN <= lhs && lhs <= INT64_MAX)) {
+      uint64_t sf = pow10(scale);
+      q = scale_to_integer(decint, sf, scale, round_up);
+    } else {
+      static const uint64_t constexpr DIGITS10_BASE = 10000000000000000000ULL; // 10^19
+      if (scale > 19) {
+        wide::ObWideInteger<Bits> num = lhs / DIGITS10_BASE;
+        scale_type sf = get_scale_factor<scale_type>(scale - 19);
+        q = scale_to_integer(num, sf, scale - 19, round_up);
+      } else {
+        bool is_neg = (lhs < 0);
+        wide::ObWideInteger<Bits> num = (is_neg ? -lhs : lhs);
+        wide::ObWideInteger<Bits> remain;
+        uint64_t sf = pow10(scale);
+        wide::ObWideInteger<Bits>::_impl::template
+            divide<wide::IgnoreOverFlow>(num, sf, num, remain);
+        round_up &= (remain >= (sf >> 1));
+        if (round_up) { num = num + 1; }
+        if (is_neg) { num = -num; }
+        q = static_cast<int64_t>(num);
+        q = (num < INT64_MIN) ? INT64_MIN : (num > INT64_MAX ? INT64_MAX : q);
+      }
+    }
+    return q;
+  }
+
+  template<typename T, typename scale_type, class = typename std::enable_if<sizeof(T) < sizeof(int128_t)>::type>
+  static inline uint64_t scale_to_unsigned_integer(T &lhs,
+                                                   scale_type &scale_factor,
+                                                   int16_t scale,
+                                                   bool round_up = true) {
+    uint64_t sf = static_cast<int64_t>(scale_factor);
+    uint64_t q = lhs;
+    if (OB_LIKELY(sf > 1)) {
+      int64_t r = q % sf;
+      q = q / sf;
+      round_up &= (r >= (sf>>1));
+      if (round_up) { q = q + 1; }
+    }
+    return q;
+  }
+  template<unsigned Bits, typename scale_type>
+  static inline uint64_t scale_to_unsigned_integer(const wide::ObWideInteger<Bits> &lhs,
+                                                   const scale_type &scale_factor,
+                                                   int16_t scale,
+                                                   bool round_up = true) {
+    uint64_t q = 0;
+    uint64_t decint = static_cast<int64_t>(lhs);
+    if (OB_UNLIKELY(scale == 0)) {
+      q = (lhs > UINT64_MAX ? UINT64_MAX : decint);
+    } else if (OB_LIKELY(lhs <= UINT64_MAX)) {
+      uint64_t sf = pow10(scale);
+      q = scale_to_unsigned_integer(decint, sf, scale, round_up);
+    } else {
+      static const uint64_t constexpr DIGITS10_BASE = 10000000000000000000ULL; // 10^19
+      wide::ObWideInteger<Bits> num;
+      if (scale > 19) {
+        num = lhs / DIGITS10_BASE;
+        scale_type sf = get_scale_factor<scale_type>(scale - 19);
+        q = scale_to_unsigned_integer(num, sf, scale - 19, round_up);
+      } else {
+        wide::ObWideInteger<Bits> remain;
+        uint64_t sf = pow10(scale);
+        wide::ObWideInteger<Bits>::_impl::template
+            divide<wide::IgnoreOverFlow>(lhs, sf, num, remain);
+        round_up &= (remain >= (sf >> 1));
+        if (round_up) { num = num + 1; }
+        q = (num > UINT64_MAX ? UINT64_MAX : static_cast<int64_t>(num));
+      }
+    }
+    return q;
+  }
+
+  ///@fn 根据传入的标记对res做舍入、溢出的处理
+  ///@description: 基于common_scale_decimalint进行的修改，保留
+  ///  common_scale_decimalint中根据cast_mode对舍入、溢出的差异化处理
+  ///  sizeof(calc_type) >= sizeof(out_type)
+  template<typename out_type, typename calc_type>
+  OB_INLINE static int decimal_overflow_roundup_check(
+      const ObCastMode cast_mode, out_type min_val, out_type max_val, bool is_neg,
+      bool overflow, bool round_up, bool has_extra_decimals,
+      calc_type &res)
+  {
+    int ret = OB_SUCCESS;
+    if (CM_IS_CONST_TO_DECIMAL_INT(cast_mode)) {
+      if (overflow) { res = is_neg ? min_val : max_val; }
+      if (has_extra_decimals) {
+        if ((cast_mode & CM_CONST_TO_DECIMAL_INT_UP) != 0 && !is_neg && res != max_val) { res = res + 1; }
+        if ((cast_mode & CM_CONST_TO_DECIMAL_INT_DOWN) != 0 && is_neg && res != min_val) { res = res - 1; }
+        if ((cast_mode & CM_CONST_TO_DECIMAL_INT_EQ) != 0) {
+          res = is_neg ? min_val : max_val;
+        }
+      }
+      if (res < min_val || res > max_val) {
+        res = is_neg ? min_val : max_val;
+      }
+    } else if (CM_IS_COLUMN_CONVERT(cast_mode) || CM_IS_EXPLICIT_CAST(cast_mode)) {
+      if (overflow) { res = is_neg ? min_val : max_val; }
+      if (round_up) { res = is_neg ? res - 1 : res + 1; }
+      if (res < min_val || res > max_val) {
+        res = is_neg ? min_val : max_val;
+      }
+    } else {  // implicit
+      if (round_up) { res = is_neg ? res - 1 : res + 1; }
+    }
+    return ret;
+  }
+
+  template<typename calc_type>
+  static inline int parse_decimalint_to_datetime(
+      calc_type decint, calc_type scale_factor, int16_t scale,
+      const ObCastMode cast_mode, ObTimeConvertCtx cvrt_ctx,
+      int64_t &int_part, int64_t &dec_part)
+  {
+    int ret = OB_SUCCESS;
+    if (scale < 6) {  // 20010528.1430 -> 20010528, 143000 000
+      if (OB_UNLIKELY(decint > INT64_MAX)) {
+        ret = OB_INVALID_DATE_VALUE;
+        SQL_LOG(WARN, "datetime integer is out of range", K(ret), K(decint));
+      } else {
+        uint64_t sf = pow10(scale);
+        int64_t int64 = static_cast<int64_t>(decint);
+        int_part = int64 / sf;
+        dec_part = (int64 % sf) * pow10(9 - scale);
+      }
+    } else {  // 20010528.1430307654321 -> 20010528, 143031 000
+      calc_type sf = get_scale_factor<calc_type>(scale);
+      int_part = CastHelperImpl::scale_to_integer(decint, sf, scale, false);
+      calc_type sf_minus6 = get_scale_factor<calc_type>(scale - 6);
+      if (scale < 19) {
+        int64_t remain = decint - sf * int_part;
+        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6);
+      } else {
+        calc_type remain = decint - sf * int_part;
+        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6);
+      }
+      dec_part *= 1000;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(dec_part != 0
+                      && ((0 == int_part && cvrt_ctx.is_timestamp_)
+                          || (int_part >= 100 && int_part <= 99999999)))) {
+        if (CM_IS_COLUMN_CONVERT(cast_mode) && !CM_IS_WARN_ON_FAIL(cast_mode)) {
+          ret = OB_INVALID_DATE_VALUE;
+          SQL_LOG(WARN, "invalid date value", K(ret), K(int_part), K(dec_part), K(cast_mode));
+        } else {
+          dec_part = 0;
+        }
+      }
+    }
+    return ret;
+  }
+
+  static inline int vector_copy_string(const ObExpr &expr, ObEvalCtx &ctx, int64_t idx,
+                                       int64_t in_len, const char *in_ptr,
+                                       int64_t &out_len, char *&out_ptr,
+                                       const int64_t align_offset = 0) {
+    int ret = OB_SUCCESS;
+    out_ptr = NULL;
+    out_len = in_len + align_offset;
+    if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, out_len, idx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate memory failed", K(ret));
+    } else {
+      MEMCPY(out_ptr + align_offset, in_ptr, in_len);
+      MEMSET(out_ptr, 0, align_offset);
+    }
+    return ret;
+  }
+
+  ///@brief common_copy_string_zf里面CM_IS_ZERO_FILL分支,
+  /// get_res_mem一次batch都是申请同一片空间，会导致向量化计算结果被覆盖，需要修改.
+  /// 此外，为了加速向量化，把非数据相关开销都尽量移出去了，并且
+  /// 该函数将仅实现将局部变量的字符串copy到str_res_mem的任务.
+  static inline int vector_copy_string_zf(const ObExpr &expr, ObEvalCtx &ctx, int64_t idx,
+                                          int64_t in_len, const char *in_ptr, ObScale out_scale,
+                                          int64_t &out_len, char *&out_ptr,
+                                          const int64_t align_offset = 0) {
+    int ret = OB_SUCCESS;
+    out_ptr = NULL;
+    out_len = static_cast<uint8_t>(out_scale);
+    if (CM_IS_ZERO_FILL(expr.extra_) && out_len > in_len) {
+      if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, out_len, idx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        int64_t zf_len = out_len - in_len;
+        MEMMOVE(out_ptr + zf_len, in_ptr, in_len);
+        MEMSET(out_ptr, '0', zf_len);
+      }
+    } else {
+      if (OB_FAIL(vector_copy_string(expr, ctx, idx, in_len, in_ptr, out_len, out_ptr, align_offset))) {
+        SQL_LOG(WARN, "common_copy_string failed", K(ret), K(in_ptr), K(expr), K(ctx));
+      }
+    }
+    return ret;
   }
 };
 

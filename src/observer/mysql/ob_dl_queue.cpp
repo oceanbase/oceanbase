@@ -13,14 +13,20 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_dl_queue.h"
-#include "ob_mysql_request_manager.h"
 
 namespace oceanbase {
 namespace common {
 
-int ObDlQueue::init(const char *label, uint64_t tenant_id) {
+int ObDlQueue::init(const char *label, uint64_t tenant_id,
+                    int64_t root_queue_size,
+                    int64_t leaf_queue_size,
+                    int64_t idle_leaf_queue_num) {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(rq_.init(label, ROOT_QUEUE_SIZE, tenant_id))) {
+  root_queue_size_ = root_queue_size;
+  leaf_queue_size_ = leaf_queue_size;
+  idle_leaf_queue_num_ = idle_leaf_queue_num;
+  label_ = label;
+  if (OB_FAIL(rq_.init(label, root_queue_size_, tenant_id))) {
     LOG_WARN("fail to init root queue", K(tenant_id));
   } else {
     rq_cur_idx_ = 0;
@@ -32,7 +38,7 @@ int ObDlQueue::init(const char *label, uint64_t tenant_id) {
   // construct default leaf queue
   if (OB_FAIL(ret)) {
   } else {
-    for (int64_t i = 0; i < DEFAULT_IDLE_LEAF_QUEUE_NUM && OB_SUCC(ret); i++) {
+    for (int64_t i = 0; i < idle_leaf_queue_num_ && OB_SUCC(ret); i++) {
       if (OB_FAIL(construct_leaf_queue())) {
         LOG_WARN("fail to construct leaf queue", K(i), K(tenant_id_));
       } else {
@@ -46,7 +52,7 @@ int ObDlQueue::init(const char *label, uint64_t tenant_id) {
 
 int ObDlQueue::prepare_alloc_queue() {
   int ret = OB_SUCCESS;
-  int64_t construct_num = DEFAULT_IDLE_LEAF_QUEUE_NUM -
+  int64_t construct_num = idle_leaf_queue_num_ -
                           (get_push_idx() - get_cur_idx());
   LOG_INFO("Construct Queue Num", K(construct_num),
       K(get_push_idx()), K(get_cur_idx()), K(get_pop_idx()));
@@ -63,7 +69,7 @@ int ObDlQueue::construct_leaf_queue() {
   void** lf_queue = NULL;
   ObLeafQueue *cur_lf_queue = NULL;
   ObMemAttr mem_attr;
-  mem_attr.label_ = ObModIds::OB_MYSQL_REQUEST_RECORD;
+  mem_attr.label_ = label_;
   mem_attr.tenant_id_ = tenant_id_;
   int64_t root_push_idx = 0;
   void *buf = NULL;
@@ -73,7 +79,7 @@ int ObDlQueue::construct_leaf_queue() {
   } else if (OB_ISNULL(cur_lf_queue = new(buf) ObLeafQueue())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret));
-  } else if (OB_FAIL(cur_lf_queue->init(ObModIds::OB_MYSQL_REQUEST_RECORD, LEAF_QUEUE_SIZE, tenant_id_))) {
+  } else if (OB_FAIL(cur_lf_queue->init(label_, leaf_queue_size_, tenant_id_))) {
     cur_lf_queue->destroy();
     ob_free(cur_lf_queue);
     cur_lf_queue = NULL;
@@ -114,7 +120,7 @@ int ObDlQueue::push(void* p, int64_t& seq) {
       }
     } else if (leaf_rec == NULL) {
     } else if (OB_FAIL(leaf_rec->push(p, leaf_queue_cur_idx,
-                      root_queue_cur_idx, seq))) {
+                      root_queue_cur_idx, seq, leaf_queue_size_))) {
       //When the sql audit secondary slot is full
       // the push will fail and needs to be retried.
       if (root_queue_cur_idx < (rq_.get_push_idx() - 1)) {
@@ -132,7 +138,7 @@ int ObDlQueue::push(void* p, int64_t& seq) {
       // set_end_idx(seq); Performance optimization
 
       // Push is successfully used to control the first-level offset
-      if (leaf_queue_cur_idx == LEAF_QUEUE_SIZE - 1) {
+      if (leaf_queue_cur_idx == leaf_queue_size_ - 1) {
         (void)ATOMIC_AAF(&rq_cur_idx_, 1);
       }
     }
@@ -175,8 +181,8 @@ ObLeafQueue* ObDlQueue::pop() {
 void* ObDlQueue::get(uint64_t seq, DlRef* ref) {
   int ret = OB_SUCCESS;
   void* record = NULL;
-  int64_t root_queue_cur_idx = (seq / LEAF_QUEUE_SIZE) % ROOT_QUEUE_SIZE;
-  int64_t leaf_queue_cur_idx =  seq % LEAF_QUEUE_SIZE;
+  int64_t root_queue_cur_idx = (seq / leaf_queue_size_) % root_queue_size_;
+  int64_t leaf_queue_cur_idx =  seq % leaf_queue_size_;
   ObLeafQueue *leaf_rec = NULL;
   if (OB_FAIL(get_leaf_queue(root_queue_cur_idx, leaf_rec, &ref->root_ref_))) {
     SERVER_LOG(WARN, "fail to get leaf queue pointer",
@@ -191,7 +197,7 @@ void* ObDlQueue::get(uint64_t seq, DlRef* ref) {
 }
 
 
-int ObLeafQueue::push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq) {
+int ObLeafQueue::push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq, int64_t leaf_queue_size) {
   int ret = OB_SUCCESS;
   if (NULL == array_) {
     ret = OB_NOT_INIT;
@@ -204,7 +210,7 @@ int ObLeafQueue::push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq
       void** addr = get_addr(push_idx);
       leaf_idx = push_idx;
       // request_id
-      seq = root_idx * ObDlQueue::LEAF_QUEUE_SIZE + leaf_idx;
+      seq = root_idx * leaf_queue_size + leaf_idx;
       while(!ATOMIC_BCAS(addr, NULL, p))
         ;
     } else {
@@ -255,21 +261,21 @@ int64_t ObDlQueue::get_end_idx() {
   int64_t leaf_idx = -1;
   if (OB_FAIL(get_leaf_queue(rq_cur_idx_, leaf_rec, &tmp_ref))) {
     // rq_cur_idx_ == push_idx_ scene
-    idx = (int64_t)rq_cur_idx_ * LEAF_QUEUE_SIZE;
+    idx = (int64_t)rq_cur_idx_ * leaf_queue_size_;
   } else {
     leaf_idx = leaf_rec->get_push_idx();
     revert_leaf_queue(&tmp_ref, leaf_rec);
-    idx = (int64_t)rq_cur_idx_ * LEAF_QUEUE_SIZE + leaf_idx;
+    idx = (int64_t)rq_cur_idx_ * leaf_queue_size_ + leaf_idx;
   }
   return idx;
 }
 
 int64_t ObDlQueue::get_capacity() {
-  return (rq_.get_push_idx() - rq_.get_pop_idx()) * LEAF_QUEUE_SIZE;
+  return (rq_.get_push_idx() - rq_.get_pop_idx()) * leaf_queue_size_;
 }
 
 int64_t ObDlQueue::get_size_used() {
-  return (rq_cur_idx_ - rq_.get_pop_idx()) * LEAF_QUEUE_SIZE;
+  return (rq_cur_idx_ - rq_.get_pop_idx()) * leaf_queue_size_;
 }
 
 int ObDlQueue::get_leaf_size_used(int64_t idx, int64_t &size) {
@@ -298,7 +304,8 @@ int ObDlQueue::need_clean_leaf_queue(int64_t idx, bool &need_clean) {
   return ret;
 }
 
-int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer,
+int ObDlQueue::release_record(int64_t release_cnt,
+                              const std::function<void(void*)> &free_callback,
                               bool is_destroyed) {
   int ret = OB_SUCCESS;
   int64_t rq_release_idx = get_pop_idx();
@@ -309,8 +316,7 @@ int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRe
     int64_t size = 0;
     bool need_clean = false;
     if (OB_FAIL(clear_leaf_queue(rq_release_idx, release_cnt,
-        std::bind(&oceanbase::obmysql::ObMySQLRequestManager::freeCallback,
-        pointer, std::placeholders::_1)))) {
+        free_callback))) {
       SERVER_LOG(WARN, "fail to clear leaf queue",
           K(rq_release_idx), K(ret));
     } else if (OB_FAIL(get_leaf_size_used(rq_release_idx, size))) {
@@ -320,7 +326,7 @@ int ObDlQueue::release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRe
       SERVER_LOG(WARN, "fail to get second level size used",
           K(rq_release_idx), K(ret));
     } else {
-      if (size == ObDlQueue::LEAF_QUEUE_SIZE || need_clean) {
+      if (size == leaf_queue_size_ || need_clean) {
         release_wait_times_++;
         ObLeafQueue *leaf_queue = NULL;
         // delay pop for performance.

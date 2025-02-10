@@ -465,6 +465,52 @@ public:
       ObIAllocator *res_allocator = NULL,
       ObIAllocator *tmp_allocator = NULL);
 
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, ObDatum &res_datum)
+  {
+    int ret = OB_SUCCESS;
+    ObString result;
+    if (OB_FAIL(pack_to_disk_inrow_lob(allocator, data, result))) {
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(data));
+    } else {
+      res_datum.set_string(result.ptr(), result.length());
+    }
+    return ret;
+  }
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, const ObObjType type, ObObj &res_obj)
+  {
+    int ret = OB_SUCCESS;
+    ObString result;
+    if (OB_FAIL(pack_to_disk_inrow_lob(allocator, data, result))) {
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(data));
+    } else {
+      res_obj.set_lob_value(type, result.ptr(), result.length());
+      res_obj.set_has_lob_header();
+    }
+    return ret;
+  }
+
+  template <typename Allocator>
+  static int pack_to_disk_inrow_lob(Allocator &allocator, const ObString data, ObString &result)
+  {
+    int ret = OB_SUCCESS;
+    int64_t total_len = data.length() + sizeof(ObLobCommon);
+    char* buf = nullptr;
+    if (OB_ISNULL(buf = (char*)allocator.alloc(total_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(total_len));
+    } else {
+      // default is inrow
+      ObLobCommon *lob_data = new(buf)ObLobCommon();
+      MEMCPY(lob_data->buffer_, data.ptr(), data.length());
+      result.assign_ptr(buf, total_len);
+    }
+    return ret;
+  }
+
 };
 
 int ob_adjust_lob_datum(const ObObj &origin_obj,

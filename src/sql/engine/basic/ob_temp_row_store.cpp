@@ -917,6 +917,37 @@ int ObTempRowStoreBase<RA_ACCESS>::add_batch(const common::ObIArray<ObExpr *> &e
   return ret;
 }
 
+template <bool RA_ACCESS>
+int ObTempRowStoreBase<RA_ACCESS>::add_batch(const common::ObIArray<ObExpr *> &exprs,
+                                             ObEvalCtx &ctx, const uint16_t selector[],
+                                             const EvalBound &bound, const ObBitVector &skip,
+                                             const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_batch_ctx())) {
+    LOG_WARN("init batch ctx failed", K(ret));
+  } else {
+    batch_ctx_->selector_ = const_cast<uint16_t *>(selector);
+  }
+  if (OB_SUCC(ret) && size > 0) {
+    for (int i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+      ObExpr *e = exprs.at(i);
+      ObIVector *vec = nullptr;
+      if (OB_FAIL(e->eval_vector(ctx, skip, bound))) {
+        LOG_WARN("eval vector failed", K(ret));
+      } else {
+        vec = e->get_vector(ctx);
+        batch_ctx_->vectors_.at(i) = vec;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(add_batch(batch_ctx_->vectors_, batch_ctx_->selector_, size))) {
+      LOG_WARN("add batch rows failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 template <>
 int ObTempRowStoreBase<false>::try_add_batch(const common::ObIArray<ObExpr *> &exprs,
                                              ObEvalCtx *ctx, const int64_t batch_size,
@@ -1317,7 +1348,7 @@ int BatchTempRowStoresMgr::add_batch(const int64_t *idxes,
     }
     BatchTempRowStoresDisableDumpGuard guard(stores_, true);
     for (int64_t i = 0; OB_SUCC(ret) && i < brs.size_; ++i) {
-      if (brs.skip_->at(i)) {
+      if (brs.skip_->at(i) || idxes[i] < 0) {
         continue;
       }
       if (nullptr != buffers_[idxes[i]] && buffers_[idxes[i]]->remain() > row_size_array_[i]) {
@@ -1341,6 +1372,47 @@ int BatchTempRowStoresMgr::add_batch(const int64_t *idxes,
   }
   return ret;
 }
+
+int BatchTempRowStoresMgr::reset_part_cnt(const int64_t part_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot reset part cnt when mgr is not inited", K(ret));
+  } else if (part_cnt_ == part_cnt) {
+    memset(blocks_, 0, sizeof(ObTempBlockStore::Block *) * part_cnt);
+    memset(buffers_, 0, sizeof(ObTempBlockStore::ShrinkBuffer *) * part_cnt);
+  } else {
+    if (nullptr != blocks_) {
+      alloc_->free(blocks_);
+      blocks_ = nullptr;
+    }
+    if (nullptr != buffers_) {
+      alloc_->free(buffers_);
+      buffers_ = nullptr;
+    }
+    stores_.reset();
+    if (OB_FAIL(stores_.prepare_allocate(part_cnt))) {
+      LOG_WARN("failed to reset stores", K(ret));
+    } else if (OB_ISNULL(blocks_ =
+                        static_cast<ObTempBlockStore::Block **>
+                        (alloc_->alloc(sizeof(ObTempBlockStore::Block *) * part_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc mem", K(ret), K(part_cnt));
+    } else if (OB_ISNULL(buffers_ =
+                        static_cast<ObTempBlockStore::ShrinkBuffer **>
+                        (alloc_->alloc(sizeof(ObTempBlockStore::ShrinkBuffer *) * part_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc mem", K(ret), K(part_cnt));
+    } else {
+      part_cnt_ = part_cnt;
+      memset(blocks_, 0, sizeof(ObTempBlockStore::Block *) * part_cnt);
+      memset(buffers_, 0, sizeof(ObTempBlockStore::ShrinkBuffer *) * part_cnt);
+    }
+  }
+  return ret;
+}
+
 
 } // end namespace sql
 } // end namespace oceanbase

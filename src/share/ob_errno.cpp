@@ -36195,7 +36195,7 @@ int g_all_ob_errnos[2399] = {0, -4000, -4001, -4002, -4003, -4004, -4005, -4006,
   int ob_oracle_errno(const int err)
   {
     int ret = -1;
-    if (OB_ERR_PROXY_REROUTE == err || OB_TENANT_NOT_IN_SERVER == err) {
+    if (OB_ERR_PROXY_REROUTE == err) {
       // Oracle Mode and MySQL mode should return same errcode for reroute sql
       // thus we make the specialization here
       ret = -1;

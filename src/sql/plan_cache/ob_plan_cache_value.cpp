@@ -178,7 +178,7 @@ ObPlanCacheValue::ObPlanCacheValue()
   not_param_info_.set_attr(ObMemAttr(MTL_ID(), "NotParamInfo"));
   not_param_var_.set_attr(ObMemAttr(MTL_ID(), "NotParamVar"));
   param_charset_type_.set_attr(ObMemAttr(MTL_ID(), "ParamCharsType"));
-  formalize_prec_idx_.set_attr(ObMemAttr(MTL_ID(), "FMTIntPrecIdx"));
+  fmt_int_or_ch_decint_idx_.set_attr(ObMemAttr(MTL_ID(), "FMTIntPrecIdx"));
 }
 
 int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
@@ -272,7 +272,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       LOG_WARN("fail to assign param charset type", K(ret));
     } else if (OB_FAIL(must_be_positive_idx_.add_members2(pc_ctx.must_be_positive_index_))) {
       LOG_WARN("failed to add bitset members", K(ret));
-    } else if (OB_FAIL(formalize_prec_idx_.add_members2(pc_ctx.formalize_prec_index_))) {
+    } else if (OB_FAIL(fmt_int_or_ch_decint_idx_.add_members2(pc_ctx.fmt_int_or_ch_decint_idx_))) {
       LOG_WARN("failed to add bitset members", K(ret));
     } else if (OB_FAIL(set_stored_schema_objs(plan->get_dependency_table(),
                                               pc_ctx.sql_ctx_.schema_guard_))) {
@@ -541,7 +541,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_UNLIKELY(pc_ctx.exec_ctx_.has_dynamic_values_table())) {
       if (OB_FAIL(ObValuesTableCompression::resolve_params_for_values_clause(pc_ctx, stmt_type_,
                   not_param_info_, param_charset_type_, neg_param_index_, not_param_index_,
-                  must_be_positive_idx_, formalize_prec_idx_, params))) {
+                  must_be_positive_idx_, fmt_int_or_ch_decint_idx_, params))) {
         LOG_WARN("failed to resolve_params_for_values_clause ", K(ret));
       }
     } else if (OB_FAIL(resolver_params(pc_ctx,
@@ -550,7 +550,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
                                        neg_param_index_,
                                        not_param_index_,
                                        must_be_positive_idx_,
-                                       formalize_prec_idx_,
+                                       fmt_int_or_ch_decint_idx_,
                                        pc_ctx.fp_result_.raw_params_,
                                        params))) {
       LOG_WARN("fail to resolver raw params", K(ret));
@@ -739,7 +739,7 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                                       const ObBitSet<> &neg_param_index,
                                       const ObBitSet<> &not_param_index,
                                       const ObBitSet<> &must_be_positive_idx,
-                                      const ObBitSet<> &formalize_prec_idx,
+                                      const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                       ObIArray<ObPCParam *> &raw_params,
                                       ParamStore *obj_params)
 {
@@ -771,9 +771,9 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_param_cnt; i++) {
       bool is_param = false;
       if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_ctx->get_param_store_for_update(), stmt_type,
-                  param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx, formalize_prec_idx,
-                  raw_params.at(i), i, enable_mysql_compatible_dates, value, is_param,
-                  enable_decimal_int))) {
+                  param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx,
+                  fmt_int_or_ch_decint_idx, raw_params.at(i), i, enable_mysql_compatible_dates,
+                  value, is_param, enable_decimal_int))) {
         SQL_PC_LOG(WARN, "failed to resolver param", K(ret), K(i));
       } else if (is_param && OB_FAIL(obj_params->push_back(value))) {
         SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
@@ -825,7 +825,7 @@ int ObPlanCacheValue::resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx)
                                                  neg_param_index_,
                                                  not_param_index_,
                                                  must_be_positive_idx_,
-                                                 formalize_prec_idx_,
+                                                 fmt_int_or_ch_decint_idx_,
                                                  param_num,
                                                  *ab_params)) {
 
@@ -856,7 +856,7 @@ int ObPlanCacheValue::resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx)
                                                    neg_param_index_,
                                                    not_param_index_,
                                                    must_be_positive_idx_,
-                                                   formalize_prec_idx_,
+                                                   fmt_int_or_ch_decint_idx_,
                                                    *ab_params))) {
       LOG_WARN("failed to check multi stmt param type", K(ret));
     } else {
@@ -873,7 +873,7 @@ int ObPlanCacheValue::resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
                                                         const ObBitSet<> &neg_param_index,
                                                         const ObBitSet<> &not_param_index,
                                                         const ObBitSet<> &must_be_positive_idx,
-                                                        const ObBitSet<> &formalize_prec_idx,
+                                                        const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                                         int64_t params_num,
                                                         ParamStore &param_store)
 {
@@ -895,7 +895,7 @@ int ObPlanCacheValue::resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
                                        neg_param_index,
                                        not_param_index,
                                        must_be_positive_idx,
-                                       formalize_prec_idx,
+                                       fmt_int_or_ch_decint_idx,
                                        *raw_param_array,
                                        &temp_obj_params))) {
       LOG_WARN("failed to resolve parames", K(ret));
@@ -949,7 +949,7 @@ int ObPlanCacheValue::check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
                                                   const ObBitSet<> &neg_param_index,
                                                   const ObBitSet<> &not_param_index,
                                                   const ObBitSet<> &must_be_positive_idx,
-                                                  const ObBitSet<> &formalize_prec_idx,
+                                                  const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                                   ParamStore &param_store)
 {
   int ret = OB_SUCCESS;
@@ -967,7 +967,7 @@ int ObPlanCacheValue::check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
                                 neg_param_index,
                                 not_param_index,
                                 must_be_positive_idx,
-                                formalize_prec_idx,
+                                fmt_int_or_ch_decint_idx,
                                 pc_ctx.multi_stmt_fp_results_.at(i).raw_params_,
                                 &temp_obj_params))) {
       LOG_WARN("failed to resolve parames", K(ret));
@@ -1463,7 +1463,7 @@ void ObPlanCacheValue::reset()
   not_param_index_.reset();
   not_param_var_.reset();
   neg_param_index_.reset();
-  formalize_prec_idx_.reset();
+  fmt_int_or_ch_decint_idx_.reset();
   param_charset_type_.reset();
   sql_traits_.reset();
   reset_tpl_sql_const_cons();

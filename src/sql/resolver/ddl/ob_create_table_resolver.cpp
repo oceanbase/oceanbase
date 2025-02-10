@@ -1674,10 +1674,11 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
             }
           }
 
+          if (OB_SUCC(ret) && !column.is_invisible_column()) {
+            has_visible_col = true;
+          }
+
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-            if (!column.is_invisible_column()) {
-              has_visible_col = true;
-            }
             // column from resolved_cols may be invalid
             if (OB_FAIL(add_udt_hidden_column(table_schema, resolved_cols, column))) {
               LOG_WARN("generate hidden column for udt failed");
@@ -1766,8 +1767,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
         SQL_RESV_LOG(WARN, "each table can only have an identity column", K(ret));
       }
     }
-    // oracle 模式下，一个表中至少有一个列为 visible 列
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    // 一个表中至少有一个列为 visible 列
+    if (OB_SUCC(ret)) {
       // RESOLVE_NON_COL == resolve_rule 时，只解析非列定义
       if (RESOLVE_NON_COL != resolve_rule && !has_visible_col) {
         ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;

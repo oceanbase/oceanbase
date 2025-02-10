@@ -1054,6 +1054,7 @@ public:
     direct_load_allow_fallback_(false),
     default_load_mode_(0),
     hash_rollup_policy_(0),
+    ndv_runtime_bloom_filter_size_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1109,6 +1110,7 @@ public:
   bool direct_load_allow_fallback_;
   int default_load_mode_;
   int hash_rollup_policy_;
+  bool ndv_runtime_bloom_filter_size_;
 
 private:
   // current cluster config version_

@@ -117,6 +117,11 @@ int ObTextStringHelper::read_real_string_data(
   str = obj.get_string();
   if (meta.is_null()) {
     str.reset();
+  } else if (! obj.is_lob_storage()) {
+  } else if (obj.has_lob_header() && obj.get_string_len() != 0 &&
+      ! obj.get_lob_value()->is_mem_loc_ && obj.get_lob_value()->in_row_) {
+    const ObLobCommon* lob = obj.get_lob_value();
+    str.assign_ptr(lob->get_inrow_data_ptr(), static_cast<int32_t>(lob->get_byte_size(obj.get_string_len())));
   } else if (OB_FAIL(read_real_string_data(
       allocator,
       meta.get_type(),

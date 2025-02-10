@@ -72,6 +72,9 @@ public:
       } else {
         ++dh_msg_cnt_;
         whole_msg_set_ = (dh_msg_cnt_ == task_cnt);
+        if (whole_msg_set_ && OB_FAIL(whole_msg_.after_aggregate_piece())) {
+          SQL_ENG_LOG(WARN, "fail to do some work after whole msg aggregate piece msg");
+        }
       }
     }
 

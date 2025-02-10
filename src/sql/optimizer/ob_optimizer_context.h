@@ -272,6 +272,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     partition_wise_plan_enabled_(true),
     enable_px_ordered_coord_(false),
     enable_opt_row_goal_(ObEnableOptRowGoal::MAX),
+    px_node_policy_(ObPxNodePolicy::INVALID),
+    px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -338,7 +340,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   }
   inline const ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() const { return direct_load_optimizer_ctx_; }
   inline ObDirectLoadOptimizerCtx &get_direct_load_optimizer_ctx() { return direct_load_optimizer_ctx_; }
-  inline const ObGlobalHint &get_global_hint() { return global_hint_; }
+  inline const ObGlobalHint &get_global_hint() const { return global_hint_; }
   inline ObRawExprFactory &get_expr_factory() { return expr_factory_; }
   inline ObLogPlanFactory &get_log_plan_factory() { return log_plan_factory_; }
   inline bool can_use_pdml() const { return can_use_pdml_; }
@@ -761,6 +763,13 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool enable_new_query_range() const { return enable_new_query_range_; }
   inline void set_enable_opt_row_goal(int64_t type) { enable_opt_row_goal_ = static_cast<ObEnableOptRowGoal>(type); }
   inline ObEnableOptRowGoal get_enable_opt_row_goal() const { return enable_opt_row_goal_; }
+  inline ObPxNodePolicy get_px_node_policy() const { return px_node_policy_; }
+  inline void set_px_node_policy(ObPxNodePolicy px_node_policy) { px_node_policy_ = px_node_policy; }
+  inline ObPxNodeSelectionMode get_px_node_selection_mode() const { return px_node_selection_mode_; }
+  inline void set_px_node_selection_mode(ObPxNodeSelectionMode selection_mode)
+  {
+    px_node_selection_mode_ = selection_mode;
+  }
   inline bool is_enable_distributed_das_scan() const { return enable_distributed_das_scan_; }
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
 private:
@@ -882,6 +891,8 @@ private:
   bool partition_wise_plan_enabled_;
   bool enable_px_ordered_coord_;
   ObEnableOptRowGoal enable_opt_row_goal_;
+  ObPxNodePolicy px_node_policy_;
+  ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
 };
 }

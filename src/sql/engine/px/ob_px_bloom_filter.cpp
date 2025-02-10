@@ -100,7 +100,7 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
       MEMSET(bits_array_, 0, bits_array_length_ * sizeof(int64_t));
       is_inited_ = true;
       LOG_TRACE("init px bloom filter", K(data_length_), K(bits_array_buf),
-                 K(bits_array_), K(hash_func_count_), K(simd_support));
+                 K(bits_array_), K_(bits_array_length), K(hash_func_count_), K(simd_support));
     }
   }
   return ret;

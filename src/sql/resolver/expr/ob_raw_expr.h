@@ -1454,7 +1454,6 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
-    ora_numeric_compare_(false),
     error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
@@ -1468,7 +1467,6 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
-    ora_numeric_compare_(false),
     error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
@@ -1501,10 +1499,6 @@ struct ObExprEqualCheckContext
 
   virtual bool compare_set_op_expr(const ObSetOpRawExpr& left,
                                    const ObSetOpRawExpr& right);
-
-  virtual bool compare_ora_numeric_consts(const ObConstRawExpr &left, const ObSysFunRawExpr &right);
-
-  virtual bool compare_ora_numeric_consts(const ObSysFunRawExpr &right, const ObConstRawExpr &left);
   void reset() {
     override_const_compare_ = false;
     override_column_compare_ = false;
@@ -1529,7 +1523,6 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
-  bool ora_numeric_compare_;
   int64_t error_code_; //error code to return
 
 private:

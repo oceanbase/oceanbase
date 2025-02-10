@@ -167,6 +167,7 @@ FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
+PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -6042,6 +6043,14 @@ NOT NULLX
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_SRID, 1, $2);
 }
+| VISIBLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VISIBLE);
+}
+| INVISIBLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INVISIBLE);
+}
 ;
 
 opt_storage_type:
@@ -7318,6 +7327,14 @@ not NULLX
 | STORAGE MEMORY
 {
   $$ = NULL;
+}
+| VISIBLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VISIBLE);
+}
+| INVISIBLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INVISIBLE);
 }
 ;
 
@@ -11680,6 +11697,20 @@ READ_CONSISTENCY '(' consistency_level ')'
 | RESOURCE_GROUP '(' STRING_VALUE ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_RESOURCE_GROUP, 1, $3);
+}
+| PX_NODE_POLICY '(' STRING_VALUE ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PX_NODE_POLICY, 1, $3);
+}
+| PX_NODE_ADDRS '(' server_list ')'
+{
+  ParseNode *addr_nums = NULL;
+  merge_nodes(addr_nums, result, T_PX_NODE_ADDRS, $3);
+  $$=addr_nums;
+}
+| PX_NODE_COUNT '(' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PX_NODE_COUNT, 1, $3);
 }
 ;
 

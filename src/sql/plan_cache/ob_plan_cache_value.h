@@ -170,7 +170,7 @@ public:
                              const ObBitSet<> &neg_param_index,
                              const ObBitSet<> &not_param_index,
                              const ObBitSet<> &must_be_positive_idx,
-                             const ObBitSet<> &formalize_prec_idx,
+                             const ObBitSet<> &fmt_int_or_ch_decint_idx,
                              ObIArray<ObPCParam *> &raw_params,
                              ParamStore *obj_params);
 
@@ -184,7 +184,7 @@ public:
                                          const ObBitSet<> &neg_param_index_,
                                          const ObBitSet<> &not_param_index,
                                          const ObBitSet<> &must_be_positive_idx,
-                                         const ObBitSet<> &formalize_prec_idx,
+                                         const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                          ParamStore &param_store);
 
   static int resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
@@ -193,7 +193,7 @@ public:
                                                const ObBitSet<> &neg_param_index_,
                                                const ObBitSet<> &not_param_index,
                                                const ObBitSet<> &must_be_positive_idx,
-                                               const ObBitSet<> &formalize_prec_idx,
+                                               const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                                int64_t params_num,
                                                ParamStore &param_store);
 
@@ -455,7 +455,7 @@ private:
   TplSqlConstCons tpl_sql_const_cons_;
   //***********  end user-defined rules **************
   bool enable_rich_vector_format_;
-  common::ObBitSet<> formalize_prec_idx_;
+  common::ObBitSet<> fmt_int_or_ch_decint_idx_;
   int64_t switchover_epoch_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);

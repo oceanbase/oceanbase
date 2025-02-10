@@ -17,6 +17,7 @@
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "src/share/stat/ob_opt_stat_manager.h"
+#include "src/sql/engine/px/ob_dfo_scheduler.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -870,10 +871,42 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   if (OB_FAIL(ret)) {
   } else if (ctx_.is_use_auto_dop() && OB_FAIL(set_auto_dop_params(session))) {
     LOG_WARN("failed to set auto dop params", K(ret));
+  } else if (OB_FAIL(init_px_node_opt_info(session.get_effective_tenant_id()))) {
+    LOG_WARN("failed to init px node opt info", K(ret));
   } else {
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
                         K(ctx_.get_auto_dop_params()));
+  }
+  return ret;
+}
+
+int ObOptimizer::init_px_node_opt_info(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const ObGlobalHint &global_hint = ctx_.get_global_hint();
+  // PX_NODE_ADDRS has a higher priority than PX_NODE_COUNT and PX_NODE_POLICY.
+  if (!global_hint.px_node_hint_.px_node_addrs_.empty()) {
+    ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::SPECIFY_NODE);
+  } else {
+    if (global_hint.px_node_hint_.px_node_count_ != ObPxNodeHint::UNSET_PX_NODE_COUNT) {
+      ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::SPECIFY_COUNT);
+    } else {
+      ctx_.set_px_node_selection_mode(ObPxNodeSelectionMode::DEFAULT);
+    }
+    // For PX_NODE_POLICY,
+    // the priority of hints is higher than that of tenant configuration settings.
+    if (global_hint.px_node_hint_.px_node_policy_ != ObPxNodePolicy::INVALID) {
+      ctx_.set_px_node_policy(global_hint.px_node_hint_.px_node_policy_);
+    } else {
+      ObPxNodePolicy tenant_config_px_node_policy;
+      if (OB_FAIL(ObPxNodePool::get_tenant_config_px_node_policy(tenant_id,
+                          tenant_config_px_node_policy))) {
+        LOG_WARN("Failed to get tenant config px_node_policy", K(ret));
+      } else {
+        ctx_.set_px_node_policy(tenant_config_px_node_policy);
+      }
+    }
   }
   return ret;
 }

@@ -446,7 +446,7 @@ int ObPxResourceAnalyzer::get_dfo_addr_set(const ObLogicalOperator &root_op, ObH
     } else {
       const ObCandiTableLoc &phy_tbl_loc_info = tbl_part_info->get_phy_tbl_location_info();
       const ObCandiTabletLocIArray &phy_part_loc_info_arr = phy_tbl_loc_info.get_phy_part_loc_info_list();
-      for (int64_t i = 0; i < phy_part_loc_info_arr.count(); ++i) {
+      for (int64_t i = 0; i < phy_part_loc_info_arr.count() && OB_SUCC(ret); ++i) {
         share::ObLSReplicaLocation replica_loc;
         if (OB_FAIL(phy_part_loc_info_arr.at(i).get_selected_replica(replica_loc))) {
           LOG_WARN("get selected replica failed", K(ret));

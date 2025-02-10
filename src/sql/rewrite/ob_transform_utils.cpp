@@ -10658,6 +10658,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
         for (int64_t k = 0; OB_SUCC(ret) && !is_existed && k < groupby_exprs.count(); k++) {
           check_context.param_expr_.reset();
           check_context.equal_param_info_.reset();
+          check_context.ora_numeric_cmp_for_grouping_items_ = true;
           if (OB_ISNULL(groupby_exprs.at(k))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got an unexpected null", K(ret));
@@ -10784,7 +10785,7 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
     const ParamStore &param_store = trans_ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
     const ObObjParam &left_param = param_store.at(idx_left);
     const ObObjParam &right_param = param_store.at(idx_right);
-    if (!check_objparam_abs_equal(left_param, right_param)) {
+    if (!check_objparam_abs_equal(left_param, right_param, true)) {
       //do nothing.
     } else if (OB_FAIL(add_compare_int_constraint(trans_ctx,
                                                    static_cast<ObConstRawExpr*>(expr_r),
@@ -10810,7 +10811,10 @@ int ObTransformUtils::replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
   return ret;
 }
 
-bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2) {
+bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2,
+                                                const bool override_ora_const_numeric_cmp)
+{
+  int ret = OB_SUCCESS;
   bool is_abs_equal = false;
   if (obj1.is_number() && obj2.is_number()) {
     is_abs_equal = (obj1.get_number().abs_compare(obj2.get_number()) == 0);
@@ -10820,6 +10824,29 @@ bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const Ob
     is_abs_equal = (obj1.get_float() + obj2.get_float() == 0) || (obj1.get_float() == obj2.get_float());
   } else if (obj1.is_decimal_int() && obj2.is_decimal_int()) {
     is_abs_equal = wide::abs_equal(obj1, obj2);
+  } else if (override_ora_const_numeric_cmp
+             && ((obj1.is_decimal_int() && obj2.is_number())
+                 || (obj1.is_number() && obj2.is_decimal_int()))) {
+    // select (a - 1) from t group by grouping sets(a, 1);
+    // `1` parsed as decimal int in `a - 1`
+    // `1' parsed as number in grouping sets
+    // special comparision is needed here to replace const `1`
+    ObNumStackOnceAlloc tmp_alloc;
+    ObNumber l_nmb, r_nmb;
+    if (obj1.is_decimal_int()) {
+      if (OB_FAIL(wide::to_number(obj1.get_decimal_int(), obj1.get_int_bytes(), obj1.get_scale(), tmp_alloc, l_nmb))) {
+        LOG_ERROR("wide::to_number failed", K(ret));
+      } else {
+        r_nmb.shadow_copy(obj2.get_number());
+      }
+    } else if (OB_FAIL(wide::to_number(obj2.get_decimal_int(), obj2.get_int_bytes(),
+                                       obj2.get_scale(), tmp_alloc, r_nmb))) {
+      LOG_ERROR("wide::to_number failed", K(ret));
+    } else {
+      l_nmb.shadow_copy(obj1.get_number());
+    }
+    OB_ASSERT(ret == OB_SUCCESS);
+    is_abs_equal = l_nmb.abs_compare(r_nmb) == 0;
   }
   return is_abs_equal;
 }

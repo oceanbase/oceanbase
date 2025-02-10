@@ -2046,6 +2046,7 @@ int cmp_prev_row(WinExprEvalCtx &ctx, const int64_t cur_idx, int &cmp_ret)
   return ret;
 }
 
+
 template<>
 struct int_trunc<VEC_TC_NUMBER>
 {
@@ -2266,6 +2267,15 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         }
         // TODO: maybe prefetch agg rows is a good idea
         int prev_calc_idx = -1;
+
+        // Only Group Concat without distinct and order by can avoid use the whole frame
+        bool group_concat_whole_frame = false;
+        if (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
+            && (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_distinct_
+                || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_order_by_)) {
+          group_concat_whole_frame = true;
+        }
+
         for (int row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int32_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
@@ -2289,7 +2299,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
             if (OB_FAIL(copy_aggr_row(ctx, copied_row, agg_row))) {
               LOG_WARN("copy aggr row failed", K(ret));
             }
-          } else if (whole_frame) {
+          } else if (whole_frame || group_concat_whole_frame) {
             ctx.win_col_.agg_ctx_->removal_info_.reset_for_new_frame();
             if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx, agg_row, is_null))) {
               LOG_WARN("eval aggregate function failed", K(ret));

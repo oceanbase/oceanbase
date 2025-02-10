@@ -21,10 +21,6 @@
 
 namespace oceanbase
 {
-namespace obmysql
-{
-class ObMySQLRequestManager;
-}
 namespace common
 {
 using Ref = ObRaQueue::Ref;
@@ -37,7 +33,7 @@ public:
     memset(ref_, 0, sizeof(ref_));
   }
   ~ObLeafQueue() { memset(ref_, 0, sizeof(ref_)); }
-  int push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq);
+  int push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq, int64_t leaf_queue_size);
 
 private:
   void wait_ref_clear(int64_t seq) {
@@ -145,8 +141,8 @@ using Root_Ref = ObRaQueue::Ref;
 class ObDlQueue
 {
 public:
-  static const int64_t ROOT_QUEUE_SIZE = 16 * 1024; // 16k
-  static const int64_t LEAF_QUEUE_SIZE = 64 * 1024; // 64k
+  static const int64_t DEFAULT_ROOT_QUEUE_SIZE = 16 * 1024; // 16k
+  static const int64_t DEFAULT_LEAF_QUEUE_SIZE = 64 * 1024; // 64k
   static const int64_t DEFAULT_IDLE_LEAF_QUEUE_NUM = 8;
   static const int64_t RETRY_TIMES = 3; // push retry 3 times
   static const uint64_t RELEASE_WAIT_TIMES = 3; //3
@@ -181,16 +177,22 @@ public:
     end_idx_ = 0;
     tenant_id_ = 0;
     release_wait_times_ = 0;
+    root_queue_size_ = ObDlQueue::DEFAULT_ROOT_QUEUE_SIZE;
+    leaf_queue_size_ = ObDlQueue::DEFAULT_LEAF_QUEUE_SIZE;
+    idle_leaf_queue_num_ = ObDlQueue::DEFAULT_IDLE_LEAF_QUEUE_NUM;
   }
   ~ObDlQueue()
   {
     destroy();
   }
-  int init(const char *label, uint64_t tenant_id);
+  int init(const char *label, uint64_t tenant_id,
+          int64_t root_queue_size = ObDlQueue::DEFAULT_ROOT_QUEUE_SIZE,
+          int64_t leaf_queue_size = ObDlQueue::DEFAULT_LEAF_QUEUE_SIZE,
+          int64_t idle_leaf_queue_num = ObDlQueue::DEFAULT_IDLE_LEAF_QUEUE_NUM);
   int prepare_alloc_queue();
 
-  template <typename Callback>
-  int clear_leaf_queue(int64_t idx, int64_t size, Callback freeCallback)
+  int clear_leaf_queue(int64_t idx, int64_t size,
+                      const std::function<void(void*)> &freeCallback)
   {
     int ret = OB_SUCCESS;
     void* req = NULL;
@@ -207,7 +209,7 @@ public:
         // Call the callback function to release memory
         freeCallback(req);
       }
-      int64_t start_idx = idx * ObDlQueue::LEAF_QUEUE_SIZE + leaf_rec->get_pop_idx();
+      int64_t start_idx = idx * leaf_queue_size_ + leaf_rec->get_pop_idx();
       set_start_idx(start_idx);
     }
 
@@ -232,8 +234,8 @@ public:
 
   int get_leaf_size_used(int64_t idx, int64_t &size);
   int need_clean_leaf_queue(int64_t idx, bool &need_clean);
-  int release_record(int64_t release_cnt, oceanbase::obmysql::ObMySQLRequestManager*&& pointer,
-                    bool is_destroyed);
+  int release_record(int64_t release_cnt, const std::function<void(void*)> &free_callback,
+                              bool is_destroyed);
 
 private:
   int construct_leaf_queue();
@@ -246,6 +248,11 @@ private:
   uint64_t tenant_id_ CACHE_ALIGNED;
   ObRootQueue rq_;
   uint64_t release_wait_times_;
+  lib::ObLabel label_;
+
+  int64_t root_queue_size_;
+  int64_t leaf_queue_size_;
+  int64_t idle_leaf_queue_num_;
 };
 
 }; // end namespace common

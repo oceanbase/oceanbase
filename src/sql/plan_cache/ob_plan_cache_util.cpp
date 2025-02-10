@@ -519,6 +519,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
   is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
   bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
   realistic_runtime_bloom_filter_size_ = !GCONF._preset_runtime_bloom_filter_size;
+  ndv_runtime_bloom_filter_size_ = GCONF._ndv_runtime_bloom_filter_size;
 
   // For Tenant configs
   // tenant config use tenant_config to get configs
@@ -623,6 +624,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_nlj_spf_use_rich_format_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d", ndv_runtime_bloom_filter_size_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(ndv_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d", enable_index_merge_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_index_merge_));

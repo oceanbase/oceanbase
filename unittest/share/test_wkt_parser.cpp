@@ -131,9 +131,9 @@ TEST_F(TestWktParser, test_parse_point)
   ASSERT_EQ(ObString("0101000000F38E53742497BF3FCF66D5E76A2BE2BF"), to_hex(mock_to_wkb(geo)));
 
   // large than DBL_MAX
-  // geo = NULL;
-  // ASSERT_TRUE(OB_SUCCESS != ObWktParser::parse_wkt(allocator, ObString("point(1.79769313486231581e+308 1)"), geo, true, false));
-  // ASSERT_TRUE(NULL == geo);
+  geo = NULL;
+  ASSERT_TRUE(OB_SUCCESS != ObWktParser::parse_wkt(allocator, ObString("point(1.79769313486231581e+308 1)"), geo, true, false));
+  ASSERT_TRUE(NULL == geo);
 
   // wrong wkt format
   geo = NULL;

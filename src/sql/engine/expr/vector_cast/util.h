@@ -18,9 +18,9 @@
 #include "share/ob_errno.h"
 #include "share/object/ob_obj_cast.h"
 
-#define DEF_BATCH_RANGE_CHECKER_DECL const ObExpr &expr, ObEvalCtx &ctx, const EvalBound &bound,\
+#define CAST_CHECKER_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, const EvalBound &bound,\
                                      const ObBitVector &skip, int &warning
-#define DEF_BATCH_RANGE_CHECKER_ARG  expr, ctx, bound, skip, warning
+#define CAST_CHECKER_ARG  expr, ctx, bound, skip, warning
 
 namespace oceanbase
 {
@@ -31,7 +31,7 @@ template<VecValueTypeClass vec_tc, typename Vector>
 struct BatchValueRangeChecker
 {
   static const bool defined_ = false;
-  static int check(DEF_BATCH_RANGE_CHECKER_DECL);
+  static int check(CAST_CHECKER_ARG_DECL);
 };
 
 } // end sql

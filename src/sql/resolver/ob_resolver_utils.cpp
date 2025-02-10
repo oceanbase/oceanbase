@@ -2604,9 +2604,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    bool enable_decimal_int_type,
                                    const ObCompatType compat_type,
                                    const bool enable_mysql_compatible_dates,
-                                   bool use_plan_cache,
                                    bool is_from_pl /* false */,
-                                   bool formalize_int_precision /* false */)
+                                   bool fmt_int_or_ch_decint /* false */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ < T_INVALID) || OB_UNLIKELY(node->type_ >= T_MAX_CONST)) {
@@ -2911,10 +2910,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
         int16_t min_int_precision = tenant_config.is_valid() ? tenant_config->_min_const_integer_precision : 1;
         int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
         // for constant integers, reset precision to 4/8/16/20
-        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type && use_plan_cache
+        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
             && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
           int16_t node_prec = static_cast<int16_t>(node->str_len_);
-          if (formalize_int_precision) {
+          if (fmt_int_or_ch_decint) {
             if (node_prec <= 4) {
               formalized_prec = 4;
             } else if (node_prec <= 8) {
@@ -2962,7 +2961,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                     && precision >= scale);
         if (lib::is_oracle_mode()
             && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
-                || precision > OB_MAX_NUMBER_PRECISION)) {
+                || precision > OB_MAX_NUMBER_PRECISION || !fmt_int_or_ch_decint)) {
           use_decimalint_as_result = false;
         }
       }
@@ -10195,7 +10194,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                                     const ObBitSet<> &neg_param_index,
                                     const ObBitSet<> &not_param_index,
                                     const ObBitSet<> &must_be_positive_idx,
-                                    const ObBitSet<> &formalize_prec_idx,
+                                    const ObBitSet<> &fmt_int_or_ch_decint_idx,
                                     const ObPCParam *pc_param,
                                     const int64_t param_idx,
                                     const bool enable_mysql_compatible_dates,
@@ -10249,9 +10248,8 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        enable_decimal_int,
                        compat_type,
                        enable_mysql_compatible_dates,
-                       session.get_local_ob_enable_plan_cache(),
                        false, /* is_from_pl */
-                       formalize_prec_idx.has_member(param_idx)))) {
+                       fmt_int_or_ch_decint_idx.has_member(param_idx)))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {
@@ -10295,7 +10293,7 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
     is_zero = wide::is_zero(obj_param.get_decimal_int(), obj_param.get_int_bytes());
   } else if (obj_param.is_number()) {
     is_neg = obj_param.is_negative_number();
-    is_zero = obj_param.is_zero_decimalint();
+    is_zero = obj_param.is_zero_number();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected obj type", K(obj_param));

@@ -3235,28 +3235,12 @@ int ObTimeConverter::date_to_ob_time(int32_t value, ObTime &ob_time)
     memset(parts, 0, sizeof(*parts) * DATETIME_PART_CNT);
     parts[DT_DATE] = ZERO_DATE;
   } else {
-    int32_t days = value;
-    int32_t leap_year = 0;
-    int32_t year = EPOCH_YEAR4;
+    int8_t month = 0;
     parts[DT_DATE] = value;
-    // year.
-    while (days < 0 || days >= DAYS_PER_YEAR[leap_year = IS_LEAP_YEAR(year)]) {
-      int32_t new_year = year + days / DAYS_PER_NYEAR;
-      new_year -= (days < 0);
-      days -= (new_year - year) * DAYS_PER_NYEAR + LEAP_YEAR_COUNT(new_year - 1) - LEAP_YEAR_COUNT(year - 1);
-      year = new_year;
-    }
-    parts[DT_YEAR] = year;
-    parts[DT_YDAY] = days + 1;
     parts[DT_WDAY] = WDAY_OFFSET[value % DAYS_PER_WEEK][EPOCH_WDAY];
-    // month.
-    const int32_t *cur_days_until_mon = DAYS_UNTIL_MON[leap_year];
-    int32_t month = 1;
-    for (; month < MONS_PER_YEAR && days >= cur_days_until_mon[month]; ++month) {}
+    days_to_year_ydays(parts[DT_DATE], parts[DT_YEAR], parts[DT_YDAY]);
+    ydays_to_month_mdays(parts[DT_YEAR], parts[DT_YDAY], month, parts[DT_MDAY]);
     parts[DT_MON] = month;
-    days -= cur_days_until_mon[month - 1];
-    // day.
-    parts[DT_MDAY] = days + 1;
   }
   return ret;
 }

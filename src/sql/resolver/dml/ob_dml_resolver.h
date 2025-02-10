@@ -1053,6 +1053,7 @@ private:
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
+  int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

@@ -1026,6 +1026,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
 };
 
+class ObConfigPxNodePolicyChecker: public ObConfigChecker
+{
+public:
+  ObConfigPxNodePolicyChecker()
+  {}
+  virtual ~ObConfigPxNodePolicyChecker()
+  {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigPxNodePolicyChecker);
+};
+
 class ObConfigPluginsLoadChecker : public ObConfigChecker
 {
 public:

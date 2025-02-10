@@ -197,7 +197,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version_) && col->is_hidden()) {
               // version lower than 4.3.1 does not support SHOW EXTENDED,
               // should not output hidden columns.
-            } else if (col->is_invisible_column()) { // 忽略 invisible 列
+            } else if (col->is_invisible_column() && lib::is_oracle_mode()) { // 忽略 invisible 列
               // mysql 8.0.23 has supported invisivle column, we should not ignore them
               // for mysql
             } else if (OB_FAIL(fill_row_cells(*table_schema, *col, has_column_priv))) {
@@ -622,6 +622,32 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
                 extra_val = ObString(pos, buf);
               }
             }
+          }
+        }
+
+        if (OB_SUCC(ret) && lib::is_mysql_mode() && column_schema.is_invisible_column()) {
+          int64_t append_len = sizeof("INVISIBLE");
+          int64_t cur_len = extra_val.length();
+
+          if (cur_len > 0) {
+            append_len += 1;
+          }
+
+          int64_t buf_len = cur_len + append_len;
+
+          char *buf = NULL;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+          } else if (FALSE_IT(MEMCPY(buf, extra_val.ptr(), cur_len))) {
+          } else if (cur_len > 0
+                     && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", " INVISIBLE"))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+          } else if (cur_len == 0
+                     && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", "INVISIBLE"))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+          } else {
+            extra_val = ObString(buf_len, buf);
           }
         }
 

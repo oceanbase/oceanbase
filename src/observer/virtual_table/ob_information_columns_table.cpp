@@ -803,6 +803,32 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             } else if (column_schema->is_stored_generated_column()) {
               extra = ObString::make_string("STORED GENERATED");
             }
+
+            if (OB_SUCC(ret) && lib::is_mysql_mode() && column_schema->is_invisible_column()) {
+              int64_t append_len = sizeof("INVISIBLE");
+              int64_t cur_len = extra.length();
+
+              if (cur_len > 0) {
+                append_len += 1;
+              }
+              int64_t buf_len = cur_len + append_len;
+
+              char *buf = NULL;
+              if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+              } else if (FALSE_IT(MEMCPY(buf, extra.ptr(), cur_len))) {
+              } else if (cur_len == 0
+                         && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", "INVISIBLE"))) {
+                SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+              } else if (cur_len > 0
+                         && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", " INVISIBLE"))) {
+                SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
+              } else {
+                extra = ObString(buf_len, buf);
+              }
+            }
+
             cells[cell_idx].set_varchar(extra);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                    ObCharset::get_default_charset()));

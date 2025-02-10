@@ -20,8 +20,8 @@
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/rewrite/ob_query_range_define.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
-
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -7572,10 +7572,11 @@ int AccessPath::check_and_prepare_estimate_parallel_params(const int64_t cur_min
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
   } else if (OB_FAIL(table_partition_info_->get_all_servers(server_list))) {
     LOG_WARN("failed to get all servers", K(ret));
+  } else if (OB_FAIL(get_candidate_server_cnt(*opt_ctx, server_list, server_cnt))) {
+    LOG_WARN("failed to get candidate server cnt", K(ret));
   } else {
     px_part_gi_min_part_per_dop = std::max(1L, px_part_gi_min_part_per_dop);
     cost_threshold_us = 1000.0 * std::max(10L, opt_ctx->get_parallel_min_scan_time_threshold());
-    server_cnt = server_list.count();
     cur_parallel_degree_limit = opt_ctx->get_parallel_degree_limit(server_cnt);
     const int64_t row_parallel_limit = std::floor(get_phy_query_range_row_count() / ROW_COUNT_THRESHOLD_PER_DOP);
     if (cur_min_parallel_degree > ObGlobalHint::UNSET_PARALLEL && cur_min_parallel_degree < cur_parallel_degree_limit) {
@@ -8133,6 +8134,53 @@ int AccessPath::compute_is_das_dynamic_part_pruning(const EqualSets &equal_sets,
       can_das_dynamic_part_pruning_ = is_match;
     }
   }
+  return ret;
+}
+
+int AccessPath::get_candidate_server_cnt(const ObOptimizerContext &opt_ctx,
+                                        const ObIArray<ObAddr> &server_list,
+                                        int64_t &server_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObGlobalHint &global_hint = opt_ctx.get_global_hint();
+  ObPxNodePolicy px_node_policy = opt_ctx.get_px_node_policy();
+  ObPxNodeSelectionMode px_node_selection_mode = opt_ctx.get_px_node_selection_mode();
+  if (px_node_selection_mode == ObPxNodeSelectionMode::SPECIFY_NODE) {
+    server_cnt = global_hint.px_node_hint_.px_node_addrs_.count();
+  } else {
+    switch (px_node_policy) {
+      case ObPxNodePolicy::DATA: {
+        server_cnt = server_list.count();
+        break;
+      }
+      case ObPxNodePolicy::ZONE: {
+        if (OB_FAIL(ObPXServerAddrUtil::get_zone_server_cnt(server_list, server_cnt))) {
+          LOG_WARN("Failed to get zone server cnt", K(ret));
+        }
+        break;
+      }
+      case ObPxNodePolicy::CLUSTER: {
+        if (OB_FAIL(ObPXServerAddrUtil::get_cluster_server_cnt(server_list, server_cnt))) {
+          LOG_WARN("Failed to get cluster server cnt", K(ret));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected px_node_policy", K(px_node_policy));
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // Defensive code: the minimum is set to the count of the server list.
+      server_cnt = std::max(server_cnt, server_list.count());
+      if (px_node_selection_mode == ObPxNodeSelectionMode::SPECIFY_NODE) {
+        server_cnt = std::min(global_hint.px_node_hint_.px_node_count_, server_cnt);
+      }
+    }
+  }
+  LOG_TRACE("get candidate server cnt", K(server_cnt), K(server_list),
+                        K(px_node_policy), K(px_node_selection_mode));
   return ret;
 }
 

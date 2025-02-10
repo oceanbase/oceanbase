@@ -51,6 +51,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/aggr_extra.cpp
   aggregate/rb_build_agg.cpp
   aggregate/approx_count_distinct_synopsis.cpp
+  aggregate/group_concat.cpp
 )
 
 ob_set_subtarget(ob_share ALONE

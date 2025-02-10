@@ -232,6 +232,7 @@ namespace sql
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
     int init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
+    int init_px_node_opt_info(int64_t tenant_id);
 
   private:
     ObOptimizerContext &ctx_;

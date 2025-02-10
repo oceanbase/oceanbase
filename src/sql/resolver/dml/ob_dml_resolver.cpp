@@ -29,6 +29,7 @@
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
@@ -5132,7 +5133,6 @@ int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path
                                              session_info->get_sql_mode(),
                                              enable_decimal_int,
                                              compat_type,
-                                             session_info->get_local_ob_enable_plan_cache(),
                                              nullptr != params_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
@@ -14401,7 +14401,8 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
           } else if (OB_ISNULL(source_base_table_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(source_base_table_schema));
-          } else if (source_base_table_schema->is_user_table()
+          } else if ((source_base_table_schema->is_user_table()
+                     || source_base_table_schema->is_external_table())
                      && ObRawExprUtils::check_exprs_type_collation_accuracy_equal(target_real_ref,
                                                                                   source_real_ref)
                      && (!target_real_col_ref_expr->is_not_null_for_write()
@@ -14415,17 +14416,6 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
             // b.target column is not allowed have NULL and can not read NULL from source column
             // we just allocate fast column_conv expr
             fast_calc = true;
-          } else if (source_base_table_schema->is_external_table()) {
-            ObArenaAllocator alloc;
-            ObExternalFileFormat format;
-            const ObString &format_or_properties = source_base_table_schema->get_external_file_format().empty() ?
-                                            source_base_table_schema->get_external_properties() :
-                                            source_base_table_schema->get_external_file_format();
-            if (OB_FAIL(format.load_from_string(format_or_properties, alloc))) {
-              LOG_WARN("load from string failed", K(ret), K(format_or_properties.length()), K(format_or_properties));
-            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT || format.format_type_ == ObExternalFileFormat::ODPS_FORMAT) {
-              fast_calc = true;
-            }
           }
         }
       }
@@ -15024,12 +15014,110 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_PX_NODE_POLICY: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        if (NULL != child0->str_value_) {
+          ObString px_node_policy;
+          px_node_policy.assign_ptr(child0->str_value_, static_cast<int32_t>(child0->str_len_));
+          if (0 == px_node_policy.case_compare("data")) {
+            global_hint.px_node_hint_.merge_px_node_policy(ObPxNodePolicy::DATA);
+          } else if (0 == px_node_policy.case_compare("zone")) {
+            global_hint.px_node_hint_.merge_px_node_policy(ObPxNodePolicy::ZONE);
+          } else if (0 == px_node_policy.case_compare("cluster")) {
+            global_hint.px_node_hint_.merge_px_node_policy(ObPxNodePolicy::CLUSTER);
+          } else {
+            // just ignore, not return error
+            LOG_WARN("hint PX_NODE_POLICY unexpected", K(ret), K(px_node_policy));
+          }
+        }
+      }
+      break;
+    }
+    case T_PX_NODE_ADDRS: {
+      sql::ObTMArray<common::ObAddr> px_node_addrs;
+      if (OB_FAIL(resolve_px_node_addrs(hint_node, px_node_addrs))) {
+        LOG_WARN("Failed to resolve px_node_addrs", K(ret));
+      } else if (OB_FAIL(global_hint.px_node_hint_.merge_px_node_addrs(px_node_addrs))) {
+        LOG_WARN("global_hint failed to merge px_node_addrs", K(ret));
+      }
+      break;
+    }
+    case T_PX_NODE_COUNT: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.px_node_hint_.merge_px_node_count(child0->value_);
+      }
+      break;
+    }
 
     default: {
       resolved_hint = false;
       break;
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *node = NULL;
+  ObString node_addr_str;
+  ObAddr addr;
+  ObAddrSet addr_set;
+  ObAddrSet tenant_addr_set;
+  if (OB_FAIL(addr_set.create(hint_node.num_child_))) {
+    LOG_WARN("fail create addr set", K(hint_node.num_child_), K(ret));
+  } else if (OB_FAIL(ObPXServerAddrUtil::get_tenant_server_set(MTL_ID(), tenant_addr_set))) {
+    LOG_WARN("Fail to get tenant server set", K(ret));
+  } else {
+    // If the address specified in the hint is incorrect,
+    // do not report an error but ignore the hint.
+    bool hint_valid = true;
+    for (int64_t i = 0; OB_SUCC(ret) && hint_valid && i < hint_node.num_child_; ++i) {
+      if (OB_ISNULL(node = hint_node.children_[i])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Invalid tracing node", K(ret));
+      } else if (OB_NOT_NULL(node->str_value_)) {
+        node_addr_str.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+        if (!node_addr_str.empty()) {
+          if (OB_FAIL(addr.parse_from_string(node_addr_str))) {
+            LOG_WARN("addr failed to parse_from_string", K(ret));
+            ret = OB_SUCCESS;
+            hint_valid = false;
+          } else {
+            ret = addr_set.exist_refactored(addr);
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else if (OB_HASH_NOT_EXIST == ret) {
+              ret = tenant_addr_set.exist_refactored(addr);
+              if (OB_HASH_EXIST == ret) {
+                if (OB_FAIL(addrs.push_back(addr))) {
+                  LOG_WARN("fail push back server", K(ret));
+                } else if (OB_FAIL(addr_set.set_refactored(addr))) {
+                  LOG_WARN("fail set addr to addr_set", K(ret));
+                }
+              } else if (OB_HASH_NOT_EXIST == ret) {
+                LOG_WARN("The addr of hint PX_NODE_ADDRS is invalid",
+                          K(ret), K(addr));
+                ret = OB_SUCCESS;
+                hint_valid = false;
+              } else {
+                LOG_WARN("fail check server exist in tenant addrset", K(ret));
+              }
+            } else {
+              LOG_WARN("fail check server exist in addr_set", K(ret));
+            }
+          }
+        }
+      }
+    }
+    // The single address is incorrect, and the entire hint is not effective.
+    if (!hint_valid) {
+      addrs.reset();
+    }
+  }
+  (void)addr_set.destroy();
+  (void)tenant_addr_set.destroy();
   return ret;
 }
 

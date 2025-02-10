@@ -262,8 +262,7 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             }
           }
         }
-        // for visibility in oracle mode
-        if (OB_SUCC(ret) && is_oracle_mode && col->is_invisible_column()) {
+        if (OB_SUCC(ret) && col->is_invisible_column()) {
           if (OB_FAIL(databuff_printf(buf, buf_len, pos, " INVISIBLE"))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print INVISIBLE", K(ret), K(*col));
           }

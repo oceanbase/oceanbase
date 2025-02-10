@@ -57,6 +57,8 @@ public:
   int sort();
   int init(ObSortVecOpContext &context);
   int add_batch(const ObBatchRows &input_brs, bool &sort_need_dump);
+  int add_batch(const ObBatchRows &input_brs, const uint16_t selector[], const int64_t size);
+  int rewind();
   int get_next_batch(const int64_t max_cnt, int64_t &read_rows);
   int add_batch_stored_row(int64_t &row_size, const ObCompactRow **sk_stored_rows,
                            const ObCompactRow **addon_stored_rows);

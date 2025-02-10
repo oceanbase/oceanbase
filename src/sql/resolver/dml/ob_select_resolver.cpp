@@ -4734,8 +4734,8 @@ int ObSelectResolver::check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&exp
    */
   ObStmtCompareContext questionmark_checker;
   questionmark_checker.reset();
+  questionmark_checker.ignore_implicit_cast_ = true;
   questionmark_checker.override_const_compare_ = true;
-  questionmark_checker.ora_numeric_compare_ = true;
   if (OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer.", K(ret));

@@ -332,7 +332,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.col_int]), filter([cast(cast(T_FUN_SUM(t1.col_int), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT(t1.col_int), DECIMAL_INT(20, 0)), DECIMAL(15,
-       4)) = cast(1, DECIMAL(1, 0))]), rowset=16
+       4)) = cast(1, DECIMAL(20, 0))]), rowset=16
       group(nil), agg_func([T_FUN_SUM(t1.col_int)], [T_FUN_COUNT(t1.col_int)])
   1 - output([t1.col_int]), filter(nil), rowset=16
       access([t1.col_int]), partitions(p0)

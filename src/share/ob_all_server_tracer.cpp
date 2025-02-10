@@ -768,6 +768,7 @@ int ObTenantServersCacheMap::init()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_TENANT_MAP_ERROR)
 int ObTenantServersCacheMap::get_alive_tenant_servers(
     const uint64_t tenant_id,
     common::ObIArray<common::ObAddr> &alive_servers,
@@ -784,6 +785,8 @@ int ObTenantServersCacheMap::get_alive_tenant_servers(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(valid_tnt_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("valid_tnt_id is invalid", KR(ret), K(valid_tnt_id), K(tenant_id));
+  } else if (OB_UNLIKELY(ERRSIM_GET_TENANT_MAP_ERROR != OB_SUCCESS)) {
+    LOG_WARN("ERRSIM_GET_TENANT_MAP_ERROR", K(ret));
   } else if (OB_FAIL(tenant_map_.get_refactored(valid_tnt_id, tenant_servers))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;

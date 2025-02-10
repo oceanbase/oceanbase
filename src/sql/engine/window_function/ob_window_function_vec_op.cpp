@@ -728,10 +728,11 @@ int ObWindowFunctionVecOp::init()
       void *win_col_buf = nullptr, *pby_row_mapped_value_buf = nullptr;
       WinFuncColExpr *win_col = nullptr;
       int64_t agg_col_id = wf_idx - 1;
-      if (OB_ISNULL(win_col_buf = local_allocator_->alloc(sizeof(WinFuncColExpr)))) {
+      if (OB_SUCC(ret)
+          && OB_ISNULL(win_col_buf = local_allocator_->alloc(sizeof(WinFuncColExpr)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
-      } else {
+      } else if (OB_SUCC(ret)) {
         win_col = new (win_col_buf) WinFuncColExpr(wf_info, *this, wf_idx);
         win_col->pby_row_mapped_idxes_ = reinterpret_cast<int32_t *>(pby_row_mapped_value_buf);
         switch (wf_info.func_type_) {
@@ -3476,6 +3477,7 @@ int WinFuncColExpr::init_aggregate_ctx(const int64_t tenant_id)
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_support_fast_single_row_agg(true))) {
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_hp_infras_mgr(&op_.hp_infras_mgr_))) {
     } else if (FALSE_IT(agg_ctx_ = agg_expr->aggr_processor_->get_rt_ctx())) {
+    } else if (FALSE_IT(agg_expr->aggr_processor_->set_in_window_func())) {
     } else if (FALSE_IT(aggr_row_buf_sz = op_.spec_.max_batch_size_ * agg_ctx_->row_meta().row_size_)) {
       // do nothing
     } else if (OB_ISNULL(aggr_row_buf = local_allocator.alloc(aggr_row_buf_sz))) {

@@ -36,6 +36,8 @@ public:
   virtual void reset() = 0;
   virtual int init(ObSortVecOpContext &context) = 0;
   virtual int add_batch(const ObBatchRows &input_brs, bool &sort_need_dump) = 0;
+  virtual int add_batch(const ObBatchRows &input_brs, const uint16_t selector[], const int64_t size) = 0;
+  virtual int rewind() = 0;
   virtual int get_next_batch(const int64_t max_cnt, int64_t &read_rows) = 0;
   virtual int sort() = 0;
   virtual int add_batch_stored_row(int64_t &row_size, const ObCompactRow **sk_stored_rows,

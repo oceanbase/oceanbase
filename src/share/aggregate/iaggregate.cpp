@@ -49,6 +49,8 @@ extern int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_co
 extern int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                   ObIAllocator &allocator, IAggregate *&agg);
 
+extern int init_group_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                       ObIAllocator &allocator, IAggregate *&agg);
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
     ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
@@ -90,6 +92,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_GROUPING, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUPING_ID, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
+        INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -120,23 +123,40 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
   IAggregate *agg = nullptr;
   ObDataBuffer local_allocator(buffer, 1);
   ObAggrInfo &info = agg_ctx.aggr_infos_.at(agg_col_id);
+
   if (info.is_implicit_first_aggr()) {
     // do nothing
-  } else if (info.get_expr_type() == T_FUN_MIN || info.get_expr_type() == T_FUN_MAX) {
-    VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();
-    if (is_var_len_agg_cell(vec_tc)) {
-      ret_size = sizeof(char *) + sizeof(int32_t); // <char *, int32_t>
+  } else {
+    switch (info.get_expr_type()) {
+    case T_FUN_MIN:
+    case T_FUN_MAX: {
+      VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();
+      if (is_var_len_agg_cell(vec_tc)) {
+        ret_size = sizeof(char *) + sizeof(int32_t); // <char *, int32_t>
+      }
+      break;
     }
-  } else if (info.get_expr_type() == T_FUN_SUM) {
-    if (OB_FAIL( // ugly code, works just fine
-          init_sum_aggregate(agg_ctx, agg_col_id, local_allocator, agg, &tmp_res_size))) {
-      SQL_LOG(ERROR, "get sum tmp res size failed", K(ret));
-      ob_abort();
-    } else {
-      ret_size = tmp_res_size;
+    case T_FUN_SUM: {
+      if (OB_FAIL(init_sum_aggregate(agg_ctx, agg_col_id, local_allocator, agg, &tmp_res_size))) {
+        SQL_LOG(ERROR, "get sum tmp res size failed", K(ret));
+        ob_abort();
+      } else {
+        ret_size = tmp_res_size;
+      }
+      break;
     }
-  } else if (info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT) {
-    ret_size = sizeof(char *);
+    case T_FUN_APPROX_COUNT_DISTINCT: {
+      ret_size = sizeof(char *);
+      break;
+    }
+    case T_FUN_GROUP_CONCAT: {
+      // Assign an int32_t for the string length, another int64_t to record how many rows have
+      // already been processed.
+      ret_size = sizeof(int32_t) + sizeof(int64_t);
+      break;
+    }
+    default: break;
+    }
   }
   return ret_size;
 }

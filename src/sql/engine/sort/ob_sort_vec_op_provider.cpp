@@ -206,6 +206,19 @@ int ObSortVecOpProvider::add_batch(const ObBatchRows &input_brs, bool &sort_need
   return sort_op_impl_->add_batch(input_brs, sort_need_dump);
 }
 
+int ObSortVecOpProvider::add_batch(const ObBatchRows &input_brs, const uint16_t selector[],
+                                   const int64_t size)
+{
+  check_status();
+  return sort_op_impl_->add_batch(input_brs, selector, size);
+}
+
+int ObSortVecOpProvider::rewind()
+{
+  check_status();
+  return sort_op_impl_->rewind();
+}
+
 int ObSortVecOpProvider::get_next_batch(const int64_t max_cnt, int64_t &read_rows)
 {
   check_status();

@@ -3265,8 +3265,8 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[231].default_value_ = "10" ;
-      ObSysVars[231].info_ = "set default wait time ms for runtime filter, default is 10ms" ;
+      ObSysVars[231].default_value_ = "0" ;
+      ObSysVars[231].info_ = "specifies runtime filter wait time before output rows, 0 means adaptive wait according to data size" ;
       ObSysVars[231].name_ = "runtime_filter_wait_time_ms" ;
       ObSysVars[231].data_type_ = ObIntType ;
       ObSysVars[231].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;

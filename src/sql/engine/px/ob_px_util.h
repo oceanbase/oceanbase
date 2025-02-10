@@ -31,6 +31,7 @@ namespace sql
 {
 const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
 class ObIExtraStatusCheck;
+class ObPxNodePool;
 enum ObBcastOptimization {
   BC_TO_WORKER,
   BC_TO_SERVER,
@@ -143,6 +144,10 @@ public:
 
 
 typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
+typedef common::hash::ObHashSet<ObAddr, common::hash::NoPthreadDefendMode> ObAddrSet;
+typedef common::hash::ObHashSet<ObZone, common::hash::NoPthreadDefendMode> ObZoneSet;
+
+
 
 class ObPXServerAddrUtil
 {
@@ -173,7 +178,8 @@ public:
                                          ObDfo &parent);
   static int alloc_by_random_distribution(ObExecContext &exec_ctx,
                                           const ObDfo &child,
-                                          ObDfo &parent);
+                                          ObDfo &parent,
+                                          ObPxNodePool &px_node_pool);
   static int alloc_by_temp_child_distribution(ObExecContext &ctx,
                                               ObDfo &child);
   static int alloc_by_temp_child_distribution_inner(ObExecContext &ctx,
@@ -200,6 +206,40 @@ public:
       ObDfo &dfo,
       ObDASTableLoc *&table_loc);
 
+  static int init_px_node_exec_info(ObExecContext &exec_ctx);
+  // Because the begin and end interfaces need to be used,
+  // ObIArray cannot be used here.
+  static int get_data_servers(ObExecContext &exec_ctx,
+                              sql::ObTMArray<ObAddr> &addrs,
+                              bool &is_empty,
+                              int64_t &data_node_cnt);
+  static int get_data_servers(ObExecContext &exec_ctx,
+                              ObAddrSet &addr_set,
+                              bool &is_empty);
+  static int inner_get_zone_servers(const ObAddrSet &data_addr_set,
+                                    ObIArray<ObAddr> &addrs);
+  static int get_zone_servers(ObExecContext &exec_ctx,
+                              sql::ObTMArray<ObAddr> &addrs,
+                              bool &is_empty,
+                              int64_t &data_node_cnt);
+  static int get_cluster_servers(ObExecContext &exec_ctx,
+                                sql::ObTMArray<ObAddr> &addrs,
+                                bool &is_empty,
+                                int64_t &data_node_cnt);
+  static int get_specified_servers(ObExecContext &exec_ctx,
+                                  sql::ObTMArray<ObAddr> &addrs,
+                                  bool &is_empty,
+                                  int64_t &data_node_cnt);
+  static int get_tenant_server_set(const int64_t &tenant_id,
+                                  ObAddrSet &tenant_server_set);
+  static int get_tenant_servers(const int64_t &tenant_id,
+                              ObIArray<ObAddr> &tenant_servers);
+  static int shuffle_px_node_pool(sql::ObTMArray<ObAddr> &addrs,
+                                    int64_t data_node_cnt);
+  static int get_zone_server_cnt(const ObIArray<ObAddr> &server_list,
+                                  int64_t &server_cnt);
+  static int get_cluster_server_cnt(const ObIArray<ObAddr> &server_list,
+                                    int64_t &server_cnt);
 private:
   static int find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op);

@@ -27,6 +27,10 @@ struct ObBatchRows
 {
   ObBatchRows() : skip_(NULL), size_(0), end_(false), all_rows_active_(false) {}
 
+  ObBatchRows(ObBitVector &skip, int64_t size, bool all_rows_active) :
+    skip_(&skip), size_(size), end_(false), all_rows_active_(all_rows_active)
+  {}
+
   DECLARE_TO_STRING;
 
   int copy(const ObBatchRows *src)

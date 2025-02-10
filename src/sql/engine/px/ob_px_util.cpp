@@ -21,6 +21,10 @@
 #include "storage/ob_locality_manager.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/px/ob_dfo_scheduler.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 
 
 using namespace oceanbase::common;
@@ -854,48 +858,67 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
 }
 
 int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
-    const ObDfo &child, ObDfo &parent)
+    const ObDfo &child, ObDfo &parent, ObPxNodePool &px_node_pool)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObAddr> addrs;
-  // use all locations involved in this sql for scheduling,
-  // use sql-included server instead of tenant-owned server,
-  // based on the two considerations
-  // 1 need to use more resources to schedule dfo without location
-  // 2 avoid scheduling servers that the user does not want, such as non-primary_zone
-  DASTableLocList &table_locs = DAS_CTX(exec_ctx).get_table_loc_list();
-  DASTabletLocArray locations;
-  FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
-    ObDASTableLoc *table_loc = *tmp_node;
-    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
-         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
-      OZ(locations.push_back(*tablet_node));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (locations.empty()) {
+  if (OB_ISNULL(exec_ctx.get_physical_plan_ctx()) ||
+      OB_ISNULL(exec_ctx.get_physical_plan_ctx()->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL phy plan ctx", K(ret), K(exec_ctx.get_physical_plan_ctx()));
+  } else if (OB_FAIL(px_node_pool.init(exec_ctx))) {
+    LOG_WARN("Fail to init mpp node info", K(ret));
+  } else if (px_node_pool.data_node_empty()) {
     // a defensive code, if this SQL does not have a location, still alloc by child
     // this kind of plan is not common
     if (OB_FAIL(alloc_by_child_distribution(child, parent))) {
       LOG_WARN("fail to alloc by child distribution", K(ret));
     }
-  } else if (OB_FAIL(get_location_addrs<DASTabletLocArray>(locations, addrs))) {
-    LOG_WARN("fail get location addrs", K(ret));
   } else {
-    int64_t parallel = parent.get_assigned_worker_count();
-    if (0 >= parallel) {
-      parallel = 1;
-    }
-    ObArray<int64_t> sqc_max_task_counts;
-    ObArray<int64_t> sqc_part_counts;
+    const ObAddrFixedArray &px_candidate_node_pool = px_node_pool.get_candidate_node_pool();
+    sql::ObTMArray<ObAddr> addrs;
+    int64_t parallel = std::max(parent.get_assigned_worker_count(), (int64_t)(1));
+    ObTMArray<int64_t> sqc_max_task_counts;
+    ObTMArray<int64_t> sqc_part_counts;
     int64_t total_task_count = 0;
-    if (parallel < addrs.count() && OB_FAIL(do_random_dfo_distribution(addrs, parallel, addrs))) {
-      LOG_WARN("fail to do random dfo distribution", K(ret));
-    } else {
-      for (int i = 0; i < addrs.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(sqc_part_counts.push_back(1))) {
-          LOG_WARN("fail to push back sqc part count", K(ret));
+    ObPxNodeSelectionMode selection_mode = px_node_pool.get_px_node_selection_mode();
+    LOG_TRACE("px candidate node pool", K(parallel),
+        K(px_candidate_node_pool.count()), K(px_candidate_node_pool));
+    switch (selection_mode) {
+      case ObPxNodeSelectionMode::SPECIFY_NODE: {
+        if (OB_FAIL(addrs.assign(px_candidate_node_pool))) {
+          LOG_WARN("Fail to assign", K(ret));
         }
+        break;
+      }
+      case ObPxNodeSelectionMode::SPECIFY_COUNT: {
+        int64_t actual_node_num = std::min(
+              exec_ctx.get_physical_plan_ctx()->get_phy_plan()->get_px_node_count(),
+              px_candidate_node_pool.count());
+        for (int i = 0; OB_SUCC(ret) && i < actual_node_num; ++i) {
+          if (OB_FAIL(addrs.push_back(px_candidate_node_pool.at(i)))) {
+            LOG_WARN("fail to push back", K(ret));
+          }
+        }
+        break;
+      }
+      case ObPxNodeSelectionMode::DEFAULT: {
+        int64_t actual_node_num = std::min(parallel, px_candidate_node_pool.count());
+        for (int i = 0; OB_SUCC(ret) && i < actual_node_num; ++i) {
+          if (OB_FAIL(addrs.push_back(px_candidate_node_pool.at(i)))) {
+            LOG_WARN("fail to push back", K(ret));
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected mpp node selection mode", K(selection_mode));
+        break;
+      }
+    }
+    for (int i = 0; i < addrs.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(sqc_part_counts.push_back(1))) {
+        LOG_WARN("fail to push back sqc part count", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -906,6 +929,8 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
       for (int i = 0; i < sqc_max_task_counts.count() && OB_SUCC(ret); ++i) {
         total_task_count += sqc_max_task_counts.at(i);
       }
+      LOG_TRACE("sqc task count", K(total_task_count),
+          K(addrs.count()), K(addrs), K(sqc_max_task_counts));
     }
     // generate dh map info
     if (OB_SUCC(ret)) {
@@ -4230,6 +4255,408 @@ int LowestCommonAncestorFinder::get_op_dfo(const ObOpSpec *op, ObDfo *root_dfo, 
         cur_que_front++;
       }
     }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_data_servers(ObExecContext &exec_ctx,
+                                         sql::ObTMArray<ObAddr> &addrs,
+                                         bool &is_empty,
+                                         int64_t &data_node_cnt)
+{
+  int ret = OB_SUCCESS;
+  DASTableLocList &table_locs = DAS_CTX(exec_ctx).get_table_loc_list();
+  DASTabletLocArray locations;
+  FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
+    ObDASTableLoc *table_loc = *tmp_node;
+    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
+        OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+      OZ(locations.push_back(*tablet_node));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (locations.empty()) {
+    is_empty = true;
+  } else if (OB_FAIL(get_location_addrs<DASTabletLocArray>(locations, addrs))) {
+    LOG_WARN("fail get location addrs", K(ret));
+  } else {
+    data_node_cnt = addrs.count();
+    if (OB_FAIL(shuffle_px_node_pool(addrs, data_node_cnt))) {
+      LOG_WARN("Fail to shuffle calc node pool", K(ret),
+                K(data_node_cnt), K(addrs));
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_data_servers(ObExecContext &exec_ctx,
+                                         ObAddrSet &addr_set,
+                                         bool &is_empty)
+{
+  int ret = OB_SUCCESS;
+  DASTableLocList &table_locs = DAS_CTX(exec_ctx).get_table_loc_list();
+  DASTabletLocArray locations;
+  FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
+    ObDASTableLoc *table_loc = *tmp_node;
+    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
+        OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+      OZ(locations.push_back(*tablet_node));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (locations.empty()) {
+    is_empty = true;
+  } else {
+    addr_set.reuse();
+    if (OB_FAIL(addr_set.create(locations.size()))) {
+      LOG_WARN("fail create addr set", K(locations.size()), K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < locations.count(); ++i) {
+      ret = addr_set.exist_refactored((locations.at(i))->server_);
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(addr_set.set_refactored((locations.at(i))->server_))) {
+          LOG_WARN("fail set addr to addr_set", K(ret));
+        }
+      } else {
+        LOG_WARN("fail check server exist in addr_set", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+struct ObGetZonesOfServersCall
+{
+  ObGetZonesOfServersCall(
+    const ObAddrSet &server_set,
+    ObZoneSet &zone_set)
+    :  server_set_(server_set),
+        zone_set_(zone_set) {}
+  int operator()(const ObServerInfoInTable &server_info);
+
+  const ObAddrSet &server_set_;
+  ObZoneSet &zone_set_;
+};
+
+int ObGetZonesOfServersCall::operator()(const ObServerInfoInTable &server_info)
+{
+  int ret = OB_SUCCESS;
+  ret = server_set_.exist_refactored(server_info.get_server());
+  if (OB_HASH_EXIST == ret) {
+    ret = zone_set_.exist_refactored(server_info.get_zone());
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      if (OB_FAIL(zone_set_.set_refactored(server_info.get_zone()))) {
+        LOG_WARN("fail set zone to zone_set", K(ret));
+      }
+    } else {
+      LOG_WARN("fail check zone exist in zone_set", K(ret));
+    }
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("fail check server exist in addr_set", K(ret));
+  }
+  return ret;
+}
+
+struct ObGetServersOfZonesCall
+{
+  ObGetServersOfZonesCall(
+    ObIArray<ObAddr> &servers,
+    const ObZoneSet &zone_set,
+    const ObAddrSet &data_server_set,
+    const ObAddrSet &tenant_server_set)
+    :  servers_(servers),
+        zone_set_(zone_set),
+        data_server_set_(data_server_set),
+        tenant_server_set_(tenant_server_set) {}
+  int operator()(const ObServerInfoInTable &server_info);
+
+  ObIArray<ObAddr> &servers_;
+  const ObZoneSet &zone_set_;
+  const ObAddrSet &data_server_set_;
+  const ObAddrSet &tenant_server_set_;
+};
+
+int ObGetServersOfZonesCall::operator()(const ObServerInfoInTable &server_info)
+{
+  int ret = OB_SUCCESS;
+  ret = zone_set_.exist_refactored(server_info.get_zone());
+  if (OB_HASH_EXIST == ret) {
+    // Not a data node and belongs to the current tenant.
+    ret = data_server_set_.exist_refactored(server_info.get_server());
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      ret = tenant_server_set_.exist_refactored(server_info.get_server());
+      if (OB_HASH_EXIST == ret) {
+        if (OB_FAIL(servers_.push_back(server_info.get_server()))) {
+          LOG_WARN("Fail to push back server", K(ret));
+        }
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail check server exist in tenant addrset", K(ret));
+      }
+    } else {
+      LOG_WARN("fail check server exist in data addr_set", K(ret));
+    }
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("fail check server exist in addr_set", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::inner_get_zone_servers(const ObAddrSet &data_addr_set,
+                                               ObIArray<ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ObZoneSet zone_set;
+  ObAddrSet tenant_addr_set;
+  ObGetZonesOfServersCall get_zones_call(data_addr_set, zone_set);
+  if (OB_FAIL(zone_set.create(data_addr_set.size()))) {
+    LOG_WARN("zone_set failed to create", K(ret), K(data_addr_set.size()));
+  } else if (OB_FAIL(SVR_TRACER.for_each_server_info(get_zones_call))) {
+    LOG_WARN("Failed to for_each_server_info", K(ret));
+  } else if (OB_FAIL(get_tenant_server_set(MTL_ID(), tenant_addr_set))) {
+    LOG_WARN("Fail to get tenant server set", K(ret));
+  }
+  FOREACH_X(addr_iter, data_addr_set, OB_SUCC(ret)) {
+    // Data nodes are placed at the front of the candidate node pool.
+    if (OB_FAIL(addrs.push_back(addr_iter->first))) {
+      LOG_WARN("addrs failed to push_back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !tenant_addr_set.empty()) {
+    ObGetServersOfZonesCall get_servers_call(addrs,
+              zone_set, data_addr_set, tenant_addr_set);
+    if (OB_FAIL(SVR_TRACER.for_each_server_info(get_servers_call))) {
+      LOG_WARN("Failed to for_each_server_info", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_zone_servers(ObExecContext &exec_ctx,
+                                         sql::ObTMArray<ObAddr> &addrs,
+                                         bool &is_empty,
+                                         int64_t &data_node_cnt)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ObAddrSet data_addr_set;
+  if (OB_FAIL(get_data_servers(exec_ctx, data_addr_set, is_empty))) {
+    LOG_WARN("Fail to get_data_servers", K(ret));
+  } else if (is_empty) {
+    // do nothing
+  } else {
+    data_node_cnt = data_addr_set.size();
+    if (OB_FAIL(inner_get_zone_servers(data_addr_set, addrs))) {
+      LOG_WARN("Failed to inner_get_zone_servers", K(ret));
+    } else if (OB_FAIL(shuffle_px_node_pool(addrs, data_node_cnt))) {
+      LOG_WARN("Fail to shuffle calc node pool", K(ret),
+                K(data_node_cnt), K(addrs));
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_tenant_server_set(const int64_t &tenant_id,
+                                              ObAddrSet &tenant_server_set)
+{
+  int ret = OB_SUCCESS;
+  ObUnitTableOperator unit_op;
+  ObTMArray<ObUnit> tenant_units;
+  tenant_server_set.reuse();
+  sql::ObTMArray<common::ObAddr> tenant_servers;
+  int64_t renew_time = 0;
+  if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(MTL_ID(),
+                          tenant_servers, renew_time))) {
+    LOG_WARN("Fail to get alive tenant servers", K(ret), K(MTL_ID()));
+  } else if (OB_UNLIKELY(tenant_servers.empty())) {
+    LOG_WARN("Unable to retrieve the machine list for the current tenant, "
+               "reverting to PX_NODE_POLICY = DATA mode.", K(ret));
+  } else if (OB_FAIL(tenant_server_set.create(tenant_servers.size()))) {
+    LOG_WARN("fail create tenant_server_set", K(tenant_servers.size()), K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < tenant_servers.count(); ++i) {
+      ret = tenant_server_set.exist_refactored(tenant_servers.at(i));
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(tenant_server_set.set_refactored(tenant_servers.at(i)))) {
+          LOG_WARN("fail set addr to tenant_server_set", K(ret));
+        }
+      } else {
+        LOG_WARN("fail check server exist in tenant_server_set", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_tenant_servers(const int64_t &tenant_id,
+                                          ObIArray<ObAddr> &tenant_servers)
+{
+  int ret = OB_SUCCESS;
+  int64_t renew_time = 0;
+  if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(MTL_ID(),
+                              tenant_servers, renew_time))) {
+    LOG_WARN("Fail to get alive tenant servers", K(ret), K(MTL_ID()));
+  } else if (OB_UNLIKELY(tenant_servers.empty())) {
+    LOG_WARN("Unable to retrieve the machine list for the current tenant, "
+               "reverting to PX_NODE_POLICY = DATA mode.", K(ret));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_cluster_servers(ObExecContext &exec_ctx,
+                                            sql::ObTMArray<ObAddr> &addrs,
+                                            bool &is_empty,
+                                            int64_t &data_node_cnt)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ObAddrSet addr_set;
+  ObTMArray<ObAddr> tenant_servers;
+  if (OB_FAIL(get_data_servers(exec_ctx, addr_set, is_empty))) {
+    LOG_WARN("Fail to get_data_servers", K(ret));
+  } else if (is_empty) {
+    // do nothing
+  } else if (OB_FAIL(get_tenant_servers(MTL_ID(), tenant_servers))) {
+    LOG_WARN("fail to get_units_by_tenant from inner_table",
+            K(ret), K(MTL_ID()));
+  } else {
+    data_node_cnt = addr_set.size();
+    FOREACH_X(addr_iter, addr_set, OB_SUCC(ret)) {
+      // Data nodes are placed at the front of the candidate node pool.
+      if (OB_FAIL(addrs.push_back(addr_iter->first))) {
+        LOG_WARN("addrs failed to push_back", K(ret));
+      }
+    }
+    for (int i = 0; OB_SUCC(ret) && i < tenant_servers.count(); ++i) {
+      ret = addr_set.exist_refactored(tenant_servers.at(i));
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(addrs.push_back(tenant_servers.at(i)))) {
+          LOG_WARN("fail push back addr", K(ret));
+        }
+      } else {
+        LOG_WARN("fail check server exist in addr_set", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(shuffle_px_node_pool(addrs, data_node_cnt))) {
+        LOG_WARN("Fail to shuffle calc node pool", K(ret),
+                  K(data_node_cnt), K(addrs));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_specified_servers(ObExecContext &exec_ctx,
+                                              sql::ObTMArray<ObAddr> &addrs,
+                                              bool &is_empty,
+                                              int64_t &data_node_cnt)
+{
+  int ret = OB_SUCCESS;
+  addrs.reset();
+  ObAddrSet tenant_addr_set;
+  const common::ObFixedArray<common::ObAddr, common::ObIAllocator> &px_node_addrs =
+            exec_ctx.get_physical_plan_ctx()->get_phy_plan()->get_px_node_addrs();
+  if (OB_FAIL(ObPXServerAddrUtil::get_tenant_server_set(MTL_ID(), tenant_addr_set))) {
+    LOG_WARN("Fail to get tenant server set", K(ret));
+  } else if (tenant_addr_set.empty()) {
+    is_empty = true;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < px_node_addrs.count(); ++i) {
+      ret = tenant_addr_set.exist_refactored(px_node_addrs.at(i));
+      if (OB_HASH_EXIST == ret) {
+        if (OB_FAIL(addrs.push_back(px_node_addrs.at(i)))) {
+          LOG_WARN("fail push back addr", K(ret));
+        }
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        LOG_WARN("unexpected addr during the execution period",
+                  K(ret), K(px_node_addrs.at(i)));
+      } else {
+        LOG_WARN("fail check server exist in tenant addrset", K(ret));
+      }
+    }
+    data_node_cnt = px_node_addrs.count();
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::shuffle_px_node_pool(sql::ObTMArray<ObAddr> &addrs,
+                                              int64_t data_node_cnt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t seed = ObTimeUtil::current_time();
+  // Ensure that data nodes are placed at the beginning of the array
+  // by separately shuffling the data nodes and the candidate compute nodes.
+  if (data_node_cnt > 1) {
+    std::shuffle(addrs.begin(), addrs.begin() + data_node_cnt,
+                  std::default_random_engine(seed));
+  }
+  if (addrs.count() - data_node_cnt > 1) {
+    std::shuffle(addrs.begin() + data_node_cnt, addrs.end(),
+                  std::default_random_engine(seed));
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_zone_server_cnt(const ObIArray<ObAddr> &server_list,
+                                            int64_t &server_cnt)
+{
+  int ret = OB_SUCCESS;
+  server_cnt = 0;
+  ObAddrSet data_addr_set;
+  if (OB_FAIL(data_addr_set.create(server_list.count()))) {
+    LOG_WARN("data_addr_set failed to create", K(ret), K(server_list.count()));
+  } else {
+    for (int i = 0; i < server_list.count() && OB_SUCC(ret); ++i) {
+      ret = data_addr_set.exist_refactored(server_list.at(i));
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(data_addr_set.set_refactored(server_list.at(i)))) {
+          LOG_WARN("fail push back addr", K(ret));
+        }
+      } else {
+        LOG_WARN("fail check server exist in data addrset", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObTMArray<ObAddr> zone_servers;
+    if (OB_FAIL(inner_get_zone_servers(data_addr_set, zone_servers))) {
+      LOG_WARN("Failed to inner_get_zone_servers", K(ret));
+    } else {
+      server_cnt = zone_servers.count();
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_cluster_server_cnt(const ObIArray<ObAddr> &server_list,
+                                              int64_t &server_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObTMArray<ObAddr> tenant_servers;
+  if (OB_FAIL(get_tenant_servers(MTL_ID(), tenant_servers))) {
+    LOG_WARN("fail to get_units_by_tenant from inner_table",
+            K(ret), K(MTL_ID()));
+  } else {
+    server_cnt = std::max(server_list.count(), tenant_servers.count());
   }
   return ret;
 }

@@ -12,10 +12,12 @@
 #pragma once
 
 #include "lib/rc/context.h"
+#include "lib/utility/ob_hyperloglog.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/join/ob_partition_store.h"
 #include "sql/engine/join/ob_join_filter_store_row.h"
 #include "src/sql/engine/ob_sql_mem_mgr_processor.h"
+
 
 namespace oceanbase
 {
@@ -41,6 +43,23 @@ public:
 
 private:
   uint64_t *batch_hash_values_;
+};
+
+class MarkHashValueAndSetHyperLogLogOP
+{
+public:
+  MarkHashValueAndSetHyperLogLogOP(uint64_t *batch_hash_values, ObHyperLogLogCalculator* hllc) : batch_hash_values_(batch_hash_values), hllc_(hllc)
+  {}
+  OB_INLINE int operator()(const int64_t i)
+  {
+    hllc_->set(batch_hash_values_[i]);
+    batch_hash_values_[i] = batch_hash_values_[i] & ObHJStoredRow::HASH_VAL_MASK;
+    return OB_SUCCESS;
+  }
+
+private:
+  uint64_t *batch_hash_values_;
+  ObHyperLogLogCalculator* hllc_{nullptr};
 };
 
 class ObJoinFilterMaxAvailableMemChecker
@@ -96,6 +115,8 @@ public:
 
   int calc_partition_hash_value(const ObBatchRows *brs, ObEvalCtx &eval_ctx,
                                 uint64_t *hash_join_hash_values,
+                                bool use_hllc_estimate_ndv,
+                                ObHyperLogLogCalculator* hllc,
                                 const bool enable_skip_null = false,
                                 const common::ObIArray<bool> *need_null_flags = nullptr);
 

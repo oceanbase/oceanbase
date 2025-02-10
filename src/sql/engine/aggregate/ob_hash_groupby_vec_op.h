@@ -23,6 +23,7 @@
 #include "sql/engine/aggregate/ob_groupby_vec_op.h"
 #include "sql/engine/basic/ob_hp_infras_vec_op.h"
 #include "src/sql/engine/expr/ob_expr_estimate_ndv.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
 {
@@ -181,8 +182,6 @@ public:
       reorder_aggr_rows_(false),
       batch_aggr_rows_table_(),
       llc_est_(),
-      dump_add_row_selectors_(nullptr),
-      dump_add_row_selectors_item_cnt_(nullptr),
       dump_vectors_(nullptr),
       dump_rows_(nullptr),
       need_reinit_vectors_(true),
@@ -194,7 +193,9 @@ public:
       by_pass_rows_(0),
       total_load_rows_(0),
       popular_map_(),
-      by_pass_agg_rows_(0)
+      by_pass_agg_rows_(0),
+      stores_mgr_(),
+      part_idxes_(nullptr)
   {
   }
   void reset(bool for_rescan);
@@ -358,7 +359,6 @@ private:
   int by_pass_get_next_permutation_batch(int64_t &nth_group, bool &last_group,
                                          const ObBatchRows *child_brs, ObBatchRows &my_brs,
                                          const int64_t batch_size, bool &insert_group_ht);
-  void reuse_dump_selectors();
   int init_by_pass_op();
 
   int process_multi_groups(aggregate::AggrRowPtr *agg_rows, const ObBatchRows &brs,
@@ -442,8 +442,6 @@ private:
   bool reorder_aggr_rows_;
   BatchAggrRowsTable batch_aggr_rows_table_;
   LlcEstimate llc_est_;
-  uint16_t **dump_add_row_selectors_;
-  uint16_t *dump_add_row_selectors_item_cnt_;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
   ObCompactRow **dump_rows_;
   bool need_reinit_vectors_;
@@ -461,6 +459,8 @@ private:
   common::ObArray<std::pair<const ObCompactRow *, int32_t>> popular_array_temp_;
   common::ObFixedArray<HashFuncTypeForTc, ObIAllocator> hash_func_for_expr_;
   common::ObFixedArray<NullHashFuncTypeForTc, ObIAllocator> null_hash_func_for_expr_;
+  BatchTempRowStoresMgr stores_mgr_;
+  int64_t *part_idxes_;
 };
 
 } // end namespace sql

@@ -1240,6 +1240,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else {
         bool has_visible_col = false;
+        bool has_invisible_col = false;
         bool has_hidden_gencol = false;
         ObColumnIterByPrevNextID iter(*table_schema_);
         const ObColumnSchemaV2 *column_schema = NULL;
@@ -1252,6 +1253,16 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             continue;
           } else if (column_schema->is_invisible_column()) {
             // skip invisible column
+            if (!has_invisible_col) {
+              // Check if the invisible_col been dropped.
+              ObColumnNameHashWrapper col_key(column_schema->get_column_name_str());
+              if (OB_HASH_NOT_EXIST == reduced_visible_col_set.exist_refactored(col_key)) {
+                has_invisible_col = true;
+                ret = OB_SUCCESS; // change ret from OB_HASH_NOT_EXIST to OB_SUCCESS
+              } else {            // OB_HASH_EXIST
+                ret = OB_SUCCESS; // change ret from OB_HASH_EXIST to OB_SUCCESS
+              }
+            }
             continue;
           } else if (column_schema->is_hidden()) {
             // skip hidden column
@@ -1276,13 +1287,54 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         } else {
           ret = OB_SUCCESS;
         }
-        if (OB_SUCC(ret)) {
-          if (lib::is_oracle_mode() && alter_column_visibility_times > reduced_visible_col_set.count()) {
-            // 走到这里说明存在 alter table modify column visible，则至少有一个 visible column，不应该报错
-          } else if (!has_visible_col && (is_oracle_mode() || has_hidden_gencol)) {
-            //If there's no hidden generated columns, OB will check if all fields are dropped on rootserver
-            ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
-            SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible", K(ret));
+        if (OB_SUCC(ret) && !has_visible_col) {
+          if (is_oracle_mode()) {
+            if (alter_column_visibility_times > reduced_visible_col_set.count()) {
+              // 走到这里说明存在 alter table modify column visible，则至少有一个 visible
+              // column，不应该报错
+            } else {
+              // If there's no hidden generated columns, OB will check if all fields are dropped on
+              // rootserver
+              ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
+              SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible",
+                           K(ret));
+            }
+          } else {
+            share::schema::AlterTableSchema &alter_table_schema =
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+            bool has_add_visible_col = false;
+            bool has_add_invisible_col = false;
+
+            for (ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
+                 OB_SUCC(ret) && it < alter_table_schema.column_end()
+                 && (!has_add_visible_col || !has_add_invisible_col);
+                 it++) {
+              const AlterColumnSchema *alter_column_schema = nullptr;
+              if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("*it_begin is NULL", K(ret));
+              } else {
+                if (alter_column_schema->alter_type_ != OB_DDL_ADD_COLUMN) {
+                  continue;
+                } else if (alter_column_schema->is_invisible_column()) {
+                  has_add_invisible_col = true;
+                } else {
+                  has_add_visible_col = true;
+                }
+              }
+            }
+            if (!has_add_visible_col) {
+              has_invisible_col |= has_add_invisible_col;
+              if (has_invisible_col || has_hidden_gencol) {
+                // If there has invisible column after alter, use this error code.
+                ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
+                SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible",
+                             K(ret));
+              } else {
+                // RootServer will handle the case there is no visible column or invisible column,
+                // it will use OB_CANT_REMOVE_ALL_FIELDS.
+              }
+            }
           }
         }
       }

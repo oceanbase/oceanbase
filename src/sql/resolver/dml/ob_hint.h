@@ -47,6 +47,13 @@ enum class ObPxNodePolicy
   CLUSTER
 };
 
+enum class ObPxNodeSelectionMode
+{
+  DEFAULT,
+  SPECIFY_COUNT,
+  SPECIFY_NODE
+};
+
 struct ObAllocOpHint
 {
   ObAllocOpHint() : id_(0), flags_(0), alloc_level_(INVALID_LEVEL) {}
@@ -274,6 +281,34 @@ struct ObDBLinkHit {
   bool hint_xa_trans_stop_check_lock_;
 };
 
+struct ObPxNodeHint {
+  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  ObPxNodeHint() { reset(); }
+  void reset() {
+    px_node_policy_ = ObPxNodePolicy::INVALID;
+    px_node_addrs_.reset();
+    px_node_count_ = UNSET_PX_NODE_COUNT;
+  }
+  bool empty() const {
+    return ObPxNodePolicy::INVALID == px_node_policy_
+         && px_node_addrs_.empty()
+         && UNSET_PX_NODE_COUNT == px_node_count_;
+  }
+  int merge_px_node_hint(const ObPxNodeHint &other);
+  void merge_px_node_policy(ObPxNodePolicy px_node_policy);
+  int merge_px_node_addrs(const ObIArray<ObAddr> &px_node_addrs);
+  void merge_px_node_count(int64_t px_node_count);
+  int print_px_node_hint(PlanText &plan_text) const;
+  int print_px_node_addrs(PlanText &plan_text) const;
+
+  TO_STRING_KV(K_(px_node_policy),
+               K_(px_node_addrs),
+               K_(px_node_count));
+  ObPxNodePolicy px_node_policy_;
+  common::ObSArray<common::ObAddr> px_node_addrs_;
+  int64_t px_node_count_;
+};
+
 struct ObGlobalHint {
   ObGlobalHint() { reset(); }
   void reset();
@@ -424,7 +459,8 @@ struct ObGlobalHint {
                K_(parallel_das_dml_option),
                K_(dynamic_sampling),
                K_(alloc_op_hints),
-               K_(dblink_hints));
+               K_(dblink_hints),
+               K_(px_node_hint));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -456,6 +492,7 @@ struct ObGlobalHint {
   ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
+  ObPxNodeHint px_node_hint_;
 };
 
 // used in physical plan

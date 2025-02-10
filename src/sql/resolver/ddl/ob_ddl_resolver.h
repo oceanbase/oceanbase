@@ -643,6 +643,8 @@ protected:
                                       ParseNode *attrs_node,
                                       ObColumnResolveStat &reslove_stat,
                                       common::ObString &pk_name,
+                                      bool &is_modify_column,
+                                      bool &is_modify_column_visibility,
                                       const bool allow_has_default = true);
   int resolve_normal_column_attribute_check_cons(ObColumnSchemaV2 &column,
                                                  ParseNode *attrs_node,

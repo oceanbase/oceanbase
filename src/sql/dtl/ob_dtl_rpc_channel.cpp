@@ -308,13 +308,14 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
     // we wait first message return and retry until peer setup.
     int64_t timeout_us = buf->timeout_ts() - ObTimeUtility::current_time();
     SendMsgCB cb(msg_response_, *cur_trace_id, buf->timeout_ts());
+    bool send_by_tenant = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
     if (timeout_us <= 0) {
       ret = OB_TIMEOUT;
       LOG_WARN("send dtl message timeout", K(ret), K(peer_),
           K(buf->timeout_ts()));
     } else if (OB_FAIL(msg_response_.start())) {
       LOG_WARN("start message process fail", K(ret));
-    } else if (send_by_tenant()
+    } else if (send_by_tenant
                && OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
         .group_id(share::OBCG_DTL)
         .compressed(compressor_type_)
@@ -325,7 +326,7 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer *&buf)
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("set start fail failed", K(tmp_ret));
       }
-    } else if (!send_by_tenant()
+    } else if (!send_by_tenant
                && OB_FAIL(DTL.get_rpc_proxy().to(peer_).timeout(timeout_us)
                      .compressed(compressor_type_)
                      .ap_send_message(ObDtlSendArgs{peer_id_, *buf}, &cb))) {

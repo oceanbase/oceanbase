@@ -3309,10 +3309,10 @@
   "runtime_filter_wait_time_ms": {
     "id": 10147,
     "name": "runtime_filter_wait_time_ms",
-    "default_value": "10",
+    "default_value": "0",
     "base_value": "10",
     "data_type": "int",
-    "info": "set default wait time ms for runtime filter, default is 10ms",
+    "info": "specifies runtime filter wait time before output rows, 0 means adaptive wait according to data size",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
     "publish_version": "420",
     "info_cn": "",

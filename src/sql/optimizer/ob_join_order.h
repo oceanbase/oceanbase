@@ -759,6 +759,9 @@ class Path
       return  can_das_dynamic_part_pruning() && NULL != table_partition_info_
               ? table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() : 1;
     }
+    static int get_candidate_server_cnt(const ObOptimizerContext &opt_ctx,
+                                  const ObIArray<ObAddr> &server_list,
+                                  int64_t &server_cnt);
     virtual bool is_index_merge_path() const { return false; }
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),

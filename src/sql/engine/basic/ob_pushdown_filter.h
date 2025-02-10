@@ -853,7 +853,8 @@ public:
   OB_INLINE bool filter_can_continuous_filter() const override final {
     bool can_continuous_filter = true;
     for (int64_t i = 0; i < filter_.filter_exprs_.count();++i) {
-      if (T_OP_PUSHDOWN_TOPN_FILTER == filter_.filter_exprs_.at(i)->type_) {
+      if (T_OP_PUSHDOWN_TOPN_FILTER == filter_.filter_exprs_.at(i)->type_
+          || T_OP_RUNTIME_FILTER == filter_.filter_exprs_.at(i)->type_) {
         can_continuous_filter = false;
         break;
       }
@@ -1185,8 +1186,8 @@ public:
   };
   OB_INLINE bool filter_can_continuous_filter() const override final
   {
-    // for topn sort runtime filter, the filter can not do continuouly check
-    return DynamicFilterType::PD_TOPN_FILTER != get_filter_node().get_dynamic_filter_type();
+    // for runtime filter, the filter can not do continuously check
+    return false;
   }
   inline const ObWhiteFilterSmallHashSet &get_small_set() const {return small_set_;}
   void clear() override;

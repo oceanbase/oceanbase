@@ -1464,7 +1464,8 @@ public:
                                                   ObTransformerCtx *trans_ctx,
                                                   bool &is_existed);
 
-  static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
+  static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2,
+                                       const bool ovrride_ora_const_numeric_cmp = false);
   static int add_compare_int_constraint(ObTransformerCtx *trans_ctx,
                                         ObRawExpr *expr,
                                         const ObItemType op_type,

@@ -1742,12 +1742,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprRange::eval_range_vector,                               /* 190 */
   ObExprURLEncode::eval_url_encode_vector,                      /* 191 */
   ObExprURLDecode::eval_url_decode_vector,                      /* 192 */
-  NULL, // ObExprIs::calc_vector_is_null,                                /* 193 */
-  NULL, // ObExprIs::calc_vector_is_true,                                /* 194 */
-  NULL, // ObExprIs::calc_vector_is_false,                               /* 195 */
-  NULL, // ObExprIsNot::calc_vector_is_not_null,                         /* 196 */
-  NULL, // ObExprIsNot::calc_vector_is_not_true,                         /* 197 */
-  NULL, // ObExprIsNot::calc_vector_is_not_false,                        /* 198 */
+  ObExprIs::calc_vector_is_null,                                /* 193 */
+  ObExprIs::calc_vector_is_true,                                /* 194 */
+  ObExprIs::calc_vector_is_false,                               /* 195 */
+  ObExprIsNot::calc_vector_is_not_null,                         /* 196 */
+  ObExprIsNot::calc_vector_is_not_true,                         /* 197 */
+  ObExprIsNot::calc_vector_is_not_false,                        /* 198 */
   NULL, // ObExprBool::calc_vector_bool_expr,                            /* 199 */
   NULL, // ObExprNotBetween::eval_not_between_vector,                    /* 200 */
   NULL, // ObExprNot::eval_not_vector,                                   /* 201 */
