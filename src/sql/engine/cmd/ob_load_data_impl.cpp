@@ -26,6 +26,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "src/observer/mysql/ob_query_driver.h"
+#include "observer/ob_inner_sql_connection_pool.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -438,10 +439,13 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
     ObSEArray<ObCSVGeneralParser::LineErrRec, 128> err_records;
     const char *ptr = buffer.begin_ptr();
     const char *end = ptr + buffer.get_data_len();
-    auto unused_handler = [](ObIArray<ObCSVGeneralParser::FieldValue> &fields_per_line) -> int {
-      UNUSED(fields_per_line);
-      return OB_SUCCESS;
+    struct Functor {
+      int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
+    struct Functor unused_handler;
     if (OB_FAIL(parser.scan(ptr, end, line_count, NULL, NULL, unused_handler, err_records, is_last_buf))) {
       LOG_WARN("fail to scan buf", K(ret));
     } else {
@@ -1006,11 +1010,13 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
     const char *ptr = handle->data_buffer->begin_ptr();
     const char *end = handle->data_buffer->begin_ptr() + handle->data_buffer->get_data_len();
 
-    auto handle_one_line = [](ObIArray<ObCSVGeneralParser::FieldValue> &fields_per_line) -> int {
-      UNUSED(fields_per_line);
-      return common::OB_SUCCESS;
+    struct Functor {
+      int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
-
+    struct Functor handle_one_line;
     if (OB_FAIL(handle->generator.init(*(handle->exec_ctx.get_my_session()), expr_buffer,
                                        handle->exec_ctx.get_sql_ctx()->schema_guard_))) {
       LOG_WARN("fail to init buffer", K(ret));
@@ -3234,6 +3240,155 @@ int ObLoadDataSPImpl::ToolBox::init_file_size(ObExecContext &ctx)
 
   return ret;
 }
+
+int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+
+  ObDataInFileStruct data_struct_in_file = load_stmt.get_data_struct_in_file();
+  ObLoadArgument load_args = load_stmt.get_load_arguments();
+  ObLoadDataHint stmt_hints = load_stmt.get_hints();
+
+  OZ (sql.append(load_args.dupl_action_ == ObLoadDupActionType::LOAD_REPLACE ? "replace " : "insert "));
+
+  // 只有当hint不为空时才添加
+  if (!stmt_hints.get_hint_str().empty()) {
+    const ObString &hint_str = stmt_hints.get_hint_str();
+    const char* hint_start = strstr(hint_str.ptr(), "/*+");
+    if (OB_NOT_NULL(hint_start)) {
+      ObString new_hint(hint_str.length() - (hint_start - hint_str.ptr()), hint_start);
+      OZ (sql.append(new_hint));
+    }
+  }
+
+  if (load_args.dupl_action_ == ObLoadDupActionType::LOAD_IGNORE) {
+    OZ (sql.append("ignore "));
+  }
+
+  OZ (sql.append_fmt(" into %.*s ",
+                load_args.combined_name_.length(), load_args.combined_name_.ptr()));
+
+  ObIArray<ObString> &part_names = load_stmt.get_part_names();
+  if (part_names.count() > 0) {
+    OZ (sql.append("partition("));
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_names.count(); ++i) {
+      if (i > 0) {
+        OZ (sql.append(","));
+      }
+      OZ (sql.append_fmt("%.*s", part_names.at(i).length(), part_names.at(i).ptr()));
+    }
+    OZ (sql.append(") "));
+  }
+
+  // 获取字段列表
+  const ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_list = load_stmt.get_field_or_var_list();
+  // 检查是否存在非table column
+  for (int64_t i = 0; OB_SUCC(ret) && i < field_list.count(); ++i) {
+    const ObLoadDataStmt::FieldOrVarStruct &field = field_list.at(i);
+    if (OB_UNLIKELY(!field.is_table_column_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("var is not supported", KR(ret), K(field), K(i), K(field_list));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // 添加列名列表
+    if (field_list.count() > 0) {
+      OZ (sql.append("("));
+      bool first = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < field_list.count(); ++i) {
+        const ObLoadDataStmt::FieldOrVarStruct &field = field_list.at(i);
+        if (!first) {
+          OZ (sql.append(","));
+        }
+        if (lib::is_oracle_mode()) {
+          OZ (sql.append_fmt("\"%.*s\"", field.field_or_var_name_.length(), field.field_or_var_name_.ptr()));
+        } else {
+          OZ (sql.append_fmt("`%.*s`", field.field_or_var_name_.length(), field.field_or_var_name_.ptr()));
+        }
+        first = false;
+      }
+      OZ (sql.append(") "));
+    }
+
+    if (!load_args.url_spec_.empty()) {
+      OZ (sql.append(load_args.url_spec_.ptr()));
+      OZ (sql.append(" "));
+    } else {
+      OZ (sql.append_fmt(" select * from %.*s ", load_args.file_name_.length(), load_args.file_name_.ptr()));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!load_stmt.get_format_str().empty() && !load_stmt.get_properties_str().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("format and properties cannot be both set", KR(ret));
+    } else {
+      if (!load_stmt.get_format_str().empty()) {
+        OZ (sql.append(load_stmt.get_format_str().ptr()));
+      }
+
+      if (!load_stmt.get_properties_str().empty()) {
+        OZ (sql.append(load_stmt.get_properties_str().ptr()));
+      }
+
+      if (!load_stmt.get_pattern_str().empty()) {
+        OZ (sql.append(load_stmt.get_pattern_str().ptr()));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLoadDataURLImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t affected_rows = 0;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObSqlString sql;
+
+  OZ (construct_sql(load_stmt, sql));
+
+  common::sqlclient::ObISQLConnection *conn = NULL;
+  ObInnerSQLConnectionPool *pool = NULL;
+  ObSQLSessionInfo *session = NULL;
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session = ctx.get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret));
+    } else if (OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(
+                          sql_proxy->get_pool()))) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("connection pool is NULL", K(ret));
+    } else if (OB_FAIL(pool->acquire(session, conn))) {
+      LOG_WARN("failed to acquire inner connection", K(ret));
+    } else if (OB_FAIL(conn->execute_write(session->get_effective_tenant_id(), sql.ptr(), affected_rows, true))) {
+      LOG_WARN("failed to exec sql", K(session->get_effective_tenant_id()), K(sql), K(ret));
+    }
+  }
+
+  if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy)) {
+    OZ (sql_proxy->close(conn, true));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+      ctx.get_physical_plan_ctx()->set_affected_rows(affected_rows);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(ctx.get_my_session())) {
+      ctx.get_my_session()->reset_cur_phy_plan_to_null();
+    }
+  }
+
+  return ret;
+}
+
 
 } // sql
 } // oceanbase

@@ -360,7 +360,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE TASK_ID
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
@@ -514,7 +514,7 @@ END_P SET_VAR DELIMITER
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
-%type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string
+%type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
@@ -546,7 +546,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
-%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option
+%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern format_or_properties opt_as_alias
 %type <node> opt_path_info opt_access_info opt_storage_use_for opt_attribute opt_scope_type
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
 %type <node> external_table_partitions external_table_partition
@@ -5023,7 +5023,7 @@ load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO T
 relation_factor opt_use_partition opt_compression opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 14,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 16,
                            $2,            /* 0. local */
                            $4,            /* 1. filename */
                            $5,            /* 2. duplicate  */
@@ -5037,11 +5037,58 @@ opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
                            $1,            /* 10. hint */
                            $17,           /* 11. extended option list */
                            $10,           /* 12. compression format */
-                           $9             /* 13. partition */
+                           $9,            /* 13. partition */
+                           NULL,          /* 14. format */
+                           NULL           /* 15. pattern */
+                           );
+}
+| load_data_with_opt_hint opt_duplicate FROM url_spec
+INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec
+format_or_properties opt_pattern
+{
+  if (NULL != $1) {
+    dup_string($1, result, @1.first_column, @1.last_column);
+  }
+  if (NULL != $10) {
+    dup_string($10, result, @10.first_column, @10.last_column);
+  }
+  if (NULL != $11) {
+    dup_string($11, result, @11.first_column, @11.last_column);
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_URL, 16,
+                           NULL,           /* 0. local */
+                           $4,             /* 1. filename */
+                           $2,             /* 2. duplicate  */
+                           $7,             /* 3. table */
+                           NULL,           /* 4. charset */
+                           NULL,           /* 5. field */
+                           NULL,           /* 6. line */
+                           NULL,           /* 7. ignore rows */
+                           $9,             /* 8. field or vars */
+                           NULL,           /* 9. set field  */
+                           $1,             /* 10. hint */
+                           NULL,           /* 11. extended option list */
+                           NULL,           /* 12. compression format */
+                           $8,             /* 13. partition */
+                           $10,            /* 14. format */
+                           $11             /* 15. pattern */
                            );
 }
 ;
 
+url_spec:
+infile_string
+{
+  dup_string($1, result, @1.first_column, @1.last_column);
+  $$ = $1;
+}
+| '(' select_with_opt_hint select_expr_list FROM infile_string ')'
+{
+  (void) $2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SELECT, 2, $3, $5);
+  dup_string($$, result, @2.first_column, @5.last_column);
+}
+;
 
 infile_string:
 STRING_VALUE
@@ -8892,17 +8939,23 @@ TYPE COMP_EQ STRING_VALUE
 | STSTOKEN COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_STSTOKEN, 1, $3);
-   $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
   $3->stmt_loc_.last_column_ = @3.last_column - 1;
   result->contain_sensitive_data_ = true;
 }
 | ENDPOINT COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ENDPOINT, 1, $3);
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
 }
 | TUNNEL_ENDPOINT COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TUNNEL_ENDPOINT, 1, $3);
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
 }
 | PROJECT_NAME COMP_EQ STRING_VALUE
 {
@@ -8956,6 +9009,31 @@ external_file_format
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
+
+opt_pattern:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+|
+PATTERN opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
+}
+;
+
+format_or_properties:
+FORMAT opt_equal_mark '(' external_file_format_list ')'
+{
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_EXTERNAL_FILE_FORMAT, $4);
+}
+| PROPERTIES opt_equal_mark '(' external_properties_list ')'
+{
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_EXTERNAL_PROPERTIES, $4);
+};
 
 external_file_format:
 TYPE COMP_EQ STRING_VALUE
@@ -9041,6 +9119,10 @@ TYPE COMP_EQ STRING_VALUE
 | FILE_EXTENSION COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FILE_EXTENSION, 1, $3);
+}
+| PARSE_HEADER COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARSE_HEADER, 1, $3);
 }
 ;
 
@@ -13790,9 +13872,42 @@ relation_factor %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, $3, $6);
 }
+| STRING_VALUE format_or_properties opt_pattern opt_as_alias
+{
+  ParseNode *location_node = NULL;
+  malloc_non_terminal_node(location_node, result->malloc_pool_, T_EXTERNAL_FILE_LOCATION, 1, $1);
+  location_node->stmt_loc_.first_column_ = @1.first_column - 1;
+  location_node->stmt_loc_.last_column_ = @1.last_column - 1;
+
+  result->contain_sensitive_data_ = true;
+
+  ParseNode *relation_node = NULL;
+  malloc_non_terminal_node(relation_node, result->malloc_pool_, T_RELATION_FACTOR, 3, location_node, $2, $3);
+  relation_node->str_len_ = $1->str_len_;
+  relation_node->str_value_ = $1->str_value_;
+  relation_node->value_ = T_EXTERNAL_FILE_LOCATION;
+
+  if ($4 == NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, relation_node, NULL, NULL, NULL);
+  } else {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, relation_node, $4, NULL, NULL, NULL);
+  }
+
+  $$->value_ = T_EXTERNAL_FILE_LOCATION;
+}
 ;
 
-
+opt_as_alias:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+|
+AS relation_name
+{
+  $$ = $2;
+}
+;
 
 dml_table_name:
 relation_factor opt_use_partition
@@ -25039,6 +25154,7 @@ ACCESS_INFO
 |       PAGE
 |       PARALLEL
 |       PARAMETERS
+|       PARSE_HEADER
 |       PARSER
 |       PARSER_PROPERTIES
 |       PARTIAL

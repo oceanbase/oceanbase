@@ -212,6 +212,89 @@ int ObExternalTableFileManager::get_external_files_by_part_ids(
   return ret;
 }
 
+int ObExternalTableFileManager::get_mocked_external_table_files(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObIArray<int64_t> &partition_ids,
+    ObIArray<ObExternalFileInfo> &external_files,
+    const ObTableSchema *table_schema,
+    sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObExprRegexpSessionVariables regexp_vars;
+  ObSqlString full_path;
+  ObArray<ObString> file_urls;
+  ObArray<int64_t> file_sizes;
+
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    bool is_odps_table = false;
+    if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_table))) {
+      LOG_WARN("failed to check is odps external table or not", K(ret));
+    }
+    if (!is_odps_table) {
+      OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
+      OZ (ObExternalTableUtils::collect_external_file_list(
+                  tenant_id,
+                  table_id,
+                  table_schema->get_external_file_location(),
+                  table_schema->get_external_file_location_access_info(),
+                  table_schema->get_external_file_pattern(),
+                  table_schema->get_external_properties(),
+                  table_schema->is_partitioned_table(),
+                  regexp_vars,
+                  ctx.get_allocator(),
+                  full_path,
+                  file_urls, file_sizes));
+      for (int i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
+        ObExternalFileInfo file;
+        file.file_id_ = i + 1;
+        file.file_size_ = file_sizes.at(i);
+        file.file_url_ = file_urls.at(i).after('%');
+        file.file_addr_ = GCTX.self_addr();
+        file.part_id_ = table_schema->is_partitioned_table() ? i + 1 : 0;
+        OZ (external_files.push_back(file));
+      }
+    } else {
+      if (table_schema->is_partitioned_table()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
+          int64_t part_id = partition_ids.at(i);
+
+          ObExternalFileInfo file;
+          bool found = false;
+          for (int i = 0; OB_SUCC(ret) && !found && i < table_schema->get_partition_num(); i++) {
+            ObBasePartition *part = NULL;
+            if (OB_FAIL(table_schema->get_part_by_idx(i, -1, part))) {
+              LOG_WARN("failed to get part by idx", K(ret));
+            } else if (part_id == part->get_part_id()) {
+              file.file_url_ = part->get_external_location();
+              file.part_id_ = part_id;
+              found = true;
+            }
+          }
+
+          if (!found) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("partition not found", K(ret), K(part_id));
+          } else {
+            file.file_id_ = 0;
+            file.file_addr_ = GCTX.self_addr();
+            OZ (external_files.push_back(file));
+          }
+        }
+      } else {
+        ObExternalFileInfo file;
+        file.file_id_ = 0;
+        file.file_addr_ = GCTX.self_addr();
+        OZ (external_files.push_back(file));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExternalTableFileManager::get_external_files_by_part_id(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -580,11 +663,9 @@ int ObExternalTableFileManager::get_all_partition_list_val(const ObTableSchema *
 int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTableSchema *table_schema,
                                                                      const ObIArray<ObExternalFileInfoTmp> &file_infos,
                                                                      ObIArray<ObNewRow> &part_vals,
-                                                                     share::schema::ObSchemaGetterGuard &schema_guard,
-                                                                     ObExecContext &exec_ctx)
+                                                                     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator &allocator = exec_ctx.get_allocator();
   bool is_odps_external_table = false;
   if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret));
@@ -636,7 +717,7 @@ int ObExternalTableFileManager::calculate_odps_part_val_by_part_spec(const ObTab
               void *dst_buf = NULL;
               uint64_t dst_buf_size = (part_spec.length() / src_minblen) * dst_maxblen;
               uint32_t dst_len = 0;
-              if (OB_ISNULL(dst_buf = exec_ctx.get_allocator().alloc(dst_buf_size))) {
+              if (OB_ISNULL(dst_buf = allocator.alloc(dst_buf_size))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 LOG_WARN("failed to alloc buf", K(ret));
               } else if (OB_FAIL(ObCharset::charset_convert(coll_src, part_spec.ptr(), part_spec.length(), coll_dst, static_cast<char*>(dst_buf), dst_buf_size, dst_len))) {
@@ -797,7 +878,7 @@ int ObExternalTableFileManager::calculate_all_files_partitions(share::schema::Ob
   } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret));
   } else if (is_odps_external_table) {
-    OZ(calculate_odps_part_val_by_part_spec(table_schema, file_infos, file_part_vals, schema_guard, exec_ctx));
+    OZ(calculate_odps_part_val_by_part_spec(table_schema, file_infos, file_part_vals, exec_ctx.get_allocator()));
   } else {
     OZ (calculate_file_part_val_by_file_name(table_schema, file_infos, file_part_vals, schema_guard, exec_ctx));
   }

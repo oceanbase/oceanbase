@@ -9913,7 +9913,18 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         format.odps_format_.region_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
         break;
       }
-
+      case T_PARSE_HEADER: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.1, parse_header");
+        } else {
+          format.csv_format_.parse_header_ = node->children_[0]->value_;
+          if (format.csv_format_.parse_header_ && format.csv_format_.skip_header_lines_ == 0) {
+            format.csv_format_.skip_header_lines_ = 1;
+          }
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

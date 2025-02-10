@@ -922,10 +922,12 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
       }
     } else if (OB_FAIL(table_locations_.push_back(tl))) {
       LOG_WARN("fail to push table location", K(ret), K(i));
-    } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), tl.get_ref_table_id(), table_schema))) {
-      LOG_WARN("get table schema failed", K(ret), K(tl.get_ref_table_id()));
-    } else {
-      contain_index_location_ |= table_schema->is_index_table();
+    } else if (!is_external_object_id(tl.get_ref_table_id())) {
+      if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), tl.get_ref_table_id(), table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tl.get_ref_table_id()));
+      } else {
+        contain_index_location_ |= table_schema->is_index_table();
+      }
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
   }

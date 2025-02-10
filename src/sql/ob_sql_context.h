@@ -535,9 +535,18 @@ public:
   // get current scn from dblink. return OB_INVALID_ID if remote server not support current_scn
   int get_link_current_scn(uint64_t dblink_id, uint64_t tenant_id, ObSQLSessionInfo *session_info,
                            uint64_t &current_scn);
+  uint64_t get_next_mocked_schema_id() { return ++mocked_schema_id_counter_; }
+  int get_mocked_table_schema(uint64_t ref_table_id, const share::schema::ObTableSchema *&table_schema) const;
+  int add_mocked_table_schema(const share::schema::ObTableSchema &table_schema);
+
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
+  static int get_table_schema(ObSqlSchemaGuard * sql_schema_guard,
+                              ObSchemaGetterGuard * schema_getter_guard,
+                              const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              const ObTableSchema *&table_schema);
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;
   common::ObArenaAllocator allocator_;
@@ -545,6 +554,7 @@ private:
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
+  int64_t mocked_schema_id_counter_;
 };
 
 #ifndef OB_BUILD_SPM

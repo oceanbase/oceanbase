@@ -732,10 +732,13 @@ int ObLoadDataDirectImpl::DataParser::get_next_row(ObNewRow &row)
   } else if (data_buffer_->empty()) {
     ret = OB_ITER_END;
   } else {
-    auto handle_one_line = [](ObIArray<ObCSVGeneralParser::FieldValue> &fields_per_line) -> int {
-      UNUSED(fields_per_line);
-      return OB_SUCCESS;
+    struct Functor {
+      int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
+    struct Functor handle_one_line;
     while (OB_SUCC(ret)) {
       const char *str = data_buffer_->data();
       const char *end = str + data_buffer_->get_data_length();

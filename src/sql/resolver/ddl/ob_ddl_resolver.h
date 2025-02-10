@@ -456,8 +456,34 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const ObString &column_name,
       ObAlterTableStmt *alter_table_stmt);
-  int check_is_json_contraint(ObTableSchema &tmp_table_schema, ObIArray<ObConstraint> &csts, ParseNode *cst_check_expr_node);
+  int check_is_json_contraint(ObTableSchema &tmp_table_schema,
+                              ObIArray<ObConstraint> &csts,
+                              ParseNode *cst_check_expr_node);
 
+  static int resolve_file_prefix(ObString &url,
+                                 ObSqlString &prefix_str,
+                                 common::ObStorageType &device_type,
+                                 ObResolverParams &params);
+  static int resolve_external_file_format(const ParseNode *format_node,
+                                          ObResolverParams &params,
+                                          ObExternalFileFormat& format,
+                                          ObString &format_str);
+  static int resolve_external_file_pattern(const ParseNode *option_node,
+                                          bool is_external_table,
+                                          common::ObIAllocator &allocator,
+                                          const ObSQLSessionInfo *session_info,
+                                          ObString &pattern);
+
+  static int resolve_external_file_location(ObResolverParams &params,
+                                            ObTableSchema &table_schema,
+                                            const ParseNode *string_node);
+
+  static int mask_properties_sensitive_info(const ParseNode *node,
+                                            ObString &ddl_sql,
+                                            ObIAllocator *allocator,
+                                            ObString &masked_sql);
+
+  static int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,
       const ObReducedVisibleColSet &drop_column_names_set,
@@ -623,7 +649,6 @@ protected:
       const bool is_oracle_temp_table = false,
       const bool is_create_table_as = false,
       const bool allow_has_default = true);
-  int resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type);
   int resolve_uk_name_from_column_attribute(
       ParseNode *attrs_node,
       common::ObString &uk_name);
@@ -1016,10 +1041,6 @@ protected:
                                     bool is_subpart);
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
-
-  int mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql);
-
-  int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
 
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);

@@ -2712,7 +2712,9 @@ int ObTableSchema::add_column(const ColumnType &column)
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (!is_view_table() && OB_FAIL(check_row_length(is_oracle_mode, NULL, &column))) {
+  } else if (!is_view_table()
+            && !is_external_object_id(table_id_)
+            && OB_FAIL(check_row_length(is_oracle_mode, NULL, &column))) {
     SHARE_SCHEMA_LOG(WARN, "check row length failed", KR(ret), K(tenant_id_), K(table_id_), K(column));
   } else {
     if (NULL == (local_column = new (buf) ColumnType(allocator_))) {

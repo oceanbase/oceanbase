@@ -25,12 +25,12 @@
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-
 namespace oceanbase
 {
 namespace share
 {
 class ObLSID;
+class ObPartitionIdRowPairArray;
 }
 namespace sql
 {
@@ -374,6 +374,7 @@ ObVTableScanParam() :
       table_scan_opt_(),
       ext_file_column_exprs_(NULL),
       ext_column_convert_exprs_(NULL),
+      partition_infos_(NULL),
       schema_guard_(NULL),
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(NULL),
@@ -458,6 +459,7 @@ ObVTableScanParam() :
   sql::ObExternalFileFormat external_file_format_;
   ObString external_file_location_;
   ObString external_file_access_info_;
+  const share::ObPartitionIdRowPairArray *partition_infos_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

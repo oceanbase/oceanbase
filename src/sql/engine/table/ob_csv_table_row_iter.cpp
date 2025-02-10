@@ -286,8 +286,8 @@ int ObCSVTableRowIterator::skip_lines()
   ObSEArray<ObCSVGeneralParser::LineErrRec, 4> error_msgs;
   int64_t nrows = 0;
   struct Functor {
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
-      UNUSED(arr);
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+      UNUSED(param);
       return OB_SUCCESS;
     }
   };
@@ -337,7 +337,7 @@ int ObCSVTableRowIterator::get_next_row()
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
 
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
         ObDatum &datum = file_column_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
@@ -359,13 +359,13 @@ int ObCSVTableRowIterator::get_next_row()
           }
         } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
           int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-          if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
+          if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
             ret = OB_ERR_UNEXPECTED;
           } else {
-            if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode_)) {
+            if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
               datum.set_null();
             } else {
-              datum.set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+              datum.set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
             }
           }
         }
@@ -465,7 +465,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
 
-    int operator()(ObIArray<ObCSVGeneralParser::FieldValue> &arr) {
+    int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
     for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
       ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
@@ -490,13 +490,13 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         }
       } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
         int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
-        if (OB_UNLIKELY(loc_idx < 0 || loc_idx > arr.count())) {
+        if (OB_UNLIKELY(loc_idx < 0 || loc_idx > param.fields_.count())) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          if (arr.at(loc_idx).is_null_ || (0 == arr.at(loc_idx).len_ && is_oracle_mode_)) {
+          if (param.fields_.at(loc_idx).is_null_ || (0 == param.fields_.at(loc_idx).len_ && is_oracle_mode_)) {
             datums[returned_row_cnt_].set_null();
           } else {
-            datums[returned_row_cnt_].set_string(arr.at(loc_idx).ptr_, arr.at(loc_idx).len_);
+            datums[returned_row_cnt_].set_string(param.fields_.at(loc_idx).ptr_, param.fields_.at(loc_idx).len_);
           }
         }
       }

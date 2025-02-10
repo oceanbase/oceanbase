@@ -2253,8 +2253,11 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
         // compatibility.  VARCHAR length in previous version means
         // maximum bytes of column, whereas new version changes to chars
         // of column.
-        const int64_t max_row_length = is_sys_table() || is_vir_table() ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
-        const int64_t max_rowkey_length = is_sys_table() || is_vir_table() ? OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
+        bool is_external_object = is_external_object_id(table_id_);
+        const int64_t max_row_length = is_sys_table() || is_vir_table() || is_external_object ?
+                                                                INT64_MAX : OB_MAX_USER_ROW_LENGTH;
+        const int64_t max_rowkey_length = is_sys_table() || is_vir_table() || is_external_object ?
+                                                OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
         if (max_row_length < varchar_col_total_length) {
           LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar columns is larger than the max allowed length",
                    K(varchar_col_total_length), K(max_row_length));

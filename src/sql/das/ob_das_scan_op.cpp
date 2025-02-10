@@ -350,6 +350,7 @@ int ObDASScanOp::init_scan_param()
   }
   //external table scan params
   if (OB_SUCC(ret) && scan_ctdef_->is_external_table_) {
+    scan_param_.partition_infos_ = &(scan_ctdef_->partition_infos_);
     scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
     scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
     if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {

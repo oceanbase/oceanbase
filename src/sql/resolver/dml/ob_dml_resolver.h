@@ -20,7 +20,11 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
-
+#include <orc/Common.hh>
+#include "parquet/schema.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 namespace oceanbase
 {
 namespace sql
@@ -401,6 +405,9 @@ protected:
   int check_contain_lateral_node(const ParseNode *parse_tree, bool &is_contain);
 
   int check_stmt_has_flashback_query(ObDMLStmt *stmt, bool check_all, bool &has_fq);
+  int resolve_mocked_table(const ParseNode *table_node,
+                           TableItem *&table_item,
+                           const ParseNode *alias_node = NULL);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
@@ -1054,6 +1061,41 @@ private:
   int compute_values_table_row_count(ObValuesTableDef &table_def);
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
+  int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  int build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema);
+  int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema, ObTableSchema& table_schema);
+  int build_column_schemas_for_csv(const ObExternalFileFormat &format,
+                                 const char *table_location,
+                                 ObTableSchema &table_schema,
+                                 common::ObIAllocator &allocator,
+                                 uint64_t new_table_id);
+#ifdef OB_BUILD_CPP_ODPS
+  int build_column_schemas_for_odps(const ObSEArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn, 8> &column_list,
+                                const common::ObIArray<ObString> &part_col_names,
+                                ObTableSchema& table_schema);
+  int set_partition_info_for_odps(ObTableSchema &table_schema,
+                                  const common::ObIArray<ObString> &part_col_names);
+#endif
+  int build_column_schemas(ObTableSchema& table_schema,
+                                      ObExternalFileFormat &format,
+                                      uint64_t new_table_id,
+                                      const char* table_location,
+                                      const common::ObString &tmp_location,
+                                      common::ObIAllocator &allocator);
+  int set_basic_info_for_mocked_table(ObTableSchema &table_schema,
+                                      const ParseNode *location_node,
+                                      const ObExternalFileFormat &format);
+  int sample_external_file_name(const char *table_location,
+                                 common::ObIAllocator &allocator,
+                                 ObTableSchema &table_schema,
+                                 common::ObString &sampled_file_name);
+  int build_mocked_external_table_schema(const ParseNode *location_node,
+                                          const ParseNode *format_node,
+                                          const ParseNode *pattern_node,
+                                          const share::schema::ObTableSchema *&new_table_schema);
+  int build_mocked_external_table_item(const share::schema::ObTableSchema *table_schema,
+                                        TableItem *&tbl_item,
+                                        const ParseNode *alias_node = NULL);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

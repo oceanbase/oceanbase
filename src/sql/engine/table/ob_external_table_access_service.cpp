@@ -35,6 +35,11 @@ namespace common {
 extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
 }
 
+namespace share
+{
+struct ObPartitionIdRowPair;
+class ObPartitionIdRowPairArray;
+}
 using namespace share::schema;
 using namespace common;
 using namespace share;
@@ -813,6 +818,49 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
         LOG_WARN("allocate mem failed", K(ret));
       }
       OZ (value.deep_copy(partition->get_list_row_values().at(0), buf, size, pos));
+    }
+  }
+  return ret;
+}
+int ObExternalTableRowIterator::calc_file_part_list_value_by_array(const int64_t part_id,
+                                                                  ObIAllocator &allocator,
+                                                                  const share::ObPartitionIdRowPairArray *partition_array,
+                                                                  ObNewRow &value)
+{
+  int ret = OB_SUCCESS;
+  int64_t partition_index = OB_INVALID_INDEX;
+  share::ObPartitionIdRowPair partition;
+
+  int64_t partition_num = partition_array->count();
+  if (OB_ISNULL(partition_array) || partition_num <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition array", K(ret), K(part_id), K(partition_num));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
+    if (part_id == partition_array->at(i).part_id_) {
+      partition_index = i;
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret) && partition_index != OB_INVALID_INDEX) {
+    partition = partition_array->at(partition_index);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (partition_index == OB_INVALID_INDEX || partition.part_id_ != part_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition", K(ret), K(partition), K(part_id));
+    } else {
+      int64_t pos = 0;
+      int64_t size = partition.list_row_value_.get_deep_copy_size();
+      char *buf = (char *)allocator.alloc(size);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate mem failed", K(ret));
+      }
+      OZ (value.deep_copy(partition.list_row_value_, buf, size, pos));
     }
   }
   return ret;

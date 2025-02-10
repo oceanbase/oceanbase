@@ -18,6 +18,11 @@
 #include "share/domain_id/ob_domain_id.h"
 namespace oceanbase
 {
+
+namespace share
+{
+  struct ObPartitionIdRowPair;
+}
 using namespace common;
 using namespace share;
 using namespace share::schema;
@@ -74,15 +79,57 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       const ObString &table_format_or_properties = table_schema->get_external_file_format().empty() ?
                                             table_schema->get_external_properties() :
                                             table_schema->get_external_file_format();
-      if (table_format_or_properties.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table_format_or_properties is empty", K(ret));
-      } else if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_format_or_properties))) {
-        LOG_WARN("fail to set string", K(ret));
-      } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
-        LOG_WARN("fail to set string", K(ret));
-      } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(table_schema->get_external_file_location_access_info()))) {
-        LOG_WARN("fail to set access info", K(ret));
+
+      int64_t partition_num = table_schema->get_partition_num();
+      if (is_external_object_id(table_schema->get_table_id())
+          && table_schema->is_partitioned_table()) {
+        if (OB_FAIL(scan_ctdef.partition_infos_.reserve(partition_num))) {
+          LOG_WARN("failed to reserve partition infos array", K(ret), K(partition_num));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_schema->get_partition_num(); ++i) {
+            share::ObPartitionIdRowPair part_info;
+            ObBasePartition *part = NULL;
+            if (OB_FAIL(table_schema->get_part_by_idx(i, -1, part))) {
+              LOG_WARN("failed to get part by idx", K(ret));
+            } else if (OB_ISNULL(part)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid partition", K(ret), K(i));
+            } else {
+              part_info.part_id_ = part->get_part_id();
+              const ObIArray<ObNewRow> &list_row_values = part->get_list_row_values();
+              if (!list_row_values.empty()) {
+                int64_t pos = 0;
+                int64_t size = list_row_values.at(0).get_deep_copy_size();
+                ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
+                char *buf = (char *)ctdef_alloc.alloc(size);
+                if (OB_ISNULL(buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("allocate memory failed", K(ret), K(size));
+                } else if (OB_FAIL(part_info.list_row_value_.deep_copy(list_row_values.at(0),
+                                                                      buf,
+                                                                      size,
+                                                                      pos))) {
+                  LOG_WARN("failed to deep copy list row value", K(ret), K(i));
+                } else if (OB_FAIL(scan_ctdef.partition_infos_.set_part_pair_by_idx(i, part_info))) {
+                  LOG_WARN("failed to push back partition info", K(ret), K(i));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (table_format_or_properties.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table_format_or_properties is empty", K(ret));
+        } else if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_format_or_properties))) {
+          LOG_WARN("fail to set string", K(ret));
+        } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
+          LOG_WARN("fail to set string", K(ret));
+        } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(table_schema->get_external_file_location_access_info()))) {
+          LOG_WARN("fail to set access info", K(ret));
+        }
       }
     }
   }
@@ -1063,7 +1110,7 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
   ObArray<ObRawExpr*> scan_param_access_exprs;
   ObArray<ObRawExpr*> domain_id_access_expr;
 
-  if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(MTL_ID(), table_id, table_schema))) {
+  if (OB_FAIL(cg_.opt_ctx_->get_sql_schema_guard()->get_table_schema(table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;

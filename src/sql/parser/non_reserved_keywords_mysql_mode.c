@@ -662,6 +662,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"page", PAGE},
   {"parameters", PARAMETERS},
   {"parallel", PARALLEL},
+  {"parse_header", PARSE_HEADER},
   {"parser", PARSER},
   {"parser_properties", PARSER_PROPERTIES},
   {"partial", PARTIAL},

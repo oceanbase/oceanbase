@@ -9166,6 +9166,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   int ret = OB_SUCCESS;
   // set params info for plan cache
   ObSchemaGetterGuard *schema_guard = log_plan.get_optimizer_context().get_schema_guard();
+  ObSqlSchemaGuard *sql_schema_guard = log_plan.get_optimizer_context().get_sql_schema_guard();
   ObSQLSessionInfo *my_session = log_plan.get_optimizer_context().get_session_info();
   ObExecContext *exec_ctx = log_plan.get_optimizer_context().get_exec_ctx();
   ObSqlCtx *sql_ctx;
@@ -9173,7 +9174,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid exec_ctx_", K(ret));
-  } else if (OB_ISNULL(log_plan.get_stmt()) || OB_ISNULL(schema_guard) || OB_ISNULL(my_session)) {
+  } else if (OB_ISNULL(log_plan.get_stmt()) || OB_ISNULL(schema_guard) || OB_ISNULL(my_session)
+             || OB_ISNULL(sql_schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt or schema guard is null", K(log_plan.get_stmt()),
              K(schema_guard), K(my_session), K(ret));
@@ -9321,8 +9323,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
           const ObTableSchema *table_schema = NULL;
           int64_t object_id = dependency_table->at(i).get_object_id();
-          if (OB_FAIL(schema_guard->get_table_schema(my_session->get_effective_tenant_id(),
-                                                     object_id, table_schema))) {
+          if (OB_FAIL(sql_schema_guard->get_table_schema(object_id, table_schema))) {
             LOG_WARN("fail to get table schema", K(ret), K(object_id));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
@@ -9486,8 +9487,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
           full_table_schema = NULL;
           table_id = dependency_table->at(i).get_object_id();
-          if (OB_FAIL(schema_guard->get_table_schema(
-              MTL_ID(), table_id, full_table_schema))) {
+          if (OB_FAIL(sql_schema_guard->get_table_schema(table_id, full_table_schema))) {
             LOG_WARN("fail to get table schema", K(ret), K(table_id));
           } else if (OB_ISNULL(full_table_schema)) {
             ret = OB_TABLE_NOT_EXIST;

@@ -2074,6 +2074,8 @@ int ObSchemaGetterGuard::get_table_schema(
   } else if (is_cte_table(table_id)) {
     // fake table is only used in sql execution process and doesn't have schema.
     // We should avoid error in such situation.
+  } else if (is_external_object_id(table_id)) {
+    // do nothing
   } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(get_schema(TABLE_SCHEMA,
@@ -3915,6 +3917,9 @@ int ObSchemaGetterGuard::get_schema_version(
         if (is_cte_table(schema_id)) {
           // fake table, we should avoid error in such situation.
           schema_version = OB_INVALID_VERSION;
+        } else if (is_external_object_id(schema_id)) {
+          uint64_t schema_id = OB_ALL_VIRTUAL_PROCESSLIST_TID;
+          GET_SCHEMA_VERSION(table, ObSimpleTableSchemaV2);
         } else {
           GET_SCHEMA_VERSION(table, ObSimpleTableSchemaV2);
         }
@@ -6992,6 +6997,8 @@ int ObSchemaGetterGuard::get_simple_table_schema(
   } else if (is_cte_table(table_id)) {
     // fake table is only used in sql execution process and doesn't have schema.
     // We should avoid error in such situation.
+  } else if (is_external_object_id(table_id)) {
+    // do nothing
   } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K(tenant_id_));
   } else if (OB_FAIL(get_schema_mgr(tenant_id, mgr))) {

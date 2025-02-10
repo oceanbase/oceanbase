@@ -209,6 +209,8 @@ int ObODPSTableRowIterator::next_task()
       try {
         const ObString &part_spec = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
         int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+        bool is_part_table = scan_param_->table_param_->is_partition_table();
+        bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
         if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
@@ -275,10 +277,6 @@ int ObODPSTableRowIterator::next_task()
                   temp_downloader->tunnel_ready_cond_.broadcast(); // wake other threads that temp_downloader has finished initializing. The initialization result may be failure or success.
                   temp_downloader->tunnel_ready_cond_.unlock();
                 }
-                if (OB_FAIL(ret) && OB_NOT_NULL(temp_downloader)) {
-                  allocator.free(temp_downloader);
-                  temp_downloader = NULL;
-                }
               } else {
                 LOG_WARN("failed to get from odps_map", K(part_id), K(ret));
               }
@@ -299,9 +297,20 @@ int ObODPSTableRowIterator::next_task()
                                                                                          true)).get())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcepted null ptr", K(ret));
-        } else if (OB_FAIL(calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_))) {
-          LOG_WARN("failed to calc parttion list value", K(part_id), K(ret));
+        }
+
+        if (is_external_object) {
+          if (is_part_table) {
+            OZ (calc_file_part_list_value_by_array(part_id,
+                                                  arena_alloc_,
+                                                  scan_param_->partition_infos_,
+                                                  state_.part_list_val_));
+          }
         } else {
+          OZ (calc_file_partition_list_value(part_id, arena_alloc_, state_.part_list_val_));
+        }
+
+        if (OB_SUCC(ret)) {
           int64_t real_time_partition_row_count = state_.download_handle_->GetRecordCount();
           if (start >= real_time_partition_row_count) {
             start = real_time_partition_row_count;
@@ -696,9 +705,9 @@ int ObODPSTableRowIterator::prepare_expr()
         LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] and metadata$partition_list_col[index]");
       } else if (OB_FAIL(target_column_id_list_.push_back(target_idx))) {
         LOG_WARN("failed to keep target_idx", K(ret));
-      } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
-                 OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
-        LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
+      // } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&
+      //            OB_FAIL(check_type_static(column_list_.at(target_idx).type_info_, cur_expr))) {
+      //   LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
       }
     }
     if (OB_SUCC(ret)) {
@@ -827,6 +836,7 @@ int ObODPSTableRowIterator::pull_partition_info()
   return ret;
 }
 
+// non-partition column
 int ObODPSTableRowIterator::pull_column() {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_handle_.get())) {
@@ -890,6 +900,58 @@ int ObODPSTableRowIterator::fill_partition_list_data(ObExpr &expr, int64_t retur
     }
   } else {
     //do nothing
+  }
+  return ret;
+}
+// partition and non-partition column
+int ObODPSTableRowIterator::pull_all_columns() {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_handle_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else {
+    try {
+      apsara::odps::sdk::IODPSTableSchemaPtr schema_handle = table_handle_->GetSchema();
+
+      if (OB_ISNULL(schema_handle.get())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null ptr", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < schema_handle->GetColumnCount(); i++) {
+          std::string name_ = schema_handle->GetTableColumn(i).GetName();
+          if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTableColumn(i).GetName(),
+                                                        schema_handle->GetTableColumn(i).GetTypeInfo())))) {
+            LOG_WARN("failed to push back column_list_", K(ret));
+          }
+        }
+      }
+      uint32_t partition_col_cnt = schema_handle->GetPartitionLevels();
+      for (uint32_t i = 0; OB_SUCC(ret) && i < partition_col_cnt; i++) {
+        if (OB_FAIL(part_col_names_.push_back(ObString(schema_handle->GetTablePartition(i).GetName().c_str())))) {
+          LOG_WARN("failed to push back part_col_names_", K(ret));
+        } else if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTablePartition(i).GetName(),
+                                                        schema_handle->GetTablePartition(i).GetTypeInfo())))) {
+          LOG_WARN("failed to push back paritition column_list_", K(ret));
+        }
+      }
+    } catch (apsara::odps::sdk::OdpsTunnelException& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("failed to call GetSchema method in ODPS sdk", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (const std::exception &ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("failed to call GetSchema method in ODPS sdk", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (...) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("odps exception occured when calling GetSchema method", K(ret));
+      }
+    }
   }
   return ret;
 }

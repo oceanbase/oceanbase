@@ -89,7 +89,7 @@ public:
 
 class ObExternalTableFileManager
 {
-private:
+public:
   struct ObExternalFileInfoTmp {
     ObExternalFileInfoTmp(common::ObString file_url, int64_t file_size, int64_t part_id) :
                           file_url_(file_url), file_size_(file_size), part_id_(part_id) {}
@@ -100,7 +100,6 @@ private:
     TO_STRING_KV(K_(file_url),K_(part_id), K_(file_size));
   };
 
-public:
   static const int64_t CACHE_EXPIRE_TIME = 20 * 1000000L; //20s
   static const int64_t MAX_VERSION = INT64_MAX;
   static const int64_t LOAD_CACHE_LOCK_CNT = 16;
@@ -132,6 +131,14 @@ public:
       common::ObIAllocator &allocator,
       common::ObIArray<ObExternalFileInfo> &external_files,
       common::ObIArray<ObNewRange *> *range_filter = NULL);
+
+  int get_mocked_external_table_files(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      ObIArray<int64_t> &partition_ids,
+      ObIArray<ObExternalFileInfo> &external_files,
+      const ObTableSchema *table_schema,
+      sql::ObExecContext &ctx);
 
   int get_external_files_by_part_id(
       const uint64_t tenant_id,
@@ -200,6 +207,10 @@ public:
                               bool &has_partition_changed);
 
   int auto_refresh_external_table(ObExecContext &exec_ctx, const int64_t interval);
+  static int calculate_odps_part_val_by_part_spec(const ObTableSchema *table_schema,
+                                          const ObIArray<ObExternalFileInfoTmp> &file_infos,
+                                          ObIArray<ObNewRow> &part_vals,
+                                          ObIAllocator &allocator);
 private:
   int collect_odps_table_statistics(const bool collect_statistic,
                                     const uint64_t tenant_id,
@@ -273,11 +284,7 @@ private:
                                           ObIArray<ObNewRow> &part_vals,
                                           share::schema::ObSchemaGetterGuard &schema_guard,
                                           ObExecContext &exec_ctx);
-  int calculate_odps_part_val_by_part_spec(const ObTableSchema *table_schema,
-                                          const ObIArray<ObExternalFileInfoTmp> &file_infos,
-                                          ObIArray<ObNewRow> &part_vals,
-                                          share::schema::ObSchemaGetterGuard &schema_guard,
-                                          ObExecContext &exec_ctx);
+
   int find_partition_existed(ObIArray<ObNewRow> &existed_part,
                             ObNewRow &file_part_val,
                             int64_t &found);

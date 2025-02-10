@@ -3409,7 +3409,9 @@ int ObLogTableScan::generate_auto_split_filter()
       || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret), K(ref_table_id_));
-  } else if (get_contains_fake_cte() || is_virtual_table(table_id)) {
+  } else if (get_contains_fake_cte()
+             || is_virtual_table(table_id)
+             || is_external_object_id(table_id)) {
     // skip mock table and virtual table
   } else if (OB_FAIL(schema_guard->get_table_schema(
       session->get_effective_tenant_id(),

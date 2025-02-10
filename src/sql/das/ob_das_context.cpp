@@ -72,6 +72,7 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
   tablet_mapper.related_info_.related_tids_ = related_table_ids;
 
   bool is_vt = is_virtual_table(ref_table_id);
+  bool is_external_object = is_external_object_id(ref_table_id);
   bool is_mapping_real_vt = is_oracle_mapping_real_virtual_table(ref_table_id);
   uint64_t real_table_id = ref_table_id;
   if (is_mapping_real_vt) {
@@ -82,22 +83,36 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
   if (tablet_mapper.is_non_partition_optimized()) {
     // table ids has calced for no partition entity table, continue
   } else if (!is_vt) {
-    //get ObTableSchema object corresponding to the table_id from ObSchemaGetterGuard
-    //record the ObTableSchema into tablet_mapper
-    //the tablet and partition info come from ObTableSchema in the real table
-    ObSchemaGetterGuard *schema_guard = nullptr;
-    if (OB_ISNULL(sql_ctx_) || OB_ISNULL(schema_guard = sql_ctx_->schema_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(schema_guard));
-    } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
-                                                      real_table_id,
-                                                      tablet_mapper.table_schema_))) {
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(real_table_id));
-    } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table schema is not found", K(ret), K(real_table_id));
+    if (!is_external_object) {
+      //get ObTableSchema object corresponding to the table_id from ObSchemaGetterGuard
+      //record the ObTableSchema into tablet_mapper
+      //the tablet and partition info come from ObTableSchema in the real table
+      ObSchemaGetterGuard *schema_guard = nullptr;
+      if (OB_ISNULL(sql_ctx_) || OB_ISNULL(schema_guard = sql_ctx_->schema_guard_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(schema_guard));
+      } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
+                                                        real_table_id,
+                                                        tablet_mapper.table_schema_))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(real_table_id));
+      } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is not found", K(ret), K(real_table_id));
+      } else {
+        tablet_mapper.related_info_.guard_ = schema_guard;
+      }
     } else {
-      tablet_mapper.related_info_.guard_ = schema_guard;
+      ObSqlSchemaGuard *sql_schema_guard = &(sql_ctx_->cur_stmt_->get_query_ctx()->sql_schema_guard_);
+      if (OB_ISNULL(sql_schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is nullptr", K(ret), K(sql_ctx_), K(sql_schema_guard));
+      } else if (OB_FAIL(sql_schema_guard->get_mocked_table_schema(real_table_id,
+                                                              tablet_mapper.table_schema_))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(real_table_id));
+      } else if (OB_ISNULL(tablet_mapper.table_schema_)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is not found", K(ret), K(real_table_id));
+      }
     }
   } else {
     //get all server lists corresponding to the table_id from the tablet location cache

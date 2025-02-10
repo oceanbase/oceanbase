@@ -5881,6 +5881,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
                  OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COMPRESSION = %.*s,",
                                          static_cast<int>(STRLEN(compression_name)), compression_name))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print compression", K(ret));
+      } else if (OB_FAIL(csv.parse_header_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  PARSE_HEADER = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print PARSE_HEADER", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;

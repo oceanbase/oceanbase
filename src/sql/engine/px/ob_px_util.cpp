@@ -221,6 +221,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
       LOG_WARN("fail to get external table location", K(ret));
     }
   }
+
   if (OB_SUCC(ret) && ext_file_urls.empty()) {
     // TODO EXTARNAL TABLE
     // if (pre_query_range.has_exec_param() || 0 == pre_query_range.get_column_count()) {
@@ -232,23 +233,40 @@ int ObPXServerAddrUtil::get_external_table_loc(
                && iter != table_loc->tablet_locs_end(); ++iter) {
       ret = part_ids.push_back((*iter)->partition_id_);
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
-                                    pre_query_range, ctx.get_allocator(), ctx, ranges,
-                                    ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
-      LOG_WARN("failed to extract external file fiter", K(ret));
-    } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
-                            tenant_id, ref_table_id, part_ids, is_external_files_on_disk,
-                            ctx.get_allocator(), ext_file_urls, ranges.empty() ? NULL : &ranges))) {
-      LOG_WARN("fail to get external files", K(ret));
-    } else if (is_external_files_on_disk
-              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(ext_file_urls,
-                                                                       all_locations))) {
-      //For recovered cluster, the file addr may not in the cluster. Then igore it.
-      LOG_WARN("filter files in location failed", K(ret));
+
+    bool is_external_object = is_external_object_id(ref_table_id);
+    const ObTableSchema *table_schema = NULL;
+
+    if (OB_SUCC(ret) && is_external_object) {
+      const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
+      OZ (sql_schema_guard.get_table_schema(ref_table_id, table_schema));
     }
-    if (OB_FAIL(ret)) {
-    } else if (ext_file_urls.empty()) {
+
+    OZ (ObSQLUtils::extract_pre_query_range(pre_query_range, ctx.get_allocator(), ctx, ranges,
+                                    ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())));
+
+    if (is_external_object) {
+      OZ (ObExternalTableFileManager::get_instance().get_mocked_external_table_files(tenant_id,
+                                                                                      ref_table_id,
+                                                                                      part_ids,
+                                                                                      ext_file_urls,
+                                                                                      table_schema,
+                                                                                      ctx));
+    } else {
+      OZ (ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
+                                                                                    ref_table_id,
+                                                                                    part_ids,
+                                                                                    is_external_files_on_disk,
+                                                                                    ctx.get_allocator(),
+                                                                                    ext_file_urls,
+                                                                                    ranges.empty() ? NULL : &ranges));
+    }
+
+    if (is_external_files_on_disk) {
+      OZ (ObExternalTableUtils::filter_files_in_locations(ext_file_urls, all_locations));
+    }
+
+    if (OB_SUCC(ret) && ext_file_urls.empty()) {
       const char* dummy_file_name = "#######DUMMY_FILE#######";
       ObExternalFileInfo dummy_file;
       dummy_file.file_url_ = dummy_file_name;

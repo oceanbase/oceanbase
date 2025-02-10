@@ -267,12 +267,12 @@ int ObDCLResolver::mask_password_for_passwd_node(
     LOG_WARN("fail to ob_write_string", K(src), K(ret));
   } else if (OB_ISNULL(passwd_node)) {
     // do nothing
-  } else if (passwd_node->stmt_loc_.last_column_ >= src_len) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("last column overflow", K(src_len), K(passwd_node->stmt_loc_.last_column_), K(ret));
+  } else if (passwd_node->stmt_loc_.first_column_ >= src_len) {
+    // do nothing
   } else {
     int64_t start_pos = passwd_node->stmt_loc_.first_column_;
-    int64_t end_pos = passwd_node->stmt_loc_.last_column_ + 1;
+    int64_t end_pos = passwd_node->stmt_loc_.last_column_ >= src_len ?
+                      src_len : passwd_node->stmt_loc_.last_column_ + 1;
     if (skip_enclosed_char && end_pos - start_pos >= 2) {
       start_pos += 1;
       end_pos -= 1;

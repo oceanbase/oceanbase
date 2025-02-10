@@ -1874,6 +1874,8 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
   } else if (is_virtual_table(meta.ref_table_id_) &&
       !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_)) {
     //do nothing
+  } else if (is_external_object_id(meta.ref_table_id_)) {
+    //do nothing
   } else if (part_loc_info_array.count() == 1) {
     if (OB_FAIL(storage_estimate_full_table_rowcount(ctx, part_loc_info_array.at(0), meta))) {
       LOG_WARN("failed to storage estimate full table rowcount", K(ret));

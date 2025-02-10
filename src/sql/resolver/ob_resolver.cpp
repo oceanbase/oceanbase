@@ -991,6 +991,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         }
         break;
       }
+      case T_LOAD_DATA_URL:
       case T_LOAD_DATA: {
         REGISTER_STMT_RESOLVER(LoadData);
         break;

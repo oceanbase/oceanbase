@@ -110,7 +110,8 @@ struct ObCSVGeneralFormat {
     file_column_nums_(0),
     compression_algorithm_(ObCSVCompression::NONE),
     is_optional_(false),
-    file_extension_(DEFAULT_FILE_EXTENSION)
+    file_extension_(DEFAULT_FILE_EXTENSION),
+    parse_header_(false)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -125,7 +126,8 @@ struct ObCSVGeneralFormat {
     "EMPTY_FIELD_AS_NULL",
     "COMPRESSION",
     "IS_OPTIONAL",
-    "FILE_EXTENSION"
+    "FILE_EXTENSION",
+    "PARSE_HEADER"
   };
   enum ObCSVCompression
   {
@@ -153,6 +155,7 @@ struct ObCSVGeneralFormat {
   ObCSVCompression compression_algorithm_;
   bool is_optional_;
   common::ObString file_extension_;
+  bool parse_header_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -356,6 +359,13 @@ public:
     return ret;
   }
   common::ObIArray<FieldValue>& get_fields_per_line() { return fields_per_line_; }
+
+  struct HandleOneLineParam {
+    HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt)
+      : fields_(fields), field_cnt_(field_cnt) {}
+    common::ObIArray<FieldValue> &fields_;
+    int field_cnt_;
+  };
 
 private:
   int init_opt_variables();
@@ -587,7 +597,8 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
-          ret = handle_one_line(fields_per_line_);
+          HandleOneLineParam param(fields_per_line_, field_idx);
+          ret = handle_one_line(param);
         }
       } else {
         if (format_.skip_blank_lines_) {

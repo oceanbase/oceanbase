@@ -465,25 +465,24 @@ int ObCSVGeneralParser::handle_irregular_line(int field_idx, int line_no,
 int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, bool into_outfile) const
 {
   int64_t pos = 0;
-  int64_t idx = 0;
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(line_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[0], to_cstring(ObHexStringWrap(line_term_str_)));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(field_term_str_)));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[1], to_cstring(ObHexStringWrap(field_term_str_)));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], field_escaped_char_);
+  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[2], field_escaped_char_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], field_enclosed_char_);
+  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[3], field_enclosed_char_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], ObCharset::charset_name(cs_type_));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[4], ObCharset::charset_name(cs_type_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], skip_header_lines_);
+  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[5], skip_header_lines_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(skip_blank_lines_));
+  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[6], STR_BOOL(skip_blank_lines_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(trim_space_));
+  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[7], STR_BOOL(trim_space_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":", OPTION_NAMES[idx++]);
+  databuff_printf(buf, buf_len, pos, "\"%s\":", OPTION_NAMES[8]);
     J_ARRAY_START();
       for (int64_t i = 0; i < null_if_.count(); i++) {
         if (i != 0) {
@@ -493,14 +492,18 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
       }
     J_ARRAY_END();
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(empty_field_as_null_));
+  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[9], STR_BOOL(empty_field_as_null_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], compression_algorithm_to_string(compression_algorithm_));
+  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[10], compression_algorithm_to_string(compression_algorithm_));
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0 && into_outfile) {
     J_COMMA();
-    databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(is_optional_));
+    databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[11], STR_BOOL(is_optional_));
     J_COMMA();
-    databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(file_extension_)));
+    databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[12], to_cstring(ObHexStringWrap(file_extension_)));
+  }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1) {
+    J_COMMA();
+    databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[13], STR_BOOL(parse_header_));
   }
   return pos;
 }
@@ -617,6 +620,14 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
     if (OB_SUCC(ret) && !obj.is_null()) {
       file_extension_ = obj.get_string();
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      parse_header_ = true;
+    } else {
+      parse_header_ = false;
     }
     node = node->get_next();
   }

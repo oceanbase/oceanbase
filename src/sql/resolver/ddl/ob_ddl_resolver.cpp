@@ -1258,7 +1258,7 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
 }
 
 
-int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type) {
+int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, common::ObStorageType &device_type, ObResolverParams &params) {
   int ret = OB_SUCCESS;
   ObString tmp_url;
   ObArenaAllocator allocator;
@@ -1283,14 +1283,211 @@ int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, c
   if (OB_SUCC(ret)) {
     ObString prefix;
     const char *ts = get_storage_type_str(device_type);
-    CK (params_.allocator_ != NULL);
-    OZ (ob_write_string(*params_.allocator_, ObString(ts), prefix));
-    ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
-    OZ (prefix_str.append(prefix));
-    OZ (prefix_str.append("://"));
+    if (OB_ISNULL(params.allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret));
+    } else {
+      if (OB_FAIL(ob_write_string(*params.allocator_, ObString(ts), prefix))) {
+        LOG_WARN("failed to write string", K(ret));
+      } else {
+        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
+        if (OB_FAIL(prefix_str.append(prefix))) {
+          LOG_WARN("failed to append prefix", K(ret));
+        } else if (OB_FAIL(prefix_str.append("://"))) {
+          LOG_WARN("failed to append '://'", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
+
+int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
+                                                ObResolverParams &params,
+                                                ObExternalFileFormat& format,
+                                                ObString &format_str)
+{
+  int ret = OB_SUCCESS;
+  bool has_file_format = false;
+  if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(), 100, CS_TYPE_UTF8MB4_BIN))) {
+    LOG_WARN("failed to init csv format", K(ret));
+  }
+  // resolve file type and encoding type
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(format_node) || (T_EXTERNAL_FILE_FORMAT != format_node->type_ && T_EXTERNAL_PROPERTIES != format_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected format node", K(ret), K(format_node->type_));
+    }
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+    if (OB_ISNULL(format_node->children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
+    } else if (T_EXTERNAL_FILE_FORMAT_TYPE == format_node->children_[i]->type_
+                || T_CHARSET == format_node->children_[i]->type_) {
+      if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params))) {
+        LOG_WARN("fail to resolve file format", K(ret));
+      }
+      has_file_format |= (T_EXTERNAL_FILE_FORMAT_TYPE == format_node->children_[i]->type_);
+    }
+  }
+  if (OB_SUCC(ret) && !has_file_format) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
+  }
+  // resolve other format value
+  for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+    if (OB_ISNULL(format_node->children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
+    } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params))) {
+      LOG_WARN("fail to resolve file format", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    bool is_valid = true;
+    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ && OB_FAIL(format.odps_format_.encrypt())) {
+      LOG_WARN("failed to encrypt odps format", K(ret));
+    } else if (OB_FAIL(ObDDLResolver::check_format_valid(format, is_valid))) {
+      LOG_WARN("check format valid failed", K(ret));
+    } else if (!is_valid) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("file format is not valid", K(ret));
+    } else {
+      char *buf = NULL;
+      int64_t buf_len = DEFAULT_BUF_LENGTH / 2;
+      int64_t pos = 0;
+      do {
+        buf_len *= 2;
+        if (OB_ISNULL(buf = static_cast<char*>(params.allocator_->alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret), K(buf_len));
+        } else {
+          pos = format.to_string(buf, buf_len);
+        }
+      } while (OB_SUCC(ret) && pos >= buf_len);
+      if (OB_SUCC(ret)) {
+        format_str = ObString(pos, buf);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_external_file_pattern(const ParseNode *option_node,
+                                                bool is_external_table,
+                                                common::ObIAllocator &allocator,
+                                                const ObSQLSessionInfo *session_info,
+                                                ObString &pattern)
+{
+  int ret = OB_SUCCESS;
+  if (!is_external_table) {
+    ret = OB_NOT_SUPPORTED;
+    ObSqlString err_msg;
+    err_msg.append_fmt("Using PATTERN as a CREATE TABLE option");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+    LOG_WARN("using PATTERN as a table option is support in external table only", K(ret));
+  } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child num", K(option_node->num_child_));
+  } else if (0 == option_node->children_[0]->str_len_) {
+    ObSqlString err_msg;
+    err_msg.append_fmt("empty regular expression");
+    ret = OB_ERR_REGEXP_ERROR;
+    LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, err_msg.ptr());
+    LOG_WARN("empty regular expression", K(ret));
+  } else {
+    pattern = ObString(option_node->children_[0]->str_len_,
+                      option_node->children_[0]->str_value_);
+    if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator,
+                                                            session_info->get_dtc_params(),
+                                                            pattern))) {
+      LOG_WARN("failed to convert pattern to utf8", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
+                                                 ObTableSchema &table_schema,
+                                                 const ParseNode *string_node)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_external_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "location option");
+  } else {
+    ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (OB_LIKELY(url.prefix_match(OB_HDFS_PREFIX)) && data_version < DATA_VERSION_4_3_5_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
+    }
+    ObBackupStorageInfo storage_info;
+    char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+
+    ObString path = url.split_on('?');
+    if (OB_FAIL(ret)) {
+      /* do nothing */
+    } else if (path.empty()) {
+      // url like: oss://ak:sk@host/bucket/...
+      ObSqlString tmp_location;
+      ObSqlString prefix;
+
+      if (OB_FAIL(resolve_file_prefix(url, prefix, storage_info.device_type_, params))) {
+        LOG_WARN("failed to resolve file prefix", K(ret));
+      } else if (OB_FAIL(tmp_location.append(prefix.string()))) {
+        LOG_WARN("failed to append prefix", K(ret));
+      } else {
+        url = url.trim_space_only();
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_STORAGE_FILE != storage_info.device_type_) {
+          if (OB_FAIL(ObSQLUtils::split_remote_object_storage_url(url, storage_info))) {
+            LOG_WARN("failed to split remote object storage url", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tmp_location.append(url))) {
+          LOG_WARN("failed to append url", K(ret));
+        } else if (OB_FAIL(storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
+          LOG_WARN("failed to get storage info str", K(ret));
+        } else if (OB_FAIL(table_schema.set_external_file_location(tmp_location.string()))) {
+          LOG_WARN("failed to set external file location", K(ret));
+        } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
+          LOG_WARN("failed to set external file location access info", K(ret));
+        } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
+          LOG_WARN("failed to set external file location access info", K(ret));
+        }
+      }
+    } else {
+      // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
+      ObString uri_cstr;
+      ObString storage_info_cstr;
+      if (OB_FAIL(ob_write_string(*params.allocator_, path, uri_cstr, true))) {
+        LOG_WARN("failed to write string", K(ret));
+      } else if (OB_FAIL(ob_write_string(*params.allocator_, url, storage_info_cstr, true))) {
+        LOG_WARN("failed to write string", K(ret));
+      } else if (OB_FAIL(storage_info.set(uri_cstr.ptr(), storage_info_cstr.ptr()))) {
+        LOG_WARN("failed to set storage info", K(ret));
+      } else if (OB_FAIL(storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)))) {
+        LOG_WARN("failed to get storage info str", K(ret));
+      } else if (OB_FAIL(table_schema.set_external_file_location(path))) {
+        LOG_WARN("failed to set external file location", K(ret));
+      } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
+        LOG_WARN("failed to set external file location access info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool is_index_option)
 {
   int ret = OB_SUCCESS;
@@ -2605,57 +2802,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         } else {
           ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
           ObCreateTableArg &arg = create_table_stmt->get_create_table_arg();
-          if (!arg.schema_.is_external_table()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "location option");
-          } else if (option_node->num_child_ != 1 || OB_ISNULL(string_node = option_node->children_[0])) {
+          if (option_node->num_child_ != 1 || OB_ISNULL(string_node = option_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected child num", K(option_node->num_child_));
-          } else {
-            ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
-            uint64_t data_version = 0;
-            if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-              LOG_WARN("failed to get data version", K(ret));
-            } else if (OB_LIKELY(url.prefix_match(OB_HDFS_PREFIX)) && data_version < DATA_VERSION_4_3_5_1) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("failed to support hdfs feature when data version is lower", K(ret), K(data_version));
-            }
-            ObBackupStorageInfo storage_info;
-            char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-
-            ObString path = url.split_on('?');
-            if (OB_FAIL(ret)) {
-              /* do nothing */
-            } else if (path.empty()) {
-              // url like: oss://ak:sk@host/bucket/...
-              ObSqlString tmp_location;
-              ObSqlString prefix;
-              OZ (resolve_file_prefix(url, prefix, storage_info.device_type_));
-              OZ (tmp_location.append(prefix.string()));
-              url = url.trim_space_only();
-
-              if (OB_STORAGE_FILE != storage_info.device_type_ &&
-                  OB_STORAGE_HDFS !=
-                      storage_info.device_type_ /* hdfs with simple auth*/) {
-                OZ(ObSQLUtils::split_remote_object_storage_url(url,
-                                                               storage_info));
-              }
-              OZ (tmp_location.append(url));
-              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
-              OZ (arg.schema_.set_external_file_location(tmp_location.string()));
-              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
-            } else {
-              // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
-              // or like: hdfs://namenode:port/...?krb5conf=xxx&pricipal=xxx&keytab=xxx&otherkey=othervalue
-              ObString uri_cstr;
-              ObString storage_info_cstr;
-              OZ (ob_write_string(*params_.allocator_, path, uri_cstr, true));
-              OZ (ob_write_string(*params_.allocator_, url, storage_info_cstr, true));
-              OZ (storage_info.set(uri_cstr.ptr(), storage_info_cstr.ptr()));
-              OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
-              OZ (arg.schema_.set_external_file_location(path));
-              OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
-            }
+          } else if (OB_FAIL(resolve_external_file_location(params_, arg.schema_, string_node))) {
+            LOG_WARN("failed to resolve external file location", K(ret));
           }
 
           if (OB_SUCC(ret)) {
@@ -2701,26 +2852,24 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           } else {
             bool has_file_format = false;
             ObExternalFileFormat format;
-            format.csv_format_.init_format(ObDataInFileStruct(), 10, CS_TYPE_UTF8MB4_BIN);
-            // 1. resolve file type and encoding type
-            for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
-              if (OB_ISNULL(option_node->children_[i])) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
-              } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_
-                         || T_CHARSET == option_node->children_[i]->type_) {
-                if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[i], format, params_))) {
-                  LOG_WARN("fail to resolve file format", K(ret));
+            ObString format_str;
+            ObString masked_sql = params_.session_info_->get_current_query_string(); // that's create table operation stmt which has properties
+            if (OB_FAIL(resolve_external_file_format(option_node, params_, format, format_str))) {
+              LOG_WARN("failed to resolve external file format", K(ret));
+            }
+
+            if (OB_SUCC(ret)) {
+              if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+                if (OB_FAIL(arg.schema_.set_external_properties(format_str))) {
+                  LOG_WARN("failed to set external properties", K(ret));
                 }
-                has_file_format |= (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_);
+              } else {
+                if (OB_FAIL(arg.schema_.set_external_file_format(format_str))) {
+                  LOG_WARN("failed to set external file format", K(ret));
+                }
               }
             }
-            if (OB_SUCC(ret) && !has_file_format) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
-            }
-            // 2. resolve other format value
-            ObString masked_sql = params_.session_info_->get_current_query_string(); // that's create table operation stmt which has properties
+
             for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
               ObString temp_masked_sql;
               if (OB_ISNULL(option_node->children_[i])) {
@@ -2728,36 +2877,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
               } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_ ||
                          T_CHARSET == option_node->children_[i]->type_) {
-              } else if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[i], format, params_))) {
-                LOG_WARN("fail to resolve file format", K(ret));
-              } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i], masked_sql, temp_masked_sql))) {
+              } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i],
+                                                                masked_sql,
+                                                                allocator_,
+                                                                temp_masked_sql))) {
                 LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(option_node->num_child_));
               } else if (!temp_masked_sql.empty()) {
                 masked_sql = temp_masked_sql;
               }
             }
             if (OB_SUCC(ret)) {
-              bool is_valid = true;
               if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ && OB_FAIL(format.odps_format_.encrypt())) {
                 LOG_WARN("failed to encrypt odps format", K(ret));
-              } else if (OB_FAIL(check_format_valid(format, is_valid))) {
-                LOG_WARN("check format valid failed", K(ret));
-              } else if (!is_valid) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("file format is not valid", K(ret));
               } else {
-                char *buf = NULL;
-                int64_t buf_len = DEFAULT_BUF_LENGTH / 2;
-                int64_t pos = 0;
-                do {
-                  buf_len *= 2;
-                  if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_WARN("fail to alloc buf", K(ret), K(buf_len));
-                  } else {
-                    pos = format.to_string(buf, buf_len);
-                  }
-                } while (OB_SUCC(ret) && pos >= buf_len);
                 if (OB_SUCC(ret)) {
                   if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
                     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
@@ -2766,13 +2898,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                       LOG_WARN("unexcepted null ptr", K(ret));
                     } else {
                       create_table_stmt->set_masked_sql(masked_sql);
-                      arg.schema_.set_external_properties(ObString(pos, buf));
                     }
-
-                  } else {
-                    arg.schema_.set_external_file_format(ObString(pos, buf));
-                    LOG_DEBUG("debug external file format",
-                              K(arg.schema_.get_external_file_format()));
                   }
                 }
               }
@@ -2787,31 +2913,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           LOG_WARN("invalid file format option", K(ret));
         } else {
           ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
-          if (!arg.schema_.is_external_table()) {
-            ret = OB_NOT_SUPPORTED;
-            ObSqlString err_msg;
-            err_msg.append_fmt("Using PATTERN as a CREATE TABLE option");
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
-            LOG_WARN("using PATTERN as a table option is support in external table only", K(ret));
-          } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected child num", K(option_node->num_child_));
-          } else if (0 == option_node->children_[0]->str_len_) {
-            ObSqlString err_msg;
-            err_msg.append_fmt("empty regular expression");
-            ret = OB_ERR_REGEXP_ERROR;
-            LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, err_msg.ptr());
-            LOG_WARN("empty regular expression", K(ret));
-          } else {
-            ObString pattern(option_node->children_[0]->str_len_,
-                             option_node->children_[0]->str_value_);
-            if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
-                                                                    session_info_->get_dtc_params(),
-                                                                    pattern))) {
-              LOG_WARN("failed to convert pattern to utf8", K(ret));
-            } else if (OB_FAIL(arg.schema_.set_external_file_pattern(pattern))) {
-              LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
-            }
+          ObString pattern;
+          if (OB_FAIL(resolve_external_file_pattern(option_node, arg.schema_.is_external_table(), *allocator_, session_info_, pattern))) {
+            LOG_WARN("failed to resolve external file pattern", K(ret));
+          } else if (OB_FAIL(arg.schema_.set_external_file_pattern(pattern))) {
+            LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
           }
         }
         break;
@@ -3032,11 +3138,13 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
   return ret;
 }
 
-int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql)
-{
+int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node,
+                                                  ObString &ddl_sql,
+                                                  ObIAllocator *allocator,
+                                                  ObString &masked_sql)
+  {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
-      OB_ISNULL(params_.session_info_) || OB_ISNULL(params_.expr_factory_)) {
+  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse node", K(ret));
   } else {
@@ -3046,7 +3154,11 @@ int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node, ObStrin
       case ObItemType::T_STSTOKEN:
       case ObItemType::T_ACCESSKEY:
       case ObItemType::T_ACCESSID: {
-        if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(params_.allocator_, ddl_sql, node->children_[0], masked_sql, true))) {
+        if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(allocator,
+                                                                ddl_sql,
+                                                                node->children_[0],
+                                                                masked_sql,
+                                                                true))) {
           LOG_WARN("fail to gen masked sql", K(ret));
         }
         break;

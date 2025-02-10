@@ -13310,30 +13310,39 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   const share::schema::ObTableSchema *table_schema = NULL;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(stmt = get_stmt())
       || OB_INVALID_ID == ref_table_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid id", K(ref_table_id), K(ret));
   } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard()) ||
+             OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard()) ||
              OB_ISNULL(session = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                    ref_table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is null", K(ret), K(table_schema));
-  } else {
-    part_level = table_schema->get_part_level();
-    part_expr = stmt->get_part_expr(table_id, ref_table_id);
-    subpart_expr = stmt->get_subpart_expr(table_id, ref_table_id);
-    if (NULL != part_expr) {
-      part_expr->set_part_key_reference();
-    }
-    if (NULL != subpart_expr) {
-      subpart_expr->set_part_key_reference();
+  } else if (OB_FAIL(ObSqlSchemaGuard::get_table_schema(sql_schema_guard,
+                                                        schema_guard,
+                                                        session->get_effective_tenant_id(),
+                                                        ref_table_id,
+                                                        table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(table_schema));
+    } else {
+      part_level = table_schema->get_part_level();
+      part_expr = stmt->get_part_expr(table_id, ref_table_id);
+      subpart_expr = stmt->get_subpart_expr(table_id, ref_table_id);
+      if (NULL != part_expr) {
+        part_expr->set_part_key_reference();
+      }
+      if (NULL != subpart_expr) {
+        subpart_expr->set_part_key_reference();
+      }
     }
   }
 

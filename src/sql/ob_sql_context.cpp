@@ -288,6 +288,7 @@ void ObSqlSchemaGuard::reset()
   allocator_.reset();
   next_link_table_id_ = 1;
   dblink_scn_.reuse();
+  mocked_schema_id_counter_ = OB_MIN_EXTERNAL_OBJECT_ID;
 }
 
 TableItem *ObSqlSchemaGuard::get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id)
@@ -422,6 +423,51 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
   return ret;
 }
 
+int ObSqlSchemaGuard::add_mocked_table_schema(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema *temp_schema = NULL;
+  OZ (ObSchemaUtils::alloc_schema(allocator_, table_schema, temp_schema));
+  OZ (table_schemas_.push_back(temp_schema));
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_mocked_table_schema(uint64_t ref_table_id, const ObTableSchema *&table_schema) const
+{
+  int ret = OB_SUCCESS;
+  table_schema = NULL;
+  for (int i = 0; OB_SUCC(ret) && i < table_schemas_.count(); i++) {
+    const ObTableSchema *cur_table_schema = table_schemas_.at(i);
+    if (OB_NOT_NULL(cur_table_schema) && cur_table_schema->get_table_id() == ref_table_id) {
+      table_schema = cur_table_schema;
+      break;
+    }
+  }
+  OV (OB_NOT_NULL(table_schema));
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_table_schema(ObSqlSchemaGuard * sql_schema_guard,
+                                      ObSchemaGetterGuard * schema_getter_guard,
+                                      const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (is_external_object_id(table_id)) {
+    if (OB_FAIL(sql_schema_guard->get_mocked_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get mocked table schema", K(ret), K(table_id));
+    }
+  } else {
+    if (OB_FAIL(schema_getter_guard->get_table_schema(tenant_id,
+                                              table_id,
+                                              table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(table_id));
+    }
+  }
+  return ret;
+}
+
 int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
                                       uint64_t ref_table_id,
                                       const ObDMLStmt *stmt,
@@ -436,6 +482,10 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
     if (NULL != item && item->is_link_table()) {
       if (OB_FAIL(get_link_table_schema(ref_table_id, table_schema))) {
         LOG_WARN("failed to get link table schema", K(table_id), K(ret));
+      }
+    } else if (is_external_object_id(table_id)) {
+      if (OB_FAIL(get_mocked_table_schema(ref_table_id, table_schema))) {
+        LOG_WARN("failed to get mocked table schema", K(ref_table_id), K(ret));
       }
     } else if (OB_FAIL(get_table_schema(ref_table_id, table_schema))) {
       LOG_WARN("failed to get table schema", K(table_id), K(ret));
@@ -456,6 +506,10 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
     if (OB_FAIL(get_link_table_schema(table_id, table_schema))) {
       LOG_WARN("failed to get link table schema", K(table_id), K(ret));
     }
+  } else if (is_external_object_id(table_id)) {
+    if (OB_FAIL(get_mocked_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get mocked table schema", K(table_id), K(ret));
+    }
   } else if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(table_id), K(ret));
   }
@@ -469,6 +523,10 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
   int ret = OB_SUCCESS;
   if (is_link) {
     OZ (get_link_table_schema(table_id, table_schema), table_id, is_link);
+  } else if (is_external_object_id(table_id)) {
+    if (OB_FAIL(get_mocked_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get mocked table schema", K(table_id), K(ret));
+    }
   } else {
     const uint64_t tenant_id = MTL_ID();
     OV (OB_NOT_NULL(schema_guard_));
@@ -496,6 +554,12 @@ int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, const ObString &colum
   if (is_link) {
     OZ (get_link_column_schema(table_id, column_name, column_schema),
         table_id, column_name, is_link);
+  } else if (is_external_object_id(table_id)) {
+    const ObTableSchema *table_schema = NULL;
+    OZ (get_mocked_table_schema(table_id, table_schema));
+    if (OB_NOT_NULL(table_schema)) {
+      column_schema = table_schema->get_column_schema(column_name);
+    }
   } else {
     const uint64_t tenant_id = MTL_ID();
     OV (OB_NOT_NULL(schema_guard_));
@@ -513,6 +577,12 @@ int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, uint64_t column_id,
   if (is_link) {
     OZ (get_link_column_schema(table_id, column_id, column_schema),
         table_id, column_id, is_link);
+  } else if (is_external_object_id(table_id)) {
+    const ObTableSchema *table_schema = NULL;
+    OZ (get_mocked_table_schema(table_id, table_schema));
+    if (OB_NOT_NULL(table_schema)) {
+      column_schema = table_schema->get_column_schema(column_id);
+    }
   } else {
     const uint64_t tenant_id = MTL_ID();
     OV (OB_NOT_NULL(schema_guard_));
@@ -543,11 +613,15 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  OV (OB_NOT_NULL(schema_guard_));
-  OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
-                                              index_tid_array, size, with_mv,
-                                              with_global_index, with_domain_index,
-                                              with_spatial_index, with_vector_index));
+  if (is_external_object_id(table_id)) {
+    size = 0;
+  } else {
+    OV (OB_NOT_NULL(schema_guard_));
+    OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
+                                                index_tid_array, size, with_mv,
+                                                with_global_index, with_domain_index,
+                                                with_spatial_index, with_vector_index));
+  }
   return ret;
 }
 

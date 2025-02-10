@@ -29,7 +29,12 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
   ObLoadDataBase *load_impl = NULL;
   ObDirectLoadOptimizerCtx optimizer_ctx;
   stmt.set_optimizer_ctx(&optimizer_ctx);
-  if (!stmt.get_load_arguments().is_csv_format_) {
+  if (stmt.is_load_data_url()) {
+    if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataURLImpl, (&ctx.get_allocator())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    }
+  } else if (!stmt.get_load_arguments().is_csv_format_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid resolver results", K(ret));
   } else if (OB_FAIL(optimizer_ctx.init_direct_load_ctx(&ctx, stmt))) {
