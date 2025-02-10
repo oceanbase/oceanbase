@@ -15,6 +15,7 @@
 
 #include "common/ob_common_utility.h"
 #include "lib/utility/utility.h"
+#include "lib/other/recursion.h"
 #include "lib/thread/protected_stack_allocator.h"
 
 namespace oceanbase
@@ -100,6 +101,7 @@ inline void dealloc_stack(void *stack_addr, size_t stack_size)
   ({                                                                        \
     int ret = OB_SUCCESS;                                                   \
     bool is_overflow = false;                                               \
+    RECURSION_CHECKER_GUARD;                                                \
     if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) {  \
     } else if (!is_overflow) {                                              \
       ret = func;                                                           \
