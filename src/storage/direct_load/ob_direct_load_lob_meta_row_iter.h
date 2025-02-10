@@ -12,44 +12,59 @@
 #pragma once
 
 #include "storage/blocksstable/ob_datum_range.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
-#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 class ObDirectLoadMultipleSSTable;
+class ObDirectLoadOriginTable;
+class ObDirectLoadOriginTableScanner;
 
 class ObDirectLoadLobIdConflictHandler : public ObDirectLoadDMLRowHandler
 {
 public:
-  ObDirectLoadLobIdConflictHandler() {}
-  virtual ~ObDirectLoadLobIdConflictHandler() {}
-  int handle_insert_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
+  ObDirectLoadLobIdConflictHandler() = default;
+  virtual ~ObDirectLoadLobIdConflictHandler() = default;
+
+  /**
+   * handle rows direct insert into sstable
+   */
+  int handle_insert_row(const ObTabletID &tablet_id,
+                        const ObDirectLoadDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_insert_batch(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows) override
+  int handle_delete_row(const ObTabletID &tablet_id,
+                        const ObDirectLoadDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_delete_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
+  int handle_insert_row(const ObTabletID &tablet_id,
+                        const blocksstable::ObDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_insert_row_with_multi_version(const ObTabletID tablet_id, const blocksstable::ObDatumRow &row)
+  int handle_insert_batch(const ObTabletID &tablet_id,
+                          const blocksstable::ObBatchDatumRows &datum_rows) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_insert_batch_with_multi_version(const ObTabletID &tablet_id, const blocksstable::ObBatchDatumRows &datum_rows)
+
+  /**
+   * handle rows with the same primary key in the imported data
+   */
+  int handle_update_row(const ObTabletID &tablet_id,
+                        const ObDirectLoadDatumRow &datum_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_update_row(const blocksstable::ObDatumRow &row) override { return OB_ERR_UNEXPECTED; }
-  int handle_update_row(common::ObArray<const ObDirectLoadExternalRow *> &rows,
+  int handle_update_row(const ObTabletID &tablet_id,
+                        common::ObArray<const ObDirectLoadExternalRow *> &rows,
                         const ObDirectLoadExternalRow *&row) override
   {
     return OB_ERR_UNEXPECTED;
@@ -59,12 +74,18 @@ public:
   {
     return OB_ERR_UNEXPECTED;
   }
-  int handle_update_row(const ObTabletID tablet_id, const blocksstable::ObDatumRow &old_row,
-                        const blocksstable::ObDatumRow &new_row,
-                        const blocksstable::ObDatumRow *&result_row) override
+
+  /**
+   * handle rows with the same primary key between the imported data and the original data
+   */
+  int handle_update_row(const ObTabletID &tablet_id,
+                        const ObDirectLoadDatumRow &old_row,
+                        const ObDirectLoadDatumRow &new_row,
+                        const ObDirectLoadDatumRow *&result_row) override
   {
     return OB_ERR_UNEXPECTED;
   }
+
   TO_STRING_EMPTY();
 };
 
@@ -80,17 +101,19 @@ public:
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
 
-class ObDirectLoadLobMetaRowIter
+class ObDirectLoadLobMetaRowIter final : public ObDirectLoadIStoreRowIterator
 {
 public:
   ObDirectLoadLobMetaRowIter();
   ~ObDirectLoadLobMetaRowIter();
-  int init(const ObDirectLoadLobMetaIterParam &param, ObDirectLoadOriginTable *origin_table,
-           const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  int init(const ObDirectLoadLobMetaIterParam &param,
+           ObDirectLoadOriginTable &origin_table,
+           const ObDirectLoadTableHandleArray &sstable_array,
            const blocksstable::ObDatumRange &range);
-  int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  int get_next_row(const ObDirectLoadDatumRow *&datum_row);
 
 private:
   int init_range();
@@ -102,10 +125,13 @@ private:
   ObDirectLoadMultipleDatumRange scan_range_;
   ObDirectLoadMultipleSSTableScanMerge scan_merge_;
   ObDirectLoadOriginTable *origin_table_;
-  ObDirectLoadIStoreRowIterator *origin_iter_;
+  ObDirectLoadOriginTableScanner *origin_scanner_;
   common::ObArenaAllocator range_allocator_;
   blocksstable::ObDatumRange range_;
   ObDirectLoadLobIdConflictHandler conflict_handler_;
+  const ObDirectLoadDatumRow *lob_id_row_;
+  int64_t lob_id_row_cnt_; // for check if lob meta row is scanned
+  ObDirectLoadDatumRow datum_row_;
   bool is_inited_;
 };
 

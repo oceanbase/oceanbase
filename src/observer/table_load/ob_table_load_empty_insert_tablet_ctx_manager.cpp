@@ -16,7 +16,7 @@
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "share/table/ob_table_load_define.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_insert_data_table_ctx.h"
 
 namespace oceanbase
 {
@@ -135,7 +135,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   int ret = OB_SUCCESS;
   ObTableLoadSchema table_load_schema;
   ObDirectLoadInsertTableParam insert_table_param;
-  ObDirectLoadInsertTableContext tmp_insert_table_ctx;
+  ObDirectLoadInsertDataTableContext tmp_insert_table_ctx;
   if (OB_FAIL(table_load_schema.init(MTL_ID(), table_id))) {
     LOG_WARN("fail to init table load schema", KR(ret));
   }
@@ -151,7 +151,6 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.lob_inrow_threshold_ = table_load_schema.lob_inrow_threshold_;
   insert_table_param.is_partitioned_table_ = table_load_schema.is_partitioned_table_;
   insert_table_param.is_heap_table_ = table_load_schema.is_heap_table_;
-  insert_table_param.is_column_store_ = table_load_schema.is_column_store_;
   insert_table_param.online_opt_stat_gather_ = false;
   insert_table_param.is_incremental_ = false;
   insert_table_param.datum_utils_ = &(table_load_schema.datum_utils_);

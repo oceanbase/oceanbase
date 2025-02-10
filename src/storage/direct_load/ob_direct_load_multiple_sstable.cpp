@@ -150,6 +150,7 @@ ObDirectLoadMultipleSSTable::ObDirectLoadMultipleSSTable()
 {
   allocator_.set_tenant_id(MTL_ID());
   fragments_.set_tenant_id(MTL_ID());
+  table_type_ = ObDirectLoadTableType::MULTIPLE_SSTABLE;
 }
 
 ObDirectLoadMultipleSSTable::~ObDirectLoadMultipleSSTable()
@@ -199,11 +200,6 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
     }
   }
   return ret;
-}
-
-void ObDirectLoadMultipleSSTable::release_data()
-{
-  fragments_.reset();
 }
 
 int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)

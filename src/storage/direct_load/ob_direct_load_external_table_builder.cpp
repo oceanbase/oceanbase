@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_external_table_builder.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 
 namespace oceanbase
@@ -85,8 +86,7 @@ int ObDirectLoadExternalTableBuilder::init(const ObDirectLoadExternalTableBuildP
 }
 
 int ObDirectLoadExternalTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                 const table::ObTableLoadSequenceNo &seq_no,
-                                                 const ObDatumRow &datum_row)
+                                                 const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -102,8 +102,8 @@ int ObDirectLoadExternalTableBuilder::append_row(const ObTabletID &tablet_id,
     LOG_WARN("invalid args", KR(ret), K(build_param_), K(tablet_id), K(datum_row));
   } else {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_append_row_time_us);
-    if (OB_FAIL(external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                          build_param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
+    if (OB_FAIL(external_row_.from_datum_row(datum_row,
+                                             build_param_.table_data_desc_.rowkey_column_num_))) {
       LOG_WARN("fail to from datums", KR(ret));
     } else if (OB_FAIL(external_writer_.write_item(external_row_))) {
       LOG_WARN("fail to write item", KR(ret));
@@ -134,8 +134,8 @@ int ObDirectLoadExternalTableBuilder::close()
   return ret;
 }
 
-int ObDirectLoadExternalTableBuilder::get_tables(
-  ObIArray<ObIDirectLoadPartitionTable *> &table_array, ObIAllocator &allocator)
+int ObDirectLoadExternalTableBuilder::get_tables(ObDirectLoadTableHandleArray &table_array,
+                                                 ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -162,21 +162,15 @@ int ObDirectLoadExternalTableBuilder::get_tables(
       LOG_WARN("fail to push back fragment", KR(ret));
     }
     if (OB_SUCC(ret)) {
+      ObDirectLoadTableHandle table_handle;
       ObDirectLoadExternalTable *external_table = nullptr;
-      if (OB_ISNULL(external_table = OB_NEWx(ObDirectLoadExternalTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadExternalTable", KR(ret));
+      if (OB_FAIL(table_manager->alloc_external_table(table_handle))) {
+        LOG_WARN("fail to alloc external table", KR(ret));
+      } else if (FALSE_IT(external_table = static_cast<ObDirectLoadExternalTable*>(table_handle.get_table()))) {
       } else if (OB_FAIL(external_table->init(create_param))) {
         LOG_WARN("fail to init external table", KR(ret));
-      } else if (OB_FAIL(table_array.push_back(external_table))) {
+      } else if (OB_FAIL(table_array.add(table_handle))) {
         LOG_WARN("fail to push back external table", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != external_table) {
-          external_table->~ObDirectLoadExternalTable();
-          allocator.free(external_table);
-          external_table = nullptr;
-        }
       }
     }
   }

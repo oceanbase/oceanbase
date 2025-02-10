@@ -12,6 +12,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_external_table_builder.h"
 #include "storage/direct_load/ob_direct_load_external_table_compactor.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
@@ -39,17 +41,11 @@ ObDirectLoadMemDump::Context::Context()
 {
   allocator_.set_tenant_id(MTL_ID());
   mem_chunk_array_.set_tenant_id(MTL_ID());
-  all_tables_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMemDump::Context::~Context()
 {
-  for (int64_t i = 0; i < all_tables_.count(); i++) {
-    ObIDirectLoadPartitionTable *table = all_tables_.at(i);
-    if (table != nullptr) {
-      table->~ObIDirectLoadPartitionTable();
-    }
-  }
+  all_tables_.reset();
   for (int64_t i = 0; i < mem_chunk_array_.count(); i++) {
     ChunkType *chunk = mem_chunk_array_.at(i);
     if (chunk != nullptr) {
@@ -60,11 +56,11 @@ ObDirectLoadMemDump::Context::~Context()
 }
 
 int ObDirectLoadMemDump::Context::add_table(const ObTabletID &tablet_id, int64_t range_idx,
-                                            ObIDirectLoadPartitionTable *table)
+                                            const ObDirectLoadTableHandle &table)
 {
   int ret = OB_SUCCESS;
   lib::ObMutexGuard guard(mutex_);
-  if (OB_FAIL(all_tables_.push_back(table))) {
+  if (OB_FAIL(all_tables_.add(table))) {
     LOG_WARN("fail to push table", KR(ret));
   } else if (OB_FAIL(tables_.add(tablet_id, std::make_pair(range_idx, table)))) {
     LOG_WARN("fail to add table", KR(ret));
@@ -98,7 +94,7 @@ int ObDirectLoadMemDump::new_table_builder(const ObTabletID &tablet_id,
                                            ObIDirectLoadPartitionTableBuilder *&table_builder)
 {
   int ret = OB_SUCCESS;
-  if (mem_ctx_->table_data_desc_.is_heap_table_) {
+  if (mem_ctx_->table_data_desc_.row_flag_.uncontain_hidden_pk_) {
     ret = new_external_table_builder(tablet_id, table_builder);
   } else {
     ret = new_sstable_builder(tablet_id, table_builder);
@@ -177,27 +173,29 @@ int ObDirectLoadMemDump::close_table_builder(ObIDirectLoadPartitionTableBuilder 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_builder));
   } else {
-    const bool need_close = (mem_ctx_->table_data_desc_.is_heap_table_ || is_final);
+    const bool need_close = (mem_ctx_->table_data_desc_.row_flag_.uncontain_hidden_pk_ || is_final);
     if (need_close && table_builder->get_row_count() > 0) { //暂时因为simple file有问题
-      ObSEArray<ObIDirectLoadPartitionTable *, 1> table_array;
+      ObDirectLoadTableHandleArray table_array;
       if (OB_FAIL(table_builder->close())) {
         LOG_WARN("fail to close sstable builder", KR(ret));
-      } else if (OB_FAIL(table_builder->get_tables(table_array, context_ptr_->safe_allocator_))) {
+      } else if (OB_FAIL(table_builder->get_tables(table_array, mem_ctx_->table_mgr_))) {
         LOG_WARN("fail to get tables", KR(ret));
       } else if (OB_UNLIKELY(1 != table_array.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table count not equal 1", KR(ret));
       } else {
-        ObIDirectLoadPartitionTable *table = table_array.at(0);
-        if (OB_FAIL(context_ptr_->add_table(table->get_tablet_id(), range_idx_, table))) {
+        ObDirectLoadTableHandle table_handle;
+        if (OB_FAIL(table_array.get_table(0, table_handle))) {
+          LOG_WARN("fail to get table", KR(ret));
+        } else if (!table_handle.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected table handle", KR(ret));
+        } else if (OB_FAIL(context_ptr_->add_table(table_handle.get_table()->get_tablet_id(), range_idx_, table_handle))) {
           LOG_WARN("fail to add table", K(tablet_id), K(range_idx_), KR(ret));
         }
       }
       if (OB_FAIL(ret)) {
-        for (int64_t i = 0; i < table_array.count(); ++i) {
-          ObIDirectLoadPartitionTable *table = table_array.at(i);
-          table->~ObIDirectLoadPartitionTable();
-        }
+        table_array.reset();
       }
     }
     if (OB_SUCC(ret) && need_close) {
@@ -219,7 +217,7 @@ int ObDirectLoadMemDump::dump_tables()
   CompareType compare1;  //不带上seq_no的排序
 
   const RowType *external_row = nullptr;
-  ObDatumRow datum_row;
+  ObDirectLoadDatumRow datum_row;
 
   ObIDirectLoadPartitionTableBuilder *table_builder = nullptr;
 
@@ -250,11 +248,8 @@ int ObDirectLoadMemDump::dump_tables()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(merger.init(iters, &compare))) {
       LOG_WARN("fail to init merger", KR(ret));
-    } else if (OB_FAIL(datum_row.init(mem_ctx_->column_count_))) {
+    } else if (OB_FAIL(datum_row.init(mem_ctx_->table_data_desc_.column_count_))) {
       LOG_WARN("fail to init datum row", KR(ret));
-    } else {
-      datum_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
     }
   }
   ObTabletID last_tablet_id;
@@ -277,12 +272,11 @@ int ObDirectLoadMemDump::dump_tables()
       }
     }
     if (OB_SUCC(ret)) {
-      datum_row.row_flag_.set_flag(external_row->is_deleted_?ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
-      if (OB_FAIL(external_row->to_datums(datum_row.storage_datums_, datum_row.count_))) {
+      if (OB_FAIL(external_row->to_datum_row(datum_row))) {
         LOG_WARN("fail to transfer dataum row", KR(ret));
-      } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, external_row->seq_no_, datum_row))) {
+      } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, datum_row))) {
         if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
-          if (OB_FAIL(mem_ctx_->dml_row_handler_->handle_update_row(datum_row))) {
+          if (OB_FAIL(mem_ctx_->dml_row_handler_->handle_update_row(external_row->tablet_id_, datum_row))) {
             LOG_WARN("fail to handle update row", KR(ret), K(datum_row));
           }
         } else {
@@ -314,7 +308,7 @@ int ObDirectLoadMemDump::new_table_compactor(const ObTabletID &tablet_id,
                                              ObIDirectLoadTabletTableCompactor *&compactor)
 {
   int ret = OB_SUCCESS;
-  if (mem_ctx_->table_data_desc_.is_heap_table_) {
+  if (mem_ctx_->table_data_desc_.row_flag_.uncontain_hidden_pk_) {
     ret = new_external_table_compactor(tablet_id, compactor);
   } else {
     ret = new_sstable_compactor(tablet_id, compactor);
@@ -398,15 +392,21 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
   int ret = OB_SUCCESS;
   ObIDirectLoadTabletTableCompactor *compactor = nullptr;
 
-  ObArray<std::pair<int64_t, ObIDirectLoadPartitionTable *>> table_array;
+  ObArray<std::pair<int64_t, ObDirectLoadTableHandle >> table_array;
   table_array.set_tenant_id(MTL_ID());
   if (OB_FAIL(context_ptr_->tables_.get(tablet_id, table_array))) {
     LOG_WARN("fail to get table array", K(tablet_id), KR(ret));
   } else {
+    struct
+    {
+      bool operator()(const std::pair<int64_t, ObDirectLoadTableHandle> &a,
+                      const std::pair<int64_t, ObDirectLoadTableHandle> &b)
+      {
+        return a.first < b.first;
+      }
+    } table_compare;
     lib::ob_sort(
-      table_array.begin(), table_array.end(),
-      [](const std::pair<int64_t, ObIDirectLoadPartitionTable *> &a,
-         const std::pair<int64_t, ObIDirectLoadPartitionTable *> &b) { return a.first < b.first; });
+      table_array.begin(), table_array.end(), table_compare);
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(new_table_compactor(tablet_id, compactor))) {
@@ -421,7 +421,6 @@ int ObDirectLoadMemDump::compact_tablet_tables(const ObTabletID &tablet_id)
   }
 
   if (OB_SUCC(ret)) {
-    ObIDirectLoadPartitionTable *table = nullptr;
     if (OB_FAIL(compactor->compact())) {
       LOG_WARN("fail to compact tables", KR(ret));
     } else if (OB_FAIL(mem_ctx_->add_tables_from_table_compactor(*compactor))) {
@@ -450,7 +449,7 @@ int ObDirectLoadMemDump::do_dump()
       ATOMIC_AAF(&(mem_ctx_->fly_mem_chunk_count_), -context_ptr_->mem_chunk_array_.count());
     }
   }
-  ATOMIC_AAF(&(mem_ctx_->running_dump_count_), -1);
+  ATOMIC_AAF(&(mem_ctx_->running_dump_task_cnt_), -1);
   return ret;
 }
 

@@ -111,6 +111,7 @@ ObDirectLoadSSTable::ObDirectLoadSSTable()
 {
   allocator_.set_tenant_id(MTL_ID());
   fragments_.set_tenant_id(MTL_ID());
+  table_type_ = ObDirectLoadTableType::SSTABLE;
 }
 
 ObDirectLoadSSTable::~ObDirectLoadSSTable() {}
@@ -157,11 +158,6 @@ int ObDirectLoadSSTable::init(ObDirectLoadSSTableCreateParam &param)
     }
   }
   return ret;
-}
-
-void ObDirectLoadSSTable::release_data()
-{
-  fragments_.reset();
 }
 
 int ObDirectLoadSSTable::copy(const ObDirectLoadSSTable &other)

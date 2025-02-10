@@ -262,24 +262,48 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_coordinator_ctx.cpp
   table_load/ob_table_load_coordinator_trans.cpp
   table_load/ob_table_load_coordinator.cpp
+  table_load/ob_table_load_data_row_delete_handler.cpp
+  table_load/ob_table_load_data_row_insert_handler.cpp
+  table_load/ob_table_load_data_table_builder.cpp
+  table_load/ob_table_load_empty_insert_tablet_ctx_manager.cpp
   table_load/ob_table_load_error_row_handler.cpp
-  table_load/ob_table_load_general_table_compactor.cpp
+  table_load/ob_table_load_exec_ctx.cpp
+  table_load/ob_table_load_index_table_builder.cpp
+  table_load/ob_table_load_instance.cpp
+  table_load/ob_table_load_lob_table_builder.cpp
   table_load/ob_table_load_manager.cpp
-  table_load/ob_table_load_merger.cpp
+  table_load/ob_table_load_mem_chunk_manager.cpp
+  table_load/ob_table_load_mem_compactor.cpp
+  table_load/ob_table_load_merge_compact_table_op.cpp
+  table_load/ob_table_load_merge_data_op.cpp
+  table_load/ob_table_load_merge_data_table_op.cpp
+  table_load/ob_table_load_merge_del_lob_op.cpp
+  table_load/ob_table_load_merge_insert_sstable_op.cpp
+  table_load/ob_table_load_merge_mem_sort_op.cpp
+  table_load/ob_table_load_merge_op.cpp
+  table_load/ob_table_load_merge_phase_op.cpp
+  table_load/ob_table_load_merge_rescan_op.cpp
+  table_load/ob_table_load_merge_table_op.cpp
+  table_load/ob_table_load_multiple_heap_table_compactor.cpp
   table_load/ob_table_load_obj_cast.cpp
-  table_load/ob_table_load_parallel_merge_ctx.cpp
-  table_load/ob_table_load_parallel_merge_table_compactor.cpp
+  table_load/ob_table_load_parallel_merger.cpp
+  table_load/ob_table_load_parallel_table_compactor.cpp
   table_load/ob_table_load_partition_calc.cpp
   table_load/ob_table_load_partition_location.cpp
+  table_load/ob_table_load_pre_sort_writer.cpp
+  table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_redef_table.cpp
+  table_load/ob_table_load_row_projector.cpp
   table_load/ob_table_load_rpc_processor.cpp
   table_load/ob_table_load_schema.cpp
   table_load/ob_table_load_service.cpp
+  table_load/ob_table_load_stat.cpp
   table_load/ob_table_load_store_ctx.cpp
-  table_load/ob_table_load_store_trans.cpp
+  table_load/ob_table_load_store_table_ctx.cpp
   table_load/ob_table_load_store_trans_px_writer.cpp
+  table_load/ob_table_load_store_trans.cpp
   table_load/ob_table_load_store.cpp
   table_load/ob_table_load_struct.cpp
-  table_load/ob_table_load_table_compactor.cpp
   table_load/ob_table_load_table_ctx.cpp
   table_load/ob_table_load_task_scheduler.cpp
   table_load/ob_table_load_task.cpp
@@ -287,23 +311,8 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_trans_bucket_writer.cpp
   table_load/ob_table_load_trans_ctx.cpp
   table_load/ob_table_load_trans_store.cpp
+  table_load/ob_table_load_unique_index_row_handler.cpp
   table_load/ob_table_load_utils.cpp
-  table_load/ob_table_load_mem_compactor.cpp
-  table_load/ob_table_load_exec_ctx.cpp
-  table_load/ob_table_load_instance.cpp
-  table_load/ob_table_load_multiple_heap_table_compactor.cpp
-  table_load/ob_table_load_redef_table.cpp
-  table_load/ob_table_load_stat.cpp
-  table_load/ob_table_load_index_table_projector.cpp
-  table_load/ob_table_load_store_table_ctx.cpp
-  table_load/ob_table_load_merger_manager.cpp
-  table_load/ob_table_load_index_row_handler.cpp
-  table_load/ob_table_load_data_row_handler.cpp
-  table_load/ob_table_load_open_insert_table_ctx_manager.cpp
-  table_load/ob_table_load_pre_sorter.cpp
-  table_load/ob_table_load_mem_chunk_manager.cpp
-  table_load/ob_table_load_pre_sort_writer.cpp
-  table_load/ob_table_load_empty_insert_tablet_ctx_manager.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

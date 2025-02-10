@@ -23,13 +23,9 @@ namespace schema
 class ObColDesc;
 } // namespace schema
 } // namespace share
-namespace blocksstable
-{
-class ObStorageDatum;
-class ObDatumRow;
-} // namespace blocksstable
 namespace storage
 {
+class ObDirectLoadDatumRow;
 class ObDirectLoadRowFlag;
 
 class ObDirectLoadBatchRowBuffer
@@ -41,11 +37,7 @@ public:
   void reuse();
   int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const int64_t max_batch_size);
-  int append_row(const blocksstable::ObStorageDatum *datums,
-                 const int64_t count,
-                 const ObDirectLoadRowFlag &row_flag,
-                 bool &is_full);
-  int append_row(const blocksstable::ObDatumRow &datum_row,
+  int append_row(const ObDirectLoadDatumRow &datum_row,
                  const ObDirectLoadRowFlag &row_flag,
                  bool &is_full);
   int append_row(const IVectorPtrs &vectors,

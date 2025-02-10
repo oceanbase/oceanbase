@@ -43,6 +43,10 @@ public:
   static const int64_t macro_block_size = 2L * 8 * 1024L;
   static const int64_t SNAPSHOT_VERSION = 2;
 
+  class RowsGuard;
+  class SSTableGuard;
+  class SSTableScannerGuard;
+
 public:
   TestDataBlockWriter() : TestDataFilePrepare(&getter, "TestDataBlockWriter", 2 * 1024 * 1024, 2048){};
   virtual void SetUp();
@@ -57,8 +61,20 @@ public:
     ObTimerService::get_instance().wait();
     ObTimerService::get_instance().destroy();
   }
-  void check_row(const ObDatumRow *next_row, const ObDatumRow *curr_row);
-  void test_alloc(char *&ptr, const int64_t size);
+  void build_sstable(const RowsGuard &rows_guard,
+                     SSTableGuard &sstable_guard,
+                     const int64_t start = 0,
+                     const int64_t count = -1);
+  void compact_sstable(const SSTableGuard &sstable_guard1,
+                       const SSTableGuard &sstable_guard2,
+                       SSTableGuard &result);
+  void scan_sstable(const SSTableGuard &sstable_guard,
+                    const ObDatumRange &datum_range,
+                    SSTableScannerGuard &scanner_guard);
+  void scan_sstable_index_block_meta(const SSTableGuard &sstable_guard,
+                                     SSTableScannerGuard &scanner_guard);
+  void check_row(const ObDirectLoadDatumRow *next_row, const ObDirectLoadDatumRow *curr_row);
+  void make_string(const int64_t size, ObString &str, ObIAllocator &allocator);
   int init_tenant_mgr()
   {
     int ret = OB_SUCCESS;
@@ -82,19 +98,247 @@ private:
   void prepare_schema();
 
 protected:
+  class RowsGuard
+  {
+    friend class RowGenerate;
+  public:
+    RowsGuard() {}
+    ~RowsGuard() { reset(); }
+    void reset()
+    {
+      for (int64_t i = 0; i < rows_.count(); ++i) {
+        ObDirectLoadDatumRow *row = rows_.at(i);
+        row->~ObDirectLoadDatumRow();
+      }
+      rows_.reset();
+      allocator_.reset();
+    }
+    int get_new_row(ObDirectLoadDatumRow *&row)
+    {
+      int ret = OB_SUCCESS;
+      row = nullptr;
+      if (OB_ISNULL(row = OB_NEWx(ObDirectLoadDatumRow, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to new ObDirectLoadDatumRow", KR(ret));
+      } else if (OB_FAIL(row->init(column_num, &allocator_))) {
+        STORAGE_LOG(WARN, "fail to init datum row", KR(ret));
+      } else if (FALSE_IT(row->seq_no_ = 0)) {
+      } else if (OB_FAIL(rows_.push_back(row))) {
+        STORAGE_LOG(WARN, "fail to push back", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != row) {
+          row->~ObDirectLoadDatumRow();
+          row = nullptr;
+        }
+      }
+      return ret;
+    }
+    ObDirectLoadDatumRow *at(int64_t idx) { return rows_.at(idx); }
+    const ObDirectLoadDatumRow *at(int64_t idx) const { return rows_.at(idx); }
+    int64_t count() const { return rows_.count(); }
+    ObArray<ObDirectLoadDatumRow *> &get_rows() { return rows_; }
+    const ObArray<ObDirectLoadDatumRow *> &get_rows() const { return rows_; }
+  private:
+    ObArenaAllocator allocator_;
+    ObArray<ObDirectLoadDatumRow *> rows_;
+  };
+
+  class SSTableGuard
+  {
+  public:
+    SSTableGuard() : sstable_(nullptr) {}
+    void reset()
+    {
+      sstable_ = nullptr;
+      table_array_.reset();
+    }
+    ObDirectLoadSSTable *get_sstable() const { return sstable_; }
+  private:
+    ObDirectLoadTableHandleArray table_array_;
+    ObDirectLoadSSTable *sstable_;
+  };
+
+  class SSTableScannerGuard
+  {
+  public:
+    SSTableScannerGuard()
+      : scanner_(nullptr),
+        meta_iter_(nullptr)
+    {
+    }
+    ~SSTableScannerGuard()
+    {
+      reset();
+    }
+    void reset()
+    {
+      if (nullptr != scanner_) {
+        scanner_->~ObDirectLoadSSTableScanner();
+        scanner_ = nullptr;
+      }
+      if (nullptr != meta_iter_) {
+        meta_iter_->~ObDirectLoadIndexBlockMetaIterator();
+        meta_iter_ = nullptr;
+      }
+      allocator_.reset();
+    }
+    ObDirectLoadSSTableScanner *get_scanner() const { return scanner_; }
+    ObDirectLoadIndexBlockMetaIterator *get_meta_iter() const { return meta_iter_; }
+  private:
+    ObArenaAllocator allocator_;
+    ObDirectLoadSSTableScanner *scanner_;
+    ObDirectLoadIndexBlockMetaIterator *meta_iter_;
+  };
+
+  class RowGenerate
+  {
+  public:
+    RowGenerate() = default;
+    ~RowGenerate()
+    {
+      reuse();
+    }
+    void reuse()
+    {
+      for (int64_t i = 0; i < rows_.count(); ++i) {
+        ObDirectLoadDatumRow *row = rows_.at(i);
+        row->~ObDirectLoadDatumRow();
+      }
+      rows_.reset();
+      allocator_.reset();
+    }
+    int init(const share::schema::ObTableSchema &src_schema,
+             bool is_multi_version_row = false)
+    {
+      return row_generate_.init(src_schema, is_multi_version_row);
+    }
+    int generate_rows(RowsGuard &rows_guard, const int64_t count)
+    {
+      int ret = OB_SUCCESS;
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+        ObDirectLoadDatumRow *row = nullptr;
+        if (OB_FAIL(rows_guard.get_new_row(row))) {
+          STORAGE_LOG(WARN, "fail to get new row", KR(ret));
+        } else {
+          datum_row_.storage_datums_ = row->storage_datums_;
+          datum_row_.count_ = row->count_;
+          if (OB_FAIL(row_generate_.get_next_row(datum_row_))) {
+            STORAGE_LOG(WARN, "fail to generate row", KR(ret));
+          }
+        }
+      }
+      return ret;
+    }
+  private:
+    ObArenaAllocator allocator_;
+    ObRowGenerate row_generate_;
+    ObDatumRow datum_row_;
+    ObArray<ObDirectLoadDatumRow *> rows_;
+  };
+
+protected:
   ObTableSchema table_schema_;
+  ObStorageDatumUtils datum_utils_;
   ObDirectLoadTableDataDesc table_data_desc_;
-  ObRowGenerate row_generate_;
+  RowGenerate row_generate_;
   ObDirectLoadTmpFileManager *file_mgr_;
+  ObDirectLoadTableManager *table_mgr_;
 };
 
-void TestDataBlockWriter::test_alloc(char *&ptr, const int64_t size)
+void TestDataBlockWriter::make_string(const int64_t size, ObString &str, ObIAllocator &allocator)
 {
-  ptr = reinterpret_cast<char *>(allocator_.alloc(size));
-  ASSERT_TRUE(nullptr != ptr);
+  ASSERT_TRUE(size > 0);
+  char *ptr = reinterpret_cast<char *>(allocator.alloc(size));
+  ASSERT_NE(nullptr, ptr);
+  str.assign(ptr, size);
 }
 
-void TestDataBlockWriter::check_row(const ObDatumRow *next_row, const ObDatumRow *curr_row)
+void TestDataBlockWriter::build_sstable(
+  const RowsGuard &rows_guard,
+  SSTableGuard &sstable_guard,
+  const int64_t start,
+  const int64_t count)
+{
+  sstable_guard.reset();
+
+  ObDirectLoadSSTableBuildParam param;
+  ObDirectLoadSSTableBuilder sstable_builder;
+  param.tablet_id_ = table_schema_.get_tablet_id();
+  param.table_data_desc_ = table_data_desc_;
+  param.datum_utils_ = &datum_utils_;
+  param.file_mgr_ = file_mgr_;
+  ASSERT_EQ(OB_SUCCESS, sstable_builder.init(param));
+  const int64_t end = count == -1 ? rows_guard.count() : MIN(start + count, rows_guard.count());
+  for (int64_t i = start; i < end; ++i) {
+    const ObDirectLoadDatumRow *row = rows_guard.at(i);
+    ASSERT_EQ(OB_SUCCESS, sstable_builder.append_row(table_schema_.get_tablet_id(), *row));
+  }
+  ASSERT_EQ(OB_SUCCESS, sstable_builder.close());
+
+  ObDirectLoadTableHandleArray table_array;
+  ObDirectLoadSSTable *sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable_builder.get_tables(table_array, table_mgr_));
+  ASSERT_EQ(1, table_array.count());
+  ASSERT_TRUE(table_array.at(0).get_table()->is_sstable());
+  ASSERT_NE(nullptr, sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0).get_table()));
+
+  ASSERT_EQ(OB_SUCCESS, sstable_guard.table_array_.assign(table_array));
+  sstable_guard.sstable_ = sstable;
+}
+
+void TestDataBlockWriter::compact_sstable(
+  const SSTableGuard &sstable_guard1,
+  const SSTableGuard &sstable_guard2,
+  SSTableGuard &result)
+{
+  ASSERT_NE(nullptr, sstable_guard1.get_sstable());
+  ASSERT_NE(nullptr, sstable_guard2.get_sstable());
+  result.reset();
+
+  ObDirectLoadSSTableCompactParam compact_param;
+  ObDirectLoadSSTableCompactor compactor;
+  compact_param.tablet_id_ = table_schema_.get_tablet_id();
+  compact_param.table_data_desc_ = table_data_desc_;
+  compact_param.datum_utils_ = &datum_utils_;
+  ASSERT_EQ(OB_SUCCESS, compactor.init(compact_param));
+  ASSERT_EQ(OB_SUCCESS, compactor.add_table(sstable_guard1.table_array_.at(0)));
+  ASSERT_EQ(OB_SUCCESS, compactor.add_table(sstable_guard2.table_array_.at(0)));
+  ASSERT_EQ(OB_SUCCESS, compactor.compact());
+
+  ObDirectLoadTableHandle table_handle;
+  ObDirectLoadSSTable *sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, compactor.get_table(table_handle, table_mgr_));
+  ASSERT_TRUE(table_handle.is_valid());
+  ASSERT_TRUE(table_handle.get_table()->is_sstable());
+  ASSERT_NE(nullptr, sstable = dynamic_cast<ObDirectLoadSSTable *>(table_handle.get_table()));
+
+  ASSERT_EQ(OB_SUCCESS, result.table_array_.add(table_handle));
+  result.sstable_ = sstable;
+}
+
+void TestDataBlockWriter::scan_sstable(
+  const SSTableGuard &sstable_guard,
+  const ObDatumRange &datum_range,
+  SSTableScannerGuard &sstable_scanner_guard)
+{
+  sstable_scanner_guard.reset();
+  ObDirectLoadSSTable *sstable = nullptr;
+  ASSERT_NE(nullptr, sstable = sstable_guard.get_sstable());
+  ASSERT_EQ(OB_SUCCESS, sstable->scan(table_data_desc_, datum_range, &datum_utils_, sstable_scanner_guard.allocator_, sstable_scanner_guard.scanner_));
+}
+
+void TestDataBlockWriter::scan_sstable_index_block_meta(
+  const SSTableGuard &sstable_guard,
+  SSTableScannerGuard &sstable_scanner_guard)
+{
+  sstable_scanner_guard.reset();
+  ObDirectLoadSSTable *sstable = nullptr;
+  ASSERT_NE(nullptr, sstable = sstable_guard.get_sstable());
+  ASSERT_EQ(OB_SUCCESS, sstable->scan_index_block_meta(sstable_scanner_guard.allocator_, sstable_scanner_guard.meta_iter_));
+}
+
+void TestDataBlockWriter::check_row(const ObDirectLoadDatumRow *next_row, const ObDirectLoadDatumRow *curr_row)
 {
   int cmp_ret = 0;
   ObDatumRowkey next_key(next_row->storage_datums_, rowkey_column_count);
@@ -157,7 +401,13 @@ void TestDataBlockWriter::SetUp()
   const int64_t max_cache_size = 1024 * 1024 * 1024;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   TestDataFilePrepare::SetUp();
+  // init table_schema_
   prepare_schema();
+  // init datum_utils_
+  ObArray<ObColDesc> col_descs;
+  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
+  ASSERT_EQ(OB_SUCCESS, datum_utils_.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_));
+  // init table_data_desc_
   table_data_desc_.rowkey_column_num_ = table_schema_.get_rowkey_column_num();
   table_data_desc_.column_count_ = column_num;
   table_data_desc_.external_data_block_size_ = (2LL << 20);
@@ -165,24 +415,19 @@ void TestDataBlockWriter::SetUp()
   table_data_desc_.sstable_data_block_size_ = DIRECT_LOAD_DEFAULT_SSTABLE_DATA_BLOCK_SIZE;
   table_data_desc_.extra_buf_size_ = (2LL << 20);
   table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-  table_data_desc_.is_heap_table_ = false;
-  table_data_desc_.max_mem_chunk_count_ = 128;
-  table_data_desc_.merge_count_per_round_ = 64;
-  table_data_desc_.session_count_ = 2;
-  file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_));
-  ASSERT_TRUE(nullptr != file_mgr_);
-  ret = file_mgr_->init(table_schema_.get_tenant_id());
-  ASSERT_EQ(OB_SUCCESS, ret);
-  // init ObRowGenerate
+  // init row_generate_
   ASSERT_EQ(OB_SUCCESS, row_generate_.init(table_schema_));
+  // init file_mgr_
+  ASSERT_NE(nullptr, file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_)));
+  ASSERT_EQ(OB_SUCCESS, file_mgr_->init(table_schema_.get_tenant_id()));
+  // init table_mgr_
+  ASSERT_NE(nullptr, table_mgr_ = OB_NEWx(ObDirectLoadTableManager, (&allocator_)));
+  ASSERT_EQ(OB_SUCCESS, table_mgr_->init());
 
-  ret = getter.add_tenant(1, 8L * 1024L * 1024L, 2L * 1024L * 1024L * 1024L);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
-  if (OB_INIT_TWICE == ret) {
+  ASSERT_EQ(OB_SUCCESS, getter.add_tenant(1, 8L * 1024L * 1024L, 2L * 1024L * 1024L * 1024L));
+  if (OB_FAIL(ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size))) {
+    ASSERT_EQ(OB_INIT_TWICE, ret);
     ret = OB_SUCCESS;
-  } else {
-    ASSERT_EQ(OB_SUCCESS, ret);
   }
   // set observer memory limit
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
@@ -190,7 +435,6 @@ void TestDataBlockWriter::SetUp()
   ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
-
 
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
@@ -219,6 +463,7 @@ void TestDataBlockWriter::SetUp()
 void TestDataBlockWriter::TearDown()
 {
   file_mgr_->~ObDirectLoadTmpFileManager();
+  table_mgr_->~ObDirectLoadTableManager();
   tmp_file::ObTmpBlockCache::get_instance().destroy();
   tmp_file::ObTmpPageCache::get_instance().destroy();
   common::ObClockGenerator::destroy();
@@ -233,1351 +478,622 @@ void TestDataBlockWriter::TearDown()
 
 TEST_F(TestDataBlockWriter, test_empty_write_and_scan)
 {
-  int ret = OB_SUCCESS;
-  const int64_t test_row_num = 100000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObDirectLoadTmpFileManager *file_mgr = new ObDirectLoadTmpFileManager();
-  ret = file_mgr->init(table_schema_.get_tenant_id());
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  build_sstable(rows_guard, sstable_guard);
 
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
-  ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  SSTableScannerGuard sstable_scanner_guard;
   ObDatumRange datum_range;
-
   datum_range.set_whole_range();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-
-  // left closed ,right closed
-  datum_range.set_left_closed();
-  datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, sstable_scanner_guard);
+  ObDirectLoadSSTableScanner *iter = nullptr;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+  ASSERT_NE(nullptr, iter = sstable_scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-  int64_t index_item_count = sstable->get_meta().index_item_count_;
-  ObDirectLoadIndexBlockMetaIterator* meta_iter;
+  scan_sstable_index_block_meta(sstable_guard, sstable_scanner_guard);
+  ObDirectLoadIndexBlockMetaIterator* meta_iter = nullptr;
   ObDirectLoadIndexBlockMeta meta;
-  ret = sstable->scan_index_block_meta(allocator_, meta_iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, meta_iter = sstable_scanner_guard.get_meta_iter());
   ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
-  //delete file_mgr; //释放会导致core，因为sstable等都没释放，干脆就都不释放了
 }
 
 TEST_F(TestDataBlockWriter, test_write_and_scan)
 {
-  int ret = OB_SUCCESS;
   const int64_t test_row_num = 100000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObDirectLoadTmpFileManager *file_mgr = new ObDirectLoadTmpFileManager();
-  ret = file_mgr->init(table_schema_.get_tenant_id());
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array.push_back(row);
-    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  build_sstable(rows_guard, sstable_guard);
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+  ObDirectLoadIndexBlockMetaIterator *meta_iter = nullptr;
+  ObDirectLoadIndexBlockMeta meta;
+
   ObDatumRange datum_range;
   int64_t start_count = rand() % test_row_num;
   int64_t end_count = rand() % test_row_num;
   int64_t max = std::max(start_count, end_count);
   int64_t min = std::min(start_count, end_count);
-  // max = 6085;
-  // min = 6083;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
-
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
 
   // left closed ,right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   int64_t new_min = min + 1;
   for (int64_t i = new_min; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left closed ,right open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = new_min; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  int64_t index_item_count = sstable->get_meta().index_item_count_;
-  ObDirectLoadIndexBlockMetaIterator* meta_iter;
-  ObDirectLoadIndexBlockMeta meta;
-  ret = sstable->scan_index_block_meta(allocator_, meta_iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  int64_t number= meta_iter->get_total_block_count();
+
+  scan_sstable_index_block_meta(sstable_guard, scanner_guard);
+  ASSERT_NE(nullptr, meta_iter = scanner_guard.get_meta_iter());
+  int64_t number = meta_iter->get_total_block_count();
   for (int64_t i = 0; i < number; ++i) {
     ASSERT_EQ(OB_SUCCESS, meta_iter->get_next(meta));
   }
   ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
-
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
-  //delete file_mgr; //同上
 }
 
-TEST_F(TestDataBlockWriter, test_write_and_scan_range)
+TEST_F(TestDataBlockWriter, test_scan_greater_range)
 {
   int ret = OB_SUCCESS;
-  const int64_t test_row_num = 10000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array.push_back(row);
-    if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
-  }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  const int64_t test_row_num = 100000;
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  build_sstable(rows_guard, sstable_guard, 0, 5000); // 只写前5000行
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+
   ObDatumRange datum_range;
-  int64_t start_count = rand() % test_row_num;
-  int64_t end_count = rand() % test_row_num;
-  int64_t max = std::max(start_count, end_count);
-  int64_t min = std::min(start_count, end_count);
-  max = 6085;
-  min = 6000;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  int64_t min = 6000;
+  int64_t max = 6085;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-  // left open ,right closed
+  // left open, right closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-  // left closed ,right open
+  // left closed, right open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-  // left open ,right closed
+  // left open, right closed
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 TEST_F(TestDataBlockWriter, test_scan_less_range)
 {
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 10000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array.push_back(row);
-    if (i >= 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
-  }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  build_sstable(rows_guard, sstable_guard, 5000); // 只写后5000行
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+
   ObDatumRange datum_range;
-  int64_t start_count = rand() % test_row_num;
-  int64_t end_count = rand() % test_row_num;
-  int64_t max = std::max(start_count, end_count);
-  int64_t min = std::min(start_count, end_count);
-  max = 4999;
-  min = 3000;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  int64_t min = 3000;
+  int64_t max = 4999;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  // left closed ,right closed
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left open ,rigth closed
+  // left open, rigth closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left open ,rigth open
+  // left open, rigth open
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left closed ,rigth open
+  // left closed, rigth open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
-
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
+
 TEST_F(TestDataBlockWriter, test_scan_range)
 {
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 10000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array.push_back(row);
-    if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
-  }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  build_sstable(rows_guard, sstable_guard, 0, 5000); // 只写前5000行
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+
   ObDatumRange datum_range;
-  int64_t start_count = rand() % test_row_num;
-  int64_t end_count = rand() % test_row_num;
-  int64_t max = std::max(start_count, end_count);
-  int64_t min = std::min(start_count, end_count);
-  max = 6085;
-  min = 3000;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  int64_t min = 3000;
+  int64_t max = 6085;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  // left closed ,right closed
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
-  for (int64_t i = min; i <= 4999; ++i) {
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = min; i < 5000; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left open ,rigth closed
+  // left open, rigth closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = (min + 1); i <= 4999; ++i) {
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i < 5000; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    ASSERT_NO_FATAL_FAILURE(check_row(datum_row, array.at(i)));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left open ,rigth open
+  // left open, rigth open
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = (min + 1); i <= 4999; ++i) {
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i < 5000; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
 
-  // left closed ,rigth open
+  // left closed, rigth open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = min; i <= 4999; ++i) {
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = min; i < 5000; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  ASSERT_TRUE(datum_row == nullptr);
-
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 TEST_F(TestDataBlockWriter, test_write_and_scan_large_low)
 {
   int ret = OB_SUCCESS;
-  const int64_t index_block_size = DIO_ALIGN_SIZE;
-  const int64_t data_block_size = 4 * DIO_ALIGN_SIZE;
+  const int32_t value1_size = 20 * 1024;
+  ObArenaAllocator allocator;
+  ObString large_string;
+  make_string(value1_size, large_string, allocator);
+
   const int64_t test_row_num = 100000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    if (i % 100 == 0) {
-      int32_t value1_size = 20 * 1024;
-      char *ptr1 = nullptr;
-      test_alloc(ptr1, value1_size);
-      ASSERT_TRUE(nullptr != ptr1);
-      row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
-    }
-    array.push_back(row);
-    ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  for (int64_t i = 0; i < test_row_num; i += 100) {
+    ObDirectLoadDatumRow *row = rows_guard.at(i);
+    row->storage_datums_[24].set_string(large_string);
   }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  build_sstable(rows_guard, sstable_guard);
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+  ObDirectLoadIndexBlockMetaIterator *meta_iter = nullptr;
+  ObDirectLoadIndexBlockMeta meta;
+
   ObDatumRange datum_range;
   int64_t start_count = rand() % test_row_num;
   int64_t end_count = rand() % test_row_num;
   int64_t max = std::max(start_count, end_count);
   int64_t min = std::min(start_count, end_count);
-  // max = 6085;
-  // min = 6083;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  // left closed ,rigth closed
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right open
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = (min + 1); i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-  // left open ,right open
+  // left open ,right close
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = (min + 1); i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left closed ,right open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
-int64_t index_item_count = sstable->get_meta().index_item_count_;
-  ObDirectLoadIndexBlockMetaIterator* meta_iter;
-  ObDirectLoadIndexBlockMeta meta;
-  ret = sstable->scan_index_block_meta(allocator_, meta_iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable_index_block_meta(sstable_guard, scanner_guard);
+  ASSERT_NE(nullptr, meta_iter = scanner_guard.get_meta_iter());
   int64_t number= meta_iter->get_total_block_count();
   for (int64_t i = 0; i < number; ++i) {
     ASSERT_EQ(OB_SUCCESS, meta_iter->get_next(meta));
   }
-   ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
+  ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
 }
 
 TEST_F(TestDataBlockWriter, test_write_and_scan_range_large_low)
 {
   int ret = OB_SUCCESS;
+  const int32_t value1_size = 20 * 1024;
+  ObArenaAllocator allocator;
+  ObString large_string;
+  make_string(value1_size, large_string, allocator);
+
   const int64_t test_row_num = 10000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    if (i % 100 == 0) {
-      int32_t value1_size = 20 * 1024;
-      char *ptr1 = nullptr;
-      test_alloc(ptr1, value1_size);
-      ASSERT_TRUE(nullptr != ptr1);
-      row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
-    }
-    array.push_back(row);
-    if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  for (int64_t i = 0; i < test_row_num; i += 100) {
+    ObDirectLoadDatumRow *row = rows_guard.at(i);
+    row->storage_datums_[24].set_string(large_string);
   }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  build_sstable(rows_guard, sstable_guard, 0, 5000); // 只写前5000行
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
-  ObDatumRange datum_range;
-  int64_t start_count = rand() % test_row_num;
-  int64_t end_count = rand() % test_row_num;
-  int64_t max = std::max(start_count, end_count);
-  int64_t min = std::min(start_count, end_count);
-  max = 6085;
-  min = 6000;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  const ObDirectLoadDatumRow *datum_row = nullptr;
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  ObDatumRange datum_range;
+  int64_t min = 6000;
+  int64_t max = 6085;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
+
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
-
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 TEST_F(TestDataBlockWriter, test_scan_range_large_low)
 {
   int ret = OB_SUCCESS;
+  const int32_t value1_size = 20 * 1024;
+  ObArenaAllocator allocator;
+  ObString large_string;
+  make_string(value1_size, large_string, allocator);
+
   const int64_t test_row_num = 10000;
-  ObArray<ObDatumRow *> array;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder;
-  ret = sstable_builder.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    if (i % 100 == 0) {
-      int32_t value1_size = 20 * 1024;
-      char *ptr1 = nullptr;
-      test_alloc(ptr1, value1_size);
-      ASSERT_TRUE(nullptr != ptr1);
-      row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
-    }
-    array.push_back(row);
-    if (i < 5000) {
-      ret = sstable_builder.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-      ASSERT_EQ(OB_SUCCESS, ret);
-    }
+  RowsGuard rows_guard;
+  SSTableGuard sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard, test_row_num));
+  for (int64_t i = 0; i < test_row_num; i += 100) {
+    ObDirectLoadDatumRow *row = rows_guard.at(i);
+    row->storage_datums_[24].set_string(large_string);
   }
-  ret = sstable_builder.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  build_sstable(rows_guard, sstable_guard, 0, 5000); // 只写前5000行
 
-  ObArray<ObIDirectLoadPartitionTable *> table_array;
-  ret = sstable_builder.get_tables(table_array, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable = nullptr;
-  sstable = dynamic_cast<ObDirectLoadSSTable *>(table_array.at(0));
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
-  ObDatumRange datum_range;
-  int64_t start_count = rand() % test_row_num;
-  int64_t end_count = rand() % test_row_num;
-  int64_t max = std::max(start_count, end_count);
-  int64_t min = std::min(start_count, end_count);
-  max = 6085;
-  min = 3000;
-  ObDatumRowkey start_key(array.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array.at(max)->storage_datums_, rowkey_column_count);
+  const ObDirectLoadDatumRow *datum_row = nullptr;
 
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
+  ObDatumRange datum_range;
+  int64_t min = 3000;
+  int64_t max = 6085;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard.at(max)->storage_datums_, rowkey_column_count);
+
+  // left closed, right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-
-  ObTableReadInfo read_info;
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= 4999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array.at(i));
+    check_row(datum_row, rows_guard.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  for (int64_t i = 0; i < array.count(); ++i) {
-    ObDatumRow *row = array.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 TEST_F(TestDataBlockWriter, test_write_and_compact)
 {
   int ret = OB_SUCCESS;
   const int64_t test_row_num = 100000;
-  ObArray<ObDatumRow *> array1;
-  ObArray<ObDatumRow *> array2;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder1;
-  ObDirectLoadSSTableBuilder sstable_builder2;
-  ret = sstable_builder1.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard1, rows_guard2;
+  SSTableGuard sstable_guard1, sstable_guard2, compact_sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard1, test_row_num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard2, test_row_num));
+  build_sstable(rows_guard1, sstable_guard1);
+  build_sstable(rows_guard2, sstable_guard2);
+  compact_sstable(sstable_guard1, sstable_guard2, compact_sstable_guard);
 
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array1.push_back(row);
-    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-    array2.push_back(row);
-    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
-
-  ret = sstable_builder1.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObArray<ObIDirectLoadPartitionTable *> table_array1;
-  ObArray<ObIDirectLoadPartitionTable *> table_array2;
-  ret = sstable_builder1.get_tables(table_array1, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.get_tables(table_array2, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable1 = nullptr;
-  sstable1 = dynamic_cast<ObDirectLoadSSTable *>(table_array1.at(0));
-  ASSERT_TRUE(nullptr != sstable1);
-
-  ObDirectLoadSSTable *sstable2 = nullptr;
-  sstable2 = dynamic_cast<ObDirectLoadSSTable *>(table_array2.at(0));
-  ASSERT_TRUE(nullptr != sstable2);
-
-  ObIDirectLoadPartitionTable *new_sstable = nullptr;
-  ObDirectLoadSSTableCompactor compactor;
-  ObDirectLoadSSTableCompactParam compact_param;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
-  compact_param.tablet_id_ = table_schema_.get_tablet_id();
-  compact_param.table_data_desc_ = table_data_desc_;
-  ObTableReadInfo read_info;
-
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  compact_param.datum_utils_ = &(read_info.datum_utils_);
-
-  ret = compactor.init(compact_param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = compactor.add_table(sstable1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = compactor.add_table(sstable2);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, compactor.compact());
-  ASSERT_EQ(OB_SUCCESS, compactor.get_table(new_sstable, allocator_));
-  ObDirectLoadSSTable *sstable = dynamic_cast<ObDirectLoadSSTable *>(new_sstable);
-  ASSERT_TRUE(nullptr != sstable);
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+  ObDirectLoadIndexBlockMetaIterator *meta_iter = nullptr;
+  ObDirectLoadIndexBlockMeta meta;
+
   ObDatumRange datum_range;
   int64_t start_count = rand() % test_row_num;
   int64_t end_count = rand() % test_row_num;
   int64_t max = std::max(start_count, end_count);
   int64_t min = std::min(start_count, end_count);
-  ObDatumRowkey start_key(array1.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array2.at(max)->storage_datums_, rowkey_column_count);
-
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard1.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard2.at(max)->storage_datums_, rowkey_column_count);
 
   // left closed ,right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  int64_t new_min = min + 1;
-  for (int64_t i = new_min; i <= 99999; ++i) {
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left closed ,right open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = new_min; i <=99999; ++i) {
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  int64_t index_item_count = sstable->get_meta().index_item_count_;
-  ObDirectLoadIndexBlockMetaIterator* meta_iter;
-  ObDirectLoadIndexBlockMeta meta;
-  ret = sstable->scan_index_block_meta(allocator_, meta_iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+
+  scan_sstable_index_block_meta(compact_sstable_guard, scanner_guard);
+  ASSERT_NE(nullptr, meta_iter = scanner_guard.get_meta_iter());
   int64_t number = meta_iter->get_total_block_count();
   for (int64_t i = 0; i < number; ++i) {
     ASSERT_EQ(OB_SUCCESS, meta_iter->get_next(meta));
   }
   ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
-
-  for (int64_t i = 0; i < array1.count(); ++i) {
-    ObDatumRow *row = array1.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
-  for (int64_t i = 0; i < array2.count(); ++i) {
-    ObDatumRow *row = array2.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 TEST_F(TestDataBlockWriter, test_write_and_compact_large_row)
 {
   int ret = OB_SUCCESS;
+  const int32_t value1_size = 20 * 1024;
+  ObArenaAllocator allocator;
+  ObString large_string;
+  make_string(value1_size, large_string, allocator);
+
   const int64_t test_row_num = 100000;
-  ObArray<ObDatumRow *> array1;
-  ObArray<ObDatumRow *> array2;
-  ObDirectLoadSSTableBuildParam param;
-  ObArray<ObColDesc> col_descs;
-  ObStorageDatumUtils datum_utils;
-  ObTableLoadSequenceNo seq_no(0);
-  ASSERT_EQ(OB_SUCCESS, table_schema_.get_column_ids(col_descs));
-  ret = datum_utils.init(col_descs, rowkey_column_count, lib::is_oracle_mode(), allocator_);
-  param.tablet_id_ = table_schema_.get_tablet_id();
-  param.table_data_desc_ = table_data_desc_;
-  param.datum_utils_ = &datum_utils;
-  param.file_mgr_ = file_mgr_;
-  ObDirectLoadSSTableBuilder sstable_builder1;
-  ObDirectLoadSSTableBuilder sstable_builder2;
-  ret = sstable_builder1.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.init(param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-     if (i % 100 == 0) {
-      int32_t value1_size = 20 * 1024;
-      char *ptr1 = nullptr;
-      test_alloc(ptr1, value1_size);
-      ASSERT_TRUE(nullptr != ptr1);
-      row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
-    }
-    array1.push_back(row);
-    ret = sstable_builder1.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
+  RowsGuard rows_guard1, rows_guard2;
+  SSTableGuard sstable_guard1, sstable_guard2, compact_sstable_guard;
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard1, test_row_num));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.generate_rows(rows_guard2, test_row_num));
+  for (int64_t i = 0; i < test_row_num; i += 100) {
+    ObDirectLoadDatumRow *row1 = rows_guard1.at(i);
+    ObDirectLoadDatumRow *row2 = rows_guard2.at(i);
+    row1->storage_datums_[24].set_string(large_string);
+    row2->storage_datums_[24].set_string(large_string);
   }
-  for (int64_t i = 0; i < test_row_num; ++i) {
-    ObDatumRow *row = OB_NEWx(ObDatumRow, (&allocator_));
-    ASSERT_EQ(OB_SUCCESS, row->init(allocator_, column_num));
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(*row));
-     if (i % 100 == 0) {
-      int32_t value1_size = 20 * 1024;
-      char *ptr1 = nullptr;
-      test_alloc(ptr1, value1_size);
-      ASSERT_TRUE(nullptr != ptr1);
-      row->storage_datums_[24].set_string(ObString(value1_size, ptr1));
-    }
-    array2.push_back(row);
-    ret = sstable_builder2.append_row(table_schema_.get_tablet_id(), seq_no, *row);
-    ASSERT_EQ(OB_SUCCESS, ret);
-  }
+  build_sstable(rows_guard1, sstable_guard1);
+  build_sstable(rows_guard2, sstable_guard2);
+  compact_sstable(sstable_guard1, sstable_guard2, compact_sstable_guard);
 
-  ret = sstable_builder1.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.close();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObArray<ObIDirectLoadPartitionTable *> table_array1;
-  ObArray<ObIDirectLoadPartitionTable *> table_array2;
-  ret = sstable_builder1.get_tables(table_array1, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = sstable_builder2.get_tables(table_array2, allocator_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ObDirectLoadSSTable *sstable1 = nullptr;
-  sstable1 = dynamic_cast<ObDirectLoadSSTable *>(table_array1.at(0));
-  ASSERT_TRUE(nullptr != sstable1);
-
-  ObDirectLoadSSTable *sstable2 = nullptr;
-  sstable2 = dynamic_cast<ObDirectLoadSSTable *>(table_array2.at(0));
-  ASSERT_TRUE(nullptr != sstable2);
-
-  ObIDirectLoadPartitionTable *new_sstable = nullptr;
-  ObDirectLoadSSTableCompactor compactor;
-  ObDirectLoadSSTableCompactParam compact_param;
-  ObTableAccessParam access_param;
-  ObTableAccessContext access_ctx;
-  compact_param.tablet_id_ = table_schema_.get_tablet_id();
-  compact_param.table_data_desc_ = table_data_desc_;
-  ObTableReadInfo read_info;
-
-  // init access_param
-  ret = read_info.init(allocator_, table_schema_.get_column_count(),
-                       table_schema_.get_rowkey_column_num(), lib::is_oracle_mode(), col_descs, nullptr/*storage_cols_index*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = access_param.init_merge_param(table_schema_.get_table_id(), param.tablet_id_, read_info);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  compact_param.datum_utils_ = &(read_info.datum_utils_);
-  ret = compactor.init(compact_param);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = compactor.add_table(sstable1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = compactor.add_table(sstable2);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, compactor.compact());
-  ASSERT_EQ(OB_SUCCESS, compactor.get_table(new_sstable, allocator_));
-  ObDirectLoadSSTable *sstable = dynamic_cast<ObDirectLoadSSTable *>(new_sstable);
-  ASSERT_TRUE(nullptr != sstable);
-
+  SSTableScannerGuard scanner_guard;
   ObDirectLoadSSTableScanner *iter = nullptr;
+  const ObDirectLoadDatumRow *datum_row = nullptr;
+  ObDirectLoadIndexBlockMetaIterator *meta_iter = nullptr;
+  ObDirectLoadIndexBlockMeta meta;
+
   ObDatumRange datum_range;
   int64_t start_count = rand() % test_row_num;
   int64_t end_count = rand() % test_row_num;
   int64_t max = std::max(start_count, end_count);
   int64_t min = std::min(start_count, end_count);
-  ObDatumRowkey start_key(array1.at(min)->storage_datums_, rowkey_column_count);
-  ObDatumRowkey end_key(array2.at(max)->storage_datums_, rowkey_column_count);
-
-  datum_range.set_start_key(start_key);
-  datum_range.set_end_key(end_key);
-
-  // init access_ctx
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
-  ObQueryFlag query_flag(ObQueryFlag::Forward, false /*daily_merge*/, true /*optimize*/,
-                         true /*whole_macro_scan*/, false /*full_row*/, false /*index_back*/,
-                         false /*query_stat*/
-  );
-  ObVersionRange trans_version_range;
-  query_flag.multi_version_minor_merge_ = false;
-  trans_version_range.multi_version_start_ = 0;
-  trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  ObStoreCtx store_ctx;
-  access_ctx.store_ctx_ = &store_ctx;
-  access_ctx.stmt_allocator_ = &allocator_;
-  access_ctx.allocator_ = &allocator_;
-  access_ctx.is_inited_ = true;
+  datum_range.start_key_ = ObDatumRowkey(rows_guard1.at(min)->storage_datums_, rowkey_column_count);
+  datum_range.end_key_ = ObDatumRowkey(rows_guard2.at(max)->storage_datums_, rowkey_column_count);
 
   // left closed ,right closed
   datum_range.set_left_closed();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const ObDatumRow *datum_row = nullptr;
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_closed();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  int64_t new_min = min + 1;
-  for (int64_t i = new_min; i <= 99999; ++i) {
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i <= max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left closed ,right open
   datum_range.set_left_closed();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
   for (int64_t i = min; i <= 99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
 
   // left open ,right closed
   datum_range.set_left_open();
   datum_range.set_right_open();
-  ret = sstable->scan(param.table_data_desc_, datum_range, param.datum_utils_, allocator_, iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = new_min; i <=99999; ++i) {
+  scan_sstable(compact_sstable_guard, datum_range, scanner_guard);
+  ASSERT_NE(nullptr, iter = scanner_guard.get_scanner());
+  for (int64_t i = (min + 1); i <=99999; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array1.at(i));
+    check_row(datum_row, rows_guard1.at(i));
   }
   for (int64_t i = 0; i < max; ++i) {
     ASSERT_EQ(OB_SUCCESS, iter->get_next_row(datum_row));
-    check_row(datum_row, array2.at(i));
+    check_row(datum_row, rows_guard2.at(i));
   }
   ASSERT_EQ(OB_ITER_END, iter->get_next_row(datum_row));
-  int64_t index_item_count = sstable->get_meta().index_item_count_;
-  ObDirectLoadIndexBlockMetaIterator* meta_iter;
-  ObDirectLoadIndexBlockMeta meta;
-  ret = sstable->scan_index_block_meta(allocator_, meta_iter);
-  ASSERT_EQ(OB_SUCCESS, ret);
+
+  scan_sstable_index_block_meta(compact_sstable_guard, scanner_guard);
+  ASSERT_NE(nullptr, meta_iter = scanner_guard.get_meta_iter());
   int64_t number = meta_iter->get_total_block_count();
   for (int64_t i = 0; i < number; ++i) {
     ASSERT_EQ(OB_SUCCESS, meta_iter->get_next(meta));
   }
   ASSERT_EQ(OB_ITER_END, meta_iter->get_next(meta));
-
-  for (int64_t i = 0; i < array1.count(); ++i) {
-    ObDatumRow *row = array1.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
-  for (int64_t i = 0; i < array2.count(); ++i) {
-    ObDatumRow *row = array2.at(i);
-    row->~ObDatumRow();
-    allocator_.free(row);
-  }
 }
 
 } // end namespace unittest

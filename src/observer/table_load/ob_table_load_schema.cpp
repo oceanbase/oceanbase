@@ -343,6 +343,53 @@ int ObTableLoadSchema::check_has_non_local_index(share::schema::ObSchemaGetterGu
   return ret;
 }
 
+int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
+  share::schema::ObSchemaGetterGuard &schema_guard,
+  const share::schema::ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_UNLIKELY(nullptr == table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(table_schema));
+  } else {
+    if (table_schema->is_heap_table()) {
+      int normal_local_index_count = 0;
+      int unique_index_count = 0;
+      int other_index_count = 0;
+      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos =
+        table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+        const ObAuxTableMetaInfo &index_table_info = simple_index_infos.at(i);
+        const share::schema::ObTableSchema *index_table_schema = nullptr;
+        if (OB_FAIL(get_table_schema(schema_guard, MTL_ID(), index_table_info.table_id_,
+                                     index_table_schema))) {
+          LOG_WARN("fail to get table shema of index table", KR(ret),
+                   K(index_table_info.table_id_));
+        } else {
+          if (INDEX_TYPE_NORMAL_LOCAL == index_table_schema->get_index_type() ||
+              INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_table_schema->get_index_type()) {
+            normal_local_index_count++;
+          } else if (share::schema::ObIndexType::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_UNIQUE_LOCAL ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL ==
+                       index_table_schema->get_index_type()) {
+            unique_index_count++;
+          } else {
+            other_index_count++;
+          }
+        }
+      }
+      if (0 == other_index_count && 1 == unique_index_count) {
+        bret = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id,
                                                                  bool &value)
 {
@@ -411,8 +458,12 @@ int ObTableLoadSchema::get_tablet_ids_by_part_ids(const ObTableSchema *table_sch
 
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
+    table_id_(OB_INVALID_ID),
+    is_index_table_(false),
+    is_lob_table_(false),
     is_partitioned_table_(false),
     is_heap_table_(false),
+    index_type_(ObIndexType::INDEX_TYPE_MAX),
     is_column_store_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
@@ -423,11 +474,11 @@ ObTableLoadSchema::ObTableLoadSchema()
     schema_version_(0),
     lob_meta_table_id_(OB_INVALID_ID),
     lob_inrow_threshold_(-1),
-    index_table_count_(0),
     non_partitioned_tablet_id_vector_(nullptr),
     is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
+  index_table_ids_.set_block_allocator(ModulePageAllocator(allocator_));
   lob_column_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
   column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
   multi_version_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
@@ -441,9 +492,13 @@ ObTableLoadSchema::~ObTableLoadSchema()
 
 void ObTableLoadSchema::reset()
 {
+  table_id_ = OB_INVALID_ID;
   table_name_.reset();
+  is_index_table_ = false;
+  is_lob_table_ = false;
   is_partitioned_table_ = false;
   is_heap_table_ = false;
+  index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
   is_column_store_ = false;
   has_autoinc_column_ = false;
   has_identity_column_ = false;
@@ -454,7 +509,7 @@ void ObTableLoadSchema::reset()
   schema_version_ = 0;
   lob_meta_table_id_ = OB_INVALID_ID;
   lob_inrow_threshold_ = -1;
-  index_table_count_ = 0;
+  index_table_ids_.reset();
   lob_column_idxs_.reset();
   column_descs_.reset();
   multi_version_column_descs_.reset();
@@ -494,8 +549,12 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
+    table_id_ = table_schema->get_table_id();
+    is_index_table_ = table_schema->is_index_table();
+    is_lob_table_ = table_schema->is_aux_lob_table();
     is_partitioned_table_ = table_schema->is_partitioned_table();
     is_heap_table_ = table_schema->is_heap_table();
+    index_type_ = table_schema->get_index_type();
     is_column_store_ = (table_schema->get_column_group_count() > 1) ? true :false;
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
@@ -506,7 +565,6 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       lob_meta_table_id_ = table_schema->get_aux_lob_meta_tid();
     }
     lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
-    index_table_count_ = table_schema->get_simple_index_infos().count();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {
       LOG_WARN("fail to deep copy table name", KR(ret));
@@ -553,6 +611,15 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
       if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(
             tablet_id, allocator_, non_partitioned_tablet_id_vector_))) {
         LOG_WARN("fail to make const tablet id vector", KR(ret), K(tablet_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema->get_simple_index_infos();
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        const uint64_t table_id = simple_index_infos.at(i).table_id_;
+        if (OB_FAIL(index_table_ids_.push_back(table_id))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
       }
     }
   }

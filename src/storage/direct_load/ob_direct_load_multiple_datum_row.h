@@ -18,6 +18,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObDirectLoadDatumRow;
 
 class ObDirectLoadMultipleDatumRow
 {
@@ -31,22 +32,27 @@ public:
   int deep_copy(const ObDirectLoadMultipleDatumRow &src, char *buf, const int64_t len,
                 int64_t &pos);
   // not deep copy
-  int from_datums(const common::ObTabletID &tablet_id, blocksstable::ObStorageDatum *datums,
-                  int64_t column_count, int64_t rowkey_column_count,
-                  const table::ObTableLoadSequenceNo &seq_no, const bool is_deleted);
-  int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
+  int from_datum_row(const ObTabletID &tablet_id,
+                     const ObDirectLoadDatumRow &datum_row,
+                     const int64_t rowkey_column_count);
+  int to_datum_row(ObDirectLoadDatumRow &datum_row) const;
   OB_INLINE bool is_valid() const
   {
     return rowkey_.is_valid() && seq_no_.is_valid() && (buf_size_ == 0 || nullptr != buf_);
   }
-  OB_INLINE int64_t get_raw_size() const { return buf_size_; }
-  TO_STRING_KV(K_(rowkey), K_(seq_no), K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(rowkey),
+               K_(seq_no),
+               K_(is_delete),
+               K_(is_ack),
+               K_(buf_size),
+               KP_(buf));
 
 public:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMultipleDatumRowkey rowkey_;
   table::ObTableLoadSequenceNo seq_no_;
-  bool is_deleted_;
+  bool is_delete_;
+  bool is_ack_;
   int64_t buf_size_;
   const char *buf_;
 };

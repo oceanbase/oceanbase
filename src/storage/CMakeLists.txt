@@ -878,21 +878,30 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_data_block.cpp
   direct_load/ob_direct_load_data_fuse.cpp
   direct_load/ob_direct_load_data_insert.cpp
+  direct_load/ob_direct_load_data_with_origin_query.cpp
+  direct_load/ob_direct_load_datum_row.cpp
   direct_load/ob_direct_load_datum.cpp
   direct_load/ob_direct_load_external_fragment.cpp
   direct_load/ob_direct_load_external_multi_partition_row.cpp
   direct_load/ob_direct_load_external_multi_partition_table.cpp
   direct_load/ob_direct_load_external_row.cpp
-  direct_load/ob_direct_load_external_table.cpp
   direct_load/ob_direct_load_external_table_builder.cpp
   direct_load/ob_direct_load_external_table_compactor.cpp
+  direct_load/ob_direct_load_external_table.cpp
+  direct_load/ob_direct_load_i_table.cpp
+  direct_load/ob_direct_load_insert_data_table_ctx.cpp
+  direct_load/ob_direct_load_insert_lob_table_ctx.cpp
   direct_load/ob_direct_load_insert_table_ctx.cpp
   direct_load/ob_direct_load_insert_table_row_handler.cpp
   direct_load/ob_direct_load_insert_table_row_iterator.cpp
   direct_load/ob_direct_load_insert_table_row_writer.cpp
-  direct_load/ob_direct_load_merge_ctx.cpp
   direct_load/ob_direct_load_lob_builder.cpp
-  direct_load/ob_direct_load_merge_task_iterator.cpp
+  direct_load/ob_direct_load_lob_meta_row_iter.cpp
+  direct_load/ob_direct_load_mem_context.cpp
+  direct_load/ob_direct_load_mem_dump.cpp
+  direct_load/ob_direct_load_mem_loader.cpp
+  direct_load/ob_direct_load_mem_sample.cpp
+  direct_load/ob_direct_load_merge_ctx.cpp
   direct_load/ob_direct_load_multiple_datum_range.cpp
   direct_load/ob_direct_load_multiple_datum_row.cpp
   direct_load/ob_direct_load_multiple_datum_rowkey.cpp
@@ -907,7 +916,9 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_multiple_heap_table_index_scan_merge.cpp
   direct_load/ob_direct_load_multiple_heap_table_index_scan_merge_loser_tree.cpp
   direct_load/ob_direct_load_multiple_heap_table_index_scanner.cpp
+  direct_load/ob_direct_load_multiple_heap_table_map.cpp
   direct_load/ob_direct_load_multiple_heap_table_scanner.cpp
+  direct_load/ob_direct_load_multiple_heap_table_sorter.cpp
   direct_load/ob_direct_load_multiple_sstable.cpp
   direct_load/ob_direct_load_multiple_sstable_builder.cpp
   direct_load/ob_direct_load_multiple_sstable_compactor.cpp
@@ -925,27 +936,20 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_partition_rescan_task.cpp
   direct_load/ob_direct_load_range_splitter.cpp
   direct_load/ob_direct_load_rowkey_iterator.cpp
-  direct_load/ob_direct_load_row_iterator.cpp
   direct_load/ob_direct_load_sstable_builder.cpp
-  direct_load/ob_direct_load_sstable.cpp
   direct_load/ob_direct_load_sstable_compactor.cpp
   direct_load/ob_direct_load_sstable_data_block.cpp
-  direct_load/ob_direct_load_sstable_index_block.cpp
-  direct_load/ob_direct_load_sstable_index_block_writer.cpp
   direct_load/ob_direct_load_sstable_index_block_reader.cpp
-  direct_load/ob_direct_load_sstable_scan_merge.cpp
+  direct_load/ob_direct_load_sstable_index_block_writer.cpp
+  direct_load/ob_direct_load_sstable_index_block.cpp
   direct_load/ob_direct_load_sstable_scan_merge_loser_tree.cpp
+  direct_load/ob_direct_load_sstable_scan_merge.cpp
   direct_load/ob_direct_load_sstable_scanner.cpp
+  direct_load/ob_direct_load_sstable.cpp
   direct_load/ob_direct_load_struct.cpp
   direct_load/ob_direct_load_table_data_desc.cpp
+  direct_load/ob_direct_load_table_store.cpp
   direct_load/ob_direct_load_tmp_file.cpp
-  direct_load/ob_direct_load_mem_dump.cpp
-  direct_load/ob_direct_load_mem_loader.cpp
-  direct_load/ob_direct_load_mem_sample.cpp
-  direct_load/ob_direct_load_mem_context.cpp
-  direct_load/ob_direct_load_multiple_heap_table_map.cpp
-  direct_load/ob_direct_load_multiple_heap_table_sorter.cpp
-  direct_load/ob_direct_load_lob_meta_row_iter.cpp
   direct_load/ob_direct_load_vector_utils.cpp
 )
 

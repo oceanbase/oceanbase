@@ -24,12 +24,9 @@ namespace sql
 {
 class ObLoadDataStat;
 } // namespace sql
-namespace blocksstable
-{
-class ObDatumRow;
-} // namespace blocksstable
 namespace storage
 {
+class ObDirectLoadDatumRow;
 class ObDirectLoadDMLRowHandler;
 
 class ObDirectLoadInsertTableBatchRowBufferWriter
@@ -86,7 +83,7 @@ public:
            common::ObIAllocator *lob_allocator);
   int append_batch(const IVectorPtrs &vectors, const int64_t batch_size);
   int append_row(const IVectorPtrs &vectors, const int64_t row_idx);
-  int append_row(const blocksstable::ObDatumRow &datum_row);
+  int append_row(const ObDirectLoadDatumRow &datum_row);
   int close() override;
 
 private:

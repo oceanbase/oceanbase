@@ -13,15 +13,22 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_store.h"
+#include "observer/table_load/ob_table_load_pre_sort_writer.h"
+#include "observer/table_load/ob_table_load_pre_sorter.h"
+#include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_stat.h"
+#include "observer/table_load/ob_table_load_store_ctx.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_store_trans.h"
 #include "observer/table_load/ob_table_load_store_trans_px_writer.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "observer/table_load/ob_table_load_store_table_ctx.h"
-#include "observer/table_load/ob_table_load_merger_manager.h"
-#include "observer/table_load/ob_table_load_pre_sorter.h"
-#include "src/observer/virtual_table/ob_all_virtual_dml_stats.h"
+#include "observer/table_load/ob_table_load_utils.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "share/table/ob_table_load_dml_stat.h"
+#include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
 {
@@ -51,30 +58,6 @@ int ObTableLoadStore::init_ctx(
   return ret;
 }
 
-void ObTableLoadStore::cancel_table_ctx(ObTableLoadTableCtx *ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx->store_ctx_->data_store_table_ctx_) ||
-      OB_ISNULL(ctx->store_ctx_->data_store_table_ctx_->insert_table_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected main store table ctx or insert_table_ctx is NULL", KR(ret));
-  } else {
-    ctx->store_ctx_->data_store_table_ctx_->insert_table_ctx_->cancel();
-  }
-
-  for (int64_t i = 0; i < ctx->store_ctx_->index_store_table_ctxs_.count(); i++) {
-    ObTableLoadStoreTableCtx *index_store_table_ctx =
-      ctx->store_ctx_->index_store_table_ctxs_.at(i);
-    if (OB_ISNULL(index_store_table_ctx) || OB_ISNULL(index_store_table_ctx->insert_table_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected index store table ctx or insert_table_ctx is NULL", KR(ret),
-               KP(index_store_table_ctx));
-    } else {
-      index_store_table_ctx->insert_table_ctx_->cancel();
-    }
-  }
-}
-
 void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
 {
   int ret = OB_SUCCESS;
@@ -100,12 +83,8 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     if (OB_TMP_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
-    cancel_table_ctx(ctx);
-    ctx->store_ctx_->merger_manager_->stop();
-    ctx->store_ctx_->task_scheduler_->stop();
-    if (OB_NOT_NULL(ctx->store_ctx_->pre_sorter_)) {
-      ctx->store_ctx_->pre_sorter_->stop();
-    }
+    // 4. stop store ctx
+    ctx->store_ctx_->stop();
     if (ctx->is_assigned_memory()) {
       ObMutexGuard guard(ctx->store_ctx_->get_op_lock());
       if (ctx->is_assigned_memory()) {
@@ -116,7 +95,7 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
         ctx->reset_assigned_memory();
       }
     }
-    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped() && (0 == ATOMIC_LOAD(&ctx->store_ctx_->px_writer_count_));
+    is_stopped = ctx->store_ctx_->is_stopped();
   }
 }
 
@@ -194,132 +173,14 @@ int ObTableLoadStore::confirm_begin()
   } else {
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
-    if (ObDirectLoadMethod::is_incremental(param_.method_)) {
-      if (OB_FAIL(open_insert_table_ctx())) {
-        LOG_WARN("fail to open insert_table_ctx", KR(ret));
-      }
-    } else {
-      if (OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
-        LOG_WARN("fail to set store status loading", KR(ret));
-      }
+    if (OB_FAIL(ctx_->store_ctx_->init_write_ctx())) {
+      LOG_WARN("fail to init write ctx", KR(ret));
+    } else if (OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
+      LOG_WARN("fail to set store status loading", KR(ret));
     }
   }
-
   return ret;
 }
-
-int ObTableLoadStore::open_insert_table_ctx()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStore not init", KR(ret));
-  } else {
-    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= ctx_->param_.session_count_; ++session_id) {
-      ObTableLoadTask *task = nullptr;
-      if (OB_FAIL(ctx_->alloc_task(task))) {
-        LOG_WARN("fail to alloc task", KR(ret));
-      } else if (OB_FAIL(task->set_processor<OpenInsertTabletTaskProcessor>(ctx_))) {
-        LOG_WARN("fail to set flush task processor", KR(ret));
-      } else if (OB_FAIL(task->set_callback<OpenInsertTabletTaskCallback>(ctx_))) {
-        LOG_WARN("fail to set flush task callback", KR(ret));
-      } else if (OB_FAIL(store_ctx_->task_scheduler_->add_task(session_id - 1, task))) {
-        LOG_WARN("fail to add task", KR(ret), K(session_id), KPC(task));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != task) {
-          ctx_->free_task(task);
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-class ObTableLoadStore::OpenInsertTabletTaskProcessor : public ObITableLoadTaskProcessor
-{
-public:
-  OpenInsertTabletTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx)
-    : ObITableLoadTaskProcessor(task), ctx_(ctx)
-  {
-    ctx_->inc_ref_count();
-  }
-  virtual ~OpenInsertTabletTaskProcessor()
-  {
-    ObTableLoadService::put_ctx(ctx_);
-  }
-  int process() override
-  {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, store_open_tablet_time_us);
-    int ret = OB_SUCCESS;
-    while (OB_SUCC(ret)) {
-      ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
-      if (OB_FAIL(ctx_->store_ctx_->get_next_insert_tablet_ctx(tablet_ctx))) {
-        if (OB_UNLIKELY(ret != OB_ITER_END)) {
-          LOG_WARN("fail to get next insert tablet context", KR(ret));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else {
-        bool is_finish = false;
-        while (OB_SUCC(ret)) {
-          if (THIS_WORKER.is_timeout_ts_valid() && OB_UNLIKELY(THIS_WORKER.is_timeout())) {
-            ret = OB_TIMEOUT;
-            LOG_WARN("worker timeouted", KR(ret));
-          } else if (OB_FAIL(ctx_->store_ctx_->check_status(ObTableLoadStatusType::INITED))) {
-            LOG_WARN("fail to check status", KR(ret));
-          } else if (OB_FAIL(tablet_ctx->open())) {
-            LOG_WARN("fail to open tablet context", KR(ret), KPC(tablet_ctx));
-            if (ret == OB_EAGAIN || ret == OB_MINOR_FREEZE_NOT_ALLOW) {
-              LOG_WARN("retry to open tablet context");
-              ret = OB_SUCCESS;
-            }
-          } else {
-            ctx_->store_ctx_->handle_open_insert_tablet_ctx_finish(is_finish);
-            break;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (is_finish && OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
-            LOG_WARN("fail to set store status loading", KR(ret));
-          }
-        }
-      }
-    }
-
-    return ret;
-  }
-private:
-  ObTableLoadTableCtx * const ctx_;
-};
-
-class ObTableLoadStore::OpenInsertTabletTaskCallback : public ObITableLoadTaskCallback
-{
-public:
-  OpenInsertTabletTaskCallback(ObTableLoadTableCtx *ctx)
-    : ctx_(ctx)
-  {
-    ctx_->inc_ref_count();
-  }
-  virtual ~OpenInsertTabletTaskCallback()
-  {
-    ObTableLoadService::put_ctx(ctx_);
-  }
-  void callback(int ret_code, ObTableLoadTask *task) override
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(ret_code)) {
-      ctx_->store_ctx_->set_status_error(ret);
-    }
-    ctx_->free_task(task);
-    OB_TABLE_LOAD_STATISTICS_PRINT_AND_RESET();
-  }
-private:
-  ObTableLoadTableCtx * const ctx_;
-};
-
 /**
  * merge
  */
@@ -339,13 +200,13 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    if (ctx_->store_ctx_->enable_pre_sort_) {
-      if (OB_FAIL(ctx_->store_ctx_->pre_sorter_->chunks_manager_->close_all_chunk())) {
-        LOG_WARN("fail to close all chunk", KR(ret));
+    if (ctx_->store_ctx_->write_ctx_.enable_pre_sort_) {
+      if (OB_FAIL(ctx_->store_ctx_->write_ctx_.pre_sorter_->close())) {
+        LOG_WARN("fail to close pre sorter", KR(ret));
       }
     } else {
-      if (OB_FAIL(ctx_->store_ctx_->merger_manager_->start())) {
-        LOG_WARN("fail to start merger", KR(ret));
+      if (OB_FAIL(ctx_->store_ctx_->start_merge())) {
+        LOG_WARN("fail to start merge", KR(ret));
       }
     }
     return ret;
@@ -484,10 +345,12 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
       LOG_WARN("trans service is null", KR(ret));
     } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
-    } else if (OB_FAIL(store_ctx_->merger_manager_->commit(dml_stats, sql_statistics))) {
-      LOG_WARN("fail to commit insert table", KR(ret));
     } else if (store_ctx_->data_store_table_ctx_->schema_->has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
+    } else if (OB_FAIL(dml_stats.merge(store_ctx_->dml_stats_))) {
+      LOG_WARN("fail to merge dml stats", KR(ret));
+    } else if (OB_FAIL(sql_statistics.merge(store_ctx_->sql_stats_))) {
+      LOG_WARN("fail to merge sql stats", KR(ret));
     }
     // 全量旁路导入的dml_stat在执行节点更新
     // 增量旁路导入的dml_stat收集到协调节点在事务中更新
@@ -891,13 +754,13 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
     //  } else {
     //    ret = OB_SUCCESS;
     //  }
-    } else if (store_ctx_->enable_pre_sort_) {
+    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
       ObTableLoadPreSortWriter pre_sort_writer;
       if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
         LOG_WARN("fail to check store ctx status", KR(ret));
-      } else if (OB_FAIL(pre_sort_writer.init(ctx_->store_ctx_->pre_sorter_, store_writer,
-                                       store_ctx_->error_row_handler_,
-                                       &(store_ctx_->data_store_table_ctx_->table_data_desc_)))) {
+      } else if (OB_FAIL(pre_sort_writer.init(store_ctx_->write_ctx_.pre_sorter_,
+                                              store_writer,
+                                              store_ctx_->error_row_handler_))) {
         LOG_WARN("fail to init pre sort writer", KR(ret));
       } else if (OB_FAIL(pre_sort_writer.write(session_id, row_array))) {
         LOG_WARN("fail to write to chunk");
@@ -1038,7 +901,7 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     // after get store writer, avoid early commit
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
-    } else if (store_ctx_->enable_pre_sort_) {
+    } else if (store_ctx_->write_ctx_.enable_pre_sort_) {
       // do nothing
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {

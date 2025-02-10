@@ -470,6 +470,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_fts_index = false;
     bool has_multivalue_index = false;
     bool has_non_normal_local_index = false;
+    bool is_heap_table_with_single_unique_index = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
 
@@ -554,13 +555,11 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                  OB_FAIL(ObTableLoadSchema::check_has_non_local_index(
                    schema_guard, table_schema, has_non_normal_local_index))) {
         LOG_WARN("fail to check support direct load for local index", KR(ret));
-      } else if (has_non_normal_local_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("incremental direct-load does not support table with non-normal local index",
-                 KR(ret));
-        FORWARD_USER_ERROR_MSG(
-          ret, "incremental direct-load does not support table with global index or unique index");
-      } else if (table_schema->get_simple_index_infos().count() > 0 && !has_non_normal_local_index && compat_version < DATA_VERSION_4_3_4_0) {
+      } else if (table_schema->get_simple_index_infos().count() > 0 &&
+                 OB_FAIL(ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
+                   schema_guard, table_schema, is_heap_table_with_single_unique_index))) {
+        LOG_WARN("fail to check support direct load for heap table with single local unique index", KR(ret));
+      } else if (table_schema->get_simple_index_infos().count() > 0 && compat_version < DATA_VERSION_4_3_4_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
           "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index",
@@ -568,11 +567,31 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         FORWARD_USER_ERROR_MSG(
           ret,
           "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index");
+      } else if (has_non_normal_local_index && compat_version < DATA_VERSION_4_3_5_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "version lower than 4.3.5.1 incremental direct-load does not support table with "
+          "non-normal local index",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "version lower than 4.3.5.1 incremental direct-load does not "
+                               "support table with global index or unique index");
+      } else if (has_non_normal_local_index && !is_heap_table_with_single_unique_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+          "incremental direct-load does only support table with "
+          "heap table with single local unique index",
+          KR(ret));
+        FORWARD_USER_ERROR_MSG(ret,
+                               "incremental direct-load does only "
+                               "support heap table with single local unique index");
       } else if (table_schema->get_foreign_key_infos().count() > 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
-      } else if (table_schema->has_check_constraint() && (ObDirectLoadMode::LOAD_DATA == load_mode || ObDirectLoadMode::TABLE_LOAD == load_mode)) {
+      } else if (table_schema->has_check_constraint() &&
+                 (ObDirectLoadMode::LOAD_DATA == load_mode ||
+                  ObDirectLoadMode::TABLE_LOAD == load_mode)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");

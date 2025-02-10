@@ -13,7 +13,7 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
-#include "storage/blocksstable/ob_datum_row.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
@@ -248,7 +248,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::before_flush_batch(ObBatchDatum
 int ObDirectLoadInsertTableBatchRowDirectWriter::after_flush_batch(ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml_row_handler_->handle_insert_batch_with_multi_version(tablet_id_, datum_rows))) {
+  if (OB_FAIL(dml_row_handler_->handle_insert_batch(tablet_id_, datum_rows))) {
     LOG_WARN("fail to handle insert batch", KR(ret));
   }
   return ret;
@@ -305,7 +305,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const IVectorPtrs &v
   return ret;
 }
 
-int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDatumRow &datum_row)
+int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -317,7 +317,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDatumRow &da
   } else {
     bool is_full = false;
     // 先处理lob列, 降低内存压力
-    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDatumRow &>(datum_row), row_flag_))) {
+    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(datum_row), row_flag_))) {
       LOG_WARN("fail to handle row", KR(ret));
     } else if (OB_FAIL(buffer_.append_row(datum_row, row_flag_, is_full))) {
       LOG_WARN("fail to append row", KR(ret));
@@ -378,7 +378,7 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::after_flush_batch(ObBatchDatumRo
   int ret = OB_SUCCESS;
   ATOMIC_AAF(&job_stat_->store_.merge_stage_write_rows_, datum_rows.row_count_);
   if (nullptr != dml_row_handler_ &&
-      OB_FAIL(dml_row_handler_->handle_insert_batch_with_multi_version(tablet_id_, datum_rows))) {
+      OB_FAIL(dml_row_handler_->handle_insert_batch(tablet_id_, datum_rows))) {
     LOG_WARN("fail to handle insert batch", KR(ret));
   }
   return ret;
@@ -398,7 +398,7 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
     ObTabletCacheInterval *hide_pk_interval = row_iter->get_hide_pk_interval();
     int64_t start_pos = buffer_.get_row_count();
     bool is_full = false;
-    const ObDatumRow *datum_row = nullptr;
+    const ObDirectLoadDatumRow *datum_row = nullptr;
     if (OB_UNLIKELY(row_flag.uncontain_hidden_pk_ && nullptr == hide_pk_interval)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid row iter", KR(ret), KPC(row_iter));
@@ -417,12 +417,14 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
       } else if (OB_ISNULL(datum_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected datum row is null", KR(ret));
-      } else if (OB_UNLIKELY(datum_row->row_flag_.is_delete())) {
+      }
+      // 有删除行的情况不走batch模式
+      else if (OB_UNLIKELY(datum_row->is_delete_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected delete row", KR(ret), KPC(datum_row));
       }
       // 先处理lob列, 降低内存压力
-      else if (OB_FAIL(row_handler_.handle_row(const_cast<ObDatumRow&>(*datum_row), row_flag))) {
+      else if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(*datum_row), row_flag))) {
         LOG_WARN("fail to handle row", KR(ret), KPC(datum_row), K(row_flag));
       } else if (OB_FAIL(buffer_.append_row(*datum_row, row_flag, is_full))) {
         LOG_WARN("fail to append row", KR(ret));

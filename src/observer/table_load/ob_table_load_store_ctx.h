@@ -31,6 +31,9 @@ namespace storage
 class ObDirectLoadTransParam;
 class ObDirectLoadInsertTableContext;
 class ObDirectLoadTmpFileManager;
+class ObDirectLoadTableManager;
+class ObDirectLoadTableStore;
+class ObDirectLoadDMLRowHandler;
 }  // namespace storage
 namespace share
 {
@@ -45,22 +48,57 @@ class ObTableLoadTransStore;
 class ObITableLoadTaskScheduler;
 class ObTableLoadMerger;
 class ObTableLoadErrorRowHandler;
-class ObTableLoadStoreTableCtx;
+class ObTableLoadStoreDataTableCtx;
+class ObTableLoadStoreIndexTableCtx;
 class ObTableLoadMergerManager;
 class ObTableLoadOpenInsertTableCtxManager;
 class ObTableLoadPreSorter;
+class ObTableLoadMergeRootOp;
+
+struct ObTableLoadStoreWriteCtx
+{
+public:
+  ObTableLoadStoreWriteCtx()
+    : table_data_desc_(),
+      dml_row_handler_(nullptr),
+      is_fast_heap_table_(false),
+      is_multiple_mode_(false),
+      enable_pre_sort_(false),
+      pre_sorter_(nullptr),
+      px_writer_cnt_(0)
+  {
+  }
+  TO_STRING_KV(K_(table_data_desc),
+               K_(trans_param),
+               KP_(dml_row_handler),
+               K_(is_fast_heap_table),
+               K_(is_multiple_mode),
+               K_(enable_pre_sort),
+               KP_(pre_sorter),
+               K_(px_writer_cnt));
+public:
+  storage::ObDirectLoadTableDataDesc table_data_desc_;
+  storage::ObDirectLoadTransParam trans_param_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
+  bool is_fast_heap_table_;
+  bool is_multiple_mode_;
+  bool enable_pre_sort_;
+  ObTableLoadPreSorter *pre_sorter_;
+  int64_t px_writer_cnt_;
+};
 
 class ObTableLoadStoreCtx
 {
 public:
   ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx);
   ~ObTableLoadStoreCtx();
+  void destroy();
   int init(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
   void stop();
-  void destroy();
   bool is_valid() const { return is_inited_; }
+  bool is_stopped() const;
   TO_STRING_KV(K_(is_inited));
 public:
   OB_INLINE lib::ObMutex &get_op_lock()
@@ -77,6 +115,11 @@ public:
     obsys::ObRLockGuard guard(status_lock_);
     status = status_;
     error_code = error_code_;
+  }
+  OB_INLINE int get_error_code() const
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    return error_code_;
   }
   OB_INLINE int set_status_inited()
   {
@@ -125,8 +168,10 @@ public:
   int get_committed_trans_stores(
     common::ObIArray<ObTableLoadTransStore *> &trans_store_array) const;
   int check_exist_trans(bool &exist) const;
-  // release disk space
-  void clear_committed_trans_stores();
+  int init_write_ctx();
+  int start_merge();
+  int handle_pre_sort_success();
+  int init_trans_param(storage::ObDirectLoadTransParam &trans_param);
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
@@ -134,39 +179,47 @@ private:
   int init_store_table_ctxs(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array);
-  int init_trans_param();
+  int init_sort_param();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
+  int get_table_store_from_committed_trans_stores(ObDirectLoadTableStore &table_store);
+  void clear_committed_trans_stores();
+  int start_merge_op();
 public:
   int commit_autoinc_value();
-  int get_next_insert_tablet_ctx(ObDirectLoadInsertTabletContext *&tablet_ctx);
-  void handle_open_insert_tablet_ctx_finish(bool &is_finish);
 public:
   ObTableLoadTableCtx * ctx_;
   common::ObArenaAllocator allocator_;
-  storage::ObDirectLoadTransParam trans_param_;
-  table::ObTableLoadResultInfo result_info_;
+  int64_t thread_cnt_;
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadErrorRowHandler *error_row_handler_;
-  ObArray<ObTableLoadStoreTableCtx *> index_store_table_ctxs_;
-  ObTableLoadStoreTableCtx *data_store_table_ctx_;
-  ObTableLoadMergerManager *merger_manager_;
-  ObTableLoadOpenInsertTableCtxManager *open_insert_tablet_ctx_manager_;
-  int64_t px_writer_count_;
+  ObTableLoadStoreDataTableCtx *data_store_table_ctx_;
+  ObArray<ObTableLoadStoreIndexTableCtx *> index_store_table_ctxs_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
+  storage::ObDirectLoadTableManager *table_mgr_;
   share::schema::ObSequenceSchema sequence_schema_;
   uint64_t next_session_id_ CACHE_ALIGNED;
   struct SessionContext
   {
-    SessionContext() : extra_buf_(nullptr), extra_buf_size_(0) {}
+    SessionContext() {}
     share::AutoincParam autoinc_param_;
-    // for multiple mode
-    char *extra_buf_;
-    int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
-  ObTableLoadPreSorter *pre_sorter_;
-  bool enable_pre_sort_;
+  // sort params
+  storage::ObDirectLoadTableDataDesc basic_table_data_desc_;
+  int64_t merge_count_per_round_;
+  int64_t max_mem_chunk_count_;
+  int64_t mem_chunk_size_; // 在资源控制模式下, 动态获取
+  int64_t heap_table_mem_chunk_size_; // 在资源控制模式下, 动态获取
+  // write
+  ObTableLoadStoreWriteCtx write_ctx_;
+  // merge
+  ObArenaAllocator merge_op_allocator_;
+  ObTableLoadMergeRootOp *merge_root_op_;
+  // result
+  table::ObTableLoadResultInfo result_info_;
+  table::ObTableLoadDmlStat dml_stats_;
+  table::ObTableLoadSqlStatistics sql_stats_;
 private:
   struct SegmentCtx : public common::LinkHashValue<table::ObTableLoadSegmentID>
   {

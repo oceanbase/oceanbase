@@ -13,14 +13,28 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_table_load_store_ctx.h"
+#include "observer/table_load/ob_table_load_data_row_insert_handler.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
+#include "observer/table_load/ob_table_load_merge_op.h"
+#include "observer/table_load/ob_table_load_pre_sorter.h"
+#include "observer/table_load/ob_table_load_schema.h"
+#include "observer/table_load/ob_table_load_store_table_ctx.h"
 #include "observer/table_load/ob_table_load_store_trans.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
-#include "observer/table_load/ob_table_load_store_table_ctx.h"
-#include "observer/table_load/ob_table_load_merger_manager.h"
-#include "observer/table_load/ob_table_load_open_insert_table_ctx_manager.h"
-#include "observer/table_load/ob_table_load_pre_sorter.h"
+#include "observer/table_load/ob_table_load_utils.h"
+#include "share/ob_autoincrement_service.h"
+#include "share/sequence/ob_sequence_cache.h"
+#include "sql/engine/cmd/ob_load_data_utils.h"
+#include "storage/direct_load/ob_direct_load_data_block.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
+#include "storage/direct_load/ob_direct_load_mem_context.h"
+#include "storage/direct_load/ob_direct_load_sstable_data_block.h"
+#include "storage/direct_load/ob_direct_load_sstable_index_block.h"
+#include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
+#include "storage/direct_load/ob_direct_load_table_store.h"
+#include "storage/direct_load/ob_direct_load_tmp_file.h"
 
 namespace oceanbase
 {
@@ -36,17 +50,22 @@ using namespace share;
 ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
     allocator_("TLD_StoreCtx"),
+    thread_cnt_(0),
     task_scheduler_(nullptr),
     error_row_handler_(nullptr),
     data_store_table_ctx_(nullptr),
-    merger_manager_(nullptr),
-    open_insert_tablet_ctx_manager_(nullptr),
-    px_writer_count_(0),
     tmp_file_mgr_(nullptr),
+    table_mgr_(nullptr),
     sequence_schema_(&allocator_),
     next_session_id_(0),
-    pre_sorter_(nullptr),
-    enable_pre_sort_(false),
+    basic_table_data_desc_(),
+    merge_count_per_round_(0),
+    max_mem_chunk_count_(0),
+    mem_chunk_size_(0),
+    heap_table_mem_chunk_size_(0),
+    write_ctx_(),
+    merge_op_allocator_("TLD_MergeOp"),
+    merge_root_op_(nullptr),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
     last_heart_beat_ts_(ObTimeUtil::current_time()),
@@ -54,6 +73,7 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
 {
   allocator_.set_tenant_id(MTL_ID());
   index_store_table_ctxs_.set_block_allocator(ModulePageAllocator(allocator_));
+  merge_op_allocator_.set_tenant_id(MTL_ID());
   committed_trans_store_array_.set_tenant_id(MTL_ID());
 }
 
@@ -62,219 +82,39 @@ ObTableLoadStoreCtx::~ObTableLoadStoreCtx()
   destroy();
 }
 
-int ObTableLoadStoreCtx::init_store_table_ctxs(
-  const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,
-  const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const share::schema::ObTableSchema *data_table_schema = nullptr;
-  if (OB_FAIL(ObTableLoadSchema::get_schema_guard(ctx_->param_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(
-               schema_guard, ctx_->param_.tenant_id_, ctx_->param_.table_id_, data_table_schema))) {
-    LOG_WARN("fail to get table shema of main table", KR(ret));
-  } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data table schema is null", KR(ret));
-  } else {
-    if (ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
-      const ObIArray<ObAuxTableMetaInfo> &simple_index_infos =
-        data_table_schema->get_simple_index_infos();
-      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
-        ObTableLoadStoreTableCtx *index_store_table_ctx = nullptr;
-        if (OB_ISNULL(index_store_table_ctx = OB_NEWx(ObTableLoadStoreTableCtx, (&allocator_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to new ObTableLoadStoreTableCtx", KR(ret));
-        } else if (OB_FAIL(index_store_table_ctx->init(simple_index_infos.at(i).table_id_, true,
-                                                       this, partition_id_array,
-                                                       target_partition_id_array))) {
-          LOG_WARN("fail to init ObTableLoadStoreTableCtx", KR(ret));
-        } else if (OB_FAIL(index_store_table_ctxs_.push_back(index_store_table_ctx))) {
-          LOG_WARN("fail to push", KR(ret));
-        }
-        if (OB_FAIL(ret)) {
-          if (OB_NOT_NULL(index_store_table_ctx)) {
-            index_store_table_ctx->~ObTableLoadStoreTableCtx();
-            allocator_.free(index_store_table_ctx);
-            index_store_table_ctx = nullptr;
-          }
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(data_store_table_ctx_ =
-                             OB_NEWx(ObTableLoadStoreTableCtx, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadStoreTableCtx", KR(ret));
-    } else if (OB_FAIL(data_store_table_ctx_->init(ctx_->ddl_param_.dest_table_id_, false, this,
-                                                   partition_id_array,
-                                                   target_partition_id_array))) {
-      LOG_WARN("fail to init ObTableLoadStoreTableCtx", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(data_store_table_ctx_)) {
-        data_store_table_ctx_->~ObTableLoadStoreTableCtx();
-        allocator_.free(data_store_table_ctx_);
-        data_store_table_ctx_ = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStoreCtx::init(
-  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
-  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObTableLoadStoreCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(partition_id_array.empty() || target_partition_id_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(partition_id_array), K(target_partition_id_array));
-  }
-  // init trans_param_
-  else if (ObDirectLoadMethod::is_incremental(ctx_->param_.method_) &&
-           OB_FAIL(init_trans_param())) {
-    LOG_WARN("fail to init trans param", KR(ret));
-  }
-  // init trans_allocator_
-  else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to init trans allocator", KR(ret));
-  }
-  // init trans_map_
-  else if (OB_FAIL(
-             trans_map_.create(1024, "TLD_STransMap", "TLD_STransMap", ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to create trans map", KR(ret));
-  }
-  // init trans_ctx_map_
-  else if (OB_FAIL(
-             trans_ctx_map_.create(1024, "TLD_TCtxMap", "TLD_TCtxMap", ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to create trans ctx map", KR(ret));
-  }
-  // init segment_trans_ctx_map_
-  else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to init segment ctx map", KR(ret));
-  }
-  // 初始化task_scheduler_
-  else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                               ctx_->param_.session_count_,
-                                               ctx_->param_.table_id_,
-                                               "Store",
-                                               ctx_->session_info_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
-  } else if (OB_FAIL(task_scheduler_->init())) {
-    LOG_WARN("fail to init task scheduler", KR(ret));
-  } else if (OB_FAIL(task_scheduler_->start())) {
-    LOG_WARN("fail to start task scheduler", KR(ret));
-  } else if (OB_ISNULL(error_row_handler_ = OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadErrorRowHandler", KR(ret));
-  } else if (OB_FAIL(error_row_handler_->init(ctx_->param_, result_info_, ctx_->job_stat_))) {
-    LOG_WARN("fail to init error row handler", KR(ret));
-  } else if (OB_FAIL(init_store_table_ctxs(partition_id_array, target_partition_id_array))) {
-    LOG_WARN("fail to init store table ctxs", KR(ret));
-  } else if (OB_ISNULL(merger_manager_ = OB_NEWx(ObTableLoadMergerManager, (&allocator_), this))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadMerger", KR(ret));
-  } else if (OB_FAIL(merger_manager_->init())) {
-    LOG_WARN("fail to init merger", KR(ret));
-  } else if (OB_ISNULL(open_insert_tablet_ctx_manager_ =
-                       OB_NEWx(ObTableLoadOpenInsertTableCtxManager, (&allocator_), this))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObTableLoadOpenInsertTableCtxManager", KR(ret));
-  } else if (OB_FAIL(open_insert_tablet_ctx_manager_->init())) {
-    LOG_WARN("fail to init open insert tablet ctx manager", KR(ret));
-  }
-  if (OB_FAIL(ret)) {
-  }
-  // init tmp_file_mgr_
-  else if (OB_ISNULL(tmp_file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObDirectLoadTmpFileManager", KR(ret));
-  } else if (OB_FAIL(tmp_file_mgr_->init(ctx_->param_.tenant_id_))) {
-    LOG_WARN("fail to init tmp file manager", KR(ret));
-  }
-  // init session_ctx_array_
-  else if (OB_FAIL(init_session_ctx_array())) {
-    LOG_WARN("fail to init session ctx array", KR(ret));
-  }
-  // init sequence_cache_ and sequence_schema_
-  else if (data_store_table_ctx_->schema_->has_identity_column_ && OB_FAIL(init_sequence())) {
-    LOG_WARN("fail to init sequence", KR(ret));
-  }
-  // init enable_pre_sort_ and pre_sorter_
-  if (OB_SUCC(ret)) {
-    enable_pre_sort_ = (data_store_table_ctx_->is_multiple_mode_
-                        && !data_store_table_ctx_->table_data_desc_.is_heap_table_);
-    if (enable_pre_sort_) {
-      if (OB_ISNULL(pre_sorter_ = OB_NEWx(ObTableLoadPreSorter,
-                                                (&allocator_),
-                                                this->ctx_,
-                                                this))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate TableLoadPreSorter", KR(ret));
-      } else if (OB_FAIL(pre_sorter_->init())) {
-        LOG_WARN("fail to init pre sorter", KR(ret));
-      } else if (OB_FAIL(pre_sorter_->start())) {
-        LOG_WARN("fail to start pre_sorter", KR(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    is_inited_ = true;
-  } else {
-    destroy();
-  }
-  return ret;
-}
-
-void ObTableLoadStoreCtx::stop()
-{
-  if (nullptr != merger_manager_) {
-    merger_manager_->stop();
-  }
-  if (nullptr != task_scheduler_) {
-    task_scheduler_->stop();
-    task_scheduler_->wait();
-  }
-  LOG_INFO("store ctx stop succ");
-}
-
 void ObTableLoadStoreCtx::destroy()
 {
-  if (OB_NOT_NULL(error_row_handler_)) {
-    error_row_handler_->~ObTableLoadErrorRowHandler();
-    allocator_.free(error_row_handler_);
-    error_row_handler_ = nullptr;
+  // 先让工作线程停下来
+  if (nullptr != write_ctx_.pre_sorter_) {
+    write_ctx_.pre_sorter_->stop();
   }
-  for (int64_t i = 0; i < index_store_table_ctxs_.count(); ++i) {
-    ObTableLoadStoreTableCtx* index_store_table_ctx = index_store_table_ctxs_.at(i);
-    index_store_table_ctx->~ObTableLoadStoreTableCtx();
-    allocator_.free(index_store_table_ctx);
-  }
-  index_store_table_ctxs_.reset();
-  if (OB_NOT_NULL(data_store_table_ctx_)) {
-    data_store_table_ctx_->~ObTableLoadStoreTableCtx();
-    allocator_.free(data_store_table_ctx_);
-    data_store_table_ctx_ = nullptr;
-  }
-  if (OB_NOT_NULL(merger_manager_)) {
-    merger_manager_->~ObTableLoadMergerManager();
-    allocator_.free(merger_manager_);
-    merger_manager_ = nullptr;
-  }
-  if (OB_NOT_NULL(open_insert_tablet_ctx_manager_)) {
-    open_insert_tablet_ctx_manager_->~ObTableLoadOpenInsertTableCtxManager();
-    allocator_.free(open_insert_tablet_ctx_manager_);
-    open_insert_tablet_ctx_manager_ = nullptr;
-  }
-  if (nullptr != task_scheduler_) {
+  if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->stop();
+  }
+  if (nullptr != write_ctx_.pre_sorter_) {
+    write_ctx_.pre_sorter_->wait();
+  }
+  if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->wait();
+  }
+  // 按顺序析构对象, 被依赖的最后析构
+  if (nullptr != write_ctx_.pre_sorter_) {
+    write_ctx_.pre_sorter_->~ObTableLoadPreSorter();
+    allocator_.free(write_ctx_.pre_sorter_);
+    write_ctx_.pre_sorter_ = nullptr;
+  }
+  if (OB_NOT_NULL(write_ctx_.dml_row_handler_)) {
+    write_ctx_.dml_row_handler_->~ObDirectLoadDMLRowHandler();
+    allocator_.free(write_ctx_.dml_row_handler_);
+    write_ctx_.dml_row_handler_ = nullptr;
+  }
+  if (OB_NOT_NULL(merge_root_op_)) {
+    merge_root_op_->~ObTableLoadMergeRootOp();
+    allocator_.free(merge_root_op_);
+    merge_root_op_ = nullptr;
+  }
+  merge_op_allocator_.reset();
+  if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->~ObITableLoadTaskScheduler();
     allocator_.free(task_scheduler_);
     task_scheduler_ = nullptr;
@@ -298,16 +138,140 @@ void ObTableLoadStoreCtx::destroy()
     ctx_->free_trans_ctx(trans_ctx);
   }
   trans_ctx_map_.reuse();
-  if (nullptr != pre_sorter_) {
-    pre_sorter_->~ObTableLoadPreSorter();
-    allocator_.free(pre_sorter_);
-    pre_sorter_ = nullptr;
+  if (OB_NOT_NULL(data_store_table_ctx_)) {
+    data_store_table_ctx_->~ObTableLoadStoreDataTableCtx();
+    allocator_.free(data_store_table_ctx_);
+    data_store_table_ctx_ = nullptr;
+  }
+  for (int64_t i = 0; i < index_store_table_ctxs_.count(); ++i) {
+    ObTableLoadStoreIndexTableCtx* index_store_table_ctx = index_store_table_ctxs_.at(i);
+    index_store_table_ctx->~ObTableLoadStoreIndexTableCtx();
+    allocator_.free(index_store_table_ctx);
+  }
+  index_store_table_ctxs_.reset();
+  if (OB_NOT_NULL(error_row_handler_)) {
+    error_row_handler_->~ObTableLoadErrorRowHandler();
+    allocator_.free(error_row_handler_);
+    error_row_handler_ = nullptr;
   }
   if (OB_NOT_NULL(tmp_file_mgr_)) {
     tmp_file_mgr_->~ObDirectLoadTmpFileManager();
     allocator_.free(tmp_file_mgr_);
     tmp_file_mgr_ = nullptr;
   }
+  if (OB_NOT_NULL(table_mgr_)) {
+    table_mgr_->~ObDirectLoadTableManager();
+    allocator_.free(table_mgr_);
+    table_mgr_ = nullptr;
+  }
+}
+
+int ObTableLoadStoreCtx::init(
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTableLoadStoreCtx init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(partition_id_array.empty() || target_partition_id_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(partition_id_array), K(target_partition_id_array));
+  }
+  // init trans_allocator_
+  else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
+    LOG_WARN("fail to init trans allocator", KR(ret));
+  }
+  // init trans_map_
+  else if (OB_FAIL(
+             trans_map_.create(1024, "TLD_STransMap", "TLD_STransMap", ctx_->param_.tenant_id_))) {
+    LOG_WARN("fail to create trans map", KR(ret));
+  }
+  // init trans_ctx_map_
+  else if (OB_FAIL(
+             trans_ctx_map_.create(1024, "TLD_TCtxMap", "TLD_TCtxMap", ctx_->param_.tenant_id_))) {
+    LOG_WARN("fail to create trans ctx map", KR(ret));
+  }
+  // init segment_trans_ctx_map_
+  else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
+    LOG_WARN("fail to init segment ctx map", KR(ret));
+  }
+  // init task_scheduler_
+  else if (FALSE_IT(thread_cnt_ = ctx_->param_.session_count_)) {
+  } else if (OB_ISNULL(task_scheduler_ =
+                         OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), thread_cnt_,
+                                 ctx_->param_.table_id_, "Store", ctx_->session_info_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->init())) {
+    LOG_WARN("fail to init task scheduler", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->start())) {
+    LOG_WARN("fail to start task scheduler", KR(ret));
+  }
+  // init error_row_handler_
+  else if (OB_ISNULL(error_row_handler_ = OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadErrorRowHandler", KR(ret));
+  } else if (OB_FAIL(error_row_handler_->init(ctx_->param_, result_info_, ctx_->job_stat_))) {
+    LOG_WARN("fail to init error row handler", KR(ret));
+  }
+  // init tmp_file_mgr_
+  else if (OB_ISNULL(tmp_file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObDirectLoadTmpFileManager", KR(ret));
+  } else if (OB_FAIL(tmp_file_mgr_->init(ctx_->param_.tenant_id_))) {
+    LOG_WARN("fail to init tmp file manager", KR(ret));
+  }
+  // init table_mgr_
+  else if (OB_ISNULL(table_mgr_ = OB_NEWx(ObDirectLoadTableManager, (&allocator_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObDirectLoadTableManager", KR(ret));
+  } else if (OB_FAIL(table_mgr_->init())) {
+    LOG_WARN("fail to init table mgr", KR(ret));
+  }
+  // init data_store_table_ctx_, index_store_table_ctxs_
+  else if (OB_FAIL(init_store_table_ctxs(partition_id_array, target_partition_id_array))) {
+    LOG_WARN("fail to init store table ctxs", KR(ret));
+  }
+  // init session_ctx_array_
+  else if (OB_FAIL(init_session_ctx_array())) {
+    LOG_WARN("fail to init session ctx array", KR(ret));
+  }
+  // init sequence_cache_ and sequence_schema_
+  else if (data_store_table_ctx_->schema_->has_identity_column_ && OB_FAIL(init_sequence())) {
+    LOG_WARN("fail to init sequence", KR(ret));
+  }
+  // init sort param
+  else if (OB_FAIL(init_sort_param())) {
+    LOG_WARN("fail to init sort param", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  } else {
+    destroy();
+  }
+  return ret;
+}
+
+void ObTableLoadStoreCtx::stop()
+{
+  LOG_INFO("store ctx stop");
+  if (nullptr != write_ctx_.pre_sorter_) {
+    write_ctx_.pre_sorter_->stop();
+  }
+  if (nullptr != merge_root_op_) {
+    merge_root_op_->stop();
+  }
+  if (nullptr != task_scheduler_) {
+    task_scheduler_->stop();
+  }
+}
+
+bool ObTableLoadStoreCtx::is_stopped() const
+{
+  return (nullptr == task_scheduler_ || task_scheduler_->is_stopped()) &&
+         (nullptr == write_ctx_.pre_sorter_ || write_ctx_.pre_sorter_->is_stopped()) &&
+         (0 == ATOMIC_LOAD(&write_ctx_.px_writer_cnt_));
 }
 
 int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
@@ -369,6 +333,7 @@ int ObTableLoadStoreCtx::set_status_abort()
     LOG_INFO("LOAD DATA STORE already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
+    error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
     table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
     LOG_INFO("LOAD DATA STORE status abort");
   }
@@ -402,12 +367,12 @@ bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_u
   return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
 }
 
-int ObTableLoadStoreCtx::init_trans_param()
+int ObTableLoadStoreCtx::init_trans_param(storage::ObDirectLoadTransParam &trans_param)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = nullptr;
   transaction::ObTxDesc *tx_desc = nullptr;
-  trans_param_.reset();
+  trans_param.reset();
   if (OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret));
@@ -418,10 +383,219 @@ int ObTableLoadStoreCtx::init_trans_param()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null tx desc", KR(ret));
   } else {
-    trans_param_.tx_desc_ = tx_desc;
-    trans_param_.tx_id_ = tx_desc->get_tx_id();
-    trans_param_.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
-    LOG_INFO("init trans param", K(trans_param_));
+    trans_param.tx_desc_ = tx_desc;
+    trans_param.tx_id_ = tx_desc->get_tx_id();
+    trans_param.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
+    LOG_INFO("init trans param", K(trans_param));
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_store_table_ctxs(
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &partition_id_array,
+  const ObTableLoadArray<ObTableLoadLSIdAndPartitionId> &target_partition_id_array)
+{
+  int ret = OB_SUCCESS;
+  // init data store_table_ctx_
+  if (OB_ISNULL(data_store_table_ctx_ =
+                  OB_NEWx(ObTableLoadStoreDataTableCtx, (&allocator_), this))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadStoreDataTableCtx", KR(ret));
+  } else if (OB_FAIL(data_store_table_ctx_->init(ctx_->param_.table_id_, partition_id_array,
+                                                 target_partition_id_array))) {
+    LOG_WARN("fail to init data table", KR(ret));
+  }
+  // init indexs store_table_ctx_
+  if (OB_SUCC(ret) && ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+    const ObIArray<uint64_t> &index_table_ids = data_store_table_ctx_->schema_->index_table_ids_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_table_ids.count(); ++i) {
+      const uint64_t index_table_id = index_table_ids.at(i);
+      ObTableLoadStoreIndexTableCtx *index_table_ctx = nullptr;
+      if (OB_ISNULL(index_table_ctx =
+                      OB_NEWx(ObTableLoadStoreIndexTableCtx, (&allocator_), this))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObTableLoadStoreIndexTableCtx", KR(ret));
+      } else if (OB_FAIL(index_table_ctx->init(index_table_id, partition_id_array,
+                                               target_partition_id_array))) {
+        LOG_WARN("fail to init index table", KR(ret));
+      } else if (OB_FAIL(index_store_table_ctxs_.push_back(index_table_ctx))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != index_table_ctx) {
+          index_table_ctx->~ObTableLoadStoreIndexTableCtx();
+          allocator_.free(index_table_ctx);
+          index_table_ctx = nullptr;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_sort_param()
+{
+  int ret = OB_SUCCESS;
+  // table_data_desc_
+  basic_table_data_desc_.reset();
+  basic_table_data_desc_.rowkey_column_num_ = 0;
+  basic_table_data_desc_.column_count_ = 0;
+  if (!GCTX.is_shared_storage_mode()) {
+    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SN_DEFAULT_DATA_BLOCK_SIZE;
+  } else {
+    basic_table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::SS_DEFAULT_DATA_BLOCK_SIZE;
+  }
+  basic_table_data_desc_.sstable_index_block_size_ =
+    ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;
+  basic_table_data_desc_.sstable_data_block_size_ = ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
+  basic_table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
+  basic_table_data_desc_.compressor_type_ = ctx_->param_.compressor_type_;
+  basic_table_data_desc_.is_shared_storage_ = GCTX.is_shared_storage_mode();
+  // sort params
+  int64_t wa_mem_limit = 0;
+  if (ctx_->param_.exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
+    // 无资源控制模式
+    if (OB_FAIL(ObTableLoadService::get_memory_limit(wa_mem_limit))) {
+      LOG_WARN("fail to get memory limit", KR(ret));
+    } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
+    } else {
+      merge_count_per_round_ =
+        min(wa_mem_limit / basic_table_data_desc_.sstable_data_block_size_ / thread_cnt_,
+            ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+      max_mem_chunk_count_ = 128;
+      int64_t mem_chunk_size = wa_mem_limit / max_mem_chunk_count_;
+      if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
+        mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+        max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
+      }
+      mem_chunk_size_ = mem_chunk_size;
+      heap_table_mem_chunk_size_ = wa_mem_limit / thread_cnt_;
+    }
+  } else {
+    // 资源控制模式
+    wa_mem_limit = ctx_->param_.avail_memory_;
+    merge_count_per_round_ =
+      min(wa_mem_limit / basic_table_data_desc_.sstable_data_block_size_ / thread_cnt_,
+          ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+    max_mem_chunk_count_ =
+      wa_mem_limit / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_write_ctx()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
+  } else {
+    static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
+    // table_data_desc_
+    write_ctx_.table_data_desc_ = basic_table_data_desc_;
+    write_ctx_.table_data_desc_.rowkey_column_num_ =
+      (!data_store_table_ctx_->schema_->is_heap_table_
+         ? data_store_table_ctx_->schema_->rowkey_column_count_
+         : 0);
+    write_ctx_.table_data_desc_.column_count_ =
+      (!data_store_table_ctx_->schema_->is_heap_table_
+         ? data_store_table_ctx_->schema_->store_column_count_
+         : data_store_table_ctx_->schema_->store_column_count_ - 1);
+    write_ctx_.table_data_desc_.row_flag_.uncontain_hidden_pk_ =
+      data_store_table_ctx_->schema_->is_heap_table_;
+    // dml_row_handler_
+    if (OB_SUCC(ret)) {
+      ObTableLoadDataRowInsertHandler *data_row_handler = nullptr;
+      if (OB_ISNULL(write_ctx_.dml_row_handler_ = data_row_handler =
+                      OB_NEWx(ObTableLoadDataRowInsertHandler, &allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObTableLoadDataRowInsertHandler", KR(ret));
+      } else if (OB_FAIL(data_row_handler->init(this))) {
+        LOG_WARN("fail to init data row handler", KR(ret));
+      }
+    }
+    // is_fast_heap_table_, is_multiple_mode_
+    switch (ctx_->param_.exe_mode_) {
+      // 堆表快速写入
+      case ObTableLoadExeMode::FAST_HEAP_TABLE:
+        write_ctx_.is_fast_heap_table_ = true;
+        break;
+      // 有主键表不排序
+      case ObTableLoadExeMode::GENERAL_TABLE_COMPACT:
+        break;
+      // 堆表排序
+      case ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT:
+      // 有主键表排序
+      case ObTableLoadExeMode::MEM_COMPACT:
+        write_ctx_.is_multiple_mode_ = true;
+        break;
+      // 无资源控制
+      case ObTableLoadExeMode::MAX_TYPE: {
+        const int64_t part_cnt = data_store_table_ctx_->ls_partition_ids_.count();
+        int64_t wa_mem_limit = 0;
+        if (OB_FAIL(ObTableLoadService::get_memory_limit(wa_mem_limit))) {
+          LOG_WARN("fail to get memory limit", KR(ret));
+        } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
+        } else if (data_store_table_ctx_->schema_->is_heap_table_) {
+          const int64_t bucket_cnt = wa_mem_limit / (thread_cnt_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          if (part_cnt <= bucket_cnt || !ctx_->param_.need_sort_) {
+            // 堆表快速写入
+            write_ctx_.is_fast_heap_table_ = true;
+          } else {
+            // 堆表排序
+            write_ctx_.is_multiple_mode_ = true;
+          }
+        } else {
+          int64_t bucket_cnt = wa_mem_limit / thread_cnt_ /
+                               (write_ctx_.table_data_desc_.sstable_index_block_size_ +
+                                write_ctx_.table_data_desc_.sstable_data_block_size_);
+          write_ctx_.is_multiple_mode_ = (ctx_->param_.need_sort_ || part_cnt > bucket_cnt);
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exe mode", KR(ret), K(ctx_->param_.exe_mode_));
+        break;
+    }
+    // pre_sort
+    if (OB_SUCC(ret)) {
+      write_ctx_.enable_pre_sort_ =
+        (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_heap_table_);
+      if (write_ctx_.enable_pre_sort_) {
+        if (OB_ISNULL(write_ctx_.pre_sorter_ =
+                        OB_NEWx(ObTableLoadPreSorter, (&allocator_), this))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to new TableLoadPreSorter", KR(ret));
+        } else if (OB_FAIL(write_ctx_.pre_sorter_->init())) {
+          LOG_WARN("fail to init pre sorter", KR(ret));
+        } else if (OB_FAIL(write_ctx_.pre_sorter_->start())) {
+          LOG_WARN("fail to start pre_sorter", KR(ret));
+        }
+      }
+    }
+    // 堆表快速写入需要提前创建insert_table_ctx
+    if (OB_SUCC(ret) && write_ctx_.is_fast_heap_table_) {
+      if (ObDirectLoadMethod::is_incremental(ctx_->param_.method_) &&
+          OB_FAIL(init_trans_param(write_ctx_.trans_param_))) {
+        LOG_WARN("fail to init trans param", KR(ret));
+      } else if (OB_FAIL(data_store_table_ctx_->init_insert_table_ctx(
+                   write_ctx_.trans_param_, true /*online_opt_stat_gather*/,
+                   true /*is_insert_lob*/))) {
+        LOG_WARN("fail to init insert table ctx", KR(ret));
+      } else if (ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < index_store_table_ctxs_.count(); ++i) {
+          ObTableLoadStoreIndexTableCtx *index_table_ctx = index_store_table_ctxs_.at(i);
+          if (OB_FAIL(index_table_ctx->init_build_insert_table())) {
+            LOG_WARN("fail to init build index table", KR(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -493,8 +667,8 @@ int ObTableLoadStoreCtx::init_sequence()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = ctx_->param_.tenant_id_;
   const uint64_t table_id = ctx_->ddl_param_.dest_table_id_;
-  share::schema::ObSchemaGetterGuard table_schema_guard;
-  share::schema::ObSchemaGetterGuard sequence_schema_guard;
+  ObSchemaGetterGuard table_schema_guard;
+  ObSchemaGetterGuard sequence_schema_guard;
   const ObSequenceSchema *sequence_schema = nullptr;
   const ObTableSchema *target_table_schema = nullptr;
   uint64_t sequence_id = OB_INVALID_ID;
@@ -570,14 +744,6 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
-      if (!data_store_table_ctx_->is_fast_heap_table_) {
-        session_ctx->extra_buf_size_ = data_store_table_ctx_->table_data_desc_.extra_buf_size_;
-        if (OB_ISNULL(session_ctx->extra_buf_ =
-                        static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory", KR(ret));
-        }
-      }
     }
   }
   return ret;
@@ -932,6 +1098,35 @@ int ObTableLoadStoreCtx::check_exist_trans(bool &exist) const
   return ret;
 }
 
+int ObTableLoadStoreCtx::get_table_store_from_committed_trans_stores(ObDirectLoadTableStore &table_store)
+{
+  int ret = OB_SUCCESS;
+  table_store.clear();
+  table_store.set_table_data_desc(write_ctx_.table_data_desc_);
+  if (write_ctx_.is_fast_heap_table_) {
+    // 堆表快速路径, 空数据, 随便填一个类型
+    table_store.set_external_table();
+  } else if (ctx_->param_.need_sort_) {
+    // 排序路径, 有主键表现在走pre_sort了
+    table_store.set_external_table();
+  } else {
+    // 有主键表不排序路径
+    table_store.set_multiple_sstable();
+  }
+  obsys::ObRLockGuard guard(rwlock_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < committed_trans_store_array_.count(); ++i) {
+    ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
+      const ObTableLoadTransStore::SessionStore *session_store =
+        trans_store->session_store_array_.at(j);
+      if (OB_FAIL(table_store.add_tables(session_store->tables_handle_))) {
+        LOG_WARN("fail to add tables", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 void ObTableLoadStoreCtx::clear_committed_trans_stores()
 {
   obsys::ObWLockGuard guard(rwlock_);
@@ -944,14 +1139,60 @@ void ObTableLoadStoreCtx::clear_committed_trans_stores()
   committed_trans_store_array_.reset();
 }
 
-int ObTableLoadStoreCtx::get_next_insert_tablet_ctx(ObDirectLoadInsertTabletContext *&tablet_ctx)
+int ObTableLoadStoreCtx::start_merge()
 {
-  return open_insert_tablet_ctx_manager_->get_next_insert_tablet_ctx(tablet_ctx);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
+  } else if (OB_UNLIKELY(write_ctx_.enable_pre_sort_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpectedpre sort is enabled", KR(ret));
+  } else if (OB_FAIL(get_table_store_from_committed_trans_stores(data_store_table_ctx_->insert_table_store_))) {
+    LOG_WARN("fail to get table store from committed trans stores", KR(ret));
+  } else if (OB_FAIL(start_merge_op())) {
+    LOG_WARN("fail to start merge op", KR(ret));
+  } else {
+    // 清空trans store, 以便在合并过程中释放磁盘空间
+    clear_committed_trans_stores();
+  }
+  return ret;
 }
 
-void ObTableLoadStoreCtx::handle_open_insert_tablet_ctx_finish(bool &is_finish)
+int ObTableLoadStoreCtx::handle_pre_sort_success()
 {
-  open_insert_tablet_ctx_manager_->handle_open_insert_tablet_ctx_finish(is_finish);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStoreCtx not init", KR(ret));
+  } else if (OB_UNLIKELY(!write_ctx_.enable_pre_sort_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pre sort not enabled", KR(ret));
+  } else if (OB_FAIL(write_ctx_.pre_sorter_->get_table_store(data_store_table_ctx_->insert_table_store_))) {
+    LOG_WARN("fail to get table store", KR(ret));
+  } else if (OB_FAIL(start_merge_op())) {
+    LOG_WARN("fail to start merge op", KR(ret));
+  } else {
+    write_ctx_.pre_sorter_->reset();
+    // 清空trans store, 释放内存, 里面也没啥东西
+    clear_committed_trans_stores();
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::start_merge_op()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr != merge_root_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected merge root op not null", KR(ret));
+  } else if (OB_ISNULL(merge_root_op_ = OB_NEWx(ObTableLoadMergeRootOp, &allocator_, this))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadMergeRootOp", KR(ret));
+  } else if (OB_FAIL(merge_root_op_->start())) {
+    LOG_WARN("fail to start merge op", KR(ret));
+  }
+  return ret;
 }
 
 } // namespace observer

@@ -364,7 +364,7 @@ ObDirectLoadMergeRangeSplitter::~ObDirectLoadMergeRangeSplitter()
 int ObDirectLoadMergeRangeSplitter::init(
   const ObTabletID &tablet_id,
   ObDirectLoadOriginTable *origin_table,
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils,
   const ObIArray<ObColDesc> &col_descs)
@@ -373,9 +373,9 @@ int ObDirectLoadMergeRangeSplitter::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMergeRangeSplitter init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || (nullptr != origin_table &&
-                         !origin_table->is_valid()) || !table_data_desc.is_valid() ||
-                         nullptr == datum_utils)) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() ||
+                         (nullptr != origin_table && !origin_table->is_valid()) ||
+                         !table_data_desc.is_valid() || nullptr == datum_utils)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tablet_id), KPC(origin_table), K(sstable_array),
              K(table_data_desc), KP(datum_utils));
@@ -402,18 +402,23 @@ int ObDirectLoadMergeRangeSplitter::init(
 }
 
 int ObDirectLoadMergeRangeSplitter::construct_sstable_rowkey_iters(
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-    ObDirectLoadMultipleSSTable *sstable = sstable_array.at(i);
+    ObDirectLoadTableHandle sstable_handle;
+    ObDirectLoadMultipleSSTable *sstable = nullptr;
     ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
-    if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(sstable,
-                                                                   table_data_desc,
-                                                                   allocator_,
-                                                                   rowkey_iter))) {
+    if (OB_FAIL(sstable_array.get_table(i, sstable_handle))) {
+      LOG_WARN("fail to get table", KR(ret), K(i));
+    } else if (OB_UNLIKELY(!sstable_handle.is_valid() || !sstable_handle.get_table()->is_multiple_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable is invalid", KR(ret), K(sstable_handle));
+    } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable *>(sstable_handle.get_table()))) {
+    } else if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(
+                 sstable, table_data_desc, allocator_, rowkey_iter))) {
       LOG_WARN("fail to construct rowkey iter", KR(ret));
     } else if (OB_FAIL(rowkey_iters_.push_back(rowkey_iter))) {
       LOG_WARN("fail to push back rowkey iter", KR(ret));
@@ -477,7 +482,7 @@ ObDirectLoadMultipleMergeRangeSplitter::~ObDirectLoadMultipleMergeRangeSplitter(
 }
 
 int ObDirectLoadMultipleMergeRangeSplitter::init(
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils,
   const ObIArray<ObColDesc> &col_descs)
@@ -486,10 +491,9 @@ int ObDirectLoadMultipleMergeRangeSplitter::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMultipleMergeRangeSplitter init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!table_data_desc.is_valid() ||
-                         nullptr == datum_utils)) {
+  } else if (OB_UNLIKELY(!table_data_desc.is_valid() || nullptr == datum_utils)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(table_data_desc), KP(datum_utils));
+    LOG_WARN("invalid args", KR(ret), K(table_data_desc), KP(datum_utils), K(sstable_array));
   } else {
     if (OB_FAIL(construct_rowkey_iters(sstable_array, table_data_desc, datum_utils))) {
       LOG_WARN("fail to construct sstable rowkey itres", KR(ret));
@@ -507,15 +511,22 @@ int ObDirectLoadMultipleMergeRangeSplitter::init(
 }
 
 int ObDirectLoadMultipleMergeRangeSplitter::construct_rowkey_iters(
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-    ObDirectLoadMultipleSSTable *sstable = sstable_array.at(i);
+    ObDirectLoadTableHandle sstable_handle;
+    ObDirectLoadMultipleSSTable *sstable = nullptr;
     ObIDirectLoadMultipleDatumRowkeyIterator *rowkey_iter = nullptr;
-    if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_multiple_rowkey_iter(
+    if (OB_FAIL(sstable_array.get_table(i, sstable_handle))) {
+      LOG_WARN("fail to get table", KR(ret), K(i));
+    } else if (!sstable_handle.is_valid() || !sstable_handle.get_table()->is_multiple_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable is invalid", KR(ret), K(sstable_handle));
+    } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable *>(sstable_handle.get_table()))) {
+    } else if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_multiple_rowkey_iter(
           sstable, table_data_desc, allocator_, rowkey_iter))) {
       LOG_WARN("fail to construct rowkey iter", KR(ret));
     } else if (OB_FAIL(rowkey_iters_.push_back(rowkey_iter))) {
@@ -817,7 +828,7 @@ ObDirectLoadMultipleSSTableRangeSplitter::~ObDirectLoadMultipleSSTableRangeSplit
 }
 
 int ObDirectLoadMultipleSSTableRangeSplitter::init(
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils)
 {
@@ -845,15 +856,22 @@ int ObDirectLoadMultipleSSTableRangeSplitter::init(
 }
 
 int ObDirectLoadMultipleSSTableRangeSplitter::construct_rowkey_iters(
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadTableDataDesc &table_data_desc,
   const ObStorageDatumUtils *datum_utils)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-    ObDirectLoadMultipleSSTable *sstable = sstable_array.at(i);
+    ObDirectLoadTableHandle sstable_handle;
+    ObDirectLoadMultipleSSTable *sstable = nullptr;
     ObIDirectLoadMultipleDatumRowkeyIterator *rowkey_iter = nullptr;
-    if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_multiple_rowkey_iter(
+    if (OB_FAIL(sstable_array.get_table(i, sstable_handle))) {
+      LOG_WARN("fail to get table", KR(ret), K(i));
+    } else if (!sstable_handle.is_valid() || !sstable_handle.get_table()->is_multiple_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable handle is not valid", KR(ret));
+    } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable *>(sstable_handle.get_table()))) {
+    } else if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_multiple_rowkey_iter(
           sstable, table_data_desc, allocator_, rowkey_iter))) {
       LOG_WARN("fail to construct rowkey iter", KR(ret));
     } else if (OB_FAIL(rowkey_iters_.push_back(rowkey_iter))) {

@@ -77,19 +77,19 @@ int ObDirectLoadSSTableCompactor::init(const ObDirectLoadSSTableCompactParam &pa
   return ret;
 }
 
-int ObDirectLoadSSTableCompactor::add_table(ObIDirectLoadPartitionTable *table)
+int ObDirectLoadSSTableCompactor::add_table(const ObDirectLoadTableHandle &table_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadSSTableCompactor not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!table_handle.is_valid() || !table_handle.get_table()->is_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_handle));
   } else {
     int cmp_ret = 0;
-    ObDirectLoadSSTable *sstable = dynamic_cast<ObDirectLoadSSTable *>(table);
-    if (OB_ISNULL(sstable)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid args", KR(ret), KP(sstable));
-    } else if (OB_FAIL(check_table_compactable(sstable))) {
+    ObDirectLoadSSTable *sstable = static_cast<ObDirectLoadSSTable *>(table_handle.get_table());
+    if (OB_FAIL(check_table_compactable(sstable))) {
       LOG_WARN("fail to check table compactable", KR(ret), KPC(sstable));
     } else if (!sstable->is_empty()) {
       const ObDirectLoadSSTableMeta &table_meta = sstable->get_meta();
@@ -156,8 +156,8 @@ int ObDirectLoadSSTableCompactor::compact()
   return ret;
 }
 
-int ObDirectLoadSSTableCompactor::get_table(ObIDirectLoadPartitionTable *&table,
-                                                  ObIAllocator &allocator)
+int ObDirectLoadSSTableCompactor::get_table(ObDirectLoadTableHandle &table_handle,
+                                            ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -165,6 +165,7 @@ int ObDirectLoadSSTableCompactor::get_table(ObIDirectLoadPartitionTable *&table,
     LOG_WARN("ObDirectLoadSSTableCompactor not init", KR(ret), KP(this));
   } else {
     ObDirectLoadSSTable *sstable = nullptr;
+    ObDirectLoadTableHandle sstable_handle;
     ObDirectLoadSSTableCreateParam create_param;
     create_param.tablet_id_ = param_.tablet_id_;
     create_param.rowkey_column_count_ = param_.table_data_desc_.rowkey_column_num_;
@@ -178,20 +179,12 @@ int ObDirectLoadSSTableCompactor::get_table(ObIDirectLoadPartitionTable *&table,
     create_param.end_key_ = end_key_;
     if (OB_FAIL(create_param.fragments_.assign(fragments_))) {
       LOG_WARN("fail to assign fragments", KR(ret));
-    } else if (OB_ISNULL(sstable = OB_NEWx(ObDirectLoadSSTable, (&allocator)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadSSTable", KR(ret));
+    } else if (OB_FAIL(table_manager->alloc_sstable(sstable_handle))) {
+      LOG_WARN("fail to alloc sstable", KR(ret));
+    } else if (FALSE_IT(sstable = static_cast<ObDirectLoadSSTable *>(sstable_handle.get_table()))) {
     } else if (OB_FAIL(sstable->init(create_param))) {
       LOG_WARN("fail to init sstable table", KR(ret));
-    } else {
-      table = sstable;
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != sstable) {
-        sstable->~ObDirectLoadSSTable();
-        allocator.free(sstable);
-        sstable = nullptr;
-      }
+    } else if (FALSE_IT(table_handle = sstable_handle)) {
     }
   }
   return ret;

@@ -90,7 +90,7 @@ void ObDirectLoadMultipleSSTableScanMerge::reset()
 
 int ObDirectLoadMultipleSSTableScanMerge::init(
   const ObDirectLoadMultipleSSTableScanMergeParam &param,
-  const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
+  const ObDirectLoadTableHandleArray &sstable_array,
   const ObDirectLoadMultipleDatumRange &range)
 {
   int ret = OB_SUCCESS;
@@ -104,9 +104,16 @@ int ObDirectLoadMultipleSSTableScanMerge::init(
   } else {
     // construct scanners
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      ObDirectLoadMultipleSSTable *sstable = sstable_array.at(i);
+      ObDirectLoadTableHandle sstable_handle;
+      ObDirectLoadMultipleSSTable *sstable = nullptr;
       ObDirectLoadMultipleSSTableScanner *scanner = nullptr;
-      if (sstable->is_empty()) {
+      if (OB_FAIL(sstable_array.get_table(i, sstable_handle))) {
+        LOG_WARN("fail to get table", KR(ret));
+      } else if (OB_UNLIKELY(!sstable_handle.is_valid() || !sstable_handle.get_table()->is_multiple_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sstable handle is invalid", KR(ret));
+      } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable *>(sstable_handle.get_table()))) {
+      } else if (sstable->is_empty()) {
       } else if (OB_FAIL(sstable->scan(param.table_data_desc_, range, param.datum_utils_,
                                        allocator_, scanner))) {
         LOG_WARN("fail to scan sstable", KR(ret));
@@ -141,6 +148,9 @@ int ObDirectLoadMultipleSSTableScanMerge::init(
       datum_utils_ = param.datum_utils_;
       dml_row_handler_ = param.dml_row_handler_;
       range_ = &range;
+      // set parent params
+      row_flag_ = param.table_data_desc_.row_flag_;
+      column_count_ = param.table_data_desc_.column_count_;
       is_inited_ = true;
     }
   }
@@ -269,7 +279,7 @@ int ObDirectLoadMultipleSSTableScanMerge::get_next_row(
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableScanMerge::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadMultipleSSTableScanMerge::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -281,11 +291,9 @@ int ObDirectLoadMultipleSSTableScanMerge::get_next_row(const ObDatumRow *&datum_
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next external row", KR(ret));
       }
-    } else if (OB_FAIL(
-                 multiple_datum_row->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
+    } else if (OB_FAIL(multiple_datum_row->to_datum_row(datum_row_))) {
       LOG_WARN("fail to transfer datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(multiple_datum_row->is_deleted_? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
       datum_row = &datum_row_;
     }
   }

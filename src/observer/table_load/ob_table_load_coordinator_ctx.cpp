@@ -247,6 +247,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
     LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
+    error_code_ = (error_code_ == OB_SUCCESS ? OB_CANCELED : error_code_);
     table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
     add_to_all_server_event();
     LOG_INFO("LOAD DATA COORDINATOR status abort");

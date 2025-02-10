@@ -15,6 +15,7 @@
 #include "common/ob_tablet_id.h"
 #include "lib/hash/ob_hashset.h"
 #include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
 #include "observer/table_load/ob_table_load_pre_sort_writer.h"
 #include "src/share/table/ob_table_load_row_array.h"
@@ -127,6 +128,7 @@ private:
     ObIVector *tablet_id_const_vector_;
     // for non-vectorized
     storage::ObDirectLoadRowFlag row_flag_;
+    storage::ObDirectLoadDatumRow datum_row_;
     storage::ObDirectLoadBatchRowBuffer batch_buffer_;
     // for vectorized
     // shallow copy unfixed cols

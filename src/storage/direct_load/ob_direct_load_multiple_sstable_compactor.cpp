@@ -80,19 +80,19 @@ int ObDirectLoadMultipleSSTableCompactor::init(const ObDirectLoadMultipleSSTable
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableCompactor::add_table(ObIDirectLoadPartitionTable *table)
+int ObDirectLoadMultipleSSTableCompactor::add_table(const ObDirectLoadTableHandle &table_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadMultipleSSTableCompactor not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!table_handle.is_valid() || !table_handle.get_table()->is_multiple_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_handle));
   } else {
     int cmp_ret = 0;
-    ObDirectLoadMultipleSSTable *sstable = dynamic_cast<ObDirectLoadMultipleSSTable *>(table);
-    if (OB_ISNULL(sstable)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid args", KR(ret), KP(sstable));
-    } else if (OB_FAIL(check_table_compactable(sstable))) {
+    ObDirectLoadMultipleSSTable *sstable = static_cast<ObDirectLoadMultipleSSTable *>(table_handle.get_table());
+    if (OB_FAIL(check_table_compactable(sstable))) {
       LOG_WARN("fail to check table compactable", KR(ret), KPC(sstable));
     } else if (!sstable->is_empty()) {
       const ObDirectLoadMultipleSSTableMeta &table_meta = sstable->get_meta();
@@ -163,14 +163,15 @@ int ObDirectLoadMultipleSSTableCompactor::compact()
   return ret;
 }
 
-int ObDirectLoadMultipleSSTableCompactor::get_table(ObIDirectLoadPartitionTable *&table,
-                                                    ObIAllocator &allocator)
+int ObDirectLoadMultipleSSTableCompactor::get_table(
+  ObDirectLoadTableHandle &table_handle, ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadMultipleSSTableCompactor not init", KR(ret), KP(this));
   } else {
+    ObDirectLoadTableHandle sstable_handle;
     ObDirectLoadMultipleSSTable *sstable = nullptr;
     ObDirectLoadMultipleSSTableCreateParam create_param;
     create_param.tablet_id_ = param_.tablet_id_;
@@ -189,20 +190,12 @@ int ObDirectLoadMultipleSSTableCompactor::get_table(ObIDirectLoadPartitionTable 
     create_param.end_key_ = end_key_;
     if (OB_FAIL(create_param.fragments_.assign(fragments_))) {
       LOG_WARN("fail to assign fragments", KR(ret));
-    } else if (OB_ISNULL(sstable = OB_NEWx(ObDirectLoadMultipleSSTable, (&allocator)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadMultipleSSTable", KR(ret));
+    } else if (OB_FAIL(table_manager->alloc_multiple_sstable(sstable_handle))) {
+      LOG_WARN("fail to alloc multiple sstable", KR(ret));
+    } else if (FALSE_IT(sstable = static_cast<ObDirectLoadMultipleSSTable *>(sstable_handle.get_table()))) {
     } else if (OB_FAIL(sstable->init(create_param))) {
       LOG_WARN("fail to init sstable table", KR(ret));
-    } else {
-      table = sstable;
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != sstable) {
-        sstable->~ObDirectLoadMultipleSSTable();
-        allocator.free(sstable);
-        sstable = nullptr;
-      }
+    } else if (FALSE_IT(table_handle = sstable_handle)) {
     }
   }
   return ret;

@@ -96,8 +96,6 @@ int ObDirectLoadSSTableScanner::init(ObDirectLoadSSTable *sstable,
       if (OB_FAIL(datum_row_.init(column_count_))) {
         LOG_WARN("fail to init datum row", KR(ret));
       } else {
-        datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-        datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
         is_inited_ = true;
       }
     }
@@ -541,7 +539,7 @@ int ObDirectLoadSSTableScanner::get_next_row(const ObDirectLoadExternalRow *&ext
   return ret;
 }
 
-int ObDirectLoadSSTableScanner::get_next_row(const ObDatumRow *&datum_row)
+int ObDirectLoadSSTableScanner::get_next_row(const ObDirectLoadDatumRow *&datum_row)
 {
   int ret = OB_SUCCESS;
   datum_row = nullptr;
@@ -554,10 +552,9 @@ int ObDirectLoadSSTableScanner::get_next_row(const ObDatumRow *&datum_row)
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next row", KR(ret));
       }
-    } else if (OB_FAIL(external_row->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
+    } else if (OB_FAIL(external_row->to_datum_row(datum_row_))) {
       LOG_WARN("fail to transfer datum row", KR(ret));
     } else {
-      datum_row_.row_flag_.set_flag(external_row->is_deleted() ? DF_DELETE: DF_INSERT);
       datum_row = &datum_row_;
     }
   }

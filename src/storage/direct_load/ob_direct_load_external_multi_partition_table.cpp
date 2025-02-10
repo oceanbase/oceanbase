@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
+#include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 
 namespace oceanbase
@@ -27,7 +28,7 @@ using namespace blocksstable;
 
 ObDirectLoadExternalMultiPartitionTableBuildParam::
   ObDirectLoadExternalMultiPartitionTableBuildParam()
-  : datum_utils_(nullptr), file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0)
+  : file_mgr_(nullptr), extra_buf_(nullptr), extra_buf_size_(0)
 {
 }
 
@@ -38,7 +39,7 @@ ObDirectLoadExternalMultiPartitionTableBuildParam::
 
 bool ObDirectLoadExternalMultiPartitionTableBuildParam::is_valid() const
 {
-  return table_data_desc_.is_valid() && nullptr != datum_utils_ && nullptr != file_mgr_ &&
+  return table_data_desc_.is_valid() && nullptr != file_mgr_ &&
          nullptr != extra_buf_ && extra_buf_size_ > 0 && extra_buf_size_ % DIO_ALIGN_SIZE == 0;
 }
 
@@ -90,8 +91,7 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::init(
 }
 
 int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID &tablet_id,
-                                                               const table::ObTableLoadSequenceNo &seq_no,
-                                                               const ObDatumRow &datum_row)
+                                                               const ObDirectLoadDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -107,8 +107,8 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID 
   } else {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_append_row_time_us);
     row_.tablet_id_ = tablet_id;
-    if (OB_FAIL(row_.external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                               param_.table_data_desc_.rowkey_column_num_, seq_no, datum_row.row_flag_.is_delete()))) {
+    if (OB_FAIL(row_.external_row_.from_datum_row(datum_row,
+                                                  param_.table_data_desc_.rowkey_column_num_))) {
       LOG_WARN("fail to from datums", KR(ret));
     } else if (OB_FAIL(external_writer_.write_item(row_))) {
       LOG_WARN("fail to write item", KR(ret));
@@ -199,7 +199,7 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::close()
 }
 
 int ObDirectLoadExternalMultiPartitionTableBuilder::get_tables(
-  ObIArray<ObIDirectLoadPartitionTable *> &table_array, ObIAllocator &allocator)
+  ObDirectLoadTableHandleArray &table_array, ObDirectLoadTableManager *table_manager)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -219,21 +219,15 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::get_tables(
     if (OB_FAIL(create_param.fragments_.assign(fragment_array_))) {
       LOG_WARN("fail to assign fragment array", KR(ret), K(fragment_array_));
     } else {
+      ObDirectLoadTableHandle table_handle;
       ObDirectLoadExternalTable *external_table = nullptr;
-      if (OB_ISNULL(external_table = OB_NEWx(ObDirectLoadExternalTable, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadExternalTable", KR(ret));
+      if (OB_FAIL(table_manager->alloc_external_table(table_handle))) {
+        LOG_WARN("fail to alloc external table", KR(ret));
+      } else if (FALSE_IT(external_table = static_cast<ObDirectLoadExternalTable*>(table_handle.get_table()))) {
       } else if (OB_FAIL(external_table->init(create_param))) {
         LOG_WARN("fail to init external table", KR(ret));
-      } else if (OB_FAIL(table_array.push_back(external_table))) {
-        LOG_WARN("fail to push back external table", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != external_table) {
-          external_table->~ObDirectLoadExternalTable();
-          allocator.free(external_table);
-          external_table = nullptr;
-        }
+      } else if (OB_FAIL(table_array.add(table_handle))) {
+        LOG_WARN("fail to add table handle", KR(ret));
       }
     }
   }
