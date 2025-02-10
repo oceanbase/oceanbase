@@ -2738,6 +2738,9 @@ typedef enum ObItemType
   T_SP_OBJ_PERSISTABLE = 4797,
   T_FLASHBACK_STANDBY_LOG = 4798,
   T_BINARY_FORMAT = 4799,
+
+  // parser config: ik_mode
+  T_IK_MODE = 4800,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
