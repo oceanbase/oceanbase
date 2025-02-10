@@ -30,7 +30,6 @@ public:
   static constexpr int DEFAULT_IO_RETRY_CNT = 3;
   static constexpr int UTF_FILE_BUFFER_ALIGN_SIZE = 4 * 1024; // 4KB
   static constexpr int UTF_FILE_WRITE_BUFFER_SIZE = 32 * 1024; // 32KB
-  static constexpr int MAX_OPEN_FILE_COUNT = 50;
   static constexpr int UTL_PATH_SIZE_LIMIT = 256;
   static constexpr mode_t UTL_FILE_ACCESS_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 };

@@ -2199,3 +2199,7 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
 DEF_BOOL(_enable_auth_switch, OB_CLUSTER_PARAMETER, "True",
          "Control whether to use auth_switch.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(utl_file_open_max, OB_CLUSTER_PARAMETER, "50", "[50, 600]",
+         "the maximum number of utl files that can be opened simultaneously in a single node under the Oracle model.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

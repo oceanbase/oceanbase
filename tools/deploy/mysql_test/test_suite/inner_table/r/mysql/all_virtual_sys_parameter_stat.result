@@ -280,6 +280,7 @@ user_block_cache_priority
 user_row_cache_priority
 use_ipv6
 use_large_pages
+utl_file_open_max
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
 workarea_size_policy
