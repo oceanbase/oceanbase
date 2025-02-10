@@ -18,7 +18,6 @@
 #include "share/ob_global_stat_proxy.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
-#include "share/backup/ob_backup_data_table_operator.h"
 
 namespace oceanbase {
 namespace rootserver {
@@ -119,10 +118,7 @@ void ObMViewCleanSnapshotTask::runTimerTask()
     share::ObSnapshotTableProxy snapshot_proxy;
     const bool select_for_update = true;
     ObSEArray<share::ObSnapshotInfo, 4> snapshots;
-    ObArray<share::ObBackupJobAttr> backup_jobs;
-    uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     bool mview_in_creation = false;
-    bool space_danger = false;
     if (OB_FAIL(stat_proxy.get_major_refresh_mv_merge_scn(select_for_update,
                                                           major_refresh_mv_merge_scn))) {
       LOG_WARN("fail to get major_refresh_mv_merge_scn", KR(ret), K(tenant_id_));
@@ -140,13 +136,6 @@ void ObMViewCleanSnapshotTask::runTimerTask()
       // when a mview is being created, its snapshot may be added but the dependency is not
       // added yet, which can cause cleaning the snapshot by mistake. so we just skip this round.
       LOG_INFO("mview is being created, skip clean task", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(share::ObBackupJobOperator::get_jobs(
-                   *sql_proxy, meta_tenant_id, false /*select for update*/, backup_jobs))) {
-      LOG_WARN("failed to get backup jobs", K(ret), K(tenant_id_));
-    } else if (!backup_jobs.empty() && OB_FAIL(check_space_occupy_(space_danger))) {
-      LOG_WARN("backup jobs exist, check space occupy failed", KR(ret), K(tenant_id_));
-    } else if (!backup_jobs.empty() && !space_danger) {
-      LOG_INFO("backup jobs exist, space is not in danger just skip clean", KR(ret), K(tenant_id_));
     } else {
       uint64_t last_tablet_id = 0;
       // considering the task is scheduled infrequently, performance should not be a concern here,
@@ -248,41 +237,6 @@ int ObMViewCleanSnapshotTask::is_mv_container_table_(const uint64_t table_id, bo
     LOG_WARN("table schema is null", KR(ret), K(tenant_id_), K(table_id));
   } else {
     is_container = table_schema->mv_major_refresh();
-  }
-
-  return ret;
-}
-
-int ObMViewCleanSnapshotTask::check_space_occupy_(bool &space_danger)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  space_danger = false;
-
-  SMART_VAR(ObMySQLProxy::MySQLResult, res)
-  {
-    common::sqlclient::ObMySQLResult *result = nullptr;
-    if (OB_FAIL(sql.assign("select CAST(max(DATA_DISK_IN_USE/DATA_DISK_ALLOCATED)*100 as SIGNED) occupy from oceanbase.gv$ob_servers"))) {
-      LOG_WARN("fail to assign sql", KR(ret));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-      LOG_WARN("execute sql failed", KR(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", KR(ret));
-    } else if (OB_FAIL(result->next())) {
-      LOG_WARN("fail to get next", KR(ret));
-    } else {
-      int64_t occupy = 0;
-      EXTRACT_INT_FIELD_MYSQL(*result, "occupy", occupy, int64_t);
-      int64_t upper_bound = GCONF._datafile_usage_upper_bound_percentage;
-      LOG_INFO("check_space_occupy", KR(ret), K(occupy), K(upper_bound), K(sql));
-      if (OB_SUCC(ret)) {
-        if (occupy >= GCONF._datafile_usage_upper_bound_percentage) {
-          space_danger = true;
-          LOG_ERROR("space in danger", K(occupy), K(upper_bound));
-        }
-      }
-    }
   }
 
   return ret;

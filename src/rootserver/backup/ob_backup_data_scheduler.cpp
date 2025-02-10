@@ -1627,7 +1627,9 @@ int ObUserTenantBackupJobMgr::select_mview_for_update_(const uint64_t tenant_id)
         LOG_INFO("major_refresh_mv_merge_scn has not been set", K(tenant_id));
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id));
+        LOG_WARN("fail to get major_refresh_mv_merge_scn", K(ret), K(tenant_id), K(OB_EAGAIN));
+        // convert ret for backup retry
+        ret = OB_EAGAIN;
       }
     } else if (OB_UNLIKELY(!major_refresh_mv_merge_scn.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

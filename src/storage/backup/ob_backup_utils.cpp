@@ -214,6 +214,12 @@ int ObBackupUtils::check_major_sstables_for_mview_(const share::SCN &mview_dep_s
     LOG_WARN("major sstable array ptr should not be null", K(ret));
   } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(tmp_sstable_array))) {
     LOG_WARN("failed to get all table wrappers", K(ret), KPC(major_sstable_array_ptr));
+  } else if (!mview_dep_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mview_dep_scn is invalid", KR(ret), K(mview_dep_scn));
+  } else if (mview_dep_scn.is_min()) {
+    // do nothing
+    // when major refresh mview first create, it's base table major sstable not match last_refresh_scn
   } else {
     bool exist = false;
     ARRAY_FOREACH_X(tmp_sstable_array, idx, cnt, OB_SUCC(ret)) {

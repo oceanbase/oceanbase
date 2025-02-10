@@ -2450,7 +2450,7 @@ int ObBackupMViewOperator::get_all_major_compaction_mview_dep_tablet_list(
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
       if (OB_FAIL(sql.assign_fmt("select t1.tablet_id tablet_id,t2.major_version major_version from %s as of snapshot %ld t1"
-            " join (select p_obj table_id,min(b.last_refresh_scn) major_version from %s as of snapshot %ld a"
+            " join (select p_obj table_id,min(case when b.last_refresh_type>0 then b.last_refresh_scn else 0 end) major_version from %s as of snapshot %ld a"
             " join %s as of snapshot %ld b on a.mview_id=b.mview_id where b.refresh_mode=%ld group by p_obj"
             " union all (select a.data_table_id table_id,b.last_refresh_scn major_version from %s as of snapshot %ld a"
             " join %s as of snapshot %ld b on a.table_id=b.mview_id and b.refresh_mode=%ld)) t2 on t1.table_id=t2.table_id",

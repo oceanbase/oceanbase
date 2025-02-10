@@ -18,7 +18,7 @@
 #define protected public
 #define private public
 
-#include "env/ob_simple_cluster_test_base.h"
+#include "simple_server/env/ob_simple_cluster_test_base.h"
 #include "rootserver/ob_tenant_balance_service.h"
 #include "share/balance/ob_balance_job_table_operator.h"
 #include "mittest/env/ob_simple_server_helper.h"
@@ -231,7 +231,7 @@ TEST_F(ObCollectMV, prepare)
       }});
 }
 
-TEST_F(ObCollectMV, read)
+TEST_F(ObCollectMV, keep_snapshot_for_long_tx)
 {
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   int64_t affected_rows;
@@ -280,6 +280,79 @@ TEST_F(ObCollectMV, read)
   EQ(0, sql_proxy.close(conn, true));
 }
 
+TEST_F(ObCollectMV, update_full_column)
+{
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+  int64_t affected_rows = 0;
+  LOGI("create tg");
+  EQ(0, sql_proxy.write("create tablegroup ufc_tg1 sharding='PARTITION'", affected_rows));
+  LOGI("create table");
+  EQ(0, sql_proxy.write("create table ufc_t1(c1 int,c2 int, primary key(c1,c2)) tablegroup='ufc_tg1' partition by hash(c1) partitions 2", affected_rows));
+  EQ(0, sql_proxy.write("create table ufc_t2(c2 int, c3 int, c4 int,c5 int,c6 int,c7 int ,primary key(c2)) duplicate_scope = 'cluster' duplicate_read_consistency='weak'", affected_rows));
+  EQ(0, sql_proxy.write("insert into ufc_t1 values(1,1),(2,2),(3,3)", affected_rows));
+  EQ(0, sql_proxy.write("insert into ufc_t2 values(1,100,1000,1000,1000,10000),(2,200,2000,2000,2000,2000),(3,300,3000,3000,3000,3000)", affected_rows));
+  EQ(0, sql_proxy.write("update ufc_t2 set c3 = 101 where c2=1", affected_rows));
+  EQ(0, sql_proxy.write("update ufc_t2 set c3 = 201,c4=20001 where c2=2", affected_rows));
+  EQ(0, sql_proxy.write("update ufc_t2 set c3 = 301,c4=30001,c5=30001,c6=30001,c7=30001 where c2=3", affected_rows));
+  int64_t val = 0;
+  EQ(0, SSH::g_select_int64(R.tenant_id_, "select tablet_id val from oceanbase.__all_table where table_name='ufc_t2'", val));
+  ObTabletID tablet_id(val);
+  EQ(0, SSH::g_select_int64(R.tenant_id_, "select ls_id val from oceanbase.__all_tablet_to_ls where tablet_id in (select tablet_id from oceanbase.__all_table where table_name='ufc_t2')", val));
+  ObTenantSwitchGuard tenant_guard;
+  EQ(0, tenant_guard.switch_to(R.tenant_id_));
+  ObLSID ls_id(val);
+  ObLSHandle ls_handle;
+  EQ(0, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ObTabletHandle tablet_handle;
+  EQ(0, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
+  ObTableHandleV2 table_handle;
+  EQ(0, tablet_handle.get_obj()->get_active_memtable(table_handle));
+  memtable::ObMemtable *memtable = NULL;
+  EQ(0, table_handle.get_data_memtable(memtable));
+  using namespace memtable;
+  ObQueryEngine::Iterator<typename ObQueryEngine::BtreeIterator> iter;
+  memtable::ObStoreRowkeyWrapper scan_start_key_wrapper(&ObStoreRowkey::MIN_STORE_ROWKEY);
+  memtable::ObStoreRowkeyWrapper scan_end_key_wrapper(&ObStoreRowkey::MAX_STORE_ROWKEY);
+  iter.reset();
+  memtable::ObQueryEngine::KeyBtree &kbtree = memtable->query_engine_.keybtree_;
+
+  EQ(0, kbtree.set_key_range(iter.get_read_handle(),
+                                             scan_start_key_wrapper,
+                                             true, /*start_exclusive*/
+                                             scan_end_key_wrapper,
+                                             true  /*end_exclusive*/));
+  {
+    int ret = OB_SUCCESS;
+    blocksstable::ObRowReader row_reader;
+    blocksstable::ObDatumRow datum_row;
+    SMART_VAR(ObCStringHelper, helper) {
+      for (int64_t row_idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next_internal()); row_idx++) {
+        const ObMemtableKey *key = iter.get_key();
+        ObMvccRow *row = iter.get_value();
+        for (ObMvccTransNode *node = row->get_list_head(); OB_SUCC(ret) && OB_NOT_NULL(node); node = node->prev_) {
+          const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node->buf_);
+          helper.reset();
+          if (OB_FAIL(row_reader.read_row(mtd->buf_, mtd->buf_len_, nullptr, datum_row))) {
+            TRANS_LOG(WARN, "Failed to read datum row", K(ret));
+          } else {
+            if (node->get_dml_flag() == ObDmlFlag::DF_UPDATE) {
+              printf("update column count: %ld\n", datum_row.get_column_count());
+              if (datum_row.get_column_count() != 6) {
+                ret = OB_ERR_UNEXPECTED;
+                TRANS_LOG(WARN, "column count not expected", K(ret), K(datum_row.get_column_count()));
+              }
+            }
+          }
+        }
+      }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+    EQ(0, ret);
+  }
+}
+
 TEST_F(ObCollectMV, basic)
 {
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
@@ -289,6 +362,9 @@ TEST_F(ObCollectMV, basic)
   LOGI("create table");
   EQ(0, sql_proxy.write("create table t1(c1 int,c2 int, primary key(c1,c2)) tablegroup='tg1' partition by hash(c1) partitions 2", affected_rows));
   EQ(0, sql_proxy.write("create table t2(c2 int, c3 int, primary key(c2)) duplicate_scope = 'cluster' duplicate_read_consistency='weak'", affected_rows));
+  EQ(0, sql_proxy.write("insert into t1 values(1,1),(2,2),(3,3)", affected_rows));
+  EQ(0, sql_proxy.write("insert into t2 values(1,100),(2,200),(3,300)", affected_rows));
+
   LOGI("create mview");
   EQ(0, sql_proxy.write(
             "create materialized view compact_mv_1 (primary key(t1_c1,t1_c2)) tablegroup='tg1' "
@@ -298,6 +374,9 @@ TEST_F(ObCollectMV, basic)
             "use_das(t2) no_use_nl_materialization(t2)*/ t1.c1 t1_c1,t1.c2 t1_c2,t2.c2 t2_c2,t2.c3 t2_c3 "
             "from t1 join t2 on t1.c2=t2.c2",
             affected_rows));
+
+  int64_t not_match_count = 0;
+  EQ(0, SSH::select_int64(sql_proxy, "select count(*) val from (select * from test.compact_mv_1 except (select t1.*,t2.* from t1,t2 where t1.c2=t2.c2) union all select t1.*,t2.* from test.t1,test.t2 where t1.c2=t2.c2 except select * from test.compact_mv_1)", not_match_count));
   LOGI("check refresh_mode");
   int64_t refresh_mode = 0;
   EQ(0, SSH::g_select_int64(R.tenant_id_, "select refresh_mode val from oceanbase.__all_mview t1, oceanbase.__all_table t2 where t1.mview_id=t2.table_id and t2.table_name='compact_mv_1'", refresh_mode));
