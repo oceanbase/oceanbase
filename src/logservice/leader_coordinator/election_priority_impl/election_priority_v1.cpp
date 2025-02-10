@@ -190,12 +190,39 @@ int PriorityV1::get_role_(const share::ObLSID &ls_id, common::ObRole &role) cons
   #undef PRINT_WRAPPER
 }
 
+int PriorityV1::get_ls_election_reference_info(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    LsElectionReferenceInfo &election_reference_info)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+    if (OB_ISNULL(coordinator)) {
+      ret = OB_ERR_UNEXPECTED;
+      COORDINATOR_LOG(ERROR, "unexpected nullptr");
+    } else if (OB_SUCC(coordinator->get_ls_election_reference_info(ls_id, election_reference_info))) {
+      // when creating tenant sys ls, __all_ls_election_reference_info in meta tenant may not exist
+      // so user sys ls should use meta sys ls election reference info
+    } else if (!is_user_tenant(tenant_id) || !ls_id.is_sys_ls()) {
+      COORDINATOR_LOG(WARN, "fail to get ls election reference info", KR(ret), K(tenant_id), K(*this));
+    } else if (OB_FAIL(get_ls_election_reference_info(gen_meta_tenant_id(tenant_id), ls_id,
+            election_reference_info))) {
+      COORDINATOR_LOG(WARN, "fail to get meta tenant ls election reference info", KR(ret),
+          K(tenant_id), K(*this));
+    } else {
+      COORDINATOR_LOG(INFO, "fail to get user tenant ls election reference info, "
+                            "use meta tenant ls election reference info", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
 int PriorityV1::refresh_(const share::ObLSID &ls_id)
 {
   LC_TIME_GUARD(100_ms);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
   int ret = OB_SUCCESS;
-  ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
   SCN scn = SCN::min_scn();
@@ -203,14 +230,14 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
 #ifdef OB_BUILD_ARBITRATION
     ret = OB_NO_NEED_UPDATE;
 #endif
-  } else if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
+  } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
   } else if (CLICK_FAIL(detector->get_specified_level_event(FailureLevel::FATAL, fatal_failures_))) {
     COORDINATOR_LOG_(WARN, "get fatal failures failed");
   } else if (CLICK_FAIL(detector->get_specified_level_event(FailureLevel::SERIOUS, serious_failures_))) {
     COORDINATOR_LOG_(WARN, "get serious failures failed");
-  } else if (CLICK_FAIL(coordinator->get_ls_election_reference_info(ls_id, election_reference_info))) {
+  } else if (CLICK_FAIL(get_ls_election_reference_info(MTL_ID(), ls_id, election_reference_info))) {
     COORDINATOR_LOG_(WARN, "fail to get ls election reference info");
   } else if (CLICK_FAIL(in_blacklist_reason_.assign(election_reference_info.element<3>().element<1>()))) {
     COORDINATOR_LOG_(WARN, "fail to copy removed reason string");

@@ -20,6 +20,9 @@
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/ob_ddl_service.h"
+#include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "observer/ob_inner_sql_connection.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -630,7 +633,7 @@ int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(fill_create_tenant_arg_(job, clone_tenant_id, arg))) {
     LOG_WARN("fail to fill create tenant arg", KR(ret), K(job));
-  } else if (OB_FAIL(rpc_proxy_->timeout(timeout).create_tenant(arg, unused_res))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(arg, unused_res))) {
     LOG_WARN("fail to create tenant", KR(ret), K(arg));
   }
 

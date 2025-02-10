@@ -17,6 +17,7 @@
 #include "rootserver/standby/ob_tenant_role_transition_service.h"
 #include "src/share/ob_schema_status_proxy.h"
 #include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -66,7 +67,7 @@ int ObRestoreCommonUtil::notify_root_key(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLService::notify_root_key(*srv_rpc_proxy_, arg, addrs, result))) {
+    } else if (OB_FAIL(ObTenantDDLService::notify_root_key(*srv_rpc_proxy_, arg, addrs, result))) {
       LOG_WARN("failed to notify root key", KR(ret));
     }
   }

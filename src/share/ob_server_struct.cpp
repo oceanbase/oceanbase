@@ -93,7 +93,8 @@ DEF_TO_STRING(ObGlobalContext)
        KP_(weak_read_service),
        KP_(schema_status_proxy),
        K_(ssl_key_expired_time),
-       K_(inited));
+       K_(inited),
+       K_(in_bootstrap));
   J_OBJ_END();
   return pos;
 }
@@ -142,6 +143,7 @@ ObGlobalContext &ObGlobalContext::operator=(const ObGlobalContext &other)
     rl_mgr_ = other.rl_mgr_;
     batch_rpc_ = other.batch_rpc_;
     server_tracer_ = other.server_tracer_;
+    in_bootstrap_ = other.in_bootstrap_;
   }
   return *this;
 }

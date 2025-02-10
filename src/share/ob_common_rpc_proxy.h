@@ -141,6 +141,14 @@ protected:
     CALL_WITH_RETRY(rpc_post(pcode, args, cb, opts));
   }
 
+  template <class pcodeStruct>
+  int rpc_post(const typename pcodeStruct::Request &args,
+               obrpc::ObRpcProxy::AsyncCB<pcodeStruct> *cb,
+               const ObRpcOpts &opts)
+  {
+    CALL_WITH_RETRY(ObRpcProxy::rpc_post<pcodeStruct>(args, cb, opts));
+  }
+
   int rpc_post(
       ObRpcPacketCode pcode,
       rpc::frame::ObReqTransport::AsyncCB *cb,

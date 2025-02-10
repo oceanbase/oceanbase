@@ -1258,6 +1258,21 @@ bool ObCreateTenantArg::is_valid() const
          && (!is_creating_standby_ || (is_creating_standby_ && !log_restore_source_.empty()));
 }
 
+ObTenantRole ObCreateTenantArg::get_tenant_role() const
+{
+  ObTenantRole role;
+  if (is_clone_tenant()) {
+    role = share::CLONE_TENANT_ROLE;
+  } else if (is_restore_tenant()) {
+    role = share::RESTORE_TENANT_ROLE;
+  } else if (is_standby_tenant()) {
+    role = share::STANDBY_TENANT_ROLE;
+  } else {
+    role = share::PRIMARY_TENANT_ROLE;
+  }
+  return role;
+}
+
 int ObCreateTenantArg::check_valid() const
 {
   int ret = OB_SUCCESS;
@@ -1336,6 +1351,79 @@ int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObCreateTenantSchemaResult, tenant_exist_, user_tenant_id_);
+
+int ObCreateTenantSchemaResult::assign(const ObCreateTenantSchemaResult &other)
+{
+  int ret = OB_SUCCESS;
+  user_tenant_id_ = other.user_tenant_id_;
+  tenant_exist_ = other.tenant_exist_;
+  return ret;
+}
+
+bool ObCreateTenantSchemaResult::is_valid() const
+{
+  bool valid = true;
+  if (tenant_exist_) {
+  // if tenant_exist_ is true, other values should be invalid
+  } else if (!is_user_tenant(user_tenant_id_)) {
+    valid = false;
+  }
+  return valid;
+}
+int ObCreateTenantSchemaResult::init(uint64_t user_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  user_tenant_id_ = user_tenant_id;
+  tenant_exist_ = false;
+  return ret;
+}
+
+int ObCreateTenantSchemaResult::init_with_tenant_exist()
+{
+  int ret = OB_SUCCESS;
+  tenant_exist_ = true;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObParallelCreateNormalTenantArg, ObDDLArg), create_tenant_arg_, tenant_id_);
+
+int ObParallelCreateNormalTenantArg::init(
+    const ObCreateTenantArg &create_tenant_arg,
+    const uint64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_tenant_arg_.assign(create_tenant_arg))) {
+    LOG_WARN("failed to assign create tenant arg", KR(ret), K(create_tenant_arg));
+  } else {
+    tenant_id_ = tenant_id;
+    exec_tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObParallelCreateNormalTenantArg::assign(const ObParallelCreateNormalTenantArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_tenant_arg_.assign(other.create_tenant_arg_))) {
+    LOG_WARN("failed to assign create_tenant_arg_", KR(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+bool ObParallelCreateNormalTenantArg::is_valid() const
+{
+  bool valid = true;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    valid = false;
+  } else if (!create_tenant_arg_.is_valid()) {
+    valid = false;
+  }
+  return valid;
+}
+
 DEF_TO_STRING(ObCreateTenantArg)
 {
   int64_t pos = 0;
@@ -1369,6 +1457,13 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     log_restore_source_,
                     is_tmp_tenant_for_recover_,
                     source_tenant_id_);
+
+int ObCreateTenantEndArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = tenant_id;
+  return ret;
+}
 
 bool ObCreateTenantEndArg::is_valid() const
 {

@@ -132,9 +132,10 @@ int ObRestoreUtil::record_physical_restore_job(
 }
 
 int ObRestoreUtil::insert_user_tenant_restore_job(
-             common::ObISQLClient &sql_client,
+             common::ObMySQLProxy &sql_client,
              const ObString &tenant_name,
-             const int64_t user_tenant_id)
+             const int64_t user_tenant_id,
+             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_user_tenant(user_tenant_id))) {
@@ -152,7 +153,6 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
     } else if (OB_FAIL(job_info.assign(initaitor_job_info))) {
       LOG_WARN("failed to assign job info", KR(ret), K(initaitor_job_info));
     } else {
-      ObMySQLTransaction trans;
       //TODO get tenant job_id, use tenant
       const int64_t job_id = initaitor_job_info.get_job_id();
       job_info.init_restore_key(user_tenant_id, job_id);
@@ -168,9 +168,7 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
       persist_info.key_.job_id_ = job_info.get_job_id();
       persist_info.restore_scn_ = job_info.get_restore_scn();
       const uint64_t exec_tenant_id = gen_meta_tenant_id(user_tenant_id);
-      if (OB_FAIL(trans.start(&sql_client, exec_tenant_id))) {
-        LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-      } else if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
+      if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore op", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(restore_persist_op.init(user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore persist op", KR(ret), K(user_tenant_id));
@@ -178,14 +176,6 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
         LOG_WARN("failed to insert job", KR(ret), K(job_info));
       } else if (OB_FAIL(restore_persist_op.insert_initial_restore_progress(trans, persist_info))) {
         LOG_WARN("failed to insert persist info", KR(ret), K(persist_info));
-      }
-      if (trans.is_started()) {
-        int temp_ret = OB_SUCCESS;
-        bool commit = OB_SUCC(ret);
-        if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-          ret = (OB_SUCC(ret)) ? temp_ret : ret;
-          LOG_WARN("trans end failed", KR(ret), KR(temp_ret), K(commit));
-        }
       }
     }
   }

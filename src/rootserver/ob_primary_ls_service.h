@@ -31,6 +31,7 @@ namespace oceanbase
 namespace obrpc
 {
 class  ObSrvRpcProxy;
+class ObAdvanceUserLSForCreatingTenantArg;
 }
 namespace common
 {
@@ -96,10 +97,16 @@ public:
   }
 
   int create_ls_for_create_tenant();
+  int advance_user_ls_status_for_creating_tenant();
   int create_duplicate_ls();
 private:
-  int process_all_ls(const share::schema::ObTenantSchema &tenant_schema);
+  int check_has_one_normal_ls();
+  int check_mini_mode_create_ls();
+  int process_all_ls(const share::schema::ObTenantSchema &tenant_schema,
+      bool in_creating_tenant = false);
   int process_all_ls_status_to_steady_(const share::schema::ObTenantSchema &tenant_schema);
+  int create_all_user_ls_for_creating_tenant_(const uint64_t tenant_id,
+      const share::schema::ObTenantSchema &tenant_schema);
   //TODO
   int report_sys_ls_recovery_stat_();
   int set_tenant_dropping_status_(const common::ObIArray<ObLSStatusMachineParameter> &status_machine_array,

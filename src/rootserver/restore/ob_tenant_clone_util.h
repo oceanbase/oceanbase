@@ -58,9 +58,10 @@ public:
   static int update_restore_scn_for_fork_job(common::ObISQLClient &sql_client,
                                              const int64_t job_id,
                                              const share::SCN &restore_scn);
-  static int insert_user_tenant_clone_job(common::ObISQLClient &sql_client,
+  static int insert_user_tenant_clone_job(common::ObMySQLProxy &sql_client,
                                           const ObString &clone_tenant_name,
-                                          const uint64_t user_tenant_id);
+                                          const uint64_t user_tenant_id,
+                                          ObMySQLTransaction &trans);
   static int recycle_clone_job(common::ObISQLClient &sql_client,
                                const share::ObCloneJob &job);
   static int notify_clone_scheduler(const uint64_t tenant_id);

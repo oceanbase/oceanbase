@@ -1687,6 +1687,29 @@ int ObGarbageCollector::check_if_tenant_has_been_dropped_(const uint64_t tenant_
   return ret;
 }
 
+int ObGarbageCollector::check_if_tenant_is_creating_(const uint64_t tenant_id, bool &is_creating)
+{
+  int ret = OB_SUCCESS;
+  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  schema::ObSchemaGetterGuard guard;
+  const schema::ObTenantSchema *tenant_schema = NULL;
+  is_creating = false;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "schema_service is null", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    CLOG_LOG(WARN, "fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+    CLOG_LOG(WARN, "fail to get tenant schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_TENANT_NOT_EXIST;
+    CLOG_LOG(WARN, "tenant not exist", KR(ret), K(tenant_id));
+  } else {
+    is_creating = tenant_schema->is_creating();
+  }
+  return ret;
+}
+
 int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
                                             ObGCCandidateArray &gc_candidates)
 {
@@ -1705,6 +1728,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
   if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
+    bool is_creating = false;
     if (OB_SUCCESS != (tmp_ret = check_if_tenant_has_been_dropped_(tenant_id, is_tenant_dropped))) {
       CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(ls_id));
     } else if (is_tenant_dropped) {
@@ -1712,7 +1736,21 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
       candidate.gc_reason_ = GCReason::LS_STATUS_ENTRY_NOT_EXIST;
       ret = OB_SUCCESS;
     } else if (OB_ENTRY_NOT_EXIST == ret) {
-      if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
+      if (is_user_tenant(tenant_id)) {
+        if (OB_TMP_FAIL(check_if_tenant_is_creating_(gen_meta_tenant_id(tenant_id), is_creating))
+            || is_creating) {
+          // tenant is creating, current observer may not refresh schema which will cause failure to get tenant schema
+          // when creating tenant, ls status may not exist, so treat it as normal
+          // after meta tenant is created, user ls should exists in __all_ls_status
+          if (REACH_TIME_INTERVAL(10_s)) {
+            CLOG_LOG(WARN, "failed to get ls status, tenant may be creating", KR(ret), KR(tmp_ret),
+                K(is_creating), K(ls_id));
+          }
+          ret = OB_SUCCESS;
+        }
+      }
+      if (OB_SUCC(ret)) {
+      } else if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
       } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
             ls.get_ls_id(), migration_status, allow_gc))) {

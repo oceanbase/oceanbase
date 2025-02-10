@@ -60,6 +60,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcMergeResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourceTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTenantP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcParallelCreateNormalTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTenantEndP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcModifyTenantP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcLockTenantP, *gctx_.root_service_);

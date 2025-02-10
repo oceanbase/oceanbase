@@ -75,7 +75,6 @@ class ObTenantChecker: public ObInspectionTask
     virtual const char* get_task_name() const { return "tenant_checker"; };
   private:
     int alter_tenant_primary_zone_();
-    int check_create_tenant_end_();
     int check_garbage_tenant_(bool &passed);
   private:
     share::schema::ObMultiVersionSchemaService *schema_service_;

@@ -81,16 +81,11 @@ int ObLSCreator::create_sys_tenant_ls(
     LOG_WARN("tenant info init failed", KR(ret));
   } else {
     ObLSAddr addr;
-    common::ObMemberList member_list;
     const int64_t paxos_replica_num = rs_list.count();
     ObLSReplicaAddr replica_addr;
-    const common::ObReplicaProperty replica_property;
     const common::ObReplicaType replica_type = common::REPLICA_TYPE_FULL;
     const common::ObCompatibilityMode compat_mode = MYSQL_MODE;
-    const SCN create_scn = SCN::base_scn();//SYS_LS no need create_scn
     palf::PalfBaseInfo palf_base_info;
-    common::ObMember arbitration_service;
-    common::GlobalLearnerList learner_list;
     for (int64_t i = 0; OB_SUCC(ret) && i < rs_list.count(); ++i) {
       replica_addr.reset();
       if (rs_list.at(i).zone_ != unit_array.at(i).zone_) {
@@ -100,21 +95,18 @@ int ObLSCreator::create_sys_tenant_ls(
               rs_list[i].server_,
               replica_type))) {
         LOG_WARN("failed to init replica addr", KR(ret), K(i), K(rs_list), K(replica_type),
-                 K(replica_property), K(unit_array));
+                 K(unit_array));
       } else if (OB_FAIL(addr.push_back(replica_addr))) {
         LOG_WARN("failed to push back replica addr", KR(ret), K(i), K(addr),
             K(replica_addr), K(rs_list));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_ls_(addr, paxos_replica_num, tenant_info,
-            create_scn, compat_mode, false/*create_with_palf*/, palf_base_info,
-            member_list, arbitration_service, learner_list))) {
+    } else if (OB_FAIL(create_sys_ls_(addr, paxos_replica_num, tenant_info,
+            compat_mode, false/*create_with_palf*/, palf_base_info))) {
       LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id),
                                               K(addr), K(paxos_replica_num), K(tenant_info),
-                                              K(create_scn), K(compat_mode), K(palf_base_info));
-    } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num, learner_list))) {
-      LOG_WARN("failed to set member list", KR(ret), K(member_list), K(arbitration_service), K(paxos_replica_num));
+                                              K(compat_mode), K(palf_base_info));
     }
   }
   return ret;
@@ -211,6 +203,35 @@ int ObLSCreator::create_user_ls(
   return ret;
 }
 
+int ObLSCreator::create_sys_ls_(
+    const ObILSAddr &addr,
+    const int64_t paxos_replica_num,
+    const share::ObAllTenantInfo &tenant_info,
+    const common::ObCompatibilityMode &compat_mode,
+    const bool create_with_palf,
+    const palf::PalfBaseInfo &palf_base_info)
+{
+  int ret = OB_SUCCESS;
+  common::ObMemberList member_list;
+  ObMember arbitration_service;
+  common::GlobalLearnerList learner_list;
+  const SCN create_scn = SCN::base_scn();
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(create_ls_(addr, paxos_replica_num, tenant_info,
+          create_scn, compat_mode, create_with_palf, palf_base_info,
+          member_list, arbitration_service, learner_list))) {
+    LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id),
+        K(addr), K(paxos_replica_num), K(tenant_info),
+        K(create_scn), K(compat_mode), K(palf_base_info));
+  } else if (OB_FAIL(set_member_list_(member_list, arbitration_service, paxos_replica_num, learner_list))) {
+    LOG_WARN("failed to set member list", KR(ret), K(member_list), K(arbitration_service),
+        K(paxos_replica_num), K(learner_list));
+  }
+  return ret;
+}
+
 int ObLSCreator::create_tenant_sys_ls(
     const common::ObZone &primary_zone,
     const share::schema::ZoneLocalityIArray &zone_locality,
@@ -220,7 +241,8 @@ int ObLSCreator::create_tenant_sys_ls(
     const ObString &zone_priority,
     const bool create_with_palf,
     const palf::PalfBaseInfo &palf_base_info,
-    const uint64_t source_tenant_id)
+    const uint64_t source_tenant_id,
+    const ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start to create log stream", K_(id), K_(tenant_id));
@@ -244,9 +266,6 @@ int ObLSCreator::create_tenant_sys_ls(
     common::ObMemberList member_list;
     share::ObLSStatusInfo exist_status_info;
     const SCN create_scn = SCN::base_scn();
-    share::ObLSStatusOperator ls_operator;
-    ObMember arbitration_service;
-    common::GlobalLearnerList learner_list;
     ObLSFlag flag(ObLSFlag::NORMAL_FLAG); // TODO: sys ls should be duplicate
     if (OB_FAIL(status_info.init(tenant_id_, id_, 0, share::OB_LS_CREATING, 0,
                                    primary_zone, flag))) {
@@ -260,29 +279,32 @@ int ObLSCreator::create_tenant_sys_ls(
     } else if (OB_FAIL(alloc_sys_ls_addr(tenant_id_, pool_list,
             zone_locality, addr))) {
       LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(pool_list));
+    } else if (is_meta_tenant(tenant_id_)) {
+      share::ObLSLifeAgentManager ls_life_agent(*proxy_);
+      if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority,
+              share::NORMAL_SWITCHOVER_STATUS))) {
+        LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
+      }
     }
-    if (OB_FAIL(ret)) {
-    } else {
-      ret = ls_operator.get_ls_init_member_list(tenant_id_, id_, member_list, exist_status_info, *proxy_, arbitration_service, learner_list);
-      if (OB_FAIL(ret) && OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get log stream member list", KR(ret), K_(id), K(tenant_id_));
-      } else if (OB_SUCC(ret) && status_info.ls_is_created()) {
-      } else {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          share::ObLSLifeAgentManager ls_life_agent(*proxy_);
-          if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn, zone_priority,
-                                                  share::NORMAL_SWITCHOVER_STATUS))) {
-            LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          REPEAT_CREATE_LS();
-        }
+    // user tenant sys ls is created with meta tenant's tables not writable
+    // so it will just create ls and set member list
+    // caller must create meta tenant sys ls before user tenant sys ls
+    // the data that should occur in meta tenant's tables will be written when meta tenant tables are writable
+    if (FAILEDx(create_sys_ls_(addr, paxos_replica_num, tenant_info,
+            compat_mode, create_with_palf, palf_base_info))) {
+      LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id),
+          K(addr), K(paxos_replica_num), K(tenant_info), K(compat_mode), K(palf_base_info));
+    } else if (is_meta_tenant(tenant_id_)) {
+      share::ObLSStatusOperator ls_operator;
+      if (OB_ISNULL(proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql proxy is null", KR(ret));
+      } else if (OB_FAIL(ls_operator.update_ls_status(tenant_id_, id_, share::OB_LS_CREATING,
+              share::OB_LS_NORMAL, share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
+        LOG_WARN("failed to update ls status", KR(ret), K(id_));
       }
     }
   }
-
   const int64_t cost = ObTimeUtility::current_time() - start_time;
   LOG_INFO("finish to create log stream", KR(ret), K_(id), K_(tenant_id), K(cost));
   LS_EVENT_ADD(tenant_id_, id_, "create_ls_finish", ret, paxos_replica_num, "", K(cost));
@@ -306,10 +328,10 @@ int ObLSCreator::construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_i
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K_(id));
   } else {
     MTL_SWITCH(OB_SYS_TENANT_ID) {
-      if (OB_FAIL(clone_op.init(tenant_id_, proxy_))) {
+      if (OB_FAIL(clone_op.init(OB_SYS_TENANT_ID, proxy_))) {
         LOG_WARN("fail to init clone op", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(clone_op.get_clone_job_by_source_tenant_id(source_tenant_id, clone_job))) {
-        LOG_WARN("fail to get clone job", KR(ret), K(tenant_id_), K(source_tenant_id));
+      } else if (OB_FAIL(clone_op.get_clone_job_by_clone_tenant_id(tenant_id_, clone_job))) {
+        LOG_WARN("fail to get clone job", KR(ret), K(tenant_id_));
       } else if (OB_UNLIKELY(!clone_job.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("clone job is not valid", KR(ret), K(clone_job), K(source_tenant_id));
@@ -398,12 +420,6 @@ int ObLSCreator::process_after_has_member_list_(
             tenant_id_, id_, share::OB_LS_CREATING, share::OB_LS_CREATED,
             share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
       LOG_WARN("failed to update ls status", KR(ret), K(id_));
-    } else if (id_.is_sys_ls()) {
-      if (OB_FAIL(ls_operator.update_ls_status(
-                  tenant_id_, id_, share::OB_LS_CREATED, share::OB_LS_NORMAL,
-                  share::NORMAL_SWITCHOVER_STATUS, *proxy_))) {
-        LOG_WARN("failed to update ls status", KR(ret), K(id_));
-      }
     }
   }
   return ret;
@@ -771,7 +787,11 @@ int ObLSCreator::check_member_list_and_learner_list_all_in_meta_table_(
   ObTimeoutCtx ctx;
   int tmp_ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
+  if (is_sys_tenant(tenant_id_)) {
+    // no need to check sys tenant
+  } else if (is_user_tenant(tenant_id_) && id_.is_sys_ls()) {
+    // user tenant sys ls is created without meta table
+  } else if (OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(member_list));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
@@ -871,7 +891,7 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
   } else if (OB_UNLIKELY(!member_list.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(member_list));
-  } else if (!is_sys_tenant(tenant_id_) && OB_FAIL(check_member_list_and_learner_list_all_in_meta_table_(member_list, learner_list))) {
+  } else if (OB_FAIL(check_member_list_and_learner_list_all_in_meta_table_(member_list, learner_list))) {
     LOG_WARN("fail to check member_list all in meta table", KR(ret), K(member_list), K(learner_list), K_(tenant_id), K_(id));
   } else if (OB_FAIL(construct_paxos_replica_number_to_persist_(
                          paxos_replica_num,

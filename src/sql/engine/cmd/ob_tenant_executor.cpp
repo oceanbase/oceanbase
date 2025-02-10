@@ -25,6 +25,8 @@
 #include "sql/resolver/cmd/ob_create_restore_point_stmt.h"
 #include "sql/resolver/cmd/ob_drop_restore_point_stmt.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "share/ls/ob_ls_status_operator.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -74,7 +76,7 @@ int ObCreateTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStmt &stmt
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
-  } else if (OB_FAIL(common_rpc_proxy->create_tenant(create_tenant_arg, tenant_id))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(create_tenant_arg, tenant_id))) {
     LOG_WARN("rpc proxy create tenant failed", K(ret));
   } else if (!create_tenant_arg.if_not_exist_ && OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -242,7 +244,7 @@ int ObCreateStandbyTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStm
   }
 
   if (OB_FAIL(ret)){
-  } else if (OB_FAIL(common_rpc_proxy->create_tenant(create_tenant_arg, tenant_id))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(create_tenant_arg, tenant_id))) {
     LOG_WARN("rpc proxy create tenant failed", K(ret));
   } else if (!create_tenant_arg.if_not_exist_ && OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;

@@ -154,6 +154,7 @@ public:
                                          ObCompatibilityMode compa_mode,
                                          bool from_file);
   static int load_all_sys_package(common::ObMySQLProxy &sql_proxy);
+  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
 
   static int add_package_to_plan_cache(const ObPLResolveCtx &resolve_ctx, ObPLPackage *package);
   static int get_package_from_plan_cache(const ObPLResolveCtx &resolve_ctx, 
@@ -190,7 +191,6 @@ private:
                                    int sys_package_count,
                                    ObCompatibilityMode compa_mode,
                                    bool from_file);
-  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
 
   int get_cached_package_spec(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                               ObPLPackage *&package_spec);

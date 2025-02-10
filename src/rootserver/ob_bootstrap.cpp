@@ -359,11 +359,11 @@ int ObPreBootstrap::notify_sys_tenant_root_key()
                                                                 result.root_key_))) {
   } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
     LOG_INFO("root key existed in local");
-  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, addrs, result, false))) {
+  } else if (OB_FAIL(ObTenantDDLService::notify_root_key(rpc_proxy_, arg, addrs, result, false))) {
     LOG_WARN("fail to notify root key", K(ret));
   } else if (obrpc::RootKeyType::INVALID != result.key_type_ || !result.root_key_.empty()) {
     LOG_INFO("root key existed in remote");
-  } else if (OB_FAIL(ObDDLService::create_root_key(rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
+  } else if (OB_FAIL(ObTenantDDLService::create_root_key(rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
     LOG_WARN("fail to create sys tenant root key", KR(ret), K(addrs));
   }
   BOOTSTRAP_CHECK_SUCCESS();
@@ -434,7 +434,7 @@ int ObPreBootstrap::notify_sys_tenant_config_()
   common::ObConfigPairs config;
   common::ObSEArray<common::ObConfigPairs, 1> init_configs;
   ObArray<ObAddr> addrs;
-  if (OB_FAIL(ObDDLService::gen_tenant_init_config(
+  if (OB_FAIL(ObTenantDDLService::gen_tenant_init_config(
       OB_SYS_TENANT_ID, DATA_CURRENT_VERSION, config))) {
   } else if (OB_FAIL(init_configs.push_back(config))) {
     LOG_WARN("fail to push back config", KR(ret), K(config));
@@ -446,7 +446,7 @@ int ObPreBootstrap::notify_sys_tenant_config_()
       LOG_WARN("fail to push back server", KR(ret));
     }
   } // end for
-  if (FAILEDx(ObDDLService::notify_init_tenant_config(
+  if (FAILEDx(ObTenantDDLService::notify_init_tenant_config(
               rpc_proxy_, init_configs, addrs))) {
     LOG_WARN("fail to notify init tenant config", KR(ret), K(init_configs), K(addrs));
   }
@@ -611,6 +611,7 @@ ObBootstrap::ObBootstrap(
     ObSrvRpcProxy &rpc_proxy,
     share::ObLSTableOperator &lst_operator,
     ObDDLService &ddl_service,
+    ObTenantDDLService &tenant_ddl_service,
     ObUnitManager &unit_mgr,
     ObServerConfig &config,
     const obrpc::ObBootstrapArg &arg,
@@ -618,6 +619,7 @@ ObBootstrap::ObBootstrap(
   : ObBaseBootstrap(rpc_proxy, arg.server_list_, config),
     lst_operator_(lst_operator),
     ddl_service_(ddl_service),
+    tenant_ddl_service_(tenant_ddl_service),
     unit_mgr_(unit_mgr),
     arg_(arg),
     common_proxy_(rs_rpc_proxy),
@@ -661,29 +663,26 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   BOOTSTRAP_CHECK_SUCCESS_V2("create_all_schema");
   ObMultiVersionSchemaService &schema_service = ddl_service_.get_schema_service();
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(init_system_data())) {
-      LOG_WARN("failed to init system data", KR(ret));
-    }
-    if (OB_SUCC(ret)) {
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_BEGIN,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap refresh all schema begin.");
-    }
-    if (FAILEDx(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
-      LOG_WARN("failed to refresh_schema", K(ret));
-      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_FAIL, ret,
-                       DBA_STEP_INC_INFO(bootstrap),
-                       "bootstrap refresh all schema fail. [suggestion] you can: "
-                       "1. Search previous error logs that may indicate the cause of this failure. "
-                       "2. Check if other nodes are accessible via ssh. "
-                       "2. Check whether other nodes can establish connections through sql client. "
-                       "3. Check the alert.log on others node to see if there are other error logs.");
-    } else {
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_SUCCESS,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap refresh all schema success.");
-    }
+  if (FAILEDx(init_system_data())) {
+    LOG_WARN("failed to init system data", KR(ret));
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_BEGIN,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap refresh all schema begin.");
+  }
+  if (FAILEDx(ddl_service_.refresh_schema(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to refresh_schema", K(ret));
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap refresh all schema fail. [suggestion] you can: "
+                     "1. Search previous error logs that may indicate the cause of this failure. "
+                     "2. Check if other nodes are accessible via ssh. "
+                     "2. Check whether other nodes can establish connections through sql client. "
+                     "3. Check the alert.log on others node to see if there are other error logs.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_REFRESH_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap refresh all schema success.");
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("refresh_schema");
 
@@ -695,27 +694,8 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
 
   if (FAILEDx(add_servers_in_rs_list(server_zone_op_service))) {
     LOG_WARN("fail to add servers in rs_list_", KR(ret));
-  } else {
-    LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_BEGIN,
-                    DBA_STEP_INC_INFO(bootstrap),
-                    "bootstrap wait all rootservice in service begin.");
-    if (OB_FAIL(wait_all_rs_in_service())) {
-      LOG_WARN("failed to wait all rs in service", KR(ret));
-      LOG_DBA_ERROR_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_FAIL, ret,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap wait all rootservice in service fail. "
-                      "[suggestion] maybe this node is not leader anymore or just timeout.(depends on error code) you can:"
-                      "1. Check whether the current node is the leader through oceanbase.CDB_OB_LS; "
-                      "2. Check whether the network between nodes is connected; "
-                      "3. Check the alert.log on other nodes;");
-    } else {
-      ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
-      LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_ALL_ROOTSERVICE_SUCCESS,
-                      DBA_STEP_INC_INFO(bootstrap),
-                      "bootstrap wait all rootservice in service success.");
-    }
   }
-
+  ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
@@ -1249,59 +1229,6 @@ int ObBootstrap::add_servers_in_rs_list(rootserver::ObServerZoneOpService &serve
   return ret;
 }
 
-int ObBootstrap::wait_all_rs_in_service()
-{
-  int ret = OB_SUCCESS;
-  const int64_t check_interval = 500 * 1000;
-  int64_t left_time_can_sleep = WAIT_RS_IN_SERVICE_TIMEOUT_US;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check_inner_stat failed", K(ret));
-  }
-  while (OB_SUCC(ret)) {
-    if (!ObRootServiceRoleChecker::is_rootserver()) {
-      ret = OB_RS_SHUTDOWN;
-      LOG_WARN("wait all rs in service fail, self is not master rootservice any more, check SYS LS leader revoke infos",
-          KR(ret), K(left_time_can_sleep));
-      break;
-    }
-
-    bool all_in_service = true;
-    FOREACH_CNT_X(rs, rs_list_, all_in_service && OB_SUCCESS == ret) {
-      bool in_service = false;
-      if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
-        left_time_can_sleep = max(left_time_can_sleep, THIS_WORKER.get_timeout_remain());
-      }
-      // mark
-      if (OB_FAIL(SVR_TRACER.check_in_service(rs->server_, in_service))) {
-        LOG_WARN("check_in_service failed", "server", rs->server_, K(ret));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          all_in_service = false;
-        }
-      } else if (!in_service) {
-        LOG_WARN("server is not in_service ", "server", rs->server_);
-        all_in_service = false;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (all_in_service) {
-      break;
-    } else if (left_time_can_sleep > 0) {
-      const int64_t time_to_sleep = min(check_interval, left_time_can_sleep);
-      LOG_WARN("fail to wait all rs in service. wait a while", K(time_to_sleep), K(left_time_can_sleep));
-      ob_usleep(static_cast<uint32_t>(time_to_sleep));
-      left_time_can_sleep -= time_to_sleep;
-    } else {
-      ret = OB_WAIT_ALL_RS_ONLINE_TIMEOUT;
-      LOG_WARN("wait all rs in service timeout", "timeout",
-          static_cast<int64_t>(WAIT_RS_IN_SERVICE_TIMEOUT_US), K(ret));
-    }
-  }
-  BOOTSTRAP_CHECK_SUCCESS();
-  return ret;
-}
-
 int ObBootstrap::check_is_already_bootstrap(bool &is_bootstrap)
 {
   int ret = OB_SUCCESS;
@@ -1351,7 +1278,7 @@ int ObBootstrap::init_global_stat()
     } else if (OB_FAIL(global_stat_proxy.set_init_value(
                OB_CORE_SCHEMA_VERSION, baseline_schema_version,
                rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp, ddl_epoch,
-               DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
+               DATA_CURRENT_VERSION, DATA_CURRENT_VERSION, DATA_CURRENT_VERSION))) {
       LOG_WARN("set_init_value failed", KR(ret), "schema_version", OB_CORE_SCHEMA_VERSION,
                K(baseline_schema_version), K(rootservice_epoch), K(ddl_epoch), "data_version", DATA_CURRENT_VERSION);
     }
@@ -1487,10 +1414,10 @@ int ObBootstrap::create_sys_tenant()
       LOG_WARN("set_comment failed", "comment", "system tenant", K(ret));
     } else if (OB_FAIL(set_replica_options(tenant))) {
       LOG_WARN("failed to set replica options", KR(ret));
-    } else if (OB_FAIL(ddl_service_.check_primary_zone_locality_condition(
+    } else if (OB_FAIL(tenant_ddl_service_.check_primary_zone_locality_condition(
             tenant, zone_list, zone_region_list, dummy_schema_guard))) {
       LOG_WARN("fail to check primary zone region condition", K(ret));
-    } else if (OB_FAIL(ddl_service_.create_sys_tenant(arg, tenant))) {
+    } else if (OB_FAIL(tenant_ddl_service_.create_sys_tenant(arg, tenant))) {
       LOG_WARN("create tenant failed", K(ret), K(tenant));
     } else if (OB_FAIL(insert_sys_ls_(tenant, zone_list))) {
       LOG_WARN("failed to insert sys ls", KR(ret), K(zone_list));

@@ -884,6 +884,7 @@ int ObRpcSwitchSchemaP::process()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_USER_LS_ERROR);
 int ObRpcCreateTenantUserLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -899,11 +900,14 @@ int ObRpcCreateTenantUserLSP::process()
         LOG_WARN("primary ls service is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(primary_ls_service->create_ls_for_create_tenant())) {
         LOG_WARN("failed to create ls for create tenant", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(primary_ls_service->advance_user_ls_status_for_creating_tenant())) {
+        LOG_WARN("failed to advance user ls status", KR(ret));
+      } else if (OB_FAIL(ERRSIM_CREATE_USER_LS_ERROR)) {
+        LOG_WARN("ERRSIM_CREATE_USER_LS_ERROR", KR(ret));
       }
     }
   }
   return ret;
-
 }
 
 int ObRpcRefreshMemStatP::process()

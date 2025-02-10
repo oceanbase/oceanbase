@@ -33,7 +33,13 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_CREATE_TABLE == pcode
          || obrpc::OB_PARALLEL_SET_COMMENT == pcode
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
-         || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode;
+         || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
+         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode;
+}
+
+inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
+{
+  return obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT != pcode;
 }
 
 // precondition: enable_ddl = false
@@ -63,7 +69,8 @@ inline bool is_allow_when_create_tenant(const obrpc::ObRpcPacketCode pcode)
       || obrpc::OB_MODIFY_TENANT == pcode
       || obrpc::OB_LOCK_TENANT == pcode
       || obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY == pcode
-      || obrpc::OB_CREATE_TENANT_END == pcode) {
+      || obrpc::OB_CREATE_TENANT_END == pcode
+      || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode) {
     bret = true;
   }
   return bret;
@@ -190,7 +197,7 @@ protected:
         if (OB_SUCC(ret)) {
           int64_t start_ts = ObTimeUtility::current_time();
           bool with_ddl_lock = false;
-          if (is_ddl_like_) {
+          if (is_ddl_like_ && need_ddl_lock(pcode)) {
             if (is_parallel_ddl(pcode)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
@@ -323,6 +330,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_START_REDEF_TABLE, ObRpcStartRedefTableP, star
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE, ObRpcCreateHiddenTableP, create_hidden_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY, ObRpcCommitAlterTenantLocalityP, commit_alter_tenant_locality(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT, ObRpcCreateTenantP, create_tenant(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, ObRpcParallelCreateNormalTenantP, parallel_create_normal_tenant(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT_END, ObRpcCreateTenantEndP, create_tenant_end(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TENANT, ObRpcDropTenantP, drop_tenant(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_MODIFY_TENANT, ObRpcModifyTenantP, modify_tenant(arg_));

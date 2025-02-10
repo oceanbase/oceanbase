@@ -754,7 +754,9 @@ int ObLSLocationService::renew_all_ls_locations()
 
 int ObLSLocationService::renew_all_ls_locations_by_rpc()
 {
-  ObCurTraceId::init(GCONF.self_addr_);
+  ObCurTraceId::TraceId new_trace_id;
+  new_trace_id.init(GCONF.self_addr_);
+  ObTraceIdGuard guard(new_trace_id);
   int ret = OB_SUCCESS;
   ObArray<ObAddr> dests;
   ObArray<ObLSLeaderLocation> leaders;

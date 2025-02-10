@@ -105,7 +105,7 @@ void ObDDLTransController::run1()
           int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
 
-          if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_unit_manager().get_tenant_unit_servers(tenant_id, zone, server_list))) {
+          if (OB_FAIL(GCTX.root_service_->get_unit_mgr().get_tenant_unit_servers(tenant_id, zone, server_list))) {
             LOG_WARN("get alive server failed", KR(ret));
           } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().publish_schema_and_get_schema_version(tenant_id, server_list, &schema_version))) {
             LOG_WARN("fail to publish_schema", KR(ret), K(tenant_id));
@@ -175,6 +175,28 @@ int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id,
     }
   }
   LOG_INFO("broadcast consensus version finished", KR(ret), K(schema_version), K(arg), K(server_list));
+  return ret;
+}
+
+int ObDDLTransController::reserve_schema_version(const uint64_t tenant_id,
+    const uint64_t schema_version_count)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  int64_t end_schema_version = OB_INVALID_VERSION;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLTransController", KR(ret));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObDDLTransController", KR(ret));
+  } else if (tenant_id == OB_INVALID_TENANT_ID || schema_version_count == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("register_task_and_assign_schema_version", KR(ret), K(tenant_id), K(schema_version_count));
+  } else if (OB_FAIL(schema_service_->gen_batch_new_schema_versions(
+              tenant_id, schema_version_count, end_schema_version))) {
+    LOG_WARN("fail to gen batch new schema versions", KR(ret), K(schema_version_count));
+  }
   return ret;
 }
 

@@ -18,6 +18,7 @@
 #include "src/pl/ob_pl.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 
 namespace oceanbase
 {
@@ -529,7 +530,7 @@ int ObUpgradeUtils::upgrade_sys_stat(
     LOG_WARN("fail to init sys stat", KR(ret), K(tenant_id));
   } else if (OB_FAIL(filter_sys_stat(sql_client, tenant_id, sys_stat))) {
     LOG_WARN("fail to filter sys stat", KR(ret), K(tenant_id), K(sys_stat));
-  } else if (OB_FAIL(ObDDLOperator::replace_sys_stat(tenant_id, sys_stat, sql_client))) {
+  } else if (OB_FAIL(ObTenantDDLService::replace_sys_stat(tenant_id, sys_stat, sql_client))) {
     LOG_WARN("fail to add sys stat", KR(ret), K(tenant_id), K(sys_stat));
   } else {
     LOG_INFO("[UPGRADE] upgrade sys stat", KR(ret), K(tenant_id), K(sys_stat));

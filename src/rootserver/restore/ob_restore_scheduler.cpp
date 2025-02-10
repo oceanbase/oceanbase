@@ -13,6 +13,12 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_scheduler.h"
+#include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_tenant_ddl_service.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
+#include "rootserver/ob_unit_manager.h"//convert_pool_name_lis
+#include "rootserver/ob_ls_service_helper.h"//create_new_ls_in_trans
 #include "rootserver/ob_common_ls_service.h"//do_create_user_ls
 #include "share/ob_schema_status_proxy.h"
 #include "rootserver/standby/ob_standby_service.h"
@@ -221,7 +227,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("failed to assign pool list", KR(ret), K(job_info));
   } else if (OB_FAIL(fill_create_tenant_arg(job_info, pool_list, arg))) {
     LOG_WARN("fail to fill create tenant arg", K(ret), K(pool_list), K(job_info));
-  } else if (OB_FAIL(rpc_proxy_->timeout(timeout).create_tenant(arg, tenant_id))) {
+  } else if (OB_FAIL(ObTenantDDLService::schedule_create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", K(ret), K(arg));
   } else {
     DEBUG_SYNC(AFTER_PHYSICAL_RESTORE_CREATE_TENANT);

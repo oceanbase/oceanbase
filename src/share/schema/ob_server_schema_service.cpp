@@ -5680,6 +5680,10 @@ int ObServerSchemaService::refresh_full_schema(
       // but refresh full may have added some tables
       // And the latter table was deleted again, at this time refresh will not delete this table in the cache
       if (OB_SUCC(ret)) {
+        // after sys tenant refresh full schema, all optimizations of bootstrap should be completed.
+        if (is_sys_tenant(tenant_id)) {
+          GCTX.in_bootstrap_ = false;
+        }
         break;
       } else {
         FLOG_WARN("[REFRESH_SCHEMA] refresh full schema failed, do some clear", KR(ret), K(schema_status));

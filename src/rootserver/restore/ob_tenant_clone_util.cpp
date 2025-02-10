@@ -262,9 +262,10 @@ int ObTenantCloneUtil::update_restore_scn_for_fork_job(common::ObISQLClient &sql
   return ret;
 }
 
-int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObISQLClient &sql_client,
+int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObMySQLProxy &sql_client,
                                                     const ObString &clone_tenant_name,
-                                                    const uint64_t user_tenant_id)
+                                                    const uint64_t user_tenant_id,
+                                                    ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(clone_tenant_name.empty() || !is_user_tenant(user_tenant_id))) {
@@ -286,7 +287,7 @@ int ObTenantCloneUtil::insert_user_tenant_clone_job(common::ObISQLClient &sql_cl
       user_clone_job.set_clone_tenant_id(user_tenant_id);
       user_clone_job.set_status(ObTenantCloneStatus::Status::CLONE_USER_PREPARE);
       ObTenantCloneTableOperator user_clone_op;
-      if (OB_FAIL(user_clone_op.init(user_tenant_id, &sql_client))) {
+      if (OB_FAIL(user_clone_op.init(user_tenant_id, &trans))) {
         LOG_WARN("fail init clone op", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(user_clone_op.insert_clone_job(user_clone_job))) {
         LOG_WARN("fail to insert clone job", KR(ret), K(user_clone_job));

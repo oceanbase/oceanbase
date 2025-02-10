@@ -54,14 +54,16 @@ public:
                              const int64_t gc_schema_version,
 			                       const int64_t ddl_epoch,
                              const uint64_t target_data_version,
-                             const uint64_t current_data_version);
+                             const uint64_t current_data_version,
+                             const uint64_t upgrade_begin_data_version);
 
   virtual int set_tenant_init_global_stat(const int64_t core_schema_version,
                                           const int64_t baseline_schema_version,
                                           const SCN &snapshot_gc_scn,
                                           const int64_t ddl_epoch,
                                           const uint64_t target_data_version,
-                                          const uint64_t current_data_version);
+                                          const uint64_t current_data_version,
+                                          const uint64_t upgrade_begin_data_version);
 
   virtual int set_core_schema_version(const int64_t core_schema_version);
   virtual int set_baseline_schema_version(const int64_t baseline_schema_version);
@@ -79,6 +81,8 @@ public:
     share::SCN &target_data_version_ora_rowscn);
   int update_target_data_version(const uint64_t target_data_version);
   int get_target_data_version(const bool for_update, uint64_t &target_data_version);
+  int update_upgrade_begin_data_version(const uint64_t upgrade_begin_data_version);
+  int get_upgrade_begin_data_version(const bool for_update, uint64_t &upgrade_begin_data_version);
   int update_finish_data_version(const uint64_t finish_data_version, const share::SCN &scn);
   int get_finish_data_version(uint64_t &finish_data_version, share::SCN &scn);
 

@@ -193,67 +193,6 @@ int ObDDLOperator::create_tenant(ObTenantSchema &tenant_schema,
   return ret;
 }
 
-int ObDDLOperator::insert_tenant_merge_info(
-    const ObSchemaOperationType op,
-    const ObTenantSchema &tenant_schema,
-    ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = tenant_schema.get_tenant_id();
-  if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
-    // add zone merge info
-    if ((OB_DDL_ADD_TENANT_START == op) || (OB_DDL_ADD_TENANT == op)) {
-      HEAP_VARS_4((ObGlobalMergeInfo, global_info),
-                  (ObZoneMergeInfoArray, merge_info_array),
-                  (ObZoneArray, zone_list),
-                  (ObZoneMergeInfo, tmp_merge_info)) {
-
-        global_info.tenant_id_ = tenant_id;
-        tmp_merge_info.tenant_id_ = tenant_id;
-        if (OB_FAIL(tenant_schema.get_zone_list(zone_list))) {
-          LOG_WARN("fail to get zone list", KR(ret));
-        }
-
-        for (int64_t i = 0; (i < zone_list.count()) && OB_SUCC(ret); ++i) {
-          tmp_merge_info.zone_ = zone_list.at(i);
-          if (OB_FAIL(merge_info_array.push_back(tmp_merge_info))) {
-            LOG_WARN("fail to push_back", KR(ret));
-          }
-        }
-        // add zone merge info of current tenant(sys tenant or meta tenant)
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans,
-              tenant_id, global_info))) {
-            LOG_WARN("fail to insert global merge info of current tenant", KR(ret), K(global_info));
-          } else if (OB_FAIL(ObZoneMergeTableOperator::insert_zone_merge_infos(
-                     trans, tenant_id, merge_info_array))) {
-            LOG_WARN("fail to insert zone merge infos of current tenant", KR(ret), K(tenant_id),
-              K(merge_info_array));
-          }
-        }
-        // add zone merge info of relative user tenant if current tenant is meta tenant
-        if (OB_SUCC(ret) && is_meta_tenant(tenant_id)) {
-          const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-          global_info.tenant_id_ = user_tenant_id;
-          for (int64_t i = 0; i < merge_info_array.count(); ++i) {
-            merge_info_array.at(i).tenant_id_ = user_tenant_id;
-          }
-          if (OB_FAIL(ObGlobalMergeTableOperator::insert_global_merge_info(trans,
-              user_tenant_id, global_info))) {
-            LOG_WARN("fail to insert global merge info of user tenant", KR(ret), K(global_info));
-          } else if (OB_FAIL(ObZoneMergeTableOperator::insert_zone_merge_infos(
-                    trans, user_tenant_id, merge_info_array))) {
-            LOG_WARN("fail to insert zone merge infos of user tenant", KR(ret), K(user_tenant_id),
-              K(merge_info_array));
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 
 int ObDDLOperator::drop_tenant(const uint64_t tenant_id,
                                ObMySQLTransaction &trans,
@@ -6030,21 +5969,15 @@ int ObDDLOperator::fetch_expire_recycle_objects(
   return ret;
 }
 
-int ObDDLOperator::init_tenant_env(
+int ObDDLOperator::init_tenant_schemas(
     const ObTenantSchema &tenant_schema,
     const ObSysVariableSchema &sys_variable,
-    const share::ObTenantRole &tenant_role,
-    const SCN &recovery_until_scn,
-    const common::ObIArray<common::ObConfigPairs> &init_configs,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
 
-  if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid recovery_until_scn", KR(ret), K(recovery_until_scn));
-  } else if (OB_FAIL(init_tenant_tablegroup(tenant_id, trans))) {
+  if (OB_FAIL(init_tenant_tablegroup(tenant_id, trans))) {
     LOG_WARN("insert default tablegroup failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_databases(tenant_schema, sys_variable, trans))) {
     LOG_WARN("insert default databases failed,", K(tenant_id), K(ret));
@@ -6058,8 +5991,6 @@ int ObDDLOperator::init_tenant_env(
     LOG_WARN("insert default user failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_keystore(tenant_id, sys_variable, trans))) {
     LOG_WARN("fail to init tenant keystore", K(ret));
-  } else if (OB_FAIL(init_tenant_sys_stats(tenant_id, trans))) {
-    LOG_WARN("insert default sys stats failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_freeze_info(tenant_id, trans))) {
     LOG_WARN("insert freeze info failed", K(tenant_id), KR(ret));
   } else if (OB_FAIL(init_tenant_srs(tenant_id, trans))) {
@@ -6073,26 +6004,6 @@ int ObDDLOperator::init_tenant_env(
       LOG_WARN("insert privilege failed", K(tenant_id), K(ret));
     }
     //TODO [profile]
-  }
-  if (OB_SUCC(ret) && !is_user_tenant(tenant_id)) {
-    uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-    if (OB_FAIL(init_tenant_config(tenant_id, init_configs, trans))) {
-      LOG_WARN("insert tenant config failed", KR(ret), K(tenant_id));
-    } else if (is_meta_tenant(tenant_id)
-               && OB_FAIL(init_tenant_config(user_tenant_id, init_configs, trans))) {
-      LOG_WARN("insert tenant config failed", KR(ret), K(user_tenant_id));
-    }
-  }
-
-  if (OB_SUCC(ret) && is_meta_tenant(tenant_id)) {
-    const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-    ObAllTenantInfo tenant_info;
-    if (OB_FAIL(tenant_info.init(user_tenant_id, tenant_role, NORMAL_SWITCHOVER_STATUS, 0,
-                SCN::base_scn(), SCN::base_scn(), SCN::base_scn(), recovery_until_scn))) {
-      LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tenant_role));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::init_tenant_info(tenant_info, &trans))) {
-      LOG_WARN("failed to init tenant info", KR(ret), K(tenant_info));
-    }
   }
 
   return ret;
@@ -6607,182 +6518,6 @@ int ObDDLOperator::init_tenant_users(const ObTenantSchema &tenant_schema,
   return ret;
 }
 
-int ObDDLOperator::init_tenant_config(
-    const uint64_t tenant_id,
-    const common::ObIArray<common::ObConfigPairs> &init_configs,
-    ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t tenant_idx = !is_user_tenant(tenant_id) ? 0 : 1;
-  if (is_user_tenant(tenant_id) && init_configs.count() == 1) {
-    ret = OB_SUCCESS;
-    LOG_WARN("no user config", KR(ret), K(tenant_idx), K(tenant_id), K(init_configs));
-  } else if (OB_UNLIKELY(
-      init_configs.count() < tenant_idx + 1
-      || tenant_id != init_configs.at(tenant_idx).get_tenant_id())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid init_configs", KR(ret), K(tenant_idx), K(tenant_id), K(init_configs));
-  } else if (OB_FAIL(init_tenant_config_(tenant_id, init_configs.at(tenant_idx), trans))) {
-    LOG_WARN("fail to init tenant config", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(init_tenant_config_from_seed_(tenant_id, trans))) {
-    LOG_WARN("fail to init tenant config from seed", KR(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObDDLOperator::init_tenant_config_(
-    const uint64_t tenant_id,
-    const common::ObConfigPairs &tenant_config,
-    ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard hard_code_config(TENANT_CONF(OB_SYS_TENANT_ID));
-  int64_t config_cnt = tenant_config.get_configs().count();
-  if (OB_UNLIKELY(tenant_id != tenant_config.get_tenant_id() || config_cnt <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant config", KR(ret), K(tenant_id), K(tenant_config));
-  } else if (!hard_code_config.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get hard code config", KR(ret), K(tenant_id));
-  } else {
-    ObDMLSqlSplicer dml;
-    ObConfigItem *item = NULL;
-    char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "ANY";
-    int64_t svr_port = 0;
-    int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
-    FOREACH_X(config, tenant_config.get_configs(), OB_SUCC(ret)) {
-      const ObConfigStringKey key(config->key_.ptr());
-      if (OB_ISNULL(hard_code_config->get_container().get(key))
-          || OB_ISNULL(item = *(hard_code_config->get_container().get(key)))) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("config not exist", KR(ret), KPC(config));
-      } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-                 || OB_FAIL(dml.add_pk_column("zone", ""))
-                 || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
-                 || OB_FAIL(dml.add_pk_column(K(svr_ip)))
-                 || OB_FAIL(dml.add_pk_column(K(svr_port)))
-                 || OB_FAIL(dml.add_pk_column("name", config->key_.ptr()))
-                 || OB_FAIL(dml.add_column("data_type", item->data_type()))
-                 || OB_FAIL(dml.add_column("value", config->value_.ptr()))
-                 || OB_FAIL(dml.add_column("info", ""))
-                 || OB_FAIL(dml.add_column("config_version", config_version))
-                 || OB_FAIL(dml.add_column("section", item->section()))
-                 || OB_FAIL(dml.add_column("scope", item->scope()))
-                 || OB_FAIL(dml.add_column("source", item->source()))
-                 || OB_FAIL(dml.add_column("edit_level", item->edit_level()))) {
-        LOG_WARN("fail to add column", KR(ret), K(tenant_id), KPC(config));
-      } else if (OB_FAIL(dml.finish_row())) {
-        LOG_WARN("fail to finish row", KR(ret), K(tenant_id), KPC(config));
-      }
-    } // end foreach
-    ObSqlString sql;
-    int64_t affected_rows = 0;
-    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-    if (FAILEDx(dml.splice_batch_insert_sql(OB_TENANT_PARAMETER_TNAME, sql))) {
-      LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
-    } else if (config_cnt != affected_rows) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected_rows not match", KR(ret), K(tenant_id), K(config_cnt), K(affected_rows));
-    }
-  }
-  return ret;
-}
-
-int ObDDLOperator::init_tenant_config_from_seed_(
-    const uint64_t tenant_id,
-    ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t start = ObTimeUtility::current_time();
-  ObSqlString sql;
-  const static char *from_seed = "select config_version, zone, svr_type, svr_ip, svr_port, name, "
-                "data_type, value, info, section, scope, source, edit_level "
-                "from __all_seed_parameter";
-  ObSQLClientRetryWeak sql_client_retry_weak(&sql_proxy_);
-  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-    int64_t expected_rows = 0;
-    int64_t config_version = omt::ObTenantConfig::INITIAL_TENANT_CONF_VERSION + 1;
-    bool is_first = true;
-    if (OB_FAIL(sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, from_seed))) {
-      LOG_WARN("read config from __all_seed_parameter failed", K(from_seed), K(ret));
-    } else {
-      sql.reset();
-      if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s "
-          "(TENANT_ID, ZONE, SVR_TYPE, SVR_IP, SVR_PORT, NAME, DATA_TYPE, VALUE, INFO, "
-          "SECTION, SCOPE, SOURCE, EDIT_LEVEL, CONFIG_VERSION) VALUES",
-          OB_TENANT_PARAMETER_TNAME))) {
-        LOG_WARN("sql assign failed", K(ret));
-      }
-
-      while (OB_SUCC(ret) && OB_SUCC(result.get_result()->next())) {
-        common::sqlclient::ObMySQLResult *rs = result.get_result();
-        if (OB_ISNULL(rs)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("system config result is null", K(ret));
-        } else {
-          ObString var_zone, var_svr_type, var_svr_ip, var_name, var_data_type;
-          ObString var_value, var_info, var_section, var_scope, var_source, var_edit_level;
-          int64_t var_svr_port = 0;
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "zone", var_zone);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "svr_type", var_svr_type);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "svr_ip", var_svr_ip);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "name", var_name);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "data_type", var_data_type);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "value", var_value);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "info", var_info);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "section", var_section);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "scope", var_scope);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "source", var_source);
-          EXTRACT_VARCHAR_FIELD_MYSQL(*rs, "edit_level", var_edit_level);
-          EXTRACT_INT_FIELD_MYSQL(*rs, "svr_port", var_svr_port, int64_t);
-          if (FAILEDx(sql.append_fmt("%s('%lu', '%.*s', '%.*s', '%.*s', %ld, '%.*s', '%.*s', '%.*s',"
-              "'%.*s', '%.*s', '%.*s', '%.*s', '%.*s', %ld)",
-              is_first ? " " : ", ",
-              tenant_id,
-              var_zone.length(), var_zone.ptr(),
-              var_svr_type.length(), var_svr_type.ptr(),
-              var_svr_ip.length(), var_svr_ip.ptr(), var_svr_port,
-              var_name.length(), var_name.ptr(),
-              var_data_type.length(), var_data_type.ptr(),
-              var_value.length(), var_value.ptr(),
-              var_info.length(), var_info.ptr(),
-              var_section.length(), var_section.ptr(),
-              var_scope.length(), var_scope.ptr(),
-              var_source.length(), var_source.ptr(),
-              var_edit_level.length(), var_edit_level.ptr(), config_version))) {
-            LOG_WARN("sql append failed", K(ret));
-          }
-        }
-        expected_rows++;
-        is_first = false;
-      } // while
-
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-        if (expected_rows > 0) {
-          int64_t affected_rows = 0;
-          if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-            LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
-          } else if (OB_UNLIKELY(affected_rows < 0
-                     || expected_rows < affected_rows)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected affected_rows", KR(ret),  K(expected_rows), K(affected_rows));
-          }
-        }
-      } else {
-        LOG_WARN("failed to get result from result set", K(ret));
-      }
-    } // else
-    LOG_INFO("init tenant config", K(ret), K(tenant_id),
-               "cost", ObTimeUtility::current_time() - start);
-  }
-  return ret;
-
-}
-
 int ObDDLOperator::init_freeze_info(const uint64_t tenant_id,
                                     ObMySQLTransaction &trans)
 {
@@ -6844,82 +6579,6 @@ int ObDDLOperator::init_tenant_srs(const uint64_t tenant_id,
 
   LOG_INFO("init tenant srs", K(ret), K(tenant_id),
            "cost", ObTimeUtility::current_time() - start);
-  return ret;
-}
-
-int ObDDLOperator::init_tenant_sys_stats(const uint64_t tenant_id,
-                                         ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  int64_t start = ObTimeUtility::current_time();
-  ObSysStat sys_stat;
-  if (OB_FAIL(sys_stat.set_initial_values(tenant_id))) {
-    LOG_WARN("set initial values failed", K(ret));
-  } else if (sys_stat.item_list_.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not system stat item", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(replace_sys_stat(tenant_id, sys_stat, trans))) {
-    LOG_WARN("replace system stat failed", K(ret));
-  }
-  LOG_INFO("init sys stat", K(ret), K(tenant_id),
-           "cost", ObTimeUtility::current_time() - start);
-  return ret;
-}
-
-int ObDDLOperator::replace_sys_stat(const uint64_t tenant_id,
-                                    ObSysStat &sys_stat,
-                                    ObISQLClient &trans)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (sys_stat.item_list_.is_empty()) {
-    // skip
-  } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
-      "(TENANT_ID, ZONE, NAME, DATA_TYPE, VALUE, INFO, gmt_modified) VALUES ",
-      OB_ALL_SYS_STAT_TNAME))) {
-    LOG_WARN("sql append failed", K(ret));
-  } else {
-    DLIST_FOREACH_X(it, sys_stat.item_list_, OB_SUCC(ret)) {
-      if (OB_ISNULL(it)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("it is null", K(ret));
-      } else {
-        char buf[2L<<10] = "";
-        int64_t pos = 0;
-        if (OB_FAIL(it->value_.print_sql_literal(
-                      buf, sizeof(buf), pos))) {
-          LOG_WARN("print obj failed", K(ret), "obj", it->value_);
-        } else {
-          ObString value(pos, buf);
-          uint64_t schema_id = OB_INVALID_ID;
-          if (OB_FAIL(ObMaxIdFetcher::str_to_uint(value, schema_id))) {
-            LOG_WARN("fail to convert str to uint", K(ret), K(value));
-          } else if (FALSE_IT(schema_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, schema_id))) {
-          } else if (OB_FAIL(sql.append_fmt("%s(%lu, '', '%s', %d, '%ld', '%s', now())",
-              (it == sys_stat.item_list_.get_first()) ? "" : ", ",
-              ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-              it->name_, it->value_.get_type(),
-              static_cast<int64_t>(schema_id),
-              it->info_))) {
-            LOG_WARN("sql append failed", K(ret));
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      LOG_INFO("create system stat sql", K(sql));
-      int64_t affected_rows = 0;
-      if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-        LOG_WARN("execute sql failed", K(ret), K(sql));
-      } else if (sys_stat.item_list_.get_size() != affected_rows
-          && sys_stat.item_list_.get_size() != affected_rows / 2) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected affected_rows", K(affected_rows),
-            "expected", sys_stat.item_list_.get_size());
-      }
-    }
-  }
   return ret;
 }
 

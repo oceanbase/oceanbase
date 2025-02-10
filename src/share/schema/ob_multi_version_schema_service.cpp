@@ -1980,6 +1980,29 @@ int ObMultiVersionSchemaService::check_if_tenant_has_been_dropped(
   return ret;
 }
 
+int ObMultiVersionSchemaService::check_if_tenant_created_for_creating_tenant(
+    const uint64_t tenant_id, const bool auto_update, bool &is_created)
+{
+  int ret = OB_SUCCESS;
+  int64_t baseline_schema_version = OB_INVALID_VERSION;
+  is_created = true;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  if (OB_FAIL(get_baseline_schema_version(meta_tenant_id, auto_update,
+          baseline_schema_version))) {
+    LOG_WARN("failed to get baseline schema version", KR(ret), K(meta_tenant_id));
+  } else if (OB_INVALID_VERSION == baseline_schema_version) {
+    is_created = false;
+  } else if (is_sys_tenant(tenant_id)) {
+  } else if (OB_FAIL(get_baseline_schema_version(user_tenant_id, auto_update,
+          baseline_schema_version))) {
+    LOG_WARN("failed to get baseline schema version", KR(ret), K(user_tenant_id));
+  } else if (OB_INVALID_VERSION == baseline_schema_version) {
+    is_created = false;
+  }
+  return ret;
+}
+
 int ObMultiVersionSchemaService::check_if_tenant_schema_has_been_refreshed(
     const uint64_t tenant_id,
     bool &is_refreshed)

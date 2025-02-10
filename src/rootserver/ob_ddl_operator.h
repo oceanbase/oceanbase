@@ -92,49 +92,6 @@ class ObDropForeignKeyArg;
 
 namespace rootserver
 {
-struct ObSysStat
-{
-  struct Item;
-  typedef common::ObDList<Item> ItemList;
-
-  struct Item : public common::ObDLinkBase<Item>
-  {
-    Item() : name_(NULL), value_(), info_(NULL) {}
-    Item(ItemList &list, const char *name, const char *info);
-
-    TO_STRING_KV("name", common::ObString(name_), K_(value), "info", common::ObString(info_));
-    const char *name_;
-    common::ObObj value_;
-    const char *info_;
-  };
-
-  ObSysStat();
-
-  // set values after bootstrap
-  int set_initial_values(const uint64_t tenant_id);
-
-  TO_STRING_KV(K_(item_list));
-
-  ItemList item_list_;
-
-  // only root tenant own
-  Item ob_max_used_tenant_id_;
-  Item ob_max_used_unit_config_id_;
-  Item ob_max_used_resource_pool_id_;
-  Item ob_max_used_unit_id_;
-  Item ob_max_used_server_id_;
-  Item ob_max_used_ddl_task_id_;
-  Item ob_max_used_unit_group_id_;
-
-  // all tenant own
-  Item ob_max_used_normal_rowid_table_tablet_id_;
-  Item ob_max_used_extended_rowid_table_tablet_id_;
-  Item ob_max_used_ls_id_;
-  Item ob_max_used_ls_group_id_;
-  Item ob_max_used_sys_pl_object_id_;
-  Item ob_max_used_object_id_;
-  Item ob_max_used_rewrite_rule_version_;
-};
 
 class ObDDLOperator
 {
@@ -544,12 +501,10 @@ public:
       const int64_t expire_time,
       common::ObIArray<share::schema::ObRecycleObject> &recycle_objs);
 
-  virtual int init_tenant_env(const share::schema::ObTenantSchema &tenant_schema,
-                              const share::schema::ObSysVariableSchema &sys_variable,
-                              const share::ObTenantRole &tenant_role,
-                              const share::SCN &recovery_until_scn,
-                              const common::ObIArray<common::ObConfigPairs> &init_configs,
-                              common::ObMySQLTransaction &trans);
+  virtual int init_tenant_schemas(
+      const share::schema::ObTenantSchema &tenant_schema,
+      const share::schema::ObSysVariableSchema &sys_variable,
+      common::ObMySQLTransaction &trans);
   virtual int rename_table(const share::schema::ObTableSchema &table_schema,
                            const common::ObString &new_table_name,
                            const uint64_t new_db_id,
@@ -1075,13 +1030,7 @@ public:
   template <typename T>
   int construct_new_name_for_recyclebin(const T &schema,
                                         common::ObSqlString &new_table_name);
-  static int replace_sys_stat(const uint64_t tenant_id,
-                              ObSysStat &sys_stat,
-                              common::ObISQLClient &trans);
 
-  int insert_tenant_merge_info(const share::schema::ObSchemaOperationType op,
-                               const share::schema::ObTenantSchema &tenant_schema,
-                               common::ObMySQLTransaction &trans);
   int update_table_status(const share::schema::ObTableSchema &orig_table_schema,
                           const int64_t schema_version,
                           const share::schema::ObObjectStatus new_status,
@@ -1158,11 +1107,6 @@ private:
   virtual int init_tenant_users(const share::schema::ObTenantSchema &tenant_schema,
                                 const share::schema::ObSysVariableSchema &sys_variable,
                                 common::ObMySQLTransaction &trans);
-  virtual int init_tenant_sys_stats(const uint64_t tenant_id,
-                                    common::ObMySQLTransaction &trans);
-  virtual int init_tenant_config(const uint64_t tenant_id,
-                                 const common::ObIArray<common::ObConfigPairs> &init_configs,
-                                 common::ObMySQLTransaction &trans);
   virtual int init_freeze_info(const uint64_t tenant_id,
                                common::ObMySQLTransaction &trans);
   virtual int init_tenant_srs(const uint64_t tenant_id,
@@ -1328,13 +1272,6 @@ private:
                                        uint64_t tenant_id,
                                        ObMySQLTransaction &trans);
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
-  int init_tenant_config_(
-      const uint64_t tenant_id,
-      const common::ObConfigPairs &tenant_config,
-      common::ObMySQLTransaction &trans);
-  int init_tenant_config_from_seed_(
-      const uint64_t tenant_id,
-      common::ObMySQLTransaction &trans);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
   share::schema::ObMultiVersionSchemaService &schema_service_;

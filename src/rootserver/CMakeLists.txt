@@ -106,6 +106,9 @@ ob_set_subtarget(ob_rootserver common
   ob_transfer_partition_command.cpp
   ob_partition_exchange.cpp
   ob_service_name_command.cpp
+  ob_tenant_ddl_service.cpp
+  ob_tenant_parallel_create_executor.cpp
+  ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
 )
 

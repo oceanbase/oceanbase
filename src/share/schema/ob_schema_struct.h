@@ -2090,6 +2090,7 @@ private:
   common::ObArrayHelper<common::ObString> zone_list_;
   common::ObString primary_zone_;
   bool locked_;
+  // read_only_ is not set now
   bool read_only_;  // After the schema is split, the value of the system variable shall prevail
   common::ObCharsetType charset_type_;
   common::ObCollationType collation_type_;

@@ -14,6 +14,8 @@
 #include "ob_primary_ls_service.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 #include "rootserver/ob_tenant_info_loader.h"
+#include "share/ob_rpc_struct.h"
+#include "rootserver/ob_common_ls_service.h"
 #include "share/ob_srv_rpc_proxy.h" // ObSrvRpcProxy
 #include "share/location_cache/ob_location_service.h" //ObLocationService
 
@@ -91,7 +93,8 @@ void ObPrimaryLSService::do_work()
 }
 
 
-int ObPrimaryLSService::process_all_ls(const share::schema::ObTenantSchema &tenant_schema)
+int ObPrimaryLSService::process_all_ls(const share::schema::ObTenantSchema &tenant_schema,
+    bool in_creating_tenant)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
@@ -103,7 +106,7 @@ int ObPrimaryLSService::process_all_ls(const share::schema::ObTenantSchema &tena
   } else if (OB_UNLIKELY(!tenant_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant schema is invalid", KR(ret), K(tenant_schema));
-  } else if (tenant_schema.is_creating()) {
+  } else if (tenant_schema.is_creating() && !in_creating_tenant) {
     ret = OB_SCHEMA_EAGAIN;
     LOG_WARN("tenant schema not ready, no need process", KR(ret), K(tenant_schema));
   } else if (OB_FAIL(ObLSServiceHelper::construct_ls_status_machine(false, tenant_id,
@@ -460,6 +463,24 @@ int ObPrimaryLSService::process_all_ls_status_to_steady_(const share::schema::Ob
   return ret;
 }
 
+int ObPrimaryLSService::check_mini_mode_create_ls()
+{
+  int ret = OB_SUCCESS;
+  bool is_created = false;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(GCTX.schema_service_));
+  } else if (!MTL_IS_MINI_MODE()) {
+  } else if (OB_FAIL(GCTX.schema_service_->check_if_tenant_created_for_creating_tenant(tenant_id_,
+          true/*auto_update*/, is_created))) {
+    LOG_WARN("failed to check if tenant created", KR(ret), K_(tenant_id));
+  } else if (!is_created) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("schema is not ready, need wait", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
 //the interface may reentry
 int ObPrimaryLSService::create_ls_for_create_tenant()
 {
@@ -473,6 +494,8 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
   } else if (!tenant_schema.is_creating()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only creating tenant can create user ls", KR(ret), K(tenant_schema));
+  } else if (OB_FAIL(check_mini_mode_create_ls())) {
+    LOG_WARN("failed to check mini mode create ls", KR(ret));
   } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
           primary_zone, unit_group_array))) {
     LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));
@@ -521,6 +544,136 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_AFTER_CREATE_ONE_LS);
+int ObPrimaryLSService::create_all_user_ls_for_creating_tenant_(
+    const uint64_t tenant_id,
+    const ObTenantSchema &tenant_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t ls_created_count = 0;
+  if (tenant_id != tenant_schema.get_tenant_id() || !is_valid_tenant_id(tenant_id) ||
+      !tenant_schema.is_creating() || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(tenant_schema), KP(GCTX.sql_proxy_));
+  } else {
+    share::ObLSAttrOperator ls_operator(tenant_id, GCTX.sql_proxy_);
+    share::ObLSAttrArray ls_array;
+    if (OB_FAIL(ls_operator.get_all_ls_by_order(false/*lock_sys_ls*/, ls_array))) {
+      LOG_WARN("failed to get get all ls", KR(ret));
+    } else if (OB_UNLIKELY(0 == ls_array.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls array can not be empty", KR(ret), K(ls_array));
+    } else {
+      ObLSRecoveryStat recovery_stat;
+      ObLSRecoveryStatOperator ls_recovery_operator;
+      share::ObLSStatusOperator status_op;
+      ObLSStatusInfo status_info;
+      palf::PalfBaseInfo palf_base_info;
+      FOREACH_X(ls, ls_array, OB_SUCC(ret)) {
+        ObLSID ls_id = ls->get_ls_id();
+        if (!ls_id.is_user_ls()) {
+        } else if (OB_FAIL(status_op.get_ls_status_info(tenant_id, ls_id, status_info,
+                *GCTX.sql_proxy_))) {
+          LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id));
+        } else if (!status_info.ls_is_creating()) {
+        } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, ls_id,
+                false /*need_for_update*/, recovery_stat, *GCTX.sql_proxy_))) {
+          LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(ObCommonLSService::do_create_user_ls(tenant_schema, status_info,
+                recovery_stat.get_create_scn(), false/*create_with_palf*/, palf_base_info,
+                OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+          // create ls
+          // ls status == CREATED, ls == CREATING
+          LOG_WARN("failed to create user ls", KR(ret), K(tenant_schema), K(status_info), K(recovery_stat));
+        } else if (OB_FAIL(ERRSIM_AFTER_CREATE_ONE_LS)) {
+          LOG_WARN("ERRSIM_AFTER_CREATE_ONE_LS", KR(ret));
+        } else {
+          ls_created_count++;
+        }
+      }
+    }
+  }
+  LOG_INFO("created user ls count", KR(ret), K(tenant_id), K(ls_created_count));
+  return ret;
+}
+
+int ObPrimaryLSService::check_has_one_normal_ls()
+{
+  int ret = OB_SUCCESS;
+  ObLSStatusInfoArray ls_status_array;
+  share::ObLSStatusOperator status_op;
+  bool has_normal_ls = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null pointer", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id_, ls_status_array, *GCTX.sql_proxy_))) {
+    LOG_WARN("failed to get get all ls status", KR(ret));
+  } else if (OB_UNLIKELY(0 == ls_status_array.count())) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("ls array can not be empty", KR(ret), K(ls_status_array));
+  } else {
+    FOREACH_X(status, ls_status_array, !has_normal_ls && OB_SUCC(ret)) {
+      ObLSID ls_id = status->get_ls_id();
+      if (!ls_id.is_user_ls()) {
+      } else if (status->is_normal()) {
+        has_normal_ls = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!has_normal_ls) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("has no normal ls, need retry", KR(ret), K(ls_status_array));
+  }
+  return ret;
+}
+
+int ObPrimaryLSService::advance_user_ls_status_for_creating_tenant()
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObTenantSchema tenant_schema;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("primary ls service not inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy  is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
+  } else if (!tenant_schema.is_creating()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("function should be called when tenant is creating", K(tenant_id_));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(process_all_ls_status_to_steady_(tenant_schema))) {
+      // init ls status
+      // ls status == CREATING, ls == CREATING
+      LOG_WARN("failed to process_all_ls_status_to_steady_, make ls status to creating failed",
+          KR(tmp_ret), K(tenant_id_));
+    }
+    if (OB_TMP_FAIL(create_all_user_ls_for_creating_tenant_(tenant_id_, tenant_schema))) {
+      // create ls
+      // ls status == CREATED, ls == CREATING
+      LOG_WARN("failed to create user ls", KR(tmp_ret), K(tenant_id_));
+    }
+    if (OB_TMP_FAIL(process_all_ls(tenant_schema, true/*in_creating_tenant*/))) {
+      // ls status == CREATED, ls == NORMAL
+      LOG_WARN("failed to process all ls", KR(tmp_ret), K(tenant_schema));
+    }
+    if (OB_TMP_FAIL(process_all_ls_status_to_steady_(tenant_schema))) {
+      // ls status == NORMAL, ls == NORMAL
+      LOG_WARN("failed to process_all_ls_status_to_steady_, make ls to normal failed", KR(tmp_ret),
+          K(tenant_id_));
+    }
+    if (OB_FAIL(check_has_one_normal_ls())) {
+      LOG_WARN("failed to check has one normal ls", KR(ret));
+    } else {
+      LOG_INFO("succeed to advance user ls status for creating tenant", KR(ret), K(tenant_id_));
+    }
+  }
+  return ret;
+}
+
 int ObPrimaryLSService::create_duplicate_ls()
 {
   int ret = OB_SUCCESS;
@@ -528,9 +681,25 @@ int ObPrimaryLSService::create_duplicate_ls()
   share::ObLSID ls_id;
   SCN create_scn;
   const uint64_t ls_group_id = 0;
+  ObArray<share::ObLSAttr> existing_ls;
   share::ObLSAttr new_ls;
   ObLSFlag flag(ObLSFlag::DUPLICATE_FLAG);
-  if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id_, ls_id))) {
+  bool duplicate_ls_exist = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ls_operator.get_duplicate_ls_attr(false, *GCTX.sql_proxy_, existing_ls))) {
+    if (ret == OB_ENTRY_NOT_EXIST) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed get duplicate ls", KR(ret));
+    }
+  } else {
+    duplicate_ls_exist = true;
+  }
+  if (duplicate_ls_exist) {
+    // check duplicate ls exist or not to avoid max used ls id to be large
+  } else if (FAILEDx(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id_, ls_id))) {
     LOG_WARN("failed to fetch new LS id", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id_, create_scn))) {
     LOG_WARN("failed to get tenant gts", KR(ret), K(tenant_id_));

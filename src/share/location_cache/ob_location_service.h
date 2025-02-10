@@ -57,6 +57,8 @@ public:
       bool &is_cache_hit,
       ObLSLocation &location);
 
+  int renew_all_ls_locations_by_rpc();
+
   // Gets leader address of a log stream synchronously.
   //
   // @param [in] force_renew: whether to renew location synchronously.

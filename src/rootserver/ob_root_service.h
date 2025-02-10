@@ -32,6 +32,7 @@
 #include "rootserver/ob_all_server_task.h"
 #include "rootserver/ob_all_server_checker.h"
 #include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_tenant_ddl_service.h"
 #include "rootserver/ob_zone_manager.h"
 #include "rootserver/ob_zone_storage_manager.h"
 #include "rootserver/ob_root_minor_freeze.h"
@@ -57,6 +58,7 @@
 #include "rootserver/ob_empty_server_checker.h"
 #include "rootserver/ob_lost_replica_checker.h"
 #include "rootserver/ob_server_zone_op_service.h"
+#include "rootserver/ob_load_sys_package_task.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
@@ -136,6 +138,7 @@ class ObRootService
 public:
   friend class TestRootServiceCreateTable_check_rs_capacity_Test;
   friend class ObTenantWrsTask;
+  friend class ObLoadSysPackageTask;
   class ObStartStopServerTask : public share::ObAsyncTask
   {
   public:
@@ -456,6 +459,7 @@ public:
       const ObZone &zone);
 
   int execute_bootstrap(const obrpc::ObBootstrapArg &arg);
+  int load_all_sys_package();
 #ifdef OB_BUILD_TDE_SECURITY
   int check_sys_tenant_initial_master_key_valid();
 #endif
@@ -494,7 +498,8 @@ public:
   int split_resource_pool(const obrpc::ObSplitResourcePoolArg &arg);
   int merge_resource_pool(const obrpc::ObMergeResourcePoolArg &arg);
   int alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &arg);
-  int create_tenant(const obrpc::ObCreateTenantArg &arg, obrpc::UInt64 &tenant_id);
+  int create_tenant(const obrpc::ObCreateTenantArg &arg, obrpc::ObCreateTenantSchemaResult &tenant_id);
+  int parallel_create_normal_tenant(obrpc::ObParallelCreateNormalTenantArg &arg);
   int create_tenant_end(const obrpc::ObCreateTenantEndArg &arg);
   int commit_alter_tenant_locality(const rootserver::ObCommitAlterTenantLocalityArg &arg);
   int drop_tenant(const obrpc::ObDropTenantArg &arg);
@@ -842,6 +847,7 @@ public:
   int after_restart();
   int do_after_full_service();
   int schedule_restart_timer_task(const int64_t delay);
+  int reschedule_restart_timer_task_after_failure();
   int schedule_self_check_task();
   int schedule_temporary_offline_timer_task();
   // @see ObCheckServerTask
@@ -861,6 +867,7 @@ public:
   int schedule_refresh_io_calibration_task();
   int schedule_check_storage_operation_status();
   int schedule_alter_log_external_table_task();
+  int schedule_load_all_sys_package_task();
   // ob_admin command, must be called in ddl thread
   int force_create_sys_table(const obrpc::ObForceCreateSysTableArg &arg);
   int force_set_locality(const obrpc::ObForceSetLocalityArg &arg);
@@ -973,12 +980,8 @@ private:
        share::ObLeaseResponse &lease_response,
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
-  int set_cpu_quota_concurrency_config_();
-  int set_use_odps_jni_connector_();
-  int set_enable_trace_log_();
-  int disable_dbms_job();
-  int set_bloom_filter_ratio_config_();
-  int enable_mysql_compatible_dates_config_();
+  int set_config_after_bootstrap_();
+  int wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list);
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
@@ -1008,6 +1011,7 @@ private:
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;
+  static const int64_t WAIT_RS_IN_SERVICE_TIMEOUT_US = 40 * 1000 * 1000; //40s
   bool inited_;
   volatile bool server_refreshed_; // server manager reload and force request heartbeat
   // use mysql server backend for debug.
@@ -1046,6 +1050,8 @@ private:
 
   // ddl related
   ObDDLService ddl_service_;
+  // tenant ddl related(create tenant, modify tenant, drop tenant, ...)
+  ObTenantDDLService tenant_ddl_service_;
   ObUnitManager unit_manager_;
 
   ObRootBalancer root_balancer_;
@@ -1122,6 +1128,7 @@ private:
   // application context
   ObTenantGlobalContextCleanTimerTask global_ctx_task_;
   ObAlterLogExternalTableTask alter_log_external_table_task_; // repeat to succeed & no retry
+  ObLoadSysPackageTask load_all_sys_package_task_; // repeat to succeed & no retry
   //rebuild tablet
   ObRootRebuildTablet root_rebuild_tablet_;
 

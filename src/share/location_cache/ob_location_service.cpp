@@ -57,6 +57,18 @@ int ObLocationService::get(
   return ret;
 }
 
+int ObLocationService::renew_all_ls_locations_by_rpc()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ls_location_service_.renew_all_ls_locations_by_rpc())) {
+    LOG_WARN("failed to renew all ls locations by rpc", KR(ret));
+  }
+  return ret;
+}
+
 int ObLocationService::get_leader(
     const int64_t cluster_id,
     const uint64_t tenant_id,

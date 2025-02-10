@@ -31,16 +31,17 @@ int ObGlobalStatProxy::set_init_value(
     const int64_t gc_schema_version,
     const int64_t ddl_epoch,
     const uint64_t target_data_version,
-    const uint64_t current_data_version)
+    const uint64_t current_data_version,
+    const uint64_t upgrade_begin_data_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < -1
       || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0 || ddl_epoch < 0
-      || target_data_version <= 0 || current_data_version <= 0) {
+      || target_data_version <= 0 || current_data_version <= 0 || upgrade_begin_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(), K(rootservice_epoch),
              K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn),
-             K(gc_schema_version), K(target_data_version), K(current_data_version));
+             K(gc_schema_version), K(target_data_version), K(current_data_version), K(upgrade_begin_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
@@ -50,6 +51,7 @@ int ObGlobalStatProxy::set_init_value(
     ObGlobalStatItem gc_schema_version_item(list, "gc_schema_version", gc_schema_version);
     ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
     ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
+    ObGlobalStatItem upgrade_begin_data_version_item(list, "upgrade_begin_data_version", static_cast<int64_t>(upgrade_begin_data_version));
     ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
 
     if (OB_FAIL(update(list))) {
@@ -65,19 +67,21 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
     const SCN &snapshot_gc_scn,
     const int64_t ddl_epoch,
     const uint64_t target_data_version,
-    const uint64_t current_data_version)
+    const uint64_t current_data_version,
+    const uint64_t upgrade_begin_data_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0
       || baseline_schema_version < OB_INVALID_VERSION
       || !snapshot_gc_scn.is_valid()
       || target_data_version <= 0
-      || current_data_version <= 0) {
+      || current_data_version <= 0
+      || upgrade_begin_data_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(),
              K(core_schema_version), K(baseline_schema_version),
              K(snapshot_gc_scn), K(target_data_version),
-             K(current_data_version));
+             K(current_data_version), K(upgrade_begin_data_version));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
@@ -85,6 +89,7 @@ int ObGlobalStatProxy::set_tenant_init_global_stat(
     ObGlobalStatItem ddl_epoch_item(list, "ddl_epoch", ddl_epoch);
     ObGlobalStatItem target_data_version_item(list, "target_data_version", static_cast<int64_t>(target_data_version));
     ObGlobalStatItem current_data_version_item(list, "current_data_version", static_cast<int64_t>(current_data_version));
+    ObGlobalStatItem upgrade_begin_data_version_item(list, "upgrade_begin_data_version", static_cast<int64_t>(upgrade_begin_data_version));
     // only Normal state tenant can refresh snapshot_gc_scn
     ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     if (OB_FAIL(update(list))) {
@@ -255,6 +260,40 @@ int ObGlobalStatProxy::get_target_data_version(
     LOG_WARN("get failed", KR(ret));
   } else {
     target_data_version = static_cast<uint64_t>(item.value_);
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::update_upgrade_begin_data_version(const uint64_t upgrade_begin_data_version)
+{
+  int ret = OB_SUCCESS;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "upgrade_begin_data_version", upgrade_begin_data_version);
+  bool is_incremental = true;
+  if (!is_valid() || upgrade_begin_data_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), "valid", is_valid(), K(upgrade_begin_data_version));
+  } else if (OB_FAIL(update(list, is_incremental))) {
+    LOG_WARN("update failed", KR(ret), K(list));
+  }
+  return ret;
+}
+
+int ObGlobalStatProxy::get_upgrade_begin_data_version(
+    const bool for_update,
+    uint64_t &upgrade_begin_data_version)
+{
+  int ret = OB_SUCCESS;
+  upgrade_begin_data_version = 0;
+  ObGlobalStatItem::ItemList list;
+  ObGlobalStatItem item(list, "upgrade_begin_data_version", OB_INVALID_VERSION);
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), "self valid", is_valid());
+  } else if (OB_FAIL(get(list, for_update))) {
+    LOG_WARN("get failed", KR(ret));
+  } else {
+    upgrade_begin_data_version = static_cast<uint64_t>(item.value_);
   }
   return ret;
 }

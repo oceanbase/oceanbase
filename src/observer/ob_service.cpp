@@ -1717,6 +1717,8 @@ int ObService::check_server_empty_with_result(const obrpc::ObCheckServerEmptyArg
       const uint64_t server_id = arg.get_server_id();
       if (OB_FAIL(set_server_id_(server_id))) {
         LOG_WARN("failed to set server_id", KR(ret), K(server_id));
+      } else {
+        GCTX.in_bootstrap_ = true;
       }
     }
   }
@@ -2391,6 +2393,8 @@ int ObService::request_heartbeat(ObLeaseRequest &lease_request)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BROADCAST_SCHEMA);
+
 // used by bootstrap/create_tenant
 int ObService::batch_broadcast_schema(
     const obrpc::ObBatchBroadcastSchemaArg &arg,
@@ -2408,6 +2412,8 @@ int ObService::batch_broadcast_schema(
   } else if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(ERRSIM_BROADCAST_SCHEMA)) {
+    LOG_WARN("ERRSIM_BROADCAST_SCHEMA", KR(ret));
   } else if (OB_FAIL(schema_service->async_refresh_schema(
              OB_SYS_TENANT_ID, sys_schema_version))) {
     LOG_WARN("fail to refresh sys schema", KR(ret), K(sys_schema_version));

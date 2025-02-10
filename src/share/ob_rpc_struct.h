@@ -492,6 +492,7 @@ public:
   bool is_clone_tenant() const { return OB_INVALID_TENANT_ID != source_tenant_id_; }
   bool is_restore_tenant() const { return is_restore_; }
   bool is_standby_tenant() const { return is_creating_standby_; }
+  share::ObTenantRole get_tenant_role() const;
   uint64_t get_source_tenant_id() const { return source_tenant_id_; }
   int check_valid() const;
   void reset();
@@ -522,12 +523,51 @@ public:
   uint64_t source_tenant_id_;           // for create clone tenant
 };
 
+struct ObCreateTenantSchemaResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateTenantSchemaResult() :
+    tenant_exist_(false), user_tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObCreateTenantSchemaResult() {}
+  int assign(const ObCreateTenantSchemaResult &other);
+  TO_STRING_KV(K_(tenant_exist),
+      K_(user_tenant_id));
+  bool is_valid() const;
+  int init_with_tenant_exist();
+  int init(uint64_t user_tenant_id);
+public:
+  // if tenant_exist_ is true, other values should be invalid
+  bool tenant_exist_;
+  uint64_t user_tenant_id_;
+};
+
+struct ObParallelCreateNormalTenantArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  explicit ObParallelCreateNormalTenantArg()
+    : create_tenant_arg_(), tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObParallelCreateNormalTenantArg() {}
+  int init(const ObCreateTenantArg &create_tenant_arg,
+      const uint64_t &tenant_id);
+  int assign(const ObParallelCreateNormalTenantArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(create_tenant_arg),
+      K_(exec_tenant_id),
+      K_(tenant_id));
+public:
+  ObCreateTenantArg create_tenant_arg_;
+  uint64_t tenant_id_;
+};
+
 struct ObCreateTenantEndArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 
 public:
   ObCreateTenantEndArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID) {}
+  int init(const uint64_t tenant_id);
   virtual ~ObCreateTenantEndArg() {}
   bool is_valid() const;
   int assign(const ObCreateTenantEndArg &other);
