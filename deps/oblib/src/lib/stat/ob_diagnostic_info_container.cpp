@@ -161,6 +161,7 @@ int ObDiagnosticInfos::get_session_diag_info(int64_t session_id, ObDISessionColl
     diag_info.base_value_.get_add_stat_stats().add(tmp_di->get_add_stat_stats());
     diag_info.session_id_ = session_id;
     diag_info.base_value_.set_tenant_id(tmp_di->get_tenant_id());
+    di_infos_.revert(tmp_di);
   }
   return ret;
 }
@@ -427,11 +428,6 @@ int ObDiagnosticInfoContainer::return_diagnostic_info(ObDiagnosticInfo *di_info)
     }
   }
   return ret;
-}
-
-int ObDiagnosticInfoContainer::inc_ref(ObDiagnosticInfo *di)
-{
-  return runnings_.inc_ref(di);
 }
 
 void ObDiagnosticInfoContainer::dec_ref(ObDiagnosticInfo *di)

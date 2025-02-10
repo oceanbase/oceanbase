@@ -299,7 +299,7 @@ ObDiagnosticInfoSwitchGuard::ObDiagnosticInfoSwitchGuard(ObDiagnosticInfo *di)
     ObLocalDiagnosticInfo::setup_diagnostic_info(di);
     cur_di_ = di;
 #ifdef ENABLE_DEBUG_LOG
-    if (di->get_uref() - INT32_MAX / 2 > 10) {
+    if (di->get_uref() - INT32_MAX / 2 > 100) {
       LOG_ERROR_RET(OB_SUCCESS, "di switch after inc leak!", KPC(di), K(di));
       leak_check_ = true;
     }
