@@ -608,13 +608,13 @@ ObTTLTaskCtx* ObTabletTTLScheduler::get_one_tablet_ctx(const ObTabletID& tablet_
 }
 
 /*other inner function*/
-int ObTabletTTLScheduler::deep_copy_task(ObTTLTaskCtx* ctx, ObTTLTaskInfo& task_info, const ObTTLTaskParam &task_param)
+int ObTabletTTLScheduler::deep_copy_task(ObTTLTaskCtx* ctx, ObTTLTaskInfo& task_info, const ObTTLTaskParam &task_param, bool with_rowkey_copy /*true*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the ctx is null", KR(ret));
-  } else if (OB_FAIL(ctx->deep_copy_rowkey(task_info.row_key_)) ) {
+  } else if (with_rowkey_copy && OB_FAIL(ctx->deep_copy_rowkey(task_info.row_key_)) ) {
     LOG_WARN("fail to deep copy rowkey", KR(ret), K(task_info.row_key_));
   } else {
     ctx->task_info_.ttl_del_cnt_ += task_info.ttl_del_cnt_;
@@ -1384,7 +1384,9 @@ int ObTabletHRowkeyTTLScheduler::report_task_status(ObTTLTaskInfo& task_info, Ob
     ctx->last_modify_time_ = ObTimeUtility::current_time();
     ctx->in_queue_ = false;
     mark_ttl_ctx_dirty(local_tenant_task_, *ctx);
-    if (need_copy_task && OB_FAIL(deep_copy_task(ctx, task_info, task_para))) {
+    // A tablet task is associated with multiple rowkey ttl tasks,
+    // so it's meaningless to copy the rowkey of current task
+    if (need_copy_task && OB_FAIL(deep_copy_task(ctx, task_info, task_para, false))) {
       LOG_WARN("fail to deep copy task", KR(ret), K_(tenant_id), K(task_info), K(task_para));
       ctx->task_status_ = OB_TTL_TASK_PENDING;
       ctx->failure_times_++;
