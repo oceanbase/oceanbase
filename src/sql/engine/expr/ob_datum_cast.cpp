@@ -3148,24 +3148,75 @@ int common_datetime_string(const ObExpr &expr, const ObObjType in_type, const Ob
     if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
       LOG_WARN("get time zone info failed", K(ret));
     } else {
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        tz_info_local : NULL;
-      ObString nls_format;
-      if (lib::is_oracle_mode() && !force_use_std_nls_format) {
-        if (OB_FAIL(common_get_nls_format(session, ctx, &expr, in_type,
-                  force_use_std_nls_format,
-                  nls_format))) {
-          LOG_WARN("common_get_nls_format failed", K(ret));
-        }
+      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?  tz_info_local : NULL;
+      ObTime ob_time;
+      if (ObMySQLDateTimeType == in_type) {
+        ObMySQLDateTime mdt_val = in_val;
+        ObTimeConverter::round_mdatetime(in_scale, mdt_val);
+        ret = ObTimeConverter::mdatetime_to_ob_time(mdt_val, ob_time);
+      } else {
+        int64_t md_val = in_val;
+        ObTimeConverter::round_datetime(in_scale, md_val);
+        ret = ObTimeConverter::datetime_to_ob_time(md_val, tz_info, ob_time);
       }
-      if (OB_SUCC(ret)) {
-        ret = ObMySQLDateTimeType == in_type ?
-                ObTimeConverter::mdatetime_to_str(in_val, NULL, nls_format, in_scale, buf, buf_len,
-                                                  out_len) :
-                ObTimeConverter::datetime_to_str(in_val, tz_info, nls_format, in_scale, buf,
-                                                 buf_len, out_len);
-        LOG_WARN("failed to convert datetime to string", K(ret), K(in_val), KP(tz_info),
-                  K(nls_format), K(in_scale), KP(buf), K(out_len));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to convert seconds to ob time", K(ret));
+      } else if (lib::is_oracle_mode() && !force_use_std_nls_format) {
+        uint64_t rt_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+        if (rt_ctx_id != ObExpr::INVALID_EXP_CTX_ID) {
+          ObExprDateTimeStringConvertCtx *convert_ctx = NULL;
+          const ObString nls_date_format = "YYYY-MM-DD HH24:MI:SS";
+          if (NULL == (convert_ctx = static_cast<ObExprDateTimeStringConvertCtx *>
+                      (ctx.exec_ctx_.get_expr_op_ctx(rt_ctx_id)))) {
+            ObString nls_format;
+            if (OB_FAIL(common_get_nls_format(session, ctx, &expr, in_type, false, nls_format))) {
+              LOG_WARN("common_get_nls_format failed", K(ret));
+            } else if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(rt_ctx_id, convert_ctx))) {
+              LOG_WARN("failed to create operator ctx", K(ret));
+            } else if (OB_FALSE_IT(convert_ctx->set_format_string(nls_format))) {
+            } else if (nls_date_format == nls_format) {
+            } else if (OB_FAIL(convert_ctx->parse_format(nls_format, expr.datum_meta_.type_,
+                                                            false, ctx.exec_ctx_.get_allocator()))) {
+              LOG_WARN("fail to parse format", K(ret), K(nls_format));
+            }
+            LOG_DEBUG("new dfm convert ctx", K(ret), KPC(convert_ctx));
+          }
+          if (OB_SUCC(ret)) {
+            if (nls_date_format == convert_ctx->get_format_string()) {
+              if (OB_FAIL(ObTimeConverter::ob_time_to_str(ob_time, DT_TYPE_DATETIME,
+                                                          in_scale, buf, buf_len,
+                                                          out_len, true))) {
+                if (OB_SIZE_OVERFLOW == ret) {
+                  LOG_TRACE("failed to convert ob time to string", K(ret));
+                } else {
+                  LOG_WARN("failed to convert ob time to string", K(ret));
+                }
+              }
+            } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_by_dfm_elems(ob_time, in_scale,
+                                                                    convert_ctx->get_dfm_elems(),
+                                                                    convert_ctx->get_format_string(),
+                                                                    buf, buf_len, out_len))) {
+              LOG_WARN("failed to convert to string", K(ret), K(convert_ctx->get_format_string()));
+            }
+          }
+        } else {
+          ObString nls_format;
+          if (OB_FAIL(common_get_nls_format(session, ctx, &expr, in_type, false, nls_format))) {
+            LOG_WARN("common_get_nls_format failed", K(ret));
+          } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_oracle_dfm(ob_time, in_scale, nls_format, buf, buf_len, out_len))) {
+            LOG_WARN("failed to convert ob time to string", K(ob_time), K(nls_format), K(buf_len), K(out_len), K(ret), KCSTRING(lbt()));
+          }
+        }
+      } else {
+        if (OB_FAIL(ObTimeConverter::ob_time_to_str(ob_time, DT_TYPE_DATETIME,
+                                                    in_scale, buf, buf_len,
+                                                    out_len, true))) {
+          if (OB_SIZE_OVERFLOW == ret) {
+            LOG_TRACE("failed to convert ob time to string", K(ret));
+          } else {
+            LOG_WARN("failed to convert ob time to string", K(ret));
+          }
+        }
       }
     }
   }

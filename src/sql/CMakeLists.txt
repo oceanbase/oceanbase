@@ -848,6 +848,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_calc_odps_size.cpp
   engine/expr/ob_expr_to_pinyin_tab.cpp
   engine/expr/ob_expr_to_pinyin.cpp
+  engine/expr/ob_expr_url_codec.cpp
+  engine/expr/ob_expr_keyvalue.cpp
   engine/expr/ob_expr_demote_cast.cpp
   engine/expr/ob_expr_array_max.cpp
   engine/expr/ob_expr_array_avg.cpp

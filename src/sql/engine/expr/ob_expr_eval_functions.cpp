@@ -414,6 +414,8 @@
 #include "ob_expr_array_first.h"
 #include "ob_expr_mysql_proc_info.h"
 #include "ob_expr_get_mysql_routine_parameter_type_str.h"
+#include "ob_expr_keyvalue.h"
+#include "ob_expr_url_codec.h"
 #include "ob_expr_ora_login_user.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
@@ -1339,8 +1341,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArraySum::eval_array_sum,                                     /* 803 */
   ObExprArrayCompact::eval_array_compact,                             /* 804 */
   ObExprArraySort::eval_array_sort,                                   /* 805 */
-  NULL, // ObExprKeyValue::calc_key_value_expr,                       /* 806 */
-  NULL, // ObExprToChar::eval_to_char,                                /* 807 */
+  ObExprKeyValue::calc_key_value_expr,                                /* 806 */
+  ObExprToChar::eval_to_char,                                         /* 807 */
   ObExprToPinyin::eval_to_pinyin,                                     /* 808 */
   ObExprArraySlice::eval_array_slice,                                 /* 809 */
   ObExprArraySortby::eval_array_sortby,                               /* 810 */
@@ -1348,8 +1350,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprArrayLength::eval_array_length,                               /* 812 */
   ObExprArrayRange::eval_array_range,                                 /* 813 */ // FARM COMPAT WHITELIST
   ObExprArrayPosition::eval_array_position,                           /* 814 */
-  NULL, // ObExprURLEncode::eval_url_encode,                          /* 815 */
-  NULL, // ObExprURLDecode::eval_url_decode,                          /* 816 */
+  ObExprURLEncode::eval_url_encode,                                   /* 815 */
+  ObExprURLDecode::eval_url_decode,                                   /* 816 */
   ObExprVecIVFPQCenterVector::generate_pq_center_vector,              /* 817 */
   ObExprDemoteCast::eval_demoted_val,                                 /* 818 */
   ObExprRangePlacement::eval_range_placement,                         /* 819 */
@@ -1537,8 +1539,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayLength::eval_array_length_batch,                         /* 168 */
   NULL,// ObExprRange::eval_range_batch,                              /* 169 */
   ObExprArrayPosition::eval_array_position_batch,                     /* 170*/
-  NULL, // ObExprURLEncode::eval_url_encode_batch,                    /* 171 */
-  NULL, // ObExprURLDecode::eval_url_decode_batch,                    /* 172 */
+  ObExprURLEncode::eval_url_encode_batch,                             /* 171 */
+  ObExprURLDecode::eval_url_decode_batch,                             /* 172 */
   NULL, // ObExprArrayExcept::eval_array_except_batch,                /* 173 */
   NULL, // ObExprArrayIntersect::eval_array_intersect_batch,          /* 174 */
   NULL, // ObExprArrayUnion::eval_array_union_batch,                  /* 175 */
@@ -1730,16 +1732,16 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprArraySum::eval_array_sum_vector,                        /* 180 */
   ObExprArrayCompact::eval_array_compact_vector,                 /* 181 */
   ObExprArraySort::eval_array_sort_vector,                       /* 182 */
-  NULL, // ObExprSplitPart::calc_split_part_expr_vec,                    /* 183 */
-  NULL, // ObExprKeyValue::calc_key_value_expr_vector,                   /* 184 */
-  NULL, // ObExprLength::calc_oracle_length_vector,                      /* 185 */
-  NULL, // ObExprToChar::eval_to_char_vector,                            /* 186 */
+  ObExprSplitPart::calc_split_part_expr_vec,                             /* 183 */
+  ObExprKeyValue::calc_key_value_expr_vector,                            /* 184 */
+  ObExprLength::calc_oracle_length_vector,                               /* 185 */
+  ObExprToChar::eval_to_char_vector,                                     /* 186 */
   ObExprArrayPosition::eval_array_position_vector,                       /* 187 */
   ObExprArraySlice::eval_array_slice_vector,                             /* 188 */
   ObExprArrayLength::eval_array_length_vector,                           /* 189 */
   NULL, // ObExprRange::eval_range_vector,                               /* 190 */
-  NULL, // ObExprURLEncode::eval_url_encode_vector,                      /* 191 */
-  NULL, // ObExprURLDecode::eval_url_decode_vector,                      /* 192 */
+  ObExprURLEncode::eval_url_encode_vector,                      /* 191 */
+  ObExprURLDecode::eval_url_decode_vector,                      /* 192 */
   NULL, // ObExprIs::calc_vector_is_null,                                /* 193 */
   NULL, // ObExprIs::calc_vector_is_true,                                /* 194 */
   NULL, // ObExprIs::calc_vector_is_false,                               /* 195 */

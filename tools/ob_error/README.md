@@ -70,6 +70,7 @@ MySQL:
         OB_INVALID_ARGUMENT(-4002)
         OB_MISS_ARGUMENT(-4277)
         INCORRECT_ARGUMENTS_TO_ESCAPE(-5832)
+        INCORRECT_ARGUMENTS_TO_URL_DECODE(-6286)
 ```
 
 When the facility is `ora` or `pls`, you will get the error info of Oracle mode(if any). For example:

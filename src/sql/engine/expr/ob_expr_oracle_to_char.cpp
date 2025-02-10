@@ -14,6 +14,7 @@
 
 #include "sql/engine/expr/ob_expr_oracle_to_char.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_number_format_models.h"
 
 namespace oceanbase
@@ -28,17 +29,46 @@ const int64_t MAX_TO_CHAR_BUFFER_SIZE = 256;
 const int64_t MAX_INTERVAL_BUFFER_SIZE = 32;
 const int64_t MAX_CLOB_BUFFER_SIZE = 4000;
 
-ObExprOracleToChar::ObExprOracleToChar(ObIAllocator &alloc)
+#define DISPATCH_VECTOR_ARG_FORMAT(func_name)                         \
+  switch (left_format) {                                                       \
+  case VEC_FIXED: {                                                            \
+    ret = func_name<ObFixedLengthBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);    \
+    break;                                                                     \
+  }                                                                            \
+  case VEC_DISCRETE: {                                                         \
+    ret = func_name<ObDiscreteFormat, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);     \
+    break;                                                                     \
+  }                                                                            \
+  case VEC_CONTINUOUS: {                                                       \
+    ret = func_name<ObContinuousFormat, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);   \
+    break;                                                                     \
+  }                                                                            \
+  case VEC_UNIFORM: {                                                          \
+    ret =                                                                      \
+        func_name<ObUniformFormat<false>, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST); \
+    break;                                                                     \
+  }                                                                            \
+  case VEC_UNIFORM_CONST: {                                                    \
+    ret =                                                                      \
+        func_name<ObUniformFormat<true>, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);  \
+    break;                                                                     \
+  }                                                                            \
+  default: {                                                                   \
+    ret = func_name<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);         \
+  }                                                                            \
+  }
+
+ObExprToChar::ObExprToChar(ObIAllocator &alloc)
     : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CHAR, N_TO_CHAR, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
 }
 
-ObExprOracleToChar::~ObExprOracleToChar()
+ObExprToChar::~ObExprToChar()
 {
 }
 
 
-int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
+int ObExprToChar::calc_result_typeN(ObExprResType &type,
                                           ObExprResType *type_array,
                                           int64_t params_count,
                                           ObExprTypeCtx &type_ctx) const
@@ -82,8 +112,12 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
           if (ob_is_numeric_tc(type_class)) {
             type.set_length(MAX_NUMBER_BUFFER_SIZE);
           } else if (ObStringTC == type_class) {
-            if (OB_FAIL(calc_result_length_for_string_param(type, type_array[0]))) {
-              LOG_WARN("calc reuslt length failed", K(ret));
+            if (is_oracle_mode()){
+              if (OB_FAIL(calc_result_length_for_string_param(type, type_array[0]))) {
+                LOG_WARN("calc reuslt length failed", K(ret));
+              }
+            } else {
+              type.set_length(type_array[0].get_accuracy().get_length());
             }
           } else if (ObTextTC == type_class) {
             type.set_length(MAX_CLOB_BUFFER_SIZE);
@@ -99,7 +133,8 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
           type.set_collation_type(nls_param.nls_collation_);
           type.set_length_semantics(nls_param.nls_length_semantics_);
           if (fmt_obj.is_null()) {
-            length = OB_MAX_ORACLE_VARCHAR_LENGTH;
+            length = is_oracle_mode() ?
+                      OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
           } else if (OB_FAIL(nfm.calc_result_length(fmt_obj, length))) {
             // invalid format won't cause failure because the expr may not be executed
             LOG_WARN("calc reuslt length failed", K(fmt_obj), K(ret));
@@ -107,20 +142,28 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
             if (type_array[0].is_character_type() && 0 == type_array[0].get_length()) {
               length = 0;
             } else {
-              length = OB_MAX_ORACLE_VARCHAR_LENGTH;
+              length = is_oracle_mode() ?
+                        OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
             }
           }
           OX (type.set_length(length));
         }
         break;
       }
+      case ObDateTC:
+      case ObTimeTC:
+      case ObYearTC:
       case ObDateTimeTC:
       case ObOTimestampTC:
       case ObIntervalTC: {
         type.set_varchar();
         type.set_length_semantics(nls_param.nls_length_semantics_);
         type.set_collation_level(CS_LEVEL_IMPLICIT);
-        type.set_collation_type(nls_param.nls_collation_);
+        if (is_oracle_mode()) {
+          type.set_collation_type(nls_param.nls_collation_);
+        } else {
+          type.set_default_collation_type();
+        }
         type.set_length(MAX_TO_CHAR_BUFFER_SIZE);
         break;
       }
@@ -376,7 +419,7 @@ int ObExprToCharCommon::process_number_format(ObString &fmt_raw,
 }
 
 /**
- * @brief ObExprOracleToChar::format_number
+ * @brief ObExprToChar::format_number
  * 将 number_str 按照 format_str 格式化后输出到 result_buf
  */
 int ObExprToCharCommon::format_number(const char *number_str,
@@ -481,26 +524,35 @@ int ObExprToCharCommon::cg_expr(ObExprCGCtx &expr_cg_ctx,
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  CK(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 3);
 
-  rt_expr.eval_func_ = &ObExprToCharCommon::eval_oracle_to_char;
-
-  // for static engine batch
-  if ((1 == rt_expr.arg_cnt_ && rt_expr.args_[0]->is_batch_result())
-      || (2 == rt_expr.arg_cnt_
-          && rt_expr.args_[0]->is_batch_result()
-          && !rt_expr.args_[1]->is_batch_result())
-      || (3 == rt_expr.arg_cnt_
-          && rt_expr.args_[0]->is_batch_result()
-          && !rt_expr.args_[1]->is_batch_result()
-          && !rt_expr.args_[2]->is_batch_result())) {
-    rt_expr.eval_batch_func_ = eval_oracle_to_char_batch;
+  if (is_oracle_mode()) {
+    CK(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 3);
+    rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
+    // for static engine batch
+    if ((1 == rt_expr.arg_cnt_ && rt_expr.args_[0]->is_batch_result())
+        || (2 == rt_expr.arg_cnt_
+            && rt_expr.args_[0]->is_batch_result()
+            && !rt_expr.args_[1]->is_batch_result())
+        || (3 == rt_expr.arg_cnt_
+            && rt_expr.args_[0]->is_batch_result()
+            && !rt_expr.args_[1]->is_batch_result()
+            && !rt_expr.args_[2]->is_batch_result())) {
+      rt_expr.eval_batch_func_ = eval_oracle_to_char_batch;
+      rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
+    }
+  } else {
+    CK(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 2);
+    rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
+    if (1 == rt_expr.arg_cnt_ ||
+        ( 2 == rt_expr.arg_cnt_ && rt_expr.args_[1]->is_const_expr())) {
+      rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
+    }
   }
 
   return ret;
 }
 
-int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
+int ObExprToCharCommon::eval_to_char(const ObExpr &expr,
                                             ObEvalCtx &ctx,
                                             ObDatum &expr_datum)
 {
@@ -526,7 +578,7 @@ int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
     if (NULL != fmt_datum) {
       fmt = fmt_datum->get_string();
     }
-    if (OB_SUCC(ret) && NULL != nlsparam_datum) {
+    if (OB_SUCC(ret) && is_oracle_mode() && NULL != nlsparam_datum) {
       OZ(ObExprUtil::convert_string_collation(nlsparam_datum->get_string(),
                                               expr.args_[2]->datum_meta_.cs_type_,
                                               nlsparam,
@@ -537,6 +589,9 @@ int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
     ObString res;
     if (OB_SUCC(ret)) {
       switch (input_tc) {
+        case ObDateTC:
+        case ObTimeTC:
+        case ObYearTC:
         case ObDateTimeTC:
         case ObOTimestampTC: {
           OZ(datetime_to_char(expr, ctx, alloc, *input, fmt, nlsparam, res));
@@ -551,7 +606,7 @@ int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
         case ObDoubleTC:
         case ObNumberTC:
         case ObDecimalIntTC: {
-          if (NULL != nlsparam_datum) {
+          if (is_oracle_mode() && NULL != nlsparam_datum) {
             nlsparam = nlsparam_datum->get_string();
           }
           if (OB_FAIL(is_valid_to_char_number(expr))) {
@@ -570,9 +625,14 @@ int ObExprToCharCommon::eval_oracle_to_char(const ObExpr &expr,
 
     if (OB_SUCC(ret)) {
       const bool is_ascii = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc) ? false : true;
-      const ObCollationType src_coll_type = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc)
+      ObCollationType src_coll_type = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc)
                                             ? ctx.exec_ctx_.get_my_session()->get_nls_collation()
                                             : CS_TYPE_UTF8MB4_BIN;
+      if (is_mysql_mode()) {
+        src_coll_type = (ObDateTimeTC == input_tc) ? ObCharset::get_default_collation(
+                                           ObCharset::get_default_charset())
+                                     : CS_TYPE_UTF8MB4_BIN;
+      }
       if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, res, is_ascii,
                                                     src_coll_type))) {
         LOG_WARN("set expr ascii result failed", K(ret));
@@ -696,7 +756,7 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
               }
               if (OB_SUCC(ret)) {
                 const bool is_ascii = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc) ? false : true;
-                const ObCollationType src_coll_type = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc)
+                ObCollationType src_coll_type = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc)
                                                       ? ctx.exec_ctx_.get_my_session()->get_nls_collation()
                                                       : CS_TYPE_UTF8MB4_BIN;
                 if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, results[j], res, j,
@@ -716,11 +776,164 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
   return ret;
 }
 
+int ObExprToCharCommon::eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
+  LOG_DEBUG("eval to_char in vector mode", K(bound.range_size()));
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval vector param values", K(ret));
+  } else {
+    VectorFormat res_format = expr.get_format(ctx);
+    VectorFormat left_format = expr.args_[0]->get_format(ctx);
+    DISPATCH_VECTOR_ARG_FORMAT(inner_eval_to_char_vector);
+  }
+  return ret;
+}
+
+template <typename LeftVec, typename ResVec>
+int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  LeftVec *input_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool is_result_all_null = false;
+
+  ObString fmt_args;
+  ObString nlsparam;
+  if (2 == expr.arg_cnt_ || 3 == expr.arg_cnt_) {
+    int64_t const_skip = 0;
+    const ObBitVector *param_skip = to_bit_vector(&const_skip);
+    if (OB_FAIL(expr.args_[1]->eval_vector(ctx, *param_skip, EvalBound(1)))) {
+      LOG_WARN("eval fmt failed", K(ret));
+    } else if (expr.args_[1]->get_vector(ctx)->is_null(0)) {
+      is_result_all_null = true;
+    } else {
+      fmt_args = expr.args_[1]->get_vector(ctx)->get_string(0);
+      if (3 == expr.arg_cnt_) {
+        if (OB_FAIL(expr.args_[2]->eval_vector(ctx, *param_skip, EvalBound(1)))) {
+          LOG_WARN("eval nlsparam failed", K(ret));
+        } else if (expr.args_[2]->get_vector(ctx)->is_null(0)) {
+          is_result_all_null = true;
+        } else {
+          nlsparam = expr.args_[2]->get_vector(ctx)->get_string(0);
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (is_result_all_null) {
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+      }
+    }
+  } else {
+    ObString fmt;
+    fmt = fmt_args;
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &alloc = alloc_guard.get_allocator();
+    const ObObjTypeClass input_tc =
+        ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
+    if (1 == expr.arg_cnt_ &&
+        (ObStringTC == input_tc || ObTextTC == input_tc)) {
+      for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+        if (skip.at(idx) || eval_flags.at(idx)) {
+          continue;
+        }
+        if (input_vec->is_null(idx)) {
+          res_vec->set_null(idx);
+        } else {
+          res_vec->set_string(idx, input_vec->get_string(idx));
+        }
+        eval_flags.set(idx);
+      }
+    } else {
+      ObString res;
+      const char *in_ptr = NULL;
+      ObLength in_len = 0;
+      bool is_null;
+      for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        if (skip.at(idx) || eval_flags.at(idx)) {
+          continue;
+        } else {
+          input_vec->get_payload(idx, is_null, in_ptr, in_len);
+          if (is_null) {
+            res_vec->set_null(idx);
+            eval_flags.set(idx);
+            continue;
+          }
+          switch (input_tc) {
+          case ObDateTC:
+          case ObTimeTC:
+          case ObYearTC:
+          case ObDateTimeTC:
+          case ObOTimestampTC: {
+            OZ(datetime_to_char(expr, ctx, alloc, in_ptr, in_len, fmt, nlsparam, res));
+            break;
+          }
+          case ObIntervalTC: {
+            OZ(interval_to_char(expr, ctx, alloc, in_ptr, in_len, fmt, nlsparam, res));
+            break;
+          }
+          case ObIntTC: // to support PLS_INTERGER type
+          case ObUIntTC:
+          case ObFloatTC:
+          case ObDoubleTC:
+          case ObNumberTC:
+          case ObDecimalIntTC: {
+            if (OB_FAIL(is_valid_to_char_number(expr))) {
+              LOG_WARN("fail to check num format", K(ret));
+            } else if (OB_FAIL(number_to_char(expr, ctx, alloc, in_ptr,
+                                              in_len, fmt, nlsparam, res))) {
+              // need to avoid calling ObNFMBase::parse_fmt in number_to_char
+              // more than once
+              LOG_WARN("number to char failed", K(ret));
+            }
+            break;
+          }
+          default: {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("unsupported to_char", K(ret), K(input_tc));
+          }
+          }
+
+          if (OB_SUCC(ret)) {
+            ObTextStringDatumResult output_result(expr.datum_meta_.type_,
+                                                  &expr, &ctx, res_vec, idx);
+            const bool is_ascii = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc) ? false : true;
+            ObCollationType src_coll_type = (ObDateTimeTC == input_tc || ObOTimestampTC == input_tc)
+                                                  ? ctx.exec_ctx_.get_my_session()->get_nls_collation()
+                                                  : CS_TYPE_UTF8MB4_BIN;
+            if (is_mysql_mode()) {
+              src_coll_type = (ObDateTimeTC == input_tc) ? ObCharset::get_default_collation(
+                                                 ObCharset::get_default_charset())
+                                           : CS_TYPE_UTF8MB4_BIN;
+            }
+            if (OB_FAIL(ObExprUtil::set_expr_asscii_result(expr, ctx, output_result,
+                                                 res, idx, is_ascii,
+                                                 src_coll_type))) {
+              LOG_WARN("set expr ascii result failed", K(ret));
+            } else {
+              eval_flags.set(idx);
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprToCharCommon::is_valid_to_char_number(const ObExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
-  if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
+  if (OB_UNLIKELY(expr.arg_cnt_ < 1 ||
+                  (is_mysql_mode() && expr.arg_cnt_ > 2) ||
+                  (is_oracle_mode() && expr.arg_cnt_ > 3))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument.", K(ret), K(expr.arg_cnt_));
   } else if (expr.args_[0]->obj_meta_.is_numeric_type()) {
@@ -729,7 +942,7 @@ int ObExprToCharCommon::is_valid_to_char_number(const ObExpr &expr)
              && expr.arg_cnt_ >= 2) {
     is_valid = (ObNullTC == expr.args_[1]->obj_meta_.get_type_class()
         || ObStringTC == expr.args_[1]->obj_meta_.get_type_class());
-    if (is_valid && expr.arg_cnt_ == 3) {
+    if (is_valid && is_oracle_mode() && expr.arg_cnt_ == 3) {
       is_valid = (ObNullTC == expr.args_[2]->obj_meta_.get_type_class()
           || ObStringTC == expr.args_[2]->obj_meta_.get_type_class());
     }
@@ -743,6 +956,46 @@ int ObExprToCharCommon::is_valid_to_char_number(const ObExpr &expr)
   return ret;
 }
 
+int ObExprToCharCommon::convert_timelike_to_str(
+    const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &alloc,
+    const ObDatum &input, const ObObjType input_type, ObString &res) {
+  int ret = OB_SUCCESS;
+  ObScale in_scale;
+  char *result_buf = NULL;
+  int64_t pos = 0;
+  int64_t result_buf_len = MAX_DATETIME_BUFFER_SIZE;
+  if (OB_ISNULL(result_buf =
+                    static_cast<char *>(alloc.alloc(result_buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate buff", K(ret), K(result_buf_len));
+  } else {
+    switch (ob_obj_type_class(input_type)) {
+    case common::ObTimeTC: {
+      in_scale = expr.args_[0]->datum_meta_.scale_;
+      ret = ObTimeConverter::time_to_str(input.get_time(), in_scale, result_buf,
+                                         result_buf_len, pos);
+      break;
+    }
+    case common::ObYearTC: {
+      ret = ObTimeConverter::year_to_str(input.get_year(), result_buf,
+                                         result_buf_len, pos);
+      break;
+    }
+    case ObDateTC: {
+      ret = ObTimeConverter::date_to_str(input.get_date(), result_buf,
+                                         result_buf_len, pos);
+      break;
+    }
+    default: {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_WARN("input value is invalid", K(ret));
+    }
+    }
+  }
+  res = ObString(pos, result_buf);
+  return ret;
+}
+
 int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
                                            const ObDatum &input,
                                            const ObObjType input_type,
@@ -751,6 +1004,18 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   switch (ob_obj_type_class(input_type)) {
+    case ObTimeTC: {
+      ret = ObTimeConverter::time_to_ob_time(input.get_time(), ob_time);
+      break;
+    }
+    case ObYearTC: {
+      ob_time.parts_[DT_YEAR] = input.get_year();
+      break;
+    }
+    case ObDateTC: {
+      ret = ObTimeConverter::date_to_ob_time(input.get_date(), ob_time);
+      break;
+    }
     case ObOTimestampTC: {
       // oracle timestamp / timestamp with time zone / timestamp with local time zone
       const ObOTimestampData &otdata = (ObTimestampTZType == input_type)
@@ -759,7 +1024,7 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
       ret = ObTimeConverter::otimestamp_to_ob_time(input_type, otdata, tz_info, ob_time, false);
       break;
     }
-    case ObDateTimeTC: {   //oracle date type
+    case ObDateTimeTC: {
       ret = ObTimeConverter::datetime_to_ob_time(input.get_datetime(), NULL, ob_time);
       break;
     }
@@ -769,6 +1034,17 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
     }
   }
   return ret;
+}
+
+int ObExprToCharCommon::datetime_to_char(const ObExpr &expr, ObEvalCtx &ctx,
+                                       ObIAllocator &alloc,
+                                       const char *&input_ptr,
+                                       uint32_t input_len, const ObString &fmt,
+                                       const common::ObString &nlsparam,
+                                       ObString &res) {
+  return datetime_to_char(expr, ctx, alloc,
+                          ObDatum(input_ptr, input_len, false),
+                           fmt, nlsparam, res);
 }
 
 int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
@@ -784,20 +1060,25 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   CK(NULL != session);
   ObSolidifiedVarsGetter helper(expr, ctx, session);
+  const ObDatumMeta &input_meta = expr.args_[0]->datum_meta_;
 
   //param2: format
   if (OB_SUCC(ret)) {
     if (!fmt.empty()) {
       format_str = fmt;
     } else {
-      if (OB_FAIL(helper.get_local_nls_format_by_type(expr.args_[0]->datum_meta_.type_, format_str))) {
-        LOG_WARN("failed to get default format", K(ret));
+      if (is_oracle_mode()) {
+        if (OB_FAIL(helper.get_local_nls_format_by_type(input_meta.type_, format_str))) {
+          LOG_WARN("failed to get default format", K(ret));
+        }
+      } else {
+        format_str = "";
       }
     }
   }
 
   //param3: NLS settings
-  if (OB_SUCC(ret) && !nlsparam.empty()) {
+  if (OB_SUCC(ret) && is_oracle_mode() && !nlsparam.empty()) {
     if (!is_valid_nls_param(nlsparam)) {
       ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
       LOG_WARN("date format is invalid", K(ret), K(nlsparam));
@@ -805,12 +1086,11 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
   }
 
   ObTime ob_time;
-  const ObDatumMeta &input_meta = expr.args_[0]->datum_meta_;
   ObScale scale = input_meta.scale_;
+  const ObTimeZoneInfo* tz_info = NULL;
 
   //determine type, get calc ob_time from input_value
   if (OB_SUCC(ret)) {
-    const ObTimeZoneInfo* tz_info = NULL;
     if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
       LOG_WARN("faild to get local timezone info", K(ret));
     } else if (OB_FAIL(convert_to_ob_time(ctx, input, input_meta.type_, tz_info, ob_time))) {
@@ -822,6 +1102,33 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(format_str.empty())) {
       res.reset();
+      // handle case of mysql mode when input has no format string
+      if (is_mysql_mode()) {
+        if (input_meta.type_ == ObDateTimeType || input_meta.type_ == ObTimestampType) {
+          const ObTimeZoneInfo *tz_info_use = (ObTimestampType == input_meta.type_) ?
+                          tz_info : NULL;
+          char *result_buf = NULL;
+          int64_t pos = 0;
+          int64_t result_buf_len = MAX_DATETIME_BUFFER_SIZE;
+          ObString nls_format;
+          if (OB_ISNULL(result_buf = static_cast<char *>(alloc.alloc(result_buf_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate buff", K(ret), K(result_buf_len));
+          } else if (OB_FAIL(ObTimeConverter::datetime_to_str(input.get_datetime(), tz_info_use,
+              nls_format, scale, result_buf, result_buf_len, pos))) {
+            LOG_WARN("failed to convert datetime to string", K(ret), K(input.get_datetime()), KP(tz_info_use),
+                  K(nls_format), K(scale), KP(result_buf), K(pos));
+          }
+          if (OB_SUCC(ret)) {
+             res = ObString(pos, result_buf);
+          }
+        } else {
+          if (OB_FAIL(convert_timelike_to_str(expr, ctx, alloc, input,
+                                              input_meta.type_, res))) {
+            LOG_WARN("fail to convert to string", K(ret), K(format_str));
+          }
+        }
+      }
     } else {
       char *result_buf = NULL;
       int64_t pos = 0;
@@ -862,10 +1169,24 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
     }
   }
 
-  LOG_DEBUG("oracle to char function finished",
+  LOG_DEBUG("expr to char function finished",
             K(ret), K(ob_time), K(input), K(format_str), K(nlsparam), K(res));
 
   return ret;
+}
+
+int ObExprToCharCommon::interval_to_char(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              common::ObIAllocator &alloc,
+                              const char *&input_ptr,
+                              uint32_t input_len,
+                              const common::ObString &fmt,
+                              const common::ObString &nlsparam,
+                              common::ObString &res)
+{
+  return interval_to_char(expr, ctx, alloc,
+                        ObDatum(input_ptr, input_len, false),
+                         fmt, nlsparam, res);
 }
 
 int ObExprToCharCommon::interval_to_char(const ObExpr &expr,
@@ -923,6 +1244,16 @@ int ObExprToCharCommon::interval_to_char(const ObExpr &expr,
   return ret;
 }
 
+int ObExprToCharCommon::number_to_char(const ObExpr &expr, ObEvalCtx &ctx,
+                                     common::ObIAllocator &alloc,
+                                     const char *&input_ptr, uint32_t input_len,
+                                     common::ObString &fmt_str,
+                                     const common::ObString &nlsparam,
+                                     common::ObString &res) {
+  return number_to_char(expr, ctx, alloc, ObDatum(input_ptr, input_len, false),
+                        fmt_str, nlsparam, res);
+}
+
 int ObExprToCharCommon::number_to_char(const ObExpr &expr,
                                        ObEvalCtx &ctx,
                                        common::ObIAllocator &alloc,
@@ -940,7 +1271,7 @@ int ObExprToCharCommon::number_to_char(const ObExpr &expr,
       LOG_WARN("fail to get number string", K(ret));
     }
   } else {
-    if (expr.arg_cnt_ > 2) {
+    if (is_oracle_mode() && expr.arg_cnt_ > 2) {
       if (!nlsparam.empty() && OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(nlsparam))) {
         ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
         LOG_WARN("date format is invalid", K(ret), K(nlsparam));
@@ -964,8 +1295,10 @@ int ObExprToCharCommon::process_number_sci_value(
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t str_len = 0;
-  const bool is_float = expr.args_[0]->obj_meta_.is_float();
-  const bool is_double = expr.args_[0]->obj_meta_.is_double();
+  const bool is_float = expr.args_[0]->obj_meta_.is_float() ||
+                        expr.args_[0]->obj_meta_.is_ufloat();
+  const bool is_double = expr.args_[0]->obj_meta_.is_double() ||
+                         expr.args_[0]->obj_meta_.is_udouble();
   const bool is_decimal_int = expr.args_[0]->obj_meta_.is_decimal_int();
   const int64_t alloc_size = ((is_float || is_double)
                               ? MAX_NUMBER_BUFFER_SIZE
@@ -1015,9 +1348,18 @@ int ObExprToCharCommon::process_number_sci_value(
                             const_cast<uint32_t *>(&(input.get_number().digits_[0])));
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObObjCaster::oracle_number_to_char(number_value, true,
-          static_cast<int16_t>(scale), alloc_size, buf, str_len))) {
-        LOG_WARN("fail to convert number to string", K(ret));
+      } else {
+        if (is_oracle_mode()) {
+          if (OB_FAIL(ObObjCaster::oracle_number_to_char(number_value, true,
+                      static_cast<int16_t>(scale), alloc_size, buf, str_len))) {
+            LOG_WARN("fail to convert number to string", K(ret));
+          }
+        } else {
+          if (OB_FAIL(number_value.format(buf, alloc_size, str_len,
+                                             static_cast<int16_t>(scale)))) {
+            LOG_WARN("fail to format number to string", K(ret));
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1081,6 +1423,13 @@ int ObExprToCharCommon::process_number_value(const ObExpr &expr,
     }
   }
   return ret;
+}
+
+int ObExprOracleToChar::eval_oracle_to_char(const ObExpr &expr,
+                                                    ObEvalCtx &ctx,
+                                                    ObDatum &expr_datum)
+{
+  return ObExprToCharCommon::eval_to_char(expr, ctx, expr_datum);
 }
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprToCharCommon, raw_expr) {

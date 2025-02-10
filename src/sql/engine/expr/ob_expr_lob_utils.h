@@ -401,6 +401,21 @@ public:
     return ret;
   }
 
+  OB_INLINE static int get_char_len(ObEvalCtx &ctx, ObString str, const ObDatumMeta &meta,
+                          const bool has_lob_header, int64_t &char_len)
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
+    if (OB_FAIL(str_iter.init(0, NULL, &temp_allocator))) {
+      COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
+    } else if (OB_FAIL(str_iter.get_char_len(char_len))) {
+      COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
+    }
+    return ret;
+  };
+
   static int get_char_len(ObEvalCtx &ctx, const ObDatum & datum, const ObDatumMeta &meta,
                           const bool has_lob_header, int64_t &char_len)
   {
@@ -408,15 +423,7 @@ public:
     if (datum.is_null()) {
       char_len = 0;
     } else {
-      ObString str = datum.get_string();
-      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      ObTextStringIter str_iter(meta.type_, meta.cs_type_, str, has_lob_header);
-      if (OB_FAIL(str_iter.init(0, NULL, &temp_allocator))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      } else if (OB_FAIL(str_iter.get_char_len(char_len))) {
-        COMMON_LOG(WARN, "Lob: init lob str iter failed ", K(ret), K(str_iter));
-      }
+      ret = get_char_len(ctx, datum.get_string(), meta, has_lob_header, char_len);
     }
     return ret;
   };

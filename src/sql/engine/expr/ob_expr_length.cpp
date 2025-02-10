@@ -86,6 +86,7 @@ int ObExprLength::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObE
       rt_expr.eval_func_ = ObExprLength::calc_null;
     } else if (lib::is_oracle_mode()) {
       rt_expr.eval_func_ = ObExprLength::calc_oracle_mode;
+      rt_expr.eval_vector_func_ = ObExprLength::calc_oracle_length_vector;
     } else {
       if (op_cg_ctx.session_->get_exec_min_cluster_version() < CLUSTER_VERSION_4_1_0_0) {
         CK(ObVarcharType == text_type);
@@ -236,6 +237,82 @@ int ObExprLength::calc_mysql_length_vector(const ObExpr &expr,
         VECTOR_EVAL_FUNC_ARG_LIST);
     } else {
       ret = calc_mysql_length_vector_dispatch<ObVectorBase, ObVectorBase>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprLength::calc_oracle_length_vector_dispatch(const ObExpr &expr,
+                                      ObEvalCtx &ctx,
+                                      const ObBitVector &skip,
+                                      const EvalBound &bound) {
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = reinterpret_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = reinterpret_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (arg_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+    } else {
+      ObString str = arg_vec->get_string(idx);
+      int64_t c_len = 0;
+      if (!is_lob_storage(expr.args_[0]->datum_meta_.type_)) {
+        c_len = ObCharset::strlen_char(cs_type, str.ptr(), str.length());
+      } else if (OB_FAIL(ObTextStringHelper::get_char_len(ctx, str, expr.args_[0]->datum_meta_,
+                        expr.args_[0]->obj_meta_.has_lob_header(), c_len))) {
+        LOG_WARN("failed to get char len for lob type", K(ret), K(expr.args_[0]->datum_meta_.type_));
+      }
+      if (OB_SUCC(ret)) {
+        ObNumStackOnceAlloc tmp_alloc;
+        number::ObNumber num;
+        if (OB_FAIL(num.from(static_cast<int64_t>(c_len), tmp_alloc))) {
+          LOG_WARN("copy number fail", K(ret));
+        } else {
+          res_vec->set_number(idx, num);
+        }
+      }
+    }
+    eval_flags.set(idx);
+  } // for end
+  return ret;
+}
+
+int ObExprLength::calc_oracle_length_vector(const ObExpr &expr,
+                                           ObEvalCtx &ctx,
+                                           const ObBitVector &skip,
+                                           const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval sin param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+      ret = calc_oracle_length_vector_dispatch<ObDiscreteFormat, ObDiscreteFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+      ret = calc_oracle_length_vector_dispatch<ObDiscreteFormat, UniformFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+      ret = calc_oracle_length_vector_dispatch<UniformFormat, ObDiscreteFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = calc_oracle_length_vector_dispatch<UniformFormat, UniformFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+      ret = calc_oracle_length_vector_dispatch<ObContinuousFormat, ObDiscreteFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
+      ret = calc_oracle_length_vector_dispatch<ObContinuousFormat, UniformFormat>(
+        VECTOR_EVAL_FUNC_ARG_LIST);
+    } else {
+      ret = calc_oracle_length_vector_dispatch<ObVectorBase, ObVectorBase>(
         VECTOR_EVAL_FUNC_ARG_LIST);
     }
   }

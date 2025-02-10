@@ -515,6 +515,42 @@ double ObExprUtil::trunc_double(double val, int64_t dec)
   return res;
 }
 
+int ObExprUtil::set_expr_asscii_result(const ObExpr &expr, ObEvalCtx &ctx,
+                                          ObTextStringDatumResult &out_res,
+                                          const ObString &ascii, const int64_t datum_idx,
+                                          const bool is_ascii,
+                                          const common::ObCollationType src_coll_type)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObString out;
+  if (ascii.empty()) {
+    if (lib::is_oracle_mode()) {
+      out_res.set_result_null();
+    } else if (OB_FAIL(out_res.init_with_batch_idx(0, datum_idx))) {
+      LOG_WARN("init text str result failed", K(ret));
+    } else {
+      out_res.set_result();
+    }
+  } else {
+    if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+      out = ascii;
+    } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                                  expr.datum_meta_.cs_type_, out))) {
+      LOG_WARN("charset convert failed", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(out_res.init_with_batch_idx(out.length(), datum_idx))) {
+      LOG_WARN("init text str result failed");
+    } else if (OB_FAIL(out_res.append(out.ptr(), out.length()))) {
+      LOG_WARN("append text str result failed", K(ret));
+    } else {
+      out_res.set_result();
+    }
+  }
+  return ret;
+}
+
 int ObExprUtil::set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
                                       const ObString &ascii, const int64_t datum_idx,
                                       const bool is_ascii,

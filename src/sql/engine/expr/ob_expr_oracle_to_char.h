@@ -45,10 +45,14 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 
+  static int eval_to_char(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int eval_oracle_to_char(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   // for static engine batch
   static int eval_oracle_to_char_batch(
       const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  static int eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template <typename LeftVec, typename ResVec>
+  static int inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 protected:
@@ -68,7 +72,25 @@ protected:
   static int datetime_to_char(const ObExpr &expr,
                               ObEvalCtx &ctx,
                               common::ObIAllocator &alloc,
+                              const char *&input_ptr,
+                              uint32_t input_len,
+                              const common::ObString &fmt,
+                              const common::ObString &nlsparam,
+                              common::ObString &res);
+
+  static int datetime_to_char(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              common::ObIAllocator &alloc,
                               const common::ObDatum &input,
+                              const common::ObString &fmt,
+                              const common::ObString &nlsparam,
+                              common::ObString &res);
+
+  static int interval_to_char(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              common::ObIAllocator &alloc,
+                              const char *&input_ptr,
+                              uint32_t input_len,
                               const common::ObString &fmt,
                               const common::ObString &nlsparam,
                               common::ObString &res);
@@ -81,6 +103,13 @@ protected:
                               const common::ObString &nlsparam,
                               common::ObString &res);
 
+  static int number_to_char(const ObExpr &expr, ObEvalCtx &ctx,
+                            common::ObIAllocator &alloc,
+                            const char *&input_ptr,
+                            uint32_t input_len,
+                            common::ObString &fmt_str,
+                            const common::ObString &nlsparam,
+                            common::ObString &res);
   static int number_to_char(const ObExpr &expr,
                             ObEvalCtx &ctx,
                             common::ObIAllocator &alloc,
@@ -97,7 +126,7 @@ protected:
 
   static int process_number_value(const ObExpr &expr,
                                   common::ObIAllocator &alloc,
-                                  const common::ObDatum &input,
+                          const common::ObDatum &input,
                                   const int scale,
                                   common::ObString &res);
 
@@ -106,7 +135,16 @@ protected:
                                 const common::ObObjType input_type,
                                 const ObTimeZoneInfo *tz_info,
                                 common::ObTime &ob_time);
+  static int convert_timelike_to_str(const ObExpr &expr,
+                                         ObEvalCtx &ctx, ObIAllocator &alloc,
+                                         const ObDatum &input,
+                                         const ObObjType input_type,
+                                         ObString &res);
 
+  static int set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx, const char *& in_ptr,
+                                      uint32_t &in_len,
+                                      const ObString &res, const bool is_ascii,
+                                      const common::ObCollationType src_coll_type);
 };
 
 class ObExprOracleToChar : public ObExprToCharCommon
@@ -114,6 +152,18 @@ class ObExprOracleToChar : public ObExprToCharCommon
 public:
   explicit ObExprOracleToChar(common::ObIAllocator &alloc);
   virtual ~ObExprOracleToChar();
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *type_array,
+                                int64_t params_count,
+                                common::ObExprTypeCtx &type_ctx) const;
+  static int eval_oracle_to_char(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+};
+
+class ObExprToChar : public ObExprToCharCommon
+{
+public:
+  explicit ObExprToChar(common::ObIAllocator &alloc);
+  virtual ~ObExprToChar();
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *type_array,
                                 int64_t params_count,

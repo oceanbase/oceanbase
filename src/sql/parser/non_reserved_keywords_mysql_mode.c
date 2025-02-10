@@ -677,6 +677,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"paxos_replica_num", PAXOS_REPLICA_NUM},
   {"percentage", PERCENTAGE},
   {"percent_rank", PERCENT_RANK},
+  {"percentile_cont", PERCENTILE_CONT},
   {"performance", PERFORMANCE},
   {"row_group_size", ROW_GROUP_SIZE},
   {"phase", PHASE},

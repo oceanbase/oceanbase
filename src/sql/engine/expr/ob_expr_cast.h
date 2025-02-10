@@ -135,6 +135,7 @@ public:
 
   // extra_serialize_ == 1 : is implicit cast
   void set_implicit_cast(bool v) { extra_serialize_ =  v ? 1 : 0; }
+  virtual bool need_rt_ctx() const override { return true; }
 
   static int eval_cast_multiset(const sql::ObExpr &expr,
                                 sql::ObEvalCtx &ctx,

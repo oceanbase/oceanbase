@@ -5261,11 +5261,11 @@ int ObAggregateProcessor::linear_inter_calc(const ObAggrInfo &aggr_info,
         ObDatumMeta factor_meta;
         factor_meta.type_ = ObNumberType;
         factor_meta.cs_type_ = CS_TYPE_BINARY;
+        ObCompatibilityMode compat_mode = is_oracle_mode() ? ORACLE_MODE : MYSQL_MODE;
         factor_meta.scale_
-            = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_scale();
+            = ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][ObNumberType].get_scale();
         factor_meta.precision_
-            = ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_precision();
-
+            = ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][ObNumberType].get_precision();
         if (OB_FAIL(arith->setup_datum_metas(factor_meta /* factor meta */,
                                              order_expr->datum_meta_ /* prev meta */,
                                              order_expr->datum_meta_ /* cur meta */))) {

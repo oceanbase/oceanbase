@@ -2217,9 +2217,20 @@ public:
   common::ObFixedBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_DFM> &get_elem_flags() { return elem_flags_; }
   TO_STRING_KV(K(dfm_elems_), K(elem_flags_));
 
-private:
+protected:
   common::ObFixedArray<common::ObDFMElem, common::ObIAllocator> dfm_elems_;
   common::ObFixedBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_DFM> elem_flags_;
+};
+
+class ObExprDateTimeStringConvertCtx : public ObExprDFMConvertCtx
+{
+public:
+  void set_format_string(ObString format) { format_ = format; }
+  ObString &get_format_string() { return format_; }
+  TO_STRING_KV(K(dfm_elems_), K(elem_flags_), K(format_));
+
+private:
+  ObString format_;
 };
 
 class ObExprFindIntCachedValue : public ObExprOperatorCtx

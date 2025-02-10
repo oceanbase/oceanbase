@@ -1903,41 +1903,61 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_GROUP_PERCENTILE_DISC: {
         if (OB_FAIL(check_median_percentile_param(expr))) {
           LOG_WARN("failed to check median/percentile param", K(ret));
-        } else if (lib::is_oracle_mode()) {
+        } else {
           const ObObjType from_type = expr.get_order_items().at(0).expr_->get_result_type().get_type();
           const ObCollationType from_cs_type = expr.get_order_items().at(0).expr_->
                                             get_result_type().get_collation_type();
           bool keep_from_type = false;
           //old sql engine can't support order by lob, So temporarily ban it.
-          if (T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type()) {
-            if (OB_UNLIKELY(ob_is_lob_locator(from_type))) {
-              ret = OB_ERR_INVALID_TYPE_FOR_OP;
-              LOG_WARN("lob type parameter not expected", K(ret));
-            } else if (ob_is_clob(from_type, from_cs_type) || ob_is_blob(from_type, from_cs_type)) {
-              if (expr.get_order_items().at(0).is_descending()) {
+          if (lib::is_oracle_mode()) {
+            if (T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type()) {
+              if (OB_UNLIKELY(ob_is_lob_locator(from_type))) {
                 ret = OB_ERR_INVALID_TYPE_FOR_OP;
                 LOG_WARN("lob type parameter not expected", K(ret));
+              } else if (ob_is_clob(from_type, from_cs_type) || ob_is_blob(from_type, from_cs_type)) {
+                if (expr.get_order_items().at(0).is_descending()) {
+                  ret = OB_ERR_INVALID_TYPE_FOR_OP;
+                  LOG_WARN("lob type parameter not expected", K(ret));
+                }
+              } else if (ob_is_decimal_int(from_type)) {
+                // cast decimal int to number to calc result
+                keep_from_type = false;
+              } else {
+                keep_from_type = true;
               }
-            } else if (ob_is_decimal_int(from_type)) {
-              // cast decimal int to number to calc result
+            } else if (ob_is_oracle_datetime_tc(from_type) || ob_is_interval_tc(from_type)
+                       || ob_is_float_tc(from_type) || ob_is_double_tc(from_type)) {
+              keep_from_type = true;
+            } else if (ob_is_oracle_numeric_type(from_type)) {
               keep_from_type = false;
             } else {
-              keep_from_type = true;
+              ret = OB_ERR_ARGUMENT_SHOULD_NUMERIC_DATE_DATETIME_TYPE;
+              LOG_WARN("expected numeric or date/datetime type", K(ret), K(from_type));
             }
-          } else if (ob_is_oracle_datetime_tc(from_type) || ob_is_interval_tc(from_type)
-                     || ob_is_float_tc(from_type) || ob_is_double_tc(from_type)) {
-            keep_from_type = true;
-          } else if (ob_is_oracle_numeric_type(from_type)) {
-            keep_from_type = false;
-          } else {
-            ret = OB_ERR_ARGUMENT_SHOULD_NUMERIC_DATE_DATETIME_TYPE;
-            LOG_WARN("expected numeric or date/datetime type", K(ret), K(from_type));
+          } else { // mysql mode
+            if (T_FUN_GROUP_PERCENTILE_CONT == expr.get_expr_type()){
+              if (ObDoubleType == from_type) {
+                keep_from_type = true;
+              } else if (ob_is_numeric_type(from_type)) {
+                keep_from_type = false;
+              } else {
+                ret = OB_ERR_ARG_INVALID;
+                LOG_WARN("expected numeric type", K(ret), K(from_type));
+                //TODO: (chenxiansen.cxs) support datetime type for mysql mode
+              }
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected mysql mode", K(ret));
+            }
           }
           if (OB_SUCC(ret)) {
-            const ObObjType to_type = keep_from_type ? from_type
+            ObObjType to_type = keep_from_type ? from_type
                                       : ((T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type()
                                             && !ob_is_decimal_int(from_type))
                                               ? ObLongTextType : ObNumberType);
+            if (is_mysql_mode()) {
+              to_type = keep_from_type ? from_type: ObDoubleType;
+            }
             const ObCollationType to_cs_type = keep_from_type ? from_cs_type
                                       : ((T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type()
                                             && !ob_is_decimal_int(from_type))
@@ -1952,10 +1972,11 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               if (from_type != to_type) {
                 result_type.set_type(to_type);
               }
+              enum ObCompatibilityMode compat_mode = is_oracle_mode() ? ORACLE_MODE : MYSQL_MODE;
               result_type.set_scale(
-                  ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][to_type].get_scale());
+                  ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][to_type].get_scale());
               result_type.set_precision(
-                  ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][to_type].get_precision());
+                  ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][to_type].get_precision());
               expr.set_result_type(result_type);
               ObCastMode def_cast_mode = CM_NONE;
               result_type.set_calc_type(result_type.get_type());
@@ -1971,9 +1992,6 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               }
             }
           }
-        } else { //mysql mode
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected mysql mode", K(ret));
         }
         break;
       }
@@ -2247,10 +2265,11 @@ int ObRawExprDeduceType::add_median_percentile_implicit_cast(ObAggFunRawExpr &ex
     res_type.set_calc_accuracy(res_type.get_accuracy());
     ObExprResType res_number_type;
     res_number_type.set_number();
+    enum ObCompatibilityMode compat_mode = is_oracle_mode()? ORACLE_MODE : MYSQL_MODE;
     res_number_type.set_scale(
-        ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_scale());
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][ObNumberType].get_scale());
     res_number_type.set_precision(
-        ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObNumberType].get_precision());
+        ObAccuracy::DDL_DEFAULT_ACCURACY2[compat_mode][ObNumberType].get_precision());
     res_number_type.set_calc_meta(res_number_type.get_obj_meta());
     res_number_type.set_calc_accuracy(res_number_type.get_accuracy());
     const int64_t cast_order_idx = expr.get_real_param_count();//order item expr pos

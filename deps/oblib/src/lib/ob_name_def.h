@@ -1240,4 +1240,7 @@
 #define N_PRIV_ST_GEOHASH                   "_st_geohash"
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #define N_TO_PINYIN                         "to_pinyin"
+#define N_URL_ENCODE                        "url_encode"
+#define N_URL_DECODE                        "url_decode"
+#define N_KEYVALUE                          "keyvalue"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
