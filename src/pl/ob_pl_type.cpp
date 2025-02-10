@@ -18,6 +18,7 @@
 #include "observer/mysql/obmp_stmt_execute.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "pl/ob_pl_dependency_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -70,7 +71,7 @@ int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
     uint64_t object_owner_id = owner_id;
     ObString object_name = udt;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_udt_info(tenant_id, object_owner_id, OB_INVALID_ID, object_name, udt_info));
     }
@@ -127,7 +128,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
     uint64_t object_owner_id = owner_id;
     ObString object_name = pkg;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_package_info(tenant_id, object_owner_id, object_name, share::schema::PACKAGE_TYPE,
                                         compatible_mode, package_info));
@@ -208,54 +209,6 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
 }
 #endif
 
-int ObPLDataType::collect_synonym_deps(uint64_t tenant_id,
-                                       ObSynonymChecker &synonym_checker,
-                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                       ObIArray<ObSchemaObjVersion> *deps)
-{
-  int ret = OB_SUCCESS;
-  if (synonym_checker.has_synonym() && OB_NOT_NULL(deps)) {
-    const ObIArray<uint64_t> &synonym_ids = synonym_checker.get_synonym_ids();
-    for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-      int64_t schema_version = OB_INVALID_VERSION;
-      ObSchemaObjVersion obj_version;
-      if (OB_FAIL(schema_guard.get_schema_version(SYNONYM_SCHEMA, tenant_id, synonym_ids.at(i), schema_version))) {
-        LOG_WARN("failed to get schema version", K(ret), K(tenant_id), K(synonym_ids.at(i)));
-      } else if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema version is invalid", K(ret), K(tenant_id), K(synonym_ids.at(i)));
-      } else {
-        obj_version.object_id_ = synonym_ids.at(i);
-        obj_version.object_type_ = DEPENDENCY_SYNONYM;
-        obj_version.version_ = schema_version;
-        if (OB_FAIL(deps->push_back(obj_version))) {
-          LOG_WARN("failed to push back obj version to array", K(ret), KPC(deps), K(obj_version));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObPLDataType::get_synonym_object(uint64_t tenant_id,
-                                     uint64_t &owner_id,
-                                     ObString &object_name,
-                                     bool &exist,
-                                     sql::ObSQLSessionInfo &session_info,
-                                     share::schema::ObSchemaGetterGuard &schema_guard,
-                                     ObIArray<ObSchemaObjVersion> *deps)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaChecker schema_checker;
-  ObSynonymChecker synonym_checker;
-  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
-  OZ (ObResolverUtils::resolve_synonym_object_recursively(
-    schema_checker, synonym_checker,
-    tenant_id, owner_id, object_name, owner_id, object_name, exist));
-  OZ (collect_synonym_deps(tenant_id, synonym_checker, schema_guard, deps));
-  return ret;
-}
-
 int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          uint64_t owner_id,
                                          const ObString &table,
@@ -269,12 +222,15 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_info = NULL;
+  ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
+  ObMySQLProxy dummy_proxy;
+  ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
     uint64_t object_owner_id = owner_id;
     ObString object_name = table;
     bool exist = false;
-    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    OZ (ObPLDependencyUtil::get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
     if (OB_SUCC(ret) && exist) {
       OZ (schema_guard.get_table_schema(tenant_id, object_owner_id, object_name, false, table_info));
     }
@@ -289,9 +245,6 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     OX (pl_type.set_user_type_id(PL_RECORD_TYPE, table_info->get_table_id()));
     OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
   } else {
-    ObPLPackageGuard dummy_guard(session_info.get_effective_tenant_id());
-    ObMySQLProxy dummy_proxy;
-    ObPLResolveCtx ctx(allocator, session_info, schema_guard, dummy_guard, dummy_proxy, false);
     ObRecordType *record_type = NULL;
     const ObPLDataType *member_type = NULL;
     CK (!type.empty());
@@ -315,12 +268,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
-    bool is_view = table_info->is_view_table() && !table_info->is_materialized_view();
-    ObSchemaObjVersion obj_version;
-    new(&obj_version)ObSchemaObjVersion(table_info->get_table_id(),
-                                        table_info->get_schema_version(),
-                                        is_view ? DEPENDENCY_VIEW : DEPENDENCY_TABLE);
-    OZ (deps->push_back(obj_version));
+    OZ (ObPLResolver::collect_dep_info_by_schema(ctx, table_info, *deps));
   }
   return ret;
 }
@@ -2204,6 +2152,23 @@ int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapsho
   return ret;
 }
 
+ObString ObPLCursorInfo::get_non_session_sql_text()
+{
+  ObString sql_text;
+  ObSPIResultSet *spi_result = NULL;
+  if (is_streaming()) {
+    spi_result = get_cursor_handler();
+    if (NULL == spi_result) {  // spi_result does not init
+      sql_text = ObString::make_empty_string();
+    } else {
+      sql_text = spi_result->get_sql_ctx().cur_sql_;
+    }
+  } else {
+    sql_text = sql_text_;
+  }
+  return sql_text;
+}
+
 int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -2239,6 +2204,8 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
       is_need_check_snapshot_ = src.is_need_check_snapshot_;
       last_execute_time_ = src.last_execute_time_;
       sql_trace_id_ = src.sql_trace_id_;
+      OZ (ob_write_string(*copy_allocator, src.sql_text_, sql_text_));
+      OX (MEMCPY(sql_id_, src.sql_id_, OB_MAX_SQL_ID_LENGTH + 1));
       //these should not be copied ..
       //    lib::MemoryContext entity_;
       //    ObIAllocator *allocator_;
@@ -2326,6 +2293,9 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
   int ret = OB_SUCCESS;
   LOG_DEBUG("close cursor", K(isopen()), K(id_), K(this), K(*this), K(session.get_sessid()));
   if (isopen()) { //如果游标已经打开，需要释放资源
+    if (!is_server_cursor()) {
+      session.del_non_session_cursor(this);  // delete cursor from cursor map first, then release resource
+    }
     if (is_streaming()) {
       ObSPIResultSet *spi_result = get_cursor_handler();
       if (OB_NOT_NULL(spi_result)) {

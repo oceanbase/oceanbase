@@ -366,6 +366,7 @@ int ObExprSubQueryRef::expr_eval(
     if (OB_SUCC(ret)) {
       OX (spi_cursor->row_store_.finish_add_row());
       OX (cursor->open(spi_cursor));
+      OZ (session->add_non_session_cursor(cursor));  //add to non session cursor map
       if (lib::is_oracle_mode()) {
         transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
         OZ (cursor->set_and_register_snapshot(snapshot));

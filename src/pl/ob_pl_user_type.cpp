@@ -1988,11 +1988,11 @@ int ObRecordType::deserialize(
   OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
     OZ (serialization::decode(src, src_len, src_pos, count));
+    CK (count == record_members_.count());
     OX (record->set_count(count));
 
     dst = reinterpret_cast<char*>(record->get_element());
     CK (OB_NOT_NULL(dst));
-    CK (count == record_members_.count());
     CK (OB_NOT_NULL(record->get_allocator()));
     for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
       const ObPLDataType *type = get_record_member_type(i);

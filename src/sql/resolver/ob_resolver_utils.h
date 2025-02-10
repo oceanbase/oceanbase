@@ -145,16 +145,6 @@ public:
                                     bool is_called_in_sql = false,
                                     ObIArray<uint64_t> *dep_db_array = NULL);
 
-  static int add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
-                                            const ObSQLSessionInfo *session_info,
-                                            const ObSynonymChecker &synonym_checker,
-                                            DependenyTableStore &dep_table);
-
-  static int add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
-                                            const ObSQLSessionInfo *session_info,
-                                            const ObSynonymChecker &synonym_checker,
-                                            const pl::ObPLDependencyTable &dep_table);
-
   static int resolve_extended_type_info(const ParseNode &str_list_node,
                                         ObIArray<ObString>& type_info_array);
   static int resolve_collection_type_info(const ParseNode &type_node,
@@ -278,21 +268,14 @@ public:
                          const share::schema::ObRoutineInfo *&routine,
                          ObSynonymChecker *synonym_checker = NULL);
   static int resolve_sp_access_name(ObSchemaChecker &schema_checker,
-                                    ObIAllocator &allocator,
-                                    uint64_t tenant_id,
-                                    const ObString& current_database,
-                                    const ObString& procedure_name,
-                                    ObString &database_name,
-                                    ObString &package_name,
-                                    ObString &routine_name);
-  static int resolve_sp_access_name(ObSchemaChecker &schema_checker,
                                     uint64_t tenant_id,
                                     const ObString& current_database,
                                     const ParseNode &sp_access_name_node,
                                     ObString &db_name,
                                     ObString &package_name,
                                     ObString &routine_name,
-                                    ObString &dblink_name);
+                                    ObString &dblink_name,
+                                    ObIArray<ObSchemaObjVersion> *deps = nullptr);
   static int resolve_sp_name(ObSQLSessionInfo &session_info,
                              const ParseNode &sp_name_node,
                              ObString &db_name,
@@ -317,8 +300,7 @@ public:
   static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                ObRawExpr &expr,
-                               ObQueryCtx &ctx,
-                               ObIArray<ObSchemaObjVersion> &return_value_version);
+                               ObQueryCtx &ctx);
 
   static int resolve_external_symbol(common::ObIAllocator &allocator,
                                      sql::ObRawExprFactory &expr_factory,
@@ -334,7 +316,8 @@ public:
                                      pl::ObPLPackageGuard *package_guard,
                                      bool is_prepare_protocol = false,
                                      bool is_check_mode = false,
-                                     bool is_sql_scope = false);
+                                     bool is_sql_scope = false,
+                                     ObIArray<ObSchemaObjVersion> *dep_tbl = nullptr);
   static int resolve_external_param_info(ExternalParams &param_info,
                                          const ObSQLSessionInfo &session_info,
                                          ObRawExprFactory &expr_factory,

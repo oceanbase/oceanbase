@@ -641,7 +641,7 @@ public:
 
   class CursorCache {
     public:
-      CursorCache() : mem_context_(nullptr), next_cursor_id_(1LL << 31), pl_cursor_map_() {}
+      CursorCache() : mem_context_(nullptr), next_cursor_id_(1LL << 31), pl_cursor_map_(), pl_non_session_cursor_map_() {}
       virtual ~CursorCache() { NULL != mem_context_ ? DESTROY_CONTEXT(mem_context_) : (void)(NULL); }
       int init(uint64_t tenant_id)
       {
@@ -661,6 +661,17 @@ public:
             mem_context_ = NULL;
           }
           SQL_ENG_LOG(WARN, "create sequence current value map failed", K(ret));
+        } else if (!pl_non_session_cursor_map_.created() &&
+                   OB_FAIL(pl_non_session_cursor_map_.create(common::hash::cal_next_prime(32),
+                                                       ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_NODE))) {
+          if (pl_cursor_map_.created()) {
+            pl_cursor_map_.destroy();
+          }
+          if (NULL != mem_context_) {
+            DESTROY_CONTEXT(mem_context_);
+            mem_context_ = NULL;
+          }
+          SQL_ENG_LOG(WARN, "create pl_non_session_cursor_map_ failed", K(ret));
         } else { /*do nothing*/ }
         return ret;
       }
@@ -705,6 +716,7 @@ public:
           SQL_ENG_LOG(ERROR, "session cursor map not empty, cursor leaked", K(pl_cursor_map_.size()));
         }
         pl_cursor_map_.reuse();
+        pl_non_session_cursor_map_.reuse();
         next_cursor_id_ = 1LL << 31;
         if (NULL != mem_context_) {
           DESTROY_CONTEXT(mem_context_);
@@ -718,6 +730,7 @@ public:
       typedef common::hash::ObHashMap<int64_t, pl::ObPLCursorInfo*,
                                       common::hash::NoPthreadDefendMode> CursorMap;
       CursorMap pl_cursor_map_;
+      CursorMap pl_non_session_cursor_map_;
   };
 
   class ObCachedTenantConfigInfo
@@ -1097,6 +1110,8 @@ public:
   int close_cursor(pl::ObPLCursorInfo *&cursor);
   int close_cursor(int64_t cursor_id);
   int make_cursor(pl::ObPLCursorInfo *&cursor);
+  int add_non_session_cursor(pl::ObPLCursorInfo *cursor);
+  void del_non_session_cursor(pl::ObPLCursorInfo *cursor);
   int init_cursor_cache();
   int make_dbms_cursor(pl::ObDbmsCursorInfo *&cursor,
                        uint64_t id = OB_INVALID_ID);

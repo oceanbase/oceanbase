@@ -166,7 +166,7 @@ public:
                                      const share::schema::ObPackageInfo *&package_body_info);
   static int destory_package_state(sql::ObSQLSessionInfo &session_info, uint64_t package_id);
   int check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                    const ObPackageStateVersion &state_version, bool &match);
+                    const ObPackageStateVersion &state_version, bool old_encode_rule, bool &match);
   int get_cached_package(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                                 ObPLPackage *&package_spec,
                                 ObPLPackage *&package_body,
@@ -199,12 +199,8 @@ private:
                              sql::ObExecContext &exec_ctx,
                              ObPLPackage &package,
                              const ObPackageStateVersion &state_version,
-                             ObPLPackageState *&package_state);
-
-  int get_package_item_state(sql::ObSQLSessionInfo &session_info,
-                             int64_t package_id,
-                             const ObPackageStateVersion &state_version,
-                             ObPLPackageState *&package_state);
+                             ObPLPackageState *&package_state,
+                             const ObPLPackage *package_for_verify);
 
   int update_special_package_status(const ObPLResolveCtx &resolve_ctx,
                                     uint64_t package_id,

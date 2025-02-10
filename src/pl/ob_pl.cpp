@@ -529,7 +529,9 @@ int ObPLContext::debug_stop(ObSQLSessionInfo *sql_session)
       && sql_session->is_pl_debug_on()
       && NULL == sql_session->get_pl_context() // we only stop debugger on top pl/sql
       && pl_debugger->is_debug_thread_running()) {
+    OX (pl_debugger->get_logger().flush("before debug_stop"));
     OZ (pl_debugger->debug_stop());
+    OX (pl_debugger->get_logger().flush("after debug_stop"));
     if (OB_SUCC(ret) && pl_debugger->need_debug_off()) {
       OZ (sql_session->free_pl_debugger());
     }
@@ -549,7 +551,15 @@ int ObPLContext::notify(ObSQLSessionInfo *sql_session)
   if (OB_SUCC(ret)
       && sql_session->is_pl_debug_on()
       && pl_debugger->is_debug_thread_running()) {
+    // register debuginfo. NOTICE: failed will continue execute.
+    int tmp_ret = pl_debugger->register_debug_info_of_top_function();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_INFO("[TARGET THREAD] failed to register_debug_info_of_top_function", K(tmp_ret));
+    }
+
+    OX (pl_debugger->get_logger().flush("before notify"));
     OZ (pl_debugger->notify());
+    OX (pl_debugger->get_logger().flush("after notify"));
   } else if (pl_debugger != NULL) {
     LOG_INFO("[TARGET THREAD] No Need To Notify!",
              K(ret),
@@ -1373,7 +1383,7 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
   bool need_set_db = true;
 
   // in mysql mode, only system packages with invoker's right do not need set db
-  // in oracle mode, set db by if the routine is definer's right
+  // in oracle mode, set db id to definer if the routine is not invoker's right
   if (lib::is_oracle_mode()
       || get_tenant_id_by_object_id(routine.get_package_id()) == OB_SYS_TENANT_ID) {
     need_set_db = !routine.is_invoker_right();

@@ -3161,7 +3161,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
         OX (cursor->set_ref_count(ref_cnt));
       }
     } else {
-      // normal cursor, do nothing
+      // normal cursor
     }
   } else {
     if (obj.is_ref_cursor_type()) {
@@ -3555,6 +3555,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
 
   cursor.set_streaming();
   ObSPIResultSet *spi_result = NULL;
+  ObString sql_copy;
   ObString ps_sql_copy;
 
   OZ (cursor.prepare_spi_result(ctx, spi_result));
@@ -3564,6 +3565,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
 
   // in a streaming cursor, lifetime of ps_sql may be shorter than the cursor itself,
   // so we need to open it with a deep copy.
+  OZ (ob_write_string(spi_result->get_allocator(), sql, sql_copy));
   OZ (ob_write_string(spi_result->get_allocator(), ps_sql, ps_sql_copy));
 
   if (OB_SUCC(ret)) {
@@ -3586,7 +3588,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
             lib::ContextTLOptGuard guard(false);
             OZ (inner_open(ctx,
                            spi_result->get_memory_ctx()->get_arena_allocator(),
-                           sql,
+                           sql_copy,
                            ps_sql_copy,
                            type,
                            params,
@@ -3602,7 +3604,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
         } else {
           OZ (inner_open(ctx,
                          spi_result->get_memory_ctx()->get_arena_allocator(),
-                         sql,
+                         sql_copy,
                          ps_sql_copy,
                          type,
                          params,
@@ -3649,11 +3651,27 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
     spi_result->end_cursor_stmt(ctx, ret);
     cursor.set_last_execute_time(ObTimeUtility::current_time());
   }
+  if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
+    int add_ret = session_info.add_non_session_cursor(&cursor);
+    if (OB_SUCCESS != add_ret) {
+      LOG_WARN("add non session cursor failed", K(ret), K(add_ret));
+    }
+  }
   // if cursor already open, spi_result will released by cursor close.
   // there is not a situation like '!cursor.is_open && spi_result not close'.
   // so do not need call spi_result.close_result_set.
   if (OB_FAIL(ret) && OB_NOT_NULL(spi_result) && !cursor.isopen()) {
     spi_result->~ObSPIResultSet();
+  }
+  return ret;
+}
+
+int ObSPIService::save_unstreaming_cursor_sql(ObPLCursorInfo &cursor, const ObString &sql_text)
+{
+  int ret = OB_SUCCESS;
+  if (!cursor.is_server_cursor()) { //only non session cursor need to save sql text
+    CK (cursor.get_allocator() != NULL);
+    OZ (ob_write_string(*cursor.get_allocator(), sql_text, cursor.get_sql_text()));
   }
   return ret;
 }
@@ -3680,6 +3698,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
     ObSPICursor* spi_cursor = NULL;
     OZ (spi_result.init(session_info));
     OZ (spi_result.start_nested_stmt_if_need(ctx, sql, static_cast<stmt::StmtType>(type), for_update));
+    OZ (save_unstreaming_cursor_sql(cursor, (sql != NULL ? sql : ps_sql)));
 
     if (OB_SUCC(ret)) {
 
@@ -3733,6 +3752,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
             OZ (ObDbmsInfo::deep_copy_field_columns(
               *cursor.get_allocator(), spi_result.get_result_set()->get_field_columns(), spi_cursor->fields_));
           }
+          OX (MEMCPY(cursor.get_sql_id(), spi_result.get_sql_ctx().sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1));
           if (OB_SUCC(ret) && OB_NOT_NULL(spi_result.get_result_set()) && OB_NOT_NULL(spi_result.get_result_set()->get_physical_plan())) {
             cursor.set_packed(spi_result.get_result_set()->get_physical_plan()->is_packed());
           }
@@ -3757,6 +3777,12 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
         }
 
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
+    }
+    if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
+      int add_ret = session_info.add_non_session_cursor(&cursor);
+      if (OB_SUCCESS != add_ret) {
+        LOG_WARN("add non session cursor failed", K(ret), K(add_ret));
+      }
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(spi_cursor)) {
       spi_cursor->~ObSPICursor();
@@ -7977,6 +8003,12 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             ObIAllocator *tmp_alloc = PL_OPAQUE_TYPE == calc_array->at(0).get_meta().get_extend_type() ? ctx->allocator_
                                                                                                        : &ctx->exec_ctx_->get_allocator();
             OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
+            if (OB_SUCC(ret) && PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
+                ObPLCursorInfo *cursor_info = reinterpret_cast<ObPLCursorInfo*>(result.get_ext());
+                if (cursor_info->isopen()) {
+                  OZ (ctx->exec_ctx_->get_my_session()->add_non_session_cursor(cursor_info));
+                }
+              }
           } else {
             dst_id = var_type.get_user_type_id();
             ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(calc_array->at(0).get_ext());

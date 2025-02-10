@@ -37,6 +37,7 @@
 #include "share/config/ob_config.h" // ObConfigPairs
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
+#include "pl_ddl/ob_pl_ddl_service.h"
 
 namespace oceanbase
 {
@@ -93,6 +94,7 @@ class ObDDLSQLTransaction;
 class ObTableGroupHelp;
 //class ObFreezeInfoManager;
 class ObSnapshotInfoManager;
+class ObPLDDLService;
 
 class ObDDLService
 {
@@ -101,6 +103,7 @@ public:
 public:
   friend class ObTableGroupHelp;
   friend class ObStandbyClusterSchemaProcessor;
+  friend class ObPLDDLService;
   ObDDLService();
   virtual ~ObDDLService() {}
 
@@ -747,12 +750,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                           ObDDLOperator &ddl_operator,
                           const uint64_t new_db_id,
                           const share::schema::ObTableType table_type);
-  int flashback_trigger(const share::schema::ObTableSchema &table_schema,
-                        const uint64_t new_database_id,
-                        const common::ObString &new_table_name,
-                        share::schema::ObSchemaGetterGuard &schema_guard,
-                        ObMySQLTransaction &trans,
-                        ObDDLOperator &ddl_operator);
   int purge_table(const obrpc::ObPurgeTableArg &arg, ObMySQLTransaction *trans = NULL);
 
   int flashback_database(const obrpc::ObFlashBackDatabaseArg &arg);
@@ -948,69 +945,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   virtual int check_udf_exist(uint64 tenant_id, const common::ObString &name, bool &is_exsit, uint64_t &udf_id);
   //----End of functions for managing udf----
 
-  //----Functions for managing routine----
-  virtual int create_routine(share::schema::ObRoutineInfo &routine_info,
-                             const share::schema::ObRoutineInfo *old_routine_info,
-                             bool replace,
-                             share::schema::ObErrorInfo &error_info,
-                             common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                             const common::ObString *ddl_stmt_str,
-                             share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int alter_routine(const share::schema::ObRoutineInfo &routine_info,
-                            share::schema::ObErrorInfo &error_info,
-                            const ObString *ddl_stmt_str,
-                            share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int drop_routine(const share::schema::ObRoutineInfo &routine_info,
-                           share::schema::ObErrorInfo &error_info,
-                           const common::ObString *ddl_stmt_str,
-                           share::schema::ObSchemaGetterGuard &schema_guard);
-  //----End of functions for managing routine----
-
-  //----Functions for managing udt----
-  virtual int create_udt(share::schema::ObUDTTypeInfo &routine_info,
-                         const share::schema::ObUDTTypeInfo *old_routine_info,
-                         ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                         share::schema::ObErrorInfo &error_info,
-                         share::schema::ObSchemaGetterGuard &schema_guard,
-                         common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                         const common::ObString *ddl_stmt_str,
-                         bool need_replace,
-                         bool exist_valid_udt,
-                         bool specify_force);
-  virtual int drop_udt(const share::schema::ObUDTTypeInfo &routine_info,
-                       share::schema::ObSchemaGetterGuard &schema_guard,
-                       const common::ObString *ddl_stmt_str,
-                       bool specify_force,
-                       bool exist_valid_udt);
-  //----End of functions for managing routine----
-
-  //----Functions for managing package----
-  virtual int create_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                             const share::schema::ObPackageInfo *old_package_info,
-                             share::schema::ObPackageInfo &new_package_info,
-                             common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                             share::schema::ObErrorInfo &error_info,
-                             common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                             const common::ObString *ddl_stmt_str);
-  virtual int alter_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                            ObPackageInfo &package_info,
-                            ObIArray<ObRoutineInfo> &public_routine_infos,
-                            share::schema::ObErrorInfo &error_info,
-                            const common::ObString *ddl_stmt_str);
-  virtual int drop_package(const share::schema::ObPackageInfo &package_info,
-                           share::schema::ObErrorInfo &error_info,
-                           const common::ObString *ddl_stmt_str);
-  //----End of functions for managing package----
-
-  //----Functions for managing trigger----
-  virtual int create_trigger(const obrpc::ObCreateTriggerArg &arg,
-                             ObSchemaGetterGuard &schema_guard,
-                             obrpc::ObCreateTriggerRes *res);
-  virtual int drop_trigger(const obrpc::ObDropTriggerArg &arg);
-  virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg,
-                            obrpc::ObRoutineDDLRes *res = nullptr);
-  //----End of functions for managing trigger----
-
   //----Functions for managing sequence----
   int do_sequence_ddl(const obrpc::ObSequenceDDLArg &arg);
   //----End of functions for managing sequence----
@@ -1088,54 +1022,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
     share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
   int drop_index_to_recyclebin(const share::schema::ObTableSchema &table_schema);
   int check_tenant_in_alter_locality(const uint64_t tenant_id, bool &in_alter_locality);
-  // trigger
-  int create_trigger_in_trans(share::schema::ObTriggerInfo &new_trigger_info,
-                              share::schema::ObErrorInfo &error_info,
-                              ObIArray<ObDependencyInfo> &dep_infos,
-                              const common::ObString *ddl_stmt_str,
-                              bool for_insert_errors,
-                              share::schema::ObSchemaGetterGuard &schema_guard,
-                              int64_t &table_schema_version);
-  int drop_trigger_in_trans(const share::schema::ObTriggerInfo &trigger_info,
-                            const common::ObString *ddl_stmt_str,
-                            share::schema::ObSchemaGetterGuard &schema_guard);
-  int try_get_exist_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
-                            const share::schema::ObTriggerInfo &new_trigger_info,
-                            const share::schema::ObTriggerInfo *&old_trigger_info,
-                            bool with_replace);
-  int rebuild_trigger_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                              const share::schema::ObTableSchema &table_schema,
-                              ObDDLOperator &ddl_operator,
-                              ObMySQLTransaction &trans);
-  int rebuild_trigger_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                              const uint64_t tenant_id,
-                              const common::ObIArray<uint64_t> &trigger_list,
-                              const common::ObString &database_name,
-                              const common::ObString &table_name,
-                              ObDDLOperator &ddl_operator,
-                              ObMySQLTransaction &trans);
-  int create_trigger_for_truncate_table(share::schema::ObSchemaGetterGuard &schema_guard,
-                                        const common::ObIArray<uint64_t> &origin_trigger_list,
-                                        share::schema::ObTableSchema &new_table_schema,
-                                        ObDDLOperator &ddl_operator,
-                                        ObMySQLTransaction &trans);
-  int adjust_trigger_action_order(share::schema::ObSchemaGetterGuard &schema_guard,
-                                  ObDDLSQLTransaction &trans,
-                                  ObDDLOperator &ddl_operator,
-                                  ObTriggerInfo &trigger_info,
-                                  bool is_create_trigger);
-  int recursive_alter_ref_trigger(share::schema::ObSchemaGetterGuard &schema_guard,
-                                  ObDDLSQLTransaction &trans,
-                                  ObDDLOperator &ddl_operator,
-                                  const ObTriggerInfo &ref_trigger_info,
-                                  const common::ObIArray<uint64_t> &trigger_list,
-                                  const ObString &trigger_name,
-                                  int64_t action_order);
-  int recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGetterGuard &schema_guard,
-                                         const ObTriggerInfo &ref_trigger_info,
-                                         const common::ObIArray<uint64_t> &trigger_list,
-                                         const ObString &create_trigger_name,
-                                         const ObString &generate_cyclic_name);
 
   // only push schema version, and publish schema
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
@@ -1493,13 +1379,6 @@ int check_will_be_having_domain_index_operation(
       const uint64_t tenant_data_version,
       const ObString &index_name = ObString(""),
       const bool ignore_cs_replica = false);
-  int rebuild_triggers_on_hidden_table(
-      const share::schema::ObTableSchema &orig_table_schema,
-      const share::schema::ObTableSchema &hidden_table_schema,
-      ObSchemaGetterGuard &src_tenant_schema_guard,
-      ObSchemaGetterGuard &dst_tenant_schema_guard,
-      ObDDLOperator &ddl_operator,
-      common::ObMySQLTransaction &trans);
   int drop_child_table_fk(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
@@ -2365,12 +2244,6 @@ private:
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObTableType table_type,
       const bool to_recyclebin);
-  int drop_trigger_in_drop_table(
-      ObMySQLTransaction &trans,
-      ObDDLOperator &ddl_operator,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &table_schema,
-      const bool to_recyclebin);
   int rebuild_table_schema_with_new_id(const share::schema::ObTableSchema &orig_table_schema,
                                        const share::schema::ObDatabaseSchema &new_database_schema,
                                        const common::ObString &new_table_name,
@@ -2708,11 +2581,6 @@ private:
   int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                ObTableSchema &new_table_schema);
 
-  int drop_trigger_in_drop_user(ObMySQLTransaction &trans,
-                                ObDDLOperator &ddl_operator,
-                                ObSchemaGetterGuard &schema_guard,
-                                const uint64_t tenant_id,
-                                const uint64_t user_id);
 
 private:
   bool inited_;

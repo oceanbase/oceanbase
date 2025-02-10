@@ -45,6 +45,9 @@
 #define INVALID_COLLATION 0
 #define INVALID_INDEX -1
 
+#define PACKAGE_KEY_PREFIX_V1  "pkg."
+#define PACKAGE_KEY_PREFIX_V2  "pkg.v2."
+
 #define YYLEX_PARAM result->yyscan_info_
 
 #define JOIN_MERGE_NODES(node1, node2)                                                  \
@@ -1049,22 +1052,23 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
 
 #define CHECK_VALID_PACKAGE_VARIABLE_NAME(node)                             \
   do {                                                                      \
+    int64_t len = strlen(PACKAGE_KEY_PREFIX_V1);                        \
     if (OB_UNLIKELY(NULL == node || NULL == node->str_value_)) {            \
       yyerror(NULL, result, "invalid arguments node: %p", node);            \
       YYABORT_UNEXPECTED;                                                   \
-    } else if ((49 + 4) != node->str_len_) {                                \
-      /* A valid package variable name like this: */                        \
-      /*   pkg.019280808000eb8780808020018480808000d84ea84f0107 */          \
-      yyerror(NULL, result, "invalid arguments node");                      \
-    } else if (strncmp(node->str_value_, "pkg.", 4) != 0) {                 \
+    } else if (strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V1, 4) != 0) { \
       yyerror(NULL, result, "invalid arguments node,not start with 'pkg.'");\
       YYABORT_UNEXPECTED;                                                   \
-    } else {                                                                \
-      for (int32_t i = 4; i < node->str_len_; ++i) {                        \
-        if (!(node->str_value_[i] >= 0                                      \
-              && node->str_value_[i] <= 9                                   \
-              && node->str_value_[i] >= 'a'                                 \
-              && node->str_value_[i] <= 'z')) {                             \
+    } else {                                     \
+      int64_t len2 = strlen(PACKAGE_KEY_PREFIX_V2);                        \
+      if (0 == strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V2, len2)) {   \
+        len = len2;                                  \
+      }        \
+      for (int32_t i = len; i < node->str_len_; ++i) {                        \
+        if (!((node->str_value_[i] >= '0'                                   \
+               && node->str_value_[i] <= '9')                                  \
+            || (node->str_value_[i] >= 'a'                                 \
+               && node->str_value_[i] <= 'z'))) {                             \
           yyerror(NULL, result, "invalid arguments node, include invalid char"); \
           YYABORT_UNEXPECTED;                                               \
         }                                                                   \

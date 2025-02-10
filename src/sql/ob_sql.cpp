@@ -157,11 +157,12 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   FLTSpanGuard(sql_compile);
   ObTruncatedString trunc_stmt(stmt);
 #ifndef NDEBUG
-  LOG_INFO("Begin to handle text statement", K(trunc_stmt),
+  LOG_INFO("Begin to handle text statement",
            "sess_id", result.get_session().get_sessid(),
            "proxy_sess_id", result.get_session().get_proxy_sessid(),
            "tenant_id", result.get_session().get_effective_tenant_id(),
-           "execution_id", result.get_session().get_current_execution_id());
+           "execution_id", result.get_session().get_current_execution_id(),
+           K(trunc_stmt));
 #endif
   NG_TRACE(parse_begin);
   //1 check inited

@@ -38,6 +38,7 @@
 #include "pl/sys_package/ob_dbms_scheduler.h"
 #include "pl/sys_package/ob_dbms_scheduler_mysql.h"
 #include "pl/sys_package/ob_dbms_crypto.h"
+#include "pl/sys_package/ob_dbms_ddl.h"
 #include "pl/sys_package/ob_dbms_job.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
 #include "pl/sys_package/ob_dbms_plan_cache.h"
@@ -848,6 +849,17 @@
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))
   //end of dbms_external_table
+
+  // start of dbms_ddl
+#ifdef OB_BUILD_ORACLE_PL
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP, "DBMS_DDL_WRAP", (ObDbmsDDL::wrap))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP_VS, "DBMS_DDL_WRAP_VS", (ObDbmsDDL::wrap_clob))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_WRAP_VA, "DBMS_DDL_WRAP_VA", (ObDbmsDDL::wrap_clob))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED, "DBMS_DDL_CREATE_WRAPPED", (ObDbmsDDL::create_wrapped))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VS, "DBMS_DDL_CREATE_WRAPPED_VS", (ObDbmsDDL::create_wrapped))
+  INTERFACE_DEF(INTERFACE_DBMS_DDL_CREATE_WRAPPED_VA, "DBMS_DDL_CREATE_WRAPPED_VA", (ObDbmsDDL::create_wrapped))
+#endif
+  // end of dbms_ddl
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

@@ -412,8 +412,7 @@ public:
   static
   int build_record_type_by_view_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* view_schema,
-                                ObRecordType *&record_type,
-                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
+                                ObRecordType *&record_type);
   static
   int build_record_type_by_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                                 common::ObIAllocator &allocator,
@@ -430,8 +429,7 @@ public:
   static
   int build_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* table_schema,
-                                ObRecordType *&record_type, bool with_rowid = false,
-                                ObIArray<ObSchemaObjVersion> *dependency_objects = NULL);
+                                ObRecordType *&record_type, bool with_rowid = false);
   static
   int build_dblink_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                          const ObTableSchema* table_schema,

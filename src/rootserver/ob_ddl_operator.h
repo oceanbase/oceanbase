@@ -70,10 +70,7 @@ class ObColumnSchemaV2;
 class AlterColumnSchema;
 struct ObSchemaOperation;
 class ObSchemaService;
-class ObRoutineInfo;
-class ObUDTTypeInfo;
 class ObTriggerInfo;
-class ObErrorInfo;
 class ObConstraint;
 class ObUDF;
 class ObDependencyInfo;
@@ -751,52 +748,6 @@ public:
 
   // --------------end  keystore ---------------//
 
-  //----Functions for managing routine----
-  int create_routine(share::schema::ObRoutineInfo &routine_info,
-                       common::ObMySQLTransaction &trans,
-                       share::schema::ObErrorInfo &error_info,
-                       common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                       const common::ObString *ddl_stmt_str/*=NULL*/);
-  int replace_routine(share::schema::ObRoutineInfo &routine_info,
-                      const share::schema::ObRoutineInfo *old_routine_info,
-                      common::ObMySQLTransaction &trans,
-                      share::schema::ObErrorInfo &error_info,
-                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                      const common::ObString *ddl_stmt_str/*=NULL*/);
-  int alter_routine(const share::schema::ObRoutineInfo &routine_info,
-                    common::ObMySQLTransaction &trans,
-                    share::schema::ObErrorInfo &error_info,
-                    const common::ObString *ddl_stmt_str/*=NULL*/);
-  int drop_routine(const share::schema::ObRoutineInfo &routine_info,
-                     common::ObMySQLTransaction &trans,
-                     share::schema::ObErrorInfo &error_info,
-                     const common::ObString *ddl_stmt_str/*=NULL*/);
-  //----End of functions for managing routine----
-
-  //----Functions for managing udt----
-  int create_udt(share::schema::ObUDTTypeInfo &udt_info,
-                 common::ObMySQLTransaction &trans,
-                 share::schema::ObErrorInfo &error_info,
-                 common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                 share::schema::ObSchemaGetterGuard &schema_guard,
-                 common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                 const common::ObString *ddl_stmt_str/*=NULL*/);
-  int replace_udt(share::schema::ObUDTTypeInfo &udt_info,
-                  const share::schema::ObUDTTypeInfo *old_udt_info,
-                  common::ObMySQLTransaction &trans,
-                  share::schema::ObErrorInfo &error_info,
-                  common::ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
-                  share::schema::ObSchemaGetterGuard &schema_guard,
-                  common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                  const common::ObString *ddl_stmt_str/*=NULL*/);
-  int drop_udt(const share::schema::ObUDTTypeInfo &udt_info,
-               common::ObMySQLTransaction &trans,
-               share::schema::ObSchemaGetterGuard &schema_guard,
-               const common::ObString *ddl_stmt_str/*=NULL*/);
-  int del_routines_in_udt(const share::schema::ObUDTTypeInfo &udt_info,
-                              common::ObMySQLTransaction &trans,
-                              share::schema::ObSchemaGetterGuard &schema_guard);
-  //----End of functions for managing udt----
   int handle_audit_metainfo(const share::schema::ObSAuditSchema &audit_schema,
                             const share::schema::ObSAuditModifyType modify_type,
                             const bool need_update,
@@ -838,11 +789,6 @@ public:
                      bool is_update_table_schema_version = true,
                      bool is_for_truncate_table = false);
   // set ddl_stmt_str to NULL if the statement is not 'drop trigger xxx'.
-  int drop_trigger(const share::schema::ObTriggerInfo &trigger_info,
-                   common::ObMySQLTransaction &trans,
-                   const common::ObString *ddl_stmt_str/*=NULL*/,
-                   bool is_update_table_schema_version = true,
-                   const bool in_offline_ddl_white_list = false);
   int drop_trigger_to_recyclebin(const share::schema::ObTriggerInfo &trigger_info,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  common::ObMySQLTransaction &trans);
@@ -1077,6 +1023,8 @@ public:
                         const ObIArray<uint64_t> &role_ids,
                         ObIArray<share::schema::ObUserInfo> &users_to_update,
                         ObMySQLTransaction &trans);
+  inline share::schema::ObMultiVersionSchemaService &get_multi_schema_service() { return schema_service_; }
+  inline common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }
 private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1126,8 +1074,6 @@ private:
 
   int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
 
-  int fill_trigger_id(share::schema::ObSchemaService &schema_service,
-                      share::schema::ObTriggerInfo &new_trigger_info);
   bool is_aux_object(const share::schema::ObDatabaseSchema &schema);
   bool is_aux_object(const share::schema::ObTableSchema &schema);
   bool is_aux_object(const share::schema::ObTriggerInfo &schema);
@@ -1141,27 +1087,12 @@ private:
                                      share::schema::ObSchemaGetterGuard &schema_guard);
   int update_table_version_of_db(const share::schema::ObDatabaseSchema &database_schema,
                                  common::ObMySQLTransaction &trans);
-  int drop_trigger_cascade(const share::schema::ObTableSchema &table_schema,
-                           common::ObMySQLTransaction &trans);
-  template <typename SchemaType>
-  int build_flashback_object_name(
-      const SchemaType &object_schema,
-      const char *data_table_prifix,
-      const char *object_type_prefix,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObIAllocator &allocator,
-      common::ObString &object_name);
+
   int get_user_id_for_inner_ur(
       share::schema::ObUserInfo &user,
       bool &is_inner_ur,
       uint64_t &new_user_id);
 
-  int update_routine_info(share::schema::ObRoutineInfo &routine_info,
-                           int64_t tenant_id,
-                           int64_t parent_id,
-                           int64_t owner_id,
-                           int64_t database_id,
-                           int64_t routine_id);
 
 private:
   int alter_table_rename_built_in_index_(
@@ -1274,6 +1205,7 @@ private:
   int init_tenant_spm_configure(uint64_t tenant_id, ObMySQLTransaction &trans);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
+protected:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   common::ObMySQLProxy &sql_proxy_;
 };

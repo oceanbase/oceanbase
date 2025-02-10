@@ -15,6 +15,11 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/parser/parse_malloc.h"
 
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/wrap/ob_pl_wrap_allocator.h"
+#include "pl/wrap/ob_pl_wrap_decoder.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -241,7 +246,10 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
   return ret;
 }
 
-int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree *&routine_stmt, bool is_for_trigger)
+int ObPLParser::parse_routine_body(const ObString &routine_body,
+                                   ObStmtNodeTree *&routine_stmt,
+                                   bool is_for_trigger,
+                                   bool need_unwrap)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
@@ -284,6 +292,21 @@ int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree 
 
     if (OB_FAIL(parse_stmt_block(parse_ctx, routine_stmt))) {
       LOG_WARN("failed to parse stmt block", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (is_wrapped_parse_tree(*routine_stmt)) {
+      if (lib::is_mysql_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mysql mode does not support wrapped procedure or function", K(ret));
+      } else if (need_unwrap) {
+        ObString plain_text;
+        ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        if (OB_FAIL(decode_cipher_text(arena_allocator, routine_stmt, plain_text))) {
+          LOG_WARN("failed to decode wrapped cipher text", K(ret));
+        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, false))) {
+          LOG_WARN("failed to parse unwrapped procedure or function", K(ret));
+        }
+      }
+#endif
     }
   }
   return ret;
@@ -294,7 +317,8 @@ int ObPLParser::parse_package(const ObString &package,
                               const ObDataTypeCastParams &dtc_params,
                               share::schema::ObSchemaGetterGuard *schema_guard,
                               bool is_for_trigger,
-                              const ObTriggerInfo *trg_info)
+                              const ObTriggerInfo *trg_info,
+                              bool need_unwrap)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
@@ -319,9 +343,28 @@ int ObPLParser::parse_package(const ObString &package,
 
   if (OB_FAIL(parse_stmt_block(parse_ctx, package_stmt))) {
     LOG_WARN("failed to parse stmt block", K(ret));
-  } else if (!is_for_trigger) {
-    // do nothing
-  } else if (OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (is_wrapped_parse_tree(*package_stmt)) {
+    if (lib::is_mysql_mode()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mysql mode does not support wrapped procedure or function", K(ret));
+    } else if (need_unwrap) {
+      ObString plain_text;
+      ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(decode_cipher_text(arena_allocator, package_stmt, plain_text))) {
+        LOG_WARN("failed to decode wrapped cipher text", K(ret));
+      } else if (OB_FAIL(parse_package(plain_text,
+                                       package_stmt,
+                                       dtc_params,
+                                       schema_guard,
+                                       is_for_trigger,
+                                       trg_info,
+                                       false))) {
+        LOG_WARN("failed to parse unwrapped type or package", K(ret));
+      }
+    }
+#endif
+  } else if (is_for_trigger && OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
     OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard));
   }
   return ret;
@@ -362,14 +405,13 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to parse the statement",
-               "orig_stmt_str", ObString(parse_ctx.orig_stmt_len_, parse_ctx.orig_stmt_str_),
-               "stmt_str", ObString(parse_ctx.stmt_len_, parse_ctx.stmt_str_),
                K_(parse_ctx.global_errmsg),
                K_(parse_ctx.global_errno),
                K_(parse_ctx.is_for_trigger),
                K_(parse_ctx.is_dynamic),
                K_(parse_ctx.is_for_preprocess),
-               K(ret));
+               "orig_stmt_str", ObString(parse_ctx.orig_stmt_len_, parse_ctx.orig_stmt_str_),
+               "stmt_str", ObString(parse_ctx.stmt_len_, parse_ctx.stmt_str_));
       if (OB_NOT_SUPPORTED == ret) {
         LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
       }
@@ -588,6 +630,66 @@ int ObPLParser::reconstruct_trigger_package(ObStmtNodeTree *&package_stmt,
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+bool ObPLParser::is_wrapped_parse_tree(const ParseNode &parse_tree)
+{
+  return T_STMT_LIST == parse_tree.type_
+         && 1 == parse_tree.num_child_
+         && OB_NOT_NULL(parse_tree.children_)
+         && OB_NOT_NULL(parse_tree.children_[0])
+         && (T_CREATE_WRAPPED_PACKAGE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_PACKAGE_BODY == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_FUNCTION == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_PROCEDURE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_TYPE == parse_tree.children_[0]->type_
+             || T_CREATE_WRAPPED_TYPE_BODY == parse_tree.children_[0]->type_);
+}
+
+int ObPLParser::check_wrapped_parse_tree_legal(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child num", K(ret), K(parse_tree.num_child_));
+  } else if (OB_ISNULL(parse_tree.children_)
+             || OB_ISNULL(parse_tree.children_[1])
+             || T_BASE64_CIPHER != parse_tree.children_[1]->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child node", K(ret));
+  }
+  return ret;
+}
+
+int ObPLParser::decode_cipher_text(ObIAllocator &allocator,
+                                   const ObStmtNodeTree *cipher_stmt,
+                                   ObString &plain_text)
+{
+  int ret = OB_SUCCESS;
+  char *out = nullptr;
+  int64_t out_size = 0;
+  ObStmtNodeTree *cipher_text_node = nullptr;
+  ObPLWAllocator wrap_allocator;
+  OZ (init_plw_allocator(&wrap_allocator, &allocator));
+  ObPLWDecoder wrap_decoder(wrap_allocator);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_wrapped_parse_tree_legal(*cipher_stmt->children_[0]))) {
+    LOG_WARN("illegal wrapped parse tree", K(ret));
+  } else if (FALSE_IT(cipher_text_node = cipher_stmt->children_[0]->children_[1])) {
+  } else if (OB_FAIL(wrap_decoder.decode(
+                 reinterpret_cast<const uint8_t *>(cipher_text_node->str_value_),
+                 cipher_text_node->str_len_,
+                 reinterpret_cast<uint8_t *&>(out),
+                 out_size))) {
+    LOG_WARN("failed to decode wrapped cipher text", K(ret));
+  }
+  CK (OB_NOT_NULL(out));
+  CK (OB_LIKELY(out_size > 0));
+  plain_text.assign(out, static_cast<int32_t>(out_size));
+  return ret;
+}
+#endif
 
 }  // namespace pl
 }  // namespace oceanbase

@@ -182,13 +182,19 @@ src/pl/parser/_gen_pl_parser.output
 src/pl/parser/_MD5
 src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
-src/share/inner_table/sys_package/system_package.cpp
+src/share/inner_table/sys_package/syspack_source.cpp
+src/share/inner_table/sys_package/*.plw
 
 ############# close_modules #############
 close_modules/oracle_pl/pl/parser/*.output
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
 close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_scanner.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_scanner.c
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.h
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.c
+close_modules/oracle_pl/pl/wrap/pl_wrap_parser.output
 
 ############# tools #############
 tools/ObRestore/mvn_repository

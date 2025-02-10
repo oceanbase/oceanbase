@@ -28,6 +28,7 @@
 #include "sql/engine/expr/ob_expr_unistr.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/engine/expr/ob_expr_cast.h"
+#include "pl/ob_pl_dependency_util.h"
 
 namespace oceanbase
 {
@@ -337,62 +338,6 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
     }
   }
 
-  return ret;
-}
-
-int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
-                                                   const ObSQLSessionInfo *session_info,
-                                                   const ObSynonymChecker &synonym_checker,
-                                                   DependenyTableStore &dep_table)
-{
-  int ret = OB_SUCCESS;
-
-  CK (OB_NOT_NULL(schema_guard));
-  CK (OB_NOT_NULL(session_info));
-  for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-    int64_t schema_version = OB_INVALID_VERSION;
-    uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
-    if (OB_FAIL(schema_guard->get_schema_version(SYNONYM_SCHEMA,
-                                                  session_info->get_effective_tenant_id(),
-                                                  obj_id,
-                                                  schema_version))) {
-      LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
-                                            K(obj_id), K(ret));
-    } else {
-      if (OB_FAIL(dep_table.push_back(ObSchemaObjVersion(obj_id, schema_version, DEPENDENCY_SYNONYM)))) {
-        LOG_WARN("add dependency object failed", K(obj_id), K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetterGuard *schema_guard,
-                                                   const ObSQLSessionInfo *session_info,
-                                                   const ObSynonymChecker &synonym_checker,
-                                                   const pl::ObPLDependencyTable &dep_table)
-{
-  int ret = OB_SUCCESS;
-
-  CK (OB_NOT_NULL(schema_guard));
-  CK (OB_NOT_NULL(session_info));
-  for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
-    int64_t schema_version = OB_INVALID_VERSION;
-    uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
-    if (OB_FAIL(schema_guard->get_schema_version(SYNONYM_SCHEMA,
-                                                  session_info->get_effective_tenant_id(),
-                                                  obj_id,
-                                                  schema_version))) {
-      LOG_WARN("get schema version failed", K(session_info->get_effective_tenant_id()),
-                                            K(obj_id), K(ret));
-    } else {
-      ObSchemaObjVersion ver(obj_id, schema_version, DEPENDENCY_SYNONYM);
-      if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(dep_table, ver))) {
-        LOG_WARN("add dependency object failed", K(obj_id), K(ret));
-      }
-    }
-  }
   return ret;
 }
 
@@ -1813,62 +1758,6 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
-                                            ObIAllocator &allocator,
-                                            uint64_t tenant_id,
-                                            const ObString& current_database,
-                                            const ObString& procedure_name,
-                                            ObString &database_name,
-                                            ObString &package_name,
-                                            ObString &routine_name)
-{
-  int ret = OB_SUCCESS;
-  ParseResult parser_result;
-  ObString dblink_name;
-  ObStmtNodeTree *parser_tree = NULL;
-  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
-  if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
-    LOG_WARN("failed to get tenant mode", K(ret), K(tenant_id), K(compat_mode));
-  } else {
-    lib::CompatModeGuard g(compat_mode);
-    ObSqlString call_str;
-    ObParser call_parser(
-      allocator, ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(compat_mode)));
-    if (OB_FAIL(call_str.append_fmt("CALL %.*s();", procedure_name.length(), procedure_name.ptr()))) {
-      LOG_WARN("failed to append call string", K(ret), K(procedure_name));
-    } else if (OB_FAIL(call_parser.parse(call_str.string(), parser_result))) {
-      LOG_WARN("failed to resolve procedure name", K(ret), K(procedure_name), K(compat_mode));
-    } else if (FALSE_IT(parser_tree = parser_result.result_tree_)) {
-    } else if (OB_ISNULL(parser_tree)
-               || OB_UNLIKELY(T_STMT_LIST != parser_tree->type_)
-               || OB_UNLIKELY(parser_tree->num_child_ != 1)
-               || OB_ISNULL(parser_tree->children_)
-               || OB_ISNULL(parser_tree->children_[0])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the children of parse tree is invalid",
-               K(ret), K(parser_tree->type_), K(parser_tree->children_[0]));
-    } else if (OB_UNLIKELY(T_SP_CALL_STMT != parser_tree->children_[0]->type_)
-               || OB_UNLIKELY(parser_tree->children_[0]->num_child_ < 1)
-               || OB_ISNULL(parser_tree->children_[0]->children_[0])
-               || OB_UNLIKELY(T_SP_ACCESS_NAME != parser_tree->children_[0]->children_[0]->type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the children of parse tree is invalid",
-               K(ret), K(parser_tree->children_[0]->type_),
-               K(parser_tree->children_[0]->num_child_),
-               K(parser_tree->children_[0]->children_[0]),
-               K(parser_tree->children_[0]->children_[0]->type_));
-    } else if (OB_FAIL(resolve_sp_access_name(schema_checker,
-                                              tenant_id,
-                                              current_database,
-                                              *(parser_tree->children_[0]->children_[0]),
-                                              database_name, package_name, routine_name, dblink_name))) {
-      LOG_WARN("failed to resolve_sp_access_name",
-               K(ret), K(procedure_name), K(tenant_id), K(current_database));
-    }
-  }
-  return ret;
-}
-
 int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_checker,
                                                         ObSynonymChecker &synonym_checker,
                                                         uint64_t tenant_id,
@@ -1923,7 +1812,8 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                                             ObString &db_name,
                                             ObString &package_name,
                                             ObString &routine_name,
-                                            ObString &dblink_name)
+                                            ObString &dblink_name,
+                                            ObIArray<ObSchemaObjVersion> *deps)
 {
   int ret = OB_SUCCESS;
 
@@ -1981,7 +1871,10 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                 package_or_db_name, object_db_id, object_name, exist));
               if (OB_FAIL(ret)) {
               } else if (exist) {
-                if (object_db_id != database_id) {
+                if (OB_NOT_NULL(deps) &&
+                    OB_FAIL(ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker, *schema_checker.get_schema_guard(), deps))) {
+                  LOG_WARN("fail to collect synonym deps", K(ret));
+                } else if (object_db_id != database_id) {
                   const ObDatabaseSchema *database_schema = NULL;
                   if (OB_FAIL(schema_checker.get_database_schema(tenant_id, object_db_id, database_schema))) {
                     LOG_WARN("failed to get database schema",
@@ -2447,7 +2340,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       }
       break;
       case T_SP_CREATE_TYPE:
-      case T_SP_CREATE_TYPE_BODY: {
+      case T_SP_CREATE_TYPE_BODY:
+      case T_CREATE_WRAPPED_TYPE:
+      case T_CREATE_WRAPPED_TYPE_BODY: {
         type = stmt::T_CREATE_TYPE;
       }
       break;
@@ -2457,7 +2352,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       break;
       // stored procedure
       case T_SP_CREATE:
-      case T_SF_CREATE: {
+      case T_SF_CREATE:
+      case T_CREATE_WRAPPED_PROCEDURE:
+      case T_CREATE_WRAPPED_FUNCTION: {
         type = stmt::T_CREATE_ROUTINE;
       }
       break;
@@ -2472,11 +2369,13 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       }
       break;
       // package
-      case T_PACKAGE_CREATE: {
+      case T_PACKAGE_CREATE:
+      case T_CREATE_WRAPPED_PACKAGE: {
         type = stmt::T_CREATE_PACKAGE;
       }
       break;
-      case T_PACKAGE_CREATE_BODY: {
+      case T_PACKAGE_CREATE_BODY:
+      case T_CREATE_WRAPPED_PACKAGE_BODY: {
         type = stmt::T_CREATE_PACKAGE_BODY;
       }
       break;
@@ -8174,8 +8073,7 @@ int ObResolverUtils::resolve_opt_one_phase(const ParseNode *node, int64_t & flag
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       ObQueryCtx &ctx,
-                                       ObIArray<ObSchemaObjVersion> &return_value_version)
+                                       ObQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -8234,25 +8132,6 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
     }
-    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
-      ObArenaAllocator alloc;
-      ObPLDataType param_type;
-      ObRoutineParam *param = nullptr;
-      common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-      ObArray<ObSchemaObjVersion> version;
-      pl::ObPLEnumSetCtx enum_set_ctx(alloc);
-      CK (routine_info->get_routine_params().count() > 0);
-      OX (param = routine_info->get_routine_params().at(0));
-      CK (OB_NOT_NULL(sql_proxy));
-      OX (param_type.set_enum_set_ctx(&enum_set_ctx));
-      OZ (pl::ObPLDataType::transform_from_iparam(param,
-                                                  schema_guard,
-                                                  session_info,
-                                                  alloc,
-                                                  *sql_proxy,
-                                                  param_type,
-                                                  &return_value_version));
-    }
   }
   return ret;
 }
@@ -8272,7 +8151,8 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              pl::ObPLPackageGuard *package_guard,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
-                                             bool is_sql_scope)
+                                             bool is_sql_scope,
+                                             ObIArray<ObSchemaObjVersion> *dep_tbl)
 {
   int ret = OB_SUCCESS;
   if (NULL == package_guard) {
@@ -8314,6 +8194,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
       } else { /*do nothing*/ }
 
       if (OB_SUCC(ret)) {
+        ObPLDependencyGuard switch_guard(&pl_resolver.get_external_ns(), pl_resolver.get_current_namespace().get_external_ns());
         if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {
           if (is_check_mode) {
             LOG_INFO("failed to resolve var", K(q_name), K(ret));
@@ -8330,10 +8211,10 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                     && T_FUN_PL_GET_CURSOR_ATTR != expr->get_expr_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr type is invalid", K(expr->get_expr_type()));
-        } else if (OB_NOT_NULL(ns) && OB_NOT_NULL(ns->get_external_ns()) && !is_check_mode) {
-          ObPLDependencyTable &src_dep_tbl = func_ast.get_dependency_table();
-          for (int64_t i = 0; OB_SUCC(ret) && i < src_dep_tbl.count(); ++i) {
-            OZ (ns->get_external_ns()->add_dependency_object(src_dep_tbl.at(i)));
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(dep_tbl)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
+            OZ (dep_tbl->push_back(func_ast.get_dependency_table().at(i)));
           }
         }
       }

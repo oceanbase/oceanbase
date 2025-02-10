@@ -4529,7 +4529,7 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
     ObSessionValMap::VarNameValMap::const_iterator iter = user_var_val_map_.get_val_map().begin();
     for (; OB_SUCC(ret) && iter != user_var_val_map_.get_val_map().end(); ++iter) {
       const ObString name = iter->first;
-      if (name.prefix_match("pkg.")) {
+      if (name.prefix_match(pl::package_key_prefix_v1)) {
         if (OB_FAIL(user_var_names.push_back(name))) {
           LOG_WARN("failed push back package var name", K(name));
         }
@@ -4929,7 +4929,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       }
 
 #ifdef OB_BUILD_ORACLE_PL
-      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match("pkg."))) {
+      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
         if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
                       this, user_var_name, user_var_val))) {
           LOG_WARN("fail to notify package variable deserialize",

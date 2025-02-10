@@ -1632,6 +1632,40 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
   return ret;
 }
 
+int ObSQLSessionInfo::add_non_session_cursor(pl::ObPLCursorInfo *cursor)
+{
+  int ret = OB_SUCCESS;
+  OZ (init_cursor_cache());
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_non_session_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
+  if (OB_FAIL(pl_cursor_cache_.pl_non_session_cursor_map_.set_refactored((int64_t)cursor, cursor))) {
+    LOG_WARN("fail insert non session cursor to hash map", K(cursor), K(*cursor), K(ret));
+  } else if (lib::is_diagnose_info_enabled()) {
+    EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
+    EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::del_non_session_cursor(pl::ObPLCursorInfo *cursor)
+{
+  int ret = OB_SUCCESS;
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_non_session_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
+  if (OB_FAIL(pl_cursor_cache_.pl_non_session_cursor_map_.erase_refactored((int64_t)cursor))) {
+#ifdef DEBUG
+    LOG_ERROR("fail delete non session cursor from hash map", K(cursor), K(*cursor), K(ret));
+#else
+    LOG_WARN("fail delete non session cursor from hash map", K(cursor), K(*cursor), K(ret));
+#endif
+  //ingore ret
+  } else if (lib::is_diagnose_info_enabled()) {
+    EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
+  }
+}
+
 int ObSQLSessionInfo::print_all_cursor()
 {
   int ret = OB_SUCCESS;
@@ -1668,6 +1702,7 @@ int ObSQLSessionInfo::init_cursor_cache()
   if (!pl_cursor_cache_.is_inited()) {
     // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
     // so we need get_thread_data_lock there
+    DISABLE_SQL_MEMLEAK_GUARD; //avoid false error report from sql_memleak_check
     ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
                               get_effective_tenant_id(),
@@ -2402,12 +2437,7 @@ int ObSQLSessionInfo::add_changed_package_info(ObExecContext &exec_ctx)
       if (package_state->is_package_info_changed()) {
         ObSEArray<ObString, 4> key;
         ObSEArray<ObObj, 4> value;
-        bool is_valid = false;
-        if (OB_FAIL(package_state->check_package_state_valid(exec_ctx, is_valid))) {
-          LOG_WARN("check package state failed", K(ret), KPC(package_state));
-        } else if (!is_valid) {
-          LOG_INFO("package state is invalid, ignore this package.", KPC(package_state));
-        } else if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
+        if (OB_FAIL(package_state->convert_changed_info_to_string_kvs(pl_ctx, key, value))) {
           LOG_WARN("convert package state to string kv failed", K(ret));
         } else {
           ObSessionVariable sess_var;
@@ -2437,12 +2467,19 @@ int ObSQLSessionInfo::replace_user_variable(
 {
   int ret = OB_SUCCESS;
   bool is_package_variable = false;
-  if (name.prefix_match("pkg.") && name.length() >= 52) {
+  if (name.prefix_match(pl::package_key_prefix_v1) && name.length() >= 40) {
     is_package_variable = true;
-    for (int64_t i = 4; i < name.length(); ++i) {
+    int64_t start_pos = 0;
+    if (name.prefix_match(pl::package_key_prefix_v2)) {
+      start_pos = strlen(pl::package_key_prefix_v2);
+    } else {
+      start_pos = strlen(pl::package_key_prefix_v1);
+    }
+    for (int64_t i = start_pos; i < name.length(); ++i) {
       if (!((name[i] >= '0' && name[i] <= '9')
             || (name[i] >= 'a' && name[i] <= 'z'))) {
         is_package_variable = false;
+        LOG_INFO("===henry:not package var===", K(name));
       }
     }
   }
@@ -2492,7 +2529,7 @@ int ObSQLSessionInfo::set_package_variables(
        OB_SUCC(ret) && iter != new_map.end(); iter++) {
     const common::ObString &key = iter->first;
     const ObObj &value = iter->second.value_;
-    if (!key.prefix_match("pkg.")) {
+    if (!key.prefix_match(pl::package_key_prefix_v1)) {
       // do nothing ...
     } else if (OB_HASH_EXIST == sync_pkg_vars.exist_refactored(key)) {
       // do nothing ...
@@ -2517,34 +2554,83 @@ int ObSQLSessionInfo::set_package_variable(
   bool match = false;
   CK (OB_NOT_NULL(GCTX.schema_service_));
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
+  OZ (GCTX.schema_service_->get_tenant_schema_guard(get_effective_tenant_id(), schema_guard));
   if (OB_SUCC(ret)) {
-    ObPLResolveCtx resolve_ctx(
-      ctx.get_allocator(),
-      *this,
-      schema_guard,
-      package_guard,
-      *(ctx.get_sql_proxy()),
-      false, /*ps*/
-      false, /*check mode*/
-      false, /*sql scope*/
-      NULL, /*param_list*/
-      NULL, /*extern_param_info*/
-      TgTimingEvent::TG_TIMING_EVENT_INVALID,
-      true /*is_sync_pacakge_var*/);
+    ObPLResolveCtx resolve_ctx(ctx.get_allocator(),
+                                *this,
+                                schema_guard,
+                                package_guard,
+                                *(ctx.get_sql_proxy()),
+                                false, /*ps*/
+                                false, /*check mode*/
+                                false, /*sql scope*/
+                                NULL, /*param_list*/
+                                NULL, /*extern_param_info*/
+                                TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                true /*is_sync_pacakge_var*/);
     OZ (package_guard.init());
-    OZ (name.decode(allocator, key));
-    CK (name.valid());
-    OZ (GCTX.schema_service_->get_tenant_schema_guard(get_effective_tenant_id(), schema_guard));
-    OZ (pl_manager.check_version(resolve_ctx, name.package_id_, name.state_version_, match));
-    if (OB_SUCC(ret) && match) {
-      OZ (pl_manager.set_package_var_val(
-        resolve_ctx, ctx, name.package_id_, name.var_idx_, value, true, from_proxy));
-      LOG_DEBUG("set pacakge variable",
-                K(ret), K(key), K(name.package_id_),
-                K(name.state_version_.package_version_),
-                K(name.state_version_.package_body_version_));
-    } else {
-      LOG_INFO("set package variable failed", K(ret), K(match), K(name), K(value));
+    if (OB_SUCC(ret)) {
+      bool is_invalid = false;
+      LOG_INFO("===henry:sync package var===", K(key), K(value));
+      if (key.prefix_match(pl::package_key_prefix_v2)) {
+        bool is_oversize_value = false;
+        OZ (name.decode_key(allocator, key));
+        CK (name.valid(true));
+        if (OB_FAIL(ret)) {
+        } else if (value.is_null()) {
+          // expired data, do nothing
+        } else if (OB_FAIL(ObPLPackageState::is_oversize_value(value, is_oversize_value))) {
+          LOG_WARN("fail to check value oversize", K(ret));
+        } else if (is_oversize_value) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("package serialize value is oversize", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "package sync oversize value");
+        } else {
+          hash::ObHashMap<int64_t, ObPackageVarEncodeInfo> value_map;
+          ObPackageStateVersion state_version(OB_INVALID_VERSION, OB_INVALID_VERSION);
+          OZ (value_map.create(4, ObModIds::OB_PL_TEMP, ObModIds::OB_HASH_NODE, MTL_ID()));
+          OZ (ObPLPackageState::decode_pkg_var_value(value, state_version, value_map));
+          OZ (pl_manager.check_version(resolve_ctx, name.package_id_, state_version, false, match));
+          if (OB_FAIL(ret)) {
+          } else if (match) {
+            for (hash::ObHashMap<int64_t, ObPackageVarEncodeInfo>::iterator it = value_map.begin();
+                  OB_SUCC(ret) && it != value_map.end(); ++it) {
+              LOG_INFO("===henry:sync package var===", K(name.package_id_), K(it->second.var_idx_), K(from_proxy));
+              OZ (pl_manager.set_package_var_val(resolve_ctx,
+                                                  ctx,
+                                                  name.package_id_,
+                                                  it->second.var_idx_,
+                                                  it->second.encode_value_,
+                                                  true,
+                                                  from_proxy));
+            }
+          } else {
+            OZ (ObPLPackageState::disable_expired_user_variables(*this, key));
+          }
+          if (value_map.created()) {
+            int tmp_ret = value_map.destroy();
+            ret = OB_SUCCESS != ret ? ret : tmp_ret;
+          }
+        }
+      } else if (OB_FAIL(ObPLPackageState::is_invalid_value(value, is_invalid))) {
+        LOG_WARN("fail to check value validation", K(ret));
+      } else if (!is_invalid) {
+        OZ (name.decode(allocator, key));
+        CK (name.valid(false));
+        OZ (pl_manager.check_version(resolve_ctx, name.package_id_, name.state_version_, true, match));
+        if (OB_FAIL(ret)) {
+        } else if (match) {
+          OZ (pl_manager.set_package_var_val(
+            resolve_ctx, ctx, name.package_id_, name.var_idx_, value, true, from_proxy));
+          LOG_DEBUG("set pacakge variable",
+                    K(ret), K(key), K(name.package_id_),
+                    K(name.state_version_.package_version_),
+                    K(name.state_version_.package_body_version_));
+        } else {
+          OZ (ObPLPackageState::disable_expired_user_variables(*this, key));
+          LOG_INFO("set package variable failed", K(ret), K(match), K(name), K(value));
+        }
+      }
     }
   }
   return ret;

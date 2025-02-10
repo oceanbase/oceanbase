@@ -1054,7 +1054,8 @@ public:
   int get_schema_version(const ObSchemaType schema_type,
                          const uint64_t tenant_id,
                          const uint64_t schema_id,
-                         int64_t &schema_version);
+                         int64_t &schema_version,
+                         uint64_t *schema_belong_db_id = nullptr);
   int get_idx_schema_by_origin_idx_name(uint64_t tenant_id,
                                         uint64_t database_id,
                                         const common::ObString &index_name,

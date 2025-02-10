@@ -127,12 +127,12 @@ int ObTriggerSqlService::flashback_trigger(const ObTriggerInfo &trigger_info,
   return ret;
 }
 
-int ObTriggerSqlService::rebuild_trigger_package(const ObTriggerInfo &trigger_info,
-                                                 const ObString &base_object_database,
-                                                 const ObString &base_object_name,
-                                                 int64_t new_schema_version,
-                                                 ObISQLClient &sql_client,
-                                                 ObSchemaOperationType op_type)
+int ObTriggerSqlService::rebuild_trigger_on_rename(const ObTriggerInfo &trigger_info,
+                                                   const ObString &base_object_database,
+                                                   const ObString &base_object_name,
+                                                   int64_t new_schema_version,
+                                                   ObISQLClient &sql_client,
+                                                   ObSchemaOperationType op_type)
 {
   int ret = OB_SUCCESS;
   ObString spec_source;

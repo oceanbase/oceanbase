@@ -17,7 +17,7 @@
 #include "src/sql/resolver/dml/ob_dml_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
-
+#include "pl/ob_pl_dependency_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -436,12 +436,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         OX (call_proc_info->set_sys_schema_version(sys_schema_version));
         OZ (call_proc_info->init_dependency_table_store(1 + (synonym_checker.has_synonym() ? synonym_checker.get_synonym_ids().count() : 0)));
         OZ (call_proc_info->get_dependency_table().push_back(obj_version));
-        if (synonym_checker.has_synonym()) {
-          OZ (ObResolverUtils::add_dependency_synonym_object(schema_checker_->get_schema_mgr(),
-                                                              session_info_,
-                                                              synonym_checker,
-                                                              call_proc_info->get_dependency_table()));
-        }
+        OZ (pl::ObPLDependencyUtil::collect_synonym_deps(tenant_id, synonym_checker, *schema_checker_->get_schema_mgr(), &call_proc_info->get_dependency_table()));
       }
     }
     ObSEArray<ObRawExpr*, 16> params;

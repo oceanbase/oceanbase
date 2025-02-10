@@ -19,6 +19,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_package_type.h"
 #endif
+#include "pl/ob_pl_dependency_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -112,8 +113,6 @@ int ObPLCompiler::init_anonymous_ast(
           // schema type, add it to dependencies recursively
           if (OB_FAIL(func_ast.get_user_type_table().add_external_type(user_type))) {
             LOG_WARN("failed to add_external_type", K(ret), KPC(user_type));
-          } else if (OB_FAIL(SMART_CALL(func_ast.add_dependency_object(resolve_ctx, *user_type)))) {
-            LOG_WARN("failed to add_dependency_object", K(ret), KPC(user_type));
           }
         } else {
           // not schema type, try AST
@@ -242,6 +241,7 @@ int ObPLCompiler::compile(
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
 
     func_ast.set_db_name(session_info_.get_database_name());
+    func_ast.set_proc_type(STANDALONE_ANONYMOUS);
     OZ (init_anonymous_ast(func_ast,
                            allocator_,
                            session_info_,
@@ -474,12 +474,12 @@ int ObPLCompiler::compile(
                                   param->is_in_sp_param(),
                                   param->is_self_param()));
       }
-      OZ (func_ast.add_dependency_objects(deps));
+      OZ (ObPLDependencyUtil::add_dependency_objects(&func_ast.get_dependency_table(), deps));
     }
     ObSchemaObjVersion obj_version(routine.get_routine_id(),
                                    routine.get_schema_version(),
                                    routine.is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION);
-    OZ (func_ast.add_dependency_object(obj_version));
+    OZ (ObPLDependencyUtil::add_dependency_object_impl(func_ast.get_dependency_table(), obj_version));
   }
 
   int64_t init_end = ObTimeUtility::current_time();
@@ -795,7 +795,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
           obj_version.object_id_ = ref_trg_info->get_trigger_id();
           obj_version.object_type_ = DEPENDENCY_TRIGGER;
           obj_version.version_ = ref_trg_info->get_schema_version();
-          OZ (package_ast.add_dependency_object(obj_version));
+          OZ (ObPLDependencyUtil::add_dependency_object_impl(package_ast.get_dependency_table(), obj_version));
         }
       }
     }
@@ -1022,6 +1022,32 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
       }
     }
     ret = tmp_ret;
+  }
+
+  if (OB_SUCC(ret)) {
+    int64_t public_syn_cnt = 0;
+    int64_t tenant_id = session_info_.get_effective_tenant_id();
+    int64_t tenant_schema_version = OB_INVALID_VERSION;
+    int64_t sys_schema_version = OB_INVALID_VERSION;
+    OZ (schema_guard_.get_schema_version(tenant_id, tenant_schema_version));
+    OZ (schema_guard_.get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
+    OX (package.set_tenant_schema_version(tenant_schema_version));
+    OX (package.set_sys_schema_version(sys_schema_version));
+    for (int64_t i = 0; OB_SUCC(ret) && i < package.get_dependency_table().count(); ++i) {
+      uint64_t object_id = package.get_dependency_table().at(i).object_id_;
+      if (SYNONYM_SCHEMA == package.get_dependency_table().at(i).get_schema_type()) {
+        const ObSimpleSynonymSchema *synonym_info = nullptr;
+        if (OB_FAIL(schema_guard_.get_simple_synonym_info(tenant_id,
+                                                          object_id,
+                                                          synonym_info))) {
+          LOG_WARN("failed to get synonym_info", K(ret), K(object_id));
+        } else if (OB_NOT_NULL(synonym_info) &&
+                   OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
+          public_syn_cnt++;
+        }
+      }
+    }
+    OX (package.set_public_syn_count(public_syn_cnt));
   }
 
   int64_t compile_end = ObTimeUtility::current_time();

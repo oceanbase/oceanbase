@@ -231,4 +231,9 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_tenant_role_transition_service.cpp
 )
 
+ob_set_subtarget(ob_rootserver pl_ddl
+  pl_ddl/ob_pl_ddl_service.cpp
+  pl_ddl/ob_pl_ddl_operator.cpp
+)
+
 ob_server_add_target(ob_rootserver)

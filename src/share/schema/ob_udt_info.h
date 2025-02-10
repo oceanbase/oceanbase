@@ -487,6 +487,7 @@ public:
   }
 
   const ObUDTObjectType *get_object_info() const;
+  ObUDTObjectType *get_object_info();
 
   int copy_udt_info_in_require(const ObUDTTypeInfo &old_info);
   bool is_object_type_info_exist(const ObUDTObjectType &udt_object) const;

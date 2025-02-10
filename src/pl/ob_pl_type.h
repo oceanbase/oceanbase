@@ -576,17 +576,6 @@ public:
 
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
-  static int collect_synonym_deps(uint64_t tenant_id,
-                                  sql::ObSynonymChecker &synonym_checker,
-                                  share::schema::ObSchemaGetterGuard &schema_guard,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
-  static int get_synonym_object(uint64_t tenant_id,
-                                uint64_t &owner_id,
-                                ObString &object_name,
-                                bool &exist,
-                                sql::ObSQLSessionInfo &session_info,
-                                share::schema::ObSchemaGetterGuard &schema_guard,
-                                ObIArray<share::schema::ObSchemaObjVersion> *deps);
   static int get_udt_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
                                   const common::ObString &udt,
@@ -937,7 +926,8 @@ public:
     ref_count_(0),
     is_scrollable_(false),
     last_execute_time_(0),
-    last_stream_cursor_(false)
+    last_stream_cursor_(false),
+    sql_text_()
   {
     reset();
   }
@@ -956,7 +946,8 @@ public:
     snapshot_(),
     is_need_check_snapshot_(false),
     last_execute_time_(0),
-    last_stream_cursor_(false)
+    last_stream_cursor_(false),
+    sql_text_()
   {
     reset();
   }
@@ -1009,6 +1000,9 @@ public:
     is_need_check_snapshot_ = false;
     sql_trace_id_.reset();
     is_packed_ = false;
+    sql_text_.reset();
+    sql_id_[0] = '\0';
+    sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   }
 
   void reset()
@@ -1102,6 +1096,9 @@ public:
   int get_bulk_exception(int64_t index, bool need_code, int64_t &result) const;
   int64_t get_bulk_exception_count() const { return bulk_exceptions_.count(); }
   int64_t get_bulk_rowcount_count() const { return bulk_rowcount_.count(); }
+  ObString &get_sql_text() { return sql_text_; }
+  char* get_sql_id() { return sql_id_; }
+  ObString get_non_session_sql_text();
   inline void reset_bulk_rowcount()
   {
     if (bulk_rowcount_.count() != 0) {
@@ -1223,6 +1220,8 @@ protected:
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
   ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
   bool is_packed_;
+  ObString sql_text_;     //non seesion的非流式游标保存sql text
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
 };
 
 class ObPLGetCursorAttrInfo

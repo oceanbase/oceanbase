@@ -152,8 +152,22 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
           // do not report error
           // ignore ret
           SERVER_LOG(WARN, "get a NULL cursor when record for v$open_cursor.");
+        } else if (!cursor_info->isopen()) { //cursor does not open now, skip it
         } else {
-          OZ (fill_session_cursor_cell(*sess_info, cursor_info->get_id()));
+          OZ (fill_cursor_cell(*sess_info, cursor_info, true));
+        }
+      }
+
+      for (sql::ObSQLSessionInfo::CursorCache::CursorMap::iterator iter = sess_info->get_cursor_cache().pl_non_session_cursor_map_.begin();
+          OB_SUCC(ret) && iter != sess_info->get_cursor_cache().pl_non_session_cursor_map_.end(); ++iter) {
+        pl::ObPLCursorInfo* cursor_info = iter->second;
+        if (OB_ISNULL(cursor_info)) {
+          // do not report error
+          // ignore ret
+          SERVER_LOG(WARN, "get a NULL cursor when record for v$open_cursor.");
+        } else if (!cursor_info->isopen()) { //cursor does not open now, skip it
+        } else {
+          OZ (fill_cursor_cell(*sess_info, cursor_info, false));
         }
       }
     }
@@ -161,14 +175,65 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
   return OB_SUCCESS == ret;
 }
 
-int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSessionInfo &sess_info,
-                                                                    const int64_t cursor_id)
+int ObVirtualOpenCursorTable::FillScanner::get_session_cursor_sql_text(ObSQLSessionInfo &sess_info,
+                                                                       pl::ObPLCursorInfo* cursor,
+                                                                       ObString &sql_text)
+{
+  int ret = OB_SUCCESS;
+  int64_t cursor_id = cursor->get_id();
+  ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+  if (0 == (cursor_id & (1L << 31))) {
+    if (OB_ISNULL(sess_info.get_ps_cache())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN,"ps : ps cache is null.", K(ret), K(cursor_id));
+    } else if (OB_FAIL(sess_info.get_inner_ps_stmt_id(cursor_id, inner_stmt_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN,"ps : get inner stmt id fail.", K(ret), K(cursor_id));
+    } else {
+      ObPsStmtInfoGuard guard;
+      ObPsStmtInfo *ps_info = NULL;
+      if (OB_FAIL(sess_info.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))) {
+        SERVER_LOG(WARN,"get stmt info guard failed", K(ret), K(cursor_id), K(inner_stmt_id));
+      } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN,"get stmt info is null", K(ret));
+      } else {
+        ObString sql = ps_info->get_ps_sql();
+        if (OB_FAIL(ob_write_string(*allocator_, ObString(min(sql.length(), 60), sql.ptr()), sql_text))) {
+          SERVER_LOG(WARN, "failed to ob_write_string", K(ret), K(sql));
+        }
+      }
+    }
+  } else {
+    // refcursor can not get sql now
+    ObString sql = ObString("ref cursor");
+    if (OB_FAIL(ob_write_string(*allocator_, sql, sql_text))) {
+      SERVER_LOG(WARN, "failed to ob_write_string", K(ret), K(sql));
+    }
+  }
+  return ret;
+}
+
+int ObVirtualOpenCursorTable::FillScanner::get_non_session_cursor_sql_text(ObSQLSessionInfo &sess_info,
+                                                                           pl::ObPLCursorInfo* cursor,
+                                                                           ObString &sql_text)
+{
+  int ret = OB_SUCCESS;
+  ObString sql = cursor->get_non_session_sql_text();
+  if (OB_FAIL(ob_write_string(*allocator_, ObString(min(sql.length(), 60), sql.ptr()), sql_text))) {
+    SERVER_LOG(WARN, "failed to ob_write_string", K(ret), K(sql));
+  }
+  return ret;
+}
+
+int ObVirtualOpenCursorTable::FillScanner::fill_cursor_cell(ObSQLSessionInfo &sess_info,
+                                                            pl::ObPLCursorInfo* cursor,
+                                                            bool is_session_cursor)
 {
   int ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
   ObCharsetType default_charset = ObCharset::get_default_charset();
   ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
-  char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     const uint64_t col_id = output_column_ids_.at(i);
     switch (col_id) {
@@ -190,14 +255,16 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         ObString tmp_saddr;
         addr.append_fmt("%lx", reinterpret_cast<uint64_t>(&sess_info));
         OZ (ob_write_string(*allocator_, addr.string(), tmp_saddr));
-        // get last 8 char, for oracle compatiable
-        int64_t offset = tmp_saddr.length() > 8 ? tmp_saddr.length() - 8 : 0;
-        // if tmp_saddr.length() - offset > 8, offset is 0
-        // the length make sure (tmp_saddr.ptr() + offset) do not have out-of-bounds access
-        int64_t length = tmp_saddr.length() - offset > 8 ? 8 : tmp_saddr.length() - offset;
-        ObString saddr(length, tmp_saddr.ptr() + offset);
-        cur_row_->cells_[i].set_varchar(saddr);
-        cur_row_->cells_[i].set_collation_type(default_collation);
+        if (OB_SUCC(ret)) {
+          // get last 8 char, for oracle compatiable
+          int64_t offset = tmp_saddr.length() > 8 ? tmp_saddr.length() - 8 : 0;
+          // if tmp_saddr.length() - offset > 8, offset is 0
+          // the length make sure (tmp_saddr.ptr() + offset) do not have out-of-bounds access
+          int64_t length = tmp_saddr.length() - offset > 8 ? 8 : tmp_saddr.length() - offset;
+          ObString saddr(length, tmp_saddr.ptr() + offset);
+          cur_row_->cells_[i].set_varchar(saddr);
+          cur_row_->cells_[i].set_collation_type(default_collation);
+        }
         break;
       }
       case SID: {
@@ -220,47 +287,31 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         break;
       }
       case SQL_ID: {
-        if (obmysql::COM_QUERY == sess_info.get_mysql_cmd() ||
-            obmysql::COM_STMT_EXECUTE == sess_info.get_mysql_cmd() ||
-            obmysql::COM_STMT_PREPARE == sess_info.get_mysql_cmd() ||
-            obmysql::COM_STMT_PREXECUTE == sess_info.get_mysql_cmd()) {
-          sess_info.get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1);
+        ObString sql_id;
+        ObSPIResultSet *spi_result = NULL;
+        if (cursor->is_streaming()) {
+            spi_result = cursor->get_cursor_handler();
+          if (NULL == spi_result) {  // spi_result does not init
+            sql_id = ObString::make_empty_string();
+          } else {
+            OZ (ob_write_string(*allocator_, ObString(spi_result->get_sql_ctx().sql_id_), sql_id));
+          }
         } else {
-          sql_id[0] = '\0';
+          OZ (ob_write_string(*allocator_, ObString(cursor->get_sql_id()), sql_id));
         }
-        cur_row_->cells_[i].set_varchar(ObString::make_string(sql_id));
-        cur_row_->cells_[i].set_collation_type(default_collation);
+        OX (cur_row_->cells_[i].set_varchar(sql_id));
+        OX (cur_row_->cells_[i].set_collation_type(default_collation));
         break;
       }
       case SQL_TEXT: {
-        ObPsStmtId inner_stmt_id = OB_INVALID_ID;
-        if (0 == (cursor_id & (1L << 31))) {
-          if (OB_ISNULL(sess_info.get_ps_cache())) {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN,"ps : ps cache is null.", K(ret), K(cursor_id));
-          } else if (OB_FAIL(sess_info.get_inner_ps_stmt_id(cursor_id, inner_stmt_id))) {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN,"ps : get inner stmt id fail.", K(ret), K(cursor_id));
-          } else {
-            ObPsStmtInfoGuard guard;
-            ObPsStmtInfo *ps_info = NULL;
-            if (OB_FAIL(sess_info.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))) {
-              SERVER_LOG(WARN,"get stmt info guard failed", K(ret), K(cursor_id), K(inner_stmt_id));
-            } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
-              ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN,"get stmt info is null", K(ret));
-            } else {
-              ObString sql = ps_info->get_ps_sql();
-              int64_t len = 60 > sql.length() ? sql.length() : 60;
-              cur_row_->cells_[i].set_varchar(ObString(len, ps_info->get_ps_sql().ptr()));
-              cur_row_->cells_[i].set_collation_type(default_collation);
-            }
-          }
+        ObString sql_text;
+        if (is_session_cursor) {
+          OZ (get_session_cursor_sql_text(sess_info, cursor, sql_text));
         } else {
-          // refcursor can not get sql now
-          cur_row_->cells_[i].set_varchar("ref cursor");
-          cur_row_->cells_[i].set_collation_type(default_collation);
+          OZ (get_non_session_cursor_sql_text(sess_info, cursor, sql_text));
         }
+        OX (cur_row_->cells_[i].set_varchar(sql_text));
+        OX (cur_row_->cells_[i].set_collation_type(default_collation));
         break;
       }
       case LAST_SQL_ACTIVE_TIME: {
@@ -273,7 +324,13 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         break;
       }
       case CURSOR_TYPE: {
-        cur_row_->cells_[i].set_varchar("SESSION CURSOR CACHED");
+        if (is_session_cursor) {
+          cur_row_->cells_[i].set_varchar("SESSION CURSOR CACHED");
+        } else if (cursor->is_ref_by_refcursor()) {
+          cur_row_->cells_[i].set_varchar("OPEN");
+        } else {
+          cur_row_->cells_[i].set_varchar("OPEN-PL/SQL");
+        }
         cur_row_->cells_[i].set_collation_type(default_collation);
         break;
       }

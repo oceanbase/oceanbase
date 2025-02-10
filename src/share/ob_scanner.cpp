@@ -15,6 +15,7 @@
 #include "share/ob_scanner.h"
 
 #include "sql/session/ob_sql_session_info.h"
+#include "pl/ob_pl_package_state.h"
 
 namespace oceanbase
 {
@@ -284,7 +285,7 @@ int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo *p_session_info)
       }
       for (sql::ObSessionValMap::VarNameValMap::const_iterator iter = current_map.get_val_map().begin();
         OB_SUCC(ret) && iter != current_map.get_val_map().end(); ++iter) {
-        if (iter->first.prefix_match("pkg.") // For package variables, only changes will be synchronized
+        if (iter->first.prefix_match(pl::package_key_prefix_v1) // For package variables, only changes will be synchronized
             && !p_session_info->is_already_tracked(
                   iter->first, p_session_info->get_changed_user_var())) {
           // do nothing ...

@@ -1098,8 +1098,14 @@ int ObCreateRoutineResolver::resolve(const ParseNode &parse_tree,
 int ObCreateRoutineResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObCreateRoutineArg *crt_routine_arg = NULL;
-  OZ (create_routine_arg(crt_routine_arg));
+  obrpc::ObCreateRoutineArg *crt_routine_arg = nullptr;
+  if (OB_NOT_NULL(get_basic_stmt())) {
+    // basic stmt would be set externally in alter routine
+    OX (crt_routine_arg = &(static_cast<ObCreateRoutineStmt *>(get_basic_stmt())->get_routine_arg()));
+    LOG_DEBUG("get basic stmt from alter routine");
+  } else {
+    OZ (create_routine_arg(crt_routine_arg));
+  }
   if (OB_SUCC(ret) && OB_ISNULL(crt_routine_arg)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for create routine stmt failed", K(ret));

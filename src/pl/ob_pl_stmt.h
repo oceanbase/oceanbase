@@ -1179,12 +1179,7 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *&dep_table) const;
-  int add_dependency_obj(const ObSchemaType schema_type,
-                        const uint64_t schema_id,
-                        const ObDependencyTableType table_type,
-                        bool is_db_expilicit,
-                        const pl::ObPLDependencyTable *&dep_table) const;
+                      const pl::ObPLDependencyTable *dep_table) const;
   int resolve_external_symbol(const common::ObString &name, ExternalType &type, ObPLDataType &data_type,
                               uint64_t &parent_id, int64_t &var_idx) const;
   int resolve_external_type_by_name(const ObString &db_name,
@@ -1213,11 +1208,9 @@ public:
                                  int64_t &var_idx) const;
   inline const ObPLBlockNS *get_parent_ns() const { return parent_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
-  inline const ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
+  inline ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
 
-  inline ObPLDependencyTable *get_dependency_table() { return dependency_table_; }
   inline void set_dependency_table(ObPLDependencyTable *dependency_table) { dependency_table_ = dependency_table; }
-  int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version) const;
 
 private:
   const ObPLResolveCtx &resolve_ctx_;
@@ -1654,14 +1647,7 @@ public:
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
   inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
-  int add_dependency_objects(
-                  const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
-  int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
-  int add_dependency_object(ObPLResolveCtx &resolve_ctx, const ObPLDataType &type);
-  static int add_dependency_object_impl(const ObPLDependencyTable &dep_tbl,
-                                        const share::schema::ObSchemaObjVersion &obj_version);
-  static int add_dependency_object_impl(ObPLDependencyTable &dep_tbl,
-                             const share::schema::ObSchemaObjVersion &obj_version);
+
   inline bool get_can_cached() const { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
   int add_sql_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);

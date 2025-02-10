@@ -431,6 +431,11 @@ do{ \
   return res;
 }
 
+ObUDTObjectType *ObUDTTypeInfo::get_object_info()
+{
+  return const_cast<ObUDTObjectType *>(static_cast<const ObUDTTypeInfo &>(*this).get_object_info());
+}
+
 int ObUDTObjectType::to_package_info(ObPackageInfo &pkg_info) const
 {
   int ret = OB_SUCCESS;

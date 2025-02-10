@@ -457,10 +457,11 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
   }
   return ret;
 }
+template<typename DependencyTable>
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
-                                          const ObPLDependencyTable &dep_schema_objs,
-                                          int64_t merge_version,
-                                          bool &match)
+                                              const DependencyTable &dep_schema_objs,
+                                              int64_t merge_version,
+                                              bool &match)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -509,6 +510,16 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
 
   return ret;
 }
+
+template int ObRoutinePersistentInfo::check_dep_schema<ObPLDependencyTable>(ObSchemaGetterGuard &schema_guard,
+                                          const ObPLDependencyTable &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match);
+
+template int ObRoutinePersistentInfo::check_dep_schema<sql::DependenyTableStore>(ObSchemaGetterGuard &schema_guard,
+                                          const sql::DependenyTableStore &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match);
 
 int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                             schema::ObSchemaGetterGuard &schema_guard,
