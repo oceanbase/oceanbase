@@ -141,7 +141,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
-          } else if (int_value >= 1 && int_value < 65536) {
+          } else if (int_value >= 1 && int_value <= 65536) {
             param.nlist_ = int_value;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -151,7 +151,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
-          } else if (int_value >= 1 && int_value < UINT64_MAX) {
+          } else if (int_value >= 1 && int_value <= INT64_MAX) {
             param.sample_per_nlist_ = int_value;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -1071,7 +1071,7 @@ int ObVectorIndexUtil::check_index_param(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_search is");
           }
         } else if (last_variable == "NLIST") {
-          if (parser_value >= 1 && parser_value <= 65535 ) {
+          if (parser_value >= 1 && parser_value <= 65536 ) {
             nlist_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -1079,7 +1079,7 @@ int ObVectorIndexUtil::check_index_param(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index nlist is");
           }
         } else if (last_variable == "SAMPLE_PER_NLIST") {
-          if (parser_value >= 1 && parser_value <= UINT64_MAX ) {
+          if (parser_value >= 1 && parser_value <= INT64_MAX ) {
             sample_per_nlist_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;
