@@ -31,6 +31,8 @@
 
 #include "rootserver/ob_service_name_command.h"
 #include "rootserver/ob_tenant_event_def.h"
+#include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
+#include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/backup/ob_backup_param_operator.h" // ObBackupParamOperator
 #include "share/table/ob_redis_importer.h"
 
@@ -1406,9 +1408,23 @@ int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
   obrpc::ObCommonRpcProxy *common_rpc = NULL;
+  uint64_t sys_data_version = 0;
   if (OB_UNLIKELY(!stmt.get_rpc_arg().is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rpc args is invalid", KR(ret), K(stmt));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret));
+  } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
+    ObDRWorker dr_worker;
+    ObNotifyTenantThreadArg arg;
+    if (OB_FAIL(dr_worker.execute_manual_dr_task(stmt.get_rpc_arg()))) {
+      LOG_WARN("failed to execute manual drtask", KR(ret), K(stmt));
+    } else if (OB_FAIL(arg.init(gen_meta_tenant_id(stmt.get_rpc_arg().get_tenant_id()),
+                                obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE))) {
+      LOG_WARN("failed to init arg", KR(ret), K(stmt));
+    } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_service(arg))) {
+      LOG_WARN("fail to wake up", KR(ret), K(stmt), K(arg));
+    }
   } else if (OB_ISNULL(task_exec_ctx)) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", KR(ret));

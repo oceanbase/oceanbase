@@ -19,6 +19,7 @@
 #endif
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_recovery_reportor.h" //ObLSRecoveryReportor
+#include "rootserver/ob_disaster_recovery_task_utils.h"//DisasterRecoveryUtils
 #include "src/share/balance/ob_balance_task_helper_operator.h"//insert_new_ls
 #include "share/ls/ob_ls_life_manager.h"            //ObLSLifeManger
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
@@ -1323,6 +1324,10 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
       can_remove = true;
       if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
         LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
+      } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(gen_meta_tenant_id(tenant_id_)))) {
+        // dr service on leader of meta tenant 1 LS. it may not be local at the moment.
+        // to save resources, try to wake it up local, not guarante success.
+        LOG_WARN("fail to wake up", KR(ret));
       }
     } else if (ls_balance_task.get_task_op().is_transfer_end()) {
       if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(

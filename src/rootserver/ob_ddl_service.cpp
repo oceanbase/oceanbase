@@ -62,6 +62,7 @@
 #include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "rootserver/ob_split_partition_helper.h"
+#include "ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/mview/ob_mview_dependency_service.h"
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
 #include "storage/ddl/ob_ddl_alter_auto_part_attr.h"

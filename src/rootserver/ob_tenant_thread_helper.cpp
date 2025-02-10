@@ -184,18 +184,16 @@ int ObTenantThreadHelper::wait_tenant_data_version_ready_(
   return ret;
 }
 
-int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
-    const uint64_t tenant_id, const uint64_t &data_version)
+int ObTenantThreadHelper::wait_tenant_schema_ready_(
+    const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema ptr is null", KR(ret), KP(GCTX.schema_service_));
-  } else if (OB_FAIL(wait_tenant_data_version_ready_(tenant_id, data_version))) {
-    LOG_WARN("failed to wait tenant data version", KR(ret), K(tenant_id), K(data_version));
+  bool is_ready = false;
+  share::schema::ObTenantSchema tenant_schema;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
-    bool is_ready = false;
-    share::schema::ObTenantSchema tenant_schema;
     while (!is_ready && !has_set_stop()) {
       ret = OB_SUCCESS;
       if (OB_FAIL(get_tenant_schema(tenant_id, tenant_schema))) {
@@ -206,16 +204,29 @@ int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
       } else {
         is_ready = true;
       }
-
       if (!is_ready) {
-        idle(10 * 1000 *1000);
+        idle(10 * 1000 * 1000);
       }
     }
-
     if (has_set_stop()) {
       LOG_WARN("thread has been stopped", K(is_ready), K(tenant_id));
       ret = OB_IN_STOP_STATE;
     }
+  }
+  return ret;
+}
+
+int ObTenantThreadHelper::wait_tenant_schema_and_version_ready_(
+    const uint64_t tenant_id, const uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(wait_tenant_data_version_ready_(tenant_id, data_version))) {
+    LOG_WARN("failed to wait tenant data version", KR(ret), K(tenant_id), K(data_version));
+  } else if (OB_FAIL(wait_tenant_schema_ready_(tenant_id))) {
+    LOG_WARN("failed to wait tenant schema ready", KR(ret), K(tenant_id));
   }
   return ret;
 }

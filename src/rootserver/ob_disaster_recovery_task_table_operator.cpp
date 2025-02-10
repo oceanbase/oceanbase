@@ -11,6 +11,8 @@
  */
 #define USING_LOG_PREFIX RS
 #include "ob_disaster_recovery_task_table_operator.h"
+#include "ob_disaster_recovery_task_utils.h"                   // for DisasterRecoveryUtils
+#include "lib/container/ob_se_array.h"                         // for ObSEArray
 
 namespace oceanbase
 {
@@ -18,57 +20,57 @@ namespace rootserver
 {
 
 int ObLSReplicaTaskTableOperator::delete_task(
-    common::ObMySQLTransaction &trans,
-    const uint64_t tenant_id,
-    const share::ObLSID& ls_id,
-    const ObDRTaskType& task_type,
-    const share::ObTaskId& task_id,
-    int64_t &affected_rows)
+    common::ObISQLClient &sql_proxy,
+    const ObDRTask &task)
 {
   int ret = OB_SUCCESS;
-  affected_rows = 0;
   ObSqlString sql;
+  int64_t affected_rows = 0;
   char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-               || !ls_id.is_valid()
-               || ObDRTaskType::MAX_TYPE == task_type
-               || task_id.is_invalid())) {
+  const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
+  if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(task_type), K(task_id));
-  } else if (false == task_id.to_string(task_id_to_set, sizeof(task_id_to_set))) {
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (false == task.get_task_id().to_string(task_id_to_set, sizeof(task_id_to_set))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert task id to string failed", KR(ret), K(task_id));
+    LOG_WARN("convert task id to string failed", KR(ret), K(task));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND ls_id = %lu "
                           "AND task_type = '%s' AND task_id = '%s'",
                           share::OB_ALL_LS_REPLICA_TASK_TNAME,
-                          tenant_id,
-                          ls_id.id(),
-                          ob_disaster_recovery_task_type_strs(task_type),
+                          task.get_tenant_id(),
+                          task.get_ls_id().id(),
+                          ob_disaster_recovery_task_type_strs(task.get_disaster_recovery_task_type()),
                           task_id_to_set))) {
-    LOG_WARN("assign sql string failed", KR(ret), K(tenant_id),
-            K(ls_id), K(task_type), K(task_id_to_set));
-  } else if (OB_FAIL(trans.write(sql_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("assign sql string failed", KR(ret), K(task));
+  } else if (OB_FAIL(sql_proxy.write(sql_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(sql), K(sql_tenant_id));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_EAGAIN;
+    // may be delete row multiple times
+    LOG_WARN("delete task not single row", KR(ret), K(affected_rows), K(task));
   }
   return ret;
 }
 
 int ObLSReplicaTaskTableOperator::insert_task(
     common::ObISQLClient &sql_proxy,
-    const ObDRTask &task)
+    const ObDRTask &task,
+    const bool record_history)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml;
   ObSqlString sql;
   int64_t affected_rows = 0;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
+  const char *table_name = record_history
+                         ? share::OB_ALL_LS_REPLICA_TASK_HISTORY_TNAME
+                         : share::OB_ALL_LS_REPLICA_TASK_TNAME;
   if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
-  } else if (OB_FAIL(task.fill_dml_splicer(dml))) {
+  } else if (OB_FAIL(task.fill_dml_splicer(dml, record_history))) {
     LOG_WARN("fill dml splicer failed", KR(ret), K(task));
-  } else if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_LS_REPLICA_TASK_TNAME, sql))) {
+  } else if (OB_FAIL(dml.splice_insert_sql(table_name, sql))) {
     LOG_WARN("fail to splice insert update sql", KR(ret), K(task));
   } else if (OB_FAIL(sql_proxy.write(sql_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(task.get_tenant_id()), K(sql_tenant_id), K(sql));
@@ -79,185 +81,137 @@ int ObLSReplicaTaskTableOperator::insert_task(
   return ret;
 }
 
-int ObLSReplicaTaskTableOperator::finish_task(
-    common::ObMySQLTransaction& trans,
-    const ObDRTaskTableUpdateTask& task)
+#define BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(TASK_TYPE)                                                         \
+  SMART_VAR(TASK_TYPE, task) {                                                                                            \
+    void *raw_ptr = nullptr;                                                                                              \
+    ObDRTask *new_task = nullptr;                                                                                         \
+    if (OB_FAIL(task.build_task_from_sql_result(res))) {                                                                  \
+      LOG_WARN("fail to build task info from res", KR(ret));                                                              \
+    } else if (OB_ISNULL(raw_ptr = allocator.alloc(task.get_clone_size()))) {                                             \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                                                    \
+      LOG_WARN("fail to alloc task", KR(ret), "size", task.get_clone_size());                                             \
+    } else if (OB_FAIL(task.clone(raw_ptr, new_task))) {                                                                  \
+      LOG_WARN("fail to clone task", KR(ret), K(task));                                                                   \
+    } else if (OB_ISNULL(new_task)) {                                                                                     \
+      ret = OB_ERR_UNEXPECTED;                                                                                            \
+      LOG_WARN("new task ptr is null", KR(ret));                                                                          \
+    } else if (OB_FAIL(dr_tasks.push_back(new_task))) {                                                                   \
+      LOG_WARN("fail to load task into schedule list", KR(ret));                                                          \
+    }                                                                                                                     \
+  }                                                                                                                       \
+// if failed, no need free here
+
+int ObLSReplicaTaskTableOperator::read_task_from_result_(
+    common::ObArenaAllocator& allocator,
+    sqlclient::ObMySQLResult &res,
+    ObIArray<ObDRTask*> &dr_tasks)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
-  int64_t insert_rows = 0;
-  int64_t delete_rows = 0;
-  if (OB_UNLIKELY(!task.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(task));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(task.get_tenant_id()), tenant_data_version))) {
-    LOG_WARN("fail to get min data version", KR(ret), K(task));
-  } else if (is_manual_dr_task_data_version_match(tenant_data_version)) {
-    char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-    int64_t schedule_time = 0;
-    ObSqlString execute_result;
-    ObSqlString condition_sql;
-    ObSqlString sql;
-    uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
-    const char* table_column = "tenant_id, ls_id, task_type, task_id, priority, target_replica_svr_ip, target_replica_svr_port, target_paxos_replica_number,"
-      "target_replica_type, source_replica_svr_ip, source_replica_svr_port, source_paxos_replica_number, source_replica_type, task_exec_svr_ip, task_exec_svr_port,"
-      "generate_time, schedule_time, comment, data_source_svr_ip, data_source_svr_port, is_manual";
-    // no task_status
-    ObDRLSReplicaTaskStatus task_status(ObDRLSReplicaTaskStatus::COMPLETED);
-    if (OB_CANCELED == task.get_ret_code()) {
-      task_status = ObDRLSReplicaTaskStatus::CANCELED;
-    } else if (OB_SUCCESS != task.get_ret_code()) {
-      task_status = ObDRLSReplicaTaskStatus::FAILED;
-    }
-    if (false == task.get_task_id().to_string(task_id_to_set, sizeof(task_id_to_set))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("convert task id to string failed", KR(ret), K(task));
-    } else if (OB_FAIL(get_task_schedule_time_(trans, task, schedule_time))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(res.next())) {
+      if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("task count is 0", KR(ret), K(task));
       } else {
-        LOG_WARN("faild to get task schedule_time", KR(ret), K(task));
+        LOG_WARN("get next result failed", KR(ret));
       }
-    } else if (OB_FAIL(build_execute_result(task.get_ret_code(),
-                                            task.get_ret_comment(),
-                                            schedule_time,
-                                            execute_result))) {
-      LOG_WARN("build_execute_result failed", KR(ret), K(task), K(schedule_time));
-    } else if (OB_FAIL(condition_sql.assign_fmt("tenant_id = %lu AND ls_id = %lu AND task_type = '%s' AND task_id = '%s'",
-                        task.get_tenant_id(), task.get_ls_id().id(),
-                        ob_disaster_recovery_task_type_strs(task.get_task_type()), task_id_to_set))) {
-      LOG_WARN("failed to append sql", KR(ret), K(task), K(task_id_to_set));
-    } else if (OB_FAIL(sql.assign_fmt("insert into %s (%s, task_status, execute_result, finish_time) "
-                            " select %s, '%s', '%s', now() from %s where %s",
-                            share::OB_ALL_LS_REPLICA_TASK_HISTORY_TNAME, table_column, table_column,
-                            task_status.get_status_str(), execute_result.ptr(),
-                            share::OB_ALL_LS_REPLICA_TASK_TNAME, condition_sql.ptr()))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(task_status), K(execute_result), K(condition_sql));
-    } else if (OB_FAIL(trans.write(sql_tenant_id, sql.ptr(), insert_rows))) {
-      LOG_WARN("execute sql failed", KR(ret), K(sql_tenant_id), K(sql));
-    } else if (insert_rows != 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql insert error", KR(ret), K(insert_rows), K(task));
-    }
-  }
-  if (FAILEDx(delete_task(trans, task.get_tenant_id(), task.get_ls_id(), task.get_task_type(),
-                          task.get_task_id(), delete_rows))) {
-    LOG_WARN("delete_task failed", KR(ret), K(task));
-  } else if (!is_single_row(delete_rows)) {
-    // ignore affected row check for task not exist
-    LOG_INFO("expected deleted single row", K(delete_rows), K(task));
-  }// during the upgrade process, it is possible that insert_rows is 0 and delete_rows is 1.
-  return ret;
-}
-
-int ObLSReplicaTaskTableOperator::get_task_schedule_time_(
-    common::ObMySQLTransaction& trans,
-    const ObDRTaskTableUpdateTask &task,
-    int64_t &schedule_time)
-{
-  int ret = OB_SUCCESS;
-  schedule_time = 0;
-  uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
-  char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  if (OB_UNLIKELY(!task.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(task));
-  } else if (false == task.get_task_id().to_string(task_id_to_set, sizeof(task_id_to_set))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert task id to string failed", KR(ret), K(task));
-  } else {
-    ObSqlString sql;
-    SMART_VAR(ObISQLClient::ReadResult, res) {
-      sqlclient::ObMySQLResult* result = nullptr;
-      if (OB_FAIL(sql.assign_fmt("SELECT time_to_usec(schedule_time) AS schedule_time FROM %s WHERE "
-             "tenant_id = %lu AND ls_id = %lu AND task_type = '%s' AND task_id = '%s'",
-                        share::OB_ALL_LS_REPLICA_TASK_TNAME,
-                        task.get_tenant_id(),
-                        task.get_ls_id().id(),
-                        ob_disaster_recovery_task_type_strs(task.get_task_type()),
-                        task_id_to_set))) {
-        LOG_WARN("fail to assign sql", KR(ret), K(task_id_to_set), K(task));
-      } else if (OB_FAIL(trans.read(res, sql_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(sql_tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
-        }
-        LOG_WARN("fail to get next result", KR(ret), K(sql));
+      break;
+    } else {
+      common::ObString task_type;
+      (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_type", task_type);
+      if (common::ObString("MIGRATE REPLICA") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObMigrateLSReplicaTask)
+      } else if (common::ObString("ADD REPLICA") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObAddLSReplicaTask)
+      } else if (common::ObString("TYPE TRANSFORM") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObLSTypeTransformTask)
+      } else if (common::ObString("REMOVE PAXOS REPLICA") == task_type
+              || common::ObString("REMOVE NON PAXOS REPLICA") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObRemoveLSReplicaTask)
+      } else if (common::ObString("MODIFY PAXOS REPLICA NUMBER") == task_type) {
+        BUILD_TASK_FROM_SQL_RESULT_AND_PUSH_INTO_ARRAY(ObLSModifyPaxosReplicaNumberTask)
       } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "schedule_time", schedule_time, int64_t);
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCC(ret) && (OB_ITER_END != (tmp_ret = result->next()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get more row than one", KR(ret), KR(tmp_ret), K(sql));
-        }
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("unexpected task type", KR(ret), K(task_type));
       }
     }
   }
   return ret;
 }
 
-int ObLSReplicaTaskTableOperator::get_task_info_for_cancel(
+int ObLSReplicaTaskTableOperator::load_task_from_inner_table(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
-    const share::ObTaskId &task_id,
-    common::ObAddr &task_execute_server,
-    share::ObLSID &ls_id)
+    const ObSqlString &sql,
+    common::ObArenaAllocator& allocator,
+    ObIArray<ObDRTask*> &dr_tasks)
 {
   int ret = OB_SUCCESS;
-  task_execute_server.reset();
-  ls_id.reset();
-  int64_t ls_id_res = share::ObLSID::INVALID_LS_ID;
-  common::ObString server_ip;
-  int64_t server_port = OB_INVALID_INDEX;
-  char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !task_id.is_valid())) {
+  dr_tasks.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || sql.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id));
-  } else if (false == task_id.to_string(task_id_to_set, sizeof(task_id_to_set))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert task id to string failed", KR(ret), K(task_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(sql));
   } else {
-    uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
-    ObSqlString sql;
-    SMART_VAR(ObISQLClient::ReadResult, res) {
-      sqlclient::ObMySQLResult* result = nullptr;
-      if (OB_FAIL(sql.assign_fmt("SELECT ls_id, task_exec_svr_ip, task_exec_svr_port FROM %s WHERE "
-             "tenant_id = %lu AND task_id = '%s'", share::OB_ALL_LS_REPLICA_TASK_TNAME, tenant_id, task_id_to_set))) {
-        LOG_WARN("fail to assign sql", KR(ret), K(task_id_to_set), K(tenant_id));
-      } else if (OB_FAIL(sql_proxy.read(res, sql_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(sql_tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
+    const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (OB_FAIL(sql_proxy.read(result, sql_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql_tenant_id), "sql", sql.ptr());
+      } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
-        }
-        LOG_WARN("fail to get next result", KR(ret), K(sql));
+        LOG_WARN("get mysql result failed", KR(ret), "sql", sql.ptr());
+      } else if (OB_FAIL(read_task_from_result_(allocator, *result.get_result(), dr_tasks))) {
+        LOG_WARN("read task from result failed", KR(ret), K(tenant_id), K(sql_tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSReplicaTaskTableOperator::read_task_key_from_result_(
+    sqlclient::ObMySQLResult &res,
+    ObIArray<ObDRTaskKey> &dr_task_keys)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(res.next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
       } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id_res, int64_t);
-        (void)GET_COL_IGNORE_NULL(result->get_varchar, "task_exec_svr_ip", server_ip);
-        (void)GET_COL_IGNORE_NULL(result->get_int, "task_exec_svr_port", server_port);
-        if (OB_FAIL(ret)) {
-        } else if (false == task_execute_server.set_ip_addr(server_ip, static_cast<uint32_t>(server_port))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid server address", K(server_ip), K(server_port));
-        } else if (OB_UNLIKELY(!task_execute_server.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid task_execute_server", KR(ret), K(task_execute_server));
-        } else {
-          ls_id = ls_id_res;
-        }
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCC(ret) && (OB_ITER_END != (tmp_ret = result->next()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get more row than one", KR(ret), KR(tmp_ret), K(sql));
-        }
+        LOG_WARN("get next result failed", KR(ret));
+      }
+      break;
+    } else {
+      ObDRTaskKey task_key;
+      if (OB_FAIL(task_key.build_task_key_from_sql_result(res))) {
+        LOG_WARN("build task_key from sql result failed", KR(ret), K(task_key));
+      } else if (OB_FAIL(dr_task_keys.push_back(task_key))) {
+        LOG_WARN("push back task_key failed", KR(ret), K(task_key));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSReplicaTaskTableOperator::load_task_key_from_inner_table(
+    common::ObISQLClient &sql_proxy,
+    const ObSqlString &sql,
+    const uint64_t tenant_id,
+    ObIArray<ObDRTaskKey> &dr_task_keys)
+{
+  int ret = OB_SUCCESS;
+  dr_task_keys.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || sql.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(sql));
+  } else {
+    const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      if (OB_FAIL(sql_proxy.read(result, sql_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql_tenant_id), "sql", sql.ptr());
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), "sql", sql.ptr());
+      } else if (OB_FAIL(read_task_key_from_result_(*result.get_result(), dr_task_keys))) {
+        LOG_WARN("read task from result failed", KR(ret), K(tenant_id), K(sql_tenant_id));
       }
     }
   }

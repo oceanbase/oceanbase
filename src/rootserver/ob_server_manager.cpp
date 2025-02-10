@@ -1603,7 +1603,6 @@ int ObServerManager::get_persist_server_statuses(
 
 int ObServerManager::adjust_server_status(
     const common::ObAddr &server,
-    ObDRTaskMgr &disaster_recovery_task_mgr,
     const bool with_rootserver)
 {
   int ret = OB_SUCCESS;
@@ -1642,12 +1641,6 @@ int ObServerManager::adjust_server_status(
       }
     }
   }
-  //if (OB_SUCC(ret) && discard_rebalance_task_time > 0) {
-  //  if (OB_FAIL(disaster_recovery_task_mgr.discard_task(server, discard_rebalance_task_time))) {
-  //    LOG_WARN("discard rebalance task failed", K(ret), K(server),
-  //             K(discard_rebalance_task_time));
-  //  }
-  //}
   return ret;
 }
 

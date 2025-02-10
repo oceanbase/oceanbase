@@ -124,7 +124,7 @@ private:
       const ObLSMigrationTask &task);
   int report_result_();
   int report_meta_table_();
-  int report_to_rs_();
+  int report_to_disaster_recovery_();
   int check_can_skip_prepare_status_(bool &can_skip);
   int check_before_do_task_();
   int check_disk_space_(const ObMigrationOpArg &arg);

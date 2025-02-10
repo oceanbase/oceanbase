@@ -5264,6 +5264,7 @@ public:
            && OB_INVALID_ID != tenant_id_
            && ls_id_.is_valid();
   }
+  uint64_t get_tenant_id() const { return tenant_id_; }
 public:
   share::ObTaskId task_id_;
   uint64_t tenant_id_;

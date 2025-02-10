@@ -36,6 +36,7 @@
   RPC_S(PR5 notify_archive, OB_NOTIFY_ARCHIVE, (ObNotifyArchiveArg));
 
   // ls disaster recovery rpc
+  RPC_S(PR5 disaster_recovery_task_reply, OB_DISASTER_RECOVERY_TASK_REPLY, (ObDRTaskReplyResult));
   RPC_S(PR5 ls_cancel_replica_task, OB_LS_CANCEL_REPLICA_TASK, (ObLSCancelReplicaTaskArg));
   RPC_S(PR5 ls_migrate_replica, OB_LS_MIGRATE_REPLICA, (ObLSMigrateReplicaArg));
   RPC_S(PR5 ls_add_replica, OB_LS_ADD_REPLICA, (ObLSAddReplicaArg));

@@ -54,7 +54,6 @@
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
-#include "rootserver/ob_disaster_recovery_task_executor.h"
 #include "rootserver/ob_empty_server_checker.h"
 #include "rootserver/ob_lost_replica_checker.h"
 #include "rootserver/ob_server_zone_op_service.h"
@@ -880,7 +879,6 @@ public:
   int handle_validate_backupset(const obrpc::ObBackupManageArg &arg);
   int handle_cancel_validate(const obrpc::ObBackupManageArg &arg);
   int handle_recover_table(const obrpc::ObRecoverTableArg &arg);
-  int disaster_recovery_task_reply(const obrpc::ObDRTaskReplyResult &arg);
   int standby_upgrade_virtual_schema(const obrpc::ObDDLNopOpreatorArg &arg);
   int check_backup_scheduler_working(obrpc::Bool &is_working);
   int send_physical_restore_result(const obrpc::ObPhysicalRestoreResult &res);
@@ -1110,9 +1108,6 @@ private:
   // master key manager
   ObRsMasterKeyManager master_key_mgr_;
 #endif
-  // Disaster Recovery related
-  ObDRTaskExecutor disaster_recovery_task_executor_;
-  ObDRTaskMgr disaster_recovery_task_mgr_;
   // application context
   ObTenantGlobalContextCleanTimerTask global_ctx_task_;
   ObAlterLogExternalTableTask alter_log_external_table_task_; // repeat to succeed & no retry

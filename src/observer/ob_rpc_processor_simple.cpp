@@ -44,6 +44,8 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
+#include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
+#include "rootserver/ob_disaster_recovery_service.h" // for ObDRService
 #include "rootserver/ob_split_partition_helper.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
@@ -284,6 +286,23 @@ int ObRpcLSCheckDRTaskExistP::process()
     if (OB_SUCC(ret)) {
       result_ = is_exist;
     }
+  }
+  return ret;
+}
+
+int ObRpcDRTaskReplyToMetaP::process()
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[DRTASK_NOTICE] receive disaster recovery task reply to meta", K(arg_));
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg_));
+  } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::clean_task_while_task_finish(
+                                      arg_.task_id_,
+                                      arg_.tenant_id_,
+                                      arg_.ls_id_,
+                                      arg_.result_))) {
+    LOG_WARN("fail to clean task while task finish", KR(ret), K(arg_));
   }
   return ret;
 }
@@ -3269,6 +3288,33 @@ int ObRpcNotifyCloneSchedulerP::process()
   return ret;
 }
 
+#define CHECK_PALF_LS_LEADER                                                          \
+    if (OB_SUCC(ret)) {                                                               \
+      int64_t proposal_id = 0;                                                        \
+      common::ObRole role = FOLLOWER;                                                 \
+      logservice::ObLogService *log_service = nullptr;                                \
+      palf::PalfHandleGuard palf_handle_guard;                                        \
+      if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {                 \
+        ret = OB_ERR_UNEXPECTED;                                                      \
+        LOG_WARN("MTL ObLogService is null", KR(ret), K_(arg));                       \
+      } else if (OB_FAIL(log_service->open_palf(SYS_LS, palf_handle_guard))) {        \
+        LOG_WARN("open palf failed", KR(ret), K_(arg));                               \
+      } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {            \
+        LOG_WARN("get role failed", KR(ret), K_(arg));                                \
+      } else if (common::ObRole::LEADER != role) {                                    \
+        ret = OB_LS_NOT_LEADER;                                                       \
+        LOG_WARN("not leader", KR(ret), K_(arg), K(role));                            \
+      }                                                                               \
+    }                                                                                 \
+
+#define WAKE_UP_TENANT_SERVICE                                                        \
+        if (OB_ISNULL(service)) {                                                     \
+          ret = OB_ERR_UNEXPECTED;                                                    \
+          LOG_WARN("MTL service is null", KR(ret), K_(arg));                          \
+        } else {                                                                      \
+          service->wakeup();                                                          \
+        }                                                                             \
+
 int ObRpcNotifyTenantThreadP::process()
 {
   int ret = OB_SUCCESS;
@@ -3278,15 +3324,14 @@ int ObRpcNotifyTenantThreadP::process()
     LOG_WARN("invalid argument", KR(ret), K(arg_));
   } else {
     MTL_SWITCH(arg_.get_tenant_id()) {
-      if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
-        rootserver::ObRecoveryLSService *ls_service =
-          MTL(rootserver::ObRecoveryLSService *);
-        if (OB_ISNULL(ls_service)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ls service is null", KR(ret), K(arg_));
-        } else {
-          ls_service->wakeup();
-        }
+      CHECK_PALF_LS_LEADER
+      if (OB_FAIL(ret)) {
+      } else if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRecoveryLSService *service = MTL(rootserver::ObRecoveryLSService *);
+        WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObDRService *service = MTL(rootserver::ObDRService *);
+        WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));

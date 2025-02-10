@@ -19,6 +19,7 @@
 #include "share/transfer/ob_transfer_task_operator.h"//get_history_task
 #include "rootserver/ob_tenant_transfer_service.h"//transfer
 #include "rootserver/balance/ob_ls_all_part_builder.h"   // ObLSAllPartBuilder
+#include "rootserver/ob_disaster_recovery_task_utils.h"//DisasterRecoveryUtils
 
 #define ISTAT(fmt, args...) FLOG_INFO("[BALANCE_EXECUTE] " fmt, ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[BALANCE_EXECUTE] " fmt, ##args)
@@ -687,7 +688,11 @@ int ObBalanceTaskExecuteService::wait_alter_ls_(const share::ObBalanceTask &task
           task.get_src_ls_id(), status_info, *sql_proxy_))) {
       LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id_), K(task));
     } else if (status_info.ls_group_id_ == task.get_ls_group_id()) {
-      //nothing
+      // dr service on leader of meta tenant 1 LS. it may not be local at the moment.
+      // to save resources, try to wake it up local, not guarante success.
+      if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(gen_meta_tenant_id(tenant_id_)))) {
+        LOG_WARN("fail to wake up", KR(ret));
+      }
     } else {
       skip_next_status = true;
       if (OB_FAIL(task_comment_.assign_fmt("Wait for LS group id of LS %ld to change from %lu to %lu",

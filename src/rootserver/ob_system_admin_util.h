@@ -371,17 +371,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminMigrateUnit);
 };
 
-class ObAdminAlterLSReplica : public ObSystemAdminUtil
-{
-public:
-  explicit ObAdminAlterLSReplica(const ObSystemAdminCtx &ctx) : ObSystemAdminUtil(ctx) {}
-  virtual ~ObAdminAlterLSReplica() {}
-
-  int execute(const obrpc::ObAdminAlterLSReplicaArg &arg);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAdminAlterLSReplica);
-};
-
 class ObAdminUpgradeVirtualSchema : public ObSystemAdminUtil
 {
 public:

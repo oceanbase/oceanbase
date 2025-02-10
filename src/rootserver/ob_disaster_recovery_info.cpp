@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_disaster_recovery_info.h"
-#include "ob_unit_manager.h"
+#include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
 
 using namespace oceanbase::common;
@@ -275,9 +275,9 @@ int DRLSInfo::fill_servers()
   ObArray<ObServerInfoInTable> servers_info;
   if (OB_FAIL(SVR_TRACER.get_servers_info(zone, servers_info))) {
     LOG_WARN("fail to get all servers_info", KR(ret));
-  } else if (OB_ISNULL(zone_mgr_)) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("zone_mgr_ is null", KR(ret), KP(zone_mgr_));
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     server_stat_info_map_.reuse();
     FOREACH_X(s, servers_info, OB_SUCC(ret)) {
@@ -289,7 +289,7 @@ int DRLSInfo::fill_servers()
       } else {
         const ObAddr &server = s->get_server();
         const ObZone &zone = s->get_zone();
-        if (OB_FAIL(zone_mgr_->check_zone_active(zone, zone_active))) {
+        if (OB_FAIL(ObZoneTableOperation::check_zone_active(*GCTX.sql_proxy_, zone, zone_active))) {
           LOG_WARN("fail to check zone active", KR(ret), "zone", zone);
         } else if (OB_FAIL(server_stat_info_map_.locate(server, item))) {
           LOG_WARN("fail to locate server status", KR(ret), "server", server);

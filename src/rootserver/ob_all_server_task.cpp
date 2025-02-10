@@ -27,11 +27,9 @@ using namespace common;
 using namespace share;
 
 ObAllServerTask::ObAllServerTask(ObServerManager &server_manager,
-                                 ObDRTaskMgr &disaster_recovery_task_mgr,
                                  const ObAddr &server,
                                  bool with_rootserver)
   : server_manager_(server_manager),
-    disaster_recovery_task_mgr_(disaster_recovery_task_mgr),
     server_(server),
     with_rootserver_(with_rootserver)
 {
@@ -55,7 +53,7 @@ int ObAllServerTask::process()
       ret = OB_NOT_MASTER;
       LOG_WARN("not master", K(ret));
     } else if (OB_FAIL(server_manager_.adjust_server_status(
-            server_, disaster_recovery_task_mgr_, with_rootserver_))) {
+            server_, with_rootserver_))) {
       LOG_WARN("fail to adjust server status", K(ret), K(server_));
     }
     if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
@@ -81,8 +79,7 @@ ObAsyncTask *ObAllServerTask::deep_copy(char *buf, const int64_t buf_size) const
     LOG_WARN("buf is null or buf size not large enough", "buf", OB_P(buf), K(buf_size),
         "need size", sizeof(ObAllServerTask), K(ret));
   } else {
-    task = new(buf) ObAllServerTask(server_manager_,
-        disaster_recovery_task_mgr_, server_, with_rootserver_);
+    task = new(buf) ObAllServerTask(server_manager_, server_, with_rootserver_);
   }
   return task;
 }

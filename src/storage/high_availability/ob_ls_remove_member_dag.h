@@ -99,7 +99,7 @@ private:
   int transform_member_(ObLS *ls);
   int switch_learner_to_acceptor_(ObLS *ls);
 
-  int report_to_rs_();
+  int report_to_disaster_recovery_();
 private:
   bool is_inited_;
   ObLSRemoveMemberCtx *ctx_;

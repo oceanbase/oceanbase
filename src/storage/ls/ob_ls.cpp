@@ -33,6 +33,7 @@
 #include "rootserver/ob_common_ls_service.h"
 #include "rootserver/ob_create_standby_from_net_actor.h"
 #include "rootserver/ob_heartbeat_service.h"
+#include "rootserver/ob_disaster_recovery_service.h" // ObDRService
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_tenant_balance_service.h"
@@ -1036,6 +1037,7 @@ int ObLS::register_sys_service()
     REGISTER_TO_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, MTL(ObBackupCleanService *));
     REGISTER_TO_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, MTL(ObArchiveSchedulerService *));
     REGISTER_TO_LOGSERVICE(COMMON_LS_SERVICE_LOG_BASE_TYPE, MTL(ObCommonLSService *));
+    REGISTER_TO_LOGSERVICE(DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE, MTL(ObDRService *));
     REGISTER_TO_LOGSERVICE(RESTORE_SERVICE_LOG_BASE_TYPE, MTL(ObRestoreService *));
 #ifdef OB_BUILD_ARBITRATION
     REGISTER_TO_LOGSERVICE(ARBITRATION_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObArbitrationService *));
@@ -1177,6 +1179,8 @@ void ObLS::unregister_sys_service_()
     UNREGISTER_FROM_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, backup_archive_service);
     ObCommonLSService *ls_service = MTL(ObCommonLSService*);
     UNREGISTER_FROM_LOGSERVICE(COMMON_LS_SERVICE_LOG_BASE_TYPE, ls_service);
+    ObDRService *dr_svr = MTL(ObDRService*);
+    UNREGISTER_FROM_LOGSERVICE(DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE, dr_svr);
     ObRestoreService * restore_service = MTL(ObRestoreService*);
     UNREGISTER_FROM_LOGSERVICE(RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
 #ifdef OB_BUILD_ARBITRATION

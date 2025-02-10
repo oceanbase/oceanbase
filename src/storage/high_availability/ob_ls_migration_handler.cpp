@@ -16,6 +16,7 @@
 #include "ob_ls_prepare_migration.h"
 #include "ob_ls_complete_migration.h"
 #include "ob_storage_ha_service.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "ob_rebuild_service.h"
@@ -1106,10 +1107,8 @@ int ObLSMigrationHandler::inner_report_result_(
     if (OB_FAIL(report_to_rebuild_service_())) {
       LOG_WARN("failed to report to rebuild service", K(ret), K(task));
     }
-  } else {
-    if (OB_FAIL(report_to_rs_())) {
-      LOG_WARN("failed to report to rs", K(ret), KPC(ls_));
-    }
+  } else if (OB_FAIL(report_to_disaster_recovery_())) {
+    LOG_WARN("failed to report to disaster_recovery", KR(ret), K(task));
   }
   return ret;
 }
@@ -1135,53 +1134,31 @@ int ObLSMigrationHandler::report_to_rebuild_service_()
   return ret;
 }
 
-int ObLSMigrationHandler::report_to_rs_()
+int ObLSMigrationHandler::report_to_disaster_recovery_()
 {
   int ret = OB_SUCCESS;
   obrpc::ObDRTaskReplyResult res;
-  ObRsMgr *rs_mgr = GCTX.rs_mgr_;
-  int64_t retry_count = 0;
-  const int64_t MAX_RETRY_TIMES = 3;
-  ObAddr rs_addr;
-  const int64_t REPORT_RETRY_INTERVAL_MS = 100 * 1000; //100ms
   ObLSMigrationTask task;
-  const uint64_t tenant_id = MTL_ID();
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ls migration handler do not init", K(ret));
-  } else if (OB_ISNULL(rs_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rs mgr should not be NULL", K(ret), KP(rs_mgr));
+    LOG_WARN("ls migration handler do not init", KR(ret));
   } else if (OB_FAIL(get_ls_migration_task_(task))) {
-    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+    LOG_WARN("failed to get ls migration task", KR(ret));
   } else {
     res.task_id_ = task.task_id_;
-    res.tenant_id_ = tenant_id;
+    res.tenant_id_ = MTL_ID();
     res.ls_id_ = task.arg_.ls_id_;
+    uint64_t sys_data_version = 0;
     if (OB_FAIL(get_result_(res.result_))) {
-      LOG_WARN("failed to get ls migration result", K(ret), KPC(ls_), K(task));
-    } else {
-      while (retry_count++ < MAX_RETRY_TIMES) {
-        if (OB_FAIL(rs_mgr->get_master_root_server(rs_addr))) {
-          STORAGE_LOG(WARN, "get master root service failed", K(ret));
-        } else if (OB_FAIL(storage_rpc_->post_ls_disaster_recovery_res(rs_addr, res))) {
-          LOG_WARN("failed to post ls diaster recovery res", K(ret), K(rs_addr), K(res));
-        }
-        if (OB_RS_NOT_MASTER != ret) {
-          if (OB_SUCC(ret)) {
-            STORAGE_LOG(INFO, "post migration result success",
-                K(rs_addr), K(task));
-          }
-          break;
-        } else if (OB_FAIL(rs_mgr->renew_master_rootserver())) {
-          STORAGE_LOG(WARN, "renew master root service failed", K(ret));
-        }
-
-        if (OB_FAIL(ret)) {
-          ob_usleep(REPORT_RETRY_INTERVAL_MS);
-        }
+      LOG_WARN("failed to get ls migration result", KR(ret), K(task));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret));
+    } else if (sys_data_version >= DATA_VERSION_4_3_5_1) {
+      if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_meta_tenant(res))) {
+        LOG_WARN("failed to report to meta tenant", KR(ret), K(res));
       }
+    } else if (OB_FAIL(rootserver::DisasterRecoveryUtils::report_to_rs(res))) {
+      LOG_WARN("failed to report to rs", KR(ret), K(res));
     }
   }
   return ret;

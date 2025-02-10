@@ -24,10 +24,7 @@ namespace rootserver
 {
 
 ObAllVirtualLSReplicaTaskPlan::ObAllVirtualLSReplicaTaskPlan()
-  :inited_(false),
-   schema_service_(nullptr),
-   task_worker_(nullptr),
-   arena_allocator_()
+  : arena_allocator_()
 {
 }
 
@@ -35,37 +32,18 @@ ObAllVirtualLSReplicaTaskPlan::~ObAllVirtualLSReplicaTaskPlan()
 {
 }
 
-int ObAllVirtualLSReplicaTaskPlan::init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    ObDRWorker &task_worker)
-{
-  int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret));
-  } else {
-    schema_service_ = &schema_service;
-    task_worker_ = &task_worker;
-    inited_ = true;
-  }
-
-  return ret;
-}
-
 int ObAllVirtualLSReplicaTaskPlan::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> tenant_id_array;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(inited));
-  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(task_worker_)) {
+  ObDRWorker task_worker;
+  if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service_ or task_worker_ is nullptr", KR(ret), KP(schema_service_), KP(task_worker_));
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("schema_service_ is nullptr", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("get sys tenant schema guard error", KR(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_id_array))) {
+  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(GCTX.schema_service_, tenant_id_array))) {
     LOG_WARN("fail to get tenant id array", KR(ret));
   } else if (!start_to_read_) {
     int64_t tmp_ret = OB_SUCCESS;
@@ -79,16 +57,17 @@ int ObAllVirtualLSReplicaTaskPlan::inner_get_next_row(ObNewRow *&row)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_schema is null", KP(table_schema), KR(ret));
     } else if (is_sys_tenant(effective_tenant_id_)) {
+      // TODO: jinqian. query the specific tenant_id and optimize it here
       for (int64_t tenant_idx = 0; OB_SUCC(ret) && tenant_idx < tenant_id_array.count(); tenant_idx++) {
-        if (OB_SUCCESS != (tmp_ret = (task_worker_->try_tenant_disaster_recovery(tenant_id_array.at(tenant_idx), true/*only_for_display*/, task_cnt)))) {
+        if (OB_SUCCESS != (tmp_ret = (task_worker.try_tenant_disaster_recovery(tenant_id_array.at(tenant_idx), true/*only_for_display*/, task_cnt)))) {
           LOG_WARN("fail to try tenant disaster recovery for display", KR(tmp_ret), "tenant_id", tenant_id_array.at(tenant_idx));
         }
       }
-    } else if (OB_FAIL(task_worker_->try_tenant_disaster_recovery(effective_tenant_id_, true/*only_for_display*/, task_cnt))) {
+    } else if (OB_FAIL(task_worker.try_tenant_disaster_recovery(effective_tenant_id_, true/*only_for_display*/, task_cnt))) {
       LOG_WARN("fail to try tenant disaster recovery for display", KR(ret), K_(effective_tenant_id));
     }
 
-    if (FAILEDx(task_worker_->get_task_plan_display(task_stats))) {
+    if (FAILEDx(task_worker.get_task_plan_display(task_stats))) {
       LOG_WARN("fail to get tasks", KR(ret));
     } else {
       LOG_INFO("success to get task plans from worker", KR(ret), K(task_stats));

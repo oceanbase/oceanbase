@@ -24,6 +24,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "rootserver/ob_table_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "share/ob_global_stat_proxy.h"
 #include "rootserver/standby/ob_standby_service.h"
 #include "share/ob_service_epoch_proxy.h"
@@ -2248,6 +2249,8 @@ int ObTenantDDLService::modify_tenant(const ObModifyTenantArg &arg)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(modify_tenant_inner_phase(arg, orig_tenant_schema, schema_guard, is_restore))) {
     LOG_WARN("modify_tenant_inner_phase fail", K(ret));
+  } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_dr_service(orig_tenant_schema->get_tenant_id()))) {
+    LOG_WARN("failed to wakeup dr service", KR(ret), K(arg), K(orig_tenant_schema->get_tenant_id()));
   }
   return ret;
 }

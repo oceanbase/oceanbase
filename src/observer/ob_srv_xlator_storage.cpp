@@ -95,6 +95,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLIncCommitLogP, gctx_);
+    RPC_PROCESSOR(ObRpcDRTaskReplyToMetaP, gctx_);
     RPC_PROCESSOR(ObRpcLSCancelReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSMigrateReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSAddReplicaP, gctx_);

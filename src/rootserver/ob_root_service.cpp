@@ -56,6 +56,8 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/tenant_snapshot/ob_tenant_snapshot_table_operator.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
+#include "ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
+#include "rootserver/ob_disaster_recovery_worker.h" // ObDRWorker
 
 #include "parallel_ddl/ob_create_table_helper.h" // ObCreateTableHelper
 #include "parallel_ddl/ob_create_view_helper.h"  // ObCreateViewHelper
@@ -621,8 +623,6 @@ ObRootService::ObRootService()
 #ifdef OB_BUILD_TDE_SECURITY
     master_key_mgr_(),
 #endif
-    disaster_recovery_task_executor_(),
-    disaster_recovery_task_mgr_(),
     global_ctx_task_(*this),
     alter_log_external_table_task_(*this),
     load_all_sys_package_task_(*this),
@@ -849,9 +849,9 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init empty server checker failed", KR(ret));
   } else if (OB_FAIL(lost_replica_checker_.init(*lst_operator_, *schema_service_))) {
     FLOG_WARN("init empty server checker failed", KR(ret));
-  } else if (OB_FAIL(root_balancer_.init(*config_, *schema_service_, unit_manager_,
-                                           server_manager_, zone_manager_, rpc_proxy_,
-                                           self_addr_, sql_proxy, disaster_recovery_task_mgr_))) {
+  } else if (OB_FAIL(root_balancer_.init(*schema_service_, unit_manager_,
+                                           server_manager_, zone_manager_,
+                                           self_addr_, sql_proxy))) {
     FLOG_WARN("init root balancer failed", KR(ret));
   } else if (OB_FAIL(ROOTSERVICE_EVENT_INSTANCE.init(sql_proxy, self_addr_))) {
     FLOG_WARN("init rootservice event history failed", KR(ret));
@@ -874,17 +874,7 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init master key mgr failed", KR(ret));
   }
 #endif
-   else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
-                                                           rpc_proxy_))) {
-    FLOG_WARN("init disaster recovery task executor failed", KR(ret));
-  } else if (OB_FAIL(disaster_recovery_task_mgr_.init(self,
-                                                      *config_,
-                                                      disaster_recovery_task_executor_,
-                                                      &rpc_proxy_,
-                                                      &sql_proxy_,
-                                                      schema_service_))) {
-    FLOG_WARN("init disaster recovery task mgr failed", KR(ret));
-  } else if (OB_FAIL(root_rebuild_tablet_.init(rpc_proxy_, unit_manager_))) {
+  else if (OB_FAIL(root_rebuild_tablet_.init(rpc_proxy_, unit_manager_))) {
     // init root rebuild tablet
     FLOG_WARN("init root_rebuild_tablet_ failed", KR(ret));
   }
@@ -977,13 +967,6 @@ void ObRootService::destroy()
     FLOG_INFO("master key mgr destroy");
   }
 #endif
-
-  if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
-    FLOG_WARN("disaster recovery task mgr destroy failed", KR(ret));
-    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-  } else {
-    FLOG_INFO("disaster recovery task mgr destroy");
-  }
 
   TG_DESTROY(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer destroyed");
@@ -1199,8 +1182,6 @@ int ObRootService::stop()
       master_key_mgr_.stop();
       FLOG_INFO("master key mgr stop");
 #endif
-      disaster_recovery_task_mgr_.stop();
-      FLOG_INFO("disaster_recovery_task_mgr stop");
       TG_STOP(lib::TGDefIDs::GlobalCtxTimer);
       FLOG_INFO("global ctx timer stop");
     }
@@ -1241,7 +1222,6 @@ void ObRootService::wait()
   master_key_mgr_.wait();
   FLOG_INFO("master key mgr exit success");
 #endif
-  disaster_recovery_task_mgr_.wait();
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer exit success");
@@ -1313,7 +1293,7 @@ int ObRootService::submit_update_all_server_task(const ObAddr &server)
   } else {
     const bool with_rootserver = (server == self_addr_);
     if (!ObHeartbeatService::is_service_enabled()) {
-      ObAllServerTask task(server_manager_, disaster_recovery_task_mgr_, server, with_rootserver);
+      ObAllServerTask task(server_manager_, server, with_rootserver);
       if (OB_FAIL(task_queue_.add_async_task(task))) {
         LOG_WARN("inner queue push task failed", K(ret));
       }
@@ -1810,7 +1790,7 @@ int ObRootService::update_all_server_and_rslist()
     } else {
       FOREACH_X(s, servers, OB_SUCC(ret)) {
         const bool with_rootserver = (*s == self_addr_);
-        ObAllServerTask task(server_manager_, disaster_recovery_task_mgr_, *s, with_rootserver);
+        ObAllServerTask task(server_manager_, *s, with_rootserver);
         if (OB_FAIL(task.process())) {
           LOG_WARN("sync server status to __all_server table failed",
                    K(ret), "server", *s);
@@ -6208,12 +6188,6 @@ int ObRootService::do_restart()
   }
 #endif
 
-  if (FAILEDx(disaster_recovery_task_mgr_.start())) {
-    FLOG_WARN("disaster recovery task manager start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start disaster recovery task manager");
-  }
-
   if (FAILEDx(rs_status_.set_rs_status(status::FULL_SERVICE))) {
     FLOG_WARN("fail to set rs status", KR(ret));
   } else {
@@ -9019,14 +8993,11 @@ int ObRootService::admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
   } else {
-    ObSystemAdminCtx ctx;
-    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
-      LOG_WARN("init_sys_admin_ctx failed", KR(ret));
-    } else {
-      ObAdminAlterLSReplica admin_util(ctx);
-      if (OB_FAIL(admin_util.execute(arg))) {
-        LOG_WARN("execute alter ls replica failed", KR(ret), K(arg));
-      }
+    ObDRWorker dr_worker;
+    if (OB_FAIL(dr_worker.execute_manual_dr_task(arg))) {
+      LOG_WARN("failed to execute manual drtask", KR(ret), K(arg));
+    } else if (OB_FAIL(DisasterRecoveryUtils::wakeup_local_service(OB_SYS_TENANT_ID))) {
+      LOG_WARN("fail to wake up", KR(ret), K(arg));
     }
   }
   int64_t cost_time = ObTimeUtility::current_time() - start_time;
@@ -10776,25 +10747,6 @@ int ObRootService::handle_cancel_validate(const obrpc::ObBackupManageArg &arg)
 {
   int ret = OB_NOT_SUPPORTED;
   LOG_ERROR("not supported now", K(ret), K(arg));
-  return ret;
-}
-
-
-int ObRootService::disaster_recovery_task_reply(
-    const obrpc::ObDRTaskReplyResult &arg)
-{
-  int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFORE_RS_DEAL_WITH_RPC);
-  FLOG_INFO("[DRTASK_NOTICE] receive disaster recovery task reply", K(arg));
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(arg));
-  } else if (OB_FAIL(disaster_recovery_task_mgr_.deal_with_task_reply(arg))) {
-    LOG_WARN("fail to execute over", KR(ret), K(arg));
-  }
   return ret;
 }
 

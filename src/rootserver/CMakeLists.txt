@@ -27,14 +27,14 @@ ob_set_subtarget(ob_rootserver backup
 ob_set_subtarget(ob_rootserver common
   ob_bootstrap.cpp
   ob_admin_drtask_util.cpp
-  ob_disaster_recovery_task_table_updater.cpp
   ob_disaster_recovery_task_table_operator.cpp
   ob_balance_group_ls_stat_operator.cpp
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
+  ob_disaster_recovery_service.cpp
   ob_disaster_recovery_task.cpp
   ob_disaster_recovery_task_mgr.cpp
-  ob_disaster_recovery_task_executor.cpp
+  ob_disaster_recovery_task_utils.cpp
   ob_migrate_unit_finish_checker.cpp
   ob_rootservice_util_checker.cpp
   ob_alter_primary_zone_checker.cpp

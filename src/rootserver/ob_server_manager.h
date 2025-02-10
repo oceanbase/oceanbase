@@ -42,7 +42,6 @@ namespace rootserver
 {
 class ObUnitManager;
 class ObZoneManager;
-class ObDRTaskMgr;
 class ObIStatusChangeCallback
 {
 public:
@@ -140,7 +139,6 @@ public:
   int get_persist_server_statuses(ObServerStatusArray &server_statuses);
   int adjust_server_status(
       const ObAddr &server,
-      ObDRTaskMgr &disaster_recovery_task_mgr,
       const bool with_rootserver);
   virtual int get_server_zone(const common::ObAddr &addr, common::ObZone &zone) const;
   inline ObIStatusChangeCallback &get_status_change_callback() const;

@@ -18,6 +18,7 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_tenant_memstore_info_operator.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_disaster_recovery_task_utils.h"
 #include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
@@ -9467,7 +9468,10 @@ int ObUnitManager::migrate_unit_(const uint64_t unit_id, const ObAddr &dst, cons
     // STEP 4: migration succeed, do some postprocess
     if (OB_SUCC(ret)) {
       // wakeup rootbalance thread to make disaster_recovery process more quickly
-      root_balance_->wakeup();
+      if (pool->is_granted_to_tenant()
+       && OB_FAIL(DisasterRecoveryUtils::wakeup_tenant_dr_service(pool->tenant_id_))) {
+        LOG_WARN("failed to wakeup dr service", KR(ret), K(pool->tenant_id_));
+      }
       // add migrate_unit rootservice event
       ROOTSERVICE_EVENT_ADD("unit", "migrate_unit",
           "unit_id", unit->unit_id_,

@@ -13645,7 +13645,7 @@ def_table_schema(
     ('task_exec_svr_port', 'int', 'true'),
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
   ],
-  vtable_route_policy = 'only_rs',
+  vtable_route_policy = 'local',
 )
 
 def_table_schema(

@@ -647,10 +647,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualLSReplicaTaskPlan *task_plan = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualLSReplicaTaskPlan, task_plan))) {
               SERVER_LOG(ERROR, "failed to init ObAllVirtualLSReplicaTaskPlan", KR(ret));
-            } else if (OB_FAIL(task_plan->init(
-                                   root_service_.get_schema_service(),
-                                   root_service_.get_root_balancer().get_disaster_recovery_worker()))) {
-              SERVER_LOG(WARN, "all_virtual_ls_replica_task_plan table init failed", KR(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(task_plan);
             }

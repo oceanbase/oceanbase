@@ -4473,24 +4473,6 @@ int ObStorageRpc::post_ls_member_list_request(
   return ret;
 }
 
-int ObStorageRpc::post_ls_disaster_recovery_res(const common::ObAddr &server,
-                         const obrpc::ObDRTaskReplyResult &res)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (!server.is_valid() || !res.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(server), K(res));
-  } else if (OB_FAIL(rs_rpc_proxy_->to(server).disaster_recovery_task_reply(res))) {
-    STORAGE_LOG(WARN, "post ls migration result failed", K(ret), K(res), K(server));
-  } else {
-    STORAGE_LOG(TRACE, "post_ls_disaster_recovery_res successfully", K(res), K(server));
-  }
-  return ret;
-}
-
 int ObStorageRpc::notify_restore_tablets(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &follower_info,
