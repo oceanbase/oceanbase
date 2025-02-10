@@ -284,8 +284,9 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
       } else {
         timeguard.click();
         global_deliver->deliver(*req);
-        if (is_to_tenant_queue
-             && OB_UNLIKELY(OB_SUCCESS != global_deliver->unlock_tenant_list())) {
+      }
+      if (OB_LIKELY(is_to_tenant_queue && OB_SUCCESS == lock_ret)) {
+        if (OB_UNLIKELY(OB_SUCCESS != global_deliver->unlock_tenant_list())) {
           RPC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unlock tenant_list failed");
         }
       }
