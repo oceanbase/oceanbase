@@ -1414,7 +1414,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     //查询语句中没有distinct 且 查询中不涉及子查询
     //由于fetch clause利用limit设计，同时考虑到需要支持百分比及with ties功能，因此这里分配topn需要考虑这一情形
     if (select_stmt->get_query_ctx()->get_global_hint().is_topk_specified()
-        && (1 == select_stmt->get_from_item_size())
+        && (1 == select_stmt->get_from_item_size() && !select_stmt->get_from_item(0).is_joined_)
         && (!select_stmt->is_calc_found_rows())
         && select_stmt->get_group_expr_size() > 0
         && !select_stmt->has_rollup()

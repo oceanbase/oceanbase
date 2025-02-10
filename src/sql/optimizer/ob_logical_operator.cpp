@@ -2853,7 +2853,7 @@ int ObLogicalOperator::get_tbl_loc_cons_for_pdml_index(LocationConstraint &loc_c
     LOG_WARN("failed to get location type", K(ret));
   } else {
     loc_cons.phy_loc_type_ = location_type;
-    loc_cons.key_.table_id_ = dml_log_op->get_table_id();
+    loc_cons.key_.table_id_ = dml_log_op->get_loc_table_id();
     loc_cons.key_.ref_table_id_ = dml_log_op->get_index_tid();
     loc_cons.table_partition_info_ = dml_log_op->get_table_partition_info();
     if (sharding->get_part_cnt() > 1 && sharding->is_distributed()) {

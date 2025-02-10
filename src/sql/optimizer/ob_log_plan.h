@@ -1445,7 +1445,8 @@ protected:
 
   int add_candidate_plan(common::ObIArray<CandidatePlan> &current_plans,
                          const CandidatePlan &new_plan);
-
+  int remove_match_all_fake_cte_plan(ObIArray<CandidatePlan> &all_candidate_plans,
+                                     ObIArray<CandidatePlan> &candidate_plans);
   int compute_plan_relationship(const CandidatePlan &first_plan,
                                 const CandidatePlan &second_plan,
                                 DominateRelation &relation);

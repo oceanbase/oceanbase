@@ -352,9 +352,9 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
       tmp_left = new (ptr) JoinedTable();
-      if (OB_FAIL(tmp_left->deep_copy(allocator,
+      if (OB_FAIL(SMART_CALL(tmp_left->deep_copy(allocator,
                                       expr_copier,
-                                      static_cast<JoinedTable &>(*left_table_)))) {
+                                      static_cast<JoinedTable &>(*left_table_))))) {
         LOG_WARN("failed to deep copy left table", K(ret));
       } else {
         left_table_ = tmp_left;
@@ -369,9 +369,9 @@ int JoinedTable::deep_copy(ObIAllocator &allocator,
       LOG_WARN("failed to allocate memory for joined table", K(ret));
     } else {
       tmp_right = new (ptr) JoinedTable();
-      if (OB_FAIL(tmp_right->deep_copy(allocator,
+      if (OB_FAIL(SMART_CALL(tmp_right->deep_copy(allocator,
                                        expr_copier,
-                                       static_cast<JoinedTable &>(*right_table_)))) {
+                                       static_cast<JoinedTable &>(*right_table_))))) {
         LOG_WARN("failed to deep copy right table", K(ret));
       } else {
         right_table_ = tmp_right;
@@ -998,7 +998,7 @@ int ObDMLStmt::iterate_joined_table_expr(JoinedTable *joined_table,
       NULL != joined_table->left_table_ &&
       joined_table->left_table_->is_joined_table()) {
     JoinedTable *left = static_cast<JoinedTable *>(joined_table->left_table_);
-    if (OB_FAIL(iterate_joined_table_expr(left, visitor))) {
+    if (OB_FAIL(SMART_CALL(iterate_joined_table_expr(left, visitor)))) {
       LOG_WARN("failed to visit joined table", K(ret));
     }
   }
@@ -1006,7 +1006,7 @@ int ObDMLStmt::iterate_joined_table_expr(JoinedTable *joined_table,
       NULL != joined_table->right_table_ &&
       joined_table->right_table_->is_joined_table()) {
     JoinedTable *right = static_cast<JoinedTable *>(joined_table->right_table_);
-    if (OB_FAIL(iterate_joined_table_expr(right, visitor))) {
+    if (OB_FAIL(SMART_CALL(iterate_joined_table_expr(right, visitor)))) {
       LOG_WARN("failed to visit joined table", K(ret));
     }
   }
@@ -1084,9 +1084,9 @@ int ObDMLStmt::construct_join_table(const ObDMLStmt &other_stmt,
   // replace right table item
   if (OB_SUCC(ret)) {
     if (other.right_table_->is_joined_table()) {
-      if (OB_FAIL(construct_join_table(other_stmt,
+      if (OB_FAIL(SMART_CALL(construct_join_table(other_stmt,
                                        static_cast<JoinedTable&>(*other.right_table_),
-                                       static_cast<JoinedTable&>(*current.right_table_)))) {
+                                       static_cast<JoinedTable&>(*current.right_table_))))) {
         LOG_WARN("failed to replace joined table", K(ret));
       } else { /*do nothing*/ }
     } else {
@@ -1347,15 +1347,15 @@ int ObDMLStmt::update_table_item_id_for_joined_table(const ObDMLStmt &other_stmt
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.left_table_->is_joined_table() &&
              current.left_table_->is_joined_table() &&
-             OB_FAIL(update_table_item_id_for_joined_table(other_stmt,
+             OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.left_table_),
-                                                           static_cast<JoinedTable&>(*current.left_table_)))) {
+                                                           static_cast<JoinedTable&>(*current.left_table_))))) {
     LOG_WARN("failed to update table id", K(ret));
   } else if (other.right_table_->is_joined_table() &&
              current.right_table_->is_joined_table() &&
-             OB_FAIL(update_table_item_id_for_joined_table(other_stmt,
+             OB_FAIL(SMART_CALL(update_table_item_id_for_joined_table(other_stmt,
                                                            static_cast<JoinedTable&>(*other.right_table_),
-                                                           static_cast<JoinedTable&>(*current.right_table_)))) {
+                                                           static_cast<JoinedTable&>(*current.right_table_))))) {
     LOG_WARN("failed to update table id", K(ret));
   } else { /*do nothing*/ }
   return ret;

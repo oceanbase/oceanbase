@@ -7510,13 +7510,13 @@ int ObTransformUtils::inner_copy_joined_table_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to assign new conditions", K(ret));
   } else if (NULL != table->left_table_ &&
              table->left_table_->is_joined_table() &&
-             OB_FAIL(inner_copy_joined_table_expr(copier,
-                                                  static_cast<JoinedTable*>(table->left_table_)))) {
+             OB_FAIL(SMART_CALL(inner_copy_joined_table_expr(copier,
+                                                  static_cast<JoinedTable*>(table->left_table_))))) {
     LOG_WARN("failed to inner copy joined table expr", K(ret));
   } else if (NULL != table->right_table_ &&
              table->right_table_->is_joined_table() &&
-             OB_FAIL(inner_copy_joined_table_expr(copier,
-                                                  static_cast<JoinedTable*>(table->right_table_)))) {
+             OB_FAIL(SMART_CALL(inner_copy_joined_table_expr(copier,
+                                                  static_cast<JoinedTable*>(table->right_table_))))) {
     LOG_WARN("failed to inner copy joined table expr", K(ret));
   }
   return ret;
@@ -9386,9 +9386,9 @@ int ObTransformUtils::get_on_condition(TableItem *table_item,
     JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
     if (OB_FAIL(append(conditions, joined_table->get_join_conditions()))) {
       LOG_WARN("failed to append join conditions", K(ret));
-    } else if (OB_FAIL(get_on_condition(joined_table->left_table_, conditions))) {
+    } else if (OB_FAIL(SMART_CALL(get_on_condition(joined_table->left_table_, conditions)))) {
       LOG_WARN("failed to get on condition", K(ret));
-    } else if (OB_FAIL(get_on_condition(joined_table->right_table_, conditions))) {
+    } else if (OB_FAIL(SMART_CALL(get_on_condition(joined_table->right_table_, conditions)))) {
       LOG_WARN("failed to get on condition", K(ret));
     }
   }
@@ -15723,14 +15723,14 @@ int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
       is_valid_join_chain = false;
     } else if (!left_table->is_joined_table()) {
       is_valid_join_chain = true;
-    } else if (OB_FAIL(check_left_join_chain_recursively(stmt,
+    } else if (OB_FAIL(SMART_CALL(check_left_join_chain_recursively(stmt,
                                                         static_cast<JoinedTable*>(left_table),
                                                         target_relation_ids,
                                                         join_left_rels,
                                                         join_right_rels,
                                                         null_reject_rels,
                                                         false,
-                                                        is_valid_join_chain))) {
+                                                        is_valid_join_chain)))) {
       LOG_WARN("failed to check left join chain recursively", K(ret));
     }
   } else {

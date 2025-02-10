@@ -228,34 +228,34 @@ int ObTransformExprPullup::transform_view_recursively(TableItem *table_item,
       // (fill null or fill the origin value).
       // Do not rewrite for the non-determined side.
       if (joined_table->is_left_join()) {
-        if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
+        if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->left_table_, stmt,
                                                parent_reject_expr_map,
                                                parent_reject_subquery_map,
                                                transformed_views,
-                                               stmt_may_reduce_row_count, trans_happened))) {
+                                               stmt_may_reduce_row_count, trans_happened)))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       } else if (joined_table->is_right_join()) {
-        if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
+        if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->right_table_, stmt,
                                                parent_reject_expr_map,
                                                parent_reject_subquery_map,
                                                transformed_views,
-                                               stmt_may_reduce_row_count, trans_happened))) {
+                                               stmt_may_reduce_row_count, trans_happened)))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       }
     } else {
-      if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
+      if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->left_table_, stmt,
                                              parent_reject_expr_map,
                                              parent_reject_subquery_map,
                                              transformed_views,
-                                             stmt_may_reduce_row_count, trans_happened))) {
+                                             stmt_may_reduce_row_count, trans_happened)))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
-      } else if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
+      } else if (OB_FAIL(SMART_CALL(transform_view_recursively(joined_table->right_table_, stmt,
                                                     parent_reject_expr_map,
                                                     parent_reject_subquery_map,
                                                     transformed_views,
-                                                    stmt_may_reduce_row_count, trans_happened))) {
+                                                    stmt_may_reduce_row_count, trans_happened)))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
       }
     }

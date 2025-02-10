@@ -5269,14 +5269,14 @@ int ObOptimizerUtil::check_subquery_filter(const JoinedTable *table, bool &has)
     }
   }
   if (OB_SUCC(ret) && !has && table->left_table_->is_joined_table()) {
-    if (OB_FAIL(check_subquery_filter(
-                  static_cast<const JoinedTable *>(table->left_table_), has))) {
+    if (OB_FAIL(SMART_CALL(check_subquery_filter(
+                  static_cast<const JoinedTable *>(table->left_table_), has)))) {
       LOG_WARN("failed to check subquery filter", K(ret));
     }
   }
   if (OB_SUCC(ret) && !has && table->right_table_->is_joined_table()) {
-    if (OB_FAIL(check_subquery_filter(
-                  static_cast<const JoinedTable *>(table->right_table_), has))) {
+    if (OB_FAIL(SMART_CALL(check_subquery_filter(
+                  static_cast<const JoinedTable *>(table->right_table_), has)))) {
       LOG_WARN("failed to check subquery filter", K(ret));
     }
   }
