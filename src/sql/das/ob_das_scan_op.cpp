@@ -670,83 +670,91 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   ObChunkDatumStore &datum_store = scan_result.get_datum_store();
   ObTempRowStore &vec_row_store = scan_result.get_vec_row_store();
   bool iter_end = false;
+  int64_t loop_times = 0;
   while (OB_SUCC(ret) && !has_more) {
     const ExprFixedArray &result_output = get_result_outputs();
     ObEvalCtx &eval_ctx = scan_rtdef_->p_pd_expr_op_->get_eval_ctx();
-    if (!scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
-      scan_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
-      if (OB_FAIL(get_output_result_iter()->get_next_row())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next row from result failed", K(ret));
-        }
-      } else if (OB_UNLIKELY(simulate_row_cnt > 0
-                 && datum_store.get_row_cnt() >= simulate_row_cnt)) {
-        // simulate a datum store overflow error, send the remaining result through RPC
-        has_more = true;
-        remain_row_cnt_ = 1;
-      } else if (OB_FAIL(datum_store.try_add_row(result_output,
-                                                &eval_ctx,
-                                                 das::OB_DAS_MAX_PACKET_SIZE,
-                                                added))) {
-        LOG_WARN("try add row to datum store failed", K(ret));
-      } else if (!added) {
-        has_more = true;
-        remain_row_cnt_ = 1;
-      }
-      if (OB_SUCC(ret) && has_more) {
-        LOG_DEBUG("try fill task result", K(simulate_row_cnt),
-                  K(datum_store.get_row_cnt()), K(has_more),
-                  "output_row", ROWEXPR2STR(eval_ctx, result_output));
-      }
+    if (loop_times % 16 == 0 && OB_UNLIKELY(IS_INTERRUPTED())) {
+      ObInterruptCode code = GET_INTERRUPT_CODE();
+      ret = code.code_;
+      LOG_WARN("received a interrupt", K(code), K(ret));
     } else {
-      int64_t max_batch_size = scan_ctdef_->pd_expr_spec_.max_batch_size_;
-      scan_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
-      remain_row_cnt_ = 0;
-      if (iter_end) {
-        ret = OB_ITER_END;
-      } else if (OB_FAIL(get_output_result_iter()->get_next_rows(remain_row_cnt_, max_batch_size))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next batch from result failed", K(ret));
-        } else {
-          iter_end = true;
-          ret = OB_SUCCESS;
-        }
-      }
-      if (enable_rich_format()) {
-        LOG_DEBUG("rich format fill task result", K(remain_row_cnt_), K(memory_limit), K(ret), K(scan_result));
-        if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
+      if (!scan_rtdef_->p_pd_expr_op_->is_vectorized()) {
+        scan_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
+        if (OB_FAIL(get_output_result_iter()->get_next_row())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next row from result failed", K(ret));
+          }
         } else if (OB_UNLIKELY(simulate_row_cnt > 0
-                   && vec_row_store.get_row_cnt() >= simulate_row_cnt)) {
+                  && datum_store.get_row_cnt() >= simulate_row_cnt)) {
           // simulate a datum store overflow error, send the remaining result through RPC
           has_more = true;
-        } else if (OB_UNLIKELY(OB_FAIL(vec_row_store.try_add_batch(result_output, &eval_ctx,
-                                                        remain_row_cnt_, memory_limit,
-                                                        added)))) {
+          remain_row_cnt_ = 1;
+        } else if (OB_FAIL(datum_store.try_add_row(result_output,
+                                                   &eval_ctx,
+                                                   das::OB_DAS_MAX_PACKET_SIZE,
+                                                   added))) {
           LOG_WARN("try add row to datum store failed", K(ret));
         } else if (!added) {
           has_more = true;
+          remain_row_cnt_ = 1;
+        }
+        if (OB_SUCC(ret) && has_more) {
+          LOG_DEBUG("try fill task result", K(simulate_row_cnt),
+                    K(datum_store.get_row_cnt()), K(has_more),
+                    "output_row", ROWEXPR2STR(eval_ctx, result_output));
         }
       } else {
-        if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
-        } else if (OB_UNLIKELY(simulate_row_cnt > 0
-                   && datum_store.get_row_cnt() >= simulate_row_cnt)) {
-          // simulate a datum store overflow error, send the remaining result through RPC
-          has_more = true;
-        } else if (OB_UNLIKELY(OB_FAIL(datum_store.try_add_batch(result_output, &eval_ctx,
-                                                        remain_row_cnt_, memory_limit,
-                                                        added)))) {
-          LOG_WARN("try add row to datum store failed", K(ret));
-        } else if (!added) {
-          has_more = true;
+        int64_t max_batch_size = scan_ctdef_->pd_expr_spec_.max_batch_size_;
+        scan_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
+        remain_row_cnt_ = 0;
+        if (iter_end) {
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(get_output_result_iter()->get_next_rows(remain_row_cnt_, max_batch_size))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next batch from result failed", K(ret));
+          } else {
+            iter_end = true;
+            ret = OB_SUCCESS;
+          }
+        }
+        if (enable_rich_format()) {
+          LOG_DEBUG("rich format fill task result", K(remain_row_cnt_), K(memory_limit), K(ret), K(scan_result));
+          if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
+          } else if (OB_UNLIKELY(simulate_row_cnt > 0
+                    && vec_row_store.get_row_cnt() >= simulate_row_cnt)) {
+            // simulate a datum store overflow error, send the remaining result through RPC
+            has_more = true;
+          } else if (OB_UNLIKELY(OB_FAIL(vec_row_store.try_add_batch(result_output, &eval_ctx,
+                                                          remain_row_cnt_, memory_limit,
+                                                          added)))) {
+            LOG_WARN("try add row to datum store failed", K(ret));
+          } else if (!added) {
+            has_more = true;
+          }
+        } else {
+          if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
+          } else if (OB_UNLIKELY(simulate_row_cnt > 0
+                    && datum_store.get_row_cnt() >= simulate_row_cnt)) {
+            // simulate a datum store overflow error, send the remaining result through RPC
+            has_more = true;
+          } else if (OB_UNLIKELY(OB_FAIL(datum_store.try_add_batch(result_output, &eval_ctx,
+                                                          remain_row_cnt_, memory_limit,
+                                                          added)))) {
+            LOG_WARN("try add row to datum store failed", K(ret));
+          } else if (!added) {
+            has_more = true;
+          }
+        }
+        if (OB_SUCC(ret) && has_more) {
+          const ObBitVector *skip = NULL;
+          PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_, skip,
+                                K(simulate_row_cnt), K(datum_store.get_row_cnt()),
+                                K(has_more));
         }
       }
-      if (OB_SUCC(ret) && has_more) {
-        const ObBitVector *skip = NULL;
-        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_, skip,
-                              K(simulate_row_cnt), K(datum_store.get_row_cnt()),
-                              K(has_more));
-      }
     }
+    ++ loop_times;
   }
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
@@ -766,7 +774,7 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   return ret;
 }
 
-int ObDASScanOp::fill_extra_result()
+int ObDASScanOp::fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
 {
   int ret = OB_SUCCESS;
   ObDASTaskResultMgr &result_mgr = MTL(ObDataAccessService *)->get_task_res_mgr();
@@ -777,6 +785,7 @@ int ObDASScanOp::fill_extra_result()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("output result iter is null", K(ret));
   } else if (OB_FAIL(result_mgr.save_task_result(task_id_,
+                                                 interrupt_info,
                                                  &result_output,
                                                  &eval_ctx,
                                                  *output_result_iter,
@@ -784,7 +793,7 @@ int ObDASScanOp::fill_extra_result()
                                                  scan_ctdef_,
                                                  scan_rtdef_,
                                                  *this))) {
-    LOG_WARN("save task result failed", KR(ret), K(task_id_));
+    LOG_WARN("save task result failed", KR(ret), K(task_id_), K(interrupt_info));
   }
   return ret;
 }

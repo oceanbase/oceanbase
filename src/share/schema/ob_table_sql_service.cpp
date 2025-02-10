@@ -4987,7 +4987,7 @@ int ObTableSqlService::gen_foreign_key_dml(const uint64_t exec_tenant_id,
       || OB_FAIL(dml.add_column("enable_flag", foreign_key_info.enable_flag_))
       || OB_FAIL(dml.add_column("validate_flag", foreign_key_info.validate_flag_))
       || OB_FAIL(dml.add_column("rely_flag", foreign_key_info.rely_flag_))
-      || OB_FAIL(dml.add_column("ref_cst_type", foreign_key_info.ref_cst_type_))
+      || OB_FAIL(dml.add_column("ref_cst_type", foreign_key_info.fk_ref_type_))
       || OB_FAIL(dml.add_column("ref_cst_id", foreign_key_info.ref_cst_id_))
       || OB_FAIL(dml.add_column("is_parent_table_mock", foreign_key_info.is_parent_table_mock_))
       || (data_version >= DATA_VERSION_4_2_1_0

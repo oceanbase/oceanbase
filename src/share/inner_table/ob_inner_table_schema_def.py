@@ -31589,7 +31589,7 @@ def_table_schema(
     CAST(ct.table_name AS CHAR(256)) AS TABLE_NAME,
     CAST(pt.table_name AS CHAR(256)) AS REFERENCED_TABLE_NAME
     FROM oceanbase.__all_foreign_key f
-    JOIN oceanbase.__all_table ct on f.child_table_id = ct.table_id and f.is_parent_table_mock = 0 and f.ref_cst_type != 2
+    JOIN oceanbase.__all_table ct on f.child_table_id = ct.table_id and f.is_parent_table_mock = 0 and f.ref_cst_type = 1
     JOIN oceanbase.__all_database cd on ct.database_id = cd.database_id
     JOIN oceanbase.__all_table pt on f.parent_table_id = pt.table_id
     JOIN oceanbase.__all_database pd on pt.database_id = pd.database_id
@@ -31607,8 +31607,10 @@ def_table_schema(
     CAST(cd.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
     CAST(f.foreign_key_name AS CHAR(128)) AS CONSTRAINT_NAME,
     CAST('def' AS CHAR(64)) AS UNIQUE_CONSTRAINT_CATALOG,
-    CAST(pd.database_name AS CHAR(128)) collate utf8mb4_name_case AS UNIQUE_CONSTRAINT_SCHEMA,
-    CAST(SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_')) AS CHAR(128)) AS UNIQUE_CONSTRAINT_NAME,
+    CAST(pd.database_name AS CHAR(128)) AS UNIQUE_CONSTRAINT_SCHEMA,
+    CAST(CASE WHEN it.table_type = 3 THEN 'PRIMARY'
+              WHEN it.index_type in (2, 4, 8) THEN SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_'))
+         ELSE NULL END AS CHAR(128)) AS UNIQUE_CONSTRAINT_NAME,
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
               WHEN f.update_action = 2 THEN 'CASCADE'
@@ -31625,7 +31627,7 @@ def_table_schema(
     CAST(ct.table_name AS CHAR(256)) AS TABLE_NAME,
     CAST(pt.table_name AS CHAR(256)) AS REFERENCED_TABLE_NAME
     FROM oceanbase.__all_foreign_key f
-    JOIN oceanbase.__all_table ct on f.child_table_id = ct.table_id and f.is_parent_table_mock = 0 and f.ref_cst_type = 2
+    JOIN oceanbase.__all_table ct on f.child_table_id = ct.table_id and f.is_parent_table_mock = 0 and f.ref_cst_type in (2, 5)
     JOIN oceanbase.__all_database cd on ct.database_id = cd.database_id
     JOIN oceanbase.__all_table pt on f.parent_table_id = pt.table_id
     JOIN oceanbase.__all_database pd on pt.database_id = pd.database_id

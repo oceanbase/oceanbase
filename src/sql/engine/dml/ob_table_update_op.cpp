@@ -266,6 +266,8 @@ OB_INLINE int ObTableUpdateOp::close_table_for_each()
                                                              dml_rtctx_,
                                                              ObDmlEventType::DE_UPDATING))) {
           LOG_WARN("process after stmt trigger failed", K(ret));
+        } else if (lib::is_mysql_mode() && !primary_upd_rtdef.has_table_cycle_ && primary_upd_ctdef.need_check_table_cycle_ && OB_FAIL(ObDMLService::delete_table_id_from_parent_table_set(dml_rtctx_, primary_upd_ctdef))) {
+          LOG_WARN("delete from parent table set failed", K(ret), K(primary_upd_ctdef.das_base_ctdef_.index_tid_));
         }
       }
     }

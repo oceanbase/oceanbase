@@ -1374,8 +1374,8 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
     for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos->count(); i++) {
       const ObForeignKeyInfo &fk_info = fk_infos->at(i);
       ObRawExpr* fk_scan_part_expr = nullptr;
-      if (fk_info.table_id_ != fk_info.child_table_id_ || fk_info.is_parent_table_mock_) {
-        // update parent table, check child table, don't use das task to perform foreign key check
+      if (fk_info.table_id_ != fk_info.child_table_id_ || fk_info.is_parent_table_mock_ || !fk_info.is_ref_unique_index()) {
+        // update parent table, check child table, referencing non-unique index, don't use das task to perform foreign key check
         ret = index_dml_info.fk_lookup_part_id_expr_.push_back(fk_scan_part_expr);
       } else {
         const uint64_t parent_table_id = fk_info.parent_table_id_;

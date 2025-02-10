@@ -1484,7 +1484,7 @@ void ObTxExecResult::reset()
 int ObTxExecResult::add_touched_ls(const share::ObLSID ls)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(touched_ls_list_.push_back(ls))) {
+  if (OB_FAIL(common::add_var_to_array_no_dup(touched_ls_list_, ls))) {
     incomplete_ = true;
     TRANS_LOG(WARN, "add touched ls failed, set incomplete", K(ret), K(ls));
   }

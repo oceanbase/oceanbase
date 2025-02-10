@@ -996,7 +996,7 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           fk_arg.foreign_key_name_ = fk_info.foreign_key_name_;
           fk_arg.enable_flag_ = fk_info.enable_flag_;
           fk_arg.is_modify_enable_flag_ = fk_info.enable_flag_;
-          fk_arg.ref_cst_type_ = fk_info.ref_cst_type_;
+          fk_arg.fk_ref_type_ = fk_info.fk_ref_type_;
           fk_arg.ref_cst_id_ = fk_info.ref_cst_id_;
           fk_arg.validate_flag_ = fk_info.validate_flag_;
           fk_arg.is_modify_validate_flag_ = fk_info.validate_flag_;

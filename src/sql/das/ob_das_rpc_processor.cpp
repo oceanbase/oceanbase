@@ -12,7 +12,10 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_rpc_processor.h"
+#include "sql/ob_sql.h"
 #include "sql/das/ob_data_access_service.h"
+#include "sql/engine/px/ob_px_interruption.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -100,6 +103,13 @@ int ObDASBaseAccessP<pcode>::process()
   ObIDASTaskOp *task_op = nullptr;
   bool has_more = false;
   int64_t memory_limit = das::OB_DAS_MAX_PACKET_SIZE;
+  ObDASTCBInterruptInfo interrupt_info;
+  bool has_set_interrupt = false;
+  ObInterruptibleTaskID interrupt_id;
+  ObRegisterDmInfo dm_info;
+  dm_info.detectable_id_ = task.get_remote_info()->detectable_id_;
+  dm_info.addr_ = task.get_ctrl_svr();
+
 #ifdef ERRSIM
   if (EN_DAS_SIMULATE_EXTRA_RESULT_MEMORY_LIMIT) {
     memory_limit = -EN_DAS_SIMULATE_EXTRA_RESULT_MEMORY_LIMIT;
@@ -114,74 +124,129 @@ int ObDASBaseAccessP<pcode>::process()
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
-      task_op = task_ops.at(i);
-      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = task_op->plan_line_id_;
-      ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
-      if (OB_FAIL(das_factory->create_das_task_result(task_op->get_type(), op_result))) {
-        LOG_WARN("create das task result failed", K(ret));
-      } else if (OB_FAIL(task_resp.add_op_result(op_result))) {
-        LOG_WARN("failed to add op result", K(ret));
-      } else if (OB_FAIL(op_result->init(*task_op, CURRENT_CONTEXT->get_arena_allocator()))) {
-        LOG_WARN("failed to init op result", K(ret));
-      } else if (FALSE_IT(op_result->set_task_id(task_op->get_task_id()))) {
-      } else if (OB_FAIL(task_op->start_das_task())) {
-        LOG_WARN("start das task failed", K(ret));
-      } else if (OB_FAIL(task_op->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
-        LOG_WARN("fill task result to controller failed", K(ret));
-      } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result())) {
-        LOG_WARN("fill extra result to controller failed", KR(ret));
+      if (OB_ISNULL(task_op = task_ops.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task op is null", KR(ret));
       } else {
-        task_resp.set_has_more(has_more);
-        ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
-        if (wb != nullptr) {
-          //ignore the errcode of storing warning msg
-          (void)task_resp.store_warning_msg(*wb);
+        DASTCBInfo tcb_info(task_op->task_id_);
+        uint64_t check_node_sequence_id = 0;
+        bool has_register_check_item = false;
+
+        GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = task_op->plan_line_id_;
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
+
+        if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
+             task_op->get_type() == DAS_OP_TABLE_SCAN) &&
+            !dm_info.detectable_id_.is_invalid()) {
+          if (!has_set_interrupt) {
+            if (OB_ISNULL(GCTX.sql_engine_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sql engine is null", K(ret), KPC(task_op));
+            } else if (OB_FAIL(ObInterruptUtil::generate_query_interrupt_id((uint32_t)GCTX.get_server_index(),
+                                                                            (uint64_t)GCTX.sql_engine_->get_px_sequence_id(),
+                                                                            interrupt_id))) {
+              LOG_WARN("generate interrupt id failed", KR(ret));
+            } else if (OB_FAIL(SET_INTERRUPTABLE(interrupt_id))) {
+              LOG_WARN("register interrupt failed", KR(ret));
+            } else {
+              has_set_interrupt = true;
+              interrupt_info.interrupt_id_ = interrupt_id;
+              interrupt_info.self_addr_ = task.get_runner_svr();
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObDetectManagerUtils::das_task_register_check_item_into_dm(dm_info,
+                                                                                        interrupt_id,
+                                                                                        tcb_info,
+                                                                                        check_node_sequence_id))) {
+            LOG_WARN("[DM] register check item result to dm failed", K(ret));
+          } else {
+            has_register_check_item = true;
+            interrupt_info.detectable_id_ = dm_info.detectable_id_;
+            interrupt_info.check_node_sequence_id_ = check_node_sequence_id;
+          }
         }
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(op_result)) {
-        // accessing failed das task result is undefined behavior.
-        op_result->reuse();
-      }
-      //因为end_task还有可能失败，需要通过RPC将end_task的返回值带回到scheduler上
-      int tmp_ret = task_op->end_das_task();
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("end das task failed", K(ret), K(tmp_ret), K(task));
-      }
-      ret = COVER_SUCC(tmp_ret);
-      if (OB_NOT_NULL(task_op->get_trans_desc())) {
-        tmp_ret = MTL(transaction::ObTransService*)
-          ->get_tx_exec_result(*task_op->get_trans_desc(),
-                              task_resp.get_trans_result());
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(das_factory->create_das_task_result(task_op->get_type(), op_result))) {
+          LOG_WARN("create das task result failed", K(ret));
+        } else if (OB_FAIL(task_resp.add_op_result(op_result))) {
+          LOG_WARN("failed to add op result", K(ret));
+        } else if (OB_FAIL(op_result->init(*task_op, CURRENT_CONTEXT->get_arena_allocator()))) {
+          LOG_WARN("failed to init op result", K(ret));
+        } else if (FALSE_IT(op_result->set_task_id(task_op->get_task_id()))) {
+        } else if (OB_FAIL(task_op->start_das_task())) {
+          LOG_WARN("start das task failed", K(ret));
+        } else if (OB_FAIL(task_op->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
+          LOG_WARN("fill task result to controller failed", K(ret));
+        } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result(interrupt_info))) {
+          LOG_WARN("fill extra result to controller failed", KR(ret));
+        } else {
+          task_resp.set_has_more(has_more);
+          ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
+          if (wb != nullptr) {
+            //ignore the errcode of storing warning msg
+            (void)task_resp.store_warning_msg(*wb);
+          }
+        }
+
+        if (OB_FAIL(ret) && OB_NOT_NULL(op_result)) {
+          // accessing failed das task result is undefined behavior.
+          op_result->reuse();
+        }
+        //因为end_task还有可能失败，需要通过RPC将end_task的返回值带回到scheduler上
+        int tmp_ret = task_op->end_das_task();
         if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("get trans exec result failed", K(ret), K(task));
+          LOG_WARN("end das task failed", K(ret), K(tmp_ret), K(task));
         }
         ret = COVER_SUCC(tmp_ret);
+        if (OB_NOT_NULL(task_op->get_trans_desc())) {
+          tmp_ret = MTL(transaction::ObTransService*)
+            ->get_tx_exec_result(*task_op->get_trans_desc(),
+                                task_resp.get_trans_result());
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("get trans exec result failed", K(ret), K(task));
+          }
+          ret = COVER_SUCC(tmp_ret);
+        }
+        if (OB_SUCCESS != ret && is_schema_error(ret)) {
+          ret = GSCHEMASERVICE.is_schema_error_need_retry(NULL, task_op->get_tenant_id()) ?
+          OB_ERR_REMOTE_SCHEMA_NOT_FULL : OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+        }
+        task_resp.set_err_code(ret);
+        if (OB_SUCCESS != ret) {
+          task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+          LOG_WARN("process das access task failed", K(ret),
+                  K(task.get_ctrl_svr()), K(task.get_runner_svr()));
+        }
+
+        // Error or no more results, need to unregister check item from dm
+        if (has_register_check_item && (OB_FAIL(ret) || !has_more)) {
+          ObDetectManagerUtils::das_task_unregister_check_item_from_dm(dm_info.detectable_id_, check_node_sequence_id);
+        }
+
+        if (has_more || memory_limit < 0) {
+          /**
+          * das serialized execution.
+          * If current resp buffer is overflow. We would reply result
+          * directly. following un-executed tasks would be executed
+          * later remotely.
+          *
+          * the insert op won't set has_more flag, but if it exceed the
+          * threshold of memory_limit, we should reply anyway.
+          */
+          LOG_DEBUG("reply das result due to memory limit exceeded.",
+              K(has_more), K(memory_limit), K(i), K(task_ops.count()));
+          break;
+        }
+        LOG_DEBUG("process das base access task", K(ret), KPC(task_op), KPC(op_result), K(has_more));
       }
-      if (OB_SUCCESS != ret && is_schema_error(ret)) {
-        ret = GSCHEMASERVICE.is_schema_error_need_retry(NULL, task_op->get_tenant_id()) ?
-        OB_ERR_REMOTE_SCHEMA_NOT_FULL : OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-      }
-      task_resp.set_err_code(ret);
-      if (OB_SUCCESS != ret) {
-        task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
-        LOG_WARN("process das access task failed", K(ret),
-                K(task.get_ctrl_svr()), K(task.get_runner_svr()));
-      }
-      if (has_more || memory_limit < 0) {
-        /**
-         * das serialized execution.
-         * If current resp buffer is overflow. We would reply result
-         * directly. following un-executed tasks would be executed
-         * later remotely.
-         *
-         * the insert op won't set has_more flag, but if it exceed the
-         * threshold of memory_limit, we should reply anyway.
-         */
-        LOG_DEBUG("reply das result due to memory limit exceeded.",
-            K(has_more), K(memory_limit), K(i), K(task_ops.count()));
-        break;
-      }
-      LOG_DEBUG("process das base access task", K(ret), KPC(task_op), KPC(op_result), K(has_more));
+    }
+
+    if (has_set_interrupt) {
+      // unregister interrupt checker
+      UNSET_INTERRUPTABLE(interrupt_id);
     }
   }
   return OB_SUCCESS;
@@ -247,6 +312,7 @@ void ObRpcDasAsyncAccessCallBack::on_timeout()
   int ret = OB_TIMEOUT;
   int64_t current_ts = ObTimeUtility::current_time();
   int64_t timeout_ts = context_->get_timeout_ts();
+  is_timeout_ = true;
   // ESTIMATE_PS_RESERVE_TIME = 100 * 1000
   if (timeout_ts - current_ts > 100 * 1000) {
     LOG_DEBUG("rpc return OB_TIMEOUT before actual timeout, change error code to OB_RPC_CONNECT_ERROR", KR(ret),
@@ -262,6 +328,7 @@ void ObRpcDasAsyncAccessCallBack::on_timeout()
 void ObRpcDasAsyncAccessCallBack::on_invalid()
 {
   int ret = OB_SUCCESS;
+  is_invalid_ = true;
   // a valid packet on protocol level, but can't decode it.
   ret = get_error() == OB_ALLOCATE_MEMORY_FAILED ?
         OB_ALLOCATE_MEMORY_FAILED : OB_INVALID_ERROR;
@@ -279,6 +346,7 @@ void ObRpcDasAsyncAccessCallBack::set_args(const Request &arg)
 int ObRpcDasAsyncAccessCallBack::process()
 {
   int ret = OB_SUCCESS;
+  is_processed_ = true;
   LOG_DEBUG("DAS async access callback process", K_(result));
   if (OB_FAIL(get_rcode())) {
     result_.set_err_code(get_rcode());
@@ -302,6 +370,23 @@ int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr)
   alloc_.set_attr(attr);
   return task_ops_.get_copy_assign_ret();
 };
+
+int ObDASSyncFetchP::before_process()
+{
+  int ret = OB_SUCCESS;
+  ObDASDataFetchReq &req = arg_;
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_das_remote_exec_ = true;
+    di->get_ash_stat().tenant_id_ = req.get_tenant_id();
+    di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
+  }
+
+  if (OB_FAIL(ObDASSyncFetchResRpcProcessor::before_process())) {
+    LOG_WARN("do rpc processor before_process failed", K(ret));
+  }
+  return ret;
+}
 
 int ObDASSyncFetchP::process()
 {
@@ -351,6 +436,12 @@ int ObDASSyncFetchP::after_process(int error_code)
   return OB_SUCCESS;
 }
 
+void ObDASSyncFetchP::cleanup()
+{
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
+  ObDASSyncFetchResRpcProcessor::cleanup();
+}
+
 int ObDASAsyncEraseP::process()
 {
   int ret = OB_SUCCESS;
@@ -361,7 +452,7 @@ int ObDASAsyncEraseP::process()
   if (OB_ISNULL(das = MTL(ObDataAccessService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das is null", KR(ret), KP(das));
-  } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(task_id))) {
+  } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(task_id, true))) {
     LOG_WARN("erase task result failed", KR(ret), K(task_id));
   }
   return ret;

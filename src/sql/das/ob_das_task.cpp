@@ -377,12 +377,12 @@ int ObIDASTaskOp::end_das_task()
   //release op，then rollback transcation
   if (task_started_) {
     if (OB_SUCCESS != (tmp_ret = release_op())) {
-      LOG_WARN("release das task op failed", K(ret), K_(errcode));
+      LOG_WARN("release das task op failed", K(tmp_ret), K_(errcode));
     }
     ret = COVER_SUCC(tmp_ret);
   }
+
   task_started_ = false;
-  ret = COVER_SUCC(tmp_ret);
   errcode_ = OB_SUCCESS;
   return ret;
 }

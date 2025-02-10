@@ -346,5 +346,85 @@ void ObDetectManagerUtils::p2p_datahub_unregister_check_item_from_dm(const commo
   }
 }
 
+int ObDetectManagerUtils::das_task_register_detectable_id_into_dm(common::ObDetectableId &detectable_id, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObDetectManager* dm = MTL(ObDetectManager*);
+  if (OB_ISNULL(dm)) {
+    // ignore ret
+    LIB_LOG(WARN, "[DM] dm is null", K(tenant_id));
+  } else if (OB_FAIL(ObDetectManagerUtils::generate_detectable_id(detectable_id, tenant_id))) {
+    LIB_LOG(WARN, "[DM] failed to generate_detectable_id", K(tenant_id));
+  } else if (OB_FAIL(dm->register_detectable_id(detectable_id))) {
+    LIB_LOG(WARN, "[DM] DAS task fail to register detectable id", K(ret), K(detectable_id), K(tenant_id));
+  } else {
+    LIB_LOG(TRACE, "[DM] DAS task register detectable id ", K(ret), K(detectable_id), K(tenant_id));
+  }
+  return ret;
+}
+
+void ObDetectManagerUtils::das_task_unregister_detectable_id_from_dm(const common::ObDetectableId &detectable_id)
+{
+  int ret = OB_SUCCESS;
+  ObDetectManager* dm = MTL(ObDetectManager*);
+  if (OB_ISNULL(dm)) {
+    // ignore ret
+    LIB_LOG(WARN, "[DM] dm is null", K(detectable_id));
+  } else if (FALSE_IT(ret = dm->unregister_detectable_id(detectable_id))) {
+  } else if (ret != OB_SUCCESS && ret != OB_HASH_NOT_EXIST) {
+    LIB_LOG(WARN, "[DM] DAS task failed to unregister detectable id", K(ret), K(detectable_id));
+  } else {
+    LIB_LOG(TRACE, "[DM] DAS task unregister detectable id ", K(ret), K(detectable_id));
+  }
+}
+
+int ObDetectManagerUtils::das_task_register_check_item_into_dm(const common::ObRegisterDmInfo &register_dm_info,
+                                                               const ObInterruptibleTaskID &interrupt_id,
+                                                               const sql::DASTCBInfo &key,
+                                                               uint64_t &node_sequence_id)
+{
+  int ret = OB_SUCCESS;
+  const ObDetectableId &detectable_id = register_dm_info.detectable_id_;
+  const common::ObAddr &addr = register_dm_info.addr_;
+  ObSEArray<ObPeerTaskState, 1> peer_states;
+  ObDASRemoteTaskDetectCB *cb = nullptr;
+  ObDetectManager* dm = MTL(ObDetectManager*);
+  node_sequence_id = 0;
+  if (OB_ISNULL(dm)) {
+    // ignore ret
+    LIB_LOG(WARN, "[DM] dm is null", K(detectable_id));
+  } else if (OB_UNLIKELY(detectable_id.is_invalid())) {
+    // ignore ret
+    LIB_LOG(WARN, "[DM] detectable id is invalid", K(detectable_id));
+  } else if (OB_FAIL(peer_states.push_back(ObPeerTaskState{addr}))) {
+    LIB_LOG(WARN, "[DM] failed to push_back", K(ret), K(detectable_id), K(addr));
+  } else if (OB_FAIL(dm->register_check_item(detectable_id, cb, node_sequence_id,
+                                             false, peer_states, key, interrupt_id))) {
+    LIB_LOG(WARN, "[DM] DAS task failed to register check item", K(detectable_id));
+  } else {
+    LIB_LOG(TRACE, "[DM] DAS task register check item into dm ", K(ret), K(detectable_id));
+  }
+  return ret;
+}
+
+void ObDetectManagerUtils::das_task_unregister_check_item_from_dm(const common::ObDetectableId &detectable_id,
+                                                                  uint64_t node_sequence_id)
+{
+  int ret = OB_SUCCESS;
+  if (!detectable_id.is_invalid() && node_sequence_id != 0) {
+    ObDetectManager* dm = MTL(ObDetectManager*);
+    if (OB_ISNULL(dm)) {
+      // ignore ret
+      LIB_LOG(WARN, "[DM] dm is null", K(detectable_id));
+    } else if (FALSE_IT(ret = dm->unregister_check_item(detectable_id, node_sequence_id))) {
+    } else if (ret != OB_SUCCESS && ret != OB_HASH_NOT_EXIST) {
+      LIB_LOG(WARN, "[DM] DAS task failed to unregister check item ", K(ret),
+                                                                      K(detectable_id), K(node_sequence_id));
+    } else {
+      LIB_LOG(TRACE, "[DM] DAS task unregister check item from dm ", K(ret), K(detectable_id));
+    }
+  }
+}
+
 } // end namespace common
 } // end namespace oceanbase

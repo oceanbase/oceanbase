@@ -49,7 +49,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
           if (is_foreign_key_cascade) {
             // nested update can not check parent row.
             LOG_DEBUG("skip foreign_key_check_exist in nested session");
-          } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false))) {
+          } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false, fk_arg.use_das_scan_))) {
             LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(new_row));
           }
         }
@@ -63,7 +63,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
                      K(ret), K(fk_arg), K(old_row), K(new_row));
           } else if (!has_changed) {
             // nothing.
-          } else if (OB_FAIL(check_exist(op, fk_arg, old_row, fk_checker, true))) {
+          } else if (OB_FAIL(check_exist(op, fk_arg, old_row, fk_checker, true, fk_arg.use_das_scan_))) {
             LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(old_row));
           }
         } else if (ACTION_CASCADE == fk_arg.ref_action_) {
@@ -146,11 +146,11 @@ int ForeignKeyHandle::value_changed(ObTableModifyOp &op,
 }
 
 int ForeignKeyHandle::check_exist(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
-                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero)
+                         const ObExprPtrIArray &row, ObForeignKeyChecker *fk_checker, bool expect_zero, bool use_das_scan)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_FOREIGN_KEY_CONSTRAINT_CHECK);
-  if (!expect_zero) {
+  if (use_das_scan) {
     ret = check_exist_scan_task(modify_op, fk_arg, row, fk_checker);
   } else {
     if (OB_FAIL(check_exist_inner_sql(modify_op, fk_arg, row, expect_zero, true))) {

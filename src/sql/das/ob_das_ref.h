@@ -286,6 +286,7 @@ public:
   DASRefCountContext &get_das_ref_count_ctx() { return das_ref_count_ctx_; }
   void clear_task_map();
   int wait_tasks_and_process_response();
+  int get_detectable_id(ObDetectableId &detectable_id);
 private:
   DISABLE_COPY_ASSIGN(ObDASRef);
   int create_task_map();
@@ -320,6 +321,7 @@ private:
   DasAsyncCbList async_cb_list_;
   DASRefCountContext das_ref_count_ctx_;
   DASParallelContext das_parallel_ctx_;
+  ObDetectableId detectable_id_;
 public:
   //all flags
   union {

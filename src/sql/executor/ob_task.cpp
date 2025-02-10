@@ -340,6 +340,7 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   }
   OB_UNIS_ENCODE(remote_sql_info_->is_original_ps_mode_);
   OB_UNIS_ENCODE(remote_sql_info_->sql_from_pl_);
+  OB_UNIS_ENCODE(ls_list_);
   return ret;
 }
 
@@ -384,6 +385,7 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     }
     OB_UNIS_ADD_LEN(remote_sql_info_->is_original_ps_mode_);
     OB_UNIS_ADD_LEN(remote_sql_info_->sql_from_pl_);
+    OB_UNIS_ADD_LEN(ls_list_);
   }
   return len;
 }
@@ -468,6 +470,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       }
       OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
       OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
+      OB_UNIS_DECODE(ls_list_);
     }
   }
   return ret;
@@ -479,6 +482,34 @@ int ObRemoteTask::assign_dependency_tables(const DependenyTableStore &dependency
     LOG_WARN("failed to assign file list", K(ret));
   }
   return ret;
+}
+
+int ObRemoteTask::assign_ls_list(const share::ObLSArray ls_ids) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_list_.assign(ls_ids))) {
+    LOG_WARN("failed to assign ls list", K(ret));
+  }
+  return ret;
+}
+
+// 需保证两个ls array中元素不重复
+bool ObRemoteTask::check_ls_list(share::ObLSArray &ls_ids) const {
+  bool is_valid = true;
+
+  if (ls_ids.count() > ls_list_.count()) {
+    is_valid = false;
+  } else {
+    ARRAY_FOREACH_X(ls_ids, i, ls_ids_cnt, is_valid) {
+      is_valid = false;
+      ARRAY_FOREACH_X(ls_list_, j, ls_list_cnt, !is_valid) {
+        if (ls_ids.at(i) == ls_list_.at(j)) {
+          is_valid = true;
+        }
+      }
+    }
+  }
+
+  return is_valid;
 }
 
 DEFINE_TO_YSON_KV(ObRemoteTask, OB_ID(task_id), task_id_,

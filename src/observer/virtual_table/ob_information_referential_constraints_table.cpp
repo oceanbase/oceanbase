@@ -161,7 +161,7 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
 {
   int ret = OB_SUCCESS;
   ObStringBuf allocator;
-  ObString uk_index_name;
+  ObString index_name;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const ObIArray<ObForeignKeyInfo> &foreign_key_infos =
         table_schema.get_foreign_key_infos();
@@ -253,31 +253,43 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
             break;
           }
           case UNIQUE_CONSTRAINT_NAME: {
-            if (CONSTRAINT_TYPE_PRIMARY_KEY == foreign_key_info.ref_cst_type_) {
+            if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_) {
               cells[cell_idx].set_varchar(ObString("PRIMARY"));
               cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                  ObCharset::get_default_charset()));
-            } else if (CONSTRAINT_TYPE_UNIQUE_KEY == foreign_key_info.ref_cst_type_) {
-              const ObSimpleTableSchemaV2 *uk_index_schema = NULL;
+            } else if (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_
+                       || FK_REF_TYPE_UNIQUE_KEY == foreign_key_info.fk_ref_type_) {
+              const ObSimpleTableSchemaV2 *index_schema = NULL;
               if (OB_FAIL(schema_guard_->get_simple_table_schema(
-                          tenant_id, foreign_key_info.ref_cst_id_, uk_index_schema))) {
-                SERVER_LOG(WARN, "get uk_index_schema failed", K(ret), K(tenant_id));
+                          tenant_id, foreign_key_info.ref_cst_id_, index_schema))) {
+                SERVER_LOG(WARN, "get index_schema failed", K(ret), K(tenant_id));
                 break;
-              } else if (OB_ISNULL(uk_index_schema)) {
+              } else if (OB_ISNULL(index_schema)) {
                 ret = OB_ERR_UNEXPECTED;
-                SERVER_LOG(WARN, "uk_index_schema is null");
+                SERVER_LOG(WARN, "index_schema is null");
+                break;
+              } else if (index_schema->is_user_table()) {
+                cells[cell_idx].set_varchar(ObString("PRIMARY"));
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                  ObCharset::get_default_charset()));
+                break;
+              } else if (!index_schema->is_unique_index()) {
+                cells[cell_idx].set_varchar(ObString("NULL"));
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                  ObCharset::get_default_charset()));
                 break;
               } else {
-                uk_index_name.reset();
-                // get the original short index name
+                index_name.reset();
                 if (OB_FAIL(ObTableSchema::get_index_name(allocator,
-                            uk_index_schema->get_table_id(),
-                            uk_index_schema->get_table_name_str(),
-                            uk_index_name))) {
+                            index_schema->get_table_id(),
+                            index_schema->get_table_name_str(),
+                            index_name))) {
+                  // get the original short index name
                   SERVER_LOG(WARN, "error get index table name failed", K(ret));
                   break;
-                } else {
-                  cells[cell_idx].set_varchar(uk_index_name);
+                }
+                if (OB_SUCC(ret)) {
+                  cells[cell_idx].set_varchar(index_name);
                   cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                      ObCharset::get_default_charset()));
                 }
@@ -288,8 +300,8 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
                                                                    ObCharset::get_default_charset()));
             } else {
               ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN, "foreign_key_info.ref_cst_type_ is invalid type",
-                               K(foreign_key_info.ref_cst_type_));
+              SERVER_LOG(WARN, "foreign_key_info.fk_ref_type_ is invalid type",
+                               K(foreign_key_info.fk_ref_type_));
               break;
             }
             break;

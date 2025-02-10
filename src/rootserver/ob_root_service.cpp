@@ -3541,29 +3541,40 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             // get parent table schema.
             // TODO: is it necessory to determine whether it is case sensitive by check sys variable
             // check whether it belongs to self reference, if so, the parent schema is child schema.
+
             if (0 == foreign_key_arg.parent_table_.case_compare(table_schema.get_table_name_str())
                   && 0 == foreign_key_arg.parent_database_.case_compare(arg.db_name_)) {
               parent_schema = &table_schema;
-              if (CONSTRAINT_TYPE_PRIMARY_KEY == foreign_key_arg.ref_cst_type_) {
+              uint64_t compat_version = 0;
+              if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_arg.fk_ref_type_) {
                 if (is_oracle_mode) {
                   for (ObTableSchema::const_constraint_iterator iter = parent_schema->constraint_begin(); iter != parent_schema->constraint_end(); ++iter) {
                     if (CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
-                      foreign_key_info.ref_cst_type_ = CONSTRAINT_TYPE_PRIMARY_KEY;
+                      foreign_key_info.fk_ref_type_ = FK_REF_TYPE_PRIMARY_KEY;
                       foreign_key_info.ref_cst_id_ = (*iter)->get_constraint_id();
                       break;
                     }
                   }
                 } else {
-                  foreign_key_info.ref_cst_type_ = CONSTRAINT_TYPE_PRIMARY_KEY;
+                  foreign_key_info.fk_ref_type_ = FK_REF_TYPE_PRIMARY_KEY;
                   foreign_key_info.ref_cst_id_ = common::OB_INVALID_ID;
                 }
-              } else if (CONSTRAINT_TYPE_UNIQUE_KEY == foreign_key_arg.ref_cst_type_) {
+              } else if (FK_REF_TYPE_UNIQUE_KEY == foreign_key_arg.fk_ref_type_) {
                 if (OB_FAIL(ddl_service_.get_uk_cst_id_for_self_ref(table_schemas, foreign_key_arg, foreign_key_info))) {
                   LOG_WARN("failed to get uk cst id for self ref", K(ret), K(foreign_key_arg));
                 }
+              } else if(OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
+                LOG_WARN("fail to get data version", KR(ret), K(table_schema.get_tenant_id()));
+              } else if (!lib::is_oracle_mode() && FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_arg.fk_ref_type_) {
+                if (compat_version < DATA_VERSION_4_3_5_1) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("foreign key referencing non-unique index is not supported in this version", K(ret));
+                } else if (OB_FAIL(ddl_service_.get_index_cst_id_for_self_ref(table_schemas, foreign_key_arg, foreign_key_info))) {
+                  LOG_WARN("failed to get index cst id for self ref", K(ret), K(foreign_key_arg));
+                }
               } else {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("invalid foreign key ref cst type", K(ret), K(foreign_key_arg));
+                LOG_WARN("invalid foreign key fk ref type", K(ret), K(foreign_key_arg));
               }
             } else if (OB_FAIL(schema_guard.get_table_schema(table_schema.get_tenant_id(),
                                                              foreign_key_arg.parent_database_,
@@ -3571,7 +3582,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                                                              false, parent_schema))) {
               LOG_WARN("failed to get parent table schema", K(ret), K(foreign_key_arg));
             } else {
-              foreign_key_info.ref_cst_type_ = foreign_key_arg.ref_cst_type_;
+              foreign_key_info.fk_ref_type_ = foreign_key_arg.fk_ref_type_;
               foreign_key_info.ref_cst_id_ = foreign_key_arg.ref_cst_id_;
             }
           }

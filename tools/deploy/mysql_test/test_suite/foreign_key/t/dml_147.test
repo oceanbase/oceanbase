@@ -344,8 +344,10 @@ drop table jx_t1;
 create table jx_t1(pk int, a int, b int, c int, d int, primary key (pk), unique key uk_b (a, b), foreign key (c, d) references jx_t1 (a, b) on update RESTRICT on delete RESTRICT);
 insert into jx_t1 values(1, 2, 2, 2, 2);
 --echo # BUG#29775335 - 修复外键指向自身时删除数据失败
+--error 1451
 update jx_t1 set a =3, c = 3 where pk = 1;
 --echo # BUG#29775335 - 修复外键指向自身时删除数据失败
+--error 1451
 update jx_t1 set c =3, a = 3 where pk = 1;
 drop table jx_t1;
 

@@ -75,8 +75,9 @@ public:
       skip_scan_group_id_(-1),
       group_rescan_cnt_(-1),
       same_tablet_addr_(),
-      real_das_dop_(0),
       use_gts_opt_(false),
+      parent_table_set_(allocator),
+      real_das_dop_(0),
       flags_(0)
   {
     is_fk_cascading_ = 0;
@@ -105,7 +106,8 @@ public:
   ObDASTableLoc *get_external_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   DASTableLocList &get_table_loc_list() { return table_locs_; }
   const DASTableLocList &get_table_loc_list() const { return table_locs_; }
-  DASDelCtxList& get_das_del_ctx_list() {return  del_ctx_list_;}
+  DASDelCtxList& get_das_del_ctx_list() { return del_ctx_list_; }
+  DASTableIdList& get_parent_table_set() { return parent_table_set_; }
   DASTableLocList &get_external_table_loc_list() { return external_table_locs_; }
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const common::ObTabletID &tablet_id,
@@ -200,8 +202,9 @@ private:
   int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
   int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
   ObAddr same_tablet_addr_;
-  int64_t real_das_dop_;
   bool use_gts_opt_; // without get gts
+  DASTableIdList parent_table_set_; // The list of parent table, for inner sql.
+  int64_t real_das_dop_;
 public:
   union {
     uint64_t flags_;

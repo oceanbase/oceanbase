@@ -18,6 +18,7 @@
 #include "sql/das/ob_das_parallel_handler.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -392,6 +393,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
                                                   int32_t group_id) {
   int ret = OB_SUCCESS;
   void *resp_buf = nullptr;
+  ObIDASTaskOp* task_op = nullptr;
   ObIDASTaskResult *op_result = nullptr;
   ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
   FLTSpanGuard(do_async_remote_das_task);
@@ -443,31 +445,46 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   }
   // prepare op result in advance avoiding racing condition.
   for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
-    if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_ops.at(i)->get_task_status())) {
+    if (OB_ISNULL(task_op = task_ops.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("task status unexpected", K(ret), K(task_ops.at(i)->get_task_status()), KPC(task_ops.at(i)));
-    } else if (NULL != (op_result = task_ops.at(i)->get_op_result())) {
-      if (OB_FAIL(op_result->reuse())) {
-        LOG_WARN("reuse task result failed", K(ret));
-      }
+      LOG_WARN("task op is null", KR(ret));
     } else {
-      if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_ops.at(i)->get_type(), op_result))) {
-            LOG_WARN("failed to create das task result", K(ret));
-      } else if (OB_ISNULL(op_result)) {
+      if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
+           task_op->get_type() == DAS_OP_TABLE_SCAN) &&
+          remote_info.detectable_id_.is_invalid()) {
+        if (OB_FAIL(das_ref.get_detectable_id(remote_info.detectable_id_))) {
+          LOG_WARN("get detectable id failed", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_op->get_task_status())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get op result", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(das_async_cb->get_op_results().push_back(op_result))) {
-        LOG_WARN("failed to add task result", K(ret));
-      } else if (OB_FAIL(op_result->init(*task_ops.at(i), das_async_cb->get_result_alloc()))) {
-        LOG_WARN("failed to init task result", K(ret));
+        LOG_WARN("task status unexpected", K(ret), K(task_op->get_task_status()), KPC(task_op));
+      } else if (NULL != (op_result = task_op->get_op_result())) {
+        if (OB_FAIL(op_result->reuse())) {
+          LOG_WARN("reuse task result failed", K(ret));
+        }
       } else {
-        task_ops.at(i)->set_op_result(op_result);
+        if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_op->get_type(), op_result))) {
+              LOG_WARN("failed to create das task result", K(ret));
+        } else if (OB_ISNULL(op_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get op result", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(das_async_cb->get_op_results().push_back(op_result))) {
+          LOG_WARN("failed to add task result", K(ret));
+        } else if (OB_FAIL(op_result->init(*task_op, das_async_cb->get_result_alloc()))) {
+          LOG_WARN("failed to init task result", K(ret));
+        } else {
+          task_op->set_op_result(op_result);
+        }
       }
     }
-  }
+  } // end for
   LOG_DEBUG("begin to do remote das task", K(task_ops));
   if (OB_FAIL(ret)) {
     // do nothing
@@ -490,14 +507,20 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   }
   if (OB_FAIL(ret)) {
     if (nullptr != das_async_cb) {
+      das_async_cb->set_invalid(true);
       das_ref.remove_async_das_cb(das_async_cb);
     }
-    for (int i = 0; i < task_ops.count(); i++) {
-      task_ops.at(i)->errcode_ = ret;
-      task_ops.at(i)->set_task_status(ObDasTaskStatus::FAILED);
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(task_ops.at(i)->state_advance())) {
-        LOG_WARN("failed to advance das task state", K(tmp_ret));
+    for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
+      if (OB_ISNULL(task_op = task_ops.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task op is null", K(ret));
+      } else {
+        task_op->errcode_ = ret;
+        task_op->set_task_status(ObDasTaskStatus::FAILED);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(task_op->state_advance())) {
+          LOG_WARN("failed to advance das task state", K(tmp_ret));
+        }
       }
     }
   }
@@ -515,6 +538,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObClockGenerator::getClock();
   uint64_t tenant_id = session->get_rpc_tenant_id();
   common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+  ObIDASTaskOp* task_op = nullptr;
   ObIDASTaskResult *op_result = nullptr;
   ObDASExtraData *extra_result = nullptr;
   ObDASRemoteInfo remote_info;
@@ -555,31 +579,45 @@ int ObDataAccessService::do_sync_remote_das_task(
 
     // prepare op result in advance avoiding racing condition.
     for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
-      if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_ops.at(i)->get_task_status())) {
+      if (OB_ISNULL(task_op = task_ops.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task status unexpected", KR(ret), K(task_ops.at(i)->get_task_status()), KPC(task_ops.at(i)));
-      } else if (NULL != (op_result = task_ops.at(i)->get_op_result())) {
-        if (OB_FAIL(op_result->reuse())) {
-          LOG_WARN("reuse task result failed", K(ret));
-        }
+        LOG_WARN("task op is null", KR(ret));
       } else {
-        if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_ops.at(i)->get_type(), op_result))) {
-          LOG_WARN("failed to create das task result", K(ret));
-        } else if (OB_ISNULL(op_result)) {
+        if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
+             task_op->get_type() == DAS_OP_TABLE_SCAN) &&
+            remote_info.detectable_id_.is_invalid()) {
+          if (OB_FAIL(das_ref.get_detectable_id(remote_info.detectable_id_))) {
+            LOG_WARN("get detectable id failed", K(ret));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_op->get_task_status())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get op result", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(task_resp.get_op_results().push_back(op_result))) {
-          LOG_WARN("failed to add task result", K(ret));
-        } else if (OB_FAIL(op_result->init(*task_ops.at(i), das_ref.get_das_alloc()))) {
-          LOG_WARN("failed to init task result", K(ret));
+          LOG_WARN("task status unexpected", KR(ret), K(task_op->get_task_status()), KPC(task_op));
+        } else if (NULL != (op_result = task_op->get_op_result())) {
+          if (OB_FAIL(op_result->reuse())) {
+            LOG_WARN("reuse task result failed", K(ret));
+          }
         } else {
-          task_ops.at(i)->set_op_result(op_result);
+          if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_op->get_type(), op_result))) {
+            LOG_WARN("failed to create das task result", K(ret));
+          } else if (OB_ISNULL(op_result)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get op result", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(task_resp.get_op_results().push_back(op_result))) {
+            LOG_WARN("failed to add task result", K(ret));
+          } else if (OB_FAIL(op_result->init(*task_op, das_ref.get_das_alloc()))) {
+            LOG_WARN("failed to init task result", K(ret));
+          } else {
+            task_op->set_op_result(op_result);
+          }
         }
       }
-    }
+    } // end for
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(collect_das_task_info(task_ops, remote_info))) {
@@ -587,6 +625,7 @@ int ObDataAccessService::do_sync_remote_das_task(
     } else if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("das is timeout", K(ret), K(plan_ctx->get_timeout_timestamp()), K(timeout));
+    } else if (FALSE_IT(das_rpc_proxy_.set_detect_session_killed(true))) {
     } else if (OB_FAIL(das_rpc_proxy_
                     .to(task_arg.get_runner_svr())
                     .by(tenant_id)
@@ -600,12 +639,17 @@ int ObDataAccessService::do_sync_remote_das_task(
       }
     }
     if (OB_FAIL(ret)) {
-      for (int i = 0; i < task_ops.count(); i++) {
-        task_ops.at(i)->errcode_ = ret;
-        task_ops.at(i)->set_task_status(ObDasTaskStatus::FAILED);
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(task_ops.at(i)->state_advance())) {
-          LOG_WARN("failed to advance das task state", K(tmp_ret));
+      for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
+        if (OB_ISNULL(task_op = task_ops.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("task op is null", KR(ret));
+        } else {
+          task_op->errcode_ = ret;
+          task_op->set_task_status(ObDasTaskStatus::FAILED);
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(task_op->state_advance())) {
+            LOG_WARN("failed to advance das task state", K(tmp_ret));
+          }
         }
       }
     } else if (OB_FAIL(process_task_resp(das_ref, task_resp, task_ops))) {

@@ -309,7 +309,20 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
                                                                have_index))) {
       LOG_WARN("fail to check index on foreign key", K(ret), K(foreign_key_infos), KPC(index_table_schema));
     } else if (have_index) {
-      ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+      if (index_table_schema->is_unique_index()) {
+        ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+      } else {
+        ObString index_name;
+        if (OB_FAIL(ObTableSchema::get_index_name(allocator,
+          index_table_schema->get_data_table_id(),
+          index_table_schema->get_table_name_str(),
+          index_name))) {
+          LOG_WARN("failed to build index table name", K(ret));
+        } else {
+          ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX;
+          LOG_USER_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX, index_name.length(), index_name.ptr());
+        }
+      }
       LOG_WARN("cannot delete index with foreign key dependency", K(ret));
     } else if (!arg.is_inner_ && index_table_schema->is_unavailable_index()) {
       ret = OB_NOT_SUPPORTED;

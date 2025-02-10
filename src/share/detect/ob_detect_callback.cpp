@@ -302,5 +302,26 @@ int ObP2PDataHubDetectCB::do_callback()
   return ret;
 }
 
+
+int ObDASRemoteTaskDetectCB::do_callback()
+{
+  int ret = OB_SUCCESS;
+  ObDataAccessService *das = MTL(ObDataAccessService *);
+  ObInterruptCode int_code(OB_RPC_CONNECT_ERROR,
+                           GETTID(),
+                           from_svr_addr_,
+                           "Dm interrupt das task");
+  if (OB_ISNULL(das)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "[DM] das is null", K(ret), K(key_));
+  } else if (OB_FAIL(ObGlobalInterruptManager::getInstance()->interrupt(tid_, int_code))) {
+    LIB_LOG(WARN, "[DM] fail to send interrupt message", K(int_code), K(tid_), K_(trace_id));
+  } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(key_.get_value(), false /* need unregister dm */))) {
+    LIB_LOG(WARN, "[DM] erase task result failed", K(ret), K(key_));
+  }
+  LIB_LOG(WARN, "[DM] interrupt das task and erase extra result", K(ret), K(tid_), K(key_), K(trace_id_));
+  return ret;
+}
+
 } // end namespace common
 } // end namespace oceanbase

@@ -187,5 +187,19 @@ private:
   sql::ObP2PDhKey key_;
 };
 
+
+class ObDASRemoteTaskDetectCB : public ObIDetectCallback
+{
+  public:
+  ObDASRemoteTaskDetectCB(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states, sql::DASTCBInfo key, const ObInterruptibleTaskID &tid)
+      : ObIDetectCallback(tenant_id, peer_states), key_(key), tid_(tid) {}
+
+  int do_callback() override;
+  int64_t get_detect_callback_type() const override { return (int64_t)DetectCallBackType::DAS_REMOTE_TASK_DETECT_CB; }
+private:
+  sql::DASTCBInfo key_;
+  ObInterruptibleTaskID tid_;
+};
+
 } // end namespace common
 } // end namespace oceanbase

@@ -204,6 +204,49 @@ int ObDMLService::check_rowkey_is_null(const ObExprPtrIArray &row,
   return ret;
 }
 
+int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, const uint64_t table_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (OB_NOT_NULL(parent_table_set)) {
+    DASTableIdList::const_iterator it = parent_table_set->begin();
+    for (; it != parent_table_set->end(); it++) {
+      if (*it == table_id) {
+        exist = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext* root_ctx;
+  if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_rtctx.get_exec_ctx(), root_ctx))) {
+    LOG_WARN("get root ExecContext failed", K(ret));
+  } else if (OB_ISNULL(root_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the root ctx of foreign key nested session is null", K(ret));
+  } else {
+    DASTableIdList& parent_table_set = root_ctx->get_das_ctx().get_parent_table_set();
+    DASTableIdList::iterator it = parent_table_set.begin();
+    bool found = false;
+    for (; it != parent_table_set.end() && !found; it++) {
+      if (*it == dml_ctdef.das_base_ctdef_.index_tid_) {
+        found = true;
+        parent_table_set.erase(it);
+      }
+    }
+    if (!found) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot find the table id in the parent table set", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
                                                 DistinctType distinct_algo,
                                                 ObEvalCtx &eval_ctx,
@@ -750,7 +793,7 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
     if (OB_SUCC(ret) && !is_skipped && OB_NOT_NULL(del_rtdef.se_rowkey_dist_ctx_) && !has_instead_of_trg) {
       bool is_distinct = false;
       ObExecContext *root_ctx = nullptr;
-      if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
+      if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_op.get_exec_ctx(), root_ctx))) {
         LOG_WARN("get root ExecContext failed", K(ret));
       } else if (OB_ISNULL(root_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -895,6 +938,12 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
     if (OB_FAIL(check_row_whether_changed(upd_ctdef, upd_rtdef, dml_op.get_eval_ctx()))) {
       LOG_WARN("check row whether changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!is_skipped && (upd_rtdef.has_table_cycle_ || upd_ctdef.self_ref_update_)) {
+    ret = OB_ERR_ROW_IS_REFERENCED;
+    LOG_WARN("A cycle reference is detected in foreign key cascade update.", K(ret));
   }
 
   if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
@@ -1423,7 +1472,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
       if (dml_op.is_fk_nested_session()) {
         // for delete distinct check that has foreign key, perform global distinct check between nested session,
         // to avoid delete same row mutiple times between different nested sqls
-        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
+        if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1459,7 +1508,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
         DmlRowkeyDistCtx del_ctx;
         del_ctx.table_id_ = del_table_id;
         LOG_TRACE("[FOREIGN KEY] create hash set used for checking duplicate rowkey due to cascade delete", K(del_table_id));
-        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
+        if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx) || root_ctx != &dml_op.get_exec_ctx()) {
           ret = OB_ERR_UNEXPECTED;
@@ -1477,7 +1526,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
       }
     } else { //T_DISTINCT_NONE == del_ctdef.distinct_algo_, means optimizer think don't need to create a new hash set for distinct check
       if (dml_op.is_fk_nested_session()) { //for delete triggered by delete cascade, need to check whether upper nested sqls will delete the same table
-        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
+        if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1586,6 +1635,40 @@ int ObDMLService::init_upd_rtdef(
     ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
     if (OB_FAIL(init_ob_rowkey(allocator, upd_ctdef.distinct_key_.count(), upd_rtdef.table_rowkey_))) {
       LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
+    }
+  }
+
+  // Calculate if there exists table cycle.
+  // If there exists duplicate tables in the parent table set, then has_table_cycle = true
+  // Otherwise it is false.
+  if (OB_SUCC(ret) && upd_ctdef.is_primary_index_ && lib::is_mysql_mode()) {
+    ObTableModifyOp &dml_op = dml_rtctx.op_;
+    const uint64_t upd_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
+    ObExecContext *root_ctx = nullptr;
+    if (OB_FAIL(get_root_exec_ctx_for_fk_cascading(&dml_op.get_exec_ctx(), root_ctx))) {
+      LOG_WARN("failed to get root exec ctx", K(ret));
+    } else if (OB_ISNULL(root_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the root exec ctx is nullptr", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      DASTableIdList* parent_table_set = &root_ctx->get_das_ctx().get_parent_table_set();
+      // check table cycle even if upd_ctdef.need_check_table_cycle_ = false.
+      // For example, create table A(a int primary key, a2 int, foreign key(a2) references A(a) on update cascade)
+      // execute 'update A set a = a * 10;', it will first update A(a), then update A(a2)
+      // When it updates A(a), upd_ctdef.need_check_table_cycle_ = true. 'A' is added to the parent table set.
+      // When it updates A(a2) through the inner sql, upd_ctdef.need_check_table_cycle_ = false.
+      // because there is no cycle if we only update A(a2).
+      // but we need to check the cycle, because it may be from A(a).
+      if (OB_FAIL(check_table_cycle(parent_table_set, upd_table_id, upd_rtdef.has_table_cycle_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table cycle reference check failed", K(ret));
+      } else if (!upd_rtdef.has_table_cycle_ && upd_ctdef.need_check_table_cycle_) {
+        if (OB_FAIL(parent_table_set->push_front(upd_table_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to push to parent table set", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -2547,9 +2630,10 @@ int ObDMLService::log_user_error_inner(
   return ret;
 }
 
-// get the exec_ctx to create hash set to perform duplicate rowkey check,
+// 找第一个发起fk cascading的祖先exec context。
+// The exec_ctx can be used to create hash set to perform duplicate rowkey check,
 // which is used to avoid delete or update same row mutiple times
-int ObDMLService::get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, ObExecContext* &needed_ctx)
+int ObDMLService::get_root_exec_ctx_for_fk_cascading(ObExecContext *ctx, ObExecContext* &needed_ctx)
 {
   int ret = OB_SUCCESS;
   ObExecContext *parent_ctx = nullptr;
@@ -2565,7 +2649,7 @@ int ObDMLService::get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, Ob
     // case2: current stmt is not the root stmt, is not triggered by foreign key cascade operations
     // may be trigger or PL instead, create hash set at current ctx to perform duplicate rowkey check
     needed_ctx = ctx;
-  } else if (OB_FAIL(SMART_CALL(get_exec_ctx_for_duplicate_rowkey_check(parent_ctx, needed_ctx)))) {
+  } else if (OB_FAIL(SMART_CALL(get_root_exec_ctx_for_fk_cascading(parent_ctx, needed_ctx)))) {
     // case3: current stmt is a nested stmt, and is triggered by foreign key cascade operations
     // need to find it's ancestor ctx which is not triggered by cascade operations
     LOG_WARN("failed to get the exec_ctx to perform duplicate rowkey check between nested sqls", K(ret), K(ctx->get_nested_level()));

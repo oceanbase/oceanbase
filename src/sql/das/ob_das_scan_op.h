@@ -29,21 +29,27 @@ namespace sql
 {
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
+struct ObDASTCBInterruptInfo;
 
 struct ObDASTCBMemProfileKey {
-  ObDASTCBMemProfileKey()
-    : fake_unique_id_(0), timestamp_(0) {}
+  ObDASTCBMemProfileKey(): fake_unique_id_(0), timestamp_(0)
+  {}
 
-  explicit ObDASTCBMemProfileKey(const ObDASTCBMemProfileKey &key)
-    : fake_unique_id_(key.fake_unique_id_), timestamp_(key.timestamp_) {}
-
-  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id) {
+  void init(uint64_t timestamp, int64_t thread_id, int64_t op_id)
+  {
     timestamp_ = timestamp;
     // [op_id (32bit), thread_id (32bit)]
     fake_unique_id_ = (((uint64_t)op_id) << 32) | ((uint64_t)0xffffffff & thread_id);
   }
 
-  void reset() {
+  void init(const ObDASTCBMemProfileKey &key)
+  {
+    timestamp_ = key.timestamp_;
+    fake_unique_id_ = key.fake_unique_id_;
+  }
+
+  void reset()
+  {
     fake_unique_id_ = 0;
     timestamp_ = 0;
   }
@@ -55,14 +61,15 @@ struct ObDASTCBMemProfileKey {
     hash_val = common::murmurhash(&timestamp_, sizeof(uint64_t), hash_val);
     return hash_val;
   }
-  int hash(int64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   inline bool operator==(const ObDASTCBMemProfileKey& key) const
   {
     return fake_unique_id_ == key.fake_unique_id_ && timestamp_ == key.timestamp_;
   }
 
-  inline bool is_valid() {
+  inline bool is_valid()
+  {
     return (fake_unique_id_ > 0) && (timestamp_ > 0);
   }
 
@@ -328,7 +335,7 @@ public:
 
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
-  virtual int fill_extra_result() override;
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return scan_ctdef_; }

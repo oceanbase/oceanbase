@@ -760,6 +760,9 @@ protected:
   ObDASMergeIter *scan_iter_;
   int64_t group_rescan_cnt_;
   int64_t group_id_;
+
+  // all tasks belonging to this op share the same key
+  ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
  };
 

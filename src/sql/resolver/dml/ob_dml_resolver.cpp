@@ -6538,7 +6538,7 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
       const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
       const uint64_t parent_table_id = foreign_key_info.parent_table_id_;
       const uint64_t child_table_id = foreign_key_info.child_table_id_;
-      if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_) {
+      if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_ && foreign_key_info.is_ref_unique_index()) {
         const ObTableSchema *parent_table_schema = nullptr;
         bool parent_key_is_pkey = false;
         const common::ObSEArray<uint64_t, 4> &parent_column_ids = foreign_key_info.parent_column_ids_;
