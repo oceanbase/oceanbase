@@ -62,11 +62,13 @@ private:
                    common::ObIAllocator &allocator,
                    const share::schema::ObColumnParam *col_param,
                    const ObObjMeta &obj_meta,
+                   const bool is_padding_mode,
                    ObStorageDatum &null_count,
                    ObStorageDatum &min_datum,
                    ObStorageDatum &max_datum);
   int pad_column(const ObObjMeta &obj_meta,
                  const share::schema::ObColumnParam *col_param,
+                 const bool is_padding_mode,
                  common::ObIAllocator &padding_alloc,
                  blocksstable::ObStorageDatum &datum);
 

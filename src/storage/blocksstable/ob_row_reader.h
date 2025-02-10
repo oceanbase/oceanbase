@@ -31,6 +31,7 @@ class ObNopBitMap;
 namespace blocksstable
 {
 typedef common::ObIArray<share::schema::ObColDesc> ObColDescIArray;
+typedef common::ObIArray<ObColumnParam *> ObColumnParamIArray;
 
 class ObClusterColumnReader
 {
@@ -134,7 +135,8 @@ public:
       const char *row_buf,
       const int64_t row_len,
       const int64_t col_index,
-      ObStorageDatum &datum);
+      ObStorageDatum &datum,
+      const share::schema::ObColumnParam *col_param = nullptr);
   int compare_meta_rowkey(
       const ObDatumRowkey &rhs,
       const blocksstable::ObStorageDatumUtils &datum_utils,

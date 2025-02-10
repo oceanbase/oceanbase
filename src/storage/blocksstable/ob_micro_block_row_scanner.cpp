@@ -349,7 +349,6 @@ int ObIMicroBlockRowScanner::apply_blockscan(
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to judge end of block or not", K(ret), K_(macro_id), K_(start), K_(last), K_(current));
     }
-  } else if (reader_->get_column_count() <= read_info_->get_max_col_index()) {
   } else if (OB_FAIL(block_row_store->apply_blockscan(
               *this,
               can_ignore_multi_version_,
@@ -564,7 +563,8 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                              pd_filter_info.cell_data_ptrs_,
                                              pd_filter_info.len_array_,
                                              filter.get_filter_node().column_exprs_,
-                                             nullptr))) {
+                                             &filter.get_default_datums(),
+                                             filter.is_padding_mode()))) {
           LOG_WARN("Failed to get rows for rich format", K(ret), K(cur_row_index));
         }
       } else if (OB_FAIL(get_rows_for_old_format(col_offsets,
@@ -575,7 +575,8 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                                  pd_filter_info.cell_data_ptrs_,
                                                  filter.get_filter_node().column_exprs_,
                                                  datum_infos,
-                                                 nullptr))) {
+                                                 &filter.get_default_datums(),
+                                                 filter.is_padding_mode()))) {
         LOG_WARN("Failed to get rows for old format", K(ret), K(cur_row_index));
       }
 
@@ -603,7 +604,8 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
     const char **cell_datas,
     sql::ObExprPtrIArray &exprs,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
-    blocksstable::ObDatumRow *default_row)
+    const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+    const bool is_padding_mode)
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
@@ -611,7 +613,8 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
     ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
     if (OB_FAIL(flat_reader->get_rows(col_offsets,
                                       col_params,
-                                      default_row,
+                                      default_datums,
+                                      is_padding_mode,
                                       row_ids,
                                       row_cap,
                                       row_,
@@ -627,6 +630,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
     ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
     if (OB_FAIL(decoder->get_rows(col_offsets,
                                   col_params,
+                                  is_padding_mode,
                                   row_ids,
                                   cell_datas,
                                   row_cap,
@@ -665,7 +669,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     const char **cell_datas,
     uint32_t *len_array,
     sql::ObExprPtrIArray &exprs,
-    blocksstable::ObDatumRow *default_row,
+    const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+    const bool is_padding_mode,
     const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
@@ -674,7 +679,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
     if (OB_FAIL(flat_reader->get_rows(col_offsets,
                                       col_params,
-                                      default_row,
+                                      default_datums,
+                                      is_padding_mode,
                                       row_ids,
                                       vector_offset,
                                       row_cap,
@@ -690,6 +696,8 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
     ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
     if (OB_FAIL(decoder->get_rows(col_offsets,
                                   col_params,
+                                  default_datums,
+                                  is_padding_mode,
                                   row_ids,
                                   row_cap,
                                   cell_datas,
@@ -923,6 +931,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
     const int64_t datum_offset,
     uint32_t *len_array,
+    const bool is_padding_mode,
     const bool need_init_vector)
 {
   int ret = OB_SUCCESS;
@@ -941,6 +950,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                          len_array,
                                          exprs,
                                          nullptr,
+                                         is_padding_mode,
                                          need_init_vector))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
@@ -953,7 +963,8 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                              cell_datas,
                                              exprs,
                                              datum_infos,
-                                             nullptr))) {
+                                             nullptr,
+                                             is_padding_mode))) {
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
   return ret;
@@ -1047,6 +1058,7 @@ int ObIMicroBlockRowScanner::check_can_group_by(
 int ObIMicroBlockRowScanner::read_distinct(
     const int32_t group_by_col,
     const char **cell_datas,
+    const bool is_padding_mode,
     storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
@@ -1055,7 +1067,7 @@ int ObIMicroBlockRowScanner::read_distinct(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected reader type", K(ret), K(reader_->get_type()));
   } else if (OB_FAIL((static_cast<blocksstable::ObIMicroBlockDecoder*>(reader_))->read_distinct(
-      group_by_col, cell_datas, group_by_cell))) {
+      group_by_col, cell_datas, is_padding_mode, group_by_cell))) {
     LOG_WARN("Failed to read distinct", K(ret));
   }
   return ret;

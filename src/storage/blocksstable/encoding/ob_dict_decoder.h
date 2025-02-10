@@ -151,8 +151,8 @@ public:
       storage::ObGroupByCellBase &group_by_cell) const;
 
 public:
-  ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
-  ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
+  ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, const bool is_padding_mode, const int64_t meta_length) const;
+  ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, const bool is_padding_mode, const int64_t meta_length) const;
 
 private:
   static const int DICT_SKIP_THRESHOLD = 32;
@@ -557,31 +557,34 @@ public:
   typedef std::random_access_iterator_tag iterator_category;
 public:
   ObDictDecoderIterator() : decoder_(nullptr), ctx_(nullptr),
-                            index_(0), meta_length_(0), cell_() {}
-  explicit ObDictDecoderIterator(
+                            index_(0), meta_length_(0), cell_(), is_padding_mode_(false) {}
+  ObDictDecoderIterator(
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
-      int64_t index,
-      int64_t meta_length)
-      : decoder_(decoder), ctx_(ctx), index_(index), meta_length_(meta_length), cell_() {}
-  explicit ObDictDecoderIterator(
+      const int64_t index,
+      const int64_t meta_length,
+      const bool is_padding_mode)
+      : decoder_(decoder), ctx_(ctx), index_(index), meta_length_(meta_length), cell_(), is_padding_mode_(is_padding_mode) {}
+  ObDictDecoderIterator(
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
-      int64_t index,
-      int64_t meta_length,
-      ObStorageDatum& cell)
+      const int64_t index,
+      const int64_t meta_length,
+      const ObStorageDatum& cell,
+      const bool is_padding_mode)
   {
     decoder_ = decoder;
     ctx_ = ctx;
     index_ = index;
     meta_length_ = meta_length;
     cell_ = cell;
+    is_padding_mode_ = is_padding_mode;
   }
   inline value_type &operator*()
   {
     OB_ASSERT(nullptr != decoder_);
     OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
-    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+    if (decoder_->need_padding(is_padding_mode_, ctx_->obj_meta_)) {
       OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
@@ -591,7 +594,7 @@ public:
   {
     OB_ASSERT(nullptr != decoder_);
     OB_ASSERT(OB_SUCCESS == decoder_->decode(ctx_->obj_meta_.get_type(), cell_, index_, meta_length_));
-    if (ctx_->obj_meta_.is_fixed_len_char_type() && nullptr != ctx_->col_param_) {
+    if (decoder_->need_padding(is_padding_mode_, ctx_->obj_meta_)) {
       OB_ASSERT(OB_SUCCESS == storage::pad_column(ctx_->obj_meta_, ctx_->col_param_->get_accuracy(),
                                                   *(ctx_->allocator_), cell_));
     }
@@ -600,7 +603,7 @@ public:
   inline ObDictDecoderIterator operator--(int)
   {
     OB_ASSERT(nullptr != decoder_);
-    return ObDictDecoderIterator(decoder_, ctx_, index_--, meta_length_, cell_);
+    return ObDictDecoderIterator(decoder_, ctx_, index_--, meta_length_, cell_, is_padding_mode_);
   }
   inline ObDictDecoderIterator operator--()
   {
@@ -611,7 +614,7 @@ public:
   inline ObDictDecoderIterator operator++(int)
   {
     OB_ASSERT(nullptr != decoder_);
-    return ObDictDecoderIterator(decoder_, ctx_, index_++, meta_length_, cell_);
+    return ObDictDecoderIterator(decoder_, ctx_, index_++, meta_length_, cell_, is_padding_mode_);
   }
   inline ObDictDecoderIterator &operator++()
   {
@@ -663,6 +666,7 @@ private:
   int64_t index_;
   int64_t meta_length_;
   value_type cell_;
+  bool is_padding_mode_;
 };
 
 template <int32_t REF_LEN, int32_t CMP_TYPE>

@@ -1051,7 +1051,7 @@ int ObRawDecoder::fast_datum_comparison_operator(
       }
       if (OB_FAIL(batch_decode_fast(col_ctx, row_index, row_ids, curr_batch_size, datums))) {
         LOG_WARN("Failed to batch decode", K(ret), K(col_ctx), K(evaluated_row_cnt), K(curr_batch_size));
-      } else if (col_ctx.obj_meta_.is_fixed_len_char_type() && nullptr != col_ctx.col_param_
+      } else if (need_padding(filter.is_padding_mode(), col_ctx.obj_meta_)
           && OB_FAIL(storage::pad_on_datums(
               col_ctx.col_param_->get_accuracy(),
               col_ctx.obj_meta_.get_collation_type(),
@@ -1227,7 +1227,7 @@ int ObRawDecoder::traverse_all_data(
           LOG_WARN("Failed to load data to object cell", K(ret), K(cell_data), K(cell_len));
         } else {
           // Padding for non-bitpacking data if required
-          if (col_ctx.obj_meta_.is_fixed_len_char_type() && nullptr != col_ctx.col_param_) {
+          if (need_padding(filter.is_padding_mode(), col_ctx.obj_meta_)) {
             if (OB_FAIL(storage::pad_column(col_ctx.obj_meta_, col_ctx.col_param_->get_accuracy(),
                                             *col_ctx.allocator_, cur_datum))) {
               LOG_WARN("Failed to pad column", K(ret));

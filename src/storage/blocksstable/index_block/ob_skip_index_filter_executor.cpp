@@ -41,6 +41,7 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
                   common::ObIAllocator &allocator,
                   const share::schema::ObColumnParam *col_param,
                   const ObObjMeta &obj_meta,
+                  const bool is_padding_mode,
                   ObStorageDatum &null_count,
                   ObStorageDatum &min_datum,
                   ObStorageDatum &max_datum)
@@ -57,10 +58,10 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
   } else if (OB_FAIL(agg_row_reader_.read(meta_, max_datum))) {
     LOG_WARN("Failed read agg max datum", K(ret), K(meta_));
   } else if (!min_datum.is_null() &&
-             OB_FAIL(pad_column(obj_meta, col_param, allocator, min_datum))) {
+             OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, min_datum))) {
     LOG_WARN("Failed to pad column on min datum", K(ret));
   } else if (!max_datum.is_null() &&
-             OB_FAIL(pad_column(obj_meta, col_param, allocator, max_datum))){
+             OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, max_datum))){
     LOG_WARN("Failed to pad column on max datum", K(ret));
   }
   LOG_DEBUG("[SKIP INDEX] read aggregate row", K(ret), K(null_count), K(min_datum), K(max_datum));
@@ -143,8 +144,8 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
   ObStorageDatum max_datum;
   if (filter.is_cmp_op_with_null_ref_value()) {
     fal_desc.set_always_false();
-  } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param,
-                                  obj_meta, null_count, min_datum, max_datum))) {
+  } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param, obj_meta,
+                                  filter.is_padding_mode(), null_count, min_datum, max_datum))) {
     LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
   } else if (null_count.is_null() && min_datum.is_null() && max_datum.is_null()) {
     // min max null_count all null, expect uncertain cause by progressive merge
@@ -278,11 +279,12 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
 
 inline int ObSkipIndexFilterExecutor::pad_column(const ObObjMeta &obj_meta,
                                           const share::schema::ObColumnParam *col_param,
+                                          const bool is_padding_mode,
                                           common::ObIAllocator &padding_alloc,
                                           blocksstable::ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
-  if (obj_meta.is_fixed_len_char_type() && nullptr != col_param) {
+  if (is_padding_mode && obj_meta.is_fixed_len_char_type()) {
     if (OB_FAIL(storage::pad_column(obj_meta, col_param->get_accuracy(),
                                     padding_alloc, datum))) {
       LOG_WARN("Failed to pad column", K(ret));
@@ -573,8 +575,8 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
   if (OB_UNLIKELY(!filter.is_monotonic())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid black filter, filter is not monotonic", K(ret), K(filter));
-  } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param,
-                            obj_meta, null_count, min_datum, max_datum))) {
+  } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param, obj_meta,
+                            filter.is_padding_mode(), null_count, min_datum, max_datum))) {
     LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
   } else if (null_count.is_null() && min_datum.is_null() && max_datum.is_null()) {
     // min max null_count all null, expect uncertain cause by progressive merge

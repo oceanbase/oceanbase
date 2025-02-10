@@ -466,7 +466,7 @@ int ObStringColumnDecoder::nunn_operator(
 
   if (!ctx.has_no_null()) {
     const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
-    const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
+    const bool is_need_padding = need_padding(filter.is_padding_mode(), ctx.obj_meta_);
 
     ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle;
     if (OB_FAIL(op_handle.assign(
@@ -486,11 +486,11 @@ int ObStringColumnDecoder::nunn_operator(
     } else if (is_fixed_len_str) {
       ret = filter_tranverse_datum_[FIX_STRING_OFFSET_WIDTH_V]
                                    [ctx.null_flag_]
-                                   [need_padding] (ctx, row_start, row_count, op_handle);
+                                   [is_need_padding] (ctx, row_start, row_count, op_handle);
     } else {
       ret = filter_tranverse_datum_[ctx.offset_ctx_->meta_.width_]
                                    [ctx.null_flag_]
-                                   [need_padding] (ctx, row_start, row_count, op_handle);
+                                   [is_need_padding] (ctx, row_start, row_count, op_handle);
     }
   }
   if (OB_FAIL(ret)) {
@@ -517,7 +517,7 @@ int ObStringColumnDecoder::comparison_operator(
   const ObDatum &filter_datum = filter.get_datums().at(0);
   const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
   const common::ObCmpOp &cmp_op = sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type];
-  const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
+  const bool is_need_padding = need_padding(filter.is_padding_mode(), ctx.obj_meta_);
 
   ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle;
   if (OB_FAIL(op_handle.assign(
@@ -540,11 +540,11 @@ int ObStringColumnDecoder::comparison_operator(
   } else if (is_fixed_len_str) {
     ret = filter_tranverse_datum_[FIX_STRING_OFFSET_WIDTH_V]
                                  [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                 [is_need_padding] (ctx, row_start, row_count, op_handle);
   } else {
     ret = filter_tranverse_datum_[ctx.offset_ctx_->meta_.width_]
                                  [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                 [is_need_padding] (ctx, row_start, row_count, op_handle);
   }
   return ret;
 }
@@ -559,7 +559,7 @@ int ObStringColumnDecoder::in_operator(
 {
   int ret = OB_SUCCESS;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
-  const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
+  const bool is_need_padding = need_padding(filter.is_padding_mode(), ctx.obj_meta_);
   const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
 
   ObFilterInCmpType cmp_type = get_filter_in_cmp_type(row_count, filter.get_datums().count(), false);
@@ -609,11 +609,11 @@ int ObStringColumnDecoder::in_operator(
   } else if (is_fixed_len_str) {
     ret = filter_tranverse_datum_[FIX_STRING_OFFSET_WIDTH_V]
                                 [ctx.null_flag_]
-                                [need_padding] (ctx, row_start, row_count, op_handle);
+                                [is_need_padding] (ctx, row_start, row_count, op_handle);
   } else {
     ret = filter_tranverse_datum_[ctx.offset_ctx_->meta_.width_]
                                 [ctx.null_flag_]
-                                [need_padding] (ctx, row_start, row_count, op_handle);
+                                [is_need_padding] (ctx, row_start, row_count, op_handle);
   }
   return ret;
 }
@@ -629,7 +629,7 @@ int ObStringColumnDecoder::bt_operator(
   int ret = OB_SUCCESS;
   const ObDatum &left_ref_datum = filter.get_datums().at(0);
   const ObDatum &right_ref_datum = filter.get_datums().at(1);
-  const bool need_padding = (ctx.obj_meta_.is_fixed_len_char_type() && nullptr != ctx.col_param_);
+  const bool is_need_padding = need_padding(filter.is_padding_mode(), ctx.obj_meta_);
   const bool is_fixed_len_str = ctx.str_ctx_->meta_.is_fixed_len_string();
 
   ObFunction<int(const ObDatum &cur_datum, const int64_t idx)> op_handle;
@@ -660,11 +660,11 @@ int ObStringColumnDecoder::bt_operator(
   } else if (is_fixed_len_str) {
     ret = filter_tranverse_datum_[FIX_STRING_OFFSET_WIDTH_V]
                                  [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                 [is_need_padding] (ctx, row_start, row_count, op_handle);
   } else {
     ret = filter_tranverse_datum_[ctx.offset_ctx_->meta_.width_]
                                  [ctx.null_flag_]
-                                 [need_padding] (ctx, row_start, row_count, op_handle);
+                                 [is_need_padding] (ctx, row_start, row_count, op_handle);
   }
   return ret;
 }

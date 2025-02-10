@@ -672,14 +672,19 @@ int ObRowReader::read_column(
     const char *row_buf,
     const int64_t row_len,
     const int64_t col_idx,
-    ObStorageDatum &datum)
+    ObStorageDatum &datum,
+    const share::schema::ObColumnParam *col_param)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(setup_row(row_buf, row_len))) {
     LOG_WARN("failed to setup row", K(ret), K(row_buf), K(row_len));
-  } else if (OB_UNLIKELY(col_idx < 0 || col_idx >= row_header_->get_column_count())) {
+  } else if (OB_UNLIKELY(col_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(col_idx));
+  } else if (OB_UNLIKELY(col_idx >= row_header_->get_column_count())) {
+    if (nullptr != col_param && OB_FAIL(datum.from_obj_enhance(col_param->get_orig_default_value()))) {
+      LOG_WARN("failed to convert obj for default column", K(ret), K(col_idx), K(col_param));
+    }
   } else if (OB_FAIL(read_specific_column_in_cluster(col_idx, datum))) {
     LOG_WARN("failed to read obj from cluster column reader", K(ret), KPC(row_header_), K(col_idx));
   }

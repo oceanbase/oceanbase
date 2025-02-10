@@ -170,6 +170,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t row_cap, const int64_t
                                                      datum_infos_,
                                                      0, /*datum offset*/
                                                      len_array_,
+                                                     is_padding_mode_,
                                                      !access_ctx_->block_row_store_->filter_is_null()))) {
       LOG_WARN("Fail to get next rows", K(ret));
     }

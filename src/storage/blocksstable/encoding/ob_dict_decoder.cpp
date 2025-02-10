@@ -958,8 +958,8 @@ int ObDictDecoder::eq_ne_operator(
         LOG_WARN("Failed to accquire dict codes", K(ret));
       }
     } else {
-      ObDictDecoderIterator begin_it = begin(&col_ctx, col_ctx.col_header_->length_);
-      ObDictDecoderIterator end_it = end(&col_ctx, col_ctx.col_header_->length_);
+      ObDictDecoderIterator begin_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
+      ObDictDecoderIterator end_it = end(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
 
       ObDatumCmpFuncType cmp_func = filter.cmp_func_;
       int64_t dict_ref = 0;
@@ -1078,8 +1078,8 @@ int ObDictDecoder::comparison_operator(
     if (count > 0) {
       const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
       const ObDatum &filter_datum = filter.get_datums().at(0);
-      ObDictDecoderIterator begin_it = begin(&col_ctx, col_ctx.col_header_->length_);
-      ObDictDecoderIterator end_it = end(&col_ctx, col_ctx.col_header_->length_);
+      ObDictDecoderIterator begin_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
+      ObDictDecoderIterator end_it = end(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
       ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
       ObDatumCmpFuncType cmp_func = filter.cmp_func_;
       if (meta_header_->is_sorted_dict()) {
@@ -1194,7 +1194,7 @@ int ObDictDecoder::comparison_operator(
       } else {
         // Unsorted dictionary, Traverse dictionary
         bool found = false;
-        ObDictDecoderIterator traverse_it = begin(&col_ctx, col_ctx.col_header_->length_);
+        ObDictDecoderIterator traverse_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
         const int64_t ref_bitset_size = meta_header_->count_ + 1;
         char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
         sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -1242,8 +1242,8 @@ int ObDictDecoder::bt_operator(
     const int64_t count = meta_header_->count_;
     ObDatumCmpFuncType cmp_func = filter.cmp_func_;
     if (count > 0) {
-      ObDictDecoderIterator begin_it = begin(&col_ctx, col_ctx.col_header_->length_);
-      ObDictDecoderIterator end_it = end(&col_ctx, col_ctx.col_header_->length_);
+      ObDictDecoderIterator begin_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
+      ObDictDecoderIterator end_it = end(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
       const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
       if (meta_header_->is_sorted_dict()) {
         ObDictDecoderIterator loc;
@@ -1286,7 +1286,7 @@ int ObDictDecoder::bt_operator(
         }
       } else {
         bool found = false;
-        ObDictDecoderIterator traverse_it = begin(&col_ctx, col_ctx.col_header_->length_);
+        ObDictDecoderIterator traverse_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
         const int64_t ref_bitset_size = meta_header_->count_ + 1;
         char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
         sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -1338,8 +1338,8 @@ int ObDictDecoder::in_operator(
     const int64_t count = meta_header_->count_;
     if (count > 0) {
       bool found = false;
-      ObDictDecoderIterator traverse_it = begin(&col_ctx, col_ctx.col_header_->length_);
-      ObDictDecoderIterator end_it = end(&col_ctx, col_ctx.col_header_->length_);
+      ObDictDecoderIterator traverse_it = begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
+      ObDictDecoderIterator end_it = end(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
       const int64_t ref_bitset_size = meta_header_->count_ + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -1541,7 +1541,7 @@ int ObDictDecoder::pushdown_operator(
                   col_ctx.col_header_->length_,
                   datums))) {
         LOG_WARN("Failed to batch decode referenes from dict", K(ret), K(col_ctx));
-      } else if (col_ctx.obj_meta_.is_fixed_len_char_type() && nullptr != col_ctx.col_param_ &&
+      } else if (need_padding(filter.is_padding_mode(), col_ctx.obj_meta_) &&
                 OB_FAIL(storage::pad_on_datums(col_ctx.col_param_->get_accuracy(),
                                                 col_ctx.obj_meta_.get_collation_type(),
                                                 *col_ctx.allocator_,
@@ -1587,8 +1587,8 @@ int ObDictDecoder::check_skip_block(
   } else if (OB_FAIL(check_has_null(col_ctx, col_ctx.col_header_->length_, has_null))) {
     LOG_WARN("Failed to check has null", K(ret));
   } else if (meta_header_->is_sorted_dict()) {
-    ObStorageDatum min_datum = *begin(&col_ctx, col_ctx.col_header_->length_);
-    ObStorageDatum max_datum = *(end(&col_ctx, col_ctx.col_header_->length_) - 1);
+    ObStorageDatum min_datum = *begin(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_);
+    ObStorageDatum max_datum = *(end(&col_ctx, filter.is_padding_mode(), col_ctx.col_header_->length_) - 1);
     if (OB_FAIL(check_skip_by_monotonicity(filter,
                                            min_datum,
                                            max_datum,
@@ -1662,13 +1662,17 @@ int ObDictDecoder::fast_to_accquire_dict_codes(
 
 ObDictDecoderIterator ObDictDecoder::begin(
     const ObColumnDecoderCtx *ctx,
-    int64_t meta_length) const
+    const bool is_padding_mode,
+    const int64_t meta_length) const
 {
-  return ObDictDecoderIterator(this, ctx, 0, meta_length);
+  return ObDictDecoderIterator(this, ctx, 0, meta_length, is_padding_mode);
 }
-ObDictDecoderIterator ObDictDecoder::end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const
+ObDictDecoderIterator ObDictDecoder::end(
+    const ObColumnDecoderCtx *ctx,
+    const bool is_padding_mode,
+    const int64_t meta_length) const
 {
-  return ObDictDecoderIterator(this, ctx, meta_header_->count_, meta_length);
+  return ObDictDecoderIterator(this, ctx, meta_header_->count_, meta_length, is_padding_mode);
 }
 
 int ObDictDecoder::get_distinct_count(int64_t &distinct_count) const

@@ -1166,6 +1166,7 @@ int ObPushdownFilterExecutor::init_filter_param(
 
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
+  is_padding_mode_ = need_padding;
   if (is_filter_node()) {
     if (0 == col_count) {
     } else if (OB_FAIL(init_array_param(col_params_, col_count))) {
@@ -1194,15 +1195,10 @@ int ObPushdownFilterExecutor::init_filter_param(
         } else if (OB_FAIL(col_offsets_.push_back(idx))) {
           LOG_WARN("failed to push back col offset", K(ret));
         } else {
-          col_param = nullptr;
           blocksstable::ObStorageDatum default_datum;
           const common::ObObj &def_cell = col_params.at(idx)->get_orig_default_value();
           const common::ObObjMeta &obj_meta = col_params.at(idx)->get_meta_type();
-          if (need_padding && obj_meta.is_fixed_len_char_type()) {
-            col_param = col_params.at(idx);
-          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-            col_param = col_params.at(idx);
-          }
+          col_param = col_params.at(idx);
           if (OB_FAIL(col_params_.push_back(col_param))) {
             LOG_WARN("failed to push back col param", K(ret));
           } else if (!def_cell.is_nop_value()) {
@@ -1249,6 +1245,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
   const common::ObIArray<ObExpr *> *cg_exprs = nullptr;
   const ObIArray<uint64_t> &col_ids = get_col_ids();
   const int64_t col_count = col_ids.count();
+  is_padding_mode_ = need_padding;
   if (OB_UNLIKELY(!iter_param.is_valid() || nullptr == (read_info = iter_param.get_read_info())
                   || nullptr == read_info->get_cg_idxs())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1304,11 +1301,7 @@ int ObPushdownFilterExecutor::init_co_filter_param(const ObTableIterParam &iter_
           blocksstable::ObStorageDatum default_datum;
           const common::ObObj &def_cell = col_param->get_orig_default_value();
           const common::ObObjMeta &obj_meta = col_param->get_meta_type();
-          if (need_padding && obj_meta.is_fixed_len_char_type()) {
-            cg_col_param = col_param;
-          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-            cg_col_param = col_param;
-          }
+          cg_col_param = col_param;
 
           if (OB_FAIL(col_params_.push_back(cg_col_param))) {
             LOG_WARN("failed to push back col param", K(ret));
@@ -1655,7 +1648,7 @@ ObPushdownFilterExecutor::ObPushdownFilterExecutor(common::ObIAllocator &alloc,
   : type_(type), need_check_row_filter_(false), filter_tree_status_(ObCommonFilterTreeStatus::NONE_FILTER),
     n_cols_(0), n_child_(0), cg_iter_idx_(INVALID_CG_ITER_IDX), skipped_rows_(0), childs_(nullptr),
     filter_bitmap_(nullptr), col_params_(alloc), col_offsets_(alloc), cg_col_offsets_(alloc), default_datums_(alloc),
-    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_rewrited_(false), filter_bool_mask_(),
+    cg_idxs_(alloc), cg_col_exprs_(alloc), allocator_(alloc), op_(op), is_padding_mode_(false), is_rewrited_(false), filter_bool_mask_(),
     enable_reorder_(false), ref_cnt_(0), filter_realtime_statistics_()
 {}
 
@@ -1681,6 +1674,7 @@ ObPushdownFilterExecutor::~ObPushdownFilterExecutor()
   n_child_ = 0;
   cg_iter_idx_ = INVALID_CG_ITER_IDX;
   need_check_row_filter_ = false;
+  is_padding_mode_ = false;
   is_rewrited_ = false;
   enable_reorder_ = false;
   ref_cnt_ = 0;
@@ -1695,7 +1689,7 @@ DEF_TO_STRING(ObPushdownFilterExecutor)
        K_(n_child), KP_(childs), KP_(filter_bitmap),
        K_(col_params), K_(default_datums), K_(col_offsets),
        K_(cg_col_offsets), K_(cg_idxs), K_(cg_col_exprs),
-       K_(is_rewrited), K_(filter_bool_mask));
+       K_(is_rewrited), K_(filter_bool_mask), K_(is_padding_mode));
   J_OBJ_END();
   return pos;
 }

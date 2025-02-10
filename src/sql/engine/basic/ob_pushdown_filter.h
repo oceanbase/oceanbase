@@ -750,6 +750,7 @@ public:
   void inc_ref() { ++ref_cnt_; }
   void dec_ref() { --ref_cnt_; }
   int64_t get_ref() { return ref_cnt_; }
+  bool is_padding_mode() const { return is_padding_mode_; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int find_evaluated_datums(
@@ -789,6 +790,7 @@ protected:
   common::ObFixedArray<ObExpr *, common::ObIAllocator> cg_col_exprs_;
   common::ObIAllocator &allocator_;
   ObPushdownOperator &op_;
+  bool is_padding_mode_;
 private:
   bool is_rewrited_;
   ObBoolMask filter_bool_mask_;

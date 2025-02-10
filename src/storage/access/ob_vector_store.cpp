@@ -34,7 +34,7 @@ ObVectorStore::ObVectorStore(
     datum_infos_(*context_.stmt_allocator_),
     col_params_(*context_.stmt_allocator_),
     group_idx_expr_(nullptr),
-    default_row_(),
+    default_datums_(context_.stmt_allocator_),
     group_by_cell_(nullptr),
     iter_param_(nullptr),
     skip_bit_(skip_bit)
@@ -56,7 +56,7 @@ void ObVectorStore::reset()
   group_idx_expr_ = nullptr;
   iter_param_ = nullptr;
   skip_bit_ = nullptr;
-  default_row_.reset();
+  default_datums_.reset();
   if (nullptr != group_by_cell_) {
     group_by_cell_->~ObGroupByCellBase();
     context_.stmt_allocator_->free(group_by_cell_);
@@ -88,7 +88,7 @@ int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet
     const bool use_new_format = param.iter_param_.use_new_format();
     if (OB_FAIL(exprs_.init(expr_count))) {
       LOG_WARN("Failed to init exprs", K(ret));
-    } else if (OB_FAIL(default_row_.init(*context_.stmt_allocator_, out_cols_param->count()))) {
+    } else if (OB_FAIL(default_datums_.init(out_cols_param->count()))) {
       STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(out_cols_param->count()));
     } else if (OB_FAIL(cols_projector_.init(expr_count))) {
       LOG_WARN("Failed to init cols", K(ret));
@@ -131,28 +131,35 @@ int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected column id", K(ret), K(out_cols_projector.at(i)), K(out_cols_param->count()));
         } else {
-          col_param = nullptr;
           const common::ObObjMeta &obj_meta = out_cols_param->at(out_cols_projector.at(i))->get_meta_type();
-          if (is_pad_char_to_full_length(context_.sql_mode_) && obj_meta.is_fixed_len_char_type()) {
-            col_param = out_cols_param->at(out_cols_projector.at(i));
-          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-            col_param = out_cols_param->at(out_cols_projector.at(i));
-          }
+          col_param = out_cols_param->at(out_cols_projector.at(i));
           ObObj def_cell(out_cols_param->at(out_cols_projector.at(i))->get_orig_default_value());
+          blocksstable::ObStorageDatum default_datum;
           if (def_cell.is_nop_value()) {
-            default_row_.storage_datums_[col_params_.count()].set_nop();
-          } else if (OB_FAIL(default_row_.storage_datums_[col_params_.count()].from_obj(def_cell, expr->obj_datum_map_))) {
-            LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
+            default_datum.set_nop();
+          } else if (OB_FAIL(default_datum.from_obj(def_cell, expr->obj_datum_map_))) {
+            LOG_WARN("convert obj to datum failed", K(ret), K(def_cell));
+          } else if (obj_meta.is_lob_storage() && !def_cell.is_null()) {
+            // lob def value must have no lob header when not null
+            // When do lob pushdown, should add lob header for default value
+            ObString data = default_datum.get_string();
+            ObString out;
+            if (OB_FAIL(ObLobManager::fill_lob_header(*context_.stmt_allocator_, data, out))) {
+              LOG_WARN("failed to fill lob header for column", K(ret), K(i), K(def_cell), K(data));
+            } else {
+              default_datum.set_string(out);
+            }
           }
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(col_params_.push_back(col_param))) {
-            LOG_WARN("failed to push back col param", K(ret));
+            LOG_WARN("failed to push back col param", K(ret), K(col_params_.count()));
+          } else if (OB_FAIL(default_datums_.push_back(default_datum))) {
+            LOG_WARN("failed to push back default datum", K(ret), K(default_datums_.count()));
           }
         }
       }
     }
-    default_row_.count_ = col_params_.count();
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(alloc_group_by_cell(param))) {
@@ -370,7 +377,8 @@ int ObVectorStore::fill_output_rows(
                                                   cell_data_ptrs_,
                                                   len_array_,
                                                   exprs_,
-                                                  &default_row_,
+                                                  &default_datums_,
+                                                  is_pad_char_to_full_length(context_.sql_mode_),
                                                   need_init_vector))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
@@ -382,7 +390,8 @@ int ObVectorStore::fill_output_rows(
                                                       cell_data_ptrs_,
                                                       exprs_,
                                                       datum_infos_,
-                                                      &default_row_))) {
+                                                      &default_datums_,
+                                                      is_pad_char_to_full_length(context_.sql_mode_)))) {
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -505,8 +514,8 @@ int ObVectorStore::do_group_by(
   blocksstable::ObIMicroBlockDecoder *decoder = static_cast<blocksstable::ObIMicroBlockDecoder*>(reader);
   const int32_t group_by_col_offset = group_by_cell_->get_group_by_col_offset();
   const char **cell_data = group_by_cell_->get_cell_datas();
-  if (OB_FAIL(decoder->read_distinct(group_by_col_offset,
-      nullptr == cell_data ? cell_data_ptrs_ : cell_data, *group_by_cell_))) {
+  if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data,
+      is_pad_char_to_full_length(context_.sql_mode_), *group_by_cell_))) {
     LOG_WARN("Failed to read distinct", K(ret));
   } else if (group_by_cell_->need_read_reference()) {
     const bool need_extract_distinct = group_by_cell_->need_extract_distinct();
@@ -529,7 +538,7 @@ int ObVectorStore::do_group_by(
           LOG_WARN("Failed to check valid", K(ret));
         } else if (iter_param_->use_new_format()) {
           if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
-                          0, len_array_, eval_ctx_, *static_cast<ObGroupByCellVec *>(group_by_cell_)))) {
+                          0, default_datums_, len_array_, eval_ctx_, *static_cast<ObGroupByCellVec *>(group_by_cell_)))) {
             LOG_WARN("Failed to get aggregate result", K(ret));
           }
         } else if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
@@ -591,7 +600,7 @@ int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(exprs),
-       K_(default_row),
+       K_(default_datums),
        K_(cols_projector),
        K_(count),
        K_(batch_size),

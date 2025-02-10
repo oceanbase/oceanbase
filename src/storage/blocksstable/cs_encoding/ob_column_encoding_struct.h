@@ -453,12 +453,23 @@ struct ObColumnCSDecoderCtx
     ObIntegerColumnDecoderCtx integer_ctx_;
     ObStringColumnDecoderCtx string_ctx_;
     ObDictColumnDecoderCtx dict_ctx_;
+    ObBaseColumnDecoderCtx new_col_ctx_;
   };
+  bool is_padding_mode_;
   void reset() { MEMSET(this, 0, sizeof(ObColumnCSDecoderCtx));}
   OB_INLINE bool is_integer_type() const { return ObCSColumnHeader::INTEGER == type_; }
   OB_INLINE bool is_string_type() const { return ObCSColumnHeader::STRING == type_; }
   OB_INLINE bool is_int_dict_type() const { return ObCSColumnHeader::INT_DICT == type_; }
   OB_INLINE bool is_string_dict_type() const { return ObCSColumnHeader::STR_DICT == type_; }
+  // just for new added column
+  OB_INLINE void fill_for_new_column(const share::schema::ObColumnParam *col_param, common::ObIAllocator *allocator)
+  {
+    reset();
+    new_col_ctx_.col_param_ = col_param;
+    new_col_ctx_.allocator_ = allocator;
+  }
+  OB_INLINE const share::schema::ObColumnParam* get_col_param() const { return new_col_ctx_.col_param_; }
+  OB_INLINE common::ObIAllocator* get_allocator() const { return new_col_ctx_.allocator_; }
 
   ObBaseColumnDecoderCtx& get_base_ctx()
   {
@@ -473,7 +484,7 @@ struct ObColumnCSDecoderCtx
     return *base_ctx;
   }
 
-  TO_STRING_KV(K_(type));
+  TO_STRING_KV(K_(type), K_(is_padding_mode));
 };
 
 }  // namespace blocksstable

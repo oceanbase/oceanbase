@@ -276,8 +276,8 @@ int ObRLEDecoder::eq_ne_operator(
     const ObDatum &ref_datum = filter.get_datums().at(0);
     if (dict_count > 0) {
       ObDatumCmpFuncType cmp_func = filter.cmp_func_;
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       int64_t dict_ref = 0;
       int cmp_res = 0;
       while (OB_SUCC(ret) && traverse_it != end_it) {
@@ -328,8 +328,8 @@ int ObRLEDecoder::comparison_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     if (dict_count > 0) {
       bool found = false;
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -378,8 +378,8 @@ int ObRLEDecoder::bt_operator(
       bool found = false;
       const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
       const common::ObIArray<common::ObDatum> &datums = filter.get_datums();
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
@@ -429,8 +429,8 @@ int ObRLEDecoder::in_operator(
     if (dict_count > 0) {
       bool found = false;
       const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, filter.is_padding_mode(), dict_meta_length);
+      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&col_ctx, filter.is_padding_mode(), dict_meta_length);
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);

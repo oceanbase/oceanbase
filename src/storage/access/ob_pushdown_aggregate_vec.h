@@ -44,6 +44,10 @@ struct ObAggCellVecBasicInfo
     rows_ = nullptr;
     is_padding_mode_ = false;
   }
+  OB_INLINE bool is_padding_mode() const
+  {
+    return is_padding_mode_;
+  }
   OB_INLINE bool need_padding() const
   {
     return is_padding_mode_ && nullptr != col_param_ && col_param_->get_meta_type().is_fixed_len_char_type();
@@ -103,6 +107,7 @@ public:
   OB_INLINE virtual bool need_get_row_ids() const { return true; }
   OB_INLINE int64_t get_agg_idx() const { return agg_idx_; }
   OB_INLINE bool need_padding() const { return basic_info_.need_padding(); }
+  OB_INLINE bool is_padding_mode() const { return basic_info_.is_padding_mode(); }
   OB_INLINE const share::schema::ObColumnParam *get_col_param() const { return basic_info_.col_param_; }
   OB_INLINE int32_t get_col_offset() const { return basic_info_.col_offset_; }
   OB_INLINE sql::ObExpr *get_agg_expr() const
@@ -120,6 +125,7 @@ public:
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
     return agg_info.expr_->obj_meta_.get_type();
   }
+  int get_def_datum(const blocksstable::ObStorageDatum *&default_datum);
 
   INHERIT_TO_STRING_KV("ObAggCellBase", ObAggCellBase, K_(agg_idx), K_(basic_info), KP_(aggregate));
 protected:
@@ -143,6 +149,7 @@ protected:
   int64_t agg_idx_;
   ObAggCellVecBasicInfo basic_info_;
   share::aggregate::IAggregate* aggregate_;
+  blocksstable::ObStorageDatum default_datum_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggCellVec);
 };

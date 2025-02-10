@@ -119,15 +119,15 @@ void ObDictValueIterator::build_decode_by_ref_func_()
   if (ctx_->col_header_->is_integer_dict()) {
     decode_by_ref_func_ = decode_integer_by_ref_;
   } else {
-    bool need_padding = (nullptr != ctx_->col_param_ && ctx_->col_param_->get_meta_type().is_fixed_len_char_type());
+    bool is_need_padding = (is_padding_mode_ && nullptr != ctx_->col_param_ && ctx_->col_param_->get_meta_type().is_fixed_len_char_type());
     if (ctx_->str_ctx_->meta_.is_fixed_len_string()) {
-      if (need_padding) {
+      if (is_need_padding) {
         decode_by_ref_func_ = decode_string_by_ref_<true, true>;
       } else {
         decode_by_ref_func_ = decode_string_by_ref_<true, false>;
       }
     } else {
-      if (need_padding) {
+      if (is_need_padding) {
         decode_by_ref_func_ = decode_string_by_ref_<false, true>;
       } else {
         decode_by_ref_func_ = decode_string_by_ref_<false, false>;
@@ -420,7 +420,7 @@ int ObDictColumnDecoder::pushdown_operator(
                 convert_func(ctx, ctx.str_data_, *ctx.str_ctx_,
                     ctx.offset_data_, ctx.ref_data_, nullptr, cur_ref_cnt, datums);
               }
-              if (ctx.obj_meta_.is_fixed_len_char_type() && (nullptr != ctx.col_param_)) {
+              if (need_padding(filter.is_padding_mode(), ctx.obj_meta_)) {
                 if (OB_FAIL(storage::pad_on_datums(ctx.col_param_->get_accuracy(),
                     ctx.obj_meta_.get_collation_type(), *ctx.allocator_, cur_ref_cnt, datums))) {
                   LOG_WARN("fail to pad on datums", KR(ret), K(ctx), K(index), K(upper_bound));
@@ -468,8 +468,8 @@ int ObDictColumnDecoder::check_skip_block(
     // Do not skip block when dict count is small.
     // Otherwise, if can not skip block by monotonicity, the performance will decrease.
   } else if (ctx.dict_meta_->is_sorted()) {
-    ObStorageDatum min_datum = *ObDictValueIterator(&ctx, 0);
-    ObStorageDatum max_datum = *(ObDictValueIterator(&ctx, dict_val_cnt) - 1);
+    ObStorageDatum min_datum = *ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+    ObStorageDatum max_datum = *(ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode()) - 1);
     if (OB_FAIL(check_skip_by_monotonicity(filter,
                                            min_datum,
                                            max_datum,
@@ -738,8 +738,8 @@ int ObDictColumnDecoder::datum_dict_val_eq_ne_op(
   ObCmpFunc cmp_func;
   cmp_func.cmp_func_ = filter.cmp_func_;
   const ObDatum &filter_datum = filter.get_datums().at(0);
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator tranverse_it = begin_it;
   int64_t dict_ref = 0;
 
@@ -1003,8 +1003,8 @@ int ObDictColumnDecoder::datum_dict_val_cmp_op(
   const ObDatum &filter_datum = filter.get_datums().at(0);
 
   int64_t dict_ref = 0;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   bool cmp_ret = false;
   while (OB_SUCC(ret) && begin_it != end_it) {
     if (OB_FAIL(compare_datum(*begin_it, filter_datum, filter.cmp_func_, cmp_op, cmp_ret))) {
@@ -1035,8 +1035,8 @@ int ObDictColumnDecoder::sorted_comparison_for_ref(
   cmp_func.cmp_func_ = filter.cmp_func_;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
   const ObDatum &filter_datum = filter.get_datums().at(0);
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
 
   bool can_fast_cmp = cs_dict_fast_cmp_funcs_inited;
 
@@ -1143,8 +1143,8 @@ int ObDictColumnDecoder::datum_dict_val_in_op(
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator min_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator max_it = ObDictValueIterator(&ctx, dict_val_cnt > 0 ? dict_val_cnt - 1 : 0);
+  ObDictValueIterator min_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator max_it = ObDictValueIterator(&ctx, dict_val_cnt > 0 ? dict_val_cnt - 1 : 0, filter.is_padding_mode());
 
   bool hit_shortcut = false;
   int cmp_ret = 0;
@@ -1239,8 +1239,8 @@ int ObDictColumnDecoder::in_operator_merge_search(
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator trav_it = begin_it;
   const ObFixedArray<ObDatum, ObIAllocator> *params
           = static_cast<const ObFixedArray<ObDatum, ObIAllocator> *>(&(filter.get_datums()));
@@ -1289,8 +1289,8 @@ int ObDictColumnDecoder::in_operator_binary_search_dict(
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator trav_it = begin_it;
   const ObFixedArray<ObDatum, ObIAllocator> *params
           = static_cast<const ObFixedArray<ObDatum, ObIAllocator> *>(&(filter.get_datums()));
@@ -1323,8 +1323,8 @@ int ObDictColumnDecoder::in_operator_binary_search(
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator trav_it = begin_it;
   const ObFixedArray<ObDatum, ObIAllocator> *params
           = static_cast<const ObFixedArray<ObDatum, ObIAllocator> *>(&(filter.get_datums()));
@@ -1354,8 +1354,8 @@ int ObDictColumnDecoder::in_operator_hash_search(
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator trav_it = begin_it;
   bool is_exist = false;
   while (OB_SUCC(ret) && trav_it != end_it) {
@@ -1513,8 +1513,8 @@ int ObDictColumnDecoder::sorted_between_for_ref(
   int ret = OB_SUCCESS;
   ObCmpFunc cmp_func;
   cmp_func.cmp_func_ = filter.cmp_func_;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
 
   int64_t left_ref_inclusive = std::lower_bound(begin_it, end_it, filter.get_datums().at(0),
                   [&cmp_func, &ret](const ObDatum &datum, const ObDatum &filter_datum)
@@ -1567,8 +1567,8 @@ int ObDictColumnDecoder::datum_dict_val_bt_op(
   ObDatumCmpFuncType cmp_func = filter.cmp_func_;
 
   int64_t dict_ref = 0;
-  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+  ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   while (OB_SUCC(ret) && begin_it != end_it) {
     int left_cmp_ret = 0;
     int right_cmp_ret = 0;
@@ -1599,7 +1599,7 @@ int ObDictColumnDecoder::do_const_only_operator(
     ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
-  ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0);
+  ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
   ObStorageDatum &const_datum = *dict_iter;
   const common::ObIArray<common::ObDatum> &ref_datums = filter.get_datums();
   ObDatumCmpFuncType cmp_func = filter.cmp_func_;
@@ -1763,7 +1763,7 @@ int ObDictColumnDecoder::comparison_const_operator(
   if (const_ref_desc.const_ref_ == dict_val_cnt) {
     // skip null
   } else {
-    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0);
+    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
     ObStorageDatum &const_datum = *(dict_iter + const_ref_desc.const_ref_);
     if (OB_FAIL(compare_datum(const_datum, filter_datum, cmp_func,
                sql::ObPushdownWhiteFilterNode::WHITE_OP_TO_CMP_OP[op_type], cmp_ret))) {
@@ -1784,8 +1784,8 @@ int ObDictColumnDecoder::comparison_const_operator(
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
 
     bool exist_matched_ref = false;
-    ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0);
-    ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt);
+    ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+    ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
     int64_t tmp_idx = 0;
     // TODO, douglou, decode all dict once or batch
     while (OB_SUCC(ret) && (mv_iter != end_iter)) {
@@ -1838,7 +1838,7 @@ int ObDictColumnDecoder::bt_const_operator(
   if (const_ref_desc.const_ref_ == dict_val_cnt) {
     // skip null
   } else {
-    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0);
+    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
     ObStorageDatum &const_datum = *(dict_iter + const_ref_desc.const_ref_);
     int left_cmp_ret = 0;
     int right_cmp_ret = 0;
@@ -1862,8 +1862,8 @@ int ObDictColumnDecoder::bt_const_operator(
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
 
     bool exist_matched_ref = false;
-    ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0);
-    ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt);
+    ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
+    ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
     int64_t tmp_idx = 0;
     while (OB_SUCC(ret) && (mv_iter != end_iter)) {
       ObStorageDatum &mv_datum = *mv_iter;
@@ -1912,7 +1912,7 @@ int ObDictColumnDecoder::in_const_operator(
   if (const_ref_desc.const_ref_ == dict_val_cnt) {
     // skip null
   } else {
-    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0);
+    ObDictValueIterator dict_iter = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
     ObStorageDatum &const_datum = *(dict_iter + const_ref_desc.const_ref_);
     if (OB_FAIL(filter.exist_in_set(const_datum, is_const_result_set))) {
       LOG_WARN("fail to check whether const value is in set", KR(ret), K(const_datum));
@@ -2210,8 +2210,8 @@ int ObDictColumnDecoder::read_distinct(
     group_by_cell.set_distinct_cnt(1);
   } else {
     group_by_cell.set_distinct_cnt(dict_val_cnt);
-    ObDictValueIterator begin_it = ObDictValueIterator(&dict_ctx, 0);
-    ObDictValueIterator end_it = ObDictValueIterator(&dict_ctx, dict_val_cnt);
+    ObDictValueIterator begin_it = ObDictValueIterator(&dict_ctx, 0, ctx.is_padding_mode_);
+    ObDictValueIterator end_it = ObDictValueIterator(&dict_ctx, dict_val_cnt, ctx.is_padding_mode_);
     int64_t dict_ref = 0;
     while (OB_SUCC(ret) && (begin_it != end_it)) {
       ObObj cur_obj;
@@ -2282,11 +2282,11 @@ int ObDictColumnDecoder::get_aggregate_result(
       // skip if all null
     } else if (row_cap == dict_ctx.micro_block_header_->row_count_) { // cover whole microblock
       if (dict_ctx.dict_meta_->is_sorted() && (agg_cell.is_min_agg() || agg_cell.is_max_agg())) { // int dict must be sorted
-        ObDictValueIterator res_iter = ObDictValueIterator(&dict_ctx, agg_cell.is_min_agg() ? 0 : dict_val_cnt - 1);
+        ObDictValueIterator res_iter = ObDictValueIterator(&dict_ctx, agg_cell.is_min_agg() ? 0 : dict_val_cnt - 1, col_ctx.is_padding_mode_);
         if (OB_FAIL(agg_cell.eval(*res_iter))) {
           LOG_WARN("Failed to eval agg cell", KR(ret), K(*res_iter), K(agg_cell));
         }
-      } else if (OB_FAIL(traverse_datum_dict_agg(dict_ctx, agg_cell))) {
+      } else if (OB_FAIL(traverse_datum_dict_agg(dict_ctx, col_ctx.is_padding_mode_, agg_cell))) {
         LOG_WARN("Failed to traverse datum dict to aggregate", KR(ret), K(dict_ctx));
       }
     } else { // cover partial microblock
@@ -2309,12 +2309,13 @@ int ObDictColumnDecoder::get_aggregate_result(
 
 int ObDictColumnDecoder::traverse_datum_dict_agg(
     const ObDictColumnDecoderCtx &ctx,
+    const bool is_padding_mode,
     storage::ObAggCellBase &agg_cell)
 {
   int ret = OB_SUCCESS;
   const uint64_t dict_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
-  ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0);
-  ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt);
+  ObDictValueIterator mv_iter = ObDictValueIterator(&ctx, 0, is_padding_mode);
+  ObDictValueIterator end_iter = ObDictValueIterator(&ctx, dict_val_cnt, is_padding_mode);
   while (OB_SUCC(ret) && mv_iter != end_iter) {
     if (OB_FAIL(agg_cell.eval(*mv_iter))) {
       LOG_WARN("Failed to eval agg cell", KR(ret), K(*mv_iter), K(agg_cell));

@@ -381,9 +381,10 @@ public:
   virtual int read_distinct(
       const int32_t group_by_col,
       const char **cell_datas,
+      const bool is_padding_mode,
       storage::ObGroupByCellBase &group_by_cell) const
   {
-    UNUSEDx(group_by_col, cell_datas, group_by_cell);
+    UNUSEDx(group_by_col, cell_datas, is_padding_mode, group_by_cell);
     return OB_NOT_SUPPORTED;
   }
   virtual int read_reference(
@@ -409,6 +410,7 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       const int64_t vec_offset,
+      const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
       storage::ObGroupByCellVec &group_by_cell)
@@ -441,6 +443,10 @@ public:
       bool &filtered);
   virtual bool has_lob_out_row() const = 0;
   OB_INLINE ObReaderType get_type() const { return reader_type_; }
+  static bool need_padding(const bool is_padding_mode, const ObObjMeta &obj_meta)
+  {
+    return is_padding_mode && obj_meta.is_fixed_len_char_type();
+  }
 
 protected:
   virtual int find_bound(const ObDatumRange &range,

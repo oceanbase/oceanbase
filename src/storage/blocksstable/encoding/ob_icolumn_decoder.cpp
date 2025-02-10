@@ -14,6 +14,7 @@
 
 #include "ob_icolumn_decoder.h"
 #include "ob_encoding_bitset.h"
+#include "storage/access/ob_aggregate_base.h"
 
 namespace oceanbase
 {
