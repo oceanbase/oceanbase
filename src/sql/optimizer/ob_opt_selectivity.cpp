@@ -1488,19 +1488,32 @@ int ObOptSelectivity::update_table_meta_info(const OptTableMetas &base_table_met
         }
 
         if (OB_SUCC(ret) && OB_NOT_NULL(sel_info)) {
-          if (sel_info->max_ < sel_info->min_ ||
-              sel_info->max_ < column_meta.get_min_value() ||
-              sel_info->min_ > column_meta.get_max_value()) {
-            // invalid min max
-            column_meta.get_min_value().set_min_value();
-            column_meta.get_max_value().set_max_value();
+          bool is_valid = true;
+          int cmp_selmax_selmin = 0;
+          int cmp_selmax_colmin = 0;
+          int cmp_colmax_colmin = 0;
+          int cmp_selmin_colmin = 0;
+          int cmp_selmax_colmax = 0;
+          if (OB_FAIL(sel_info->max_.compare(sel_info->min_, cmp_selmax_selmin)) ||
+              OB_FAIL(sel_info->max_.compare(column_meta.get_min_value(), cmp_selmax_colmin)) ||
+              OB_FAIL(column_meta.get_max_value().compare(sel_info->min_, cmp_colmax_colmin)) ||
+              OB_FAIL(sel_info->min_.compare(column_meta.get_min_value(), cmp_selmin_colmin)) ||
+              OB_FAIL(sel_info->max_.compare(column_meta.get_max_value(), cmp_selmax_colmax))) {
+            LOG_WARN("failed to compare", K(ret), K(sel_info->min_), K(sel_info->max_), K(column_meta));
+          } else if (cmp_selmax_selmin < 0 || cmp_selmax_colmin < 0 || cmp_colmax_colmin < 0) {
+            is_valid = false;
           } else {
-            if (!sel_info->min_.is_null() && sel_info->min_ > column_meta.get_min_value()) {
+            if (!sel_info->min_.is_null() && cmp_selmin_colmin > 0) {
               column_meta.set_min_value(sel_info->min_);
             }
-            if (!sel_info->max_.is_null() && sel_info->max_ < column_meta.get_max_value()) {
+            if (!sel_info->max_.is_null() && cmp_selmax_colmax < 0) {
               column_meta.set_max_value(sel_info->max_);
             }
+          }
+          if (OB_FAIL(ret) || !is_valid) {
+            ret = OB_SUCCESS;
+            column_meta.get_min_value().set_min_value();
+            column_meta.get_max_value().set_max_value();
           }
         }
       }
@@ -4199,34 +4212,35 @@ int ObOptSelectivity::remove_ignorable_func_for_est_sel(const ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   bool is_ignorable = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is NULL", K(ret));
+  }
   while(OB_SUCC(ret) && is_ignorable) {
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is NULL", K(ret));
-    } else if (T_FUN_SYS_CAST == expr->get_expr_type() ||
-               T_FUN_SYS_CONVERT == expr->get_expr_type() ||
-               T_FUN_SYS_TO_DATE == expr->get_expr_type() ||
-               T_FUN_SYS_TO_CHAR == expr->get_expr_type() ||
-               T_FUN_SYS_TO_NCHAR == expr->get_expr_type() ||
-               T_FUN_SYS_TO_NUMBER == expr->get_expr_type() ||
-               T_FUN_SYS_TO_BINARY_FLOAT == expr->get_expr_type() ||
-               T_FUN_SYS_TO_BINARY_DOUBLE == expr->get_expr_type() ||
-               T_FUN_SYS_SET_COLLATION == expr->get_expr_type() ||
-               T_FUN_SYS_TO_TIMESTAMP == expr->get_expr_type() ||
-               T_FUN_SYS_TO_TIMESTAMP_TZ  == expr->get_expr_type()) {
-      if (OB_UNLIKELY(1 > expr->get_param_count())) {
+    if (T_FUN_SYS_CAST == expr->get_expr_type() ||
+        T_FUN_SYS_CONVERT == expr->get_expr_type() ||
+        T_FUN_SYS_TO_DATE == expr->get_expr_type() ||
+        T_FUN_SYS_TO_CHAR == expr->get_expr_type() ||
+        T_FUN_SYS_TO_NCHAR == expr->get_expr_type() ||
+        T_FUN_SYS_TO_NUMBER == expr->get_expr_type() ||
+        T_FUN_SYS_TO_BINARY_FLOAT == expr->get_expr_type() ||
+        T_FUN_SYS_TO_BINARY_DOUBLE == expr->get_expr_type() ||
+        T_FUN_SYS_SET_COLLATION == expr->get_expr_type() ||
+        T_FUN_SYS_TO_TIMESTAMP == expr->get_expr_type() ||
+        T_FUN_SYS_TO_TIMESTAMP_TZ  == expr->get_expr_type()) {
+      const ObRawExpr *child_expr = NULL;
+      if (OB_UNLIKELY(1 > expr->get_param_count()) ||
+          OB_ISNULL(child_expr = expr->get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected param count", K(ret), KPC(expr));
+      } else if (child_expr->has_flag(CNT_COLUMN)) {
+        expr = child_expr;
       } else {
-        expr = expr->get_param_expr(0);
+        is_ignorable = false;
       }
     } else {
       is_ignorable = false;
     }
-  }
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is NULL", K(ret));
   }
   return ret;
 }
