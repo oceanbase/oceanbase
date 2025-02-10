@@ -174,6 +174,7 @@ protected:
   int gen_rowkeys_itr();
   int get_next_saved_rowkeys(int64_t &count);
   int get_next_saved_rowkey();
+  int64_t get_nprobe(const common::ObLimitParam &limit_param, int64_t enlargement_factor = 1);
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;

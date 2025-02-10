@@ -2037,7 +2037,7 @@ int ObVectorIndexUtil::check_vector_index_by_column_name(
     if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("fail to get simple index infos failed", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && !is_ivf; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
         const ObTableSchema *index_schema = nullptr;
         const int64_t table_id = simple_index_infos.at(i).table_id_;
         if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, index_schema))) {

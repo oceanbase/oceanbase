@@ -520,6 +520,17 @@ int ObDASIvfBaseScanIter::gen_rowkeys_itr_brute(ObDASIter *scan_iter)
 
   return ret;
 }
+
+int64_t ObDASIvfBaseScanIter::get_nprobe(const common::ObLimitParam &limit_param, int64_t enlargement_factor /*= 1*/)
+{
+  int64_t nprobe = INT64_MAX;
+  int64_t sum = limit_param.limit_ + limit_param.offset_;
+
+  if (sum > 0 && sum <= (INT64_MAX / enlargement_factor)) {
+    nprobe = sum * enlargement_factor;
+  }
+  return nprobe;
+}
 /*************************** implement ObDASIvfScanIter ****************************/
 
 int ObDASIvfScanIter::parse_centroid_datum_with_deep_copy(
@@ -772,7 +783,7 @@ int ObDASIvfScanIter::get_nearest_limit_rowkeys_in_cids(const ObIArray<ObString>
   int ret = OB_SUCCESS;
 
   share::ObVectorCentorClusterHelper<T, ObRowkey *> nearest_rowkey_heap(
-      vec_op_alloc_, serch_vec, dim_, limit_param_.limit_ + limit_param_.offset_);
+      vec_op_alloc_, serch_vec, dim_, get_nprobe(limit_param_));
   const ObDASScanCtDef *cid_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CID_VEC_SCAN);
   ObDASScanRtDef *cid_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx());
@@ -1481,7 +1492,7 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
   int64_t sub_dim = dim_ / m_;
   IvfRowkeyHeap nearest_rowkey_heap(
       vec_op_alloc_, search_vec/*unused*/, sub_dim,
-      (limit_param_.limit_ + limit_param_.offset_) * PQ_ID_ENLARGEMENT_FACTOR);
+      get_nprobe(limit_param_, PQ_ID_ENLARGEMENT_FACTOR));
   const ObDASScanCtDef *cid_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CID_VEC_SCAN);
   ObDASScanRtDef *cid_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx());
@@ -1827,7 +1838,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
   nearest_centers.set_attr(ObMemAttr(MTL_ID(), "VecIdxNearCid"));
   IvfRowkeyHeap nearest_rowkey_heap(
       vec_op_alloc_, reinterpret_cast<const float *>(real_search_vec_.ptr())/*unused*/,
-      dim_ / m_, (limit_param_.limit_ + limit_param_.offset_) * PQ_ID_ENLARGEMENT_FACTOR);
+      dim_ / m_, get_nprobe(limit_param_, PQ_ID_ENLARGEMENT_FACTOR));
   if (OB_FAIL(get_nearest_probe_centers(nearest_centers))) {
     // 1. Scan the ivf_centroid table, calculate the distance between vec_x and cid_vec,
     //    and get the nearest cluster center (cid 1, cid_vec 1)... (cid n, cid_vec n)
