@@ -111,12 +111,12 @@ int ObTabletCopyFinishTask::process()
     // do nothing.
   } else if (OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME == ret ) { // ret=-4192, errsim trigger to test ddl-split orthogonal ls-migration.
     ret = OB_SUCCESS;
-    if (tablet_id_.is_inner_tablet() || tablet_id_.is_ls_inner_tablet()) {
-    } else if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()){
-      LOG_INFO("[ERRSIM] stuck before create table store", K(tablet_id_), KPC(this));
+    if (param_.tablet_id_.is_inner_tablet() || param_.tablet_id_.is_ls_inner_tablet()) {
+    } else if (GCONF.errsim_test_tablet_id.get_value() > 0 && param_.tablet_id_.id() == GCONF.errsim_test_tablet_id.get_value()) {
+      LOG_INFO("[ERRSIM] stuck before create table store", K(param_), KPC(this));
       DEBUG_SYNC(BEFORE_MIGRATION_CREATE_TABLE_STORE);
     } else {
-      LOG_INFO("start to process copy finish task", K(tablet_id_), KPC(this));
+      LOG_INFO("start to process copy finish task", K(param_), KPC(this));
     }
   } else {
     ret = OB_SUCCESS; // other errsim errors of ddl split, ignored here.
