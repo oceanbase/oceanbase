@@ -4910,7 +4910,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         }
       }
     }
-    if (OB_SUCC(ret) && NULL != phy_plan && !session.get_is_deserialized() && !session.is_inner()) {
+    if (OB_SUCC(ret) && NULL != phy_plan && !session.get_is_deserialized()
+        && (!session.is_inner() || session.is_user_session())) {
       bool has_session_tmp_table = phy_plan->is_contain_oracle_session_level_temporary_table()
         || phy_plan->contains_temp_table();
       bool has_txn_tmp_table = phy_plan->is_contain_oracle_trx_level_temporary_table();
