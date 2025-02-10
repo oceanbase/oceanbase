@@ -63,7 +63,8 @@ public:
   }
   static bool in_ddl_retry_black_list(const int ret_code)
   {
-    return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code || OB_NOT_SUPPORTED == ret_code;
+    return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code || OB_NOT_SUPPORTED == ret_code
+          || common::OB_ERR_DATA_TOO_LONG == ret_code;
   }
   static bool is_ddl_force_no_more_process(const int ret_code)
   {
