@@ -125,7 +125,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
           nullptr != block_row_store_ &&
           iter_param_->enable_skip_index() &&
           !sstable_->is_multi_version_table()) {
-        if (block_row_store_->is_vec2()) {
+        if (iter_param_->use_new_format()) {
           prefetcher_.agg_store_ = static_cast<ObAggStoreBase *>(static_cast<ObAggregatedStoreVec *>(block_row_store_));
         } else {
           prefetcher_.agg_store_ = static_cast<ObAggStoreBase *>(static_cast<ObAggregatedStore *>(block_row_store_));

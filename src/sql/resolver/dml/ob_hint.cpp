@@ -944,6 +944,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case PUSHDOWN_STORAGE_LEVEL:
     case RANGE_INDEX_DIVE_LIMIT:
     case PARTITION_INDEX_DIVE_LIMIT:
       is_valid = val.is_int();

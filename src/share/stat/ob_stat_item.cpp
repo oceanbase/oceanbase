@@ -828,8 +828,12 @@ int ObStatAvgLen::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     LOG_WARN("column param is null", K(ret));
   } else if (col_param_->column_type_ < type_count &&
              DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_] > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d",
-                                DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_]))) {
+    const char* fmt = lib::is_oracle_mode() ? " (%d * COUNT(\"%.*s\"))/decode(COUNT(*),0,1,COUNT(*))"
+                     : " (%d * COUNT(`%.*s`))/(case when COUNT(*) = 0 then 1 else COUNT(*) end)";
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, fmt,
+                                DEFAULT_DATA_TYPE_LEGNTH[col_param_->column_type_],
+                                col_param_->column_name_.length(),
+                                col_param_->column_name_.ptr()))) {
       LOG_WARN("failed to print avg column size", K(ret));
     }
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, get_fmt(),

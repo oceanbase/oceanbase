@@ -149,12 +149,13 @@ protected:
   int64_t agg_idx_;
   ObAggCellVecBasicInfo basic_info_;
   share::aggregate::IAggregate* aggregate_;
+  common::ObArenaAllocator padding_allocator_;
   blocksstable::ObStorageDatum default_datum_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggCellVec);
 };
 
-class ObCountAggCellVec : public ObAggCellVec
+class ObCountAggCellVec final : public ObAggCellVec
 {
 public:
   ObCountAggCellVec(const int64_t agg_idx,
@@ -197,7 +198,7 @@ private:
   bool exclude_null_;
 };
 
-class ObMaxAggCellVec : public ObAggCellVec
+class ObMaxAggCellVec final : public ObAggCellVec
 {
 public:
   ObMaxAggCellVec(const int64_t agg_idx,
@@ -205,7 +206,7 @@ public:
                   common::ObIAllocator &allocator);
 };
 
-class ObMinAggCellVec : public ObAggCellVec
+class ObMinAggCellVec final : public ObAggCellVec
 {
 public:
   ObMinAggCellVec(const int64_t agg_idx,
@@ -213,7 +214,7 @@ public:
                   common::ObIAllocator &allocator);
 };
 
-class ObSumAggCellVec : public ObAggCellVec
+class ObSumAggCellVec final : public ObAggCellVec
 {
 public:
   ObSumAggCellVec(const int64_t agg_idx,
@@ -242,7 +243,63 @@ private:
   blocksstable::ObStorageDatum cast_datum_;
 };
 
-class ObRbBuildAggCellVec : public ObAggCellVec
+class ObHyperLogLogAggCellVec final : public ObAggCellVec
+{
+public:
+  ObHyperLogLogAggCellVec(const int64_t agg_idx,
+                          const ObAggCellVecBasicInfo &basic_info,
+                          common::ObIAllocator &allocator);
+protected:
+  OB_INLINE bool can_use_index_info() const override { return false; }
+};
+
+class ObSumOpNSizeAggCellVec final : public ObAggCellVec
+{
+public:
+  ObSumOpNSizeAggCellVec(const int64_t agg_idx,
+                        const ObAggCellVecBasicInfo &basic_info,
+                        common::ObIAllocator &allocator,
+                        const bool exclude_null);
+  int init() override;
+  int eval(blocksstable::ObStorageDatum &datum,
+           const int64_t row_count = 1,
+           const int64_t agg_row_idx = 0) override;
+  int eval_batch(blocksstable::ObIMicroBlockReader *reader,
+                 const int32_t col_offset,
+                 const int32_t *row_ids,
+                 const int64_t row_count,
+                 const int64_t row_offset = 0,
+                 const int64_t agg_row_idx = 0) override;
+  int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                      const bool is_cg,
+                      const int64_t agg_row_idx = 0) override;
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                         const int32_t col_index, bool &can_agg) override;
+  OB_INLINE bool need_access_data() const override
+  {
+    return !is_fixed_length_type();
+  }
+  OB_INLINE bool need_get_row_ids() const override
+  {
+    return exclude_null_ || !is_fixed_length_type();
+  }
+  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(op_nsize), K_(exclude_null));
+protected:
+  int set_op_nsize();
+  int get_datum_op_nsize(blocksstable::ObStorageDatum &datum, int64_t &length);
+  OB_INLINE bool can_use_index_info() const override { return is_fixed_length_type(); }
+  OB_INLINE bool is_fixed_length_type() const
+  {
+    const sql::ObExpr *proj_expr = get_project_expr();
+    ObObjDatumMapType type = proj_expr->obj_datum_map_;
+    return type != OBJ_DATUM_STRING && type != OBJ_DATUM_NUMBER && type != OBJ_DATUM_DECIMALINT;
+  }
+private:
+  int64_t op_nsize_;
+  bool exclude_null_;
+};
+
+class ObRbBuildAggCellVec final : public ObAggCellVec
 {
 public:
   ObRbBuildAggCellVec(const int64_t agg_idx,

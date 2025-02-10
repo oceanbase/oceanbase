@@ -467,7 +467,8 @@ int Processor::setup_rt_info(AggrRowPtr row,
     // oracle mode use ObNumber as result type for count aggregation
     // we use int64_t as result type for count aggregation in aggregate row
     // and cast int64_t to ObNumber during `collect_group_result`
-    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT) {
+    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
+        agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
       ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
       // set zero number
       d.len_ = 0;
@@ -855,7 +856,8 @@ int Processor::collect_empty_set(bool collect_for_third_stage) const
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
       case T_FUN_KEEP_COUNT:
-      case T_FUN_GROUP_PERCENT_RANK: {
+      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_SUM_OPNSIZE: {
         if (lib::is_oracle_mode()) {
           number::ObNumber zero_nmb;
           zero_nmb.set_zero();
@@ -1036,7 +1038,8 @@ int Processor::reuse_group(const int64_t group_id)
     agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
     switch (res_tc) {
     case VEC_TC_NUMBER: {
-      if (aggr_info.get_expr_type() != T_FUN_COUNT) {
+      if (aggr_info.get_expr_type() != T_FUN_COUNT &&
+          aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
         ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
         // set zero number
         d.len_ = 0;

@@ -827,6 +827,14 @@ int ObOptStatManager::update_opt_stat_gather_stat(const ObOptStatGatherStat &gat
   return stat_service_.get_sql_service().update_opt_stat_gather_stat(gather_stat);
 }
 
+int ObOptStatManager::update_table_stat_failed_count(const uint64_t tenant_id,
+                        const uint64_t table_id,
+                        const ObIArray<int64_t> &part_ids,
+                        int64_t &affected_rows)
+{
+  return stat_service_.get_sql_service().update_table_stat_failed_count(tenant_id, table_id, part_ids, affected_rows);
+}
+
 int ObOptStatManager::update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info)
 {
   return stat_service_.get_sql_service().update_opt_stat_task_stat(task_info);

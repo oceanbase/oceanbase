@@ -25,7 +25,6 @@ namespace storage
 
 ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
     : is_inited_(false),
-      is_vec2_(false),
       pd_filter_info_(),
       context_(context),
       iter_param_(nullptr),

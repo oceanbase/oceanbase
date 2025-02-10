@@ -62,6 +62,8 @@ enum StatOptionFlags
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
 const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
+
+const static double OPT_DEFAULT_AUTO_COLLECT_BATCH_SIZE = 16;
 const int64_t MAX_AUTO_GATHER_FULL_TABLE_ROWS = 100000000;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
@@ -132,11 +134,11 @@ enum ColumnAttrFlag
 
 enum ColumnGatherFlag
 {
-  NO_NEED_STAT          = 0,
-  VALID_OPT_COL         = 1,
-  NEED_BASIC_STAT       = 1 << 1,
-  NEED_AVG_LEN          = 1 << 2,
-  NEED_REFINE_MIN_MAX   = 1 << 3,
+  NO_NEED_STAT            = 0,
+  VALID_OPT_COL           = 1,
+  NEED_BASIC_STAT         = 1 << 1,
+  NEED_AVG_LEN            = 1 << 2,
+  NEED_REFINE_MIN_MAX     = 1 << 3,
   NEED_CS_REFINE_MIN_MAX  = 1 << 4
 };
 
@@ -215,7 +217,8 @@ struct StatTable
     stale_percent_(0.0),
     partition_stat_infos_(),
     is_async_gather_(false),
-    async_partition_ids_()
+    async_partition_ids_(),
+    consecutive_failed_count_(0)
   {
     partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
     async_partition_ids_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
@@ -226,7 +229,8 @@ struct StatTable
     stale_percent_(0.0),
     partition_stat_infos_(),
     is_async_gather_(is_async_gather),
-    async_partition_ids_()
+    async_partition_ids_(),
+    consecutive_failed_count_(0)
   {
     partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
     async_partition_ids_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
@@ -245,6 +249,7 @@ struct StatTable
   ObArray<ObPartitionStatInfo> partition_stat_infos_;
   bool is_async_gather_;
   ObArray<int64_t> async_partition_ids_;
+  int64_t consecutive_failed_count_;
 };
 
 struct AsyncStatTable
@@ -253,6 +258,7 @@ struct AsyncStatTable
     table_id_(OB_INVALID_ID),
     partition_ids_()
   {}
+
   AsyncStatTable(int64_t table_id) :
     table_id_(table_id),
     partition_ids_()
@@ -262,6 +268,7 @@ struct AsyncStatTable
                K_(partition_ids));
   uint64_t table_id_;
   ObArray<int64_t> partition_ids_;
+
 };
 
 enum ObStatTableType {
@@ -429,13 +436,14 @@ struct ObColumnStatParam {
   inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
   inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }
   inline void set_need_refine_min_max() { gather_flag_ |= ColumnGatherFlag::NEED_REFINE_MIN_MAX; }
+  inline void set_need_cs_refine_min_max() { gather_flag_ |= ColumnGatherFlag::NEED_CS_REFINE_MIN_MAX; }
   inline bool is_valid_opt_col() const { return gather_flag_ & ColumnGatherFlag::VALID_OPT_COL; }
   inline bool need_basic_stat() const { return gather_flag_ & ColumnGatherFlag::NEED_BASIC_STAT; }
   inline bool need_avg_len() const { return gather_flag_ & ColumnGatherFlag::NEED_AVG_LEN; }
   inline bool need_col_stat() const { return gather_flag_ != ColumnGatherFlag::NO_NEED_STAT; }
   inline void unset_need_basic_stat() { gather_flag_ &= ~ColumnGatherFlag::NEED_BASIC_STAT; }
   inline bool need_refine_min_max() const { return gather_flag_ & ColumnGatherFlag::NEED_REFINE_MIN_MAX; }
-
+  inline bool need_cs_refine_min_max() const { return gather_flag_ & ColumnGatherFlag::NEED_CS_REFINE_MIN_MAX; }
   ObString column_name_;
   uint64_t column_id_;
   common::ObCollationType cs_type_;
@@ -450,6 +458,7 @@ struct ObColumnStatParam {
 
   static bool is_valid_opt_col_type(const ObObjType type, bool is_online_stat = false);
   static bool is_valid_avglen_type(const ObObjType type);
+  static bool is_valid_refine_min_max_type(const ObObjType type);
   static const int64_t DEFAULT_HISTOGRAM_BUCKET_NUM;
 
   TO_STRING_KV(K_(column_name),
@@ -982,14 +991,16 @@ struct ObPartitionStatInfo
     row_cnt_(0),
     is_stat_locked_(false),
     is_no_dml_modified_(false),
+    is_ban_(false),
     is_no_stale_(false)
   {}
 
-  ObPartitionStatInfo(int64_t partition_id, int64_t row_cnt, bool is_locked, bool is_no_dml_modified):
+  ObPartitionStatInfo(int64_t partition_id, int64_t row_cnt, bool is_locked, bool is_no_dml_modified, bool is_ban):
     partition_id_(partition_id),
     row_cnt_(row_cnt),
     is_stat_locked_(is_locked),
     is_no_dml_modified_(is_no_dml_modified),
+    is_ban_(is_ban),
     is_no_stale_(false)
   {}
 
@@ -997,13 +1008,16 @@ struct ObPartitionStatInfo
   int64_t row_cnt_;
   bool is_stat_locked_;
   bool is_no_dml_modified_;
+  bool is_ban_;
   bool is_no_stale_;
-  bool is_regather() const { return !is_stat_locked_ && !is_no_dml_modified_ && !is_no_stale_; }
+
+  bool is_regather() const { return !is_stat_locked_ && !is_no_dml_modified_ && !is_no_stale_ && !is_ban_; }
 
   TO_STRING_KV(K(partition_id_),
                K(row_cnt_),
                K(is_stat_locked_),
                K(is_no_dml_modified_),
+               K(is_ban_),
                K(is_no_stale_));
 };
 
@@ -1055,6 +1069,47 @@ public:
   TO_STRING_KV(K_(part_id), K_(tablet_id));
 };
 typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
+
+class AuditBaseItem
+{
+public:
+  AuditBaseItem() {}
+  virtual ~AuditBaseItem() {}
+
+  virtual int64_t get_cost_time() const = 0;
+
+  DECLARE_PURE_VIRTUAL_TO_STRING;
+};
+
+class ObOptStatGatherAudit
+{
+public:
+  static const int64_t MINIMAL_AUDIT_TIME = 500000;
+public:
+  ObOptStatGatherAudit(ObIAllocator &allocator)
+    : audit_items_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
+      failed_refine_parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
+      allocator_(allocator) {}
+  ~ObOptStatGatherAudit();
+
+  int add_failed_refine_parts(uint64_t part_id)
+  {
+    return failed_refine_parts_.push_back(part_id);
+  }
+
+  bool need_audit(int64_t cost_time) { return cost_time >= MINIMAL_AUDIT_TIME; }
+
+  int add_basic_estimate_audit(const ObIArray<PartInfo> & parts, bool is_index, int64_t cost_time);
+  int add_histogram_estimate_audit(uint64_t part_id, int64_t topk_cost, int64_t hybrid_cost);
+  int add_refine_estimate_audit(bool use_skip_index, uint64_t part_id, int64_t cost_time);
+  int add_flush_stats_audit(int64_t cost_time);
+  DECLARE_TO_STRING;
+private:
+  int64_t inner_to_string(const ObIArray<AuditBaseItem*> &items, char* buf, const int64_t buf_len) const;
+  ObSEArray<AuditBaseItem*, 4, ObIAllocator&> audit_items_;
+  ObSEArray<uint64_t, 4, ObIAllocator&> failed_refine_parts_;
+  ObIAllocator &allocator_;
+};
 
 }
 }

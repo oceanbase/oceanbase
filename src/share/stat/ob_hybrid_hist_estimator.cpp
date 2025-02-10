@@ -29,6 +29,21 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                     ObOptStat &opt_stat)
 {
   int ret = OB_SUCCESS;
+  ret = estimate(param,
+                  opt_stat.table_stat_->get_row_count(),
+                  opt_stat.table_stat_->get_micro_block_num(),
+                  opt_stat.table_stat_->get_sstable_row_count() >= opt_stat.table_stat_->get_memtable_row_count(),
+                  opt_stat);
+  return ret;
+}
+
+int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
+                                    int64_t total_row_count,
+                                    int64_t micro_block_num,
+                                    bool sstable_rows_more,
+                                    ObOptStat &opt_stat)
+{
+  int ret = OB_SUCCESS;
   ObSEArray<const ObColumnStatParam *, 4> hybrid_col_params;
   ObSEArray<ObOptColumnStat *, 4> hybrid_col_stats;
   bool need_sample = false;
@@ -50,9 +65,9 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (OB_UNLIKELY(hybrid_col_params.count() != hybrid_col_stats.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(hybrid_col_params.count()), K(hybrid_col_stats.count()));
-  } else if (OB_FAIL(compute_estimate_percent(opt_stat.table_stat_->get_row_count(),
-                                              opt_stat.table_stat_->get_micro_block_num(),
-                                              opt_stat.table_stat_->get_sstable_row_count() >= opt_stat.table_stat_->get_memtable_row_count(),
+  } else if (OB_FAIL(compute_estimate_percent(total_row_count,
+                                              micro_block_num,
+                                              sstable_rows_more,
                                               max_num_buckets,
                                               param.hist_sample_info_,
                                               need_sample,
@@ -70,7 +85,7 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                                 est_percent,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false, false))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
@@ -206,7 +221,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
                                                           hybrid_col_stats,
                                                           no_sample_idx))) {
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false, false))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));
@@ -392,6 +407,7 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
   if (OB_SUCC(ret)) {
     //refine est_percent avoid sampling block cnt is too small.
     if (is_block_sample && sstable_rows_more &&
+         micro_block_num > 0 &&
         (est_percent / 100.0 * micro_block_num) < MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST) {
       est_percent = MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST * 100.0 / micro_block_num;
     }

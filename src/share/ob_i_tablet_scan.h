@@ -79,9 +79,11 @@ struct SampleInfo
     SAMPLE_BASE_DATA = 1,
     SAMPLE_INCR_DATA = 2
   };
-  bool is_row_sample() const { return ROW_SAMPLE == method_; }
-  bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
-  bool is_no_sample() const { return NO_SAMPLE == method_; }
+  OB_INLINE bool is_trival_sample() const { return ROW_SAMPLE == method_; }
+  OB_INLINE bool is_hybrid_sample() const { return HYBRID_SAMPLE == method_; }
+  OB_INLINE bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
+  OB_INLINE bool is_no_sample() const { return NO_SAMPLE == method_; }
+  OB_INLINE bool is_row_sample() const { return is_trival_sample() || is_hybrid_sample(); }
   uint64_t hash(uint64_t seed) const;
   void reset()
   {

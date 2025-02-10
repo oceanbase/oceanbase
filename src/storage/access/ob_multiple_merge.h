@@ -132,7 +132,6 @@ private:
   int update_and_report_tablet_stat();
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
-  OB_INLINE bool can_use_vec2(); // need to remove after statistical info pushdown support vec 2.0
 
 protected:
   common::ObArenaAllocator padding_allocator_;
@@ -192,20 +191,6 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
   }
 #endif
   return ret;
-}
-
-// temporary code
-OB_INLINE bool ObMultipleMerge::can_use_vec2()
-{
-  bool bret = true;
-  for (int64_t i = 0; i < access_param_->aggregate_exprs_->count(); ++i) {
-    const sql::ObExpr *agg_expr = access_param_->aggregate_exprs_->at(i);
-    if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == agg_expr->type_ || T_FUN_SUM_OPNSIZE == agg_expr->type_) {
-      bret = false;
-      break;
-    }
-  }
-  return bret;
 }
 
 }

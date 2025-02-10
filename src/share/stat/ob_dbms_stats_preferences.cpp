@@ -414,6 +414,7 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
   init_perfs_value(ObAsyncStaleMaxTableSizePrefs, false/*last value*/);//init async stale max table size
   init_perfs_value(ObHistEstPercentPrefs, false/*last value*/);//init hist_est_percent
   init_perfs_value(ObHistBlockSamplePrefs, false/*last value*/);//init hist_block_sample
+  init_perfs_value(ObGatherStatBatchSizePrefs, false/*last value*/);//init async/auto gather batch size
   init_perfs_value(ObAutoSampleRowCountPrefs, true/*last value*/);//init auto_sample_row_count
   if (OB_SUCC(ret)) {
     if (OB_FAIL(raw_sql.append_fmt(INIT_GLOBAL_PREFS,
@@ -1114,6 +1115,40 @@ int ObHistBlockSamplePrefs::check_pref_value_validity(ObTableStatParam *param/*d
   return ret;
 }
 
+int ObGatherStatBatchSizePrefs::check_pref_value_validity(ObTableStatParam *param)
+{
+  int ret = OB_SUCCESS;
+  if (!pvalue_.empty()) {
+    ObObj src_obj;
+    ObObj dest_obj;
+    src_obj.set_string(ObVarcharType, pvalue_);
+    ObArenaAllocator calc_buf("AutoBatchSize");
+    ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
+    int64_t batch_part_size = 0;
+    int64_t int_part = 0;
+    if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
+      LOG_WARN("failed to type", K(ret), K(src_obj));
+    } else if (!dest_obj.get_number().is_valid_int64(int_part)) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal auto gather stats batch size must be interger", K(ret));
+    } else if (OB_FAIL(dest_obj.get_number().extract_valid_int64_with_trunc(batch_part_size))) {
+      LOG_WARN("failed to extract valid int64 with trunc", K(ret), K(src_obj));
+    } else if (batch_part_size < 0) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal auto gather stats batch size must greater than 0", K(ret), K(batch_part_size));
+    } else if (NULL != param) {
+      // do nothing
+    } else { /*do nothing*/
+    }
+    if (OB_FAIL(ret)) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal auto gather stats batch size.", K(ret), K(pvalue_));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal auto gather stats batch size.");
+    }
+  }
+  return ret;
+}
+
 int ObAutoSampleRowCountPrefs::check_pref_value_validity(ObTableStatParam *param)
 {
   int ret = OB_SUCCESS;
@@ -1314,6 +1349,31 @@ int ObDbmsStatsPreferences::get_extra_stats_perfs_for_upgrade_425(ObSqlString &r
   const char *time_str = "CURRENT_TIMESTAMP";
   ObSqlString value_str;
   ObAutoSampleRowCountPrefs prefs;
+  if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                      K(prefs.get_stat_pref_default_value()));
+  } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s');",
+                                          prefs.get_stat_pref_name(),
+                                          null_str,
+                                          time_str,
+                                          "0"))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(raw_sql.append_fmt(INIT_GLOBAL_PREFS,
+                                        share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+                                        value_str.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsPreferences::get_extra_stats_perfs_for_upgrade_4351(ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  const char *null_str = "NULL";
+  const char *time_str = "CURRENT_TIMESTAMP";
+  ObSqlString value_str;
+  ObGatherStatBatchSizePrefs prefs;
   if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),

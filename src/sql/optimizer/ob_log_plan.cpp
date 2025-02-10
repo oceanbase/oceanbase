@@ -6120,6 +6120,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
   bool enable_aggr_push_down = false;
   bool enable_groupby_push_down = false;
   bool is_only_full_group_by = true;
+  bool is_scala_push_down = false;
   can_push = false;
   if (OB_ISNULL(stmt = get_stmt()) ||
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
@@ -6135,7 +6136,11 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
              stmt->has_for_update() ||
              !stmt->is_single_table_stmt()) {
     /*do nothing*/
-  } else if (!static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by() &&
+  } else if (OB_FAIL(check_can_scala_storage_pushdown(*session_info,
+                                                      *static_cast<const ObSelectStmt*>(stmt),
+                                                      is_scala_push_down))) {
+    LOG_WARN("failed to check is statistic gather sql", K(ret));
+  } else if (!is_scala_push_down &&
              !enable_groupby_push_down) {
     OPT_TRACE("tenant or hint disable groupby push down");
   } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
@@ -6163,7 +6168,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
     const ObIArray<ObRawExpr *> &filters = stmt->get_condition_exprs();
     ObRawExpr* groupby_column = NULL;
     can_push = true;
-    if (static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by()) {
+    if (is_scala_push_down) {
       if (OB_FAIL(check_scalar_aggr_can_storage_pushdown(table_item->table_id_,
                                                          aggrs,
                                                          pushdown_groupby_columns,
@@ -15555,6 +15560,47 @@ int ObLogPlan::get_enable_rich_vector_format(bool &enable)
     LOG_WARN("session is null", K(ret));
   } else {
     enable = session_info->use_rich_format();
+  }
+  return ret;
+}
+
+int ObLogPlan::check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
+                                                const ObSelectStmt &stmt,
+                                                bool &can_pushdown)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = session_info.get_effective_tenant_id();
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+  ObRawExpr* group_expr = NULL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  const ObGlobalHint &global_hint = optimizer_context_.get_global_hint();
+  bool is_exist_hint = false;
+  bool hint_rowsets_enable = false;
+  can_pushdown = false;
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (stmt.is_scala_group_by()) {
+    can_pushdown = true;
+  } else if (get_log_plan_hint().optimizer_features_enable_version_ < COMPAT_VERSION_4_3_5_BP1) {
+    // do nothing
+  } else if (!query_ctx->get_global_hint().has_dbms_stats_hint()) {
+    // do nothing
+  } else if (stmt.get_group_exprs().count() != 1) {
+    // do nothing
+  } else if (OB_ISNULL(group_expr = stmt.get_group_exprs().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (group_expr->get_expr_type() != T_FUN_SYS_CALC_PARTITION_ID) {
+    // do nothing
+  } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED,
+                                                                hint_rowsets_enable,
+                                                                is_exist_hint))) {
+    LOG_WARN("failed to get bool opt param", K(ret));
+  } else {
+    bool rowsets_enabled = is_exist_hint ? hint_rowsets_enable :
+                                           (tenant_config.is_valid() && tenant_config->_rowsets_enabled);
+    can_pushdown = rowsets_enabled;
   }
   return ret;
 }

@@ -5573,13 +5573,13 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
 
   if (OB_SUCC(ret)) {
     if (op.is_sample_scan()
-        && op.get_sample_info().method_ == SampleInfo::ROW_SAMPLE) {
+        && (op.get_sample_info().is_row_sample())) {
       ObRowSampleScanSpec &sample_scan = static_cast<ObRowSampleScanSpec &>(spec);
       sample_scan.set_sample_info(op.get_sample_info());
     }
 
     if (OB_SUCC(ret) && op.is_sample_scan()
-        && op.get_sample_info().method_ == SampleInfo::BLOCK_SAMPLE) {
+        && op.get_sample_info().is_block_sample()) {
       ObBlockSampleScanSpec &sample_scan = static_cast<ObBlockSampleScanSpec &>(spec);
       sample_scan.set_sample_info(op.get_sample_info());
     }
@@ -9696,9 +9696,9 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       if (op.get_contains_fake_cte()) {
         type = PHY_FAKE_CTE_TABLE;
       } else if (op.is_sample_scan()) {
-        if (op.get_sample_info().method_ == SampleInfo::ROW_SAMPLE) {
+        if (op.get_sample_info().is_row_sample()) {
           type = PHY_ROW_SAMPLE_SCAN;
-        } else if (op.get_sample_info().method_ == SampleInfo::BLOCK_SAMPLE){
+        } else if (op.get_sample_info().is_block_sample()){
           type = PHY_BLOCK_SAMPLE_SCAN;
         }
       } else if (op.get_is_multi_part_table_scan()) {

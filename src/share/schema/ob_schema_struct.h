@@ -3394,6 +3394,21 @@ public:
       common::ObObjectID &subpart_id,
       RelatedTableInfo *related_table = NULL);
 
+  static int get_tablet_and_part_id(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObObjectID &target_part_id,
+    common::ObTabletID &tablet_id,
+    common::ObObjectID &part_id,
+    RelatedTableInfo *related_table /*= NULL*/);
+
+  static int get_tablet_and_subpart_id(
+    const share::schema::ObTableSchema &table_schema,
+    const common::ObPartID &part_id,
+    const common::ObObjectID &target_part_id,
+    common::ObTabletID &tablet_id,
+    common::ObObjectID &subpart_id,
+    RelatedTableInfo *related_table /*= NULL*/);
+
   static bool is_default_list_part(const ObPartition &part);
 
   static int check_param_valid(

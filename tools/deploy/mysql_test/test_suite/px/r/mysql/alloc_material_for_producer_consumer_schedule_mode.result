@@ -74,7 +74,7 @@ Query Plan
 |ID|OPERATOR                                         |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
 |0 |PX COORDINATOR                                   |        |1       |6           |
-|1 |└─EXCHANGE OUT DISTR                             |:EX10003|1       |6           |
+|1 |└─EXCHANGE OUT DISTR                             |:EX10003|1       |5           |
 |2 |  └─HASH GROUP BY                                |        |1       |5           |
 |3 |    └─EXCHANGE IN DISTR                          |        |1       |5           |
 |4 |      └─EXCHANGE OUT DISTR (HASH)                |:EX10002|1       |5           |
@@ -140,8 +140,8 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |        |1       |7           |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10002|1       |6           |
+|0 |PX COORDINATOR                         |        |1       |6           |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10002|1       |5           |
 |2 |  └─MERGE GROUP BY                     |        |1       |4           |
 |3 |    └─PARTITION SORT                   |        |1       |4           |
 |4 |      └─MERGE JOIN                     |        |1       |4           |
@@ -150,8 +150,8 @@ Query Plan
 |7 |        │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|1       |2           |
 |8 |        │     └─PX BLOCK ITERATOR      |        |1       |2           |
 |9 |        │       └─TABLE FULL SCAN      |t1      |1       |2           |
-|10|        └─SORT                         |        |1       |3           |
-|11|          └─EXCHANGE IN DISTR          |        |1       |3           |
+|10|        └─SORT                         |        |1       |2           |
+|11|          └─EXCHANGE IN DISTR          |        |1       |2           |
 |12|            └─EXCHANGE OUT DISTR (HASH)|:EX10001|1       |2           |
 |13|              └─PX BLOCK ITERATOR      |        |1       |2           |
 |14|                └─TABLE FULL SCAN      |b       |1       |2           |

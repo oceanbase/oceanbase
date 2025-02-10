@@ -171,10 +171,21 @@ public:
   int fill_hints(common::ObIAllocator &alloc,
                  const ObString &table_name,
                  int64_t gather_vectorize,
-                 bool use_column_store);
+                 bool use_column_store,
+                 bool use_plan_cache);
 
   static int set_partition_stat_no_regather(const int64_t partition_id,
                                             ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+
+  int fill_partition_info(ObIAllocator &allocator,
+                          const ObOptStatGatherParam &param,
+                          const PartInfo &part);
+
+  int fill_partition_info(ObIAllocator &allocator,
+                          const ObString &part_nam)
+  {
+    return ObStatsEstimator::fill_partition_info(allocator, part_nam);
+  }
 
 private:
 

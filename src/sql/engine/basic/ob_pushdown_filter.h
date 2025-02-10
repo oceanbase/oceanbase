@@ -621,7 +621,7 @@ public:
   {
     return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR;
   }
-  virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR || type_ == TRIVAL_SAMPLE_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
   virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR; }

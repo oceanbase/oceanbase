@@ -614,7 +614,7 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
         INIT_AND_OPEN_ITER(multi_scan_merge_, sample_ranges_, false);
         if (OB_FAIL(ret)) {
         } else if (scan_param_->sample_info_.is_row_sample()) {
-          // Row sample is scan, do not need extra iterator.
+          // Row Sample and Hybrid Sample are scan, do not need extra iterator.
         } else {
           if (OB_FAIL(
                   sample_iter_helper.get_sample_iter(memtable_row_sample_iterator_, main_iter_, multi_scan_merge_))) {

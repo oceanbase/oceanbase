@@ -739,7 +739,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     // first time: aggregated row, ret = OB_SUCCESS
     if (OB_ITER_END == ret && !batch_row_store->is_end()) {
       ObAggStoreBase *agg_store_base = nullptr;
-      if (batch_row_store->is_vec2()) {
+      if (access_param_->iter_param_.use_new_format()) {
         agg_store_base = static_cast<ObAggregatedStoreVec *>(batch_row_store);
       } else {
         agg_store_base = static_cast<ObAggregatedStore *>(batch_row_store);
@@ -1055,7 +1055,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, group by can not pushdown in reverse scan", K(ret));
   } else if (param.iter_param_.enable_pd_aggregate()) {
-    if (param.iter_param_.use_new_format() && can_use_vec2()) {
+    if (param.iter_param_.use_new_format()) {
       if (OB_ISNULL(buf = context.stmt_allocator_->alloc(sizeof(ObAggregatedStoreVec)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc aggregated store vec", K(ret));

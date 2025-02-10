@@ -336,7 +336,17 @@ private:
   int post_upgrade_for_optimizer_stats();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 1)
+class ObUpgradeFor4351Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4351Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4351Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_optimizer_stats();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

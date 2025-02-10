@@ -12911,6 +12911,8 @@ int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
       sample_info.table_id_ = table_item.table_id_;
       if (sample_node->children_[METHOD]->value_ == 2) {
         sample_info.method_ = SampleInfo::BLOCK_SAMPLE;
+      } else if (sample_node->children_[METHOD]->value_ == 3) {
+        sample_info.method_ = SampleInfo::HYBRID_SAMPLE;
       } else {
         sample_info.method_ = SampleInfo::ROW_SAMPLE;
       }

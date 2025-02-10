@@ -101,6 +101,12 @@ public:
 
   int estimate(const ObOptStatGatherParam &param,
                ObOptStat &opt_stat);
+
+  int estimate(const ObOptStatGatherParam &param,
+               int64_t total_row_count,
+               int64_t micro_block_num,
+               bool sstable_rows_more,
+               ObOptStat &opt_stat);
 private:
 
   int try_build_hybrid_hist(const ObColumnStatParam &param,

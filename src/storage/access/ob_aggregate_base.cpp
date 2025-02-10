@@ -313,7 +313,8 @@ OB_INLINE void ObPushdownAggContext::setup_agg_row(share::aggregate::AggrRowPtr 
   OB_ASSERT(row_size == agg_ctx_.row_meta().row_size_);
   MEMSET(row, 0, row_size);
   for (int col_id = 0; col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    if (agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT) {
+    if (agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
+        agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
       ObDatumMeta &res_meta = agg_ctx_.aggr_infos_.at(col_id).expr_->datum_meta_;
       VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
       char *cell = nullptr;

@@ -374,6 +374,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"hour_minute", HOUR_MINUTE},
   {"hour_second", HOUR_SECOND},
   {"hidden", HIDDEN},
+  {"hybrid", HYBRID},
   {"hybrid_hist", HYBRID_HIST},
   {"id", ID},
   {"idc", IDC},

@@ -51,6 +51,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/aggr_extra.cpp
   aggregate/rb_build_agg.cpp
   aggregate/approx_count_distinct_synopsis.cpp
+  aggregate/sum_opnsize.cpp
   aggregate/group_concat.cpp
 )
 
@@ -577,6 +578,7 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_system_stat.cpp
   stat/ob_opt_system_stat_cache.cpp
   stat/ob_min_max_estimator.cpp
+  stat/ob_column_store_refine_estimator.cpp
 )
 
 ob_set_subtarget(ob_share external_table

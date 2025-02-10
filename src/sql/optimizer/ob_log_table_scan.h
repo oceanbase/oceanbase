@@ -932,9 +932,11 @@ public:
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
+  int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
+  int pick_out_dbms_calc_partition_id_exprs();
   int filter_before_index_back_set();
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;

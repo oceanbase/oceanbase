@@ -40,7 +40,8 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObAndFilterExecutor, ObPushdownAndFilterNode, AND_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObOrFilterExecutor, ObPushdownOrFilterNode, OR_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObSampleFilterExecutor, ObPushdownSampleFilterNode, HYBRID_SAMPLE_FILTER_EXECUTOR>
+  ObPushdownFilterFactory::alloc<ObHybridSampleFilterExecutor, ObPushdownSampleFilterNode, HYBRID_SAMPLE_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObTrivalSampleFilterExecutor, ObPushdownSampleFilterNode, TRIVAL_SAMPLE_FILTER_EXECUTOR>
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS

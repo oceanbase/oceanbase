@@ -41,6 +41,13 @@ const char *ObLogTableScan::get_name() const
   }
   if (sample_method != SampleInfo::NO_SAMPLE) {
     name = (sample_method == SampleInfo::ROW_SAMPLE) ? "TABLE ROW SAMPLE SCAN" : "TABLE BLOCK SAMPLE SCAN";
+    if (sample_method == SampleInfo::ROW_SAMPLE) {
+      name = "TABLE ROW SAMPLE SCAN";
+    } else if (sample_method == SampleInfo::BLOCK_SAMPLE) {
+      name = "TABLE BLOCK SAMPLE SCAN";
+    } else if (sample_method == SampleInfo::HYBRID_SAMPLE) {
+      name = "TABLE HYBRID SAMPLE SCAN";
+    }
   } else if (is_text_retrieval_scan()) {
     name = use_das() ? "DISTRIBUTED TEXT RETRIEVAL SCAN" : "TEXT RETRIEVAL SCAN";
   } else if (is_pre_vec_idx_scan()) {
@@ -1374,6 +1381,8 @@ int ObLogTableScan::set_table_scan_filters(const common::ObIArray<ObRawExpr *> &
     LOG_WARN("failed to get exprs", K(ret));
   } else if (OB_FAIL(pick_out_query_range_exprs())) {
     LOG_WARN("failed to pick out query range exprs", K(ret));
+  } else if (OB_FAIL(pick_out_dbms_calc_partition_id_exprs())) {
+    LOG_WARN("failed to pick out dbms calc partiton id exprs", K(ret));
   } else if (OB_FAIL(pick_out_startup_filters())) {
     LOG_WARN("failed to pick out startup filters", K(ret));
   }
@@ -1557,6 +1566,37 @@ int ObLogTableScan::pick_out_query_range_exprs()
       }
     } //end for
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObLogTableScan::pick_out_dbms_calc_partition_id_exprs()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (get_plan()->get_optimizer_context().get_global_hint().has_dbms_stats_hint()) {
+    ObArray<ObRawExpr *> filter_exprs;
+    if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+      LOG_WARN("assign filter exprs failed", K(ret));
+    } else {
+      filter_exprs_.reset();
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+      ObRawExpr *expr = filter_exprs.at(i);
+      bool is_dbms_calc_part_expr = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(check_is_dbms_calc_partition_expr(*expr, is_dbms_calc_part_expr))) {
+        LOG_WARN("failed to check is dbms calc partition expr", K(ret));
+      } else if (is_dbms_calc_part_expr) {
+        // do nothing
+      } else if (OB_FAIL(filter_exprs_.push_back(expr))) {
+        LOG_WARN("failed to push back filter exprs", K(ret));
+      }
+    } //end for
+  }
   return ret;
 }
 
@@ -5156,6 +5196,30 @@ int ObLogTableScan::try_adjust_scan_direction(const ObIArray<OrderItem> &sort_ke
     }
     if (OB_SUCC(ret) && found) {
       set_scan_direction(first_sortkey.order_type_);
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true)
+{
+  int ret = OB_SUCCESS;
+  is_true = false;
+  if (expr.get_expr_type() == T_OP_EQ) {
+    const ObRawExpr *left_expr = ObRawExprUtils::skip_implicit_cast(expr.get_param_expr(0));
+    const ObRawExpr *right_expr = ObRawExprUtils::skip_implicit_cast(expr.get_param_expr(1));
+    uint64_t ref_table_id = is_index_global_ ? index_table_id_ : ref_table_id_;
+    if (OB_ISNULL(left_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (left_expr->get_expr_type() == T_FUN_SYS_CALC_PARTITION_ID &&
+               left_expr->get_extra() == ref_table_id &&
+               right_expr->is_const_expr()) {
+      is_true = true;
+    } else if (right_expr->get_expr_type() == T_FUN_SYS_CALC_PARTITION_ID &&
+               right_expr->get_extra() == ref_table_id &&
+               left_expr->is_const_expr()) {
+      is_true = true;
     }
   }
   return ret;

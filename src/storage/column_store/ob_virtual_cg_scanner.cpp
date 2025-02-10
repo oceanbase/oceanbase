@@ -182,7 +182,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   1 != iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (access_ctx.block_row_store_->is_vec2()) {
+  } else if (iter_param.use_new_format()) {
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;
     if (OB_FAIL(agg_store_vec->get_agg_group(nullptr, agg_group_vec))){
@@ -301,7 +301,7 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
                   0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (access_ctx.block_row_store_->is_vec2()) {
+  } else if (iter_param.use_new_format()) {
     const sql::ObExpr *output_expr = nullptr;
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;

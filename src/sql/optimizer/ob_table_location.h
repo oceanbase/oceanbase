@@ -315,6 +315,26 @@ public:
   common::ObFixedArray<ValueItemExpr*, common::ObIAllocator> vies_;
 };
 
+struct ObPLGatherStatNode : public ObPartLocCalcNode
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObPLGatherStatNode(common::ObIAllocator &allocator)
+    : ObPartLocCalcNode(allocator)
+  {
+    set_node_type(GATHER_STAT);
+  }
+
+  virtual ~ObPLGatherStatNode()
+  { }
+  virtual int deep_copy(common::ObIAllocator &allocator,
+                        common::ObIArray<ObPartLocCalcNode*> &calc_nodes,
+                        ObPartLocCalcNode *&other) const;
+  virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
+
+  ValueItemExpr vie_;
+};
+
 struct ObListPartMapKey {
   common::ObNewRow row_;
 
@@ -1237,6 +1257,21 @@ private:
       ObIArray<ObObjectID> &partition_ids,
       const ObDataTypeCastParams &dtc_params,
       const ObIArray<ObObjectID> *part_ids) const;
+
+  int try_get_gather_stat_partition_info(ObExecContext *exec_ctx,
+                                         uint64_t ref_table_id,
+                                         const ObIArray<ObRawExpr*> &filter_exprs,
+                                         ObPartLocCalcNode *&calc_node,
+                                         ObPartLocCalcNode *&subcalc_node);
+  int calc_gather_stat_partition_ids(ObExecContext &exec_ctx,
+                                     ObDASTabletMapper &tablet_mapper,
+                                     const ParamStore &params,
+                                     const ObPLGatherStatNode *calc_node,
+                                     ObIArray<ObTabletID> &tablet_ids,
+                                     ObIArray<ObObjectID> &partition_ids,
+                                     const ObDataTypeCastParams &dtc_params,
+                                     const ObIArray<ObObjectID> *part_ids) const;
+
 public:
   inline const ObIArray<common::ObObjectID> &get_part_hint_ids() const
   {

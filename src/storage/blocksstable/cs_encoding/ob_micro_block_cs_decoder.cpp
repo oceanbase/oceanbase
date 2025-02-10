@@ -1669,22 +1669,22 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
     bret = (PD_MIN == agg_type || PD_MAX == agg_type);
   } else if (FALSE_IT(bret = !((col_param.get_meta_type().is_lob_storage() && has_lob_out_row())))) {
   } else if (bret) {
+    bool can_convert = false;
     switch (column_decoder->ctx_->type_) {
       case ObCSColumnHeader::INTEGER : {
         const ObIntegerColumnDecoderCtx &integer_ctx = column_decoder->ctx_->integer_ctx_;
         bool is_col_signed = false;
         const ObObjType store_col_type = integer_ctx.col_header_->get_store_obj_type();
-        const bool can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
         const int64_t row_gap = std::abs(row_ids[0] - row_ids[row_cap - 1]) + 1;
+        can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
         bret = ((PD_MIN == agg_type || PD_MAX == agg_type) &&
                 row_cap == row_gap &&
                 can_convert);
-        LOG_DEBUG("can pushdown integer", K(can_convert), K(row_gap), K(row_cap));
         break;
       }
       case ObCSColumnHeader::INT_DICT:
       case ObCSColumnHeader::STR_DICT: {
-        bret = (PD_MIN == agg_type || PD_MAX == agg_type);
+        bret = (PD_MIN == agg_type || PD_MAX == agg_type || PD_HLL == agg_type);
         break;
       }
       default: {
@@ -1692,7 +1692,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
       }
     }
     LOG_DEBUG("can pushdown decoder", K(bret), K(agg_type), K(column_decoder->ctx_->type_),
-              K(row_ids[0]), K(row_ids[row_cap - 1]), K(row_cap));
+              K(row_ids[0]), K(row_ids[row_cap - 1]), K(row_cap), K(can_convert));
   }
   return bret;
 }

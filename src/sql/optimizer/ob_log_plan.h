@@ -832,6 +832,10 @@ public:
                                      ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                      bool &can_push);
 
+  int check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
+                                       const ObSelectStmt &stmt,
+                                       bool &can_pushdown);
+
   int check_table_columns_can_storage_pushdown(const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                const ObIArray<ObRawExpr *> &pushdown_groupby_columns,

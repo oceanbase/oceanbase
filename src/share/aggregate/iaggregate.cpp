@@ -48,6 +48,8 @@ extern int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_co
                                    ObIAllocator &allocator, IAggregate *&agg);
 extern int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                   ObIAllocator &allocator, IAggregate *&agg);
+extern int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                      ObIAllocator &allocator, IAggregate *&agg);
 
 extern int init_group_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                        ObIAllocator &allocator, IAggregate *&agg);
@@ -92,6 +94,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_GROUPING, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUPING_ID, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, rb_build, i);
+        INIT_AGGREGATE_CASE(T_FUN_SUM_OPNSIZE, sum_opnsize, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
       default: {
         ret = OB_NOT_SUPPORTED;

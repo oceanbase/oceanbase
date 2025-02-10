@@ -59,8 +59,33 @@
                                                                "user_stats," \
                                                                "stattype_locked," \
                                                                "stale_stats," \
-                                                               "spare1) VALUES " \
+                                                               "spare1,"\
+                                                               "spare2) VALUES " \
 
+#define UPDATE_TABLE_STAT_FAILCOUNT_SQL "INSERT /*+QUERY_TIMEOUT(60000000)*/INTO %s(tenant_id," \
+                                                                                "table_id," \
+                                                                                "partition_id," \
+                                                                                "index_type," \
+                                                                                "object_type," \
+                                                                                "last_analyzed," \
+                                                                                "sstable_row_cnt," \
+                                                                                "sstable_avg_row_len," \
+                                                                                "macro_blk_cnt," \
+                                                                                "micro_blk_cnt," \
+                                                                                "memtable_row_cnt," \
+                                                                                "memtable_avg_row_len," \
+                                                                                "row_cnt," \
+                                                                                "avg_row_len," \
+                                                                                "global_stats," \
+                                                                                "user_stats," \
+                                                                                "stattype_locked," \
+                                                                                "stale_stats, "\
+                                                                                "spare2 ) VALUES %s " \
+                                                                                "ON DUPLICATE KEY UPDATE " \
+                                                                                " spare2 = COALESCE(spare2, 0) + 1," \
+                                                                                "last_analyzed = usec_to_time(%ld) "
+
+#define UPDATE_TABLE_STAT_FAILCOUNT_VALUE  " (%lu, %lu, %ld, 0, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, 0, 0, 0, 1, 1)"
 #define REPLACE_COL_STAT_SQL "REPLACE INTO __all_column_stat(tenant_id," \
                                                               "table_id," \
                                                               "partition_id," \
@@ -194,7 +219,8 @@
                                                          "end_time," \
                                                          "memory_used," \
                                                          "stat_refresh_failed_list," \
-                                                         "properties) VALUES (%s);"
+                                                         "properties," \
+                                                         "spare3) VALUES (%s);"
 
 
 #define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \
@@ -906,7 +932,8 @@ int ObOptStatSqlService::get_table_stat_sql(const uint64_t tenant_id,
       OB_FAIL(dml_splicer.add_column("user_stats", 0)) ||
       OB_FAIL(dml_splicer.add_column("stattype_locked", stat.get_stattype_locked())) ||
       OB_FAIL(dml_splicer.add_column("stale_stats", 0)) ||
-      OB_FAIL(dml_splicer.add_column("spare1", stat.get_sample_size()))) {
+      OB_FAIL(dml_splicer.add_column("spare1", stat.get_sample_size())) ||
+      OB_FAIL(dml_splicer.add_column("spare2", 0)) ) {
     LOG_WARN("failed to add dml splicer column", K(ret));
   } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
     LOG_WARN("failed to get sql string", K(ret));
@@ -2113,6 +2140,71 @@ int ObOptStatSqlService::update_opt_stat_gather_stat(const ObOptStatGatherStat &
   return ret;
 }
 
+int ObOptStatSqlService::update_table_stat_failed_count(
+    const uint64_t tenant_id, const uint64_t table_id,
+    const ObIArray<int64_t> &part_ids, int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  ObSqlString value_str;
+  uint64_t ext_tenant_id =
+      share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+  if (OB_FAIL(get_update_fail_count_value_list(ext_tenant_id, table_id,
+                                                      part_ids, value_str))) {
+    LOG_WARN("failed to generate in list", K(ret));
+  } else if (OB_UNLIKELY(value_str.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(value_str));
+  } else if (OB_FAIL(raw_sql.append_fmt(
+               UPDATE_TABLE_STAT_FAILCOUNT_SQL, share::OB_ALL_TABLE_STAT_TNAME,
+               value_str.ptr(), ObTimeUtility::current_time()))) {
+    LOG_WARN("failed to append fmt", K(ret), K(raw_sql));
+  } else {
+    ObMySQLTransaction trans;
+    LOG_TRACE("sql string of update failed count ", K(raw_sql));
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_INFO("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec insert failed count sql", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::get_update_fail_count_value_list(
+    const uint64_t tenant_id, const uint64_t table_id,
+    const ObIArray<int64_t> &part_ids, ObSqlString &value_str)
+{
+  int ret = OB_SUCCESS;
+  if (part_ids.empty()) {
+    value_str.append_fmt(UPDATE_TABLE_STAT_FAILCOUNT_VALUE, tenant_id,
+                                 table_id, -1l);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
+    ObSqlString value;
+    if (OB_FAIL(value.append_fmt(UPDATE_TABLE_STAT_FAILCOUNT_VALUE, tenant_id,
+                                 table_id, part_ids.at(i)))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    } else if (OB_FAIL(value_str.append_fmt(
+                   "%s%s", value.ptr(), i == part_ids.count() - 1 ? " " : ", "
+                   ))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptStatSqlService::get_gather_stat_task_value(const ObOptStatTaskInfo &task_info,
                                                     ObSqlString &value_str)
 {
@@ -2150,7 +2242,8 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
       OB_FAIL(dml_splicer.add_time_column("end_time", gather_stat.get_end_time())) ||
       OB_FAIL(dml_splicer.add_column("memory_used", gather_stat.get_memory_used())) ||
       OB_FAIL(dml_splicer.add_column("stat_refresh_failed_list", gather_stat.get_stat_refresh_failed_list())) ||
-      OB_FAIL(dml_splicer.add_column("properties", gather_stat.get_properties()))) {
+      OB_FAIL(dml_splicer.add_column("properties", gather_stat.get_properties())) ||
+      OB_FAIL(dml_splicer.add_column("spare3", gather_stat.get_gather_audit()))) {
     LOG_WARN("failed to add dml splicer column", K(ret));
   } else if (OB_FAIL(dml_splicer.splice_values(values_ptr))) {
     LOG_WARN("failed to get sql string", K(ret));
@@ -2313,6 +2406,8 @@ int ObOptStatSqlService::delete_system_stats(const uint64_t tenant_id)
 #undef ALL_HISTOGRAM_STAT_COLUMN_NAME
 #undef ALL_COLUMN_STAT_COLUMN_NAME
 #undef INSERT_TABLE_STAT_SQL
+#undef UPDATE_TABLE_STAT_FAILCOUNT_SQL
+#undef UPDATE_TABLE_STAT_FAILCOUNT_VALUE
 #undef REPLACE_COL_STAT_SQL
 #undef INSERT_HISTOGRAM_STAT_SQL
 #undef DELETE_HISTOGRAM_STAT_SQL

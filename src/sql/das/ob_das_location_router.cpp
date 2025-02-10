@@ -381,6 +381,67 @@ int ObDASTabletMapper::get_tablet_and_object_id(const ObPartitionLevel part_leve
   return ret;
 }
 
+int ObDASTabletMapper::get_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
+                             const common::ObPartID part_id,
+                             const int64_t target_partition_id,
+                             common::ObTabletID &tablet_id,
+                             common::ObObjectID &object_id)
+{
+  int ret = OB_SUCCESS;
+  tablet_id = ObTabletID::INVALID_TABLET_ID;
+  if (OB_NOT_NULL(table_schema_)) {
+    share::schema::RelatedTableInfo *related_info_ptr = nullptr;
+    if (related_info_.related_tids_ != nullptr && !related_info_.related_tids_->empty()) {
+      related_info_ptr = &related_info_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (table_schema_->is_external_table()) {
+      if (PARTITION_LEVEL_ZERO == part_level) {
+        tablet_id = table_schema_->get_object_id();
+        object_id = table_schema_->get_object_id();
+      } else if (PARTITION_LEVEL_ONE == part_level) {
+        ObPartition *partition = NULL;
+        for (int64_t i = 0; OB_SUCC(ret) && partition == NULL && i < table_schema_->get_partition_num(); i++) {
+          if (target_partition_id == table_schema_->get_part_array()[i]->get_part_id()) {
+            partition = table_schema_->get_part_array()[i];
+            tablet_id = partition->get_object_id();
+            object_id = partition->get_object_id();
+          }
+        } // end dor
+      }
+    } else if (PARTITION_LEVEL_ZERO == part_level) {
+      if (OB_FAIL(ObPartitionUtils::get_tablet_and_object_id(
+          *table_schema_, tablet_id, object_id, related_info_ptr))) {
+        LOG_WARN("fail to get tablet_id and object_id", KR(ret), KPC_(table_schema));
+      } else if (object_id != target_partition_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected partition id", K(target_partition_id), K(object_id));
+      }
+    } else if (PARTITION_LEVEL_ONE == part_level) {
+      if (OB_FAIL(ObPartitionUtils::get_tablet_and_part_id(
+          *table_schema_, target_partition_id, tablet_id, object_id, related_info_ptr))) {
+        LOG_WARN("fail to get tablet_id and part_id", KR(ret), K(target_partition_id), KPC_(table_schema));
+      }
+    } else if (PARTITION_LEVEL_TWO == part_level) {
+      if (OB_FAIL(ObPartitionUtils::get_tablet_and_subpart_id(
+          *table_schema_, part_id, target_partition_id, tablet_id, object_id, related_info_ptr))) {
+        LOG_WARN("fail to get tablet_id and part_id", KR(ret), K(part_id), K(target_partition_id), KPC_(table_schema));
+      } else if (OB_FAIL(set_partition_id_map(part_id, object_id))) {
+        LOG_WARN("failed to set partition id map");
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid part level", KR(ret), K(part_level));
+    }
+  } else {
+    //virtual table, only supported partition by list(svr_ip, svr_port) ...
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("get partition id by target partition for virtual table not support", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "get partition id by target partition for virtual table");
+  }
+  return ret;
+}
+
 int ObDASTabletMapper::mock_vtable_related_tablet_id_map(
     const ObIArray<ObTabletID> &tablet_ids,
     const ObIArray<ObObjectID> &part_ids)

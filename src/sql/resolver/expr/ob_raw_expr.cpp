@@ -4701,6 +4701,9 @@ bool ObSysFunRawExpr::inner_same_as(
            T_FUN_SYS_JSON_REMOVE == get_expr_type())) {
         bool_ret = false;
       }
+      if (bool_ret && T_FUN_SYS_CALC_PARTITION_ID == get_expr_type()) {
+        bool_ret = get_partition_id_calc_type() == s_expr->get_partition_id_calc_type();
+      }
     }
   } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
     //for cases which compares concat('xxx','xxx') with 'xxx'||'xxx'
