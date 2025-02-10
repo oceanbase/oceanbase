@@ -427,7 +427,8 @@ public:
   static int update_dbms_sched_job_info(common::ObISQLClient &sql_client,
                                         const ObDBMSSchedJobInfo &job_info,
                                         const ObString &job_attribute_name,
-                                        const ObObj &job_attribute_value);
+                                        const ObObj &job_attribute_value,
+                                        const bool from_pl_set_attr = false);
   /**
    * @brief  获取 JOB 信息
    * @param [in] tenant_id  - 租户id
