@@ -18435,49 +18435,50 @@ int ObDDLService::check_alter_add_subpartitions(const share::schema::ObTableSche
     ObPartIterator iter(orig_table_schema, check_partition_mode);
     const ObPartition *part = NULL;
     const ObPartition *inc_part = part_array[i];
+    if (OB_ISNULL(inc_part)
+        || 0 == inc_part->get_subpartition_num()
+        || OB_ISNULL(inc_part->get_subpart_array())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("nontemplate subpart_array is NULL", KR(ret), K(i));
+    }
     while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
       if (OB_ISNULL(part) || OB_ISNULL(inc_part)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL ptr", K(part), K(ret));
+        LOG_WARN("NULL ptr", KR(ret));
       } else if (ObCharset::case_insensitive_equal(part->get_part_name(),
                                                    inc_part->get_part_name())) {
-        if (0 == inc_part->get_subpartition_num()
-            || OB_ISNULL(inc_part->get_subpart_array())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("nontemplate subpart_array is NULL", K(part), K(ret), K(i));
-        } else if (OB_FAIL(orig_parts.push_back(part))) {
+        if (OB_FAIL(orig_parts.push_back(part))) {
           LOG_WARN("fail to push back orig parts", KR(ret), KPC(part));
-        } else {
-          for (int j = 0; OB_SUCC(ret) && j < inc_part->get_subpartition_num(); j++) {
-            ObSubPartition *subpart = NULL;
-            ObSubPartition *inc_subpart = inc_part->get_subpart_array()[j];
-            int64_t k = 0, subpart_num = part->get_subpartition_num();
-            for (k = 0; OB_SUCC(ret) && k < subpart_num; k++) {
-              subpart = part->get_subpart_array()[k];
-              if (OB_ISNULL(subpart) || OB_ISNULL(inc_subpart)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("NULL ptr", K(part), K(inc_subpart), K(ret));
-              } else if (ObCharset::case_insensitive_equal(subpart->get_part_name(),
-                                                           inc_subpart->get_part_name())) {
-                ret = OB_ERR_SAME_NAME_SUBPARTITION;
-                LOG_WARN("duplicate subpartition name", K(ret), K(subpart->get_part_name()));
-                LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, subpart->get_part_name().length(),
-                               subpart->get_part_name().ptr());
-              }
-            }
-            if (OB_SUCC(ret) && k >= subpart_num) {
-              ret = OB_SUCCESS;
-            }
+        }
+      }
+
+      for (int j = 0; OB_SUCC(ret) && j < inc_part->get_subpartition_num(); j++) {
+        ObSubPartition *subpart = NULL;
+        ObSubPartition *inc_subpart = inc_part->get_subpart_array()[j];
+        int64_t k = 0, subpart_num = part->get_subpartition_num();
+        for (k = 0; OB_SUCC(ret) && k < subpart_num; k++) {
+          subpart = part->get_subpart_array()[k];
+          if (OB_ISNULL(subpart) || OB_ISNULL(inc_subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL ptr", KR(ret));
+          } else if (ObCharset::case_insensitive_equal(subpart->get_part_name(),
+                                                       inc_subpart->get_part_name())) {
+            ret = OB_ERR_SAME_NAME_SUBPARTITION;
+            LOG_WARN("duplicate subpartition name", KR(ret), K(subpart->get_part_name()));
+            LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, subpart->get_part_name().length(),
+                            subpart->get_part_name().ptr());
           }
         }
-        break;
       }
     }
-
     if (OB_ITER_END == ret) {
-      ret = OB_PARTITION_NOT_EXIST;
-      LOG_WARN("duplicate partition name", K(ret), K(inc_part->get_part_name()));
-      LOG_USER_ERROR(OB_PARTITION_NOT_EXIST);
+      if (OB_UNLIKELY(orig_parts.empty())) {
+        ret = OB_PARTITION_NOT_EXIST;
+        LOG_WARN("partition does not exist", KR(ret), K(inc_part->get_part_name()));
+        LOG_USER_ERROR(OB_PARTITION_NOT_EXIST);
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
   }// end for
 

@@ -403,7 +403,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
-%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num
+%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num opt_subpartition_range_or_list
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
@@ -18691,6 +18691,11 @@ ADD PARTITION opt_partition_range_or_list
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_PARTITION_EXCHANGE, 2, $3, $6);
 }
+| MODIFY PARTITION relation_factor ADD SUBPARTITION opt_subpartition_range_or_list
+{
+  merge_nodes($$, result, T_PARTITION_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SUBPARTITION_ADD, 2, $3, $$);
+}
 ;
 
 opt_partition_range_or_list:
@@ -18704,6 +18709,19 @@ opt_list_partition_list
   $$ = $1;
 }
 ;
+
+opt_subpartition_range_or_list:
+opt_range_subpartition_list
+{
+  $$ = $1;
+}
+|
+opt_list_subpartition_list
+{
+  $$ = $1;
+}
+;
+
 alter_tg_partition_option:
 DROP PARTITION drop_partition_name_list
 {
