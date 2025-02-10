@@ -525,7 +525,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
   } else if (0 == job_attribute_name.case_compare("enabled")) {
     if (OB_FAIL(dml.add_column("enabled", job_attribute_value.get_bool()))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_bool()));
-    } else if (job_attribute_value.get_bool() && job_info.state_.case_compare("BROKEN")) {
+    } else if (job_attribute_value.get_bool() && (0 == job_info.state_.case_compare("BROKEN"))) {
       if (OB_FAIL(dml.add_column("state", "SCHEDULED"))) {
         LOG_WARN("add state column failed", KR(ret), K(job_info.state_));
       } else if (OB_FAIL(dml.add_column("failures", 0))) {
