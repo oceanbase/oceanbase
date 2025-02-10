@@ -18,6 +18,7 @@
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "storage/mview/ob_mview_refresh_stats_collect.h"
 #include "storage/mview/ob_mview_transaction.h"
+#include "storage/mview/ob_mview_mds.h"
 
 namespace oceanbase
 {
@@ -85,7 +86,19 @@ int ObMViewRefresher::refresh()
     }
     if (OB_SUCC(ret)) {
       const ObMVRefreshType refresh_type = refresh_ctx_->refresh_type_;
+      ObMViewOpArg arg;
+      arg.table_id_ =  mview_id;
+      arg.parallel_ = refresh_ctx_->refresh_parallelism_;
       if (ObMVRefreshType::FAST == refresh_type) {
+        arg.mview_op_type_ = MVIEW_OP_TYPE::FAST_REFRESH;
+        arg.read_snapshot_ = refresh_ctx_->refresh_scn_range_.end_scn_.get_val_for_tx();
+      } else if (ObMVRefreshType::COMPLETE == refresh_type) {
+        // COMPLETE REFRESH is ddl task keep snapshot by ddl frame
+        arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
+      }
+      if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, *refresh_ctx_->trans_))) {
+        LOG_WARN("register mview mds failed", KR(ret), K(tenant_id), K(arg));
+      } else if (ObMVRefreshType::FAST == refresh_type) {
         if (OB_FAIL(fast_refresh())) {
           LOG_WARN("fail to fast refresh", KR(ret));
         }
@@ -155,6 +168,8 @@ int ObMViewRefresher::prepare_for_refresh()
   ObSQLSessionInfo *session_info = nullptr;
   ObSchemaGetterGuard schema_guard;
   SCN current_scn;
+  uint64_t data_version = 0;
+  const ObTableSchema *mview_table_schema = nullptr;
   if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
@@ -167,12 +182,13 @@ int ObMViewRefresher::prepare_for_refresh()
     LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(current_scn))) {
     LOG_WARN("fail to get current scn", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data_version", KR(ret));
   }
   // fetch mview info
   if (OB_SUCC(ret)) {
     WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans)
     {
-      const ObTableSchema *mview_table_schema = nullptr;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, mview_table_schema))) {
         LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mview_id));
       } else if (OB_ISNULL(mview_table_schema)) {
@@ -219,13 +235,15 @@ int ObMViewRefresher::prepare_for_refresh()
                                          : refresh_param_.refresh_method_;
     ObMVProvider mv_provider(tenant_id, mview_id);
     bool can_fast_refresh = false;
+    FastRefreshableNotes note;
     if (ObMVRefreshMode::NEVER == mview_info.get_refresh_mode()) {
       ret = OB_ERR_MVIEW_NEVER_REFRESH;
       LOG_WARN("mview never refresh", KR(ret), K(mview_info));
     } else if (OB_FAIL(mv_provider.init_mv_provider(refresh_scn_range.start_scn_,
                                                     refresh_scn_range.end_scn_,
                                                     &schema_guard,
-                                                    session_info))) {
+                                                    session_info,
+                                                    note))) {
       LOG_WARN("fail to init mv provider", KR(ret), K(tenant_id));
     } else if (OB_FAIL(mv_provider.get_mv_dependency_infos(dependency_infos))) {
       LOG_WARN("fail to get mv dependency infos", KR(ret), K(tenant_id));
@@ -239,6 +257,8 @@ int ObMViewRefresher::prepare_for_refresh()
     } else if (!can_fast_refresh && ObMVRefreshMethod::FAST == refresh_method) {
       ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
       LOG_WARN("mv can not fast refresh", KR(ret));
+      LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, mview_table_schema->get_table_name(),
+                     note.error_.ptr());
     } else if (OB_FAIL(check_fast_refreshable())) {
       if (ObMVRefreshMethod::FORCE == refresh_method &&
           OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret || OB_ERR_MLOG_IS_YOUNGER == ret)) {
@@ -267,6 +287,19 @@ int ObMViewRefresher::prepare_for_refresh()
           LOG_WARN("fail to push back", KR(ret));
         }
       }
+    }
+  }
+
+  // calculate refresh parallelism
+  if (OB_SUCC(ret) && data_version >= DATA_VERSION_4_3_5_1) {
+    int64_t final_parallelism = 0;
+    int64_t explict_parallelism = trans.is_inner_session() ? mview_info.get_refresh_dop() : refresh_param_.parallelism_;
+    if (OB_FAIL(calc_mv_refresh_parallelism(explict_parallelism, ctx_->get_my_session(),
+                                            final_parallelism))) {
+      LOG_WARN("fail to calculate mv refresh parallelism", KR(ret), K(refresh_param_));
+    } else {
+      refresh_param_.parallelism_ = final_parallelism;
+      refresh_ctx_->refresh_parallelism_ = final_parallelism;
     }
   }
   return ret;
@@ -471,6 +504,7 @@ int ObMViewRefresher::fast_refresh()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = refresh_param_.tenant_id_;
   const uint64_t mview_id = refresh_param_.mview_id_;
+  const int64_t parallelism = refresh_param_.parallelism_;
   const int64_t start_time = ObTimeUtil::current_time();
   ObMViewTransaction &trans = *refresh_ctx_->trans_;
   ObMViewInfo &mview_info = refresh_ctx_->mview_info_;
@@ -481,7 +515,12 @@ int ObMViewRefresher::fast_refresh()
   ObInnerSQLConnection *conn = nullptr;
   sql::ObSQLSessionInfo *exec_session_info = nullptr;
   int64_t affected_rows = 0;
-  if (OB_ISNULL(conn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
+  uint64_t data_version = 0;
+  bool has_updated_dml_dop = false;
+  uint64_t orig_dml_dop = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data_version", KR(ret));
+  } else if (OB_ISNULL(conn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("connection can not be NULL", KR(ret));
   } else {
@@ -506,6 +545,13 @@ int ObMViewRefresher::fast_refresh()
       }
     }
   }
+
+  if (OB_SUCC(ret) && OB_FAIL(set_session_dml_dop_(tenant_id, data_version, exec_session_info,
+                                                   trans, parallelism, has_updated_dml_dop,
+                                                   orig_dml_dop))) {
+    LOG_WARN("failed to set session dml dop", KR(ret));
+  }
+
   // exec sqls
   for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(ctx_->check_status()) && i < refresh_sqls.count();
        ++i) {
@@ -524,6 +570,16 @@ int ObMViewRefresher::fast_refresh()
       }
     }
   }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(restore_session_dml_dop_(tenant_id, data_version, has_updated_dml_dop,
+                                           orig_dml_dop, trans))) {
+    LOG_WARN("failed to restore session dml dop", KR(ret), K(has_updated_dml_dop), K(orig_dml_dop));
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  }
+
   const int64_t end_time = ObTimeUtil::current_time();
   // check mlogs avaiable
   if (OB_SUCC(ret)) {
@@ -571,6 +627,102 @@ int ObMViewRefresher::fast_refresh()
       }
     }
   }
+  return ret;
+}
+
+int ObMViewRefresher::set_session_dml_dop_(const uint64_t tenant_id,
+                                           const uint64_t data_version,
+                                           sql::ObSQLSessionInfo *exec_session_info,
+                                           ObMViewTransaction &trans,
+                                           const int64_t parallelism,
+                                           bool &has_updated_dml_dop,
+                                           uint64_t &orig_dml_dop)
+{
+  int ret = OB_SUCCESS;
+  has_updated_dml_dop = false;
+  orig_dml_dop = 0;
+  const bool is_oracle_mode = refresh_ctx_->is_oracle_mode_;
+
+  if (OB_ISNULL(exec_session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec session info is null", KR(ret));
+  } else if (data_version >= DATA_VERSION_4_3_5_1) {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(exec_session_info->get_force_parallel_dml_dop(orig_dml_dop))) {
+      LOG_WARN("fail to get force parallel dml dop", KR(ret));
+    } else if (is_oracle_mode &&
+               OB_FAIL(sql.assign_fmt("SET \"_force_parallel_dml_dop\" = %lu", parallelism))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(parallelism));
+    } else if (!is_oracle_mode &&
+               OB_FAIL(sql.assign_fmt("SET _force_parallel_dml_dop = %lu", parallelism))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(parallelism));
+    } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to set force parallel dml dop", KR(ret), K(sql));
+    } else {
+      has_updated_dml_dop = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewRefresher::restore_session_dml_dop_(const uint64_t tenant_id,
+                                               const uint64_t data_version,
+                                               const bool has_updated_dml_dop,
+                                               const uint64_t orig_dml_dop,
+                                               ObMViewTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const bool is_oracle_mode = refresh_ctx_->is_oracle_mode_;
+
+  if (has_updated_dml_dop && data_version >= DATA_VERSION_4_3_5_1) {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (is_oracle_mode &&
+        OB_FAIL(sql.assign_fmt("SET \"_force_parallel_dml_dop\" = %lu", orig_dml_dop))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(orig_dml_dop));
+    } else if (!is_oracle_mode &&
+               OB_FAIL(sql.assign_fmt("SET _force_parallel_dml_dop = %lu", orig_dml_dop))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(orig_dml_dop));
+    } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to set force parallel dml dop", KR(ret), K(sql));
+    }
+  }
+
+  return ret;
+}
+
+int ObMViewRefresher::calc_mv_refresh_parallelism(int64_t explict_parallelism,
+                                                  sql::ObSQLSessionInfo *session_info,
+                                                  int64_t &final_parallelism)
+{
+  int ret = OB_SUCCESS;
+  int64_t session_parallelism = 0;
+  final_parallelism = 1;
+
+  if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (explict_parallelism < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parallelism", KR(ret), K(explict_parallelism));
+  } else if (explict_parallelism != 0) {
+    final_parallelism = explict_parallelism;
+  } else if (OB_FAIL(session_info->get_mview_refresh_dop(session_parallelism))) {
+    LOG_WARN("fail to get materialized view parallelism", KR(ret));
+  } else if (session_parallelism < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session parallelism is invalid", KR(ret), K(session_parallelism));
+  } else if (session_parallelism != 0) {
+    final_parallelism = session_parallelism;
+  } else {
+    final_parallelism = 1;
+  }
+
+  LOG_INFO("calc mv refresh parallelism", KR(ret), K(explict_parallelism), K(session_parallelism),
+           K(final_parallelism), K(session_info->get_sessid()));
+
   return ret;
 }
 

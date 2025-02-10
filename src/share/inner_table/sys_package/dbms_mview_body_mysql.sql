@@ -16,13 +16,13 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
   PROCEDURE do_refresh(
     IN     mv_name                VARCHAR(65535),
     IN     method                 VARCHAR(65535) DEFAULT NULL,
-    IN     refresh_parallel       INT            DEFAULT 1);
+    IN     refresh_parallel       INT            DEFAULT 0);
   PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_REFRESH);
 
   PROCEDURE refresh(
     IN     mv_name                VARCHAR(65535),
     IN     method                 VARCHAR(65535) DEFAULT NULL,
-    IN     refresh_parallel       INT            DEFAULT 1)
+    IN     refresh_parallel       INT            DEFAULT 0)
   BEGIN
     COMMIT;
     CALL do_refresh(mv_name, method, refresh_parallel);

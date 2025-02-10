@@ -479,7 +479,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
   } else if (enable_auto_dop && !ctx_.get_global_hint().has_parallel_hint()) {
     // 2.2 enable parallel dml by auto dop
-  } else if (!session.is_user_session()) {
+  } else if (!session.is_user_session() && !session.get_ddl_info().is_refreshing_mview()) {
     can_use_pdml = false;
   } else if (OB_FAIL(session.get_enable_parallel_dml(session_enable_pdml))
              || OB_FAIL(session.get_force_parallel_dml_dop(session_pdml_dop))) {

@@ -3114,12 +3114,12 @@ DEF_FREELISTS	bigint(0)	NO
 DEF_FREELIST_GROUPS	bigint(0)	NO			
 DEF_LOGGING	varchar(7)	NO			
 DEF_COMPRESSION	varchar(8)	NO			
-DEF_COMPRESS_FOR	varchar(12)	NO		NULL	
+DEF_COMPRESS_FOR	varchar(12)	NO			
 DEF_BUFFER_POOL	varchar(7)	NO			
 DEF_FLASH_CACHE	varchar(7)	NO			
 DEF_CELL_FLASH_CACHE	varchar(7)	NO			
 REF_PTN_CONSTRAINT_NAME	varchar(128)	NO			
-INTERVAL	text	YES		NULL	
+INTERVAL	text	NO			
 AUTOLIST	varchar(3)	NO			
 INTERVAL_SUBPARTITION	text	NO			
 AUTOLIST_SUBPARTITION	varchar(3)	NO			
@@ -3511,12 +3511,12 @@ DEF_FREELISTS	bigint(0)	NO
 DEF_FREELIST_GROUPS	bigint(0)	NO			
 DEF_LOGGING	varchar(7)	NO			
 DEF_COMPRESSION	varchar(8)	NO			
-DEF_COMPRESS_FOR	varchar(12)	NO		NULL	
+DEF_COMPRESS_FOR	varchar(12)	NO			
 DEF_BUFFER_POOL	varchar(7)	NO			
 DEF_FLASH_CACHE	varchar(7)	NO			
 DEF_CELL_FLASH_CACHE	varchar(7)	NO			
 REF_PTN_CONSTRAINT_NAME	varchar(30)	NO			
-INTERVAL	text	YES		NULL	
+INTERVAL	text	NO			
 AUTOLIST	varchar(3)	NO			
 INTERVAL_SUBPARTITION	text	NO			
 AUTOLIST_SUBPARTITION	varchar(3)	NO			
@@ -9602,6 +9602,7 @@ UNUSABLE_BEFORE	varchar(128)	NO
 UNUSABLE_BEGINNING	varchar(128)	NO			
 DEFAULT_COLLATION	varchar(100)	NO			
 ON_QUERY_COMPUTATION	varchar(1)	NO			
+REFRESH_DOP	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_MVIEWS limit 1);
 cnt
 1
@@ -9645,6 +9646,7 @@ UNUSABLE_BEFORE	varchar(128)	NO
 UNUSABLE_BEGINNING	varchar(128)	NO			
 DEFAULT_COLLATION	varchar(100)	NO			
 ON_QUERY_COMPUTATION	varchar(1)	NO			
+REFRESH_DOP	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVIEWS limit 1);
 cnt
 1

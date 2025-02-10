@@ -114,7 +114,8 @@ public:
                                 ObRawExprFactory &expr_factory,
                                 ObSQLSessionInfo *session_info,
                                 ObIArray<ObString> &operators,
-                                ObMVRefreshableType &refreshable_type);
+                                ObMVRefreshableType &refreshable_type,
+                                FastRefreshableNotes &fast_refreshable_note);
   static int set_refresh_table_scan_flag_for_mr_mv(ObSelectStmt &refresh_stmt);
   static int set_real_time_table_scan_flag_for_mr_mv(ObSelectStmt &rt_mv_stmt);
   static const uint64_t MR_MV_RT_QUERY_LEADING_TABLE_FLAG = 0x1 << 2;

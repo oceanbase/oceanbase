@@ -47,12 +47,14 @@ int ObMVPrinter::print_mv_operators(const share::schema::ObTableSchema &mv_schem
                                     ObRawExprFactory &expr_factory,
                                     ObSQLSessionInfo *session_info,
                                     ObIArray<ObString> &operators,
-                                    ObMVRefreshableType &refreshable_type)
+                                    ObMVRefreshableType &refreshable_type,
+                                    FastRefreshableNotes &fast_refreshable_note)
 {
   int ret = OB_SUCCESS;
   operators.reuse();
   refreshable_type = OB_MV_REFRESH_INVALID;
-  ObMVChecker checker(view_stmt, expr_factory, session_info, mv_container_schema);
+  ObMVChecker checker(view_stmt, expr_factory, session_info, mv_container_schema,
+                      fast_refreshable_note);
   ObMVPrinter printer(alloc, mv_schema, checker, for_rt_expand, stmt_factory, expr_factory);
   ObSEArray<ObDMLStmt*, 4> dml_stmts;
   if (OB_ISNULL(view_stmt.get_query_ctx())) {

@@ -93,6 +93,8 @@
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
+#include "ob_ddl_args.h"
+#include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 
 namespace oceanbase
@@ -238,62 +240,7 @@ public:
 typedef common::ObSArray<ObServerInfo> ObServerInfoList;
 typedef common::ObArray<ObServerInfoList> ObPartitionServerList;
 
-struct ObDDLArg
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObDDLArg() :
-      ddl_stmt_str_(),
-      exec_tenant_id_(common::OB_INVALID_TENANT_ID),
-      ddl_id_str_(),
-      sync_from_primary_(false),
-      based_schema_object_infos_(),
-      parallelism_(0),
-      task_id_(0),
-      consumer_group_id_(0),
-      is_parallel_(false)
-   { }
-  virtual ~ObDDLArg() = default;
-  bool is_need_check_based_schema_objects() const
-  {
-    return 0 < based_schema_object_infos_.count();
-  }
-  virtual bool is_allow_when_disable_ddl() const { return false; }
-  virtual bool is_allow_when_upgrade() const { return false; }
-  bool is_sync_from_primary() const
-  {
-    return sync_from_primary_;
-  }
-  //user tenant can not ddl in standby
-  virtual bool is_allow_in_standby() const
-  { return !is_user_tenant(exec_tenant_id_); }
-  virtual int assign(const ObDDLArg &other);
-  virtual bool contain_sensitive_data() const { return false; }
-  void reset()
-  {
-    ddl_stmt_str_.reset();
-    exec_tenant_id_ = common::OB_INVALID_TENANT_ID;
-    ddl_id_str_.reset();
-    sync_from_primary_ = false;
-    based_schema_object_infos_.reset();
-    parallelism_ = 0;
-    task_id_ = 0;
-    consumer_group_id_ = 0;
-    is_parallel_ = false;
-  }
-  DECLARE_TO_STRING;
 
-  common::ObString ddl_stmt_str_;
-  uint64_t exec_tenant_id_;
-  common::ObString ddl_id_str_;
-  bool sync_from_primary_;
-  common::ObSArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
-  int64_t parallelism_;
-  int64_t task_id_;
-  int64_t consumer_group_id_;
-  //some parallel ddl is effect before 4220, this member is valid after 4220
-  bool is_parallel_;
-};
 
 struct ObAlterResourceUnitArg : public ObDDLArg
 {
@@ -2160,104 +2107,6 @@ public:
   share::ObTaskId trace_id_;
 };
 
-struct ObMViewCompleteRefreshArg final : public ObDDLArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMViewCompleteRefreshArg()
-    : ObDDLArg(),
-      tenant_id_(OB_INVALID_TENANT_ID),
-      table_id_(OB_INVALID_ID),
-      session_id_(OB_INVALID_ID),
-      sql_mode_(0),
-      last_refresh_scn_(),
-      allocator_("MVRefDDL"),
-      tz_info_(),
-      tz_info_wrap_(),
-      nls_formats_(),
-      parent_task_id_(0)
-  {
-  }
-  ~ObMViewCompleteRefreshArg() = default;
-  bool is_valid() const;
-  void reset();
-  int assign(const ObMViewCompleteRefreshArg &other);
-  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
-                       K_(tenant_id),
-                       K_(table_id),
-                       K_(session_id),
-                       K_(sql_mode),
-                       K_(last_refresh_scn),
-                       K_(tz_info),
-                       K_(tz_info_wrap),
-                       "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-                       K_(parent_task_id));
-public:
-  uint64_t tenant_id_;
-  uint64_t table_id_; // mview table id
-  uint64_t session_id_;
-  ObSQLMode sql_mode_;
-  share::SCN last_refresh_scn_;
-  common::ObArenaAllocator allocator_;
-  common::ObTimeZoneInfo tz_info_;
-  common::ObTimeZoneInfoWrap tz_info_wrap_;
-  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
-  int64_t parent_task_id_;
-};
-
-struct ObMViewCompleteRefreshRes final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMViewCompleteRefreshRes() : task_id_(0), trace_id_() {}
-  ~ObMViewCompleteRefreshRes() = default;
-  void reset()
-  {
-    task_id_ = 0;
-    trace_id_.reset();
-  }
-  int assign(const ObMViewCompleteRefreshRes &other)
-  {
-    if (this != &other) {
-      task_id_ = other.task_id_;
-      trace_id_ = other.trace_id_;
-    }
-    return OB_SUCCESS;
-  }
-  TO_STRING_KV(K_(task_id), K_(trace_id));
-public:
-  int64_t task_id_;
-  share::ObTaskId trace_id_;
-};
-
-struct ObMViewRefreshInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMViewRefreshInfo()
-    : mview_table_id_(OB_INVALID_ID),
-      last_refresh_scn_(),
-      refresh_scn_(),
-      start_time_(OB_INVALID_TIMESTAMP),
-      is_mview_complete_refresh_(false)
-  {
-  }
-  ~ObMViewRefreshInfo() = default;
-  bool is_valid() const;
-  void reset();
-  int assign(const ObMViewRefreshInfo &other);
-  TO_STRING_KV(K_(mview_table_id),
-               K_(last_refresh_scn),
-               K_(refresh_scn),
-               K_(start_time),
-               K_(is_mview_complete_refresh));
-public:
-  uint64_t mview_table_id_;
-  share::SCN last_refresh_scn_;
-  share::SCN refresh_scn_;
-  int64_t start_time_;
-  bool is_mview_complete_refresh_;
-};
 struct ObSetCommentArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -2423,7 +2272,11 @@ public:
       client_session_create_ts_(0),
       lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL),
       is_direct_load_partition_(false),
-      is_alter_column_group_delayed_(false)
+      is_alter_column_group_delayed_(false),
+      is_alter_mview_attributes_(false),
+      alter_mview_arg_(),
+      is_alter_mlog_attributes_(false),
+      alter_mlog_arg_()
   {
   }
   virtual ~ObAlterTableArg()
@@ -2517,7 +2370,11 @@ public:
                K_(client_session_create_ts),
                K_(lock_priority),
                K_(is_direct_load_partition),
-               K_(is_alter_column_group_delayed));
+               K_(is_alter_column_group_delayed),
+               K_(is_alter_mview_attributes),
+               K_(alter_mview_arg),
+               K_(is_alter_mlog_attributes),
+               K_(alter_mlog_arg));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2559,6 +2416,10 @@ public:
   transaction::tablelock::ObTableLockPriority lock_priority_;
   bool is_direct_load_partition_;
   bool is_alter_column_group_delayed_;
+  bool is_alter_mview_attributes_;
+  ObAlterMViewArg alter_mview_arg_;
+  bool is_alter_mlog_attributes_;
+  ObAlterMLogArg alter_mlog_arg_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;

@@ -11,7 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_SESSION
+#include "share/ob_define.h"
 #include "share/system_variable/ob_system_variable_factory.h"
+#include "share/ob_errno.h"
+#include <algorithm>
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -969,6 +972,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "metadata_locks_hash_instances",
   "min_examined_row_limit",
   "multi_range_count",
+  "mview_refresh_dop",
   "myisam_data_pointer_size",
   "myisam_max_sort_file_size",
   "myisam_mmap_size",
@@ -1803,6 +1807,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_METADATA_LOCKS_HASH_INSTANCES,
   SYS_VAR_MIN_EXAMINED_ROW_LIMIT,
   SYS_VAR_MULTI_RANGE_COUNT,
+  SYS_VAR_MVIEW_REFRESH_DOP,
   SYS_VAR_MYISAM_DATA_POINTER_SIZE,
   SYS_VAR_MYISAM_MAX_SORT_FILE_SIZE,
   SYS_VAR_MYISAM_MMAP_SIZE,
@@ -3056,6 +3061,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "pid_file",
   "port",
   "socket",
+  "mview_refresh_dop",
   "enable_optimizer_rowgoal",
   "ob_ivf_nprobes"
 };
@@ -4091,6 +4097,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarPidFile)
         + sizeof(ObSysVarPort)
         + sizeof(ObSysVarSocket)
+        + sizeof(ObSysVarMviewRefreshDop)
         + sizeof(ObSysVarEnableOptimizerRowgoal)
         + sizeof(ObSysVarObIvfNprobes)
         ;
@@ -11560,6 +11567,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SOCKET))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSocket));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMviewRefreshDop())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMviewRefreshDop", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MVIEW_REFRESH_DOP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMviewRefreshDop));
       }
     }
     if (OB_SUCC(ret)) {
@@ -20706,6 +20722,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSocket())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSocket", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MVIEW_REFRESH_DOP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMviewRefreshDop)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMviewRefreshDop)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMviewRefreshDop())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMviewRefreshDop", K(ret));
       }
       break;
     }

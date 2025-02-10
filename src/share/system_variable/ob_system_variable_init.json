@@ -11698,8 +11698,8 @@
   "mview_refresh_dop": {
     "id": 10746,
     "name": "mview_refresh_dop",
-    "default_value": "0",
-    "base_value": "0",
+    "default_value": "4",
+    "base_value": "4",
     "data_type": "int",
     "info": "The default refresh parallelism of materialized view",
     "flags": "GLOBAL | SESSION ",
@@ -11707,7 +11707,7 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "",
-    "placeholder": true
+    "placeholder": false
   },
   "enable_optimizer_rowgoal": {
     "id": 10747,

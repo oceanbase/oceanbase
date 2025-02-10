@@ -319,6 +319,8 @@ public:
   inline void set_is_multivalue_index(bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
   inline bool is_vec_index() const { return is_vec_index_; }
   inline void set_is_vec_index(const bool is_vec_index) { is_vec_index_ = is_vec_index; }
+  inline bool is_mlog_table() const { return is_mlog_table_; }
+  inline void set_is_mlog_table(const bool is_mlog_table) { is_mlog_table_ = is_mlog_table; }
   inline int64_t is_partition_table() const { return is_partition_table_; }
   inline void set_is_partition_table(bool is_partition_table) { is_partition_table_ = is_partition_table; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
@@ -424,6 +426,8 @@ private:
   bool is_partition_table_;
   // column storage tables created after v435 will place the rowkey/all cg at the start of the table schema column group array
   bool is_normal_cgs_at_the_end_;
+  // for read time query check of mview
+  bool is_mlog_table_;
 };
 } //namespace schema
 } //namespace share

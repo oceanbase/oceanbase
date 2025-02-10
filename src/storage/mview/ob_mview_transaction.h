@@ -37,6 +37,7 @@ public:
     return nullptr != session_info_ ? session_info_->get_compatibility_mode()
                                     : ObCompatibilityMode::OCEANBASE_MODE;
   }
+  bool is_inner_session() const { return session_param_saved_.is_inner_session(); }
 
 protected:
   int connect(sql::ObSQLSessionInfo *session_info, ObISQLClient *sql_client);
@@ -57,6 +58,8 @@ protected:
 
     int save(sql::ObSQLSessionInfo *session_info);
     int restore();
+
+    bool is_inner_session() const { return is_inner_; }
 
   private:
     sql::ObSQLSessionInfo *session_info_;

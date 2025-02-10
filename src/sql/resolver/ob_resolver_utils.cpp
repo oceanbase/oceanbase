@@ -10432,6 +10432,10 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
     }
 
     if (OB_FAIL(ret)) {
+    } else if (arg.is_alter_columns_) {
+      // add colunm is supported
+      // ObAlterTableResolver::check_action_node_for_mlog_master allow alter column
+      // ObAlterTableResolver::check_column_option_for_mlog_master allow add column
     } else if ((arg.is_alter_indexs_ && !is_alter_pk)
         || (arg.is_update_global_indexes_ && !arg.is_alter_partitions_)
         || (arg.is_alter_options_ // the following allowed options change does not affect mlog

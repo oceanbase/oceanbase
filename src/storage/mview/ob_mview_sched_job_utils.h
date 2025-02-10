@@ -15,6 +15,8 @@
 #include "lib/ob_define.h"
 #include "sql/parser/parse_node.h"
 #include "share/scn.h"
+#include "share/schema/ob_mview_info.h"
+#include "share/schema/ob_mlog_info.h"
 
 namespace oceanbase
 {
@@ -71,6 +73,26 @@ public:
                                const common::ObObj &start_date,
                                const common::ObString &repeat_interval,
                                const common::ObString &exec_env);
+  static int create_mview_scheduler_job(common::ObISQLClient &sql_client,
+                                        const uint64_t tenant_id,
+                                        const uint64_t mview_id,
+                                        const common::ObString &db_name,
+                                        const common::ObString &table_name,
+                                        const common::ObObj &start_date,
+                                        const common::ObString &repeat_interval,
+                                        const common::ObString &exec_env,
+                                        ObArenaAllocator &allocator,
+                                        common::ObString &job_name);
+  static int create_mlog_scheduler_job(common::ObISQLClient &sql_client,
+                                       const uint64_t tenant_id,
+                                       const uint64_t mlog_id,
+                                       const common::ObString &db_name,
+                                       const common::ObString &table_name,
+                                       const common::ObObj &start_date,
+                                       const common::ObString &repeat_interval,
+                                       const common::ObString &exec_env,
+                                       ObArenaAllocator &allocator,
+                                       common::ObString &job_name);
 
   static int add_mview_info_and_refresh_job(common::ObISQLClient &sql_client,
                                             const uint64_t tenant_id,
@@ -102,6 +124,17 @@ public:
                                             const ParseNode &node,
                                             common::ObIAllocator &allocator,
                                             int64_t &timestamp);
+  static int replace_mview_refresh_job(common::ObISQLClient &sql_client,
+                                       share::schema::ObMViewInfo &mview_info,
+                                       const common::ObString &db_name,
+                                       const common::ObString &table_name,
+                                       const common::ObString &exec_env);
+  static int replace_mlog_purge_job(common::ObISQLClient &sql_client,
+                                    share::schema::ObMLogInfo &mlog_info,
+                                    const common::ObString &db_name,
+                                    const common::ObString &table_name,
+                                    const common::ObString &exec_env);
+
 private:
   static int acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,
                                                  const uint64_t tenant_id);

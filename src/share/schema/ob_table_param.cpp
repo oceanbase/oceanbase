@@ -625,7 +625,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     is_column_replica_table_(false),
     is_vec_index_(false),
     is_partition_table_(false),
-    is_normal_cgs_at_the_end_(false)
+    is_normal_cgs_at_the_end_(false),
+    is_mlog_table_(false)
 {
   reset();
 }
@@ -659,6 +660,7 @@ void ObTableParam::reset()
   is_vec_index_ = false;
   is_partition_table_ = false;
   is_normal_cgs_at_the_end_ = false;
+  is_mlog_table_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -711,6 +713,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ENCODE(parser_properties_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_mlog_table_);
   }
   return ret;
 }
@@ -820,6 +825,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
       LOG_WARN("Fail to ccopy parser name ", K(ret), K_(parser_properties), K(tmp_parser_properties));
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, is_mlog_table_);
+  }
   return ret;
 }
 
@@ -879,6 +887,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   }
   if (OB_SUCC(ret) && is_fts_index_) {
     OB_UNIS_ADD_LEN(parser_properties_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                is_mlog_table_);
   }
   return len;
 }
@@ -1611,7 +1623,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(parser_properties),
        K_(is_vec_index),
        K_(is_column_replica_table),
-       K_(is_normal_cgs_at_the_end));
+       K_(is_normal_cgs_at_the_end),
+       K_(is_mlog_table));
   J_OBJ_END();
 
   return pos;

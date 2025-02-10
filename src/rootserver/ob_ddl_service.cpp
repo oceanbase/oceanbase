@@ -65,6 +65,9 @@
 #include "storage/ddl/ob_ddl_alter_auto_part_attr.h"
 #include "src/share/ob_vec_index_builder_util.h"
 #include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
+#include "share/schema/ob_mview_info.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "rootserver/mview/ob_mview_alter_service.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 
 
@@ -788,16 +791,8 @@ int ObDDLService::add_mlog(
   if (!purge_options.start_datetime_expr_.is_null()
       || !purge_options.next_datetime_expr_.empty()) {
     const ObDatabaseSchema *database = NULL;
-    ObString job_prefix(ObMLogInfo::MLOG_PURGE_JOB_PREFIX);
-    int64_t job_id = OB_INVALID_ID;
     // job_name is generated as "job_prefix+job_id"
-    if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
-      LOG_WARN("failed to generate mview job id", KR(ret));
-    } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(
-        allocator, job_id, job_prefix, purge_job))) {
-      LOG_WARN("failed to generate mview job name",
-          KR(ret), K(tenant_id), K(job_prefix));
-    } else if (OB_FAIL(schema_guard.get_database_schema(
+    if (OB_FAIL(schema_guard.get_database_schema(
         tenant_id, mlog_schema.get_database_id(), database))) {
       LOG_WARN("failed to get database_schema", KR(ret),
           K(tenant_id), "database_id", mlog_schema.get_database_id());
@@ -806,32 +801,25 @@ int ObDDLService::add_mlog(
       LOG_WARN("database_schema is null", KR(ret),
           "database_id", mlog_schema.get_database_id());
     } else {
-      const ObString mlog_purge_func("DBMS_MVIEW.purge_log");
       const ObString &db_name = database->get_database_name_str();
       const ObString &table_name = arg.table_name_;
-      ObString job_action;
       // job_action is generated as "mlog_purge_func('db_name.table_name')"
-      if (OB_FAIL(ObMViewSchedJobUtils::generate_job_action(
-          allocator,
-          mlog_purge_func,
-          db_name,
-          table_name,
-          job_action))) {
-        LOG_WARN("failed to generate mview job action", KR(ret));
-      } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
+      if (OB_FAIL(ObMViewSchedJobUtils::create_mlog_scheduler_job(
           trans,
           tenant_id,
-          job_id,
-          purge_job,
-          job_action,
+          mlog_table_id,
+          db_name,
+          table_name,
           purge_options.start_datetime_expr_,
           purge_next,
-          arg.purge_options_.exec_env_))) {
-        LOG_WARN("failed to add mview scheduler job", KR(ret), K(purge_job),
-            K(job_action), K(purge_options.start_datetime_expr_), K(purge_next));
-      } else {
-        LOG_INFO("succeed to add purge mlog scheduler job",
+          arg.purge_options_.exec_env_,
+          allocator,
+          purge_job))) {
+        LOG_WARN("failed to add purge mlog scheduler job", KR(ret), K(mlog_table_id), K(db_name), K(table_name),
             K(purge_options.start_datetime_expr_), K(purge_next));
+      } else {
+        LOG_INFO("succeed to add purge mlog scheduler job", K(mlog_table_id),
+            K(purge_options.start_datetime_expr_), K(purge_next), K(purge_job));
       }
     }
   }
@@ -14398,10 +14386,15 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
                     LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg));;
                   }
                 } else {
-                  if (OB_FAIL(alter_table_in_trans(alter_table_arg, res, tenant_data_version))) {
-                    LOG_WARN("refresh sess active time of temporary table failed", K(alter_table_arg), K(ret));
-                  } else {
-                    LOG_INFO("a temporary table just refreshed sess active time", K(alter_table_arg));
+                  if ((alter_table_arg.is_alter_mlog_attributes_ ||
+                       alter_table_arg.is_alter_mview_attributes_) &&
+                      OB_FAIL(ObMviewAlterService::alter_mview_or_mlog_in_trans(
+                          alter_table_arg, res, schema_guard, schema_service_, sql_proxy_,
+                          tenant_data_version))) {
+                    LOG_WARN("alter_mview_or_mlog_in_trans failed", KR(ret));
+                  } else if (OB_FAIL(
+                                 alter_table_in_trans(alter_table_arg, res, tenant_data_version))) {
+                    LOG_WARN("alter_table_in_trans failed", K(ret));
                   }
                 }
               }
@@ -17260,6 +17253,9 @@ int ObDDLService::get_and_check_table_schema(
           }
         }
       }
+      if (OB_SUCC(ret) && (alter_table_arg.is_alter_mview_attributes_ || alter_table_arg.is_alter_mlog_attributes_)) {
+        allow_alter_mview = true;
+      }
       if (OB_SUCC(ret) && !allow_alter_mview) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("alter materialized view is not supported", KR(ret));
@@ -18813,7 +18809,11 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg), K(ddl_type));
           }
         } else {
-          if (OB_FAIL(alter_table_in_trans(alter_table_arg, res, data_version))) {
+          if ((alter_table_arg.is_alter_mlog_attributes_ ||
+               alter_table_arg.is_alter_mview_attributes_) &&
+              OB_FAIL(ObMviewAlterService::alter_mview_or_mlog_in_trans(alter_table_arg, res, schema_guard, schema_service_, sql_proxy_, data_version))) {
+            LOG_WARN("alter_mview_or_mlog_in_trans failed", KR(ret));
+          } else if (OB_FAIL(alter_table_in_trans(alter_table_arg, res, data_version))) {
             LOG_WARN("alter_table_in_trans failed", K(ret));
           }
         }

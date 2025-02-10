@@ -35,7 +35,8 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
   int ret = OB_SUCCESS;
   MajorRefreshInfo major_refresh_info(part_idx, sub_part_idx, range);
   major_refresh_info_ = major_refresh_info.is_valid_info() ? &major_refresh_info : NULL;
-  if (OB_FAIL(init_mv_provider(last_refresh_scn, refresh_scn, schema_guard, session_info))) {
+  FastRefreshableNotes note;
+  if (OB_FAIL(init_mv_provider(last_refresh_scn, refresh_scn, schema_guard, session_info, note))) {
     LOG_WARN("Failed to init mv provider", K(ret), K(major_refresh_info));
   }
   major_refresh_info_ = NULL;
@@ -48,7 +49,8 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
 int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                    const share::SCN &refresh_scn,
                                    ObSchemaGetterGuard *schema_guard,
-                                   ObSQLSessionInfo *session_info)
+                                   ObSQLSessionInfo *session_info,
+                                   FastRefreshableNotes &fast_refreshable_note)
 {
   int ret = OB_SUCCESS;
   dependency_infos_.reuse();
@@ -119,7 +121,8 @@ int ObMVProvider::init_mv_provider(const share::SCN &last_refresh_scn,
                                                          expr_factory,
                                                          session_info,
                                                          operators,
-                                                         refreshable_type_))) {
+                                                         refreshable_type_,
+                                                         fast_refreshable_note))) {
         LOG_WARN("failed to print mv operators", K(ret));
       } else if (OB_FAIL(operators_.assign(operators))) {
         LOG_WARN("failed to assign fixed array", K(ret));

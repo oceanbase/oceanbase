@@ -11287,5 +11287,26 @@ int ObPartTransCtx::check_need_transfer(
   return ret;
 }
 
+int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  need_collect = false;
+  CtxLockGuard guard(lock_);
+  for (int64_t i = 0; i < exec_info_.multi_data_source_.count(); i++) {
+    if (exec_info_.multi_data_source_[i].get_data_source_type() == ObTxDataSourceType::MVIEW_MDS_OP) {
+      need_collect = true;
+      const ObMViewMdsOpCtx *user_ctx = static_cast<const ObMViewMdsOpCtx*>(exec_info_.multi_data_source_[i].get_buffer_ctx_node().get_ctx());
+      if (OB_ISNULL(user_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "mview mds is null", KR(ret), KPC(this));
+      } else if (OB_FAIL(arg.assign(user_ctx->get_arg_const()))) {
+        TRANS_LOG(WARN, "assign mview op arg failed", KR(ret), KPC(this));
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
 } // namespace transaction
 } // namespace oceanbase

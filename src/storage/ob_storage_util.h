@@ -523,6 +523,10 @@ int build_mview_scan_info_if_need(
     sql::ObEvalCtx &eval_ctx,
     common::ObIAllocator *alloc,
     ObMviewScanInfo *&mview_scan_info);
+int get_query_begin_version_for_mlog(
+    const sql::ObExprPtrIArray &op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    int64_t &begin_version);
 void release_mview_scan_info(common::ObIAllocator *alloc, ObMviewScanInfo *&mview_scan_info);
 
 }

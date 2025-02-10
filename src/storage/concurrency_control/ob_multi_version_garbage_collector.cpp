@@ -14,6 +14,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
+#include "rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase
 {
@@ -496,7 +497,6 @@ int ObMultiVersionGarbageCollector::study_min_active_txn_version(
   share::SCN &min_active_txn_version)
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(GCTX.session_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     MVCC_LOG(WARN, "session mgr is nullptr");
@@ -505,6 +505,13 @@ int ObMultiVersionGarbageCollector::study_min_active_txn_version(
     MVCC_LOG(WARN, "get min active snaphot version failed", K(ret));
   }
 
+  share::SCN min_mview_mds_snapshot;
+  if (FAILEDx(MTL(rootserver::ObMViewMaintenanceService*)->get_min_mview_mds_snapshot(min_mview_mds_snapshot))) {
+    MVCC_LOG(WARN, "get min mview active snaphot version failed", K(ret));
+  } else if (min_mview_mds_snapshot.is_valid() && min_mview_mds_snapshot < min_active_txn_version) {
+    MVCC_LOG(INFO, "study_min_active_txn_version", K(min_active_txn_version), K(min_mview_mds_snapshot));
+    min_active_txn_version = min_mview_mds_snapshot;
+  }
   return ret;
 }
 

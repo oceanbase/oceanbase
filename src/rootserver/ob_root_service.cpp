@@ -10720,7 +10720,8 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
       LOG_WARN("try to alter invisible table schema", K(schema->get_session_id()), K(arg));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "try to alter invisible table");
     }
-  } else if (schema->required_by_mview_refresh() || schema->is_mlog_table()) {
+  } else if ((schema->required_by_mview_refresh() || schema->is_mlog_table()) &&
+             !arg.is_alter_mlog_attributes_) {
     if (OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
         tenant_id, arg, *schema))) {
       LOG_WARN("failed to check allowed alter operation for mlog",

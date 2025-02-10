@@ -219,6 +219,12 @@ private:
   int check_mysql_rename_column(const share::schema::AlterColumnSchema &alter_column_schema,
                                 const share::schema::ObTableSchema &orign_table_schema,
                                 ObAlterTableStmt &alter_table_stmt);
+  static int check_column_option_for_mlog_master(
+      const ObTableSchema &table_schema,
+      const ObItemType type);
+  static int check_action_node_for_mlog_master(
+      const ObTableSchema &table_schema,
+      const ObItemType type);
   const share::schema::ObTableSchema *table_schema_;
   const share::schema::ObTableSchema *index_schema_;
 

@@ -61,6 +61,7 @@ public:
   DEFINE_GETTER_AND_SETTER(int64_t, last_refresh_time);
   DEFINE_STRING_GETTER_AND_SETTER(last_refresh_trace_id);
   DEFINE_GETTER_AND_SETTER(int64_t, schema_version);
+  DEFINE_GETTER_AND_SETTER(int64_t, refresh_dop);
 
 #undef DEFINE_GETTER_AND_SETTER
 #undef DEFINE_STRING_GETTER_AND_SETTER

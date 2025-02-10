@@ -422,6 +422,7 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   } else if (table_schema->is_multivalue_index_aux() && FALSE_IT(scan_ctdef.table_param_.set_is_multivalue_index(true))) {
   } else if (table_schema->is_vec_index() && FALSE_IT(scan_ctdef.table_param_.set_is_vec_index(true))) {
   } else if (FALSE_IT(scan_ctdef.table_param_.set_is_partition_table(table_schema->is_partitioned_table()))) {
+  } else if (FALSE_IT(scan_ctdef.table_param_.set_is_mlog_table(table_schema->is_mlog_table()))) {
   } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
     LOG_WARN("extract tsc output column ids failed", K(ret));
   } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {

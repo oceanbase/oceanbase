@@ -670,6 +670,58 @@ int decimal_or_number_to_int64(const ObDatum &datum,
   return ret;
 }
 
+int get_query_begin_version_for_mlog(
+    const sql::ObExprPtrIArray &op_filters,
+    sql::ObEvalCtx &eval_ctx,
+    int64_t &begin_version)
+{
+  int ret = OB_SUCCESS;
+  sql::ObExpr *e = nullptr;
+  ObDatum *datum = NULL;
+  begin_version = -1;
+  int64_t end_version = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && i < op_filters.count(); ++i) {
+    if (OB_ISNULL(e = op_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "expr is null", K(ret), K(i));
+    } else if ((T_OP_GT == e->type_ || T_OP_LE == e->type_) && 2 == e->arg_cnt_) {
+      sql::ObExpr *left = e->args_[0];
+      sql::ObExpr *right = e->args_[1];
+      int64_t rowscn = -1;
+      if (T_ORA_ROWSCN != left->type_ && lib::is_oracle_mode()) {
+        if (T_FUN_SYS_CAST == left->type_ &&
+            2 == left->arg_cnt_ &&
+            T_ORA_ROWSCN == left->args_[0]->type_ ) {
+          left = left->args_[0];
+        } else {
+          left = nullptr;
+        }
+      }
+      if (nullptr != left &&
+          T_ORA_ROWSCN == left->type_ && (right->is_static_const_ || T_FUN_SYS_LAST_REFRESH_SCN == right->type_)) {
+        if (OB_FAIL(right->eval(eval_ctx, datum))) {
+          STORAGE_LOG(WARN, "Failed to eval const expr", K(ret));
+        } else if (lib::is_oracle_mode()) {
+          if (OB_FAIL(decimal_or_number_to_int64(*datum, right->datum_meta_, rowscn))) {
+            STORAGE_LOG(WARN, "Failed to get rowscn", K(ret));
+          }
+        } else {
+          rowscn = datum->get_int();
+        }
+        if (OB_FAIL(ret)) {
+        } else if (T_OP_GT == e->type_) {
+          begin_version = rowscn;
+        } else {
+          end_version = rowscn;
+        }
+      }
+    }
+  }
+  STORAGE_LOG(INFO, "get_begin_version finish", K(ret), K(begin_version), K(end_version));
+  return ret;
+}
+
+
 // extract mview info from filter: ora_rowscn > V0 and ora_rowscn <= V1 and $OLD_NEW='O|N|F'
 int build_mview_scan_info_if_need(
     const common::ObQueryFlag query_flag,

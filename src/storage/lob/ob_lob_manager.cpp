@@ -2283,6 +2283,12 @@ int ObLobManager::prepare_insert_task(
     LOG_WARN("fail to get lob byte len", K(ret), K(task));
   } else if (new_byte_len <= lob_inrow_threshold) {
     // skip if inrow store
+  } else if (param.is_mlog_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "columns more than lob inrow threshold in materialized view log is");
+    LOG_WARN("columns more than lob inrow threshold in materialized view log is not supported ",
+        KR(ret), K(new_byte_len), K(lob_inrow_threshold), K(lbt()));
   } else if (OB_FAIL(prepare_outrow_locator(param, task))) {
     LOG_WARN("prepare_outrow_locator fail", K(ret), K(task), K(param));
   } else {

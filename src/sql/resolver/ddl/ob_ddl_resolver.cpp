@@ -103,6 +103,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
     mocked_external_table_column_ids_(),
     index_params_(),
+    mv_refresh_dop_(0),
     vec_column_name_(),
     vec_index_type_(INDEX_TYPE_MAX),
     enable_macro_block_bloom_filter_(false)
@@ -2581,6 +2582,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 K(ret));
           } else {
             table_dop_ = table_dop;
+            mv_refresh_dop_ = table_dop;
           }
         }
         if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
@@ -5512,6 +5514,7 @@ void ObDDLResolver::reset() {
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
   index_params_.reset();
+  mv_refresh_dop_ = 0;
   enable_macro_block_bloom_filter_ = false;
 }
 

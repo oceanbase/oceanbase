@@ -190,6 +190,7 @@ public:
   DEFINE_GETTER_AND_SETTER(int64_t, final_num_rows);
   DEFINE_GETTER_AND_SETTER(int64_t, num_steps);
   DEFINE_GETTER_AND_SETTER(int, result);
+  DEFINE_GETTER_AND_SETTER(int64_t, refresh_parallelism);
 
 #undef DEFINE_GETTER_AND_SETTER
 
@@ -262,7 +263,8 @@ public:
                K_(initial_num_rows),
                K_(final_num_rows),
                K_(num_steps),
-               K_(result));
+               K_(result),
+               K_(refresh_parallelism));
 
 public:
   uint64_t tenant_id_;
@@ -278,6 +280,7 @@ public:
   int64_t final_num_rows_;
   int64_t num_steps_;
   int result_;
+  int64_t refresh_parallelism_;
 };
 
 class ObMViewRefreshChangeStats : public ObSchema

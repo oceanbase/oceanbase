@@ -19,7 +19,7 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1);
+    refresh_parallel       IN     BINARY_INTEGER := 0);
 
   PROCEDURE refresh(
     tab                    IN     DBMS_UTILITY.UNCL_ARRAY,
@@ -34,7 +34,7 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1);
+    refresh_parallel       IN     BINARY_INTEGER := 0);
 
 END dbms_mview;
 //

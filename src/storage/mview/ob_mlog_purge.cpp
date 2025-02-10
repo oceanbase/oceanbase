@@ -16,6 +16,7 @@
 #include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
+#include "storage/mview/ob_mview_mds.h"
 
 namespace oceanbase
 {
@@ -65,8 +66,22 @@ int ObMLogPurger::purge()
       LOG_WARN("fail to start trans", KR(ret));
     } else if (OB_FAIL(prepare_for_purge())) {
       LOG_WARN("fail to prepare for purge", KR(ret));
-    } else if (need_purge_ && OB_FAIL(do_purge())) {
-      LOG_WARN("fail to do purge", KR(ret));
+    } else if (need_purge_) {
+      ObMViewOpArg arg;
+      arg.table_id_ =  mlog_info_.get_mlog_id();
+      arg.mview_op_type_ = MVIEW_OP_TYPE::PURGE_MLOG;
+      arg.parallel_ = purge_param_.purge_log_parallel_;
+      share::SCN curr_scn;
+      if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(curr_scn))) {
+        LOG_WARN("get current_scn failed", KR(ret));
+      } else if (FALSE_IT(arg.read_snapshot_ = curr_scn.get_val_for_tx())) {
+      } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(purge_param_.tenant_id_,
+                                                         arg,
+                                                         trans_))) {
+        LOG_WARN("register mview mds failed", KR(ret), K(arg));
+      } else if (OB_FAIL(do_purge())) {
+        LOG_WARN("fail to do purge", KR(ret));
+      }
     }
     if (trans_.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -129,6 +144,9 @@ int ObMLogPurger::prepare_for_purge()
     } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
                  tenant_id, mlog_table_id, is_oracle_mode_))) {
       LOG_WARN("check if oracle mode failed", KR(ret), K(mlog_table_id));
+    } else {
+      // mlog purge parallel use dop
+      purge_param_.purge_log_parallel_ = mlog_table_schema->get_dop();
     }
   }
   // fetch mlog info and dep objs

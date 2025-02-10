@@ -55,7 +55,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1);
+    refresh_parallel       IN     BINARY_INTEGER := 0);
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH);
 
   PROCEDURE refresh(
@@ -71,7 +71,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1)
+    refresh_parallel       IN     BINARY_INTEGER := 0)
   IS
   BEGIN
     COMMIT;
@@ -103,7 +103,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
-    refresh_parallel       IN     BINARY_INTEGER := 1)
+    refresh_parallel       IN     BINARY_INTEGER := 0)
   IS
   list                VARCHAR2(4000);
   BEGIN

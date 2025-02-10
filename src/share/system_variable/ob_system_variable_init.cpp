@@ -11,9 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "ob_system_variable_init.h"
+#include "share/system_variable/ob_system_variable_init.h"
 #include "share/system_variable/ob_system_variable_factory.h"
 #include "share/object/ob_obj_cast.h"
+#include "common/expression/ob_expr_string_buf.h"
+#include "common/expression/ob_expr_string_buf.h"
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -11354,32 +11356,45 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[829].default_value_ = "1" ;
-      ObSysVars[829].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
-      ObSysVars[829].name_ = "enable_optimizer_rowgoal" ;
+      ObSysVars[829].default_value_ = "4" ;
+      ObSysVars[829].info_ = "The default refresh parallelism of materialized view" ;
+      ObSysVars[829].name_ = "mview_refresh_dop" ;
       ObSysVars[829].data_type_ = ObIntType ;
-      ObSysVars[829].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
       ObSysVars[829].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[829].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 829 ;
-      ObSysVars[829].base_value_ = "1" ;
-    ObSysVars[829].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
+      ObSysVars[829].id_ = SYS_VAR_MVIEW_REFRESH_DOP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MVIEW_REFRESH_DOP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MVIEW_REFRESH_DOP] = 829 ;
+      ObSysVars[829].base_value_ = "4" ;
+    ObSysVars[829].alias_ = "OB_SV_MVIEW_REFRESH_DOP" ;
     }();
 
     [&] (){
-      ObSysVars[830].default_value_ = "8" ;
-      ObSysVars[830].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
-      ObSysVars[830].name_ = "ob_ivf_nprobes" ;
-      ObSysVars[830].data_type_ = ObUInt64Type ;
-      ObSysVars[830].min_val_ = "1" ;
-      ObSysVars[830].max_val_ = "65536" ;
-      ObSysVars[830].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[830].id_ = SYS_VAR_OB_IVF_NPROBES ;
+      ObSysVars[830].default_value_ = "1" ;
+      ObSysVars[830].info_ = "Control whether the optimizer considers the impact of rowgoal (such as the LIMIT operator, etc.) during cardinality estimation." ;
+      ObSysVars[830].name_ = "enable_optimizer_rowgoal" ;
+      ObSysVars[830].data_type_ = ObIntType ;
+      ObSysVars[830].enum_names_ = "[u'OFF', u'AUTO', u'ON']" ;
+      ObSysVars[830].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[830].id_ = SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_OPTIMIZER_ROWGOAL] = 830 ;
+      ObSysVars[830].base_value_ = "1" ;
+    ObSysVars[830].alias_ = "OB_SV_ENABLE_OPTIMIZER_ROWGOAL" ;
+    }();
+
+    [&] (){
+      ObSysVars[831].default_value_ = "8" ;
+      ObSysVars[831].info_ = "The number of nearest cluster centers from the IVF vector index searched during this session." ;
+      ObSysVars[831].name_ = "ob_ivf_nprobes" ;
+      ObSysVars[831].data_type_ = ObUInt64Type ;
+      ObSysVars[831].min_val_ = "1" ;
+      ObSysVars[831].max_val_ = "65536" ;
+      ObSysVars[831].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[831].id_ = SYS_VAR_OB_IVF_NPROBES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_IVF_NPROBES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 830 ;
-      ObSysVars[830].base_value_ = "8" ;
-    ObSysVars[830].alias_ = "OB_SV_IVF_NPROBES" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IVF_NPROBES] = 831 ;
+      ObSysVars[831].base_value_ = "8" ;
+    ObSysVars[831].alias_ = "OB_SV_IVF_NPROBES" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11388,7 +11403,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 831;
+static int64_t var_amount = 832;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

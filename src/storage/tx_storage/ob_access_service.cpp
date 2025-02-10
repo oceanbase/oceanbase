@@ -705,6 +705,8 @@ int ObAccessService::check_read_allowed_(
       } else {
         LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
       }
+    } else if (OB_FAIL(check_mlog_safe_(*tablet_handle.get_obj(), scan_param))) {
+      LOG_WARN("failed to check_mlog_safe", KR(ret), K(tablet_id), K(scan_param));
     }
   }
   return ret;
@@ -1395,6 +1397,38 @@ int ObAccessService::split_multi_ranges(
       tablet_id, timeout_us, ranges,
       expected_task_count, allocator, multi_range_split_array))) {
     LOG_WARN("Fail to split multi ranges", K(ret), K(ls_id), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObAccessService::check_mlog_safe_(
+    const ObTablet &tablet,
+    const ObTableScanParam &scan_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_version = -1;
+  if (OB_ISNULL(scan_param.table_param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scan_param.table_param_ is NULL", KR(ret), K(scan_param), K(tablet));
+  } else if (scan_param.table_param_->is_mlog_table()) {
+    if (OB_ISNULL(scan_param.op_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("scan_param.op_ is NULL", KR(ret), K(scan_param), K(tablet));
+    } else if (OB_ISNULL(scan_param.op_filters_)) {
+      // query has no filter
+    } else if (OB_FAIL(get_query_begin_version_for_mlog(*scan_param.op_filters_, scan_param.op_->get_eval_ctx(), begin_version))) {
+      LOG_WARN("failed to get_query_begin_version_for_mlog", KR(ret), K(scan_param), K(tablet));
+    } else if (-1 != begin_version) {
+      ObTabletCreateDeleteMdsUserData user_data;
+      if (OB_FAIL(tablet.ObITabletMdsInterface::get_tablet_status(
+              share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+        LOG_WARN("failed to get tablet status", KR(ret), K(tablet));
+      } else if (begin_version < user_data.create_commit_version_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "mlog query begin version which is more than tablet create commit version, materialized view need complete fresh");
+        LOG_WARN("mlog query begin version is more than create commit version", KR(ret), K(begin_version), K(user_data), K(tablet));
+      }
+    }
   }
   return ret;
 }

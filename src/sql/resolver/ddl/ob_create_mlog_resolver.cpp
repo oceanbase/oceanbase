@@ -89,6 +89,11 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
   }
 
   if (OB_SUCC(ret)) {
+
+    // set default lob_inrow_threshold ob_default_lob_inrow_threshold(8K), if not the default lob_inrow_threshold is OB_DEFAULT_LOB_INROW_THRESHOLD(4k)
+    ObCreateMLogArg &create_mlog_arg = create_mlog_stmt->get_create_mlog_arg();
+    create_mlog_arg.mlog_schema_.set_lob_inrow_threshold(session_info_->get_default_lob_inrow_threshold());
+
     // resolve table options
     ParseNode *table_options_node = parse_node.children_[ENUM_OPT_TABLE_OPTIONS];
     if (OB_NOT_NULL(table_options_node)) {

@@ -61,6 +61,8 @@ ob_set_subtarget(ob_share ALONE
   schema/ob_schema_service_sql_impl.cpp
   ob_srv_rpc_proxy.cpp
   ob_common_rpc_proxy.cpp
+  ob_ddl_args.cpp
+  ob_mview_args.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")

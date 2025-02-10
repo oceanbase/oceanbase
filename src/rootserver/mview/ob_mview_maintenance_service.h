@@ -23,6 +23,7 @@
 #include "share/scn.h"
 #include "rootserver/mview/ob_replica_safe_check_task.h"
 #include "rootserver/mview/ob_mview_update_cache_task.h"
+#include "rootserver/mview/ob_mview_mds_op_task.h"
 
 namespace oceanbase
 {
@@ -42,6 +43,7 @@ public:
     {};
   };
   typedef hash::ObHashMap<uint64_t, MViewRefreshInfo> MViewRefreshInfoCache;
+  typedef hash::ObHashMap<transaction::ObTransID, ObMViewOpArg> MViewMdsOpMap;
 public:
   ObMViewMaintenanceService();
   virtual ~ObMViewMaintenanceService();
@@ -100,6 +102,10 @@ public:
                             ObIArray<uint64_t> &mview_ids,
                             ObIArray<uint64_t> &mview_refresh_scns,
                             bool &hit_cache);
+  MViewMdsOpMap &get_mview_mds_op() { return mview_mds_map_; }
+  void update_mview_mds_ts(int64_t ts) { mview_mds_timestamp_ = ts; }
+  int64_t get_mview_mds_ts() { return mview_mds_timestamp_; }
+  int get_min_mview_mds_snapshot(share::SCN &scn);
 private:
   int inner_switch_to_leader();
   int inner_switch_to_follower();
@@ -116,8 +122,11 @@ private:
   ObCollectMvMergeInfoTask collect_mv_merge_info_task_;
   ObMViewCleanSnapshotTask mview_clean_snapshot_task_;
   ObMviewUpdateCacheTask mview_update_cache_task_;
+  ObMViewMdsOpTask mview_mds_task_;
   MViewRefreshInfoCache mview_refresh_info_cache_;
   int64_t mview_refresh_info_timestamp_;
+  int64_t mview_mds_timestamp_;
+  MViewMdsOpMap mview_mds_map_;
 };
 
 } // namespace rootserver

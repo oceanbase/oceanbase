@@ -373,9 +373,12 @@ int ObMViewRefreshStatsCollector::alloc_collection(const uint64_t mview_id,
 int ObMViewRefreshStatsCollector::commit()
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMViewRefreshStatsCollector not init", KR(ret), KP(this));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id_));
   } else {
     run_stats_.end_time_ = ObTimeUtil::current_time();
     run_stats_.elapsed_time_ = (run_stats_.end_time_ - run_stats_.start_time_) / 1000 / 1000;
@@ -384,6 +387,7 @@ int ObMViewRefreshStatsCollector::commit()
     if (OB_FAIL(trans.start(ctx_->get_sql_proxy(), tenant_id_))) {
       LOG_WARN("fail to start trans", KR(ret));
     }
+    int64_t last_refresh_parallelism = 0;
     FOREACH_X(iter, mv_ref_stats_map_, OB_SUCC(ret))
     {
       ObMViewRefreshStatsCollection *collection = iter->second;
@@ -396,8 +400,20 @@ int ObMViewRefreshStatsCollector::commit()
           run_stats_.num_mvs_current_++;
         }
       }
+      if (OB_SUCC(ret)) {
+        int64_t refresh_parallelism = collection->refresh_stats_.get_refresh_parallelism();
+        if (last_refresh_parallelism == 0) {
+          last_refresh_parallelism = refresh_parallelism;
+        } else if (refresh_parallelism != last_refresh_parallelism) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected refresh parallelism", KR(ret), K(refresh_parallelism), K(last_refresh_parallelism));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
+      if (data_version >= DATA_VERSION_4_3_5_1) {
+        run_stats_.set_parallelism(last_refresh_parallelism);
+      }
       if (OB_FAIL(ObMViewRefreshRunStats::insert_run_stats(trans, run_stats_))) {
         LOG_WARN("fail to insert run stats", KR(ret), K(run_stats_));
       }

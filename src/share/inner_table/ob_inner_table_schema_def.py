@@ -22797,7 +22797,7 @@ def_table_schema(
       CAST(INDEX_NAME AS CHAR(128)) AS INDEX_NAME,
       CAST(INDEX_TYPE_NAME AS CHAR(27)) AS INDEX_TYPE,
       CAST(TABLE_OWNER AS CHAR(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
       CAST('TABLE' AS CHAR(5)) AS TABLE_TYPE,
       CAST(UNIQUENESS AS CHAR(9)) AS UNIQUENESS,
       CAST(COMPRESSION AS CHAR(13)) AS COMPRESSION,
@@ -22943,7 +22943,36 @@ def_table_schema(
         WHERE
           (A.TABLE_TYPE = 3 AND A.TABLE_MODE & 66048 = 0) OR (A.TABLE_TYPE = 5 AND A.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22))
         ) C
-      JOIN OCEANBASE.__ALL_VIRTUAL_TABLE D
+      JOIN
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) D
         ON C.TABLE_ID = D.TABLE_ID
            AND C.TENANT_ID = D.TENANT_ID
 
@@ -22968,7 +22997,7 @@ def_table_schema(
       CAST(INDEX_OWNER AS CHAR(128)) AS INDEX_OWNER,
       CAST(INDEX_NAME AS CHAR(128)) AS INDEX_NAME,
       CAST(TABLE_OWNER AS CHAR(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
       CAST(COLUMN_NAME AS CHAR(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS SIGNED) AS COLUMN_POSITION,
 
@@ -23022,7 +23051,36 @@ def_table_schema(
           WHERE
             (A.TABLE_TYPE = 3 AND A.TABLE_MODE & 66048 = 0) OR (A.TABLE_TYPE = 5)
         ) E
-        JOIN OCEANBASE.__ALL_VIRTUAL_TABLE D
+        JOIN
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) D
           ON E.TENANT_ID = D.TENANT_ID
              AND E.TABLE_ID = D.TABLE_ID
 
@@ -23047,7 +23105,7 @@ def_table_schema(
   view_definition = """
   SELECT CAST(DB.TENANT_ID AS SIGNED) CON_ID,
          CAST(DB.DATABASE_NAME AS CHAR(128)) OWNER,
-         CAST(TB.TABLE_NAME AS CHAR(128)) TABLE_NAME,
+         CAST(TB.NEW_TABLE_NAME AS CHAR(128)) TABLE_NAME,
          CAST((CASE TB.PART_FUNC_TYPE
               WHEN 0 THEN 'HASH'
               WHEN 1 THEN (CASE COMPATIBILITY_MODE WHEN 1 THEN 'HASH' ELSE 'KEY' END)
@@ -23122,7 +23180,36 @@ def_table_schema(
          CAST(NULL AS CHAR(12)) DEF_INMEMORY_SERVICE,
          CAST(NULL AS CHAR(1000)) DEF_INMEMORY_SERVICE_NAME,
          CAST('NO' AS CHAR(3)) AUTO
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLE TB
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) TB
       JOIN OCEANBASE.__ALL_TENANT T
       ON TB.TENANT_ID = T.TENANT_ID
       AND TB.TABLE_MODE >> 12 & 15 in (0,1)
@@ -23237,10 +23324,39 @@ def_table_schema(
                    DB.DATABASE_NAME,
                    DB.DATABASE_ID,
                    TB.TABLE_ID,
-                   TB.TABLE_NAME,
+                   TB.NEW_TABLE_NAME AS TABLE_NAME,
                    TB.B_TRANSITION_POINT,
                    TB.PART_LEVEL
-            FROM OCEANBASE.__ALL_VIRTUAL_TABLE TB,
+            FROM
+			      ((
+			          SELECT
+			              mv_table.table_name AS new_table_name,
+			              container_table.*
+			          FROM
+			              oceanbase.__all_virtual_table AS mv_table,
+			              (
+			                  SELECT * FROM
+			                      oceanbase.__all_virtual_table
+			                  WHERE
+			                      (table_mode & 1 << 24) = 1 << 24
+			              ) AS container_table
+			          WHERE
+			              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+                    and mv_table.tenant_id = container_table.tenant_id
+			      )
+
+			      UNION ALL
+
+			      (
+			          SELECT
+			              table_name as new_table_name,
+			              *
+			          FROM
+			              oceanbase.__all_virtual_table
+			          WHERE
+			              (table_mode & 1 << 24) = 0
+			      )) TB,
                  OCEANBASE.__ALL_VIRTUAL_DATABASE DB
             WHERE TB.DATABASE_ID = DB.DATABASE_ID
               AND TB.TENANT_ID = DB.TENANT_ID
@@ -23343,8 +23459,37 @@ def_table_schema(
               DB.DATABASE_NAME,
               DB.DATABASE_ID,
               TB.TABLE_ID,
-              TB.TABLE_NAME
-       FROM  OCEANBASE.__ALL_VIRTUAL_TABLE TB,
+              TB.NEW_TABLE_NAME AS TABLE_NAME
+       FROM
+			 ((
+			     SELECT
+			         mv_table.table_name AS new_table_name,
+			         container_table.*
+			     FROM
+			         oceanbase.__all_virtual_table AS mv_table,
+			         (
+			             SELECT * FROM
+			                 oceanbase.__all_virtual_table
+			             WHERE
+			                 (table_mode & 1 << 24) = 1 << 24
+			         ) AS container_table
+			     WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			 )
+
+			 UNION ALL
+
+			 (
+			     SELECT
+			         table_name as new_table_name,
+			         *
+			     FROM
+			         oceanbase.__all_virtual_table
+			     WHERE
+			         (table_mode & 1 << 24) = 0
+			 )) TB,
              OCEANBASE.__ALL_VIRTUAL_DATABASE DB
        WHERE TB.DATABASE_ID = DB.DATABASE_ID
          AND TB.TENANT_ID = DB.TENANT_ID
@@ -23654,7 +23799,7 @@ FROM
         I.PART_FUNC_TYPE,
         I.PART_NUM,
         I.SUB_PART_FUNC_TYPE,
-        T.TABLE_NAME AS TABLE_NAME,
+        T.NEW_TABLE_NAME AS TABLE_NAME,
         T.SUB_PART_NUM,
         T.SUB_PART_TEMPLATE_FLAGS,
         T.TABLESPACE_ID,
@@ -23675,7 +23820,36 @@ FROM
          WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
- JOIN OCEANBASE.__ALL_VIRTUAL_TABLE T
+ JOIN
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID
  JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
@@ -24358,7 +24532,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT CAST(DB.DATABASE_NAME AS CHAR(128)) OWNER,
-         CAST(TB.TABLE_NAME AS CHAR(128)) TABLE_NAME,
+         CAST(TB.NEW_TABLE_NAME AS CHAR(128)) TABLE_NAME,
          CAST((CASE TB.PART_FUNC_TYPE
               WHEN 0 THEN 'HASH'
               WHEN 1 THEN 'KEY'
@@ -24433,7 +24607,35 @@ def_table_schema(
          CAST(NULL AS CHAR(12)) DEF_INMEMORY_SERVICE,
          CAST(NULL AS CHAR(1000)) DEF_INMEMORY_SERVICE_NAME,
          CAST('NO' AS CHAR(3)) AUTO
-      FROM OCEANBASE.__ALL_TABLE TB
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) TB
       JOIN OCEANBASE.__ALL_DATABASE DB
       ON TB.TENANT_ID = DB.TENANT_ID AND TB.DATABASE_ID = DB.DATABASE_ID
       JOIN
@@ -24675,10 +24877,38 @@ def_table_schema(
                    DB.DATABASE_NAME,
                    DB.DATABASE_ID,
                    TB.TABLE_ID,
-                   TB.TABLE_NAME,
+                   TB.NEW_TABLE_NAME AS TABLE_NAME,
                    TB.B_TRANSITION_POINT,
                    TB.PART_LEVEL
-            FROM OCEANBASE.__ALL_TABLE TB,
+            FROM
+			      ((
+			          SELECT
+			              mv_table.table_name AS new_table_name,
+			              container_table.*
+			          FROM
+			              oceanbase.__all_table AS mv_table,
+			              (
+			                  SELECT * FROM
+			                      oceanbase.__all_table
+			                  WHERE
+			                      (table_mode & 1 << 24) = 1 << 24
+			              ) AS container_table
+			          WHERE
+			              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			      )
+
+			      UNION ALL
+
+			      (
+			          SELECT
+			              table_name as new_table_name,
+			              *
+			          FROM
+			              oceanbase.__all_table
+			          WHERE
+			              (table_mode & 1 << 24) = 0
+			      )) TB,
                  OCEANBASE.__ALL_DATABASE DB
             WHERE TB.DATABASE_ID = DB.DATABASE_ID
               AND TB.TENANT_ID = DB.TENANT_ID
@@ -24782,8 +25012,36 @@ def_table_schema(
               DB.DATABASE_NAME,
               DB.DATABASE_ID,
               TB.TABLE_ID,
-              TB.TABLE_NAME
-       FROM  OCEANBASE.__ALL_TABLE TB,
+              TB.NEW_TABLE_NAME AS TABLE_NAME
+       FROM
+			 ((
+			     SELECT
+			         mv_table.table_name AS new_table_name,
+			         container_table.*
+			     FROM
+			         oceanbase.__all_table AS mv_table,
+			         (
+			             SELECT * FROM
+			                 oceanbase.__all_table
+			             WHERE
+			                 (table_mode & 1 << 24) = 1 << 24
+			         ) AS container_table
+			     WHERE
+			         mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			 )
+
+			 UNION ALL
+
+			 (
+			     SELECT
+			         table_name as new_table_name,
+			         *
+			     FROM
+			         oceanbase.__all_table
+			     WHERE
+			         (table_mode & 1 << 24) = 0
+			 )) TB,
              OCEANBASE.__ALL_DATABASE DB
        WHERE TB.DATABASE_ID = DB.DATABASE_ID
          AND TB.TABLE_MODE >> 12 & 15 in (0,1)
@@ -24970,7 +25228,7 @@ FROM
         I.PART_FUNC_TYPE,
         I.PART_NUM,
         I.SUB_PART_FUNC_TYPE,
-        T.TABLE_NAME AS TABLE_NAME,
+        T.NEW_TABLE_NAME AS TABLE_NAME,
         T.SUB_PART_NUM,
         T.SUB_PART_TEMPLATE_FLAGS,
         T.TABLESPACE_ID,
@@ -24991,7 +25249,35 @@ FROM
          WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_TABLE I
- JOIN OCEANBASE.__ALL_TABLE T
+ JOIN
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID
  JOIN OCEANBASE.__ALL_DATABASE D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
@@ -29942,7 +30228,7 @@ FROM (
 
       SELECT
       DATABASE_ID,
-      TABLE_NAME,
+      NEW_TABLE_NAME AS TABLE_NAME,
       TABLE_ID,
       'NULL' AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -29953,14 +30239,43 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_TABLE
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			))
+
       WHERE TABLET_ID != 0 AND PART_LEVEL = 0 AND TENANT_ID = 0
 
       UNION ALL
 
       SELECT
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -29971,7 +30286,35 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T JOIN OCEANBASE.__ALL_PART P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = 0
             AND P.PARTITION_TYPE = 0
@@ -29980,7 +30323,7 @@ FROM (
 
       SELECT
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
@@ -29991,7 +30334,35 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P,OCEANBASE.__ALL_SUB_PART Q
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T, OCEANBASE.__ALL_PART P,OCEANBASE.__ALL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID = Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
       AND T.TENANT_ID = 0
@@ -30087,7 +30458,7 @@ FROM (
       SELECT
       TENANT_ID,
       DATABASE_ID,
-      TABLE_NAME,
+      NEW_TABLE_NAME AS TABLE_NAME,
       TABLE_ID,
       'NULL' AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -30098,7 +30469,37 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLE
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			))
+
       WHERE TABLET_ID != 0 AND PART_LEVEL = 0
 
       UNION ALL
@@ -30106,7 +30507,7 @@ FROM (
       SELECT
       P.TENANT_ID AS TENANT_ID,
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -30117,7 +30518,36 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = P.TENANT_ID AND T.PART_LEVEL = 1
             AND P.PARTITION_TYPE = 0
       UNION ALL
@@ -30125,7 +30555,7 @@ FROM (
       SELECT
       T.TENANT_ID AS TENANT_ID,
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
@@ -30136,7 +30566,36 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
+      FROM
+			((
+			    SELECT
+			        mv_table.table_name AS new_table_name,
+			        container_table.*
+			    FROM
+			        oceanbase.__all_virtual_table AS mv_table,
+			        (
+			            SELECT * FROM
+			                oceanbase.__all_virtual_table
+			            WHERE
+			                (table_mode & 1 << 24) = 1 << 24
+			        ) AS container_table
+			    WHERE
+			        mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+              and mv_table.tenant_id = container_table.tenant_id
+			)
+
+			UNION ALL
+
+			(
+			    SELECT
+			        table_name as new_table_name,
+			        *
+			    FROM
+			        oceanbase.__all_virtual_table
+			    WHERE
+			        (table_mode & 1 << 24) = 0
+			)) T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
       AND P.PARTITION_TYPE = 0 AND Q.PARTITION_TYPE = 0
@@ -37002,7 +37461,8 @@ def_table_schema(
           WHEN 1 THEN 'Y'
           ELSE NULL
         END AS CHAR(1)
-      ) AS ON_QUERY_COMPUTATION
+      ) AS ON_QUERY_COMPUTATION,
+      C.REFRESH_DOP AS REFRESH_DOP
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -37105,7 +37565,8 @@ def_table_schema(
           WHEN 1 THEN 'Y'
           ELSE NULL
         END AS CHAR(1)
-      ) AS ON_QUERY_COMPUTATION
+      ) AS ON_QUERY_COMPUTATION,
+      C.REFRESH_DOP AS REFRESH_DOP
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -42316,7 +42777,7 @@ def_table_schema(
       CAST(INDEX_OWNER AS VARCHAR2(128)) AS INDEX_OWNER,
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
       CAST(TABLE_OWNER AS VARCHAR2(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
@@ -42370,7 +42831,37 @@ def_table_schema(
             NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
             AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) E
-        JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+        JOIN
+        ((
+            SELECT
+                mv_table.table_name AS new_table_name,
+                container_table.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+                (
+                    SELECT
+                        *
+                    FROM
+                        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                    WHERE
+                      bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+                ) container_table
+            WHERE
+                mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+        )
+
+        UNION ALL
+
+        (
+            SELECT
+                table_name as new_table_name,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+            WHERE
+                bitand(table_mode, POWER(2, 24)) = 0
+        )) D
           ON E.TENANT_ID = D.TENANT_ID
              AND E.TABLE_ID = D.TABLE_ID
              AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -42398,7 +42889,7 @@ def_table_schema(
       CAST(INDEX_OWNER AS VARCHAR2(128)) AS INDEX_OWNER,
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
       CAST(TABLE_OWNER AS VARCHAR2(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
@@ -42456,7 +42947,37 @@ def_table_schema(
             NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
             AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) E
-        JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+        JOIN
+        ((
+            SELECT
+                mv_table.table_name AS new_table_name,
+                container_table.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+                (
+                    SELECT
+                        *
+                    FROM
+                        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                    WHERE
+                      bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+                ) container_table
+            WHERE
+                mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+        )
+
+        UNION ALL
+
+        (
+            SELECT
+                table_name as new_table_name,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+            WHERE
+                bitand(table_mode, POWER(2, 24)) = 0
+        )) D
           ON E.TENANT_ID = D.TENANT_ID
              AND E.TABLE_ID = D.TABLE_ID
              AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -42482,7 +43003,7 @@ def_table_schema(
   view_definition = """
     SELECT
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(COLUMN_NAME AS VARCHAR2(4000)) AS COLUMN_NAME,
       CAST(ROWKEY_POSITION AS NUMBER) AS COLUMN_POSITION,
 
@@ -42537,7 +43058,37 @@ def_table_schema(
             NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
             AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) E
-        JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+        JOIN
+        ((
+            SELECT
+                mv_table.table_name AS new_table_name,
+                container_table.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+                (
+                    SELECT
+                        *
+                    FROM
+                        SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                    WHERE
+                      bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+                ) container_table
+            WHERE
+                mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+        )
+
+        UNION ALL
+
+        (
+            SELECT
+                table_name as new_table_name,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+            FROM
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+            WHERE
+                bitand(table_mode, POWER(2, 24)) = 0
+        )) D
           ON E.TENANT_ID = D.TENANT_ID
              AND E.TABLE_ID = D.TABLE_ID
              AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -44950,7 +45501,7 @@ def_table_schema(
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
       CAST(INDEX_TYPE_NAME AS VARCHAR2(27)) AS INDEX_TYPE,
       CAST(TABLE_OWNER AS VARCHAR2(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST('TABLE' AS CHAR(5)) AS TABLE_TYPE,
       CAST(UNIQUENESS AS VARCHAR2(9)) AS UNIQUENESS,
       CAST(COMPRESSION AS VARCHAR2(13)) AS COMPRESSION,
@@ -45097,7 +45648,37 @@ def_table_schema(
           NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
           AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) C
-      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+      JOIN
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) D
         ON C.TABLE_ID = D.TABLE_ID
            AND C.TENANT_ID = D.TENANT_ID
            AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -45125,7 +45706,7 @@ def_table_schema(
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
       CAST(INDEX_TYPE_NAME AS VARCHAR2(27)) AS INDEX_TYPE,
       CAST(TABLE_OWNER AS VARCHAR2(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST('TABLE' AS CHAR(5)) AS TABLE_TYPE,
       CAST(UNIQUENESS AS VARCHAR2(9)) AS UNIQUENESS,
       CAST(COMPRESSION AS VARCHAR2(13)) AS COMPRESSION,
@@ -45276,7 +45857,37 @@ def_table_schema(
           NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
           AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) C
-      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+      JOIN
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) D
         ON C.TABLE_ID = D.TABLE_ID
            AND C.TENANT_ID = D.TENANT_ID
            AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -45303,7 +45914,7 @@ def_table_schema(
       CAST(INDEX_NAME AS VARCHAR2(128)) AS INDEX_NAME,
       CAST(INDEX_TYPE_NAME AS VARCHAR2(27)) AS INDEX_TYPE,
       CAST(TABLE_OWNER AS VARCHAR2(128)) AS TABLE_OWNER,
-      CAST(TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+      CAST(NEW_TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST('TABLE' AS CHAR(5)) AS TABLE_TYPE,
       CAST(UNIQUENESS AS VARCHAR2(9)) AS UNIQUENESS,
       CAST(COMPRESSION AS VARCHAR2(13)) AS COMPRESSION,
@@ -45451,7 +46062,37 @@ def_table_schema(
           NOT(TABLE_TYPE = 3 AND CONSTRAINT_NAME IS NULL)
           AND (CONS_TAB.CONSTRAINT_TYPE IS NULL OR CONS_TAB.CONSTRAINT_TYPE = 1)
         ) C
-      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D
+      JOIN
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) D
         ON C.TABLE_ID = D.TABLE_ID
            AND C.TENANT_ID = D.TENANT_ID
            AND D.TABLE_TYPE != 12 AND D.TABLE_TYPE != 13
@@ -48932,7 +49573,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT CAST(DB.DATABASE_NAME AS VARCHAR2(128)) OWNER,
-      CAST(TB.TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
+      CAST(TB.NEW_TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
       CAST(CASE TB.PART_FUNC_TYPE
            WHEN 0 THEN 'HASH'
            WHEN 1 THEN 'HASH'
@@ -49006,7 +49647,37 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(12)) DEF_INMEMORY_SERVICE,
       CAST(NULL AS VARCHAR2(1000)) DEF_INMEMORY_SERVICE_NAME,
       CAST('NO' AS VARCHAR2(3)) AUTO
-      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT TB
+      FROM
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) TB
       JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
       ON
@@ -49048,7 +49719,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT CAST(DB.DATABASE_NAME AS VARCHAR2(128)) OWNER,
-      CAST(TB.TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
+      CAST(TB.NEW_TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
       CAST(CASE TB.PART_FUNC_TYPE
            WHEN 0 THEN 'HASH'
            WHEN 1 THEN 'HASH'
@@ -49122,7 +49793,37 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(12)) DEF_INMEMORY_SERVICE,
       CAST(NULL AS VARCHAR2(1000)) DEF_INMEMORY_SERVICE_NAME,
       CAST('NO' AS VARCHAR2(3)) AUTO
-      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT TB
+      FROM
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) TB
       JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
       ON
@@ -49162,7 +49863,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT
-      CAST(TB.TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
+      CAST(TB.NEW_TABLE_NAME AS VARCHAR2(128)) TABLE_NAME,
       CAST(CASE TB.PART_FUNC_TYPE
            WHEN 0 THEN 'HASH'
            WHEN 1 THEN 'HASH'
@@ -49236,7 +49937,37 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(12)) DEF_INMEMORY_SERVICE,
       CAST(NULL AS VARCHAR2(1000)) DEF_INMEMORY_SERVICE_NAME,
       CAST('NO' AS VARCHAR2(3)) AUTO
-      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT TB
+      FROM
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) TB
       JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
       ON
@@ -49356,10 +50087,40 @@ def_table_schema(
                    DB.DATABASE_NAME,
                    DB.DATABASE_ID,
                    TB.TABLE_ID,
-                   TB.TABLE_NAME,
+                   TB.NEW_TABLE_NAME AS TABLE_NAME,
                    TB.B_TRANSITION_POINT,
                    TB.PART_LEVEL
-            FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT TB,
+            FROM
+            ((
+                SELECT
+                    mv_table.table_name AS new_table_name,
+                    container_table.*
+                FROM
+                    SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+                    (
+                        SELECT
+                            *
+                        FROM
+                            SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                        WHERE
+                          bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+                    ) container_table
+                WHERE
+                    mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+            )
+
+            UNION ALL
+
+            (
+                SELECT
+                    table_name as new_table_name,
+                    SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+                FROM
+                    SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                WHERE
+                    bitand(table_mode, POWER(2, 24)) = 0
+            )) TB,
                  SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
             WHERE TB.DATABASE_ID = DB.DATABASE_ID
               AND TB.TENANT_ID = DB.TENANT_ID
@@ -49593,8 +50354,38 @@ def_table_schema(
               DB.DATABASE_NAME,
               DB.DATABASE_ID,
               TB.TABLE_ID,
-              TB.TABLE_NAME
-       FROM  SYS.ALL_VIRTUAL_TABLE_REAL_AGENT TB,
+              TB.NEW_TABLE_NAME AS TABLE_NAME
+       FROM
+       ((
+           SELECT
+               mv_table.table_name AS new_table_name,
+               container_table.*
+           FROM
+               SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+               (
+                   SELECT
+                       *
+                   FROM
+                       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                   WHERE
+                     bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+               ) container_table
+           WHERE
+               mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+       )
+
+       UNION ALL
+
+       (
+           SELECT
+               table_name as new_table_name,
+               SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+           FROM
+               SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+           WHERE
+               bitand(table_mode, POWER(2, 24)) = 0
+       )) TB,
              SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
        WHERE TB.DATABASE_ID = DB.DATABASE_ID
          AND bitand((TB.TABLE_MODE / 4096), 15) IN (0,1)
@@ -50003,7 +50794,7 @@ FROM
         I.PART_FUNC_TYPE,
         I.PART_NUM,
         I.SUB_PART_FUNC_TYPE,
-        T.TABLE_NAME AS TABLE_NAME,
+        T.NEW_TABLE_NAME AS TABLE_NAME,
         T.SUB_PART_NUM,
         T.SUB_PART_TEMPLATE_FLAGS,
         T.TABLESPACE_ID,
@@ -50024,7 +50815,37 @@ FROM
          WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
- JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+ JOIN
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID
  AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
  AND bitand(I.INDEX_ATTRIBUTES_SET, 16) = 0
@@ -60627,7 +61448,8 @@ def_table_schema(
           WHEN 1 THEN 'Y'
           ELSE NULL
         END AS CHAR(1)
-      ) AS ON_QUERY_COMPUTATION
+      ) AS ON_QUERY_COMPUTATION,
+      C.REFRESH_DOP AS REFRESH_DOP
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -60730,7 +61552,8 @@ def_table_schema(
           WHEN 1 THEN 'Y'
           ELSE NULL
         END AS CHAR(1)
-      ) AS ON_QUERY_COMPUTATION
+      ) AS ON_QUERY_COMPUTATION,
+      C.REFRESH_DOP AS REFRESH_DOP
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -60835,7 +61658,8 @@ def_table_schema(
           WHEN 1 THEN 'Y'
           ELSE NULL
         END AS CHAR(1)
-      ) AS ON_QUERY_COMPUTATION
+      ) AS ON_QUERY_COMPUTATION,
+      C.REFRESH_DOP AS REFRESH_DOP
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -67785,7 +68609,7 @@ FROM (
       SELECT
       T.TENANT_ID AS TENANT_ID,
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       'NULL' AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -67796,7 +68620,37 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+      FROM
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) T
       WHERE T.TABLET_ID != 0 AND T.PART_LEVEL = 0 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
 
       UNION ALL
@@ -67804,7 +68658,7 @@ FROM (
       SELECT
       T.TENANT_ID AS TENANT_ID,
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       'NULL' AS SUBPARTITION_NAME,
@@ -67815,7 +68669,37 @@ FROM (
       DUPLICATE_SCOPE,
       DUPLICATE_READ_CONSISTENCY,
       TABLEGROUP_ID
-      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+      FROM
+      ((
+          SELECT
+              mv_table.table_name AS new_table_name,
+              container_table.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+              (
+                  SELECT
+                      *
+                  FROM
+                      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                  WHERE
+                    bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+              ) container_table
+          WHERE
+              mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+      )
+
+      UNION ALL
+
+      (
+          SELECT
+              table_name as new_table_name,
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+          FROM
+              SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+          WHERE
+              bitand(table_mode, POWER(2, 24)) = 0
+      )) T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
             AND P.PARTITION_TYPE = 0
@@ -67825,7 +68709,7 @@ FROM (
       SELECT
       T.TENANT_ID AS TENANT_ID,
       T.DATABASE_ID AS DATABASE_ID,
-      T.TABLE_NAME AS TABLE_NAME,
+      T.NEW_TABLE_NAME AS TABLE_NAME,
       T.TABLE_ID AS TABLE_ID,
       P.PART_NAME AS PARTITION_NAME,
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
@@ -67838,7 +68722,37 @@ FROM (
       TABLEGROUP_ID
       FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT Q
            JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON P.PART_ID =Q.PART_ID AND Q.TENANT_ID = P.TENANT_ID
-           JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
+           JOIN
+           ((
+               SELECT
+                   mv_table.table_name AS new_table_name,
+                   container_table.*
+               FROM
+                   SYS.ALL_VIRTUAL_TABLE_REAL_AGENT mv_table,
+                   (
+                       SELECT
+                           *
+                       FROM
+                           SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+                       WHERE
+                         bitand(table_mode, POWER(2, 24)) = POWER(2, 24)
+                   ) container_table
+               WHERE
+                   mv_table.data_table_id = container_table.table_id
+							and mv_table.table_type = 7
+           )
+
+           UNION ALL
+
+           (
+               SELECT
+                   table_name as new_table_name,
+                   SYS.ALL_VIRTUAL_TABLE_REAL_AGENT.*
+               FROM
+                   SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+               WHERE
+                   bitand(table_mode, POWER(2, 24)) = 0
+           )) T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
       WHERE T.PART_LEVEL = 2 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
             AND Q.PARTITION_TYPE = 0
             AND P.PARTITION_TYPE = 0

@@ -18,6 +18,7 @@
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
+#include "storage/mview/ob_mview_refresh.h"
 
 namespace oceanbase
 {
@@ -130,8 +131,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     uint64_t old_database_id = session_info_->get_database_id();
     bool resolve_succ = true;
     bool can_expand_star = true;
+    uint64_t tenant_data_version = 0;
     if (is_materialized_view) {
-      uint64_t tenant_data_version = 0;
       if (GCTX.is_shared_storage_mode()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("in share storage mode, create materialized view is not supported", KR(ret));
@@ -428,10 +429,17 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to resolve mv options", K(ret));
       }
       if (OB_SUCC(ret)) {
+        int64_t refresh_parallelism = 0;
         if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
           LOG_WARN("resolve hints failed", K(ret));
-        } else {
+        } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
           mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
+        } else if (OB_FAIL(storage::ObMViewRefresher::calc_mv_refresh_parallelism(
+                       mv_ainfo->mv_refresh_info_.refresh_dop_, session_info_, refresh_parallelism))) {
+          LOG_WARN("fail to calculate refresh parallelism", KR(ret), "explicit_parallelism",
+                   mv_ainfo->mv_refresh_info_.refresh_dop_);
+        } else {
+          mv_ainfo->mv_refresh_info_.parallel_ = refresh_parallelism;
         }
       }
     }
@@ -1311,21 +1319,24 @@ int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
     }
   }
   if (OB_SUCC(ret)) {
+    FastRefreshableNotes fast_refreshable_note;
     if ((table_schema.mv_on_query_computation() ||
                 ObMVRefreshMethod::FAST == refresh_info.refresh_method_)) {
       ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
       if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
               stmt, params_.stmt_factory_, params_.expr_factory_, params_.session_info_,
-              container_table_schema, refresh_type))) {
+              container_table_schema, refresh_type, fast_refreshable_note))) {
         LOG_WARN("fail to check mv type", KR(ret));
       } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(refresh_type))) {
 	      // When creating an MV, which can not be fast refreshed, with both fast refresh
         // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
         if (table_schema.mv_on_query_computation()) {
-	        ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
-	      } else {
-	        ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
-	      }
+          ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+          LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE, table_schema.get_table_name(), fast_refreshable_note.error_.ptr());
+        } else {
+          ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+          LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, table_schema.get_table_name(), fast_refreshable_note.error_.ptr());
+        }
         LOG_WARN("fast refresh is not supported for this mv", KR(ret), K(refresh_type));
       } else if (OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refresh_type) {
         table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
@@ -1478,6 +1489,9 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
         }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    refresh_info.refresh_dop_ = mv_refresh_dop_;
   }
   return ret;
 }

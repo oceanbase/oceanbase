@@ -543,6 +543,8 @@ public:
 
   int del_retain_ctx();
 
+  int collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg);
+
   // ========================================================
 private:
   // ========================================================

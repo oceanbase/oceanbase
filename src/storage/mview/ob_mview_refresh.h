@@ -60,6 +60,9 @@ public:
            ObMViewRefreshStatsCollection *refresh_stats_collection);
   int refresh();
 
+  static int calc_mv_refresh_parallelism(int64_t explict_parallelism,
+                                         sql::ObSQLSessionInfo *session_info, int64_t &final_parallelism);
+
   TO_STRING_KV(KP_(ctx), KP_(refresh_ctx), K_(refresh_param), KP_(refresh_stats_collection));
 
 private:
@@ -69,6 +72,13 @@ private:
   int check_fast_refreshable();
   int complete_refresh();
   int fast_refresh();
+  int set_session_dml_dop_(const uint64_t tenant_id, const uint64_t data_version,
+                          sql::ObSQLSessionInfo *exec_session_info, ObMViewTransaction &trans,
+                          const int64_t parallelism, bool &has_updated_dml_dop,
+                          uint64_t &orig_dml_dop);
+  int restore_session_dml_dop_(const uint64_t tenant_id, const uint64_t data_version,
+                              const bool has_updated_dml_dop, const uint64_t orig_dml_dop,
+                              ObMViewTransaction &trans);
 
 private:
   sql::ObExecContext *ctx_;

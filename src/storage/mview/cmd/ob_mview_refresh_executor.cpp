@@ -254,6 +254,7 @@ int ObMViewRefreshExecutor::do_refresh()
       refresh_stats_collection->set_elapsed_time((end_time - start_time) / 1000 / 1000);
       refresh_stats_collection->set_log_purge_time(log_purge_time);
       refresh_stats_collection->set_result(OB_SUCCESS);
+      refresh_stats_collection->set_refresh_parallelism(refresh_ctx.refresh_parallelism_);
     }
   }
   if (OB_SUCC(ret)) {

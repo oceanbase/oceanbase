@@ -364,6 +364,7 @@ ObMViewRefreshStats &ObMViewRefreshStats::operator=(const ObMViewRefreshStats &s
     final_num_rows_ = src_schema.final_num_rows_;
     num_steps_ = src_schema.num_steps_;
     result_ = src_schema.result_;
+    refresh_parallelism_ = src_schema.refresh_parallelism_;
   }
   return *this;
 }
@@ -401,6 +402,7 @@ void ObMViewRefreshStats::reset()
   final_num_rows_ = 0;
   num_steps_ = 0;
   result_ = UNEXECUTED_STATUS;
+  refresh_parallelism_ = 0;
   ObSchema::reset();
 }
 
