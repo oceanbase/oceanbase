@@ -77,11 +77,8 @@ public:
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
   void reset();
   void reuse();
-  int prepare_sstable_index_builders(const common::ObTabletID &tablet_id,
-      const common::ObIArray<storage::ObITable::TableKey> &table_keys,
-      const bool is_major_compaction_mview_dep_tablet);
-  int open_sstable_index_builder(const common::ObTabletID &tablet_id, const ObTabletHandle &tablet_handle,
-      const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable);
+  int check_and_prepare_sstable_index_builders(ObTabletHandle &tablet_handle, const bool is_major_compaction_mview_dep_tablet,
+      const common::ObIArray<ObSSTableWrapper> &sstable_array, const common::ObTabletID &tablet_id);
   int get_sstable_index_builder_mgr(const common::ObTabletID &tablet_id, ObBackupTabletSSTableIndexBuilderMgr *&builder_mgr);
   int check_sstable_index_builder_mgr_exist(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key, bool &exist);
   int get_sstable_index_builder(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
@@ -92,6 +89,15 @@ public:
       ObIODevice *device_handle);
   int free_sstable_index_builder(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int remove_sstable_index_builder(const common::ObTabletID &tablet_id);
+
+private:
+  int check_sstable_index_builder_mgr_exist_without_lock_(
+      const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key, bool &exist);
+  int prepare_sstable_index_builders_without_lock_(const common::ObTabletID &tablet_id,
+      const common::ObIArray<storage::ObITable::TableKey> &table_keys,
+      const bool is_major_compaction_mview_dep_tablet);
+  int open_sstable_index_builders_without_lock_(const common::ObTabletID &tablet_id, const ObTabletHandle &tablet_handle,
+      const common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
 
 private:
   typedef common::hash::ObHashMap<common::ObTabletID, ObBackupTabletSSTableIndexBuilderMgr *> TabletSSTableBuilderMap;

@@ -725,17 +725,23 @@ int ObLSBackupDataDagNet::get_batch_size_(int64_t &batch_size)
 {
   int ret = OB_SUCCESS;
   int64_t data_file_size = 0;
+  int64_t data_backup_concurrency = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (!tenant_config.is_valid()) {
     data_file_size = DEFAULT_BACKUP_DATA_FILE_SIZE;
+    data_backup_concurrency = tenant_config->ha_low_thread_score;
    } else {
     data_file_size = tenant_config->backup_data_file_size;
+  }
+  if (0 == data_backup_concurrency) {
+    data_backup_concurrency = 2;
   }
   if (0 == data_file_size) {
     batch_size = OB_DEFAULT_BACKUP_BATCH_COUNT;
   } else {
     batch_size = data_file_size / OB_DEFAULT_MACRO_BLOCK_SIZE;
   }
+  batch_size = batch_size / data_backup_concurrency;
 #ifdef ERRSIM
   if (1 != param_.ls_id_.id()) {
     const int64_t max_block_per_backup_task = GCONF._max_block_per_backup_task;
@@ -2428,7 +2434,9 @@ int ObLSBackupDataTask::process()
     LOG_WARN("failed to prepare companion index file handle for data file", K(ret), K_(task_id), K(meta_tree_type));
   } else if (OB_FAIL(device_handle_array.push_back(meta_tree_device_handle))) {
     LOG_WARN("failed to push back device handle", K(ret), KP(meta_tree_device_handle));
-  } else if (OB_FAIL(do_iterate_backup_items_(device_handle_array))) {
+  } else if (OB_FAIL(deal_with_backup_data_(device_handle_array))) {
+    LOG_WARN("failed to do iterate backup items", K(ret));
+  } else if (OB_FAIL(deal_with_backup_meta_(device_handle_array))) {
     LOG_WARN("failed to do iterate backup items", K(ret));
   } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(
       param_.tenant_id_, param_.ls_id_, ls_backup_ctx_->rebuild_seq_))) {
@@ -2581,7 +2589,8 @@ int ObLSBackupDataTask::prepare_macro_block_readers_(ObMultiMacroBlockBackupRead
   return ret;
 }
 
-int ObLSBackupDataTask::do_iterate_backup_items_(common::ObIArray<ObIODevice *> &device_handle_array)
+// this method only deal with data, meta is handled in deal_with_backup_meta_ method
+int ObLSBackupDataTask::deal_with_backup_data_(common::ObIArray<ObIODevice *> &device_handle_array)
 {
   int ret = OB_SUCCESS;
   ObMultiMacroBlockBackupReader *macro_reader = NULL;
@@ -2599,7 +2608,7 @@ int ObLSBackupDataTask::do_iterate_backup_items_(common::ObIArray<ObIODevice *> 
     if (OB_SUCC(ret)) {
       switch (item.get_item_type()) {
         case PROVIDER_ITEM_TABLET_SSTABLE_INDEX_BUILDER_PREPARE: {
-          if (OB_FAIL(do_prepare_sstable_builders_(item))) {
+          if (OB_FAIL(check_and_prepare_sstable_index_builders_(item.get_tablet_id()))) {
             LOG_WARN("failed to do prepare sstable builders", K(ret), K(item));
           }
           break;
@@ -2614,6 +2623,44 @@ int ObLSBackupDataTask::do_iterate_backup_items_(common::ObIArray<ObIODevice *> 
           if (OB_FAIL(do_backup_single_ddl_other_block_(ddl_macro_reader, item))) {
             LOG_WARN("failed to do backup single ddl other block", K(ret), K(item));
           }
+          break;
+        }
+        case PROVIDER_ITEM_TABLET_AND_SSTABLE_META: {
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("item type is not valid", K(ret), K(item));
+          break;
+        }
+      }
+    }
+  }
+  if (OB_NOT_NULL(macro_reader)) {
+    ObLSBackupFactory::free(macro_reader);
+  }
+  if (OB_NOT_NULL(ddl_macro_reader)) {
+    ObLSBackupFactory::free(ddl_macro_reader);
+  }
+  return ret;
+}
+
+// this method only deal with meta, data is handled in deal_with_backup_data_ method
+int ObLSBackupDataTask::deal_with_backup_meta_(common::ObIArray<ObIODevice *> &device_handle_array)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_items_.count(); ++i) {
+    const ObBackupProviderItem &item = backup_items_.at(i);
+    if (REACH_TIME_INTERVAL(CHECK_DISK_SPACE_INTERVAL)) {
+      if (OB_FAIL(check_disk_space_())) {
+        LOG_WARN("failed to check disk space", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      switch (item.get_item_type()) {
+        case PROVIDER_ITEM_TABLET_SSTABLE_INDEX_BUILDER_PREPARE:
+        case PROVIDER_ITEM_MACRO_ID:
+        case PROVIDER_ITEM_DDL_OTHER_BLOCK_ID: {
           break;
         }
         case PROVIDER_ITEM_TABLET_AND_SSTABLE_META: {
@@ -2634,28 +2681,18 @@ int ObLSBackupDataTask::do_iterate_backup_items_(common::ObIArray<ObIODevice *> 
       }
     }
   }
-  if (OB_NOT_NULL(macro_reader)) {
-    ObLSBackupFactory::free(macro_reader);
-  }
-  if (OB_NOT_NULL(ddl_macro_reader)) {
-    ObLSBackupFactory::free(ddl_macro_reader);
-  }
   return ret;
 }
 
-int ObLSBackupDataTask::do_prepare_sstable_builders_(const ObBackupProviderItem &item)
+int ObLSBackupDataTask::check_and_prepare_sstable_index_builders_(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  const ObTabletID &tablet_id = item.get_tablet_id();
   ObBackupTabletHandleRef *tablet_ref = NULL;
   ObArray<storage::ObSSTableWrapper> sstable_array;
   bool is_major_compaction_mview_dep_tablet = false;
   share::SCN mview_dep_scn;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (!item.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arg", K(ret), K(item));
-  } else if (OB_ISNULL(ls_backup_ctx_)) {
+  if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
   } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
@@ -2667,64 +2704,12 @@ int ObLSBackupDataTask::do_prepare_sstable_builders_(const ObBackupProviderItem 
   } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_ref->tablet_handle_, backup_data_type_,
       *table_store_wrapper.get_member(), is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to get sstables by data type", K(ret), KPC(tablet_ref), K_(backup_data_type));
-  } else if (OB_FAIL(prepare_tablet_sstable_index_builders_(tablet_id, is_major_compaction_mview_dep_tablet, sstable_array))) {
-    LOG_WARN("failed to prepare tablet sstable index builders", K(ret), K_(param), K(tablet_id), K(sstable_array));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(i);
-      ObSSTable *sstable_ptr = NULL;
-      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be null", K(ret));
-      } else {
-        const ObITable::TableKey &table_key = sstable_ptr->get_key();
-        if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
-          // do nothing
-        } else if (OB_FAIL(open_tablet_sstable_index_builder_(tablet_id, tablet_ref->tablet_handle_, table_key, sstable_ptr))) {
-          LOG_WARN("failed to open tablet sstable index builder", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLSBackupDataTask::prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
-    const bool is_major_compaction_mview_dep_tablet, common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_builder_mgr_)) {
+  } else if (OB_ISNULL(index_builder_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index builder mgr should not be null", K(ret));
-  } else {
-    ObArray<storage::ObITable::TableKey> table_key_array;
-    ARRAY_FOREACH_X(sstable_array, idx, cnt, OB_SUCC(ret)) {
-      storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(idx);
-      ObSSTable *sstable_ptr = NULL;
-      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be null", K(ret));
-      } else if (OB_FAIL(table_key_array.push_back(sstable_ptr->get_key()))) {
-        LOG_WARN("failed to push back", K(ret), KPC(sstable_ptr));
-      }
-    }
-    if (FAILEDx(index_builder_mgr_->prepare_sstable_index_builders(tablet_id, table_key_array, is_major_compaction_mview_dep_tablet))) {
-      LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(table_key_array), K(is_major_compaction_mview_dep_tablet));
-    }
-  }
-  return ret;
-}
-
-int ObLSBackupDataTask::open_tablet_sstable_index_builder_(
-    const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
-    const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_builder_mgr_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("index builder mgr should not be null", K(ret));
-  } else if (OB_FAIL(index_builder_mgr_->open_sstable_index_builder(tablet_id, tablet_handle, table_key, sstable))) {
-    LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(tablet_handle), K(table_key), KPC(sstable));
+    LOG_WARN("mgr should not be null", K(ret));
+  } else if (OB_FAIL(index_builder_mgr_->check_and_prepare_sstable_index_builders(tablet_ref->tablet_handle_,
+      is_major_compaction_mview_dep_tablet, sstable_array, tablet_id))) {
+    LOG_WARN("failed to check sstable index builder mgr exist", K(ret), K(tablet_id));
   }
   return ret;
 }
@@ -2781,8 +2766,8 @@ int ObLSBackupDataTask::do_backup_single_macro_block_data_(ObMultiMacroBlockBack
   if (OB_ISNULL(macro_reader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("macro reader should not be null", K(ret));
-  } else if (OB_FAIL(do_wait_index_builder_ready_(backup_item.get_tablet_id(), backup_item.get_table_key()))) {
-    LOG_WARN("failed to do wait index builder ready", K(ret), K(backup_item));
+  } else if (OB_FAIL(check_and_prepare_sstable_index_builders_(backup_item.get_tablet_id()))) { // check is sstable level, prepare is tablet level
+    LOG_WARN("failed to check and prepare sstable index builders", K(ret), K(backup_item));
   } else if (OB_FAIL(get_next_macro_block_data_(macro_reader, buffer_reader, table_key, logic_id, macro_id, &io_allocator))) {
     if (OB_ITER_END == ret) {
       LOG_INFO("iterator meet end", K(logic_id));

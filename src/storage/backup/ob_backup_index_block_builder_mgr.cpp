@@ -321,19 +321,15 @@ void ObBackupTabletIndexBlockBuilderMgr::reuse()
   }
 }
 
-int ObBackupTabletIndexBlockBuilderMgr::prepare_sstable_index_builders(
+int ObBackupTabletIndexBlockBuilderMgr::prepare_sstable_index_builders_without_lock_(
     const common::ObTabletID &tablet_id, const common::ObIArray<storage::ObITable::TableKey> &table_keys,
     const bool is_major_compaction_mview_dep_tablet)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup index block builder mgr do not init", K(ret));
-  } else if (!tablet_id.is_valid()) {
+  if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else {
-    ObMutexGuard guard(mutex_);
     ObBackupTabletSSTableIndexBuilderMgr *mgr = NULL;
     int32_t hash_ret = sstable_builder_map_.get_refactored(tablet_id, mgr);
     if (OB_HASH_NOT_EXIST != hash_ret) {
@@ -366,29 +362,39 @@ int ObBackupTabletIndexBlockBuilderMgr::prepare_sstable_index_builders(
   return ret;
 }
 
-int ObBackupTabletIndexBlockBuilderMgr::open_sstable_index_builder(
+int ObBackupTabletIndexBlockBuilderMgr::open_sstable_index_builders_without_lock_(
     const common::ObTabletID &tablet_id, const ObTabletHandle &tablet_handle,
-    const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable)
+    const common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   ObBackupTabletSSTableIndexBuilderMgr *mgr = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup index block builder mgr do not init", K(ret), K(tablet_id));
-  } else if (!tablet_id.is_valid() || !table_key.is_valid()) {
+  if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key));
+    LOG_WARN("get invalid argument", K(ret), K(tablet_id));
   } else {
-    ObMutexGuard guard(mutex_);
     if (OB_FAIL(sstable_builder_map_.get_refactored(tablet_id, mgr))) {
       LOG_WARN("failed to get sstable index builder", K(ret), K(tablet_id));
     } else if (OB_ISNULL(mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup tablet sstable index builder mgr should not be null", K(ret));
-    } else if (OB_FAIL(mgr->add_sstable_index_builder(ls_id_, tablet_handle, table_key, sstable))) {
-      LOG_WARN("failed to add sstable index builder", K(ret), K(tablet_id), K(table_key), KPC(sstable));
     } else {
-      LOG_INFO("[INDEX_BUILDER_MGR] open sstable index builder", K(tablet_id), K(table_key));
+      for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
+        const storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(i);
+        ObSSTable *sstable_ptr = NULL;
+        if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table should not be null", K(ret));
+        } else {
+          const ObITable::TableKey &table_key = sstable_ptr->get_key();
+          if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
+            // do nothing
+          } else if (OB_FAIL(mgr->add_sstable_index_builder(ls_id_, tablet_handle, table_key, sstable_ptr))) {
+            LOG_WARN("failed to add sstable index builder", K(ret), K(tablet_id), K(table_key), KPC(sstable_ptr));
+          } else {
+            LOG_INFO("[INDEX_BUILDER_MGR] open sstable index builder", K(tablet_id), K(table_key));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -443,6 +449,76 @@ int ObBackupTabletIndexBlockBuilderMgr::get_sstable_index_builder(const common::
       LOG_WARN("failed to get copy table key info", K(ret), K(tablet_id), K(table_key));
     } else {
       LOG_INFO("[INDEX_BUILDER_MGR] get sstable index builder", K(tablet_id), K(table_key));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletIndexBlockBuilderMgr::check_and_prepare_sstable_index_builders(
+    ObTabletHandle &tablet_handle, const bool is_major_compaction_mview_dep_tablet,
+    const common::ObIArray<ObSSTableWrapper> &sstable_array,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  bool is_exist = false;
+  ObArray<storage::ObITable::TableKey> table_keys;
+  ARRAY_FOREACH_X(sstable_array, idx, cnt, OB_SUCC(ret)) {
+    const storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(idx);
+    ObSSTable *sstable_ptr = NULL;
+    if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table should not be null", K(ret));
+    } else if (OB_FAIL(table_keys.push_back(sstable_ptr->get_key()))) {
+      LOG_WARN("failed to push back", K(ret), KPC(sstable_ptr));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tablet index block builder mgr do not init", K(ret));
+  } else if (table_keys.empty()) {
+    // do nothing
+  } else if (OB_FAIL(check_sstable_index_builder_mgr_exist_without_lock_(tablet_id, table_keys.at(0), is_exist))) {
+    LOG_WARN("failed to check sstable index builder mgr exist without lock", K(ret), K(tablet_id));
+  } else if (is_exist) {
+    // do nothing
+  } else if (OB_FAIL(prepare_sstable_index_builders_without_lock_(tablet_id, table_keys, is_major_compaction_mview_dep_tablet))) {
+    LOG_WARN("failed to prepare sstable index builders without lock", K(ret));
+  } else if (OB_FAIL(open_sstable_index_builders_without_lock_(tablet_id, tablet_handle, sstable_array))) {
+    LOG_WARN("failed to open sstable index builders without lock", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupTabletIndexBlockBuilderMgr::check_sstable_index_builder_mgr_exist_without_lock_(
+    const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  ObBackupTabletSSTableIndexBuilderMgr *builder_mgr = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha table info mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid() || !table_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key));
+  } else {
+    blocksstable::ObSSTableIndexBuilder *index_builder = NULL;
+    if (OB_FAIL(sstable_builder_map_.get_refactored(tablet_id, builder_mgr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        exist = false;
+      } else {
+        LOG_WARN("failed to get tablet table key mgr", K(ret), K(tablet_id));
+      }
+    } else if (OB_FAIL(builder_mgr->get_sstable_index_builder(table_key, index_builder))) {
+      LOG_WARN("failed to get sstable index builder", K(ret), K(table_key));
+    } else if (OB_ISNULL(index_builder)) {
+      exist = false;
+    } else {
+      exist = true;
     }
   }
   return ret;
