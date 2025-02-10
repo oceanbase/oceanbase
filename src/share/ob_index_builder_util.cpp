@@ -229,7 +229,7 @@ int ObIndexBuilderUtil::add_shadow_pks(
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
-        } else if (ob_is_text_tc(const_data_column->get_data_type())) {
+        } else if (const_data_column->is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Unexpected lob column in shadow pk", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
@@ -464,7 +464,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
                    "database_id", data_schema.get_database_id(),
                    "table_name", data_schema.get_table_name(),
                    "column name", sort_item.column_name_, K(ret));
-        } else if (ob_is_text_tc(data_column->get_data_type())) {
+        } else if (data_column->is_key_forbid_lob()) {
           if (use_mysql_errno && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
             LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
@@ -554,7 +554,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
             ret = OB_ERR_BAD_FIELD_ERROR;
             LOG_WARN("get_column_schema failed", "table_id", data_schema.get_table_id(),
                 K(column_id), K(ret));
-          } else if (ob_is_text_tc(data_column->get_data_type())) {
+          } else if (data_column->is_key_forbid_lob()) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_WARN("Lob column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
@@ -607,7 +607,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("get_column_schema failed", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
-          } else if (ob_is_text_tc(data_column->get_data_type())) {
+          } else if (data_column->is_key_forbid_lob()) {
             ret = OB_ERR_WRONG_KEY_COLUMN;
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
             LOG_WARN("Index storing column should not be lob type", "tenant_id", data_schema.get_tenant_id(),

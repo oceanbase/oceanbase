@@ -179,6 +179,9 @@ public:
   // storage param is generated from other param, they won't be serialized.
   // it is called in convert or after deserialization
   int prepare_storage_param(const common::ObIArray<uint64_t> &column_ids);
+  int set_data_table_rowkey_tags(share::schema::ObSchemaGetterGuard *guard,
+                                 const ObTableSchema *index_schema,
+                                 const uint64_t tenant_id);
   OB_INLINE bool is_valid() const { return data_table_.is_valid(); }
   OB_INLINE const ObTableSchemaParam & get_data_table() const { return data_table_; }
   OB_INLINE ObTableSchemaParam& get_data_table_ref() { return data_table_; }

@@ -329,7 +329,7 @@ int ObDDLResolver::get_mv_container_table(
 // check whether the column is allowed to be selected as part of primary key.
 int ObDDLResolver::check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column_schema) {
   int ret = OB_SUCCESS;
-  if (ob_is_text_tc(column_schema.get_data_type())) {
+  if (column_schema.is_key_forbid_lob()) {
     ret = OB_ERR_WRONG_KEY_COLUMN;
     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
     SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(ret), K(column_schema));
@@ -3557,6 +3557,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     }
 
     if (OB_SUCC(ret)) {
+      const bool is_string = (2 == type_node->int32_values_[1]);
       column.set_meta_type(data_type.get_meta_type());
       column.set_accuracy(data_type.get_accuracy());
       column.set_charset_type(data_type.get_charset_type());
@@ -3614,6 +3615,17 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                    || data_type.get_meta_type().is_geometry() || data_type.get_meta_type().is_roaringbitmap()) {
           if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
             SQL_RESV_LOG(WARN, "fail to check text or blob column length", K(ret), K(column));
+          } else if (is_string && data_type.get_meta_type().is_text()) {
+            if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("tenant version is less than 4.3.5.1, string type not supported", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.3.5.1, string type");
+            } else {
+              column.set_is_string_lob();
+              column.set_charset_type(CHARSET_UTF8MB4);
+              column.set_collation_type(CS_TYPE_UTF8MB4_0900_BIN);
+              column.set_binary_collation(false);
+            }
           }
         } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode(), params_.is_prepare_stage_))) {
           SQL_RESV_LOG(WARN, "fail to check string column length", K(ret), K(column));
@@ -4157,7 +4169,7 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "VECTOR, TEXT column can't be primary key", K(column), K(ret));
-        } else if (ob_is_text_tc(column.get_data_type())) {
+        } else if (column.is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(column), K(ret));

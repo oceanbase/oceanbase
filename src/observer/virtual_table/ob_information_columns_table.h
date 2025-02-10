@@ -107,7 +107,8 @@ private:
   int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
       const common::ObIArray<ObString> &type_info,
       const int16_t default_length_semantics, int64_t &pos,
-      const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY));
+      const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY),
+      const bool is_string_lob = false);
   int fill_col_privs(
       const ObSessionPrivInfo &session_priv,
       const common::ObIArray<uint64_t> &enable_role_id_array,

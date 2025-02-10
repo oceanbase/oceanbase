@@ -297,6 +297,7 @@ int ObTableLoadStoreTableCtx::init_insert_table_ctx()
   insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
   insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
   insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+  insert_table_param.is_index_table_ = is_index_table_;
   if (OB_ISNULL(insert_table_ctx_ =
                       OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

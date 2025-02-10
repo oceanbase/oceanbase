@@ -156,6 +156,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_geo_type(const common::ObGeoType geo_type) { srs_info_.geo_type_ = static_cast<uint8_t>(geo_type); }
   int set_geo_type(const int32_t type_val);
   inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val); }
+  inline void set_is_string_lob() { add_column_flag(STRING_LOB_COLUMN_FLAG); }
   //get methods
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
@@ -198,6 +199,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_roaringbitmap() const { return meta_type_.is_roaringbitmap(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
   inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
+  inline bool is_string_lob() const { return column_flags_ & STRING_LOB_COLUMN_FLAG; }
+  inline bool is_key_forbid_lob() const { return ob_is_text_tc(meta_type_.get_type()) && !is_string_lob(); }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
@@ -267,6 +270,10 @@ int assign(const ObColumnSchemaV2 &src_schema);
     del_column_flag(ALWAYS_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
+  }
+  inline void erase_string_lob_flag()
+  {
+    del_column_flag(STRING_LOB_COLUMN_FLAG);
   }
   /* vector index */
   inline bool is_vec_index_column() const { return ObSchemaUtils::is_vec_index_column(column_flags_); }

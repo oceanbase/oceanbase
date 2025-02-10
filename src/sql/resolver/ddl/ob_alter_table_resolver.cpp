@@ -6656,6 +6656,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
           //所以需要清空掉自己以前拷贝的generated column flag
           alter_column_schema.set_column_flags(origin_col_schema->get_column_flags());
           alter_column_schema.erase_generated_column_flags();
+          alter_column_schema.erase_string_lob_flag();
           if (!is_oracle_mode()) {
             alter_column_schema.drop_not_null_cst();
           }

@@ -66,7 +66,7 @@ int ObDirectLoadLobBuilder::init(ObDirectLoadInsertTabletContext *insert_tablet_
     lob_column_cnt_ = lob_column_idxs_->count();
     extra_rowkey_cnt_ = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     lob_inrow_threshold_ = insert_tablet_ctx->get_lob_inrow_threshold();
-    if (OB_FAIL(init_sstable_slice_ctx())) {
+    if (!insert_tablet_ctx->get_is_index_table() && OB_FAIL(init_sstable_slice_ctx())) {
       LOG_WARN("fail to init sstable slice ctx", KR(ret));
     } else {
       is_inited_ = true;
@@ -106,7 +106,17 @@ int ObDirectLoadLobBuilder::check_can_skip(char *ptr, uint32_t len, bool &can_sk
     LOG_WARN("unexpected lob column is empty data", KR(ret), KP(ptr), K(len));
   } else {
     ObLobLocatorV2 locator(ptr, len, true /*has_lob_header*/);
-    can_skip = (locator.is_inrow_disk_lob_locator() && (len - sizeof(ObLobCommon) <= lob_inrow_threshold_));
+    if (insert_tablet_ctx_->get_is_index_table()) {
+      if (!locator.is_inrow_disk_lob_locator() || len - sizeof(ObLobCommon) > lob_inrow_threshold_) {
+        ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+        STORAGE_LOG(WARN, "invalid lob", K(ret), K(locator), KP(ptr), K(len));
+      } else {
+        can_skip = true;
+      }
+    } else {
+      can_skip = (locator.is_inrow_disk_lob_locator() && (len - sizeof(ObLobCommon) <= lob_inrow_threshold_));
+    }
   }
   return ret;
 }
@@ -116,7 +126,8 @@ int ObDirectLoadLobBuilder::check_can_skip(const ObDatumRow &datum_row, bool &ca
   int ret = OB_SUCCESS;
   can_skip = true;
   for (int64_t i = 0; OB_SUCC(ret) && can_skip && i < lob_column_idxs_->count(); ++i) {
-    const int64_t column_idx = lob_column_idxs_->at(i) + extra_rowkey_cnt_;
+    const bool is_rowkey_col = lob_column_idxs_->at(i) < insert_tablet_ctx_->get_rowkey_column_count();
+    const int64_t column_idx = is_rowkey_col ? lob_column_idxs_->at(i) : lob_column_idxs_->at(i) + extra_rowkey_cnt_;
     const ObDatum &datum = datum_row.storage_datums_[column_idx];
     if (datum.is_null()) {
     } else if (OB_FAIL(check_can_skip(const_cast<char *>(datum.ptr_), datum.len_, can_skip))) {
@@ -131,7 +142,8 @@ int ObDirectLoadLobBuilder::check_can_skip(const ObBatchDatumRows &datum_rows, b
   int ret = OB_SUCCESS;
   can_skip = true;
   for (int64_t i = 0; OB_SUCC(ret) && can_skip && i < lob_column_idxs_->count(); ++i) {
-    const int64_t column_idx = lob_column_idxs_->at(i) + extra_rowkey_cnt_;
+    const bool is_rowkey_col = lob_column_idxs_->at(i) < insert_tablet_ctx_->get_rowkey_column_count();
+    const int64_t column_idx = is_rowkey_col ? lob_column_idxs_->at(i) : lob_column_idxs_->at(i) + extra_rowkey_cnt_;
     ObIVector *vector = datum_rows.vectors_.at(column_idx);
     const VectorFormat format = vector->get_format();
     switch (format) {
@@ -278,7 +290,8 @@ int ObDirectLoadLobBuilder::fill_into_datum_row(ObDatumRow &datum_row,
   for (int64_t i = 0; i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
     const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
-    const int64_t dest_column_idx = column_idx + extra_rowkey_cnt_;
+    const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
+                                     ? column_idx : column_idx + extra_rowkey_cnt_;
     datum_row_.storage_datums_[dest_column_idx] = datum_row.storage_datums_[src_column_idx];
   }
   return ret;
@@ -291,7 +304,8 @@ int ObDirectLoadLobBuilder::fetch_from_datum_row(ObDatumRow &datum_row,
   for (int64_t i = 0; i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
     const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
-    const int64_t dest_column_idx = column_idx + extra_rowkey_cnt_;
+    const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
+                                     ? column_idx : column_idx + extra_rowkey_cnt_;
     datum_row.storage_datums_[src_column_idx] = datum_row_.storage_datums_[dest_column_idx];
   }
   return ret;
@@ -329,7 +343,8 @@ int ObDirectLoadLobBuilder::fill_into_datum_row(const IVectorPtrs &vectors,
   for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
     const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
-    const int64_t dest_column_idx = column_idx + extra_rowkey_cnt_;
+    const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
+                                     ? column_idx : column_idx + extra_rowkey_cnt_;
     ObIVector *vector = vectors.at(src_column_idx);
     ObDatum &datum = datum_row_.storage_datums_[dest_column_idx];
     if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, datum))) {
@@ -347,7 +362,8 @@ int ObDirectLoadLobBuilder::fetch_from_datum_row(const IVectorPtrs &vectors,
   for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
     const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
-    const int64_t dest_column_idx = column_idx + extra_rowkey_cnt_;
+    const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
+                                     ? column_idx : column_idx + extra_rowkey_cnt_;
     ObIVector *vector = vectors.at(src_column_idx);
     ObDatum &datum = datum_row_.storage_datums_[dest_column_idx];
     if (OB_FAIL(ObDirectLoadVectorUtils::set_datum(vector, row_idx, datum))) {
@@ -392,7 +408,7 @@ int ObDirectLoadLobBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet lob builder is closed", KR(ret));
   } else {
-    if (OB_FAIL(insert_tablet_ctx_->close_lob_sstable_slice(current_lob_slice_id_))) {
+    if (!insert_tablet_ctx_->get_is_index_table() && OB_FAIL(insert_tablet_ctx_->close_lob_sstable_slice(current_lob_slice_id_))) {
       LOG_WARN("fail to close sstable slice ", KR(ret));
     } else {
       current_lob_slice_id_ = 0;

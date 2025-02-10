@@ -65,7 +65,7 @@ private:
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
   common::ObIAllocator *lob_allocator_;
   common::ObArenaAllocator inner_lob_allocator_;
-  // 不包含多版本列, 默认lob不会是主键列
+  // 不包含多版本列, lob可能是主键列
   const ObIArray<int64_t> *lob_column_idxs_;
   int64_t lob_column_cnt_;
   int64_t extra_rowkey_cnt_;

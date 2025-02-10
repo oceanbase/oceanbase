@@ -85,6 +85,7 @@ public:
                K_(is_partitioned_table),
                K_(is_heap_table),
                K_(is_column_store),
+               K_(is_index_table),
                K_(online_opt_stat_gather),
                K_(is_incremental),
                K_(reuse_pk),
@@ -111,6 +112,7 @@ public:
   bool is_partitioned_table_;
   bool is_heap_table_;
   bool is_column_store_;
+  bool is_index_table_;
   bool online_opt_stat_gather_;
   bool is_incremental_;
   bool reuse_pk_;
@@ -165,6 +167,7 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_partitioned_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_heap_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_column_store, false);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_index_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, online_opt_stat_gather, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_incremental, false);
   // ObDirectLoadTransParam trans_param_;
@@ -179,7 +182,7 @@ public:
 
   OB_INLINE bool has_lob_storage() const { return nullptr != param_ ? !param_->lob_column_idxs_->empty() : false; }
   OB_INLINE bool need_rescan() const { return nullptr != param_ ? (!param_->is_incremental_ && param_->is_column_store_) : false; }
-  OB_INLINE bool need_del_lob() const { return nullptr != param_ ? (param_->is_incremental_ && !param_->lob_column_idxs_->empty()) : false; }
+  OB_INLINE bool need_del_lob() const { return nullptr != param_ ? (param_->is_incremental_ && !param_->lob_column_idxs_->empty() && !param_->is_index_table_) : false; }
 
   const ObLobId &get_min_insert_lob_id() const { return min_insert_lob_id_; }
 
@@ -305,7 +308,7 @@ public:
   OB_INLINE ObDirectLoadType get_direct_load_type() const { return ddl_ctrl_.direct_load_type_; }
 
   OB_INLINE bool need_rescan() const { return (!param_.is_incremental_ && param_.is_column_store_); }
-  OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && !param_.lob_column_idxs_->empty()); }
+  OB_INLINE bool need_del_lob() const { return (param_.is_incremental_ && !param_.lob_column_idxs_->empty() && !param_.is_index_table_); }
   OB_INLINE TABLET_CTX_MAP &get_tablet_ctx_map() { return tablet_ctx_map_; }
 
   int64_t get_sql_stat_column_count() const;

@@ -43,7 +43,9 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     is_old_row_valid_for_lob_(false),
     is_need_check_old_row_(is_need_row_datum_utils),
     is_udf_(false),
+    has_lob_rowkey_(false),
     lob_dml_ctx_(),
+    main_table_rowkey_col_flag_(allocator),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
     is_need_row_datum_utils_(is_need_row_datum_utils),
     is_inited_(false)
@@ -52,6 +54,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
 
 ObDMLRunningCtx::~ObDMLRunningCtx()
 {
+  main_table_rowkey_col_flag_.reset();
 }
 
 int ObDMLRunningCtx::init(
@@ -168,6 +171,29 @@ int ObDMLRunningCtx::prepare_column_info(const common::ObIArray<uint64_t> &colum
       LOG_WARN("col desc is empty", K(ret));
     } else if (ObDmlFlag::DF_UPDATE == dml_flag_) {
       col_map_ = &(dml_param_.table_param_->get_col_map());
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < relative_table_.get_rowkey_column_num(); ++i) {
+        if (col_descs_->at(i).col_type_.is_lob_storage()) {
+          has_lob_rowkey_ = true;
+          break;
+        }
+      }
+      if (relative_table_.is_index_table()) {
+        if (OB_FAIL(main_table_rowkey_col_flag_.init(col_descs_->count()))) {
+          LOG_WARN("fail to init main table rowkey column flag array", K(ret), K_(relative_table));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_descs_->count(); ++i) {
+          bool is_main_table_rowkey_col = false;
+          const ObColumnParam *column = dml_param_.table_param_->get_data_table().get_column(col_descs_->at(i).col_id_);
+          if (OB_ISNULL(column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column is null", K(ret), K(i), KP(column), K(col_descs_->at(i)));
+          } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column->is_data_table_rowkey()))) {
+            LOG_WARN("fail to push back", K(ret), K(i), KPC(column));
+          }
+        }
+      }
     }
   }
   return ret;

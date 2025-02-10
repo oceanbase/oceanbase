@@ -34,7 +34,11 @@ int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<Ra
   int ret = OB_SUCCESS;
   ObArray<RowType *> sample_rows;
   sample_rows.set_tenant_id(MTL_ID());
-  for (int64_t i = 0; OB_SUCC(ret) && i < DEFAULT_SAMPLE_TIMES; i ++) {
+  int64_t row_count = 0;
+  for (int64_t i = 0; i < chunks.count(); ++i) {
+    row_count += chunks.at(i)->get_size();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < MIN(row_count, DEFAULT_SAMPLE_TIMES); i ++) {
     int idx = ObRandom::rand(0, chunks.count() - 1);
     ChunkType *chunk = chunks.at(idx);
     int idx2 = ObRandom::rand(0, chunk->get_size() - 1);
@@ -52,7 +56,7 @@ int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<Ra
     }
   }
 
-  int64_t step = DEFAULT_SAMPLE_TIMES / range_count_;
+  int64_t step = sample_rows.count() / range_count_;
 
   RowType *last_row = nullptr;
   for (int64_t i = 1; OB_SUCC(ret) && i <= range_count_; i ++) {

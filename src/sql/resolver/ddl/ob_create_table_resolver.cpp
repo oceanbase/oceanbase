@@ -1578,7 +1578,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                 ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
               } else if (OB_FAIL(add_pk_key_for_oracle_temp_table(stats, pk_data_length))) {
                 SQL_RESV_LOG(WARN, "add new pk key failed", K(ret));
-              } else if (ob_is_string_tc(column.get_data_type())) {
+              } else if (ob_is_string_tc(column.get_data_type()) && !column.is_string_lob()) {
                 int64_t length = 0;
                 if (OB_FAIL(column.get_byte_length(length, is_oracle_mode, false))){
                   SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
@@ -2949,8 +2949,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("index column is vector column, but is not vector index is not supported", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column index but not vector index is");
-              } else if (ob_is_text_tc(column_schema->get_data_type())
-                  && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
+              } else if (column_schema->is_key_forbid_lob() && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
                 if (column_schema->is_hidden()) {
                   //functional index in mysql mode
                   ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
@@ -2974,7 +2973,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 SQL_RESV_LOG(WARN, "fail to resolve multivalue index constraint", K(ret), K(column_name));
               }
 
-              if (OB_SUCC(ret) && ob_is_string_type(column_schema->get_data_type())) {
+              if (OB_SUCC(ret) && ob_is_string_type(column_schema->get_data_type()) && !column_schema->is_string_lob()) {
                 int64_t length = 0;
                 if (OB_FAIL(column_schema->get_byte_length(length, is_oracle_mode, false))) {
                   SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
@@ -3083,7 +3082,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         } else if (ObTimestampTZType == column_schema->get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
-        } else if (ob_is_string_tc(column_schema->get_data_type())) {
+        } else if (ob_is_string_tc(column_schema->get_data_type()) && !column_schema->is_string_lob()) {
           int64_t length = 0;
           if (OB_FAIL(column_schema->get_byte_length(length, is_oracle_mode, false))) {
             SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
@@ -3635,6 +3634,8 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
 {
   int ret = OB_SUCCESS;
   int64_t row_data_length = 0;
+  int64_t rowkey_data_length = 0;
+  bool has_string_lob = false;
   bool is_oracle_mode = lib::is_oracle_mode();
   for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
     int64_t length = 0;
@@ -3666,11 +3667,27 @@ int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_
         length = min(length, max(table_schema.get_lob_inrow_threshold(), OB_MAX_LOB_HANDLE_LENGTH));
       }
     }
-    if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
-      ret = OB_ERR_TOO_BIG_ROWSIZE;
-      SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(i), K(row_data_length), K(length));
+    if (OB_FAIL(ret)) {
+    } else if (column->is_rowkey_column()) {
+      if (column->is_string_lob()) {
+        has_string_lob = true;
+      } else {
+        rowkey_data_length += length;
+      }
+    } else {
+      row_data_length += length;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (has_string_lob) {
+      rowkey_data_length = OB_MAX_VARCHAR_LENGTH_KEY;
+    }
+    if (row_data_length + rowkey_data_length > OB_MAX_USER_ROW_LENGTH) {
+      ret = OB_ERR_TOO_BIG_ROWSIZE;
+      SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(row_data_length), K(rowkey_data_length));
+    }
+  }
+
   return ret;
 }
 

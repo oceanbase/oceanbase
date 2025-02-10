@@ -4433,6 +4433,10 @@ int ObTableSqlService::gen_column_dml(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.3.2, roaringbitmap type is not supported", K(ret), K(tenant_data_version), K(column));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, roaringbitmap type");
+  } else if (tenant_data_version < DATA_VERSION_4_3_5_1 && column.is_string_lob()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.5.1, string type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.1, string type");
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(column.get_charset_type(),
                                                                     exec_tenant_id))) {
     LOG_WARN("failed to check charset data version valid",  K(column.get_charset_type()), K(ret));

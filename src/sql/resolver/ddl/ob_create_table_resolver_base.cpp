@@ -313,12 +313,17 @@ int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
     /* do nothing */
   } else if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, false))) {
     SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
-  } else if ((pk_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
-    ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
   } else if (length <= 0) {
     ret = OB_ERR_WRONG_KEY_COLUMN;
     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+  } else {
+    if (col->is_string_lob()) {
+      length = 0;
+    }
+    if ((pk_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+    }
   }
   return ret;
 }

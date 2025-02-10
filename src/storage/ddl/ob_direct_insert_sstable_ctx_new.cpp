@@ -1548,6 +1548,8 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
                   LOG_WARN("push back lob column idx failed", K(ret), K(i));
                 } else if (OB_FAIL(lob_col_types_.push_back(column_schema->get_meta_type()))) {
                   LOG_WARN("push back lob col_type  failed", K(ret), K(i));
+                } else if (i < table_schema->get_rowkey_column_num()) {
+                  schema_item_.has_lob_rowkey_ = true;
                 }
               }
             }
@@ -1729,7 +1731,7 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(slice_info), K(lob_mgr_handle_.get_obj()->is_schema_item_ready_));
     } else if (OB_FAIL(slice_writer->fill_lob_sstable_slice(lob_mgr_handle_.get_obj()->sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, allocator, sqc_build_ctx_.allocator_,
-          start_scn, info, pk_interval, lob_column_idxs_, lob_col_types_, schema_item_.lob_inrow_threshold_, datum_row))) {
+          start_scn, info, pk_interval, lob_column_idxs_, lob_col_types_, schema_item_, datum_row))) {
         LOG_WARN("fail to fill batch sstable slice", K(ret), K(start_scn), K(tablet_id_), K(pk_interval));
     }
   }
@@ -1790,7 +1792,7 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(slice_info), K(lob_mgr_handle_.get_obj()->is_schema_item_ready_));
     } else if (OB_FAIL(slice_writer->fill_lob_sstable_slice(lob_mgr_handle_.get_obj()->sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, allocator, sqc_build_ctx_.allocator_,
-          start_scn, info, pk_interval, lob_column_idxs_, lob_col_types_, schema_item_.lob_inrow_threshold_, datum_rows))) {
+          start_scn, info, pk_interval, lob_column_idxs_, lob_col_types_, schema_item_, datum_rows))) {
         LOG_WARN("fail to fill batch sstable slice", K(ret), K(start_scn), K(tablet_id_), K(pk_interval));
     }
   }

@@ -4056,16 +4056,17 @@ int ObResolverUtils::check_column_valid_for_partition(const ObRawExpr &part_expr
   if (part_expr.is_column_ref_expr()) {
     const ObColumnRefRawExpr &column_ref = static_cast<const ObColumnRefRawExpr&>(part_expr);
     const ObColumnSchemaV2 *col_schema = NULL;
-    if (!is_valid_partition_column_type(column_ref.get_data_type(), part_func_type, false)) {
+    if (OB_ISNULL(col_schema = tbl_schema.get_column_schema(column_ref.get_column_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column", K(tbl_schema), K(column_ref.get_column_id()), K(ret));
+    } else if ((lib::is_oracle_mode() || !col_schema->is_string_lob() || !is_key_part(part_func_type))
+                && !is_valid_partition_column_type(column_ref.get_data_type(), part_func_type, false)) {
       ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
       LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
                      column_ref.get_column_name().length(),
                      column_ref.get_column_name().ptr());
       LOG_WARN("Field is not a allowed type for this type of partitioning", K(ret),
           "type", column_ref.get_data_type());
-    } else if (OB_ISNULL(col_schema = tbl_schema.get_column_schema(column_ref.get_column_id()))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get column", K(tbl_schema), K(column_ref.get_column_id()), K(ret));
     } else if (lib::is_oracle_mode() && col_schema->is_generated_column()) {
       ObSEArray<uint64_t, 5> cascaded_columns;
       if (OB_FAIL(col_schema->get_cascaded_column_ids(cascaded_columns))) {
@@ -6887,7 +6888,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
     case ObLobTC:
       data_type.set_length(length);
       data_type.set_scale(default_accuracy.get_scale());
-      if (type_node.int32_values_[1]/*is binary*/) {
+      if (1 == type_node.int32_values_[1]/*is binary*/) {
         data_type.set_charset_type(CHARSET_BINARY);
         data_type.set_collation_type(CS_TYPE_BINARY);
       } else if (OB_FAIL(resolve_str_charset_info(type_node, data_type, is_for_pl_type))) {

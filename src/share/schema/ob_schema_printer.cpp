@@ -214,7 +214,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                                       col->get_accuracy(),
                                       col->get_extended_type_info(),
                                       default_length_semantics,
-                                      buf, buf_len, pos, sub_type))) {
+                                      buf, buf_len, pos, sub_type,
+                                      col->is_string_lob()))) {
             SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(col->get_data_type()), K(*col), K(ret));
           } else if (is_oracle_mode) {
             int64_t end = pos;

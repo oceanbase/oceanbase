@@ -5218,7 +5218,7 @@ int ObTableSchema::check_alter_column_in_rowkey(const ObColumnSchemaV2 &src_colu
 {
   int ret = OB_SUCCESS;
   if (src_column.is_original_rowkey_column()) {
-    if (ob_is_text_tc(dst_column.get_data_type())) {
+    if (dst_column.is_key_forbid_lob()) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, dst_column.get_column_name_str().length(),
       dst_column.get_column_name_str().ptr());
@@ -5268,7 +5268,7 @@ int ObTableSchema::check_alter_column_in_index(const ObColumnSchemaV2 &src_colum
         }
       }
       if (OB_SUCC(ret) && is_in_index) {
-        if (!index_table_schema->is_vec_index() && ob_is_text_tc(dst_column.get_data_type())) {
+        if (!index_table_schema->is_vec_index() && dst_column.is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, dst_column.get_column_name_str().length(),
           dst_column.get_column_name_str().ptr());
@@ -5679,7 +5679,7 @@ int ObTableSchema::check_rowkey_column_can_be_altered(const ObColumnSchemaV2 *sr
   //    ret = OB_NOT_SUPPORTED;
   //    LOG_WARN("There must be at least one primary key column", K(ret));
   //  }
-  ObColumnSchemaV2 *column = NULL;
+  const ObColumnSchemaV2 *column = NULL;
   int64_t rowkey_varchar_col_length = 0;
   int64_t length = 0;
   bool is_oracle_mode = false;
@@ -5689,14 +5689,14 @@ int ObTableSchema::check_rowkey_column_can_be_altered(const ObColumnSchemaV2 *sr
   } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle compat mode", KR(ret), KPC(this));
   } else {
-    if (ob_is_string_tc(src_schema->get_data_type())
-        && ob_is_string_tc(dst_schema->get_data_type())) {
+    if ((ob_is_string_tc(src_schema->get_data_type()) || src_schema->is_string_lob())
+        && (ob_is_string_tc(dst_schema->get_data_type()) || dst_schema->is_string_lob())) {
       const int64_t max_rowkey_length = is_sys_table() ? OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
       for (int64_t i = 0; OB_SUCC(ret) && (i < column_cnt_); ++i) {
-        column = column_array_[i];
+        column = *src_schema == *column_array_[i] ? dst_schema : column_array_[i];
         if ((!is_index_table() && (column->get_rowkey_position() > 0))
             || (is_index_table() && (column->is_index_column()))) {
-          if (ob_is_string_tc(column->get_data_type())) {
+          if (ob_is_string_tc(column->get_data_type()) && !column->is_string_lob()) {
             if (OB_FAIL(column->get_byte_length(length, is_oracle_mode, false))) {
               LOG_WARN("fail to get byte length of column", KR(ret), K(is_oracle_mode));
             } else {
@@ -5704,17 +5704,6 @@ int ObTableSchema::check_rowkey_column_can_be_altered(const ObColumnSchemaV2 *sr
             }
           }
         }
-      }
-      int64_t src_column_byte_length = 0;
-      int64_t dst_column_byte_length = 0;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(src_schema->get_byte_length(src_column_byte_length, is_oracle_mode, false))) {
-        LOG_WARN("fail to get byte length of column", KR(ret), K(is_oracle_mode));
-      } else if (OB_FAIL(dst_schema->get_byte_length(dst_column_byte_length, is_oracle_mode, false))) {
-        LOG_WARN("fail to get byte length of column", KR(ret), K(is_oracle_mode));
-      } else {
-        rowkey_varchar_col_length -= src_column_byte_length;
-        rowkey_varchar_col_length += dst_column_byte_length;
       }
       if (OB_FAIL(ret)) {
       } else if (rowkey_varchar_col_length > max_rowkey_length) {
@@ -5747,56 +5736,67 @@ int ObTableSchema::check_row_length(
     LOG_WARN("invalid argument", K(ret), K(dst_schema));
   } else {
     const int64_t max_row_length = is_inner_table(get_table_id()) ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
-    ObColumnSchemaV2 *col = NULL;
+    const ObColumnSchemaV2 *col = NULL;
     int64_t row_length = 0;
+    int64_t rowkey_length = 0;
+    bool has_string_lob = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
-      col = column_array_[i];
+      int64_t length = 0;
+      col = (nullptr != src_schema && *src_schema == *column_array_[i]) ? dst_schema : column_array_[i];
       if ((is_table() || is_tmp_table() || is_external_table()) && !col->is_column_stored_in_sstable()) {
         // The virtual column in the table does not actually store data, and does not count the length
       } else if (is_storage_index_table() && col->is_fulltext_column()) {
         // The full text column in the index only counts the length of one word segment
-        row_length += OB_MAX_OBJECT_NAME_LENGTH;
+        length = OB_MAX_OBJECT_NAME_LENGTH;
       } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())
                  || ob_is_geometry(col->get_data_type()) || ob_is_roaringbitmap(col->get_data_type())) {
-        int64_t length = 0;
+        // TODO (wenye): bug here! lob should use lob_inrow_threshold.
         if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, true))) {
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
-        } else {
-          row_length += length;
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (col->is_rowkey_column()) {
+        if (col->is_string_lob()) {
+          has_string_lob = true;
+        } else {
+          rowkey_length += length;
+        }
+      } else {
+        row_length += length;
+      }
+    }
+    if (OB_SUCC(ret) && nullptr == src_schema) {
+      int64_t length = 0;
+      if ((is_table() || is_tmp_table() || is_external_table()) && !dst_schema->is_column_stored_in_sstable()) {
+        // The virtual column in the table does not actually store data, and does not count the length
+      } else if (is_storage_index_table() && dst_schema->is_fulltext_column()) {
+        // The full text column in the index only counts the length of one word segment
+        length = OB_MAX_OBJECT_NAME_LENGTH;
+      } else if (OB_FAIL(dst_schema->get_byte_length(length, is_oracle_mode, true))) {
+        SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret), KPC(dst_schema), K(is_oracle_mode));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (dst_schema->is_rowkey_column()) {
+        if (dst_schema->is_string_lob()) {
+          has_string_lob = true;
+        } else {
+          rowkey_length += length;
+        }
+      } else {
+        row_length += length;
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t src_byte_length = 0;
-      if (NULL != src_schema) {
-        // is alter_column
-        if (OB_FAIL(src_schema->get_byte_length(src_byte_length, is_oracle_mode, true))) {
-          SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
-        }
+      if (has_string_lob) {
+        rowkey_length = OB_MAX_VARCHAR_LENGTH_KEY;
       }
-      if (OB_SUCC(ret)) {
-        int64_t dst_byte_length = 0;
-        if (OB_FAIL(dst_schema->get_byte_length(dst_byte_length, is_oracle_mode, true))) {
-          SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
-        } else {
-          row_length -= src_byte_length;
-          if ((is_table() || is_tmp_table() || is_external_table()) && !dst_schema->is_column_stored_in_sstable()) {
-            // The virtual column in the table does not actually store data, and does not count the length
-          } else if (is_storage_index_table() && dst_schema->is_fulltext_column()) {
-            // The full text column in the index only counts the length of one word segment
-            row_length += OB_MAX_OBJECT_NAME_LENGTH;
-          } else {
-            row_length += dst_byte_length;
-          }
-          if (row_length > max_row_length) {
-            ret = OB_ERR_TOO_BIG_ROWSIZE;
-            SQL_RESV_LOG(WARN, "row_length is larger than max_row_length", K(ret), K(row_length), K(max_row_length), K(column_cnt_));
-          }
-        }
+      if (row_length + rowkey_length > max_row_length) {
+        ret = OB_ERR_TOO_BIG_ROWSIZE;
+        SQL_RESV_LOG(WARN, "row_length is larger than max_row_length", K(ret), K(row_length), K(rowkey_length), K(max_row_length), K(column_cnt_));
       }
     }
   }
-
   return ret;
 }
 

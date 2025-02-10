@@ -948,7 +948,7 @@ int ObAccessService::insert_rows(
       || OB_ISNULL(row_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
-             K(dml_param), K(column_ids), K(row_iter));
+             K(dml_param), K(column_ids), KP(row_iter));
   } else if (OB_FAIL(check_write_allowed_(ls_id,
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,

@@ -125,7 +125,7 @@ private:
   int init_lob_reader(const ObTableIterParam &iter_param,
                      ObTableAccessContext &access_ctx);
   int read_lob_columns_full_data(blocksstable::ObDatumRow &row);
-  bool need_read_lob_columns(const blocksstable::ObDatumRow &row);
+  bool need_handle_lob_columns(const blocksstable::ObDatumRow &row);
   int handle_lob_before_fuse_row();
   void reuse_lob_locator();
   void report_tablet_stat();

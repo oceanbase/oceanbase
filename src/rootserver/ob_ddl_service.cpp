@@ -3354,6 +3354,7 @@ int ObDDLService::set_raw_table_options(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "lob inrow threshold less than 4.2.1.2");
           } else {
             new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
+            need_update_index_table = true;
           }
           break;
         }

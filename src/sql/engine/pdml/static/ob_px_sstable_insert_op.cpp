@@ -311,13 +311,14 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         }
         if (OB_SUCC(ret)) {
           ObDDLSliceRowIterator slice_row_iter(
-              this, notify_tablet_id, is_current_slice_empty, table_schema->get_rowkey_column_num(),
+              this, notify_tablet_id, is_current_slice_empty,
+              table_schema->is_index_table(), table_schema->get_rowkey_column_num(),
               snapshot_version_, tablet_slice_param, need_idempotent_autoinc_val, table_all_slice_count_,
               table_level_slice_idx, autoinc_range_interval_);
           ObDDLInsertRowIterator row_iter;
           if (OB_FAIL(row_iter.init(tenant_id, ddl_agent, &slice_row_iter, notify_ls_id, notify_tablet_id,
-                                    slice_info.context_id_, tablet_slice_param,
-                                    table_schema->get_lob_columns_count(), slice_info.total_slice_cnt_, is_vec_data_complement_))) {
+                                    slice_info.context_id_, tablet_slice_param, table_schema->get_lob_columns_count(), slice_info.total_slice_cnt_,
+                                    is_vec_data_complement_ || table_schema->is_index_table()))) {
             LOG_WARN("init ddl insert rot iterator failed", K(ret));
           } else if (OB_FAIL(ddl_agent.fill_sstable_slice(slice_info, &row_iter, affected_rows,
                                                           &insert_monitor))) {

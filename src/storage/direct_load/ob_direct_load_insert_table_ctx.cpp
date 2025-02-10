@@ -47,6 +47,7 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     is_partitioned_table_(false),
     is_heap_table_(false),
     is_column_store_(false),
+    is_index_table_(false),
     online_opt_stat_gather_(false),
     is_incremental_(false),
     reuse_pk_(true),

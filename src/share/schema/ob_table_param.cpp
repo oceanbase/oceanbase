@@ -391,6 +391,7 @@ void ObColumnParam::reset()
   is_gen_col_udf_expr_ = false;
   is_hidden_ = false;
   lob_chunk_size_ = OB_DEFAULT_LOB_CHUNK_SIZE;
+  is_data_table_rowkey_ = false;
 }
 
 void ObColumnParam::destroy()
@@ -449,7 +450,8 @@ OB_DEF_SERIALIZE(ObColumnParam)
               is_gen_col_udf_expr_,
               is_nullable_for_read_,
               is_hidden_,
-              lob_chunk_size_);
+              lob_chunk_size_,
+              is_data_table_rowkey_);
   return ret;
 }
 
@@ -491,6 +493,7 @@ OB_DEF_DESERIALIZE(ObColumnParam)
     }
   }
   OB_UNIS_DECODE(lob_chunk_size_);
+  OB_UNIS_DECODE(is_data_table_rowkey_);
 
   return ret;
 }
@@ -512,7 +515,8 @@ OB_DEF_SERIALIZE_SIZE(ObColumnParam)
               is_virtual_gen_col_,
               is_gen_col_udf_expr_,
               is_hidden_,
-              lob_chunk_size_);
+              lob_chunk_size_,
+              is_data_table_rowkey_);
   return len;
 }
 
@@ -531,6 +535,7 @@ int ObColumnParam::assign(const ObColumnParam &other)
     is_gen_col_udf_expr_= other.is_gen_col_udf_expr_;
     is_hidden_ = other.is_hidden_;
     lob_chunk_size_ = other.lob_chunk_size_;
+    is_data_table_rowkey_ = other.is_data_table_rowkey_;
     if (OB_FAIL(deep_copy_obj(other.cur_default_value_, cur_default_value_))) {
       LOG_WARN("Fail to deep copy cur_default_value, ", K(ret), K(cur_default_value_));
     } else if (OB_FAIL(deep_copy_obj(other.orig_default_value_, orig_default_value_))) {

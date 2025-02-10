@@ -865,6 +865,9 @@ private:
       bool &is_same);
 
   // for lob tablet dml
+  static int check_rowkey_length(
+      const ObDMLRunningCtx &run_ctx,
+      const blocksstable::ObDatumRow &datum_row);
   static int process_lob_before_insert(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,

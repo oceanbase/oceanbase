@@ -721,10 +721,11 @@ int ob_sql_type_str_with_coll(char *buff,
     int64_t scale,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
-    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */,
+    const bool is_string_lob/* false */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, type_info, sub_type))) {
+  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, type_info, sub_type, is_string_lob))) {
     LOG_WARN("fail to get data type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
   } else if (lib::is_mysql_mode() && ob_is_string_type(type) && CS_TYPE_BINARY != coll_type) {
       if (ObCharset::is_default_collation(coll_type)) {
@@ -749,7 +750,8 @@ int ob_sql_type_str(char *buff,
     int64_t scale,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
-    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */,
+    const bool is_string_lob/* false */)
 {
   int ret = OB_SUCCESS;
   static ObSqlTypeStrFunc sql_type_name[ObMaxType+1] =
@@ -834,6 +836,10 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(ob_collection_str(type, type_info, buff, buff_length, pos))) {
       LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(buff_length), K(pos));
     }
+  } else if (is_string_lob) {
+    if (OB_FAIL(databuff_printf(buff, buff_length, pos, "string"))) {
+      LOG_WARN("fail to print string lob str", K(ret), K(buff_length), K(pos));
+    }
   } else {
     ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
   }
@@ -845,7 +851,8 @@ int ob_sql_type_str(char *buff,
     ObObjType type,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
-    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
+    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */,
+    const bool is_string_lob/* false */)
 {
   int ret = OB_SUCCESS;
   static obSqlTypeStrWithoutAccuracyFunc sql_type_name[ObMaxType+1] =
@@ -929,6 +936,11 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(ob_collection_str(type, type_info, buff, buff_length, pos))) {
       LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(buff_length), K(pos));
     }
+  } else if (is_string_lob) {
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(buff, buff_length, pos, "string"))) {
+      LOG_WARN("fail to print string lob str", K(ret), K(buff_length), K(pos));
+    }
   } else if (OB_ISNULL(sql_type_name[type])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("function pointer is NULL", K(type), K(ret));
@@ -946,11 +958,12 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     char *buff,
     int64_t buff_length,
     int64_t &pos,
-    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */,
+    const bool is_string_lob/* false */)
 {
   int ret = OB_SUCCESS;
   int16_t precision_or_length_semantics = accuracy.get_precision();
-  LOG_DEBUG("ob_sql_type_str",K(ret), K(accuracy), K(precision_or_length_semantics), K(precision_or_length_semantics), KCSTRING(common::lbt()));
+  LOG_DEBUG("ob_sql_type_str",K(ret), K(accuracy), K(precision_or_length_semantics), K(precision_or_length_semantics), K(is_string_lob), KCSTRING(common::lbt()));
   if (lib::is_oracle_mode() && obj_meta.is_varchar_or_char() && precision_or_length_semantics == default_length_semantics) {
     precision_or_length_semantics = LS_DEFAULT;
   }
@@ -982,8 +995,8 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     }
     if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos,
                                 datatype, length,
-                                precision_or_length_semantics,
-                                accuracy.get_scale(), coll_type, type_info, sub_type))) {
+                                precision_or_length_semantics, accuracy.get_scale(),
+                                coll_type, type_info, sub_type, is_string_lob))) {
       LOG_WARN("fail to print sql type", K(ret), K(obj_meta), K(accuracy));
     }
   }

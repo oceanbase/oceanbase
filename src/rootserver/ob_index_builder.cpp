@@ -1616,10 +1616,10 @@ int ObIndexBuilder::generate_schema(
         } else if (!is_oracle_mode && data_column->is_func_idx_column() && ob_is_text_tc(data_column->get_data_type())) {
           ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
           LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
-        } else if (ob_is_text_tc(data_column->get_data_type()) && !data_column->is_fulltext_column()) {
+        } else if (data_column->is_key_forbid_lob() && !data_column->is_fulltext_column()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
-          LOG_WARN("index created direct on large text column should only be fulltext", K(arg.index_type_), K(ret));
+          LOG_WARN("index created direct on large text column should only be fulltext or string", K(arg.index_type_), K(ret));
         } else if (ob_is_roaringbitmap_tc(data_column->get_data_type())) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
@@ -1653,6 +1653,18 @@ int ObIndexBuilder::generate_schema(
             if (!is_ctxcat_added) {
               length = OB_MAX_OBJECT_NAME_LENGTH;
               is_ctxcat_added = true;
+            }
+          } else if (data_column->is_string_lob()) {
+            uint64_t tenant_data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(),
+                                            tenant_data_version))) {
+              LOG_WARN("failed to get tenant data version", K(ret));
+            } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("tenant data version is less than 4.3.5.1, string index is not supported", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.1, string index");
+            } else {
+              length = 0;
             }
           } else if (OB_FAIL(data_column->get_byte_length(length, is_oracle_mode, false))) {
             LOG_WARN("fail to get byte length of column", K(ret));
@@ -1702,6 +1714,7 @@ int ObIndexBuilder::generate_schema(
       const bool is_index_local_storage = share::schema::is_index_local_storage(arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
       schema.set_table_mode(data_schema.get_table_mode_flag());
+      schema.set_lob_inrow_threshold(data_schema.get_lob_inrow_threshold());
       schema.set_table_state_flag(data_schema.get_table_state_flag());
       schema.set_mv_mode(data_schema.get_mv_mode());
       schema.set_duplicate_attribute(data_schema.get_duplicate_scope(), data_schema.get_duplicate_read_consistency());

@@ -159,6 +159,7 @@ int ObLobDataReader::fuse_disk_lob_header(common::ObObj &obj)
       LOG_WARN("failed to fill header for lob data", K(ret), K(data));
     } else {
       obj.set_string(obj.get_type(), out);
+      obj.set_has_lob_header();
     }
   }
   return ret;

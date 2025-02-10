@@ -3081,7 +3081,6 @@ int ObLSTabletService::insert_rows(
               rows[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
             }
           }
-
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(insert_rows_to_tablet(tablet_handle, run_ctx, rows,
               row_count, rows_info, afct_num, dup_num))) {
@@ -4532,6 +4531,24 @@ int ObLSTabletService::put_tablet_rows(
   return ret;
 }
 
+OB_INLINE int ObLSTabletService::check_rowkey_length(const ObDMLRunningCtx &run_ctx, const blocksstable::ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  int64_t rowkey_length = 0;
+  const int64_t rowkey_column_num = run_ctx.relative_table_.get_rowkey_column_num();
+  if (run_ctx.has_lob_rowkey_) {
+    for (int64_t i = 0; i < rowkey_column_num; ++i) {
+      rowkey_length += datum_row.storage_datums_[i].len_;
+    }
+    if (rowkey_length > OB_MAX_VARCHAR_LENGTH_KEY) {
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+      STORAGE_LOG(WARN, "rowkey is too long", K(ret), K(rowkey_length), K(rowkey_column_num), K(datum_row));
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::process_lob_before_insert(
     ObTabletHandle &tablet_handle,
     ObDMLRunningCtx &run_ctx,
@@ -4561,10 +4578,13 @@ int ObLSTabletService::process_lob_before_insert(
       if (datum.is_null() || datum.is_nop_value()) {
         // do nothing
       } else if (column.col_type_.is_lob_storage()) {
-        if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_insert(tablet_handle, run_ctx, datum_row, column, row_idx, i, datum))) {
+        if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_insert(tablet_handle, run_ctx, datum_row, row_idx, i, datum))) {
           LOG_WARN("process_lob_column_before_insert fail", K(ret), K(column), K(i), K(datum), K(datum_row));
         }
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(check_rowkey_length(run_ctx, datum_row))) {
+      LOG_WARN("failed to check rowkey length", K(ret), K(datum_row));
     }
   }
   return ret;
@@ -4949,13 +4969,14 @@ int ObLSTabletService::process_lob_before_update(
       if (column.col_type_.is_lob_storage()) {
         ObStorageDatum &old_datum = old_row.storage_datums_[i];
         ObStorageDatum &new_datum = new_row.storage_datums_[i];
-        bool is_update = false;
-        for (int64_t j = 0; !is_update && j < update_idx.count(); ++j) {
+        bool is_col_update = false;
+        const bool is_rowkey_col = i < run_ctx.relative_table_.get_rowkey_column_num();
+        for (int64_t j = 0; !is_rowkey_col && !is_col_update && j < update_idx.count(); ++j) {
           if (update_idx.at(j) == i) {
-            is_update = true;
+            is_col_update = true;
           }
         }
-        if (is_update) {
+        if (is_rowkey_col || is_col_update) {
           // get new lob locator
           ObString new_lob_str = (new_datum.is_null() || new_datum.is_nop_value())
                                  ? ObString(0, nullptr) : new_datum.get_string();
@@ -4968,11 +4989,11 @@ int ObLSTabletService::process_lob_before_update(
                      new_lob.is_full_temp_lob() ||
                      new_lob.is_persist_lob() ||
                      (new_lob.is_lob_disk_locator() && new_lob.has_inrow_data())) {
-            if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(run_ctx, old_row, new_row, data_tbl_rowkey_change, column, 0/*row_idx*/, i, old_datum, new_datum))) {
+            if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(run_ctx, old_row, new_row, data_tbl_rowkey_change, 0/*row_idx*/, i, old_datum, new_datum))) {
               LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(new_datum), K(new_lob));
             }
           } else if (new_lob.is_delta_temp_lob()) {
-            if (OB_FAIL(ObLobTabletDmlHelper::process_delta_lob(run_ctx, old_row, column, old_datum, new_lob, new_datum))) {
+            if (OB_FAIL(ObLobTabletDmlHelper::process_delta_lob(run_ctx, old_row, i, old_datum, new_lob, new_datum))) {
               LOG_WARN("failed to process delta lob.", K(ret), K(i));
             }
           } else {
@@ -4994,16 +5015,22 @@ int ObLSTabletService::process_lob_before_update(
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
               } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(
-                    run_ctx, old_row, new_row, data_tbl_rowkey_change, column, 0/*row_idx*/, i, old_datum, new_datum))) {
+                    run_ctx, old_row, new_row, data_tbl_rowkey_change, 0/*row_idx*/, i, old_datum, new_datum))) {
                 LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(new_datum));
               }
             } else {
               new_datum.reuse();
-              new_datum.set_string(val_str.ptr(), val_str.length()); // remove has lob header flag
+              new_datum.set_string(val_str.ptr(), val_str.length());
+              if (old_datum.has_lob_header()) {
+                new_datum.set_has_lob_header();
+              }
             }
           }
         }
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(check_rowkey_length(run_ctx, new_row))) {
+      LOG_WARN("failed to check rowkey length", K(ret), K(new_row));
     }
   }
   return ret;
@@ -5821,7 +5848,7 @@ int ObLSTabletService::delete_lob_tablet_rows(
       if (column.col_type_.is_lob_storage()) {
         blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[i];
         ObLobAccessParam lob_param;
-        if (OB_FAIL(ObLobTabletDmlHelper::delete_lob_col(run_ctx, datum_row, column, datum, lob_common, lob_param))) {
+        if (OB_FAIL(ObLobTabletDmlHelper::delete_lob_col(run_ctx, datum_row, i, datum, lob_common, lob_param))) {
           LOG_WARN("[STORAGE_LOB]failed to erase lob col.", K(ret), K(i), K(datum_row));
         }
       }
@@ -7771,7 +7798,7 @@ int ObLSTabletService::process_lob_after_insert(
     if (task.col_idx_ >= run_ctx.col_descs_->count() || task.row_idx_ >= row_count) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col idx or row idx is invalid", K(ret), K(task), KPC(run_ctx.col_descs_), K(row_count));
-    } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_after_insert(run_ctx, datum_row, column, task))) {
+    } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_after_insert(run_ctx, datum_row, task))) {
       LOG_WARN("process_lob_column_after_insert fail", K(ret), K(column), K(i), K(task), K(datum_row));
     }
   }
@@ -7798,7 +7825,7 @@ int ObLSTabletService::process_lob_after_update(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col idx or row idx is invalid", K(ret), K(task), KPC(run_ctx.col_descs_));
     } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_after_update(
-        run_ctx, old_datum_row, new_datum_row, data_tbl_rowkey_change, column, task))) {
+        run_ctx, old_datum_row, new_datum_row, data_tbl_rowkey_change, task))) {
       LOG_WARN("process_lob_column_after_update fail", K(ret), K(column), K(i), K(task));
     }
   }

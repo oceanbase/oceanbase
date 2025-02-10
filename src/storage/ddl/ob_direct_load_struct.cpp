@@ -50,6 +50,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     sql::ObPxMultiPartSSTableInsertOp *op,
     const common::ObTabletID &tablet_id,
     const bool is_slice_empty,
+    const bool is_index_table,
     const int64_t rowkey_cnt,
     const int64_t snapshot_version,
     const ObTabletSliceParam &ddl_slice_param,
@@ -60,16 +61,18 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
   : op_(op),
     tablet_id_(tablet_id),
     current_row_(),
-    is_slice_empty_(is_slice_empty),
     rowkey_col_cnt_(rowkey_cnt),
     snapshot_version_(snapshot_version),
-    is_next_row_cached_(true),
     ddl_slice_param_(ddl_slice_param),
-    need_idempotent_autoinc_val_(need_idempotent_autoinc_val),
     table_all_slice_count_(table_all_slice_count),
     table_level_slice_idx_(table_level_slice_idx),
     cur_row_idx_(0),
-    autoinc_range_interval_(autoinc_range_interval)
+    autoinc_range_interval_(autoinc_range_interval),
+    is_slice_empty_(is_slice_empty),
+    is_next_row_cached_(true),
+    need_idempotent_autoinc_val_(need_idempotent_autoinc_val),
+    is_index_table_(is_index_table),
+    has_lob_rowkey_(true)
 {
 }
 
@@ -128,6 +131,9 @@ int ObDDLSliceRowIterator::get_next_row(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected err", K(ret), K(request_cnt), "datum_row_cnt", current_row_.get_column_count());
         } else {
+          int64_t rowkey_length = 0;
+          int64_t byte_len = 0;
+          bool has_lob = false;
           for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
             ObDatum *datum = nullptr;
             const ObExpr *e = exprs.at(i);
@@ -136,17 +142,35 @@ int ObDDLSliceRowIterator::get_next_row(
               LOG_WARN("expr is NULL", K(ret), K(i));
             } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
               LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-            } else if (i < rowkey_col_cnt_) {
-              current_row_.storage_datums_[i].shallow_copy_from_datum(*datum);
-            } else {
-              current_row_.storage_datums_[i + extra_rowkey_cnt].shallow_copy_from_datum(*datum);
+            } else if (is_index_table_ && has_lob_rowkey_ && i < rowkey_col_cnt_) {
+              if (e->obj_meta_.is_lob_storage()) {
+                has_lob = true;
+                if (!datum->is_null() && !datum->is_nop()) {
+                  const ObString &data = datum->get_string();
+                  const bool has_lob_header = e->obj_meta_.has_lob_header();
+                  ObLobLocatorV2 locator(data, has_lob_header);
+                  if (!locator.is_inrow_disk_lob_locator()) {
+                    ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+                    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+                    STORAGE_LOG(WARN, "invalid lob", K(ret), K(locator), KPC(datum), K(has_lob_header), K(data));
+                  }
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (i < rowkey_col_cnt_) {
+                current_row_.storage_datums_[i].shallow_copy_from_datum(*datum);
+              } else {
+                current_row_.storage_datums_[i + extra_rowkey_cnt].shallow_copy_from_datum(*datum);
+              }
             }
           }
           if (OB_SUCC(ret)) {
+            has_lob_rowkey_ = has_lob;
             // add extra rowkey
             current_row_.storage_datums_[rowkey_col_cnt_].set_int(-snapshot_version_);
             current_row_.storage_datums_[rowkey_col_cnt_ + 1].set_int(0);
-            LOG_DEBUG("ddl row iter get next row", K(row_tablet_id), K(tablet_id_), K(row_tablet_slice_param), K(ddl_slice_param_), K(current_row_));
+            LOG_DEBUG("ddl row iter get next row", K(row_tablet_id), K(tablet_id_), K(row_tablet_slice_param), K(ddl_slice_param_), K(current_row_), K(has_lob), K_(has_lob_rowkey));
           }
         }
       }
@@ -233,7 +257,7 @@ int ObDDLInsertRowIterator::init(
     // the shared-storage ddl requires at least one slice to generate the major sstable in the end.
     // And the shared-nothing ddl allocates the lobid cache when processing each row.
     } else if (is_shared_storage_dempotent_mode(ddl_agent_->get_direct_load_type())) {
-      if (lob_cols_cnt_ > 0 && lob_id_cache_.remain_count() < lob_cols_cnt_) { // lob id cache not enough.
+      if (!is_skip_lob && lob_cols_cnt_ > 0 && lob_id_cache_.remain_count() < lob_cols_cnt_) { // lob id cache not enough.
         if (OB_FAIL(switch_to_new_lob_slice())) { // close the old slice, and open the new one.
           LOG_WARN("switch to new lob slice failed", K(ret));
         }
@@ -1399,7 +1423,8 @@ bool ObTabletDDLParam::is_valid() const
 ObDirectLoadSliceWriter::ObDirectLoadSliceWriter()
   : is_inited_(false), writer_type_(ObDirectLoadSliceWriterType::WRITER_TYPE_MAX), is_canceled_(false), start_seq_(), tablet_direct_load_mgr_(nullptr),
     slice_store_(nullptr), meta_write_iter_(nullptr), row_iterator_(nullptr),
-    allocator_(lib::ObLabel("SliceWriter"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), lob_allocator_(nullptr), row_offset_(-1)
+    allocator_(lib::ObLabel("SliceWriter"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    lob_allocator_(nullptr), rowkey_lengths_(), row_offset_(-1)
 {
 }
 
@@ -1426,6 +1451,7 @@ ObDirectLoadSliceWriter::~ObDirectLoadSliceWriter()
     lob_allocator_= nullptr;
   }
   allocator_.reset();
+  rowkey_lengths_.destroy();
   row_offset_ = -1;
   writer_type_ = ObDirectLoadSliceWriterType::WRITER_TYPE_MAX;
 }
@@ -1663,7 +1689,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const transaction::ObTransID trans_id,
     const int64_t seq_no,
     const int64_t timeout_ts,
-    const int64_t lob_inrow_threshold,
+    const ObLobStorageParam &lob_storage_param,
     const uint64_t src_tenant_id,
     const ObDirectLoadType direct_load_type,
     transaction::ObTxDesc* tx_desc,
@@ -1705,10 +1731,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
       }
     }
   }
-
   if (OB_SUCC(ret)) {
-    ObLobStorageParam lob_storage_param;
-    lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
     int64_t unused_affected_rows = 0;
     if (is_incremental_direct_load(direct_load_type) && OB_ISNULL(tx_desc)) {
       ret = OB_INVALID_ARGUMENT;
@@ -1737,7 +1760,7 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     share::ObTabletCacheInterval &pk_interval,
     const ObArray<int64_t> &lob_column_idxs,
     const ObArray<common::ObObjMeta> &col_types,
-    const int64_t lob_inrow_threshold,
+    const ObTableSchemaItem &schema_item,
     blocksstable::ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
@@ -1746,17 +1769,21 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
   } else {
+    ObLobStorageParam lob_storage_param;
+    lob_storage_param.inrow_threshold_ = schema_item.lob_inrow_threshold_;
+    lob_storage_param.is_index_table_ = schema_item.is_index_table_;
     for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
       const int64_t idx = lob_column_idxs.at(i);
       const ObObjMeta &col_type = col_types.at(i);
       ObStorageDatum &datum = datum_row.storage_datums_[idx];
+      lob_storage_param.is_rowkey_col_ = idx < schema_item.rowkey_column_num_;
       if (DATA_VERSION_4_3_0_0 > data_format_version) {
-        if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, datum))) {
+        if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, datum))) {
           LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
         }
       } else {
         if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-            pk_interval, col_type, lob_inrow_threshold, datum))) {
+            pk_interval, col_type, lob_storage_param, datum))) {
           LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
         }
       }
@@ -1769,14 +1796,12 @@ int ObDirectLoadSliceWriter::fill_lob_into_memtable(
     ObIAllocator &allocator,
     const ObBatchSliceWriteInfo &info,
     const common::ObObjMeta &col_type,
-    const int64_t lob_inrow_threshold,
+    const ObLobStorageParam &lob_storage_param,
     blocksstable::ObStorageDatum &datum)
 {
   // to insert lob data into memtable.
   int ret = OB_SUCCESS;
   const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
-  ObLobStorageParam lob_storage_param;
-  lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
   if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
     allocator, info.ls_id_, info.data_tablet_id_, col_type.get_type(), col_type.get_collation_type(),
     lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
@@ -1792,7 +1817,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
     const ObBatchSliceWriteInfo &info,
     share::ObTabletCacheInterval &pk_interval,
     const common::ObObjMeta &col_type,
-    const int64_t lob_inrow_threshold,
+    const ObLobStorageParam &lob_storage_param,
     blocksstable::ObStorageDatum &datum)
 {
   // to insert lob data into macro block.
@@ -1804,7 +1829,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
       ObLobMetaRowIterator *row_iter = nullptr;
       if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
           info.data_tablet_id_, info.trans_version_, col_type.get_type(), col_type.get_collation_type(),
-          info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, info.direct_load_type_,
+          info.trans_id_, info.seq_no_, timeout_ts, lob_storage_param, info.src_tenant_id_, info.direct_load_type_,
           info.tx_desc_, pk_interval, row_iter))) {
         LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
       } else {
@@ -1825,8 +1850,9 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
           } else if (OB_ISNULL(cur_row) || !cur_row->is_valid()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid args", KR(ret), KPC(cur_row));
-          } else if (OB_FAIL(check_null(false/*is_index_table*/, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
-            LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
+          } else if (OB_FAIL(check_null_and_length(false/*is_index_table*/, false/*has_lob_rowkey*/,
+                                                   ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
+            LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
           } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
               false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, nullptr /*storage_schema*/, start_scn,
               ObString()/*unsued*/, 0/*unsued*/))) {
@@ -1951,7 +1977,7 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     share::ObTabletCacheInterval &pk_interval,
     const ObArray<int64_t> &lob_column_idxs,
     const ObArray<common::ObObjMeta> &col_types,
-    const int64_t lob_inrow_threshold,
+    const ObTableSchemaItem &schema_item,
     blocksstable::ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
@@ -1961,11 +1987,15 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
   } else {
     ObStorageDatum temp_datum;
+    ObLobStorageParam lob_storage_param;
+    lob_storage_param.inrow_threshold_ = schema_item.lob_inrow_threshold_;
+    lob_storage_param.is_index_table_ = schema_item.is_index_table_;
     for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs.count(); i++) {
       const int64_t idx = lob_column_idxs.at(i);
       const ObObjMeta &col_type = col_types.at(i);
       ObIVector *vector = datum_rows.vectors_.at(idx);
       const VectorFormat format = vector->get_format();
+      lob_storage_param.is_rowkey_col_ = idx < schema_item.rowkey_column_num_;
       if (fast_check_vector_is_all_null(vector, datum_rows.row_count_)) {
         // do nothing
         continue;
@@ -1995,12 +2025,12 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
               temp_datum.ptr_ = data + offsets[j];
               temp_datum.len_ = offsets[j + 1] - offsets[j];
               if (DATA_VERSION_4_3_0_0 > data_format_version) {
-                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                    pk_interval, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2025,12 +2055,12 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
               temp_datum.ptr_ = ptrs[j];
               temp_datum.len_ = lens[j];
               if (DATA_VERSION_4_3_0_0 > data_format_version) {
-                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                    pk_interval, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2052,12 +2082,12 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
               temp_datum.ptr_ = datum.ptr_;
               temp_datum.len_ = datum.len_;
               if (DATA_VERSION_4_3_0_0 > data_format_version) {
-                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_inrow_threshold, temp_datum))) {
+                if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_inrow_threshold, temp_datum))) {
+                    pk_interval, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2111,8 +2141,9 @@ int ObDirectLoadSliceWriter::fill_lob_meta_sstable_slice(
       } else if (OB_ISNULL(cur_row) || !cur_row->is_valid() || cur_row->get_column_count() != column_count) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid args", KR(ret), KPC(cur_row), K(column_count));
-      } else if (OB_FAIL(check_null(false/*is_index_table*/, rowkey_column_count, *cur_row))) {
-        LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
+      } else if (OB_FAIL(check_null_and_length(false/*is_index_table*/, false/*has_lob_rowkey*/,
+                                               rowkey_column_count, *cur_row))) {
+        LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
       } else if (OB_FAIL(prepare_slice_store_if_need(rowkey_column_count,
                                                      false/*is_column_store*/,
                                                      1L/*unsued*/,
@@ -2198,8 +2229,9 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(check_null(schema_item.is_index_table_, schema_item.rowkey_column_num_, *cur_row))) {
-        LOG_WARN("fail to check null value in row", KR(ret), KPC(cur_row));
+      } else if (OB_FAIL(check_null_and_length(schema_item.is_index_table_, schema_item.has_lob_rowkey_,
+                                               schema_item.rowkey_column_num_, *cur_row))) {
+        LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
       } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_,
                                                      schema_item.is_column_store_,
                                                      dir_id,
@@ -2289,8 +2321,9 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(check_null(schema_item.is_index_table_, schema_item.rowkey_column_num_, datum_rows))) {
-      LOG_WARN("fail to check null value in row", KR(ret));
+    } else if (OB_FAIL(check_null_and_length(schema_item.is_index_table_, schema_item.has_lob_rowkey_,
+                                             schema_item.rowkey_column_num_, datum_rows))) {
+      LOG_WARN("fail to check rowkey null value and length in row", KR(ret));
     } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_,
                                                    schema_item.is_column_store_,
                                                    dir_id,
@@ -2473,48 +2506,77 @@ int ObDirectLoadSliceWriter::report_unique_key_dumplicated(
   return ret;
 }
 
-int ObDirectLoadSliceWriter::check_null(
+int ObDirectLoadSliceWriter::check_null_and_length(
     const bool is_index_table,
+    const bool has_lob_rowkey,
     const int64_t rowkey_column_num,
     const ObDatumRow &row_val) const
 {
   int ret = OB_SUCCESS;
-  if (is_index_table) {
+  if (is_index_table && !has_lob_rowkey) {
     // index table is index-organized but can have null values in index column
   } else if (OB_UNLIKELY(rowkey_column_num > row_val.get_column_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid rowkey column number", KR(ret), K(rowkey_column_num), K(row_val));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
+    int64_t rowkey_length = 0;
+    bool has_null = false;
+    for (int64_t i = 0; i < rowkey_column_num; i++) {
       const ObStorageDatum &cell = row_val.storage_datums_[i];
-      if (cell.is_null()) {
-        ret = OB_ER_INVALID_USE_OF_NULL;
-        LOG_WARN("invalid null cell for row key column", KR(ret), K(cell));
-      }
+      rowkey_length += cell.len_;
+      has_null |= cell.is_null();
+    }
+    if (!is_index_table && has_null) {
+      ret = OB_ER_INVALID_USE_OF_NULL;
+      LOG_WARN("invalid null cell for row key column", KR(ret), K(row_val));
+    }
+    if (OB_SUCC(ret) && has_lob_rowkey && rowkey_length > OB_MAX_VARCHAR_LENGTH_KEY) {
+      ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+      STORAGE_LOG(WARN, "rowkey is too long", K(ret), K(rowkey_length), K(rowkey_column_num), K(row_val));
     }
   }
   return ret;
 }
 
-int ObDirectLoadSliceWriter::check_null(
+int ObDirectLoadSliceWriter::check_null_and_length(
     const bool is_index_table,
+    const bool has_lob_rowkey,
     const int64_t rowkey_column_num,
-    const ObBatchDatumRows &datum_rows) const
+    const ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
-  if (is_index_table) {
+  if (is_index_table && !has_lob_rowkey) {
     // index table is index-organized but can have null values in index column
   } else if (OB_UNLIKELY(rowkey_column_num > datum_rows.get_column_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid rowkey column number", KR(ret), K(rowkey_column_num), K(datum_rows.get_column_count()));
   } else {
+    rowkey_lengths_.reuse();
+    bool has_null = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; ++i) {
       ObIVector *vector = datum_rows.vectors_.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < datum_rows.row_count_; ++j) {
-        if (OB_UNLIKELY(vector->is_null(j))) {
-          ret = OB_ER_INVALID_USE_OF_NULL;
-          LOG_WARN("invalid null cell for row key column", KR(ret), K(i), K(j), KPC(vector));
+        const int64_t col_length = vector->get_length(j);
+        has_null |= vector->is_null(j);
+        if (i == 0) {
+          if (OB_FAIL(rowkey_lengths_.push_back(col_length))) {
+            LOG_WARN("fail to push back column length", K(ret), K(col_length));
+          }
+        } else {
+          rowkey_lengths_[j] += col_length;
         }
+      }
+    }
+    if (OB_SUCC(ret) && !is_index_table && has_null) {
+      ret = OB_ER_INVALID_USE_OF_NULL;
+      LOG_WARN("invalid null cell for row key column", KR(ret), K(datum_rows));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && has_lob_rowkey && i < datum_rows.row_count_; ++i) {
+      if (rowkey_lengths_.at(i) > OB_MAX_VARCHAR_LENGTH_KEY) {
+        ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+        STORAGE_LOG(WARN, "rowkey is too long", K(ret), K(i), K(rowkey_lengths_.at(i)));
       }
     }
   }

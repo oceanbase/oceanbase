@@ -4254,6 +4254,7 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_table_state_flag(new_table_schema.get_table_state_flag());
           new_aux_table_schema.set_duplicate_attribute(new_table_schema.get_duplicate_scope(), new_table_schema.get_duplicate_read_consistency());
           new_aux_table_schema.set_enable_macro_block_bloom_filter(new_table_schema.get_enable_macro_block_bloom_filter());
+          new_aux_table_schema.set_lob_inrow_threshold(new_table_schema.get_lob_inrow_threshold());
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {

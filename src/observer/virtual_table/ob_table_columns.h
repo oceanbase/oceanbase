@@ -57,6 +57,7 @@ public:
     common::ObString privileges_;
     sql::ObExprResType result_type_;
     int64_t is_hidden_;
+    bool is_string_lob_;
     int64_t get_data_length() const;
   };
   ObTableColumns();
@@ -75,12 +76,13 @@ public:
       bool throw_error);
   // skip inner added implicit cast and bool expr.
   static const sql::ObRawExpr *skip_inner_added_expr(const sql::ObRawExpr *expr);
-  static int set_null_and_default_according_binary_expr(const uint64_t tenant_id,
-                                                        const sql::ObSelectStmt *select_stmt,
-                                                        const sql::ObRawExpr *expr,
-                                                        share::schema::ObSchemaGetterGuard *schema_guard,
-                                                        bool &nullable,
-                                                        bool &has_default);
+  static int set_col_attrs_according_binary_expr(const uint64_t tenant_id,
+                                                 const sql::ObSelectStmt *select_stmt,
+                                                 const sql::ObRawExpr *expr,
+                                                 share::schema::ObSchemaGetterGuard *schema_guard,
+                                                 bool &nullable,
+                                                 bool &has_default,
+                                                 bool &is_string_lob);
   static int deduce_column_attributes(const bool is_oracle_mode,
                                       const ObTableSchema &table_schema,
                                       const sql::ObSelectStmt *select_stmt,

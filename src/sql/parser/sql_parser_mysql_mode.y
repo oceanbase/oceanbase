@@ -6726,7 +6726,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $2[0] = 0; /* change default string len from -1 to 0 for compat mysql */
   }
   $$->int32_values_[0] = $2[0];
-  $$->int32_values_[1] = 0; /* is text */
+  if (1 == $1[1]) {
+    $$->int32_values_[1] = 2; /* is string */
+  } else {
+    $$->int32_values_[1] = 0; /* is text */
+  }
 }
 | BINARY opt_string_length_i
 {
@@ -6945,11 +6949,12 @@ DATE        { $$[0] = T_DATE; }
 ;
 
 text_type_i:
-TINYTEXT     { $$[0] = T_TINYTEXT; }
-| TEXT   { $$[0] = T_TEXT; }
-| MEDIUMTEXT   { $$[0] = T_MEDIUMTEXT; }
-| LONGTEXT   { $$[0] = T_LONGTEXT;  }
-| MEDIUMTEXT VARCHAR { $$[0] = T_MEDIUMTEXT; } /*LONG VARCHAR*/
+TINYTEXT     { $$[0] = T_TINYTEXT; $$[1] = 0; }
+| TEXT   { $$[0] = T_TEXT; $$[1] = 0; }
+| MEDIUMTEXT   { $$[0] = T_MEDIUMTEXT; $$[1] = 0; }
+| LONGTEXT   { $$[0] = T_LONGTEXT;  $$[1] = 0; }
+| MEDIUMTEXT VARCHAR { $$[0] = T_MEDIUMTEXT; $$[1] = 0; } /*LONG VARCHAR*/
+| STRING { $$[0] = T_MEDIUMTEXT; $$[1] = 1; }
 ;
 
 blob_type_i:

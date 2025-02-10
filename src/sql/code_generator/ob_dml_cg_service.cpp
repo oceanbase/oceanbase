@@ -2544,6 +2544,10 @@ int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *gua
                                                         t_version,
                                                         das_dml_ctdef.column_ids_))) {
     LOG_WARN("fail to convert table param", K(ret), K(das_dml_ctdef));
+  } else if (OB_FAIL(das_dml_ctdef.table_param_.set_data_table_rowkey_tags(guard,
+                                                                           table_schema,
+                                                                           tenant_id))) {
+    LOG_WARN("fail to set data table rowkey info on table param", K(ret), K(das_dml_ctdef));
   } else if (table_schema->is_multivalue_index_aux() &&
             OB_FAIL(fill_multivalue_extra_info_on_table_param(guard, table_schema, tenant_id, das_dml_ctdef))) {
     LOG_WARN("fail to set multivalue index extra info on table param", K(ret), K(das_dml_ctdef));

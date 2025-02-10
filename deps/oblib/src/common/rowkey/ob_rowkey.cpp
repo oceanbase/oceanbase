@@ -72,8 +72,8 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
       const ObObj &rhs_obj = rhs.obj_ptr_[i];
       tc = obj.get_type_class();
       if (ObMaxTC <= tc) {
-        COMMON_LOG(WARN, "invalid type class", K(tc));
         ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "invalid type class", K(ret), K(tc));
       } else if (tc != rhs_obj.get_type_class()) {
         is_equal = false;
       } else {
@@ -144,10 +144,10 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
           if (ob_is_urowid(obj.get_type()) && ob_is_urowid(rhs_obj.get_type())) {
             is_equal = obj.get_urowid() == rhs_obj.get_urowid();
           } else {
-            COMMON_LOG(WARN, "not support rowid type for now",
+            ret = OB_ERR_UNEXPECTED;
+            COMMON_LOG(WARN, "not support rowid type for now", K(ret),
                        K(obj.get_type()),
                        K(obj.get_type()));
-            ret = OB_ERR_UNEXPECTED;
           }
           break;
         case ObLobTC:
@@ -162,9 +162,31 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
           }
           break;
         }
+        case ObTextTC: { // only for string
+          if (lib::is_mysql_mode()) {
+            ObString str;
+            ObString rhs_str;
+            if (OB_UNLIKELY(obj.is_outrow_lob() || rhs_obj.is_outrow_lob())) {
+              ret = OB_ERR_UNEXPECTED;
+              COMMON_LOG(WARN, "not supported outrow lob", K(ret), K(obj), K(rhs_obj));
+            } else if (OB_FAIL(obj.get_string(str))) {
+              COMMON_LOG(WARN, "Lob: get inrow string failed", K(ret), K(obj));
+            } else if (OB_FAIL(rhs_obj.get_string(rhs_str))) {
+              COMMON_LOG(WARN, "Lob: get inrow string failed", K(ret), K(rhs_obj));
+            } else if (str.length() != rhs_str.length() || 0 != str.compare(rhs_str)) {
+              is_equal = (ObCharset::strcmpsp(obj.get_collation_type(), str.ptr(), str.length(),
+                rhs_str.ptr(), rhs_str.length(), false/*cmp_padding_space*/) == 0);
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            COMMON_LOG(ERROR, "not supported mode", K(ret));
+
+          }
+          break;
+        }
         default:
-          COMMON_LOG(WARN, "not_supported type class", K(tc));
           ret = OB_ERR_UNEXPECTED;
+          COMMON_LOG(WARN, "not_supported type class", K(ret), K(tc));
           break;
         }
       }

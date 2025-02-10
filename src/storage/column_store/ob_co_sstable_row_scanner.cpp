@@ -90,6 +90,7 @@ int ObCOSSTableRowScanner::init(
     if (OB_FAIL(init_project_iter_for_single_row(param, context, table))) {
       LOG_WARN("Fail to init project iter for single row", K(ret));
     } else if (param.has_lob_column_out()
+        && nullptr != param.out_cols_project_ && param.out_cols_project_->count() > 0
         && (nullptr == context.lob_locator_helper_
             || !context.lob_locator_helper_->enable_lob_locator_v2()
             || !context.lob_locator_helper_->is_valid())) {

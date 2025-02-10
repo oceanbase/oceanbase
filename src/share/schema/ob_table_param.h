@@ -241,6 +241,8 @@ public:
 
   inline void set_lob_chunk_size(int64_t chunk_size) { lob_chunk_size_ = chunk_size; }
   inline int64_t get_lob_chunk_size() const { return lob_chunk_size_; }
+  inline void set_is_data_table_rowkey(const bool is_data_table_rowkey) { is_data_table_rowkey_ = is_data_table_rowkey; }
+  inline bool is_data_table_rowkey() const { return is_data_table_rowkey_; }
 
   TO_STRING_KV(K_(column_id),
                K_(meta_type),
@@ -254,7 +256,8 @@ public:
                K_(is_virtual_gen_col),
                K_(is_gen_col_udf_expr),
                K_(is_hidden),
-               K_(lob_chunk_size));
+               K_(lob_chunk_size),
+               K_(is_data_table_rowkey));
 private:
   int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
 private:
@@ -272,6 +275,7 @@ private:
   bool is_gen_col_udf_expr_;
   bool is_hidden_;
   int64_t lob_chunk_size_;
+  bool is_data_table_rowkey_; // So far only used for DML
 };
 
 typedef common::ObFixedArray<ObColumnParam *, common::ObIAllocator> Columns;

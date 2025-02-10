@@ -167,8 +167,8 @@ struct ObTableSchemaItem final
 {
 public:
   ObTableSchemaItem()
-    : is_column_store_(false), is_index_table_(false), is_unique_index_(false), rowkey_column_num_(0),
-      compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    : is_column_store_(false), is_index_table_(false), is_unique_index_(false), has_lob_rowkey_(false),
+      rowkey_column_num_(0), compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
       vec_idx_param_(), vec_dim_(0)
   {}
   ~ObTableSchemaItem() { reset(); }
@@ -177,19 +177,21 @@ public:
     is_column_store_ = false;
     is_index_table_ = false;
     is_unique_index_ = false;
+    has_lob_rowkey_ = false;
     rowkey_column_num_ = 0;
     compress_type_ = NONE_COMPRESSOR;
     lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
     vec_idx_param_.reset();
     vec_dim_ = 0;
   }
-  TO_STRING_KV(K(is_column_store_), K(is_index_table_), K(is_unique_index_), K(rowkey_column_num_),
-               K(compress_type_), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim));
+  TO_STRING_KV(K(is_column_store_), K(is_index_table_), K(is_unique_index_), K_(has_lob_rowkey),
+    K(rowkey_column_num_), K(compress_type_), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim));
 
 public:
   bool is_column_store_;
   bool is_index_table_;
   bool is_unique_index_;
+  bool has_lob_rowkey_;
   int64_t rowkey_column_num_;
   common::ObCompressorType compress_type_;
   int64_t lob_inrow_threshold_;
@@ -343,6 +345,7 @@ public:
       sql::ObPxMultiPartSSTableInsertOp *op,
       const common::ObTabletID &tablet_id,
       const bool is_slice_empty,
+      const bool is_index_table,
       const int64_t rowkey_cnt,
       const int64_t snapshot_version,
       const ObTabletSliceParam &ddl_slice_param,
@@ -352,21 +355,24 @@ public:
       const int64_t autoinc_range_interval);
   virtual ~ObDDLSliceRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
-  TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version), K_(is_next_row_cached), K_(ddl_slice_param));
+  TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version),
+    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table));
 private:
   sql::ObPxMultiPartSSTableInsertOp *op_;
   common::ObTabletID tablet_id_; // data_tablet_id rather than lob_meta_tablet_id.
   blocksstable::ObDatumRow current_row_;
-  bool is_slice_empty_; // without data.
   int64_t rowkey_col_cnt_;
   int64_t snapshot_version_;
-  bool is_next_row_cached_;
   ObTabletSliceParam ddl_slice_param_;
-  bool need_idempotent_autoinc_val_;
   int64_t table_all_slice_count_;
   int64_t table_level_slice_idx_;
   int64_t cur_row_idx_;
   int64_t autoinc_range_interval_;
+  bool is_slice_empty_; // without data.
+  bool is_next_row_cached_;
+  bool need_idempotent_autoinc_val_;
+  bool is_index_table_;
+  bool has_lob_rowkey_;
 };
 
 // for ddl insert row.
@@ -1026,7 +1032,7 @@ public:
       share::ObTabletCacheInterval &pk_interval,
       const ObArray<int64_t> &lob_column_idxs,
       const ObArray<common::ObObjMeta> &col_types,
-      const int64_t lob_inrow_threshold,
+      const ObTableSchemaItem &schema_item,
       blocksstable::ObDatumRow &datum_row);
   int fill_lob_sstable_slice(
       const uint64_t table_id,
@@ -1037,7 +1043,7 @@ public:
       share::ObTabletCacheInterval &pk_interval,
       const ObArray<int64_t> &lob_column_idxs,
       const ObArray<common::ObObjMeta> &col_types,
-      const int64_t lob_inrow_threshold,
+      const ObTableSchemaItem &schema_item,
       blocksstable::ObBatchDatumRows &datum_rows);
   int close();
   // fill lob meta row into macro block
@@ -1079,7 +1085,7 @@ private:
       ObIAllocator &allocator,
       const ObBatchSliceWriteInfo &info,
       const common::ObObjMeta &col_type,
-      const int64_t lob_inrow_threshold,
+      const ObLobStorageParam &lob_storage_param,
       blocksstable::ObStorageDatum &datum);
   int fill_lob_into_macro_block( // for version >= 4.3.0.0
       ObIAllocator &allocator,
@@ -1088,16 +1094,18 @@ private:
       const ObBatchSliceWriteInfo &info,
       share::ObTabletCacheInterval &pk_interval,
       const common::ObObjMeta &col_type,
-      const int64_t lob_inrow_threshold,
+      const ObLobStorageParam &lob_storage_param,
       blocksstable::ObStorageDatum &datum);
-  int check_null(
+  int check_null_and_length(
       const bool is_index_table,
+      const bool has_lob_rowkey,
       const int64_t rowkey_column_cnt,
       const blocksstable::ObDatumRow &row_val) const;
-  int check_null(
+  int check_null_and_length(
       const bool is_index_table,
+      const bool has_lob_rowkey,
       const int64_t rowkey_column_cnt,
-      const blocksstable::ObBatchDatumRows &datum_rows) const;
+      const blocksstable::ObBatchDatumRows &datum_rows);
   int prepare_slice_store_if_need(
       const int64_t schema_rowkey_column_num,
       const bool is_slice_store,
@@ -1137,7 +1145,7 @@ private:
       const transaction::ObTransID trans_id,
       const int64_t seq_no,
       const int64_t timeout_ts,
-      const int64_t lob_inrow_threshold,
+      const ObLobStorageParam &lob_storage_param,
       const uint64_t src_tenant_id,
       const ObDirectLoadType direct_load_type,
       transaction::ObTxDesc* tx_desc,
@@ -1182,6 +1190,7 @@ private:
   ObLobMetaRowIterator *row_iterator_;
   common::ObArenaAllocator allocator_;
   common::ObIAllocator *lob_allocator_;
+  ObSEArray<int64_t, 256> rowkey_lengths_;
   int64_t row_offset_;
 };
 

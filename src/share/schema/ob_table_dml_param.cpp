@@ -907,6 +907,46 @@ int ObTableDMLParam::prepare_storage_param(const ObIArray<uint64_t> &column_ids)
   return ret;
 }
 
+int ObTableDMLParam::set_data_table_rowkey_tags(share::schema::ObSchemaGetterGuard *guard,
+                                                const ObTableSchema *index_schema,
+                                                const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == guard || nullptr == index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid guard or index schema", K(ret), KP(guard), KP(index_schema));
+  } else {
+    const ObTableSchema *data_table_schema = index_schema;
+    common::ObSEArray<uint64_t, 4> data_table_rowkey_cids;
+    const common::ObIArray<ObColumnParam *> &columns = data_table_.get_columns();
+    if (index_schema->is_index_table()) {
+      if (OB_FAIL(guard->get_table_schema(tenant_id, index_schema->get_data_table_id(), data_table_schema))) {
+        LOG_WARN("fail to get data_table_schema", K(ret), K(index_schema->get_data_table_id()));
+      } else if (OB_ISNULL(data_table_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("data table schema is NULL", K(ret), KP(data_table_schema), K(index_schema->get_data_table_id()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(data_table_schema->get_rowkey_column_ids(data_table_rowkey_cids))) {
+        LOG_WARN("fail to get rowkey cids", K(ret), KPC(data_table_schema));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
+        if (OB_ISNULL(columns.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column param is null", K(ret), K(i), KP(columns.at(i)));
+        } else {
+          const uint64_t col_id = is_shadow_column(columns.at(i)->get_column_id()) ?
+                                  columns.at(i)->get_column_id() - OB_MIN_SHADOW_COLUMN_ID :
+                                  columns.at(i)->get_column_id();
+          columns.at(i)->set_is_data_table_rowkey(has_exist_in_array(data_table_rowkey_cids, col_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }//namespace oceanbase
 }//namespace share
 }//namespace schema
