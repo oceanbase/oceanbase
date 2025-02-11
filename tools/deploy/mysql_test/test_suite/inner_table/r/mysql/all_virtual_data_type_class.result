@@ -125,7 +125,7 @@ __all_virtual_data_type_class	CREATE TABLE `__all_virtual_data_type_class` (
   `data_type_class` bigint(20) NOT NULL,
   `data_type_class_str` varchar(128) NOT NULL,
   PRIMARY KEY (`data_type_class`)
-) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
 desc __all_virtual_data_type_class;
 Field	Type	Null	Key	Default	Extra
 data_type_class	bigint(20)	NO	PRI	NULL	

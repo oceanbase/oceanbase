@@ -78,7 +78,7 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
   } else if (index_dml_info.is_primary_index_ //generate column infos
       && OB_FAIL(add_all_column_infos(op,
                                       index_dml_info.column_exprs_,
-                                      ins_ctdef.is_heap_table_,
+                                      ins_ctdef.is_table_without_pk_,
                                       ins_ctdef.column_infos_))) {
     LOG_WARN("add column info failed", K(ret), K(index_dml_info.column_exprs_));
   } else if (OB_FAIL(generate_das_ins_ctdef(op,
@@ -492,7 +492,7 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                                 full_row,
                                                 upd_ctdef.related_upd_ctdefs_))) {
     LOG_WARN("generate related upd ctdef failed", K(ret));
-  } else if (OB_FAIL(convert_upd_assign_infos(upd_ctdef.is_heap_table_,
+  } else if (OB_FAIL(convert_upd_assign_infos(upd_ctdef.is_table_without_pk_,
                                               index_dml_info,
                                               upd_ctdef.assign_columns_))) {
     LOG_WARN("convert upd assign infos failed", K(ret), K(index_dml_info));
@@ -1484,7 +1484,7 @@ int ObDmlCgService::heap_table_has_not_null_uk(ObSchemaGetterGuard *schema_guard
   int ret = OB_SUCCESS;
   need_all_columns = false;
   bool has_not_null_uk = false;
-  if (table_schema->is_heap_table()) {
+  if (table_schema->is_table_without_pk()) {
     if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
       LOG_WARN("fail to check has not null UK", K(ret));
     } else if (!has_not_null_uk) {
@@ -1775,7 +1775,7 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
   } else if (OB_FAIL(append_time_type_column_id(table_schema, minimal_column_ids))) {
     // append time_type column
     LOG_WARN("fail to append time type column_id", K(ret));
-  } else if (table_schema->is_heap_table() &&
+  } else if (table_schema->is_table_without_pk() &&
       OB_FAIL(append_heap_table_part_key_dependcy_column(table_schema, minimal_column_ids))) {
     // append heap table part_key_column_id and dependency column
     LOG_WARN("fail to append heap table part_id", K(ret));
@@ -1864,7 +1864,7 @@ int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_vec_index()) {
     need_all_columns = true;
     LOG_TRACE("delete from vector index table, need all columns", K(table_schema->get_index_type()));
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
       LOG_WARN("fail to check whether has not null unique key", K(ret), K(table_schema->get_table_name_str()));
     } else if (!has_not_null_uk) {
@@ -1923,7 +1923,7 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
   } else if (OB_FAIL(append_all_uk_column_id(schema_guard, table_schema, minimal_column_ids))) {
     // append unique key
     LOG_WARN("fail to append all unique key column_id");
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     if (OB_FAIL(append_heap_table_part_key_dependcy_column(table_schema, minimal_column_ids))) {
       // append heap table part_key_column_id and dependcy column
       LOG_WARN("fail to append heap table part_id", K(ret));
@@ -2573,7 +2573,7 @@ int ObDmlCgService::check_is_heap_table(ObLogicalOperator &op,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_schema));
-  } else if (!table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_with_pk()) {
     is_heap_table = false;
   } else {
     is_heap_table = true;
@@ -2601,7 +2601,7 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
     if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
       LOG_WARN("convert foreign keys failed", K(ret));
     } else {
-      dml_base_ctdef.is_heap_table_ = is_heap_table;
+      dml_base_ctdef.is_table_without_pk_ = is_heap_table;
     }
   }
 

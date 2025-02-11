@@ -2528,6 +2528,53 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                             }
                           }
                         }
+                      } else if (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION)) {
+                        ObSArray<uint64_t> tenant_ids;
+                        bool affect_all = false;
+                        bool affect_all_user = false;
+                        bool affect_all_meta = false;
+                        if (OB_FAIL(ObAlterSystemResolverUtil::resolve_tenant(*n,
+                                                                              tenant_id,
+                                                                              tenant_ids,
+                                                                              affect_all,
+                                                                              affect_all_user,
+                                                                              affect_all_meta))) {
+                          LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
+                        } else if (affect_all_meta) {
+                          ret = OB_NOT_SUPPORTED;
+                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION",
+                                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                        "use all_meta in 'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax is");
+                        } else if (tenant_ids.empty()) {
+                          if (!affect_all && !affect_all_user) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_WARN("error unexpected", "item", item, K(ret), K(i), K(tenant_id));
+                          }
+                        }
+                        if (OB_SUCC(ret) && !tenant_ids.empty()) {
+                          bool valid = true;
+                          ObSchemaGetterGuard schema_guard;
+                          if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+                            LOG_WARN("get_schema_guard failed", K(ret));
+                          }
+                          for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count() && valid; i++) {
+                            const uint64_t tenant_id = tenant_ids.at(i);
+                            lib::Worker::CompatMode compat_mode;
+                            valid = valid && ObConfigDefaultTableOrganizationChecker::check(item);
+                            if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+                              LOG_WARN("fail to get compat mode", K(ret));
+                            } else if (!valid) {
+                              ret = OB_OP_NOT_ALLOW;
+                              LOG_WARN("can not set defdefault_table_organization", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                            } else if (lib::Worker::CompatMode::ORACLE == compat_mode || OB_SYS_TENANT_ID == tenant_id) {
+                              LOG_WARN("can not set default_table_organization in oracle and sys tenants",
+                                       "item", item, K(i), K(tenant_id), K(compat_mode));
+                              LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                                            "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in oracle or sys tenant is");
+                            }
+                          }
+                        }
                       }
                     }
                   } else {
@@ -2540,6 +2587,17 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   if (!valid) {
                     ret = OB_OP_NOT_ALLOW;
                     LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
+                  }
+                } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                  bool valid = ObConfigDefaultTableOrganizationChecker::check(item);
+                  if (!valid) {
+                    ret = OB_OP_NOT_ALLOW;
+                    LOG_WARN("can not set default_table_organization", "item", item, K(ret));
+                  } else if (OB_SYS_TENANT_ID == item.exec_tenant_id_) {
+                    LOG_WARN("can not set default_table_organization in the sys tenant",
+                              "item", item,"tenant_id", item.exec_tenant_id_);
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED,
+                                  "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the sys tenant is");
                   }
                 }
 
@@ -4981,6 +5039,9 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                       ret = OB_OP_NOT_ALLOW;
                       LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
                     }
+                  } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                    LOG_WARN("can not set default_table_organization", "item", item, "tenant_id", item.exec_tenant_id_);
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED, "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the oracle tenant is");
                   }
                 }
               }

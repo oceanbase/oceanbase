@@ -85,6 +85,7 @@ typedef common::ParamStore ParamStore;
 class ObSchemaGetterGuard;
 class ObSimpleTableSchemaV2;
 class ObTableSchema;
+class ObTableMode;
 class ObColumnSchemaV2;
 #define ASSIGN_STRING(dst, src, field, buffer, skip)\
   (dst)->field.assign(buffer + offset, (src)->field.length());\
@@ -998,6 +999,7 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == index_type
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+           || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type
            || is_local_fts_index(index_type)
            || is_local_vec_index(index_type)
            || is_global_local_fts_index(index_type)
@@ -1025,6 +1027,7 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_SPATIAL_LOCAL == index_type
         || INDEX_TYPE_SPATIAL_GLOBAL == index_type
         || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+        || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type
         || is_fts_index(index_type)
         || is_multivalue_index(index_type)
         || is_vec_index(index_type);
@@ -1034,7 +1037,8 @@ inline static bool is_local_unique_index_table(const ObIndexType index_type)
 {
   return INDEX_TYPE_UNIQUE_LOCAL == index_type
       || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
-      || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type;
+      || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type
+      || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type;
 }
 
 struct ObTenantTableId

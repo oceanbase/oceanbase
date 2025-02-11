@@ -1457,6 +1457,7 @@ int check_will_be_having_domain_index_operation(
                                          const obrpc::ObIndexArg::IndexActionType &index_action_type,
                                          bool &is_support);
   int check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
+                              const ObTableSchema &orig_table_schema,
                               share::ObDDLType &ddl_type,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               bool &has_drop_and_add_index);
@@ -2093,6 +2094,9 @@ private:
                                     bool &need_continue);
 
   const char* ddl_type_str(const share::ObDDLType ddl_type);
+  int check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
+                                   const ObTableSchema &orig_table_schema,
+                                   obrpc::ObIndexArg *index_arg);
 public:
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
   // used only by create normal tenant

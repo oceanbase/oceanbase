@@ -177,6 +177,7 @@ CREATE_OPTIONS	varchar(255)	NO
 TABLE_COMMENT	text	NO			
 AUTO_SPLIT	varchar(16)	NO			
 AUTO_SPLIT_TABLET_SIZE	bigint(20) unsigned	NO			
+ORGANIZATION	varchar(12)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLES limit 1);
 cnt
 1

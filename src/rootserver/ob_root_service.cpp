@@ -3172,6 +3172,14 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, partition external table is ");
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (arg.schema_.is_heap_organized_table()) {
+      if (compat_version < DATA_VERSION_4_3_5_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("version lower than 4.3.5.1 does not support heap organized table", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is lower than 4.3.5.1; heap organized table is ");
+      }
+    }
     ObCreateTableHelper create_table_helper(schema_service_, tenant_id, arg, res);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(create_table_helper.init(ddl_service_))) {
@@ -3370,6 +3378,18 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("version lower than 4.3.1 does not support partition external table", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, partition external table is ");
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (table_schema.is_heap_organized_table()) {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
+          LOG_WARN("fail to get data version", KR(ret));
+        } else if (compat_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.5.1 does not support heap organized table", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.5.1, heap organized table is ");
         }
       }
 

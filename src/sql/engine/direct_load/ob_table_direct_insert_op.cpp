@@ -406,13 +406,14 @@ int ObTableDirectInsertOp::process_insert_batch()
   ObEvalCtx &eval_ctx = get_eval_ctx();
   const ExprFixedArray &dml_expr_array = MY_SPEC.ins_ctdef_.new_row_;
   const ObIArray<ColumnContent> &column_infos = MY_SPEC.ins_ctdef_.column_infos_;
-  const int64_t column_offset = MY_SPEC.ins_ctdef_.is_heap_table_ ? 1: 0;
+  // todo@lanyi check column_offset for the order by table
+  const int64_t column_offset = MY_SPEC.ins_ctdef_.is_table_without_pk_ ? 1: 0;
   const int64_t row_num = 0; // no sense
   ObUserLoggingCtx::Guard logging_ctx_guard(*(ctx_.get_user_logging_ctx()));
   ctx_.set_cur_rownum(row_num);
   CK (dml_expr_array.count() == column_infos.count() + column_offset);
   for (int64_t i = 0; OB_SUCC(ret) && (i < dml_expr_array.count()); ++i) {
-    if (MY_SPEC.ins_ctdef_.is_heap_table_ && (0 == i)) {
+    if (MY_SPEC.ins_ctdef_.is_table_without_pk_ && (0 == i)) {
       continue; // skip hidden table pk column
     } else {
       const ColumnContent &column_info = column_infos.at(i - column_offset);

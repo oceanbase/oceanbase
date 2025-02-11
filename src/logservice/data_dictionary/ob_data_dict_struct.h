@@ -426,12 +426,20 @@ public:
         || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_
         || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_;
   }
+  // same meaning as the functions with the same names in TableSchema
+  // todo@lanyi 可以在schema模块内抽出一些类似share::schema::is_index_table的方法，简化这里的逻辑
+  OB_INLINE bool is_table_with_pk() const
+  { return share::schema::TOM_TABLE_WITH_PK == (enum share::schema::ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
+  OB_INLINE bool is_table_with_hidden_pk_column() const
+  { return (share::schema::TOM_HEAP_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.table_organization_mode_ ||
+           (share::schema::TOM_INDEX_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.table_organization_mode_ &&
+            share::schema::TOM_TABLE_WITHOUT_PK == (enum share::schema::ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_)); }
+  OB_INLINE bool is_table_without_pk() const
+  { return share::schema::TOM_TABLE_WITHOUT_PK == (enum share::schema::ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
   OB_INLINE bool is_aux_lob_meta_table() const { return share::schema::ObTableType::AUX_LOB_META == table_type_; }
   OB_INLINE bool is_aux_lob_piece_table() const { return share::schema::ObTableType::AUX_LOB_PIECE == table_type_; }
   OB_INLINE bool is_aux_lob_table() const { return is_aux_lob_meta_table() || is_aux_lob_piece_table(); }
   OB_INLINE bool is_aux_vp_table() const { return share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_; }
-  OB_INLINE bool is_heap_table() const
-  { return share::schema::TOM_HEAP_ORGANIZED == (enum share::schema::ObTableOrganizationMode)table_mode_.pk_exists_; }
   OB_INLINE bool is_vir_table() const { return share::schema::ObTableType::VIRTUAL_TABLE == table_type_; }
   OB_INLINE bool is_view_table() const
   {
@@ -452,7 +460,8 @@ public:
   {
     return share::schema::INDEX_TYPE_UNIQUE_LOCAL == index_type_
         || share::schema::INDEX_TYPE_UNIQUE_GLOBAL == index_type_
-        || share::schema::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_;
+        || share::schema::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
+        || share::schema::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type_;
   }
   OB_INLINE bool is_global_normal_index_table() const { return share::schema::INDEX_TYPE_NORMAL_GLOBAL == index_type_; }
   OB_INLINE bool is_global_unique_index_table() const { return share::schema::INDEX_TYPE_UNIQUE_GLOBAL == index_type_; }

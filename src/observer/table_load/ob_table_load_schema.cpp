@@ -353,7 +353,7 @@ int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    if (table_schema->is_heap_table()) {
+    if (table_schema->is_table_without_pk()) {
       int normal_local_index_count = 0;
       int unique_index_count = 0;
       int other_index_count = 0;
@@ -375,6 +375,8 @@ int ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
                      share::schema::ObIndexType::INDEX_TYPE_UNIQUE_LOCAL ==
                        index_table_schema->get_index_type() ||
                      share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL ==
+                       index_table_schema->get_index_type() ||
+                     share::schema::ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY ==
                        index_table_schema->get_index_type()) {
             unique_index_count++;
           } else {
@@ -462,7 +464,8 @@ ObTableLoadSchema::ObTableLoadSchema()
     is_index_table_(false),
     is_lob_table_(false),
     is_partitioned_table_(false),
-    is_heap_table_(false),
+    is_table_without_pk_(false),
+    is_table_with_hidden_pk_column_(false),
     index_type_(ObIndexType::INDEX_TYPE_MAX),
     is_column_store_(false),
     has_autoinc_column_(false),
@@ -497,7 +500,8 @@ void ObTableLoadSchema::reset()
   is_index_table_ = false;
   is_lob_table_ = false;
   is_partitioned_table_ = false;
-  is_heap_table_ = false;
+  is_table_without_pk_ = false;
+  is_table_with_hidden_pk_column_ = false;
   index_type_ = share::schema::ObIndexType::INDEX_TYPE_MAX;
   is_column_store_ = false;
   has_autoinc_column_ = false;
@@ -553,7 +557,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     is_index_table_ = table_schema->is_index_table();
     is_lob_table_ = table_schema->is_aux_lob_table();
     is_partitioned_table_ = table_schema->is_partitioned_table();
-    is_heap_table_ = table_schema->is_heap_table();
+    is_table_without_pk_ = table_schema->is_table_without_pk();
+    is_table_with_hidden_pk_column_ = table_schema->is_table_with_hidden_pk_column();
     index_type_ = table_schema->get_index_type();
     is_column_store_ = (table_schema->get_column_group_count() > 1) ? true :false;
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);

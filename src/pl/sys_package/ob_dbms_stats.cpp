@@ -3716,7 +3716,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
           col_param.set_need_avg_len();
         }
       }
-      if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
+      if (col->is_rowkey_column() && table_schema.is_table_with_pk()) {
         col_param.set_is_index_column();
         if (1 == table_schema.get_rowkey_column_num()) {
           col_param.set_is_unique_column();

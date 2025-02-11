@@ -524,7 +524,10 @@ public:
                                         char* buf,
                                         const int64_t& buf_len,
                                         int64_t& pos) const;
-
+  int print_heap_table_pk_info(const ObTableSchema &table_schema,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t& pos) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {

@@ -233,7 +233,7 @@ int ObAlterAutoPartAttrOp::alter_table_auto_part_attr_if_need(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("modified auto partition attr, not expected here", K(ret), K(ddl_type),
       K(alter_table_arg.alter_auto_partition_attr_));
-  } else if (table_schema.is_heap_table() || table_schema.is_in_recyclebin()) {
+  } else if (table_schema.is_table_without_pk() || table_schema.is_in_recyclebin()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("modified auto partition attr, unexpected table status", K(ret), K(table_schema));
   } else if (OB_FAIL(lock_for_modify_auto_part_size(table_schema, schema_guard, trans))) {

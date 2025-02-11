@@ -166,6 +166,12 @@ public:
     AT_VALUES_NODE = 1,
     SPLIT_PARTITION_TYPE_NODE = 2
   };
+  enum ObTableOrganizationType : uint8_t {
+    OB_ORGANIZATION_INVALID = 0,
+    OB_INDEX_ORGANIZATION = 1,
+    OB_HEAP_ORGANIZATION = 2,
+    OB_ORGANIZATION_MAX
+  };
   static const int NAMENODE = 1;
 
   static const int64_t MAX_PROGRESSIVE_MERGE_NUM = 100;
@@ -1070,6 +1076,7 @@ protected:
       bool &is_prefix);
   bool is_support_split_index_key(const INDEX_KEYNAME index_keyname);
   bool is_column_group_supported() const;
+  bool is_organization_set_to_heap() { return table_organization_ == ObTableOrganizationType::OB_HEAP_ORGANIZATION; }
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
@@ -1139,6 +1146,7 @@ protected:
   ObExternalFileFormat::FormatType external_table_format_type_;
   common::ObBitSet<> mocked_external_table_column_ids_;
   common::ObString index_params_;
+  ObTableOrganizationType table_organization_;
   int64_t mv_refresh_dop_;
   common::ObString vec_column_name_;
   ObIndexType vec_index_type_;

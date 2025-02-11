@@ -2051,7 +2051,7 @@ int ObLoadDataDirectImpl::BackupLoadExecutor::process_partition(int32_t session_
     ObNewRow *new_row = nullptr;
     bool is_iter_end = false;
     int64_t processed_line_count = 0;
-    const bool is_heap_table = direct_loader->get_table_ctx()->schema_.is_heap_table_;
+    const bool is_heap_table = direct_loader->get_table_ctx()->schema_.is_table_with_hidden_pk_column_;
     ObTableLoadSequenceNo sequence_no(
       (partition_idx << ObTableLoadSequenceNo::BACKUP_PARTITION_IDX_SHIFT) +
       (subpart_idx << ObTableLoadSequenceNo::BACKUP_SUBPART_IDX_SHIFT));

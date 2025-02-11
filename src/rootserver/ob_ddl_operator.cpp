@@ -9381,7 +9381,7 @@ int ObDDLOperator::revise_not_null_constraint_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(table_id), K(tenant_id));
   } else {
-    bool is_heap_table = ori_table_schema->is_heap_table();
+    bool is_table_with_hidden_pk_column = ori_table_schema->is_table_with_hidden_pk_column();
     ObTableSchema::const_column_iterator col_iter = ori_table_schema->column_begin();
     ObTableSchema::const_column_iterator col_iter_end = ori_table_schema->column_end();
     for (; col_iter != col_iter_end && OB_SUCC(ret); col_iter++) {
@@ -9389,7 +9389,8 @@ int ObDDLOperator::revise_not_null_constraint_info(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column schema is null", K(ret), KPC(ori_table_schema));
       } else if (!(*col_iter)->is_nullable() && !(*col_iter)->is_hidden()) {
-        if (!is_heap_table && (*col_iter)->is_rowkey_column()) {
+        // todo@lanyi conisder case when not null columns of order by table
+        if (!is_table_with_hidden_pk_column && (*col_iter)->is_rowkey_column()) {
           // do nothing for rowkey columns.
           // not filter rowkey column of no_pk_table since it may be partition key and can be null.
         } else if (OB_UNLIKELY((*col_iter)->has_not_null_constraint())) {

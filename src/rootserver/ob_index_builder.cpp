@@ -304,6 +304,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
           LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
         }
       }
+    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_table_schema->get_index_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support to drop index with a name reserved by the heap table", K(ret), KPC(index_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping index with a name reserved by the heap table is");
     } else if (OB_FAIL(ddl_service_.check_index_on_foreign_key(index_table_schema,
                                                                foreign_key_infos,
                                                                have_index))) {
@@ -1578,7 +1582,8 @@ int ObIndexBuilder::generate_schema(
           && (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
               || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
               || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == arg.index_type_
-              || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_)) {
+              || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_
+              || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == arg.index_type_)) {
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                 data_schema, arg))) {
           RS_LOG(WARN, "fail to check unique key cover partition column", K(ret));
@@ -1718,7 +1723,18 @@ int ObIndexBuilder::generate_schema(
       schema.set_table_state_flag(data_schema.get_table_state_flag());
       schema.set_mv_mode(data_schema.get_mv_mode());
       schema.set_duplicate_attribute(data_schema.get_duplicate_scope(), data_schema.get_duplicate_read_consistency());
-      if (OB_FAIL(set_basic_infos(arg, data_schema, schema))) {
+      if (INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == arg.index_type_) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.5.1, heap table is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.1, heap table is");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(set_basic_infos(arg, data_schema, schema))) {
         LOG_WARN("set_basic_infos failed", K(arg), K(data_schema), K(ret));
       } else if (need_generate_index_schema_column
                  && OB_FAIL(set_index_table_columns(arg, data_schema, schema))) {
@@ -1893,6 +1909,7 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
       if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
           || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
           || INDEX_TYPE_SPATIAL_LOCAL == arg.index_type_
+          || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == arg.index_type_
           || is_fts_index(arg.index_type_)
           || is_multivalue_index(arg.index_type_)
           || is_vec_index(arg.index_type_)) {

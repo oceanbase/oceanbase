@@ -138,7 +138,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected rowkey position", KR(ret), KPC(column_schema), K(pos));
       } else {
-        if (table_schema->is_heap_table()) {
+        if (table_schema->is_table_with_hidden_pk_column()) {
           abort_unless(i > 0);
           part_key_obj_index_[pos - 1].index_ = i - 1;
         } else {

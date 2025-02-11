@@ -150,7 +150,8 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.column_count_ = table_load_schema.store_column_count_;
   insert_table_param.lob_inrow_threshold_ = table_load_schema.lob_inrow_threshold_;
   insert_table_param.is_partitioned_table_ = table_load_schema.is_partitioned_table_;
-  insert_table_param.is_heap_table_ = table_load_schema.is_heap_table_;
+  insert_table_param.is_table_without_pk_ = table_load_schema.is_table_without_pk_;
+  insert_table_param.is_table_with_hidden_pk_column_ = table_load_schema.is_table_with_hidden_pk_column_;
   insert_table_param.online_opt_stat_gather_ = false;
   insert_table_param.is_incremental_ = false;
   insert_table_param.datum_utils_ = &(table_load_schema.datum_utils_);

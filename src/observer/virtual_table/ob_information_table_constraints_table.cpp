@@ -142,7 +142,7 @@ int ObInfoSchemaTableConstraintsTable::add_table_constraints(const ObTableSchema
 {
   int ret = OB_SUCCESS;
   //add rowkey constraints
-  if (!table_schema.is_heap_table()) {
+  if (table_schema.is_table_with_pk()) {
     if (OB_FAIL(add_rowkey_constraints(table_schema, database_name, cells, col_count))) {
       SERVER_LOG(WARN, "fail to add rowkey indexes", K(ret));
     }

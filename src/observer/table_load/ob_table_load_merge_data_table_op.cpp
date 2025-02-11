@@ -41,7 +41,7 @@ int ObTableLoadMergeDataTableOp::inner_init()
   ObTableLoadStoreDataTableCtx *store_table_ctx = store_ctx_->data_store_table_ctx_;
   need_del_lob_ = ObDirectLoadMethod::is_incremental(ctx_->param_.method_) &&
                   nullptr != store_ctx_->data_store_table_ctx_->lob_table_ctx_ &&
-                  !store_table_ctx->schema_->is_heap_table_;
+                  !store_table_ctx->schema_->is_table_without_pk_;
   need_rescan_ =
     ObDirectLoadMethod::is_full(ctx_->param_.method_) && store_table_ctx->schema_->is_column_store_;
   if (!store_ctx_->write_ctx_.is_fast_heap_table_) {
@@ -101,7 +101,7 @@ int ObTableLoadMergeDataTableOp::inner_init()
         break;
       // 增量
       case ObDirectLoadMethod::INCREMENTAL:
-        if (store_table_ctx->schema_->is_heap_table_) {
+        if (store_table_ctx->schema_->is_table_without_pk_) {
           inner_ctx_.merge_mode_ = ObDirectLoadMergeMode::NORMAL;
         } else {
           switch (ctx_->param_.insert_mode_) {

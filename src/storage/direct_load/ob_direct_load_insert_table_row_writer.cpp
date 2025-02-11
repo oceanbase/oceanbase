@@ -170,7 +170,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
   } else if (OB_UNLIKELY(nullptr == dml_row_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret), KP(dml_row_handler));
-  } else if (OB_UNLIKELY(!insert_tablet_ctx->get_is_heap_table())) {
+  } else if (OB_UNLIKELY(!insert_tablet_ctx->get_is_table_without_pk())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected not heap table", KR(ret));
   } else if (OB_FAIL(init_sstable_slice())) {

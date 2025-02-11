@@ -223,6 +223,13 @@ enum ObTableStateBitMask
   TABLE_STATE_MAX_MASK,
 };
 
+enum ObTablePrimaryKeyExistsMode
+{
+  TOM_TABLE_WITH_PK = 0,
+  TOM_TABLE_WITHOUT_PK = 1,
+  TOM_PK_MAX,
+};
+
 enum ObTableOrganizationMode
 {
   TOM_INDEX_ORGANIZED = 0,
@@ -377,9 +384,13 @@ public:
   {
     return (ObTableStateFlag)((table_mode >> TM_TABLE_STATE_FLAG_OFFSET) & STATE_FLAG_MASK);
   }
+  static ObTablePrimaryKeyExistsMode get_table_pk_exists_flag(int32_t table_mode)
+  {
+    return (ObTablePrimaryKeyExistsMode)(((table_mode >> TM_TABLE_PK_EXISTS_MODE_OFFSET) & TABLE_PK_EXISTS_MODE_MASK));
+  }
   static ObTableOrganizationMode get_table_organization_flag(int32_t table_mode)
   {
-    return (ObTableOrganizationMode)((table_mode >> TM_TABLE_PK_EXISTS_MODE_OFFSET) & TABLE_PK_EXISTS_MODE_MASK);
+    return (ObTableOrganizationMode)(((table_mode >> TM_TABLE_ORGANIZATION_MODE_OFFSET) & TABLE_ORGANIZATION_MODE_MASK));
   }
   static ObViewCreatedMethodFlag get_view_created_method_flag(int32_t table_mode)
   {
@@ -434,13 +445,13 @@ public:
                "mv_on_query_computation_flag", mv_on_query_computation_flag_,
                "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_,
                "table_organization_mode", table_organization_mode_);
-
   union {
     int32_t mode_;
     struct {
       uint32_t mode_flag_ :TM_MODE_FLAG_BITS;
       uint32_t pk_mode_ :TM_PK_MODE_BITS;
       uint32_t state_flag_ :TM_TABLE_STATE_FLAG_BITS;
+      // pk_exists will indicate whether the table has pk or not (not the user defined pk, is ob's pk)
       uint32_t pk_exists_: TM_TABLE_PK_EXISTS_MODE_BITS; // FARM COMPAT WHITELIST, renamed
       uint32_t view_created_method_flag_ :TM_VIEW_CREATED_METHOD_FLAG_BITS;
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
@@ -452,6 +463,7 @@ public:
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
       uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
+      // heap_organization_mode_ will indicate whether the table is index organized(0) or heap organized(1)
       uint32_t table_organization_mode_: TM_TABLE_ORGANIZATION_MODE_BITS;
       uint32_t reserved_ : TM_RESERVED;
     };
@@ -799,8 +811,14 @@ public:
   { table_mode_.mode_flag_ =  mode_flag; }
   inline void set_table_pk_mode(const ObTablePKMode pk_mode)
   { table_mode_.pk_mode_ =  pk_mode; }
-  inline void set_table_organization_mode(const ObTableOrganizationMode organization_mode)
+  inline void set_table_pk_exists_mode(const ObTablePrimaryKeyExistsMode organization_mode)
   { table_mode_.pk_exists_ = organization_mode; }
+  inline void set_table_organization_mode(const ObTableOrganizationMode organization_mode)
+  { table_mode_.table_organization_mode_ = organization_mode; }
+  inline ObTablePrimaryKeyExistsMode get_table_pk_exists_mode() const
+  { return (ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
+  inline ObTableOrganizationMode get_table_organization_mode() const
+  { return (ObTableOrganizationMode)table_mode_.table_organization_mode_; }
   inline void set_view_created_method_flag(const ObViewCreatedMethodFlag view_created_method_flag)
     { table_mode_.view_created_method_flag_ =  view_created_method_flag; }
   inline ObViewCreatedMethodFlag get_view_created_method_flag() const
@@ -836,10 +854,25 @@ public:
   { table_mode_.state_flag_ = flag; }
   inline bool is_queuing_table() const
   { return is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
-  inline bool is_iot_table() const
-  { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.pk_exists_; }
-  inline bool is_heap_table() const
-  { return TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.pk_exists_; }
+  // returns true when the primary key in ob contains the hidden column
+  inline bool is_table_with_hidden_pk_column() const
+  { return (TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ ||
+           (TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ &&
+            TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_)); }
+  // returns true when ob considers the table does not have the user provided primary key and use the
+  // hidden pk as ob's primary key
+  inline bool is_table_without_pk() const
+  { return TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
+  // returns true when ob considers the table has the user provided primary key (order by columns
+  // in the heap organized table and primary key columns in the index organized table)
+  inline bool is_table_with_pk() const
+  { return TOM_TABLE_WITH_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
+  // returns true when users define the table organization as heap (by tenant config or table option)
+  inline bool is_heap_organized_table() const
+  { return TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_; }
+  // returns true when users define the table organization as index (by tenant config or table option)
+  inline bool is_index_organized_table() const
+  { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_; }
   inline bool view_column_filled() const
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
@@ -1190,7 +1223,7 @@ public:
   **/
   inline bool need_partition_key_for_build_local_index(const ObSimpleTableSchemaV2 &data_table_schema) const
   {
-    const bool heap_case =  is_index_local_storage() && data_table_schema.is_heap_table();
+    const bool heap_case =  is_index_local_storage() && data_table_schema.is_table_without_pk();
     const bool fts_case = is_partitioned_table() && is_index_local_storage() && (is_fts_index_aux() || is_fts_doc_word_aux());
     const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
     const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
@@ -1631,6 +1664,10 @@ public:
   int get_generated_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
   int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
+  // returns true when user defined primary key is given
+  int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
+  int get_heap_table_pk(ObIArray<uint64_t> &pk_ids) const;
+
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
   int check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const;
@@ -2509,7 +2546,8 @@ inline bool ObSimpleTableSchemaV2::is_unique_index(ObIndexType index_type)
   return INDEX_TYPE_UNIQUE_LOCAL == index_type
          || INDEX_TYPE_UNIQUE_GLOBAL == index_type
          || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
-         || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type;
+         || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type
+         || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type;
 }
 
 inline bool ObSimpleTableSchemaV2::is_domain_index() const
@@ -2617,7 +2655,6 @@ int ObTableSchema::build_index_table_name(Allocator &allocator,
       }
     }
   }
-
   return ret;
 }
 

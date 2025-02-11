@@ -4576,8 +4576,8 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema, const
              && !is_sys_table() && !is_aux_vp_table() && !is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only NORMAL table and index table and SYSTEM table and view table are allowed", K(ret));
-  } else if (!for_view && ((!is_heap_table() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
-            || (is_heap_table() && column_cnt_ <=
+  } else if (!for_view && ((!is_table_with_hidden_pk_column() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
+            || (is_table_with_hidden_pk_column() && column_cnt_ <=
               ((column_schema->is_rowkey_column() && column_schema->is_hidden()) ? MIN_COLUMN_COUNT_WITH_HEAP_TABLE - 1 :
               MIN_COLUMN_COUNT_WITH_HEAP_TABLE)))) {
     ret = OB_CANT_REMOVE_ALL_FIELDS;
@@ -6196,7 +6196,7 @@ int ObTableSchema::get_column_ids_serialize_to_rowid(common::ObIArray<uint64_t> 
     OZ(rowkey_info.get_column_ids(col_ids));
     OX(rowkey_cnt = col_ids.count());
 
-    if (is_heap_table()) {
+    if (is_table_without_pk()) {
       // rowid of heap organized table is made up of (tablet id, rowkey)
     } else if (OB_SUCC(ret) && has_generated_column()) {
       const ObPartitionKeyInfo &part_key_info = get_partition_key_info();
@@ -6318,9 +6318,9 @@ int ObTableSchema::get_rowid_version(int64_t rowkey_cnt,
 {
   int ret = OB_SUCCESS;
 
-  if (is_heap_table() && !is_external_table()) {
+  if (is_table_without_pk() && !is_external_table()) {
     version = is_extended_rowid_mode() ? ObURowIDData::EXT_HEAP_TABLE_ROWID_VERSION : ObURowIDData::HEAP_TABLE_ROWID_VERSION;
-  } else if (is_heap_table() && is_external_table()) {
+  } else if (is_table_without_pk() && is_external_table()) {
     version = ObURowIDData::EXTERNAL_TABLE_ROWID_VERSION;
   } else {
     version = ObURowIDData::PK_ROWID_VERSION;
@@ -6636,6 +6636,68 @@ int ObTableSchema::has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bo
           // All index columns of this unique key index are not nullable, return true.
           bool_result = true;
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const
+{
+  int ret = OB_SUCCESS;
+  bool_result = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  uint64_t compat_version = 0;
+  if (!is_valid()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("The ObTableSchema is invalid", K(ret));
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  } else {
+    const uint64_t tenant_id = get_tenant_id();
+    for (int64_t i = 0; !bool_result && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = NULL;
+      const ObSimpleTableSchemaV2 *simple_index_schema = NULL;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+        simple_index_infos.at(i).table_id_, simple_index_schema))) {
+        LOG_WARN("fail to get simple table schema", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_UNLIKELY(NULL == simple_index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("simple index schema from schema guard is NULL", K(ret), K(simple_index_schema));
+      } else if (INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == simple_index_schema->get_index_type()) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(get_tenant_id(), compat_version))) {
+          LOG_WARN("failed to get min data version", KR(ret), K(get_tenant_id()));
+        } else if((compat_version < DATA_VERSION_4_3_5_1)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("heap organized table is not supported under version 4.3.5.1", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap organized table under version 4.3.5.1 is");
+        } else {
+          bool_result = true;
+        }
+
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    bool_result |= is_table_with_pk() && is_index_organized_table();
+  }
+  return ret;
+}
+
+int ObTableSchema::get_heap_table_pk(ObIArray<uint64_t> &pk_ids) const
+{
+  int ret = OB_SUCCESS;
+  pk_ids.reuse();
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+       OB_SUCC(ret) && iter != column_end(); iter++) {
+    const ObColumnSchemaV2 *column = *iter;
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), KPC(this));
+    } else if (column->is_heap_table_primary_key_column()) {
+      if (OB_FAIL(pk_ids.push_back(column->get_column_id()))) {
+        LOG_WARN("failed to push back", K(ret));
       }
     }
   }
@@ -7646,7 +7708,7 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
   ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
   if (is_auto_partitioned_table()) {
     bool match_rowkey_prefix = false;
-    if (is_heap_table()) {
+    if (is_table_without_pk()) {
       // not allow to auto partitioning no primary key table
       // target_part_level = PARTITION_LEVEL_MAX
       ret = OB_ERR_UNEXPECTED;
@@ -7744,7 +7806,7 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split table in recyclebin", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "recyclebin table is");
-  } else if (is_heap_table()) {
+  } else if (is_table_without_pk()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split a partition of no primary key table", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "reorganizing table without primary key(s) is");
@@ -8084,7 +8146,7 @@ int ObTableSchema::is_presetting_partition_key(const uint64_t partition_key_id,
 int ObTableSchema::check_primary_key_cover_partition_column()
 {
   int ret = OB_SUCCESS;
-  if (!is_partitioned_table() || is_heap_table()) {
+  if (!is_partitioned_table() || is_table_without_pk()) {
     //nothing todo
   } else if (OB_FAIL(check_rowkey_cover_partition_keys(partition_key_info_))) {
     LOG_WARN("Check rowkey cover partition key failed", K(ret));
@@ -8142,8 +8204,8 @@ int ObTableSchema::check_create_index_on_hidden_primary_key(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(index_table));
   } else if (!is_partitioned_table()
-             || !is_heap_table()
-             || (is_heap_table() && index_table.is_index_local_storage())) {
+             || is_table_with_pk()
+             || (is_table_without_pk() && index_table.is_index_local_storage())) {
     // update 2021.11: for 4.0 new heap table, index table doesn't need to cover partition keys
     // If it is not a non-partitioned table, or is not a hidden primary key, there is no need to check
   } else if (OB_FAIL(index_table.check_index_table_cover_partition_keys(partition_key_info_))) {

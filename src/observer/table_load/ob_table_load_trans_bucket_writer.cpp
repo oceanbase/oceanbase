@@ -99,7 +99,7 @@ int ObTableLoadTransBucketWriter::init()
     const ObTableLoadSchema &schema = coordinator_ctx_->ctx_->schema_;
     is_partitioned_ = schema.is_partitioned_table_;
     column_count_ =
-      (!schema.is_heap_table_ ? schema.store_column_count_ : schema.store_column_count_ - 1);
+      (!schema.is_table_with_hidden_pk_column_ ? schema.store_column_count_ : schema.store_column_count_ - 1);
     if (OB_FAIL(ObSQLUtils::get_default_cast_mode(coordinator_ctx_->ctx_->session_info_, cast_mode_))) {
       LOG_WARN("fail to get_default_cast_mode", KR(ret));
     } else if (OB_FAIL(init_session_ctx_array())) {

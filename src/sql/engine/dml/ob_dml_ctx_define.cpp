@@ -278,7 +278,7 @@ OB_SERIALIZE_MEMBER(ObDMLBaseCtDef,
                     error_logging_ctdef_,
                     view_check_exprs_,
                     is_primary_index_,
-                    is_heap_table_,
+                    is_table_without_pk_, // FARM COMPAT WHITELIST, renamed
                     has_instead_of_trigger_,
                     trans_info_expr_);
 

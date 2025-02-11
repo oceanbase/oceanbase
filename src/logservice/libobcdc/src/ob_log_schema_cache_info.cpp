@@ -432,7 +432,7 @@ int64_t ObLogRowkeyInfo::to_string(char* buf, const int64_t buf_len) const
 TableSchemaInfo::TableSchemaInfo(ObIAllocator &allocator)
     : is_inited_(false),
       allocator_(allocator),
-      is_heap_table_(false),
+      is_table_with_hidden_pk_column_(false),
       aux_lob_meta_tid_(OB_INVALID_ID),
       rowkey_info_(),
       user_column_idx_array_(NULL),
@@ -465,12 +465,12 @@ int TableSchemaInfo::init(const TABLE_SCHEMA *table_schema)
     // externally set user_column_idx_array_cnt_ to the number of hidden columns not included
     user_column_idx_array_cnt_ = table_schema->get_column_count();
     column_schema_array_cnt_ = table_schema->get_max_used_column_id() - OB_APP_MIN_COLUMN_ID + 1;
-    const bool is_heap_table = table_schema->is_heap_table();
+    const bool is_table_with_hidden_pk_column = table_schema->is_table_with_hidden_pk_column();
     aux_lob_meta_tid_ = table_schema->get_aux_lob_meta_tid();
 
     // For table without primary keys:
     // record hidden primary key information at the start column_id=1, column_name="__pk_increment", reserved position
-    if (is_heap_table) {
+    if (is_table_with_hidden_pk_column) {
       ++user_column_idx_array_cnt_;
       ++column_schema_array_cnt_;
     }
@@ -489,11 +489,11 @@ int TableSchemaInfo::init(const TABLE_SCHEMA *table_schema)
       LOG_ERROR("init_column_id_hash_array_ fail", KR(ret), K(column_schema_array_cnt_));
     } else {
       is_inited_ = true;
-      is_heap_table_ = is_heap_table;
+      is_table_with_hidden_pk_column_ = is_table_with_hidden_pk_column;
 
       LOG_INFO("table_schema_info init succ", "table_id", table_schema->get_table_id(),
           "table_name", table_schema->get_table_name(),
-          K_(is_heap_table),
+          K_(is_table_with_hidden_pk_column),
           K_(aux_lob_meta_tid),
           "version", table_schema->get_schema_version(),
           "user_column_idx_array_cnt", user_column_idx_array_cnt_,
@@ -515,7 +515,7 @@ void TableSchemaInfo::destroy()
 {
   is_inited_ = false;
 
-  is_heap_table_ = false;
+  is_table_with_hidden_pk_column_ = false;
   aux_lob_meta_tid_ = OB_INVALID_ID;
   rowkey_info_.release_mem(allocator_);
 
@@ -659,7 +659,7 @@ int TableSchemaInfo::init_column_schema_info(
   const bool is_rowkey_col = column_table_schema.is_rowkey_column();
   const int16_t rowkey_idx = column_table_schema.get_rowkey_position() -1;
   ColumnSchemaInfo *column_schema_info = NULL;
-  bool is_heap_table_pk_increment_column = table_schema.is_heap_table()  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
+  bool is_heap_table_pk_increment_column = table_schema.is_table_with_hidden_pk_column()  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

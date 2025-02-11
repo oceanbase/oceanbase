@@ -496,15 +496,15 @@ int ObTableLoadStoreCtx::init_write_ctx()
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
-      (!data_store_table_ctx_->schema_->is_heap_table_
+      (!data_store_table_ctx_->schema_->is_table_without_pk_
          ? data_store_table_ctx_->schema_->rowkey_column_count_
          : 0);
     write_ctx_.table_data_desc_.column_count_ =
-      (!data_store_table_ctx_->schema_->is_heap_table_
+      (!data_store_table_ctx_->schema_->is_table_without_pk_
          ? data_store_table_ctx_->schema_->store_column_count_
          : data_store_table_ctx_->schema_->store_column_count_ - 1);
     write_ctx_.table_data_desc_.row_flag_.uncontain_hidden_pk_ =
-      data_store_table_ctx_->schema_->is_heap_table_;
+      data_store_table_ctx_->schema_->is_table_without_pk_;
     // dml_row_handler_
     if (OB_SUCC(ret)) {
       ObTableLoadDataRowInsertHandler *data_row_handler = nullptr;
@@ -540,7 +540,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
         } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
-        } else if (data_store_table_ctx_->schema_->is_heap_table_) {
+        } else if (data_store_table_ctx_->schema_->is_table_without_pk_) {
           const int64_t bucket_cnt = wa_mem_limit / (thread_cnt_ * MACRO_BLOCK_WRITER_MEM_SIZE);
           if (part_cnt <= bucket_cnt || !ctx_->param_.need_sort_) {
             // 堆表快速写入
@@ -565,7 +565,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
     // pre_sort
     if (OB_SUCC(ret)) {
       write_ctx_.enable_pre_sort_ =
-        (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_heap_table_);
+        (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_table_without_pk_);
       if (write_ctx_.enable_pre_sort_) {
         if (OB_ISNULL(write_ctx_.pre_sorter_ =
                         OB_NEWx(ObTableLoadPreSorter, (&allocator_), this))) {

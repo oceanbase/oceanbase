@@ -6326,12 +6326,15 @@ int ObResolverUtils::check_unique_index_cover_partition_column(const ObTableSche
 {
   int ret = OB_SUCCESS;
   if (!(table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
+      //todo@lanyi 看能不能抽象成统一函数
       || (INDEX_TYPE_PRIMARY != arg.index_type_
           && INDEX_TYPE_UNIQUE_LOCAL != arg.index_type_
           && INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL != arg.index_type_
-          && INDEX_TYPE_UNIQUE_GLOBAL != arg.index_type_)) {
+          && INDEX_TYPE_UNIQUE_GLOBAL != arg.index_type_
+          && INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY != arg.index_type_)) {
     //nothing to do
   } else {
+    bool is_heap_table_primary_key = INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == arg.index_type_;
     const common::ObPartitionKeyInfo &partition_info = table_schema.get_partition_key_info();
     const common::ObPartitionKeyInfo &subpartition_info = table_schema.get_subpartition_key_info();
     ObSEArray<uint64_t, 5> idx_col_ids;
@@ -6339,13 +6342,13 @@ int ObResolverUtils::check_unique_index_cover_partition_column(const ObTableSche
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Failed to get index column ids", K(ret), K(table_schema), K(arg.index_columns_));
     } else if (table_schema.is_auto_partitioned_table() && !table_schema.is_partitioned_table()) {
-      if (OB_FAIL(unique_idx_covered_presetting_partition_columns(table_schema, idx_col_ids))) {
+      if (OB_FAIL(unique_idx_covered_presetting_partition_columns(table_schema, idx_col_ids, is_heap_table_primary_key))) {
         LOG_WARN("Unique index covered presetting partition columns failed", KR(ret));
       }
     } else {
-      if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, partition_info))) {
+      if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, partition_info, is_heap_table_primary_key))) {
         LOG_WARN("Unique index covered partition columns failed", KR(ret));
-      } else if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, subpartition_info))) {
+      } else if (OB_FAIL(unique_idx_covered_partition_columns(table_schema, idx_col_ids, subpartition_info, is_heap_table_primary_key))) {
         LOG_WARN("Unique index covered partition columns failed", KR(ret));
       } else { }//do nothing
     }
@@ -6372,7 +6375,8 @@ int ObResolverUtils::get_index_column_ids(
 }
 
 int ObResolverUtils::unique_idx_covered_presetting_partition_columns(const share::schema::ObTableSchema &table_schema,
-                                                                     const common::ObIArray<uint64_t> &index_columns)
+                                                                     const common::ObIArray<uint64_t> &index_columns,
+                                                                     const bool is_heap_table_primary_key)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
@@ -6388,7 +6392,7 @@ int ObResolverUtils::unique_idx_covered_presetting_partition_columns(const share
         LOG_WARN("unique key does not include all presetting partition key", KR(ret),
                                                                              K(presetting_partition_column_ids),
                                                                              K(index_columns));
-        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "UNIQUE INDEX");
+        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, is_heap_table_primary_key ? "PRIMARY KEY" : "UNIQUE INDEX");
       }
     } // end for
   }
@@ -6399,7 +6403,8 @@ int ObResolverUtils::unique_idx_covered_presetting_partition_columns(const share
 int ObResolverUtils::unique_idx_covered_partition_columns(
     const ObTableSchema &table_schema,
     const ObIArray<uint64_t> &index_columns,
-    const ObPartitionKeyInfo &partition_info)
+    const ObPartitionKeyInfo &partition_info,
+    const bool is_heap_table_primary_key)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
@@ -6430,7 +6435,7 @@ int ObResolverUtils::unique_idx_covered_partition_columns(
         }
       } else {
         ret = OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF;
-        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, "UNIQUE INDEX");
+        LOG_USER_ERROR(OB_EER_UNIQUE_KEY_NEED_ALL_FIELDS_IN_PF, is_heap_table_primary_key ? "PRIMARY KEY" : "UNIQUE INDEX");
       }
     } else { }//do nothing
   } // end for

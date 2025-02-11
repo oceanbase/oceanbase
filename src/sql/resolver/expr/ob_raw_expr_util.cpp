@@ -9159,7 +9159,7 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
       OZ(calc_urowid_expr->add_param_expr(rowkey_exprs.at(i)));
     }
-    if (OB_SUCC(ret) && !table_schema.is_external_table() && table_schema.is_heap_table()) {
+    if (OB_SUCC(ret) && !table_schema.is_external_table() && table_schema.is_table_without_pk()) {
       //set calc tablet id for heap table calc_urowid expr
       ObRawExpr *calc_tablet_id_expr = nullptr;
       OZ(build_calc_tablet_id_expr(expr_factory,

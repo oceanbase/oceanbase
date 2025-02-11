@@ -1639,7 +1639,7 @@ int ObMVPrinter::gen_max_min_seq_window_func_exprs(const TableItem &table,
   } else if (OB_ISNULL(source_data_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(source_data_schema));
-  } else if (!source_data_schema->is_heap_table()) {
+  } else if (source_data_schema->is_table_with_pk()) {
     if (OB_FAIL(source_data_schema->get_rowkey_column_ids(unique_col_ids))) {
       LOG_WARN("failed to get rowkey column ids", KR(ret));
     }
@@ -2060,7 +2060,7 @@ int ObMVPrinter::gen_rowkey_join_conds_for_table(const TableItem &origin_table,
     LOG_WARN("unexpected null", K(ret), K(stmt_factory_.get_query_ctx()));
   } else if (OB_FAIL(stmt_factory_.get_query_ctx()->sql_schema_guard_.get_table_schema(origin_table.ref_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_UNLIKELY(table_schema->is_heap_table())) {
+  } else if (OB_UNLIKELY(table_schema->is_table_without_pk())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table schema", K(ret), KPC(table_schema));
   } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_column_ids))) {

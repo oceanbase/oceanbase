@@ -1521,7 +1521,7 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
           LOG_WARN("column which rowid dependent is not exist",
                    K(rowid_col_ids.at(i)), K(rowid_col_ids), K(ret));
         }
-        if (table_schema.is_heap_table()) {
+        if (table_schema.is_table_without_pk()) {
           rowid_version = table_schema.is_extended_rowid_mode() ? ObURowIDData::EXT_HEAP_TABLE_ROWID_VERSION : ObURowIDData::HEAP_TABLE_ROWID_VERSION;
         } else {
           rowid_version = common::ObURowIDData::LOB_NO_PK_ROWID_VERSION;

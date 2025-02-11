@@ -1359,7 +1359,7 @@ int ObDDLUtil::generate_order_by_str_for_mview(const ObTableSchema &container_ta
   int ret = OB_SUCCESS;
   rowkey_column_sql_string.reset();
   const ObRowkeyInfo &rowkey_info = container_table_schema.get_rowkey_info();
-  if (container_table_schema.is_heap_table()) {
+  if (container_table_schema.is_table_without_pk()) {
     /* do nothing */
   } else if (OB_UNLIKELY(rowkey_info.get_size() < 1)) {
     ret = OB_ERR_UNEXPECTED;

@@ -9578,7 +9578,7 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(dblink_param_ctx &param_ctx,
     } else if (lib::is_oracle_mode() && OB_FAIL(try_mock_link_table_column(*table_schema))) {
       LOG_WARN("failed to mock link table pkey", K(ret));
     } else {
-      table_schema->set_table_organization_mode(ObTableOrganizationMode::TOM_HEAP_ORGANIZED);
+      table_schema->set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
     }
     if (OB_SUCC(ret) && DBLINK_DRV_OB == param_ctx.link_type_ && NULL != current_scn) {
       if (OB_FAIL(fetch_link_current_scn(param_ctx,

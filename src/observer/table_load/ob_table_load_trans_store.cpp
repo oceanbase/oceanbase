@@ -302,7 +302,7 @@ int ObTableLoadTransStoreWriter::StoreWriter::new_table_builder(
     }
   } else {
     // 有主键表不排序路径
-    abort_unless(!store_ctx_->data_store_table_ctx_->schema_->is_heap_table_);
+    abort_unless(!store_ctx_->data_store_table_ctx_->schema_->is_table_without_pk_);
     ObDirectLoadMultipleSSTableBuildParam param;
     param.tablet_id_ = tablet_id;
     param.table_data_desc_ = store_ctx_->write_ctx_.table_data_desc_;

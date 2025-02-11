@@ -602,7 +602,7 @@ int ObDirectLoadInsertDataTableContext::create_all_tablet_contexts(
 int64_t ObDirectLoadInsertDataTableContext::get_sql_stat_column_count() const
 {
   int64_t column_count = 0;
-  if (!param_.is_heap_table_) {
+  if (!param_.is_table_without_pk_) {
     column_count = param_.column_count_;
   } else {
     column_count = param_.column_count_ - param_.rowkey_column_count_;
@@ -677,11 +677,11 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
   } else {
     ObOptOSGColumnStat *col_stat = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
-      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+      if (i < param_.rowkey_column_count_ && param_.is_table_without_pk_) {
         // ignore heap table hidden pk
       } else {
         const int64_t datum_idx = i < param_.rowkey_column_count_ ? i : i + extra_rowkey_cnt;
-        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const int64_t col_stat_idx = param_.is_table_without_pk_ ? i - 1 : i;
         const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
@@ -730,11 +730,11 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
         // do nothing
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
-          if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+          if (i < param_.rowkey_column_count_ && param_.is_table_without_pk_) {
             // ignore heap table hidden pk
           } else {
             const int64_t datum_idx = i < param_.rowkey_column_count_ ? i : i + extra_rowkey_cnt;
-            const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+            const int64_t col_stat_idx = param_.is_table_without_pk_ ? i - 1 : i;
             const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
             const ObColDesc &col_desc = param_.col_descs_->at(i);
             ObIVector *vector = datum_rows.vectors_.at(datum_idx);
@@ -776,7 +776,7 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
     LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
   } else if (OB_UNLIKELY(row_flag.get_column_count(datum_row.get_column_count()) !=
                            param_.column_count_ ||
-                         (row_flag.uncontain_hidden_pk_ && !param_.is_heap_table_))) {
+                         (row_flag.uncontain_hidden_pk_ && !param_.is_table_without_pk_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid datum row", KR(ret), K(param_), K(datum_row), K(row_flag));
   } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
@@ -786,11 +786,11 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
   } else {
     ObOptOSGColumnStat *col_stat = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
-      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+      if (i < param_.rowkey_column_count_ && param_.is_table_without_pk_) {
         // ignore heap table hidden pk
       } else {
         const int64_t datum_idx = row_flag.uncontain_hidden_pk_ ? i - 1 : i;
-        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const int64_t col_stat_idx = param_.is_table_without_pk_ ? i - 1 : i;
         const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
@@ -827,7 +827,7 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
     LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
   } else if (OB_UNLIKELY(row_flag.get_column_count(vectors.count()) != param_.column_count_ ||
                          row_idx < 0 ||
-                         (row_flag.uncontain_hidden_pk_ && !param_.is_heap_table_))) {
+                         (row_flag.uncontain_hidden_pk_ && !param_.is_table_without_pk_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid datum row", KR(ret), K(param_), K(vectors.count()), K(row_idx), K(row_flag));
   } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
@@ -838,11 +838,11 @@ int ObDirectLoadInsertDataTableContext::update_sql_statistics(
     ObOptOSGColumnStat *col_stat = nullptr;
     ObDatum datum;
     for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; ++i) {
-      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+      if (i < param_.rowkey_column_count_ && param_.is_table_without_pk_) {
         // ignore heap table hidden pk
       } else {
         const int64_t datum_idx = row_flag.uncontain_hidden_pk_ ? i - 1 : i;
-        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const int64_t col_stat_idx = param_.is_table_without_pk_ ? i - 1 : i;
         const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
         const ObColDesc &col_desc = param_.col_descs_->at(i);
         ObIVector *vector = vectors.at(datum_idx);
@@ -920,7 +920,7 @@ int ObDirectLoadInsertDataTableContext::collect_sql_statistics(
     int64_t table_avg_len = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
       ObOptOSGColumnStat *osg_col_stat = nullptr;
-      const ObColDesc &col_desc = param_.col_descs_->at(!param_.is_heap_table_ ? i : i + 1);
+      const ObColDesc &col_desc = param_.col_descs_->at(!param_.is_table_without_pk_ ? i : i + 1);
       if (OB_FAIL(sql_statistics.get_col_stat(i, osg_col_stat))) {
         LOG_WARN("fail to get col stat", KR(ret), K(i));
       }

@@ -431,7 +431,7 @@ int ObVecIndexBuilderUtil::check_vec_index_allowed(
   if (OB_UNLIKELY(!data_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(data_schema));
-  } else if (data_schema.is_partitioned_table() && data_schema.is_heap_table()) {
+  } else if (data_schema.is_partitioned_table() && data_schema.is_table_without_pk()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on partition table without primary key");
   }

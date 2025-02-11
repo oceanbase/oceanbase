@@ -94,8 +94,8 @@ public:
            share::schema::ObIndexType::INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == index_type_;
   }
   bool is_valid() const { return is_inited_; }
-  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_heap_table), K_(has_autoinc_column),
-               K_(has_identity_column), K_(rowkey_column_count), K_(store_column_count),
+  TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
+               K_(has_autoinc_column), K_(has_identity_column), K_(rowkey_column_count), K_(store_column_count),
                K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
@@ -114,7 +114,8 @@ public:
   bool is_index_table_;
   bool is_lob_table_;
   bool is_partitioned_table_;
-  bool is_heap_table_;
+  bool is_table_without_pk_;
+  bool is_table_with_hidden_pk_column_;
   share::schema::ObIndexType index_type_;
   bool is_column_store_;
   bool has_autoinc_column_;

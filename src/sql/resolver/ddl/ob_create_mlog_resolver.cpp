@@ -43,7 +43,7 @@ CREATE MATERIALIZED VIEW LOG ON [ schema. ] table
 */
 ObCreateMLogResolver::ObCreateMLogResolver(ObResolverParams &params)
     : ObDDLResolver(params),
-      is_heap_table_(false)
+      is_table_with_logic_pk_(false)
 {
 }
 
@@ -107,7 +107,7 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
     // resolve with clause
     ParseNode *with_options_node = parse_node.children_[ENUM_OPT_WITH];
     create_mlog_stmt->set_with_sequence(true);
-    if (is_heap_table_) {
+    if (!is_table_with_logic_pk_) {
       create_mlog_stmt->set_with_primary_key(false);
       create_mlog_stmt->set_with_rowid(true);
     } else {
@@ -334,13 +334,17 @@ int ObCreateMLogResolver::resolve_table_name_node(
       }
 
       if (OB_SUCC(ret)) {
-        is_heap_table_ = real_table_schema->is_heap_table();
-        create_mlog_stmt.set_database_name(tmp_new_db_name);
-        create_mlog_stmt.set_table_name(tmp_new_tbl_name);
-        create_mlog_stmt.set_mlog_name(mlog_table_name);
-        create_mlog_stmt.set_tenant_id(tenant_id);
-        create_mlog_stmt.set_data_table_id(data_table_schema->get_table_id());
-        create_mlog_stmt.set_name_generated_type(GENERATED_TYPE_SYSTEM);
+        CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
+        if (OB_FAIL(real_table_schema->is_table_with_logic_pk(*schema_checker_->get_schema_guard(), is_table_with_logic_pk_))) {
+          LOG_WARN("failed to check table with logic pk", KR(ret));
+        } else {
+          create_mlog_stmt.set_database_name(tmp_new_db_name);
+          create_mlog_stmt.set_table_name(tmp_new_tbl_name);
+          create_mlog_stmt.set_mlog_name(mlog_table_name);
+          create_mlog_stmt.set_tenant_id(tenant_id);
+          create_mlog_stmt.set_data_table_id(data_table_schema->get_table_id());
+          create_mlog_stmt.set_name_generated_type(GENERATED_TYPE_SYSTEM);
+        }
       }
     }
   }
@@ -472,12 +476,12 @@ int ObCreateMLogResolver::resolve_special_column_node(
   } else {
     switch (special_column_node->type_) {
       case T_MLOG_WITH_PRIMARY_KEY:
-        if (!is_heap_table_) {
+        if (is_table_with_logic_pk_) {
           create_mlog_stmt.set_with_primary_key(true);
         }
         break;
       case T_MLOG_WITH_ROWID:
-        if (is_heap_table_) {
+        if (!is_table_with_logic_pk_) {
           create_mlog_stmt.set_with_rowid(true);
         }
         break;

@@ -207,7 +207,7 @@ int ObIndexBuilderUtil::add_shadow_pks(
     const ObPartitionKeyInfo &subpartition_keys = data_schema.get_subpartition_key_info();
     char shadow_pk_name[OB_MAX_COLUMN_NAME_BUF_LENGTH];
     ObSEArray<uint64_t, 2> column_ids;
-    if (data_schema.is_heap_table() && schema.is_global_unique_index_table()) {
+    if (data_schema.is_table_without_pk() && schema.is_global_unique_index_table()) {
       if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
         LOG_WARN("fail to get column ids from partition keys", K(ret));
       } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
@@ -265,7 +265,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
   ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
-  if (!data_schema.is_heap_table()) {
+  if (!data_schema.is_table_without_pk()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only heap table should add shadow partition keys", K(data_schema), K(ret));
   } else {
@@ -276,7 +276,7 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
     const ObColumnSchemaV2 *const_data_column = NULL;
     ObColumnSchemaV2 data_column;
     ObSEArray<uint64_t, 2> column_ids;
-    if (data_schema.is_heap_table()) {
+    if (data_schema.is_table_without_pk()) {
       if (partition_keys.is_valid() && OB_FAIL(partition_keys.get_column_ids(column_ids))) {
         LOG_WARN("fail to get column ids from partition keys", K(ret));
       } else if (subpartition_keys.is_valid() && OB_FAIL(subpartition_keys.get_column_ids(column_ids))) {
@@ -588,7 +588,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
       }
 
       // if data table is a heap table, add partition keys to index table
-      if (OB_SUCC(ret) && data_schema.is_heap_table() && index_schema.is_global_index_table()) {
+      if (OB_SUCC(ret) && data_schema.is_table_without_pk() && index_schema.is_global_index_table()) {
         if (OB_FAIL(add_shadow_partition_keys(data_schema, row_desc, index_schema))) {
           LOG_WARN("add_shadow_partition_keys failed", K(data_schema), K(row_desc), K(ret));
         }

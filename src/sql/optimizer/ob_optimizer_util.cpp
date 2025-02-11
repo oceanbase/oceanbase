@@ -3823,10 +3823,10 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
     LOG_WARN("failed to get index cols", K(ret));
   //new heap table not add partition key in rowkey and the tablet id is unique in partition,
   //we need check partition key
-  } else if (index_schema->is_heap_table() && index_schema->get_partition_key_info().is_valid() &&
+  } else if (index_schema->is_table_without_pk() && index_schema->get_partition_key_info().is_valid() &&
              OB_FAIL(index_schema->get_partition_key_info().get_column_ids(column_ids))) {
     LOG_WARN("failed to add part column ids", K(ret));
-  } else if (index_schema->is_heap_table() && index_schema->get_subpartition_key_info().is_valid() &&
+  } else if (index_schema->is_table_without_pk() && index_schema->get_subpartition_key_info().is_valid() &&
              OB_FAIL(index_schema->get_subpartition_key_info().get_column_ids(column_ids))) {
     LOG_WARN("failed to add subpart column ids", K(ret));
   } else {

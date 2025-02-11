@@ -447,5 +447,66 @@ int ObCreateTableResolverBase::resolve_column_group(const ParseNode *cg_node)
   }
   return ret;
 }
+
+int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  // get the table organization from the tenant config
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    const char *ptr = NULL;
+    if (OB_ISNULL(ptr = tenant_config->default_table_organization.get_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("default organization ptr is null", K(ret));
+    } else {
+      table_organization_ =
+        (0 == ObString::make_string("HEAP").case_compare(ptr)) ?
+          ObTableOrganizationType::OB_HEAP_ORGANIZATION : ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+    }
+  }
+
+  // get the table organization from the table options
+  if (OB_FAIL(ret)) {
+  } else if (NULL != node) {
+    ParseNode *option_node = NULL;
+    int32_t num = 0;
+    if (T_TABLE_OPTION_LIST != node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
+    } else {
+      num = node->num_child_;
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+      if (OB_ISNULL(option_node = node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "node is null", K(ret));
+      } else if (T_ORGANIZATION == option_node->type_) {
+        if (lib::is_oracle_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("oracle mode should not specify organization type", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type in oracle mode");
+        } else if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
+          if (OB_ISNULL(option_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
+          } else {
+            if (T_ORGANIZATION_HEAP == option_node->children_[0]->type_) {
+              table_organization_ = ObTableOrganizationType::OB_HEAP_ORGANIZATION;
+            } else if (T_ORGANIZATION_INDEX == option_node->children_[0]->type_) {
+              table_organization_ = ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+            }
+          }
+        } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter table statement should not specify organization type", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type in alter table query");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+        }
+      }
+    }
+  }
+  return ret;
+}
 }//end namespace sql
 }//end namespace oceanbase

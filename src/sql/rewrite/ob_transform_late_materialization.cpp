@@ -350,7 +350,8 @@ int ObTransformLateMaterialization::get_accessible_index(const ObSelectStmt &sel
             INDEX_TYPE_UNIQUE_GLOBAL == index_type ||
             INDEX_TYPE_PRIMARY == index_type ||
             INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type ||
-            INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type) {
+            INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type ||
+            INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_type) {
           if (OB_FAIL(tmp_index_schemas.push_back(index_schema))) {
             LOG_WARN("failed to push back", K(ret));
           }

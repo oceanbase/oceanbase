@@ -450,11 +450,11 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
       LOG_WARN("failed to check rowkey", K(ret));
     //new heap table not add partition key in rowkey and the tablet id is unique in partition,
     //we need check partition key
-    } else if (is_unique && table_schema->is_heap_table() &&
+    } else if (is_unique && table_schema->is_table_without_pk() &&
                table_schema->get_partition_key_info().is_valid() &&
                OB_FAIL(exprs_has_unique_subset(exprs, table_schema->get_partition_key_info(), is_unique))) {
       LOG_WARN("failed to check rowkey", K(ret));
-    } else if (is_unique && table_schema->is_heap_table() &&
+    } else if (is_unique && table_schema->is_table_without_pk() &&
                table_schema->get_subpartition_key_info().is_valid() &&
                OB_FAIL(exprs_has_unique_subset(exprs, table_schema->get_subpartition_key_info(), is_unique))) {
       LOG_WARN("failed to check rowkey", K(ret));
@@ -5883,7 +5883,7 @@ int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
     LOG_WARN("table schema is null", K(ret), K(table_schema));
   //new heap table not add partition key in rowkey and the tablet id is unique in partition,
   //we need add partition key to ensure the output unique.
-  } else if (table_schema->is_heap_table() &&
+  } else if (table_schema->is_table_without_pk() &&
              OB_FAIL(add_part_column_exprs_for_heap_table(stmt, table_schema,
                                                           item->table_id_, unique_keys))) {
     LOG_WARN("failed to add part column exprs for heap table", K(ret));
@@ -12470,7 +12470,7 @@ int ObTransformUtils::add_part_column_exprs_for_heap_table(const ObDMLStmt *stmt
   if (OB_ISNULL(stmt) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(table_schema));
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     const ObRawExpr *part_expr = stmt->get_part_expr(table_id, table_schema->get_table_id());
     const ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_id, table_schema->get_table_id());
     if (part_expr != NULL &&

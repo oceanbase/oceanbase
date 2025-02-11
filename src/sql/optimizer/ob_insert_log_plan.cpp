@@ -1307,7 +1307,7 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
                                           constraint_info.constraint_columns_,
                                           true))) {
     LOG_WARN("failed to generate index rowkey exprs", K(ret));
-  } else if (!index_schema.is_index_table() && index_schema.is_heap_table()) {
+  } else if (!index_schema.is_index_table() && index_schema.is_table_without_pk()) {
     // 如果是堆表，那么这里还需要在 constraint_info.constraint_columns_中追加分区建
     // 因为4.0版本堆表 分区建 + hidden_pk 才能保证唯一性
     const ColumnItem *col_item = NULL;

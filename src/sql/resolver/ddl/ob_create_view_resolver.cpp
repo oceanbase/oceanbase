@@ -527,7 +527,7 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
     LOG_WARN("failed to resolve primary key node", K(ret));
   } else if (0 < container_table_schema.get_rowkey_column_num()) {  // create mv with primary key
     container_table_schema.set_table_pk_mode(ObTablePKMode::TPKM_OLD_NO_PK);
-    container_table_schema.set_table_organization_mode(ObTableOrganizationMode::TOM_INDEX_ORGANIZED);
+    container_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITH_PK);
     if (is_oracle_mode() && OB_FAIL(resolve_pk_constraint_node(*mv_primary_key_node, ObString::make_empty_string(), csts))) {
       LOG_WARN("failed to add pk constraint for oracle mode", KR(ret));
     }
@@ -535,7 +535,7 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
     LOG_WARN("fail to add hidden pk", KR(ret));
   } else {  // create mv without primary key
     container_table_schema.set_table_pk_mode(TPKM_TABLET_SEQ_PK);
-    container_table_schema.set_table_organization_mode(TOM_HEAP_ORGANIZED);
+    container_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
   }
 
   if (OB_FAIL(ret)) {

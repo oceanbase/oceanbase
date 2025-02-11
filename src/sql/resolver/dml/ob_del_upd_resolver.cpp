@@ -1880,7 +1880,7 @@ bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
   // Returns True although binlog_row_image is MINIMAL temporarily,
   // because optimizer may need full columns currently.
   // This can be optimized later.
-  return (table_schema.is_heap_table() ||
+  return (table_schema.is_table_without_pk() ||
           table_schema.get_foreign_key_infos().count() > 0 ||
           table_schema.get_trigger_list().count() > 0 ||
           table_schema.has_check_constraint() ||
@@ -2189,7 +2189,7 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
   } else if (NULL == table_schema) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid table schema", K(table_item));
-  } else if (table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_without_pk()) {
     const ObPartitionKeyInfo &partition_keys = table_schema->get_partition_key_info();
     const ObPartitionKeyInfo &subpartition_keys = table_schema->get_subpartition_key_info();
     ObSEArray<uint64_t, 2> column_ids;
@@ -3955,7 +3955,7 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
                                                        table_schema, table->is_link_table()))) {
     LOG_WARN("fail to get table schema", K(ret),
              "base_table_id", table->get_base_table_item().ref_id_);
-  } else if (!table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_with_pk()) {
     // 不是堆表，什么都不需要做
   } else if (OB_FAIL(check_update_part_key(tas,
                                            table->get_base_table_item().ref_id_,

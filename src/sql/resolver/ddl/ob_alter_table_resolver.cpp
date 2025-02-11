@@ -3763,7 +3763,7 @@ int ObAlterTableResolver::resolve_alter_primary(const ParseNode &action_node_lis
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
-  } else if (table_schema_->is_heap_table()) {
+  } else if (table_schema_->is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
@@ -3837,7 +3837,7 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
-  } else if (!table_schema_->is_heap_table()) {
+  } else if (table_schema_->is_table_with_pk()) {
     ret = OB_ERR_MULTIPLE_PRI_KEY;
     SQL_RESV_LOG(WARN, "multiple primary key defined", K(ret));
   } else {
@@ -3992,13 +3992,21 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
   bool is_drop_primary_key = false;
   ObAlterPrimaryArg *drop_pk_arg = nullptr;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
   if (OB_ISNULL(alter_table_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alter table stmt should not be null", K(ret));
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is null", K(ret));
-  } else if (table_schema_->is_heap_table()) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version >= DATA_VERSION_4_3_5_1 && table_schema_->is_heap_organized_table()) {
+    const ObString pk_name = "PRIMAY";
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't DROP 'PRIMARY', feature is not supported in the heap organized table", K(ret), KPC(table_schema_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can't DROP 'PRIMARY', DROP 'PRIMARY' in the heap organized table");
+  } else if (table_schema_->is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));

@@ -335,6 +335,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
+  inline bool is_heap_table_primary_key_column() const { return column_flags_ & HEAP_TABLE_PRIMARY_KEY_FLAG; }
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
   inline void set_unused()
   {

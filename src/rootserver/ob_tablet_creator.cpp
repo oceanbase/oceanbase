@@ -207,7 +207,7 @@ int ObBatchCreateTabletHelper::add_table_schema_(
   HEAP_VAR(ObTableSchema, table_schema) {
   if (OB_FAIL(table_schema.assign(const_table_schema))) {
     LOG_WARN("failed to assign table_schema", KR(ret), K(const_table_schema));
-  } else if (table_schema.is_user_table() && table_schema.is_heap_table()) {
+  } else if (table_schema.is_user_table() && table_schema.is_table_with_hidden_pk_column()) {
     /*
      * When creating heap table (no explicit primary key), or doing offline ddl to drop primary key, the column array in table_schema here is out of order actually.
      * The `__pk_increment` column is pushed back into column array with column_id 1, and in the LAST of column array in table schema.

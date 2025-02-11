@@ -956,7 +956,6 @@ int ObLogMetaManager::build_column_metas_(
     const ObTimeZoneInfoWrap *tz_info_wrap = &(obcdc_tenant_tz_info->get_tz_wrap());
     int64_t version = table_schema->get_schema_version();
     uint64_t table_id = table_schema->get_table_id();
-    const bool is_heap_table = table_schema->is_heap_table();
     const int64_t column_cnt = column_ids.count();
     int16_t usr_column_cnt = 0;
 
@@ -1090,7 +1089,7 @@ int ObLogMetaManager::check_column_(
   const uint64_t column_id = column_schema.get_column_id();
   const uint64_t udt_set_id = column_schema.get_udt_set_id();
   const uint64_t sub_data_type = column_schema.get_sub_data_type();
-  const bool is_heap_table = table_schema.is_heap_table();
+  const bool is_table_with_hidden_pk_column = table_schema.is_table_with_hidden_pk_column();
   const bool is_rowkey_column = column_schema.is_rowkey_column();
   const bool is_invisible_column = column_schema.is_invisible_column();
   const bool is_hidden_column = column_schema.is_hidden();
@@ -1098,7 +1097,7 @@ int ObLogMetaManager::check_column_(
   const bool enable_output_invisible_column = (0 != TCONF.enable_output_invisible_column);
   // is column not user_column in OB.
   bool is_non_ob_user_column = (column_id < OB_APP_MIN_COLUMN_ID) || (column_id >= OB_MIN_SHADOW_COLUMN_ID);
-  is_heap_table_pk_increment_column = is_heap_table  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
+  is_heap_table_pk_increment_column = is_table_with_hidden_pk_column  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
 
   if (is_rowkey_column) {
     // user specified rowkey column should output;
@@ -1116,7 +1115,7 @@ int ObLogMetaManager::check_column_(
   META_STAT_INFO("check_column_",
       "table_name", table_schema.get_table_name(),
       "table_id", table_schema.get_table_id(),
-      K(is_heap_table),
+      K(is_table_with_hidden_pk_column),
       K(column_id),
       K(udt_set_id),
       K(sub_data_type),
@@ -1276,7 +1275,7 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
     LOG_ERROR("invalid argument", K(table_meta), K(table_schema));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (! table_schema->is_heap_table()) {
+    if (table_schema->is_table_with_pk()) {
       const int64_t rowkey_column_num = table_schema->get_rowkey_column_num();
 
       for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
@@ -1378,7 +1377,7 @@ int ObLogMetaManager::get_logic_primary_keys_for_heap_table_(
   const bool enable_output_hidden_primary_key = (1 == TCONF.enable_output_hidden_primary_key);
   pk_list.reset();
 
-  if (table_schema.is_heap_table() && enable_output_hidden_primary_key) {
+  if (table_schema.is_table_with_hidden_pk_column() && enable_output_hidden_primary_key) {
     ObArray<ObColDesc> col_ids;
     if (OB_FAIL(table_schema.get_column_ids(col_ids))) {
       LOG_ERROR("get all column info failed", KR(ret), K(table_schema));

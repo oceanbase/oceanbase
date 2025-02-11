@@ -1487,7 +1487,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (op.get_is_index_global() && table_schema->is_heap_table()) {
+    } else if (op.get_is_index_global() && table_schema->is_table_without_pk()) {
       if (!table_schema->is_partitioned_table()) {
         // do nothing
       } else if (table_schema->get_partition_key_info().get_size() > 0 &&

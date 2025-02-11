@@ -69,9 +69,9 @@ public:
   TO_STRING_KV(K_(table_id), K_(schema_version), K_(snapshot_version), K_(ddl_task_id),
                K_(data_version), K_(parallel), K_(reserved_parallel), K_(rowkey_column_count),
                K_(column_count), K_(lob_inrow_threshold), K_(is_partitioned_table),
-               K_(is_heap_table), K_(is_index_table), K_(online_opt_stat_gather),
-               K_(is_incremental), K_(reuse_pk), K_(trans_param), KP_(datum_utils), KP_(col_descs),
-               KP_(cmp_funcs), KP_(lob_column_idxs), K_(online_sample_percent), K_(is_no_logging),
+               K_(is_table_without_pk), K_(is_table_with_hidden_pk_column), K_(is_index_table),
+               K_(online_opt_stat_gather), K_(is_incremental), K_(reuse_pk), K_(trans_param), KP_(datum_utils),
+               KP_(col_descs), KP_(cmp_funcs), KP_(lob_column_idxs), K_(online_sample_percent), K_(is_no_logging),
                K_(max_batch_size));
 
 public:
@@ -86,7 +86,8 @@ public:
   int64_t column_count_; // 不包含多版本列
   int64_t lob_inrow_threshold_;
   bool is_partitioned_table_;
-  bool is_heap_table_;
+  bool is_table_without_pk_;
+  bool is_table_with_hidden_pk_column_;
   bool is_index_table_;
   bool online_opt_stat_gather_;
   bool is_insert_lob_;
@@ -168,7 +169,8 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, column_count, 0);
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, lob_inrow_threshold, -1);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_partitioned_table, false);
-  DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_heap_table, false);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_table_without_pk, false);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_table_with_hidden_pk_column, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_index_table, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, online_opt_stat_gather, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_insert_lob, false);

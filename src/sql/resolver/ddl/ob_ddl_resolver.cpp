@@ -103,6 +103,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
     mocked_external_table_column_ids_(),
     index_params_(),
+    table_organization_(ObTableOrganizationType::OB_ORGANIZATION_INVALID),
     mv_refresh_dop_(0),
     vec_column_name_(),
     vec_index_type_(INDEX_TYPE_MAX),
@@ -2139,6 +2140,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 // 设置Table当前的PK_MODE，组装最终态TableMode
                 table_mode_.pk_mode_ = tmp_table_schema.get_table_mode_struct().pk_mode_;
                 table_mode_.pk_exists_ = tmp_table_schema.get_table_mode_struct().pk_exists_;
+                table_mode_.table_organization_mode_ = tmp_table_schema.get_table_mode_struct().table_organization_mode_;
               }
             }
           }
@@ -3125,7 +3127,24 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
            ret = OB_ERR_UNEXPECTED;
          }
          break;
-       }
+      }
+      case T_ORGANIZATION: {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (data_version < DATA_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("organization is not supported in data version less than 4.3.5.1", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "organization in data version less than 4.3.5.1");
+        } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("organization is not supported in the alter table statement", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "organization in the alter table statement");
+        } else {
+          // do nothing
+        }
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -8571,7 +8590,7 @@ int ObDDLResolver::check_indexes_on_same_cols(const ObTableSchema &table_schema,
       }
     }
   }
-  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_iot_table()) {
+  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_table_with_pk()) {
     ObSEArray<uint64_t, 8> pk_column_ids;
     ObSEArray<ObString, 8> pk_columns_names;
     table_schema.get_rowkey_column_ids(pk_column_ids);
@@ -11776,6 +11795,10 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not allow non-user-table to set auto-partition clause", KR(ret), K(table_schema.get_table_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "using auto-partition clause for non-user-table is");
+    } else if (table_schema.is_heap_organized_table() && stmt->use_auto_partition_clause()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not allow heap organizated table to set auto-partition clause", KR(ret), K(table_schema.get_table_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "using auto-partition clause for heap organizated table is");
     } else { // table_schema.is_user_table() && stmt->use_auto_partition_clause()
       if (!SET_PARTITION_DEFINITION &&
           OB_FAIL(resolve_presetting_partition_key(node, table_schema))) {
@@ -11900,7 +11923,7 @@ int ObDDLResolver::resolve_presetting_partition_key(ParseNode *node, ObTableSche
   } else if (OB_NOT_NULL(node->children_[RANGE_ELEMENTS_NODE])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("check presetting partition key for partitioned table", KR(ret));
-  } else if (table_schema.is_heap_table()) {
+  } else if (table_schema.is_table_without_pk()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to auto partitioning no primary key table", KR(ret), K(table_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto partitioned table without primary key is");

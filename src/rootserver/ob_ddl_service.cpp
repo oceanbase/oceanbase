@@ -3560,7 +3560,7 @@ int ObDDLService::drop_primary_key(
   if (OB_SUCC(ret)) {
     // step2: set table pk mode and origanization mode.
     new_table_schema.set_table_pk_mode(ObTablePKMode::TPKM_TABLET_SEQ_PK);
-    new_table_schema.set_table_organization_mode(ObTableOrganizationMode::TOM_HEAP_ORGANIZED);
+    new_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
     // step3: add hidden pk column.
     new_table_schema.reset_rowkey_info();
     int32_t rowkey_position = 1;
@@ -3604,7 +3604,7 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
       col->set_rowkey_position(0);
     }
     new_table_schema.set_table_pk_mode(ObTablePKMode::TPKM_OLD_NO_PK);
-    new_table_schema.set_table_organization_mode(ObTableOrganizationMode::TOM_INDEX_ORGANIZED);
+    new_table_schema.set_table_pk_exists_mode(ObTablePrimaryKeyExistsMode::TOM_TABLE_WITH_PK);
   }
 
   if (OB_SUCC(ret) && nullptr != del_hidden_pk_column) {
@@ -3889,7 +3889,15 @@ int ObDDLService::check_alter_column_is_offline(
       &orig_column_schema, &alter_column_schema, schema_guard, need_rewrite_data))) {
     LOG_WARN("fail to check column can be altered", K(ret));
   } else {
-    add_pk = orig_table_schema.is_heap_table() && alter_column_schema.is_primary_key_;
+    //check_alter_column_is_offline will check whether the column type, precision, type is changed,
+    if ((orig_table_schema.is_heap_organized_table() && need_rewrite_data && orig_column_schema.is_heap_table_primary_key_column())
+     || (orig_table_schema.is_heap_organized_table() && alter_column_schema.is_primary_key_)
+     || (orig_table_schema.is_heap_organized_table() && orig_column_schema.is_heap_table_primary_key_column() && alter_column_schema.is_nullable())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Heap table primary key column not support change", K(ret), K(orig_table_schema), K(need_rewrite_data), K(alter_column_schema.is_nullable()), K(alter_column_schema.is_primary_key_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "performing offline DDL operations on primary key columns or changing primary key columns to be NOT NULL in a heap table is");
+    }
+    add_pk = orig_table_schema.is_table_without_pk() && alter_column_schema.is_primary_key_;
     is_offline = is_change_column_order || need_rewrite_data || add_pk;
   }
   return ret;
@@ -4341,6 +4349,10 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
             ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
             LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
             LOG_WARN("fail to find old column schema", KR(ret), K(orig_column_name), KPC(orig_column_schema));
+          } else if (orig_column_schema->is_heap_table_primary_key_column() && orig_table_schema.is_heap_organized_table()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("Heap table primary key column not support drop", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping primary key columns in a heap table is");
           } else if (is_lob_storage(orig_column_schema->get_data_type())
                      && !orig_column_schema->is_udt_hidden_column()) {
             drop_lob_cols_cnt++;
@@ -4427,7 +4439,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           } else if (is_offline) {
             if (alter_column_schema->is_primary_key_) {
               if (orig_table_schema.get_rowkey_column_num() > 0) {
-                if (!orig_table_schema.is_heap_table()) {
+                if (orig_table_schema.is_table_with_pk()) {
                   ret = OB_ERR_MULTIPLE_PRI_KEY;
                   RS_LOG(WARN, "multiple primary key defined", K(ret));
                 } else {
@@ -4456,7 +4468,11 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "Changing the STORED status for generated columns");
               } else if (orig_table_schema.get_autoinc_column_id() == 0) {
-                if (orig_column_schema->is_nullable()) {
+                if (orig_table_schema.is_heap_organized_table() && orig_column_schema->is_heap_table_primary_key_column()) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("Heap table primary key column not support adding an autoincrement attribute", K(ret));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding an autoincrement attribute to primary key column in a heap table is");
+                } else if (orig_column_schema->is_nullable()) {
                   // if the original table has null, we need to do double write to fill the nulls
                   if (ObDDLType::DDL_INVALID == ddl_type || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
                     ddl_type = ObDDLType::DDL_MODIFY_COLUMN;
@@ -4626,7 +4642,102 @@ int ObDDLService::check_support_alter_pk_and_columns(
   return ret;
 }
 
+int ObDDLService::check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
+                                               const ObTableSchema &orig_table_schema,
+                                               obrpc::ObIndexArg *index_arg)
+{
+  int ret = OB_SUCCESS;
+  ObString index_table_name;
+  char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+  uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  ObArenaAllocator allocator("HeapTblCheck", OB_MALLOC_NORMAL_BLOCK_SIZE);
+  bool is_oracle_mode = false;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (OB_ISNULL(index_arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index_arg is NULL", K(ret));
+  } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                      orig_table_schema.get_table_id(),
+                                                      index_arg->index_name_,
+                                                      index_table_name))) {
+    LOG_WARN("failed to build index table name", K(index_arg->index_name_), K(index_table_name), K(ret));
+  }
+  const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = orig_table_schema.get_simple_index_infos();
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *index_schema = NULL;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  }
+  ObIndexSchemaHashWrapper dest_index_schema_name_wrapper(tenant_id,
+                                                         orig_table_schema.get_database_id(),
+                                                         is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
+                                                         index_table_name);
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("fail to get index schema", K(ret));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the index to be altered is null", K(ret));
+    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY != index_schema->get_index_type()) {
+      continue;
+    }
+    ObIndexSchemaHashWrapper orgin_index_schema_name_wrapper(index_schema->get_tenant_id(),
+                                                             orig_table_schema.get_database_id(),
+                                                             is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
+                                                             index_schema->get_table_name_str());
+    //RENAME_INDEX ddl needs to check whether it reuses the primary key name in the heap table
+    if (OB_FAIL(ret)) {
+    } else if (ObIndexArg::RENAME_INDEX == type) {
+      ObRenameIndexArg *rename_index_arg = static_cast<ObRenameIndexArg *>(index_arg);
+      const ObString &ori_index_name = rename_index_arg->origin_index_name_;
+      const ObString &new_index_name = rename_index_arg->new_index_name_;
+      ObString ori_index_table_name;
+      ObString new_index_table_name;
+      if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                        orig_table_schema.get_table_id(),
+                                                        ori_index_name,
+                                                        ori_index_table_name))) {
+        LOG_WARN("failed to build index table name", K(index_arg->index_name_), K(ori_index_table_name), K(ret));
+      } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                        orig_table_schema.get_table_id(),
+                                                        new_index_name,
+                                                        new_index_table_name))) {
+        LOG_WARN("failed to build index table name", K(index_arg->index_name_), K(ori_index_table_name), K(ret));
+      }
+      ObIndexSchemaHashWrapper rename_from_name_wrapper(tenant_id,
+                                                        orig_table_schema.get_database_id(),
+                                                        is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
+                                                        ori_index_table_name);
+      ObIndexSchemaHashWrapper rename_to_name_wrapper(tenant_id,
+                                                      orig_table_schema.get_database_id(),
+                                                      is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
+                                                      new_index_table_name);
+      if (OB_FAIL(ret)) {
+      } else if (rename_from_name_wrapper == orgin_index_schema_name_wrapper) {
+        ret = OB_NOT_SUPPORTED;
+        (void)snprintf(err_msg, sizeof(err_msg), "can't RENAME '%s'; RENAME from a column/key that is reserved by heap table is is",
+                      ori_index_name.ptr());
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      } else if (rename_to_name_wrapper == orgin_index_schema_name_wrapper) {
+        ret = OB_NOT_SUPPORTED;
+        (void)snprintf(err_msg, sizeof(err_msg), "switch to another name; RENAME a column/key to a name that is reserved by heap table is");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      }
+    } else if (dest_index_schema_name_wrapper == orgin_index_schema_name_wrapper) {
+      ret = OB_NOT_SUPPORTED;
+      (void)snprintf(err_msg, sizeof(err_msg), "can't %s '%s'; %s with a name that is reserved by heap table is",
+                      ObIndexArg::to_type_str(type),
+                      index_arg->index_name_.ptr(),
+                      ObIndexArg::to_type_str(type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+    }
+  }
+  return ret;
+}
 int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
+                                          const ObTableSchema &orig_table_schema,
                                           ObDDLType &ddl_type,
                                           share::schema::ObSchemaGetterGuard &schema_guard,
                                           bool &has_drop_and_add_index)
@@ -4731,7 +4842,12 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         }
         case ObIndexArg::ADD_PRIMARY_KEY: {
           bool is_support = true;
-          if (ObDDLType::DDL_INVALID == ddl_type) {
+          if (orig_table_schema.is_heap_organized_table()) {
+            ret = OB_NOT_SUPPORTED;
+            (void)snprintf(err_msg, sizeof(err_msg), "%s in heap organized table",
+                          ObIndexArg::to_type_str(type));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+          } else if (ObDDLType::DDL_INVALID == ddl_type) {
             ddl_type = DDL_ADD_PRIMARY_KEY;
             last_type = type;
           } else if (OB_FAIL(check_support_alter_pk_and_columns(alter_table_arg, type, is_support))) {
@@ -4754,6 +4870,11 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
             (void)snprintf(err_msg, sizeof(err_msg), "%s and %s in single statment",
                           ObIndexArg::to_type_str(last_type), ObIndexArg::to_type_str(type));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+          } else if (orig_table_schema.is_heap_organized_table()) {
+            ret = OB_NOT_SUPPORTED;
+            (void)snprintf(err_msg, sizeof(err_msg), "%s in heap organized table",
+                          ObIndexArg::to_type_str(type));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
           } else {
             ddl_type = DDL_ALTER_PRIMARY_KEY;
             last_type = type;
@@ -4768,7 +4889,12 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         case ObIndexArg::RENAME_INDEX:
         case ObIndexArg::ALTER_INDEX_TABLESPACE: {
           // offline ddl cannot appear at the same time with other ddl
-          if ((DDL_MODIFY_COLUMN == ddl_type || DDL_ADD_COLUMN_OFFLINE == ddl_type
+          if (orig_table_schema.is_heap_organized_table() && OB_FAIL(check_alter_heap_table_index(type, orig_table_schema, index_arg))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("Alter heap table index failed", K(ret));
+          }
+          if (OB_FAIL(ret)) {
+          } else if ((DDL_MODIFY_COLUMN == ddl_type || DDL_ADD_COLUMN_OFFLINE == ddl_type
               || DDL_ADD_COLUMN_ONLINE == ddl_type || DDL_TABLE_REDEFINITION == ddl_type
               || DDL_ADD_COLUMN_INSTANT == ddl_type)
               && ObIndexArg::ADD_INDEX == type) {
@@ -5497,7 +5623,7 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   const ObIArray<ObForeignKeyInfo> &fk_infos = origin_table_schema.get_foreign_key_infos();
   ObPartitionFuncType part_func_type = origin_table_schema.get_part_option().get_part_func_type();
   // disallow to drop pk if the table is implicit key partition table.
-  if (origin_table_schema.is_heap_table()) {
+  if (origin_table_schema.is_table_without_pk()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), K(origin_table_schema));
@@ -5601,12 +5727,12 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
               LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
               LOG_WARN("too many index or index aux for table!",
                        K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE));
-            } else if (!new_table_schema.is_heap_table()) {
+            } else if (new_table_schema.is_table_with_pk()) {
               ret = OB_ERR_MULTIPLE_PRI_KEY;
               LOG_WARN("multiple primary key defined", K(ret));
             }
           } else {
-            if (new_table_schema.is_heap_table()) {
+            if (new_table_schema.is_table_without_pk()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("primary key does not exist!", K(ret));
             }
@@ -6019,8 +6145,8 @@ int ObDDLService::check_can_drop_column(
     }
   } else if (OB_FAIL(check_is_drop_partition_key(orig_table_schema, *orig_column_schema, schema_guard))) {
     LOG_WARN("check drop partition column failed", K(ret));
-  } else if ((!new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_PK_TABLE)
-      || (new_table_schema.is_heap_table() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_HEAP_TABLE)) {
+  } else if ((!new_table_schema.is_table_with_hidden_pk_column() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_PK_TABLE)
+      || (new_table_schema.is_table_with_hidden_pk_column() && column_count <= ObTableSchema::MIN_COLUMN_COUNT_WITH_HEAP_TABLE)) {
     ret = OB_CANT_REMOVE_ALL_FIELDS;
     LOG_USER_ERROR(OB_CANT_REMOVE_ALL_FIELDS);
     LOG_WARN("Can not delete all columns in table", K(ret));
@@ -7612,7 +7738,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
           if (OB_SUCC(ret)) {
             if (create_index_arg->index_type_ == INDEX_TYPE_PRIMARY) {
               if (new_table_schema.get_rowkey_column_num() > 0) {
-                if (new_table_schema.is_heap_table()) {
+                if (new_table_schema.is_table_without_pk()) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_WARN("not support to add primary key!", K(ret));
                 } else {
@@ -10898,7 +11024,7 @@ int ObDDLService::add_new_column_to_table_schema(
       LOG_WARN("fail to resolve default value", K(ret));
     } else if (alter_column_schema.is_primary_key_) {
       if (new_table_schema.get_rowkey_column_num() > 0) {
-        if (new_table_schema.is_heap_table()) {
+        if (new_table_schema.is_table_without_pk()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support to add primary key!", K(ret));
         } else {
@@ -11213,7 +11339,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
             } else {
               ObSEArray<ObString, 1> new_pk_column;
               if (alter_column_schema->is_primary_key_) {
-                if (!new_table_schema.is_heap_table()) {
+                if (new_table_schema.is_table_with_pk()) {
                   ret = OB_ERR_MULTIPLE_PRI_KEY;
                   LOG_WARN("multiple primary key defined", K(ret));
                 } else if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))){
@@ -11810,7 +11936,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
               LOG_WARN("alter table modeify identity column fail", K(alter_column_schema), K(ret));
             } else if (alter_column_schema->is_primary_key_) {
               if (new_table_schema.get_rowkey_column_num() > 0) {
-                if (new_table_schema.is_heap_table()) {
+                if (new_table_schema.is_table_without_pk()) {
                   ret = OB_NOT_SUPPORTED;
                   RS_LOG(WARN, "not support to add primary key!", K(ret));
                 } else {
@@ -15306,6 +15432,10 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
   } else {
     bool has_drop_and_add_index = false;
     char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
+    if (OB_SUCC(ret) && orig_table_schema->is_heap_organized_table() && tenant_data_version < DATA_VERSION_4_3_5_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unable to support heap table before data version 4.3.5.1", KR(ret), KPC(orig_table_schema));
+    }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_columns_
         && OB_FAIL(check_alter_table_column(alter_table_arg,
                                             *orig_table_schema,
@@ -15318,7 +15448,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
     const ObDDLType alter_table_ddl_type = ddl_type;
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
-        && OB_FAIL(check_alter_table_index(alter_table_arg,
+        && OB_FAIL(check_alter_table_index(alter_table_arg, *orig_table_schema,
                                            ddl_type,
                                            schema_guard,
                                            has_drop_and_add_index))) {
@@ -20137,7 +20267,8 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
         hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
       }
       // in oracle mode, need to add primary key constraints
-      if (is_oracle_mode && !hidden_table_schema.is_heap_table()) {
+      // todo@lanyi for heap organized table user defined primary key is also needed to be added to the primary key constriants
+      if (is_oracle_mode && hidden_table_schema.is_table_with_pk()) {
         uint64_t new_cst_id = OB_INVALID_ID;
         ObString pk_name;
         ObNameGeneratedType pk_name_type = GENERATED_TYPE_USER;
@@ -20147,7 +20278,7 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
                                                             new_cst_id))) {
           LOG_WARN("failed to fetch new constraint id", K(ret));
         } else if (FALSE_IT(cst.set_constraint_id(new_cst_id))) {
-        } else if (!orig_table_schema.is_heap_table()) {
+        } else if (orig_table_schema.is_table_with_pk()) {
           const ObConstraint *pk_cst = orig_table_schema.get_pk_constraint();
           if (OB_NOT_NULL(pk_cst)) {
             pk_name.assign_ptr(
@@ -20663,7 +20794,8 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_inde
       if (INDEX_TYPE_NORMAL_LOCAL == create_index_arg.index_type_
           || INDEX_TYPE_UNIQUE_LOCAL == create_index_arg.index_type_
           || INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL == create_index_arg.index_type_
-          || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == create_index_arg.index_type_) {
+          || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == create_index_arg.index_type_
+          || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == create_index_arg.index_type_) {
         if (OB_FAIL(sql::ObResolverUtils::check_unique_index_cover_partition_column(
                     new_table_schema, create_index_arg))) {
           LOG_WARN("fail to check unique key cover partition column", K(ret));
@@ -20756,7 +20888,7 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
             if (OB_SUCC(ret)) {
               if (create_index_arg->index_type_ == INDEX_TYPE_PRIMARY) {
                 if (new_table_schema.get_rowkey_column_num() > 0) {
-                  if (new_table_schema.is_heap_table()) {
+                  if (new_table_schema.is_table_without_pk()) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_WARN("not support to add primary key!", K(ret));
                   } else {
@@ -36858,7 +36990,7 @@ int ObDDLService::prepare_change_modify_column_online(AlterColumnSchema &alter_c
   if (OB_SUCC(ret)) {
     if (alter_column_schema.is_primary_key_) {
       if (new_table_schema.get_rowkey_column_num() > 0) {
-        if (new_table_schema.is_heap_table()) {
+        if (new_table_schema.is_table_without_pk()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support to add primary key", K(ret));
         } else {
@@ -37261,7 +37393,7 @@ int ObDDLService::prepare_change_modify_column_offline(AlterColumnSchema &alter_
     if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
       LOG_WARN("assign column schema failed", K(ret));
     } else if (alter_column_schema.is_primary_key_) {
-      if (!new_table_schema.is_heap_table()) {
+      if (new_table_schema.is_table_with_pk()) {
         ret = OB_ERR_MULTIPLE_PRI_KEY;
         LOG_WARN("multiple primary key defined", K(ret));
       }

@@ -347,7 +347,8 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.column_count_ = schema_->store_column_count_;
     insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
-    insert_table_param.is_heap_table_ = schema_->is_heap_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather && store_ctx_->ctx_->param_.online_opt_stat_gather_;
     insert_table_param.reuse_pk_ = !ObDirectLoadInsertMode::is_overwrite_mode(store_ctx_->ctx_->param_.insert_mode_);
     insert_table_param.is_insert_lob_ = is_insert_lob;
@@ -621,7 +622,8 @@ int ObTableLoadStoreLobTableCtx::init_insert_table_ctx(const ObDirectLoadTransPa
     insert_table_param.column_count_ = schema_->store_column_count_;
     insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
-    insert_table_param.is_heap_table_ = schema_->is_heap_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather;
     insert_table_param.is_insert_lob_ = is_insert_lob;
     insert_table_param.reuse_pk_ = true;
@@ -866,7 +868,8 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.column_count_ = schema_->store_column_count_;
     insert_table_param.lob_inrow_threshold_ = schema_->lob_inrow_threshold_;
     insert_table_param.is_partitioned_table_ = schema_->is_partitioned_table_;
-    insert_table_param.is_heap_table_ = schema_->is_heap_table_;
+    insert_table_param.is_table_without_pk_ = schema_->is_table_without_pk_;
+    insert_table_param.is_table_with_hidden_pk_column_ = schema_->is_table_with_hidden_pk_column_;
     insert_table_param.online_opt_stat_gather_ = online_opt_stat_gather;
     insert_table_param.is_insert_lob_ = is_insert_lob;
     insert_table_param.reuse_pk_ = true;

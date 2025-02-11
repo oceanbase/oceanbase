@@ -207,7 +207,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         ref_column->set_next_column_id(UINT64_MAX);
         ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                 rowkey_column->get_column_id()));
-        if (base_table_schema.is_heap_table()
+        if (base_table_schema.is_table_without_pk()
             && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
           LOG_WARN("failed to set column name", KR(ret));
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
@@ -707,30 +707,42 @@ int ObMLogBuilder::set_table_columns(
     ObTableSchema &mlog_schema)
 {
   int ret = OB_SUCCESS;
+  bool is_table_with_logic_pk = false;
+  const uint64_t tenant_id = base_table_schema.get_tenant_id();
+  ObSchemaGetterGuard schema_guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogBuilder not init", KR(ret));
+  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+    tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard in inner table failed", K(ret));
+  } else if (OB_FAIL(base_table_schema.is_table_with_logic_pk(schema_guard, is_table_with_logic_pk))) {
+    LOG_WARN("fail to get is table with logic pk", KR(ret));
   } else {
     HEAP_VAR(ObRowDesc, row_desc) {
-      if (base_table_schema.is_heap_table()) {
+      // There are 4 types of tables in OB: heap organized table with pk, heap organized table without pk,
+      // index organized table with pk, index organized table without pk. heap organized table with pk can have
+      // rowid and primary key option, index organized table without pk and heap organized table without pk only enables rowid option,
+      // and index organized table with pk only enables primary key option.
+      if (!is_table_with_logic_pk) {
         if (create_mlog_arg.with_primary_key_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on heap table cannot use with primary key option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_primary_key_));
         } else if (!create_mlog_arg.with_rowid_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on heap table should use with rowid option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_rowid_));
         }
       } else {
         if (create_mlog_arg.with_rowid_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on non-heap table cannot use with rowid option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_rowid_));
         } else if (!create_mlog_arg.with_primary_key_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create mlog on non-heap table should use with primary key option",
-              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+              KR(ret), K(is_table_with_logic_pk), K(create_mlog_arg.with_primary_key_));
         }
       }
 

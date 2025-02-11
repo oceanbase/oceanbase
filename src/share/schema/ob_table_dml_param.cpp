@@ -121,7 +121,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     }
   }
 
-  if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
+  if (OB_SUCC(ret) && schema->is_user_table() && schema->is_table_with_pk()) {
     ObString tmp_pk_name;
     if (OB_FAIL(schema->get_pk_constraint_name(tmp_pk_name))) {
       LOG_WARN("get pk name from schema failed", K(ret));

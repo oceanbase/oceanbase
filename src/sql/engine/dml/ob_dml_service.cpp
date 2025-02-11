@@ -636,7 +636,7 @@ int ObDMLService::process_after_stmt_trigger(const ObDMLBaseCtDef &dml_ctdef,
 int ObDMLService::init_heap_table_pk_for_ins(const ObInsCtDef &ins_ctdef, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
-  if (ins_ctdef.is_primary_index_ && ins_ctdef.is_heap_table_ && !ins_ctdef.has_instead_of_trigger_) {
+  if (ins_ctdef.is_primary_index_ && ins_ctdef.is_table_without_pk_ && !ins_ctdef.has_instead_of_trigger_) {
     ObExpr *auto_inc_expr = ins_ctdef.new_row_.at(0);
     if (OB_ISNULL(auto_inc_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -859,7 +859,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
     }
 
     if (OB_SUCC(ret) && !is_skipped) {
-      if (upd_ctdef.is_heap_table_ &&
+      if (upd_ctdef.is_table_without_pk_ &&
           OB_FAIL(copy_heap_table_hidden_pk(dml_op.get_eval_ctx(), upd_ctdef))) {
         LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
       }
@@ -1166,7 +1166,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                            upd_ctdef.trans_info_expr_,
                                                            old_row))) {
         LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-      } else if (upd_ctdef.is_heap_table_ &&
+      } else if (upd_ctdef.is_table_without_pk_ &&
           OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
                                        upd_ctdef,
                                        new_tablet_loc->tablet_id_))) {
@@ -2039,7 +2039,7 @@ int ObDMLService::copy_heap_table_hidden_pk(ObEvalCtx &eval_ctx,
   if (OB_ISNULL(old_hidden_pk) || OB_ISNULL(new_hidden_pk)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is unexpected null", K(ret), KPC(old_hidden_pk), KPC(new_hidden_pk));
-  } else if (!upd_ctdef.is_heap_table_) {
+  } else if (!upd_ctdef.is_table_without_pk_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("is not heap_table", K(ret), K(upd_ctdef));
   } else if (new_hidden_pk->type_ != T_TABLET_AUTOINC_NEXTVAL) {
@@ -2066,7 +2066,7 @@ int ObDMLService::set_update_hidden_pk(ObEvalCtx &eval_ctx,
 {
   int ret = OB_SUCCESS;
   uint64_t autoinc_seq = 0;
-  if (upd_ctdef.is_heap_table_ && upd_ctdef.is_primary_index_) {
+  if (upd_ctdef.is_table_without_pk_ && upd_ctdef.is_primary_index_) {
     ObExpr *auto_inc_expr = upd_ctdef.new_row_.at(0);
     ObSQLSessionInfo *my_session = eval_ctx.exec_ctx_.get_my_session();
     uint64_t tenant_id = my_session->get_effective_tenant_id();
@@ -2109,7 +2109,7 @@ int ObDMLService::set_heap_table_hidden_pk(const ObInsCtDef &ins_ctdef,
 {
   int ret = OB_SUCCESS;
   uint64_t autoinc_seq = 0;
-  if (ins_ctdef.is_heap_table_ && ins_ctdef.is_primary_index_) {
+  if (ins_ctdef.is_table_without_pk_ && ins_ctdef.is_primary_index_) {
     ObSQLSessionInfo *my_session = eval_ctx.exec_ctx_.get_my_session();
     uint64_t tenant_id = my_session->get_effective_tenant_id();
     if (OB_FAIL(ObDMLService::get_heap_table_hidden_pk(tenant_id,

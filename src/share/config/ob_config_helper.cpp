@@ -1566,6 +1566,14 @@ bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigDefaultTableOrganizationChecker::check(const obrpc::ObAdminSetConfigItem &t)
+{
+  const ObString tmp_str(t.value_.size(), t.value_.ptr());
+  return 0 == tmp_str.case_compare("INDEX")
+      || 0 == tmp_str.case_compare("HEAP");
+}
+
+
 bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
 {
   int bret = false;
@@ -1621,13 +1629,6 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
     bret = true;
   }
   return bret;
-}
-
-bool ObConfigDefaultOrganizationChecker::check(const ObConfigItem &t) const
-{
-  const ObString tmp_str(t.str());
-  return 0 == tmp_str.case_compare("INDEX")
-      || 0 == tmp_str.case_compare("HEAP");
 }
 } // end of namepace common
 } // end of namespace oceanbase

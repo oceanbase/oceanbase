@@ -237,20 +237,29 @@ int OptTableMeta::init(const uint64_t table_id,
   } else {/*do nothing*/}
 
   // init pkey ids
-  const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("failed to get column id", K(ret));
-    } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM) {
-      if (table_schema->is_heap_table()) {
-        // partition column will add to primary key for heap table
-        pk_ids_.reset();
-      } else { /* do nothing */ }
-      break;
-    } else if (OB_FAIL(pk_ids_.push_back(column_id))) {
-      LOG_WARN("failed to push back column id", K(ret));
+  if (OB_SUCC(ret)) {
+    if (table_schema->is_heap_organized_table()) {
+      if (OB_FAIL(table_schema->get_heap_table_pk(pk_ids_))) {
+        LOG_WARN("failed to get heap table pk", K(ret));
+      }
+    } else {
+      const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+        if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+          LOG_WARN("failed to get column id", K(ret));
+        } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM) {
+          if (table_schema->is_table_without_pk()) {
+            // partition column will add to primary key for heap table
+            pk_ids_.reset();
+          } else { /* do nothing */ }
+          break;
+        } else if (OB_FAIL(pk_ids_.push_back(column_id))) {
+          LOG_WARN("failed to push back column id", K(ret));
+        }
+      }
     }
   }
+
   //init column ndv
   for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
     if (OB_FAIL(init_column_meta(ctx, column_ids.at(i), column_metas_.at(i)))) {

@@ -311,7 +311,7 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
     rowkey_info_idx_ = OB_INVALID_ID;
   } else if (is_compat) {
     is_column_visible = true;
-    if (table_schema.is_heap_table()) {
+    if (table_schema.is_table_without_pk()) {
       // don't show hidden pk
       // used for only hidden pk in the RowKey Table_schema
       is_end = true;
@@ -329,7 +329,7 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
     if (table_schema.is_view_table() && !table_schema.is_materialized_view()) {
       is_end = true;
       rowkey_info_idx_ = OB_INVALID_ID;
-    } else if (!table_schema.is_heap_table()
+    } else if (table_schema.is_table_with_pk()
         && OB_FAIL(rowkey_info.is_rowkey_column(store_column_ids.at(rowkey_info_idx_).col_id_, is_column_visible))) {
       SERVER_LOG(WARN, "fail to check rowkey column", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
     } else if (OB_UNLIKELY(NULL == (column_schema = table_schema.get_column_schema(store_column_ids.at(rowkey_info_idx_).col_id_)))) {

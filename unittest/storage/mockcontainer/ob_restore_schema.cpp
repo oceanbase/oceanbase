@@ -233,9 +233,11 @@ int ObRestoreSchema::gen_columns(ObCreateIndexStmt &stmt,
           OB_ASSERT(INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
               || INDEX_TYPE_NORMAL_LOCAL == index_arg.index_type_
               || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_
-              || INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_);
+              || INDEX_TYPE_NORMAL_GLOBAL == index_arg.index_type_
+              || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_arg.index_type_);
           if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
-              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_
+              || INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_arg.index_type_) {
             index_column.set_column_id(OB_MIN_SHADOW_COLUMN_ID + col->get_column_id());
             int32_t shadow_name_len = col->get_column_name_str().length() + 8;
             char shadow_name[shadow_name_len];

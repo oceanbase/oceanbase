@@ -340,7 +340,7 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(table_schema));
-  } else if (!table_schema->is_heap_table()) {
+  } else if (table_schema->is_table_with_pk()) {
     if (OB_FAIL(table_schema->get_rowkey_column_ids(unique_col_ids))) {
       LOG_WARN("failed to get rowkey column ids", KR(ret));
     }
@@ -835,7 +835,7 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid table schema", K(ret), K(table_schema));
-      } else if (table_schema->is_heap_table()) {
+      } else if (table_schema->is_table_without_pk()) {
         all_table_exists_rowkey = false;
       } else {
         all_rowkey_size += table_schema->get_rowkey_info().get_size();

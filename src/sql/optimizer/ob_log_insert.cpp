@@ -452,7 +452,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(index_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,
@@ -497,7 +497,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(dml_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,

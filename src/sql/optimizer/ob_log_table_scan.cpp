@@ -1194,14 +1194,14 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   bool has_lob_column = false;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
-  bool is_heap_table = false;
+  bool is_table_without_pk = false;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+  } else if (table_schema != NULL && FALSE_IT(is_table_without_pk = table_schema->is_table_without_pk())) {
   } else if (OB_FAIL(get_stmt()->has_lob_column(table_id_, has_lob_column))) {
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
   } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
@@ -1219,7 +1219,7 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   } else if (use_index_merge()
       && OB_FAIL(extract_index_merge_access_exprs(domain_exprs_))) {
     LOG_WARN("failed to extract index merge access exprs", K(ret));
-  } else if (is_heap_table && is_index_global_ && index_back_ &&
+  } else if (is_table_without_pk && is_index_global_ && index_back_ &&
              OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
     LOG_WARN("failed to get part column exprs", K(ret));
   } else if ((has_lob_column || index_back_ || has_func_lookup()) &&
@@ -1637,7 +1637,7 @@ int ObLogTableScan::init_calc_part_id_expr()
       LOG_WARN("failed to add skipped exprs", K(ret));
     } else if (OB_FAIL(copier.copy(calc_part_id_expr_, calc_part_id_expr_))) {
       LOG_WARN("failed to copy exprs", K(ret));
-    } else if (!table_schema->is_heap_table() &&
+    } else if (table_schema->is_table_with_pk() &&
                OB_NOT_NULL(calc_part_id_expr_) &&
                OB_FAIL(replace_gen_column(get_plan(), calc_part_id_expr_, calc_part_id_expr_))) {
       LOG_WARN("failed to replace gen column", K(ret));

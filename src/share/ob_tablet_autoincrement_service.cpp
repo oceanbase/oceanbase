@@ -509,7 +509,7 @@ int ObTabletAutoincrementService::clear_tablet_autoinc_seq_cache(
 int ObTabletAutoincCacheCleaner::add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_heap_table() || table_schema.is_aux_lob_meta_table()) {
+  if (table_schema.is_table_with_hidden_pk_column() || table_schema.is_aux_lob_meta_table()) {
     const uint64_t tenant_id = table_schema.get_tenant_id();
     ObArray<ObTabletID> tablet_ids;
     if (OB_UNLIKELY(tenant_id != tenant_id_)) {

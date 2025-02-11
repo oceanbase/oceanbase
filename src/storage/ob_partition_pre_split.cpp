@@ -511,7 +511,7 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
   const bool is_global_index_table =
     table_schema.is_global_local_index_table() || table_schema.is_global_index_table();
 
-  if (OB_UNLIKELY(table_schema.is_heap_table())) {
+  if (OB_UNLIKELY(table_schema.is_table_without_pk())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support heap table", K(ret), K(table_schema));
   } else if (OB_UNLIKELY(!is_user_table && !is_global_index_table)) {
