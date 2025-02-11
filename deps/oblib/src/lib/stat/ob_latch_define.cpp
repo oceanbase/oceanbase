@@ -29,7 +29,7 @@ LATCH_DEF_##enable(def, id, name, policy, max_spin_cnt, max_yield_cnt)
 #undef LATCH_DEF_true
 #undef LATCH_DEF_false
 
-static_assert(ARRAYSIZEOF(OB_LATCHES) == 258, "DO NOT delete latch defination");
+static_assert(ARRAYSIZEOF(OB_LATCHES) == 259, "DO NOT delete latch defination");
 static_assert(ObLatchIds::LATCH_END == ARRAYSIZEOF(OB_LATCHES) - 1, "update id of LATCH_END before adding your defination");
 
 }
