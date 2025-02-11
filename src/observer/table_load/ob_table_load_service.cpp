@@ -562,29 +562,34 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       } else if (table_schema->get_simple_index_infos().count() > 0 && compat_version < DATA_VERSION_4_3_4_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
-          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index",
+          "version lower than 4.3.4.0 incremental direct-load does not support table with index",
           KR(ret));
         FORWARD_USER_ERROR_MSG(
           ret,
-          "version lower than 4.3.4.0 incremental direct-load does not support table with non-normal local index");
+          "version lower than 4.3.4.0 incremental direct-load does not support table with index");
       } else if (has_non_normal_local_index && compat_version < DATA_VERSION_4_3_5_1) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
-          "version lower than 4.3.5.1 incremental direct-load does not support table with "
-          "non-normal local index",
+          "version lower than 4.3.5.1 incremental direct-load only support table with "
+          "normal local index",
           KR(ret));
-        FORWARD_USER_ERROR_MSG(ret,
-                               "version lower than 4.3.5.1 incremental direct-load does not "
-                               "support table with global index or unique index");
+        FORWARD_USER_ERROR_MSG(
+          ret,
+          "version lower than 4.3.5.1 incremental direct-load only support table with "
+          "normal local index");
       } else if (has_non_normal_local_index && !is_heap_table_with_single_unique_index) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
-          "incremental direct-load does only support table with "
-          "heap table with single local unique index",
+          "unsupported index type exists, "
+          "incremental direct-load does only support "
+          "normal local index or "
+          "single local unique index in heap table",
           KR(ret));
         FORWARD_USER_ERROR_MSG(ret,
-                               "incremental direct-load does only "
-                               "support heap table with single local unique index");
+                               "unsupported index type exists, "
+                               "incremental direct-load does only support "
+                               "normal local index or "
+                               "single local unique index in heap table");
       } else if (table_schema->get_foreign_key_infos().count() > 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
