@@ -1204,15 +1204,27 @@ int ObDynamicSampling::gen_partition_str(const ObIArray<PartInfo> &partition_inf
                                          ObSqlString &partition_str)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("ObOptDS");
   if (OB_UNLIKELY(partition_infos.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(partition_infos));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-      char prefix = i == 0 ? ' ' : ',';
-      if (OB_FAIL(partition_str.append_fmt("%c%.*s", prefix, partition_infos.at(i).part_name_.length(),
-                                           partition_infos.at(i).part_name_.ptr()))) {
-        LOG_WARN("failed to append fmt", K(ret));
+      const char *quot = lib::is_mysql_mode() ? "`" : "\"";
+      ObString print_name;
+      if (i > 0 && OB_FAIL(partition_str.append(","))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(partition_str.append(quot))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::generate_new_name_with_escape_character(allocator,
+                                                                             partition_infos.at(i).part_name_,
+                                                                             print_name,
+                                                                             lib::is_oracle_mode()))) {
+        LOG_WARN("failed to generate new name with escape character", K(ret));
+      } else if (OB_FAIL(partition_str.append(print_name))) {
+        LOG_WARN("failed to append", K(ret));
+      } else if (OB_FAIL(partition_str.append(quot))) {
+        LOG_WARN("failed to append", K(ret));
       }
     }
   }
