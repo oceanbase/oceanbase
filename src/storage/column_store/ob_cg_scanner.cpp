@@ -556,7 +556,9 @@ int ObCGRowScanner::init(
         col_param = nullptr;
         int64_t col_offset = out_cols_projector->at(i);
         const common::ObObjMeta &obj_meta = read_info_->get_columns_desc().at(col_offset).col_type_;
-        if (col_offset < out_cols_param->count()) {
+        if (is_padding_mode_ && obj_meta.is_fixed_len_char_type()) {
+          col_param = out_cols_param->at(col_offset);
+        } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
           col_param = out_cols_param->at(col_offset);
         }
         if (OB_FAIL(col_params_.push_back(col_param))) {
