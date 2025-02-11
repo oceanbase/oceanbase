@@ -1292,6 +1292,7 @@ protected:
 private:
   int process_read();
   int process_getlength();
+  int64_t get_timeout() const;
 };
 
 // Stream get ls meta and all tablet meta
