@@ -30,7 +30,8 @@ ObITable::TableKey::TableKey()
     tablet_id_(),
     scn_range_(),
     column_group_idx_(0),
-    table_type_(ObITable::MAX_TABLE_TYPE)
+    table_type_(ObITable::MAX_TABLE_TYPE),
+    slice_range_()
 {
 }
 
@@ -41,6 +42,7 @@ void ObITable::TableKey::reset()
   scn_range_.reset();
   column_group_idx_ = 0;
   table_type_ = ObITable::MAX_TABLE_TYPE;
+  slice_range_.reset();
 }
 
 const char* ObITable::table_type_name_[] =
@@ -81,6 +83,7 @@ uint64_t ObITable::TableKey::hash() const
   uint64_t hash_value = 0;
   hash_value = common::murmurhash(&table_type_, sizeof(table_type_), hash_value);
   hash_value = common::murmurhash(&column_group_idx_, sizeof(table_type_), hash_value);
+  hash_value = common::murmurhash(&slice_range_, sizeof(slice_range_), hash_value);
   hash_value += tablet_id_.hash();
   if (is_table_with_scn_range()) {
     hash_value += scn_range_.hash();
@@ -91,11 +94,17 @@ uint64_t ObITable::TableKey::hash() const
 }
 
 OB_SERIALIZE_MEMBER(
+    ObITable::SliceRange,
+    start_slice_idx_,
+    end_slice_idx_);
+
+OB_SERIALIZE_MEMBER(
     ObITable::TableKey,
     tablet_id_,
     scn_range_,
     column_group_idx_,
-    table_type_);
+    table_type_,
+    slice_range_);
 
 OB_SERIALIZE_MEMBER(ObITable, key_);
 

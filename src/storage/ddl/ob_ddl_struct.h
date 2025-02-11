@@ -228,7 +228,8 @@ public:
                K_(with_cs_replica),
                K_(macro_block_id),
                K_(parallel_cnt),
-               K_(cg_cnt));
+               K_(cg_cnt),
+               K_(merge_slice_idx));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
@@ -244,6 +245,7 @@ public:
   // for shared storage gc occupy info
   int64_t parallel_cnt_;
   int64_t cg_cnt_;
+  int64_t merge_slice_idx_;
 };
 
 class ObTabletDirectLoadMgr;

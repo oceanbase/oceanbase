@@ -393,7 +393,8 @@ ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
     with_cs_replica_(false),
     macro_block_id_(MacroBlockId::mock_valid_macro_id()),
     parallel_cnt_(0),
-    cg_cnt_(0)
+    cg_cnt_(0),
+    merge_slice_idx_(0)
 {
 }
 
@@ -412,6 +413,7 @@ void ObDDLMacroBlockRedoInfo::reset()
   macro_block_id_ = MacroBlockId::mock_valid_macro_id();
   parallel_cnt_ = 0;
   cg_cnt_ = 0;
+  merge_slice_idx_ = 0;
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
@@ -472,7 +474,8 @@ OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     with_cs_replica_,
                     macro_block_id_,
                     parallel_cnt_,
-                    cg_cnt_);
+                    cg_cnt_,
+                    merge_slice_idx_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)
