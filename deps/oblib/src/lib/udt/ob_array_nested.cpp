@@ -209,7 +209,7 @@ int ObArrayNested::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
   return ret;
 }
 
-int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
+int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
 {
   int ret = OB_SUCCESS;
   const ObCollectionArrayType *array_type = dynamic_cast<const ObCollectionArrayType *>(this->get_array_type()->element_type_);
@@ -219,7 +219,7 @@ int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
   } else if (OB_FAIL(format_str.append("["))) {
     OB_LOG(WARN, "fail to append [", K(ret));
   } else {
-    if (print_size == 0) {
+    if (print_whole) {
       // print whole array
       print_size = length_;
     }
@@ -234,7 +234,7 @@ int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
       } else {
         uint32_t start = offset_at(i, offsets_);
         uint32_t elem_cnt = offsets_[i] - start;
-        if (OB_FAIL(data_->print(format_str, start, elem_cnt))) {
+        if (OB_FAIL(data_->print(format_str, start, elem_cnt, false))) {
            OB_LOG(WARN, "fail to append string to format_str", K(ret));
         }
       }
@@ -246,7 +246,7 @@ int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
   return ret;
 }
 
-int ObArrayNested::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size,
+int ObArrayNested::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole,
                                  ObString delimiter, bool has_null_str, ObString null_str) const
 {
   int ret = OB_SUCCESS;
@@ -255,7 +255,7 @@ int ObArrayNested::print_element(ObStringBuffer &format_str, uint32_t begin, uin
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret));
   } else {
-    if (print_size == 0) {
+    if (print_whole) {
       // print whole array
       print_size = length_;
     }
@@ -269,7 +269,7 @@ int ObArrayNested::print_element(ObStringBuffer &format_str, uint32_t begin, uin
         last_length = format_str.length();
         uint32_t start = offset_at(i, offsets_);
         uint32_t elem_cnt = offsets_[i] - start;
-        if (OB_FAIL(data_->print_element(format_str, start, elem_cnt, delimiter, has_null_str, null_str))) {
+        if (OB_FAIL(data_->print_element(format_str, start, elem_cnt, false, delimiter, has_null_str, null_str))) {
           OB_LOG(WARN, "fail to append string to format_str", K(ret));
         }
       }

@@ -310,13 +310,13 @@ int ObArrayBinary::escape_append(ObStringBuffer &format_str, ObString elem_str)
   return ret;
 }
 
-int ObArrayBinary::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
+int ObArrayBinary::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(format_str.append("["))) {
     OB_LOG(WARN, "fail to append [", K(ret));
   } else {
-    if (print_size == 0) {
+    if (print_whole) {
       // print whole array
       print_size = length_;
     }
@@ -343,11 +343,11 @@ int ObArrayBinary::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
   return ret;
 }
 
-int ObArrayBinary::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size,
+int ObArrayBinary::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole,
                                  ObString delimiter, bool has_null_str, ObString null_str) const
 {
   int ret = OB_SUCCESS;
-  if (print_size == 0) {
+  if (print_whole) {
     // print whole array
     print_size = length_;
   }

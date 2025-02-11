@@ -19,12 +19,12 @@ namespace common {
 //////////////////////////////////
 // implement of ObVectorF32Data //
 //////////////////////////////////
-int ObVectorF32Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
+int ObVectorF32Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(format_str.append("["))) {
     OB_LOG(WARN, "fail to append [", K(ret));
-  } else if (OB_FAIL(print_element(format_str, begin, print_size))) {
+  } else if (OB_FAIL(print_element(format_str, begin, print_size, print_whole))) {
     OB_LOG(WARN, "fail to print vector element", K(ret));
   } else if (OB_FAIL(format_str.append("]"))) {
     OB_LOG(WARN, "fail to append ]", K(ret));
@@ -34,10 +34,11 @@ int ObVectorF32Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t 
 
 int ObVectorF32Data::print_element(ObStringBuffer &format_str,
                                 uint32_t begin, uint32_t print_size,
+                                bool print_whole,
                                 ObString delimiter, bool has_null_str, ObString null_str) const
 {
   int ret = OB_SUCCESS;
-  if (print_size == 0) {
+  if (print_whole) {
     // print whole array
     print_size = length_;
   }
@@ -96,12 +97,12 @@ int ObVectorF32Data::elem_at(uint32_t idx, ObObj &elem_obj) const
 /////////////////////////////////
 // implement of ObVectorU8Data //
 /////////////////////////////////
-int ObVectorU8Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
+int ObVectorU8Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(format_str.append("["))) {
     OB_LOG(WARN, "fail to append [", K(ret));
-  } else if (OB_FAIL(print_element(format_str, begin, print_size))) {
+  } else if (OB_FAIL(print_element(format_str, begin, print_size, print_whole))) {
     OB_LOG(WARN, "fail to print vector element", K(ret));
   } else if (OB_FAIL(format_str.append("]"))) {
     OB_LOG(WARN, "fail to append ]", K(ret));
@@ -111,10 +112,11 @@ int ObVectorU8Data::print(ObStringBuffer &format_str, uint32_t begin, uint32_t p
 
 int ObVectorU8Data::print_element(ObStringBuffer &format_str,
                                 uint32_t begin, uint32_t print_size,
+                                bool print_whole,
                                 ObString delimiter, bool has_null_str, ObString null_str) const
 {
   int ret = OB_SUCCESS;
-  if (print_size == 0) {
+  if (print_whole) {
     // print whole array
     print_size = length_;
   }

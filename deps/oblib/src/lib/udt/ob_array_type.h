@@ -80,8 +80,8 @@ enum ArrayFormat {
 
 class ObIArrayType {
 public:
-  virtual int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0) const = 0;
-  virtual int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0,
+  virtual int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const = 0;
+  virtual int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true,
                             ObString delimiter = ObString(","), bool has_null_str = true, ObString null_str = ObString("NULL")) const = 0;
   virtual int32_t get_raw_binary_len() = 0;
   virtual int get_raw_binary(char *res_buf, int64_t buf_len) = 0;

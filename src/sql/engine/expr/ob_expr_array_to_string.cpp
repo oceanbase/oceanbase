@@ -132,7 +132,7 @@ int ObExprArrayToString::eval_array_to_string(const ObExpr &expr, ObEvalCtx &ctx
   } else {
     ObStringBuffer res_buf(&tmp_allocator);
     ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-    if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+    if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, true, delimiter, has_null_str, null_str))) {
       LOG_WARN("failed to format array", K(ret));
     } else if (OB_FAIL(str_result.init(res_buf.length()))) {
       LOG_WARN("failed to init result", K(ret), K(res_buf.length()));
@@ -190,7 +190,7 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
       } else {
         ObStringBuffer res_buf(&tmp_allocator);
         ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, res_datum.at(j));
-        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, true, delimiter, has_null_str, null_str))) {
           LOG_WARN("failed to format array", K(ret));
         } else if (OB_FAIL(str_result.init_with_batch_idx(res_buf.length(), j))) {
           LOG_WARN("failed to init result", K(ret), K(res_buf.length()), K(j));
@@ -259,7 +259,7 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
         eval_flags.set(idx);
       } else {
         ObStringBuffer res_buf(&tmp_allocator);
-        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, delimiter, has_null_str, null_str))) {
+        if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, true, delimiter, has_null_str, null_str))) {
           LOG_WARN("failed to format array", K(ret));
         } else {
           if (res_format == VEC_DISCRETE) {

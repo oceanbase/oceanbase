@@ -26,9 +26,11 @@ public :
   virtual ~ObVectorData() = default;
 
   virtual int print(ObStringBuffer &format_str,
-            uint32_t begin = 0, uint32_t print_size = 0) const = 0;
+            uint32_t begin = 0, uint32_t print_size = 0,
+            bool print_whole = true) const = 0;
   virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
+                    bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const = 0;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const = 0;
@@ -134,9 +136,11 @@ public:
     : ObVectorData(length, ObFloatType, data) {}
   virtual ~ObVectorF32Data() = default;
   virtual int print(ObStringBuffer &format_str,
-            uint32_t begin = 0, uint32_t print_size = 0) const override;
+            uint32_t begin = 0, uint32_t print_size = 0,
+            bool print_whole = true) const override;
   virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
+                    bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const override;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const override;
@@ -150,9 +154,11 @@ public:
     : ObVectorData(length, ObUTinyIntType, data) {}
   virtual ~ObVectorU8Data() = default;
   virtual int print(ObStringBuffer &format_str,
-            uint32_t begin = 0, uint32_t print_size = 0) const override;
+            uint32_t begin = 0, uint32_t print_size = 0,
+            bool print_whole = true) const override;
   virtual int print_element(ObStringBuffer &format_str,
                     uint32_t begin = 0, uint32_t print_size = 0,
+                    bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const override;
   virtual int clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool read_only = true) const override;

@@ -28,8 +28,9 @@ public :
   uint32_t *get_offsets() const { return offsets_; }
   char *get_data() const { return data_->get_data();}
   void set_scale(ObScale scale) { UNUSED(scale); }
-  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0) const;
+  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const;
   int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0,
+                    bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const;
 

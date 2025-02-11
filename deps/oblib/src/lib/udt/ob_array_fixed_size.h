@@ -36,8 +36,9 @@ public :
   int check_validity(const ObCollectionArrayType &arr_type, const ObIArrayType &array) const { return OB_SUCCESS; }
   int push_null();
   int push_back(T value, bool is_null = false);
-  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0) const;
+  int print(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0, bool print_whole = true) const;
   int print_element(ObStringBuffer &format_str, uint32_t begin = 0, uint32_t print_size = 0,
+                    bool print_whole = true,
                     ObString delimiter = ObString(","),
                     bool has_null_str = true, ObString null_str = ObString("NULL")) const;
 

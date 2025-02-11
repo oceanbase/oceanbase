@@ -74,12 +74,12 @@ int ObArrayFixedSize<T>::push_back(T value, bool is_null)
 }
 
 template<typename T>
-int ObArrayFixedSize<T>::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size) const
+int ObArrayFixedSize<T>::print(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(format_str.append("["))) {
     OB_LOG(WARN, "fail to append [", K(ret));
-  } else if (OB_FAIL(print_element(format_str, begin, print_size))) {
+  } else if (OB_FAIL(print_element(format_str, begin, print_size, print_whole))) {
     OB_LOG(WARN, "fail to print element", K(ret));
   } else if (OB_FAIL(format_str.append("]"))) {
     OB_LOG(WARN, "fail to append ]", K(ret));
@@ -88,7 +88,7 @@ int ObArrayFixedSize<T>::print(ObStringBuffer &format_str, uint32_t begin, uint3
 }
 
 template<typename T>
-int ObArrayFixedSize<T>::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size,
+int ObArrayFixedSize<T>::print_element(ObStringBuffer &format_str, uint32_t begin, uint32_t print_size, bool print_whole,
                                        ObString delimiter, bool has_null_str, ObString null_str) const
 {
   int ret = OB_SUCCESS;
@@ -97,7 +97,7 @@ int ObArrayFixedSize<T>::print_element(ObStringBuffer &format_str, uint32_t begi
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret));
   } else {
-    if (print_size == 0) {
+    if (print_whole) {
       // print whole element
       print_size = this->length_;
     }
