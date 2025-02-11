@@ -848,6 +848,8 @@ public:
   static int resolve_file_compression_format(const ParseNode *node,
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);
+  static int resolve_binary_format(const ParseNode *node, ObExternalFileFormat &format);
+  static int wrap_csv_binary_format_expr(ObResolverParams &params, const ObCSVGeneralFormat& csv_format, ObRawExpr *&real_ref_expr);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,
                                               ObResolverParams &params,

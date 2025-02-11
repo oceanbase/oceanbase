@@ -111,7 +111,8 @@ struct ObCSVGeneralFormat {
     compression_algorithm_(ObCSVCompression::NONE),
     is_optional_(false),
     file_extension_(DEFAULT_FILE_EXTENSION),
-    parse_header_(false)
+    parse_header_(false),
+    binary_format_(ObCSVBinaryFormat::DEFAULT)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -127,9 +128,37 @@ struct ObCSVGeneralFormat {
     "COMPRESSION",
     "IS_OPTIONAL",
     "FILE_EXTENSION",
-    "PARSE_HEADER"
+    "PARSE_HEADER",
+    "BINARY_FORMAT"
   };
-  enum ObCSVCompression
+
+  // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
+  enum class ObCSVOptionsEnum {
+    LINE_DELIMITER = 0,
+    FIELD_DELIMITER,
+    ESCAPE,
+    FIELD_OPTIONALLY_ENCLOSED_BY,
+    ENCODING,
+    SKIP_HEADER,
+    SKIP_BLANK_LINES,
+    TRIM_SPACE,
+    NULL_IF_EXETERNAL,
+    EMPTY_FIELD_AS_NULL,
+    COMPRESSION,
+    IS_OPTIONAL,
+    FILE_EXTENSION,
+    PARSE_HEADER,
+    BINARY_FORMAT,
+    // put new options here, before MAX_OPTIONS
+    // ....
+    MAX_OPTIONS
+  };
+
+  // Make sure OPTION_NAMES has the same length as ObCSVOptionsEnum
+  static_assert((sizeof(OPTION_NAMES) / sizeof(OPTION_NAMES[0])) == static_cast<size_t>(ObCSVOptionsEnum::MAX_OPTIONS),
+    "OPTION_NAMES should has the same length as ObCSVOptionsEnum");
+
+  enum class ObCSVCompression
   {
     INVALID = -1,
     NONE = 0,
@@ -137,6 +166,11 @@ struct ObCSVGeneralFormat {
     GZIP = 2,
     DEFLATE = 3,
     ZSTD = 4,
+  };
+  enum class ObCSVBinaryFormat {
+    DEFAULT = 0,
+    HEX = 1,
+    BASE64 = 2
   };
   static constexpr const char *DEFAULT_FILE_EXTENSION = ".csv";
   common::ObString line_start_str_;
@@ -156,6 +190,7 @@ struct ObCSVGeneralFormat {
   bool is_optional_;
   common::ObString file_extension_;
   bool parse_header_;
+  ObCSVBinaryFormat binary_format_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -165,7 +200,7 @@ struct ObCSVGeneralFormat {
 
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
-               K(compression_algorithm_), K(file_extension_));
+               K(compression_algorithm_), K(file_extension_), K(binary_format_));
   OB_UNIS_VERSION(1);
 };
 
@@ -698,6 +733,9 @@ struct ObOriginFileFormat
 const char *compression_algorithm_to_string(ObCSVGeneralFormat::ObCSVCompression compression_algorithm);
 int compression_algorithm_from_string(ObString compression_name,
                                       ObCSVGeneralFormat::ObCSVCompression &compression_algorithm);
+const char *binary_format_to_string(const ObCSVGeneralFormat::ObCSVBinaryFormat binary_format);
+int binary_format_from_string(const ObString binary_format_str,
+                                        ObCSVGeneralFormat::ObCSVBinaryFormat &binary_format);
 
 /**
  * guess compression format from filename suffix

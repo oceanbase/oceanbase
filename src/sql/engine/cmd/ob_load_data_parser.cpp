@@ -470,44 +470,65 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
 {
   int64_t pos = 0;
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[0], to_cstring(ObHexStringWrap(line_term_str_)));
+  databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::LINE_DELIMITER)],
+                  to_cstring(ObHexStringWrap(line_term_str_)));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[1], to_cstring(ObHexStringWrap(field_term_str_)));
+  databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FIELD_DELIMITER)], to_cstring(ObHexStringWrap(field_term_str_)));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[2], field_escaped_char_);
+  databuff_printf(buf, buf_len, pos, R"("%s":%ld)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::ESCAPE)], field_escaped_char_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[3], field_enclosed_char_);
+  databuff_printf(buf, buf_len, pos, R"("%s":%ld)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FIELD_OPTIONALLY_ENCLOSED_BY)], field_enclosed_char_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[4], ObCharset::charset_name(cs_type_));
+  databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::ENCODING)], ObCharset::charset_name(cs_type_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[5], skip_header_lines_);
+  databuff_printf(buf, buf_len, pos, R"("%s":%ld)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::SKIP_HEADER)], skip_header_lines_);
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[6], STR_BOOL(skip_blank_lines_));
+  databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::SKIP_BLANK_LINES)], STR_BOOL(skip_blank_lines_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[7], STR_BOOL(trim_space_));
+  databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::TRIM_SPACE)], STR_BOOL(trim_space_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":", OPTION_NAMES[8]);
+  databuff_printf(buf, buf_len, pos, R"("%s":)", OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::NULL_IF_EXETERNAL)]);
     J_ARRAY_START();
       for (int64_t i = 0; i < null_if_.count(); i++) {
         if (i != 0) {
           J_COMMA();
         }
-        databuff_printf(buf, buf_len, pos, "\"%s\"", to_cstring(ObHexStringWrap(null_if_.at(i))));
+        databuff_printf(buf, buf_len, pos, R"("%s")", to_cstring(ObHexStringWrap(null_if_.at(i))));
       }
     J_ARRAY_END();
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[9], STR_BOOL(empty_field_as_null_));
+  databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::EMPTY_FIELD_AS_NULL)],
+                  STR_BOOL(empty_field_as_null_));
   J_COMMA();
-  databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[10], compression_algorithm_to_string(compression_algorithm_));
+  databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                  OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::COMPRESSION)],
+                  compression_algorithm_to_string(compression_algorithm_));
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0 && into_outfile) {
     J_COMMA();
-    databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[11], STR_BOOL(is_optional_));
+    databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IS_OPTIONAL)], STR_BOOL(is_optional_));
     J_COMMA();
-    databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[12], to_cstring(ObHexStringWrap(file_extension_)));
+    databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FILE_EXTENSION)],
+                    to_cstring(ObHexStringWrap(file_extension_)));
   }
   if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1) {
     J_COMMA();
-    databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[13], STR_BOOL(parse_header_));
+    databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARSE_HEADER)], STR_BOOL(parse_header_));
+    J_COMMA();
+    databuff_printf(buf, buf_len, pos, R"("%s":"%s")",
+                    OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::BINARY_FORMAT)],
+                    binary_format_to_string(binary_format_));
   }
   return pos;
 }
@@ -515,46 +536,45 @@ int64_t ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
 int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  int64_t idx = 0;
-  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::LINE_DELIMITER)])
       && json::JT_STRING == node->value_->get_type()) {
     ObObj obj;
-    OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+    OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
     if (OB_SUCC(ret) && !obj.is_null()) {
       line_term_str_ = obj.get_string();
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FIELD_DELIMITER)])
       && json::JT_STRING == node->value_->get_type()) {
     ObObj obj;
-    OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+    OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
     if (OB_SUCC(ret) && !obj.is_null()) {
       field_term_str_ = obj.get_string();
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::ESCAPE)])
       && json::JT_NUMBER == node->value_->get_type()) {
     field_escaped_char_ = node->value_->get_number();
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FIELD_OPTIONALLY_ENCLOSED_BY)])
       && json::JT_NUMBER == node->value_->get_type()) {
     field_enclosed_char_ = node->value_->get_number();
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::ENCODING)])
       && json::JT_STRING == node->value_->get_type()) {
     cs_type_ = ObCharset::charset_type(node->value_->get_string());
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::SKIP_HEADER)])
       && json::JT_NUMBER == node->value_->get_type()) {
     skip_header_lines_ = node->value_->get_number();
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::SKIP_BLANK_LINES)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       skip_blank_lines_ = true;
     } else {
@@ -562,7 +582,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::TRIM_SPACE)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       trim_space_ = true;
     } else {
@@ -570,7 +590,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_SUCC(ret) && OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::NULL_IF_EXETERNAL)])
       && json::JT_ARRAY == node->value_->get_type()) {
     const json::Array &it_array = node->value_->get_array();
     int64_t idx = 0;
@@ -586,7 +606,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
         LOG_WARN("null_if_ child is not string", K(ret), "type", it_tmp->get_type());
       } else {
         ObObj obj;
-        OZ (ObHexUtilsBase::unhex(it_tmp->get_string(), allocator, obj));
+        OZ(ObHexUtilsBase::unhex(it_tmp->get_string(), allocator, obj));
         if (OB_SUCC(ret) && !obj.is_null()) {
           null_if_.at(idx++) = obj.get_string();
         }
@@ -594,7 +614,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::EMPTY_FIELD_AS_NULL)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       empty_field_as_null_ = true;
     } else {
@@ -602,7 +622,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::COMPRESSION)])
       && json::JT_STRING == node->value_->get_type()) {
     if (OB_FAIL(compression_algorithm_from_string(node->value_->get_string(), compression_algorithm_))) {
       LOG_WARN("failed to convert string to compression", K(ret));
@@ -610,7 +630,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
       node = node->get_next();
     }
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::IS_OPTIONAL)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       is_optional_ = true;
     } else {
@@ -618,7 +638,7 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::FILE_EXTENSION)])
       && json::JT_STRING == node->value_->get_type()) {
     ObObj obj;
     OZ (ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
@@ -627,13 +647,21 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
     }
     node = node->get_next();
   }
-  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])) {
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::PARSE_HEADER)])) {
     if (json::JT_TRUE == node->value_->get_type()) {
       parse_header_ = true;
     } else {
       parse_header_ = false;
     }
     node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::BINARY_FORMAT)])
+      && json::JT_STRING == node->value_->get_type()) {
+    if (OB_FAIL(binary_format_from_string(node->value_->get_string(), binary_format_))) {
+      LOG_WARN("failed to convert string to binary format", K(ret));
+    } else {
+      node = node->get_next();
+    }
   }
   return ret;
 }
@@ -847,6 +875,32 @@ int compression_algorithm_from_string(ObString compression_name,
   } else {
     ret = OB_INVALID_ARGUMENT;
     compression_algorithm = ObCSVGeneralFormat::ObCSVCompression::INVALID;
+  }
+  return ret;
+}
+
+const char *binary_format_to_string(const ObCSVGeneralFormat::ObCSVBinaryFormat binary_format)
+{
+  switch (binary_format) {
+    case ObCSVGeneralFormat::ObCSVBinaryFormat::HEX:    return "HEX";
+    case ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64:    return "BASE64";
+    default: return "DEFAULT";
+  }
+}
+
+int binary_format_from_string(const ObString binary_format_str,
+                              ObCSVGeneralFormat::ObCSVBinaryFormat &binary_format) {
+  int ret = OB_SUCCESS;
+
+  if (binary_format_str.empty() || 0 == binary_format_str.case_compare("default")) {
+    binary_format = ObCSVGeneralFormat::ObCSVBinaryFormat::DEFAULT;
+  } else if (0 == binary_format_str.case_compare("hex")) {
+    binary_format = ObCSVGeneralFormat::ObCSVBinaryFormat::HEX;
+  } else if (0 == binary_format_str.case_compare("base64")) {
+    binary_format = ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    binary_format = ObCSVGeneralFormat::ObCSVBinaryFormat::DEFAULT;
   }
   return ret;
 }

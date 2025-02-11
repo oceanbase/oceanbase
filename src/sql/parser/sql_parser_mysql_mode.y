@@ -272,7 +272,7 @@ END_P SET_VAR DELIMITER
         ARBITRATION ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
-        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
+        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
         BADFILE BUFFER_SIZE
@@ -509,7 +509,7 @@ END_P SET_VAR DELIMITER
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
-%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const
+%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const binary_format
 %type <node> string_list text_string string_val_list ulong_num
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
@@ -5157,6 +5157,15 @@ NAME_OB { $$ = $1; }
 }
 ;
 
+binary_format:
+NAME_OB { $$ = $1; }
+| STRING_VALUE { $$ = $1; }
+| unreserved_keyword
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
+}
+;
+
 opt_duplicate:
 /* empty */     { $$= NULL; }
 | IGNORE        { malloc_terminal_node($$, result->malloc_pool_, T_IGNORE); }
@@ -9104,6 +9113,10 @@ TYPE COMP_EQ STRING_VALUE
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
+}
+| BINARY_FORMAT COMP_EQ binary_format
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINARY_FORMAT, 1, $3);
 }
 | STRIPE_SIZE COMP_EQ file_size_const
 {
@@ -24763,6 +24776,7 @@ ACCESS_INFO
 |       BALANCE
 |       BANDWIDTH
 |       BEGI
+|       BINARY_FORMAT
 |       BINDING
 |       BINLOG
 |       BIT

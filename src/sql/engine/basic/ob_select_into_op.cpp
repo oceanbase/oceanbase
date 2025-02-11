@@ -151,9 +151,23 @@ int ObSelectIntoOp::init_csv_env()
     if (external_properties_.csv_format_.compression_algorithm_ != CsvCompressType::NONE) {
       has_compress_ = true;
     }
+    // setup binary output format for bit/binary
+    switch (external_properties_.csv_format_.binary_format_) {
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::DEFAULT:
+        print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
+        break;
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::HEX:
+        print_params_.binary_string_print_hex_ = true;
+        break;
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64:
+        print_params_.binary_string_print_base64_ = true;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set csv binary output format", K(ret));
+    }
     print_params_.tz_info_ = session->get_timezone_info();
     print_params_.use_memcpy_ = true;
-    print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
     print_params_.cs_type_ = cs_type_;
   }
   //create buffer
@@ -1033,6 +1047,12 @@ int ObSelectIntoOp::check_buf_sufficient(ObCsvFileWriter &data_writer,
 int ObSelectIntoOp::write_obj_to_file(const ObObj &obj, ObCsvFileWriter &data_writer, bool need_escape)
 {
   int ret = OB_SUCCESS;
+  // binary collation do not require to escape when encode with base64/hex
+  if (obj.get_collation_type() == CS_TYPE_BINARY &&
+      (print_params_.binary_string_print_hex_ || print_params_.binary_string_print_base64_)) {
+    need_escape = false;
+  }
+
   if ((obj.is_string_type() || obj.is_json() || obj.is_collection_sql_type()) && need_escape) {
     if (OB_FAIL(print_str_or_json_with_escape(obj, data_writer))) {
       LOG_WARN("failed to print str or json with escape", K(ret));

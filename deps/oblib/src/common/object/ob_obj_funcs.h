@@ -710,11 +710,25 @@ DEF_DOUBLE_FUNCS(ObUDoubleType, udouble, double, double);
   }                                                                     \
   template <>                                                           \
   inline int obj_print_plain_str<ObBitType>(const ObObj &obj, char *buffer, int64_t length, \
-                                            int64_t &pos, const ObObjPrintParams &params) \
-  {                                                                     \
-    UNUSED(params);                                                    \
-    return databuff_printf(buffer, length, pos, "%lu", obj.get_bit()); \
-  }                                                                     \
+                                            int64_t &pos, const ObObjPrintParams &params)   \
+  {                                                                                         \
+    if (params.binary_string_print_hex_) {                                                  \
+      return databuff_printf(buffer, length, pos, "%lX", obj.get_bit());                    \
+    } else if (params.binary_string_print_base64_) {                                        \
+      const uint64_t v = obj.get_bit();                                                     \
+      int8_t scale = obj.get_meta().get_scale();                                            \
+      if (scale < 1 || scale > 64) {                                                        \
+        /* defense code*/                                                                   \
+        scale = 64;                                                                         \
+      }                                                                                     \
+      /* bit 类型最大长度是 64，所以其最多只需要占用 8bytes 空间 */                                \
+      /* bit_bytes 向上取整 */                                                                \
+      const uint8_t bit_bytes = (scale + 8 - 1) / 8;                                         \
+      return ObBase64Encoder::encode(reinterpret_cast<const uint8_t*>(&v), bit_bytes, buffer, length, pos); \
+    } else {                                                                                 \
+      return databuff_printf(buffer, length, pos, "%lu", obj.get_bit());                     \
+    }                                                                                        \
+  }                                                                                          \
   template <>                                                           \
   inline int obj_print_json<ObBitType>(const ObObj &obj, char *buf, const int64_t buf_len, \
                                       int64_t &pos, const ObObjPrintParams &params) \
@@ -1273,6 +1287,8 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     if (src_type == CHARSET_BINARY || src_type == dst_type || src_type == CHARSET_INVALID) {\
       if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_hex_) {  \
         ret = hex_print(obj.get_string_ptr(), obj.get_string_len(), buffer, length, pos);   \
+      } else if (obj.get_collation_type() == CS_TYPE_BINARY && params.binary_string_print_base64_) { \
+        ret = ObBase64Encoder::encode(reinterpret_cast<const uint8_t*>(obj.get_string_ptr()), obj.get_string_len(), buffer, length, pos);  \
       } else if (params.use_memcpy_) {                                                      \
         ret = databuff_memcpy(buffer, length, pos, obj.get_string_len(), obj.get_string_ptr());         \
       } else {                                                                              \

@@ -10000,6 +10000,14 @@ int ObDMLResolver::resolve_external_table_generated_column(
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
+      if (OB_SUCC(ret) && format.csv_format_.binary_format_ != ObCSVGeneralFormat::ObCSVBinaryFormat::DEFAULT) {
+        // handle for binary format, only support for mysql mode(bit/binary/varbinary)
+        if (lib::is_mysql_mode() && (column_schema->get_meta_type().is_bit() || column_schema->get_meta_type().is_varbinary_or_binary())) {
+          if (OB_FAIL(ObResolverUtils::wrap_csv_binary_format_expr(params_, format.csv_format_, real_ref_expr))) {
+            LOG_WARN("fail to wrap binary format expr", K(ret));
+          }
+        }
+      }
     } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
         LOG_WARN("fail to calc file column idx", K(ret));

@@ -89,6 +89,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"before", BEFORE},
   {"begin", BEGI},
   {"between", BETWEEN},
+  {"binary_format", BINARY_FORMAT},
   {"bigint", BIGINT},
   {"binary", BINARY},
   {"binlog", BINLOG},

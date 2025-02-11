@@ -9563,6 +9563,66 @@ int ObResolverUtils::resolve_file_compression_format(const ParseNode *node, ObEx
   return ret;
 }
 
+int ObResolverUtils::wrap_csv_binary_format_expr(ObResolverParams &params, const ObCSVGeneralFormat &csv_format, ObRawExpr *&real_ref_expr) {
+  int ret = OB_SUCCESS;
+  // add parent expr above real_ref_expr
+  ObRawExpr *child_expr = real_ref_expr;
+  ObSysFunRawExpr *func_expr = nullptr;
+  if (OB_ISNULL(child_expr) || OB_ISNULL(params.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected exception", K(ret));
+  } else if (OB_FAIL(params.expr_factory_->create_raw_expr(T_FUN_SYS, func_expr))) {
+    LOG_WARN("fail to build binary format convert column expr for external table", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func_expr is null", K(ret));
+  } else if (OB_FAIL(func_expr->add_param_expr(child_expr))) {
+    LOG_WARN("failed to add child expr", K(ret));
+  } else {
+    switch (csv_format.binary_format_) {
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::HEX: {
+        func_expr->set_func_name("unhex");
+        break;
+      }
+      case ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64: {
+        func_expr->set_func_name("from_base64");
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected behavior for binary format");
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    real_ref_expr = func_expr;
+  }
+  return ret;
+}
+
+
+int ObResolverUtils::resolve_binary_format(const ParseNode* node, ObExternalFileFormat& format) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    const ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
+    if (0 == string_v.case_compare("hex")) {
+      format.csv_format_.binary_format_ = ObCSVGeneralFormat::ObCSVBinaryFormat::HEX;
+    } else if (0 == string_v.case_compare("base64")) {
+      format.csv_format_.binary_format_ = ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      ObSqlString err_msg;
+      err_msg.append_fmt("%s -> binary_format", string_v.ptr());
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+      LOG_WARN("not support this format type", K(format.format_type_));
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params)
 {
   int ret = OB_SUCCESS;
@@ -9809,6 +9869,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           if (format.csv_format_.parse_header_ && format.csv_format_.skip_header_lines_ == 0) {
             format.csv_format_.skip_header_lines_ = 1;
           }
+        }
+        break;
+      }
+      case T_BINARY_FORMAT: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.1, binary_format");
+        } else if (OB_FAIL(ObResolverUtils::resolve_binary_format(node, format))) {
+          LOG_WARN("failed to resolve file binary format", K(ret));
         }
         break;
       }
