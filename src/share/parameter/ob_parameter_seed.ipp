@@ -2504,3 +2504,7 @@ DEF_BOOL(_enable_auth_switch, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_malloc_v2, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable ob_malloc_v2.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(utl_file_open_max, OB_CLUSTER_PARAMETER, "50", "[50, 600]",
+         "the maximum number of utl files that can be opened simultaneously in a single node under the Oracle model.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
