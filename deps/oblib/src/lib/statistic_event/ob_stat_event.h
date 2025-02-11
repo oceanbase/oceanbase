@@ -286,6 +286,8 @@ STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_HIT, "backup index cache hit", ObStatClass
 STAT_EVENT_ADD_DEF(BACKUP_INDEX_CACHE_MISS, "backup index cache miss", ObStatClassIds::CACHE, 50072, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_HIT, "backup meta cache hit", ObStatClassIds::CACHE, 50073, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_META_CACHE_MISS, "backup meta cache miss", ObStatClassIds::CACHE, 50074, true, true, true)
+STAT_EVENT_ADD_DEF(TRUNCATE_INFO_CACHE_HIT, "truncate info cache hit", ObStatClassIds::CACHE, 50075, true, true, true)
+STAT_EVENT_ADD_DEF(TRUNCATE_INFO_CACHE_MISS, "truncate info cache miss", ObStatClassIds::CACHE, 50076, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)

@@ -20,6 +20,7 @@ using namespace share;
 using namespace common;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_CREATE_MAP);
 
 ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionInfo &other)
 {
@@ -160,6 +161,11 @@ int ObTabletLSPairCache::refresh()
                 K(tablet_ls_pair_array));
       } else if (tablet_ls_pair_array.empty()) {
         break;
+#ifdef ERRSIM
+      } else if (OB_UNLIKELY(EN_COMPACTION_SKIP_CREATE_MAP)) {
+        LOG_INFO("ERRSIM EN_COMPACTION_SKIP_CREATE_MAP, skip set map"); // tablet_ls_pair_array is empty
+        break;
+#endif
       } else {
         for (int64_t idx = 0; OB_SUCC(ret) && idx < tablet_ls_pair_array.count(); ++idx) {
           ObTabletLSPair &pair = tablet_ls_pair_array.at(idx);
@@ -189,6 +195,13 @@ int ObTabletLSPairCache::rebuild_map_by_tablet_cnt()
     if (OB_FAIL(ObTabletToLSTableOperator::get_tablet_ls_pairs_cnt(*GCTX.sql_proxy_, tenant_id_, tablet_cnt))) {
       LOG_WARN("failed to get tablet_ls pair cnt", KR(ret));
     }
+#ifdef ERRSIM
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(EN_COMPACTION_SKIP_CREATE_MAP)) {
+      tablet_cnt = 0;
+      LOG_INFO("ERRSIM EN_COMPACTION_SKIP_CREATE_MAP, set tablet_cnt to 0", K(tablet_cnt));
+    }
+#endif
   } else {
     tablet_cnt = map_.size();
   }
@@ -237,7 +250,7 @@ int ObTabletLSPairCache::try_refresh(const bool force_refresh/* = false*/)
   share::ObTransferTaskID tmp_max_task_id;
   if (OB_FAIL(check_exist_new_transfer_task(exist, tmp_max_task_id))) {
     LOG_WARN("failed to check transfer task", KR(ret));
-  } else if (force_refresh && OB_FAIL(rebuild_map_by_tablet_cnt())) {
+  } else if ((force_refresh || !map_.created()) && OB_FAIL(rebuild_map_by_tablet_cnt())) {
     LOG_WARN("failed to rebuild map by tablet cnt", KR(ret), K(force_refresh));
   } else if (force_refresh
       || (exist && (ObTimeUtility::fast_current_time() - last_refresh_ts_ >= REFRESH_CACHE_TIME_INTERVAL))) {
