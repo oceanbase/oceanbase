@@ -14,6 +14,7 @@
 #include "ob_das_task_result.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/px/ob_px_util.h"
 #include "share/detect/ob_detect_manager_utils.h"
 namespace oceanbase
 {
@@ -1129,12 +1130,16 @@ int ObDASTaskResultMgr::init_mem_profile(ObDASTCBMemProfileKey &key, ObDASMemPro
           ob_free(info);
           info = NULL;
         } else {
+          ObSqlProfileExecInfo profile_exec_info(exec_ctx);
+          // all tasks in an op share a common profile, if the tasks come from different rpc,
+          // the session in exec_ctx will be invalidated at this time
+          profile_exec_info.reset_my_session();
           if (OB_FAIL(info->sql_mem_processor_.init(&info->allocator_,
                                                     MTL_ID(),
                                                     cache_size,
                                                     PHY_TABLE_SCAN,
                                                     op_id,
-                                                    exec_ctx))) {
+                                                    profile_exec_info))) {
             LOG_WARN("init sql memory manager processor failed", K(ret));
           } else if (OB_FAIL(mem_profile_map_.set_refactored(key, info))) {
             LOG_WARN("set mem profile in map failed", K(ret));
