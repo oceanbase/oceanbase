@@ -1244,40 +1244,58 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
   if (OB_SUCC(ret) && user_exist) {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
-    } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
       if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                  static_cast<int32_t>(values.length()),
-                                  values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                      sql.ptr(),
-                                      affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
-          }
+        // reset map
+        ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+        if (OB_FAIL(rule_mgr.reset_group_id_by_user(tenant_id, user_id))) {
+          LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(user_id), K(value));
         }
       }
-      if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
-        // reset map
-        if (consumer_group.empty()) {
-          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-          if (OB_FAIL(rule_mgr.reset_group_id_by_user(tenant_id, user_id))) {
-            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(user_id), K(value));
+    } else {
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                    static_cast<int32_t>(values.length()),
+                                    values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                        sql.ptr(),
+                                        affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
+          } else {
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
@@ -1304,42 +1322,60 @@ int ObResourceManagerProxy::replace_function_mapping_rule(ObMySQLTransaction &tr
   if (OB_SUCC(ret) && function_exist) {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
-    } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
       if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                  static_cast<int32_t>(values.length()),
-                                  values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                      sql.ptr(),
-                                      affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
-          }
+        // reset map
+        ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
+        ObResMgrVarcharValue func;
+        func.set_value(value);
+        if (OB_FAIL(rule_mgr.reset_group_id_by_function(tenant_id, func))) {
+          LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(func), K(value));
         }
       }
-      if (OB_SUCC(ret) && function_exist && consumer_group.empty()) {
-        // reset map
-        if (consumer_group.empty()) {
-          ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-          ObResMgrVarcharValue func;
-          func.set_value(value);
-          if (OB_FAIL(rule_mgr.reset_group_id_by_function(tenant_id, func))) {
-            LOG_WARN("fail reset user_group map", K(ret), K(tenant_id), K(func), K(value));
+    } else {
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, value.ptr(), value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                    static_cast<int32_t>(values.length()),
+                                    values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                        sql.ptr(),
+                                        affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
+          } else {
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
@@ -1373,31 +1409,51 @@ int ObResourceManagerProxy::replace_column_mapping_rule(ObMySQLTransaction &tran
   } else {
     ObSqlString sql;
     const char *tname = OB_ALL_RES_MGR_MAPPING_RULE_TNAME;
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
-      STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+    int64_t affected_rows = 0;
+    if (consumer_group.empty()) {
+      // if consumer_group is empty, delete mapping
+      if (OB_FAIL(sql.assign_fmt(
+                  "DELETE /* REMOVE_MAPPING_RULES */ FROM %s "
+                  "WHERE TENANT_ID = %ld "
+                  "AND ATTRIBUTE = '%.*s'"
+                  "AND VALUE = '%.*s'",
+                  tname, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  attribute.length(), attribute.ptr(),
+                  value.length(), value.ptr()))) {
+        LOG_WARN("fail append value", K(ret));
+      } else if (OB_FAIL(trans.write(
+                  tenant_id,
+                  sql.ptr(),
+                  affected_rows))) {
+        trans.reset_last_error();
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      }
     } else {
-      ObSqlString values;
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
-      SQL_COL_APPEND_STR_VALUE(sql, values, formalized_value.ptr(), formalized_value.length(), "value");
-      SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
-      if (OB_SUCC(ret)) {
-        int64_t affected_rows = 0;
-        if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
-                                    static_cast<int32_t>(values.length()),
-                                    values.ptr()))) {
-          LOG_WARN("append sql failed, ", K(ret));
-        } else if (OB_FAIL(trans.write(tenant_id,
-                                        sql.ptr(),
-                                        affected_rows))) {
-          trans.reset_last_error();
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
-        } else {
-          if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
-            // insert or replace
+      if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+        STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+      } else {
+        ObSqlString values;
+        SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+        SQL_COL_APPEND_STR_VALUE(sql, values, attribute.ptr(), attribute.length(), "attribute");
+        SQL_COL_APPEND_STR_VALUE(sql, values, formalized_value.ptr(), formalized_value.length(), "value");
+        SQL_COL_APPEND_STR_VALUE(sql, values, consumer_group.ptr(), consumer_group.length(), "consumer_group");
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                      static_cast<int32_t>(values.length()),
+                                      values.ptr()))) {
+            LOG_WARN("append sql failed, ", K(ret));
+          } else if (OB_FAIL(trans.write(tenant_id,
+                                          sql.ptr(),
+                                          affected_rows))) {
+            trans.reset_last_error();
+            LOG_WARN("fail to execute sql", K(sql), K(ret));
           } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+              // insert or replace
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+            }
           }
         }
       }
