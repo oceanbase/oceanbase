@@ -3898,10 +3898,19 @@ int ObIvfSq8MetaSliceStore::get_next_vector_data_row(
         if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(cid_str));
         } else {
-          current_row_.storage_datums_[meta_vector_col_idx_].set_string(vec_res);
-          current_row_.storage_datums_[meta_id_col_idx_].set_string(cid_str);
-          current_row_.storage_datums_[rowkey_cnt].set_int(-snapshot_version);
-          current_row_.storage_datums_[rowkey_cnt + 1].set_int(0);
+          for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
+            if (meta_vector_col_idx_ == i) {
+              current_row_.storage_datums_[meta_vector_col_idx_].set_string(vec_res);
+            } else if (meta_id_col_idx_ == i) {
+              current_row_.storage_datums_[meta_id_col_idx_].set_string(cid_str);
+            } else if (rowkey_cnt == i) {
+              current_row_.storage_datums_[i].set_int(-snapshot_version);
+            } else if (rowkey_cnt + 1 == i) {
+              current_row_.storage_datums_[i].set_int(0);
+            } else {
+              current_row_.storage_datums_[i].set_null(); // set part key null
+            }
+          }
           current_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
           datum_row = &current_row_;
           cur_row_pos_++;
@@ -4095,10 +4104,19 @@ int ObIvfPqSliceStore::get_next_vector_data_row(
         if (OB_FAIL(ObVectorClusterHelper::set_pq_center_id_to_string(pq_center_id, pq_cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(pq_center_id), K(pq_cid_str));
         } else {
-          current_row_.storage_datums_[pq_center_vector_col_idx_].set_string(vec_res);
-          current_row_.storage_datums_[pq_center_id_col_idx_].set_string(pq_cid_str);
-          current_row_.storage_datums_[rowkey_cnt].set_int(-snapshot_version);
-          current_row_.storage_datums_[rowkey_cnt + 1].set_int(0);
+          for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
+            if (pq_center_vector_col_idx_ == i) {
+              current_row_.storage_datums_[i].set_string(vec_res);
+            } else if (pq_center_id_col_idx_ == i) {
+              current_row_.storage_datums_[i].set_string(pq_cid_str);
+            } else if (rowkey_cnt == i) {
+              current_row_.storage_datums_[i].set_int(-snapshot_version);
+            } else if (rowkey_cnt + 1 == i) {
+              current_row_.storage_datums_[i].set_int(0);
+            } else {
+              current_row_.storage_datums_[i].set_null(); // set part key null
+            }
+          }
           current_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
           datum_row = &current_row_;
           cur_row_pos_++;
