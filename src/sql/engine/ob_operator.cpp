@@ -1126,20 +1126,39 @@ int ObOperator::try_deregister_rt_monitor_node()
   }
   return ret;
 }
+
+int check_child_closed_helper(ObOperator *child, bool &closed)
+{
+  closed = true;
+  return child->close();
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::close()
 {
   int ret = OB_SUCCESS;
-  int child_ret = OB_SUCCESS;
   OperatorOpenOrder open_order = get_operator_open_order();
   if (OPEN_SELF_ONLY != open_order) {
     //first call close of children
     for (int64_t i = 0; i < child_cnt_; ++i) {
-      // children_ pointer is checked before operator open, no need check again.
-      int tmp_ret = SMART_CALL(children_[i]->close());
-      if (OB_SUCCESS != tmp_ret) {
+      bool closed = false;
+      int tmp_ret = OB_SUCCESS;
+      // here retry SMART_CALL a few times, try to avoid child operator not calling close
+      // which maybe caused by error injection while allocing new stack in SMART_CALL
+      for (int64_t retry_cnt = 0; retry_cnt < SMART_CALL_CLOSE_RETRY_TIMES && !closed; retry_cnt++) {
+        // children_ pointer is checked before operator open, no need check again.
+        tmp_ret = SMART_CALL(check_child_closed_helper(children_[i], closed));
+      }
+      if (OB_UNLIKELY(!closed)) {
+        // SMART_CALL failed more than SMART_CALL_CLOSE_RETRY_TIMES, cannot alloc more memory for
+        // func stack, maybe caused wild ptr because child operator cannot revoke close(),
+        // so revoke right_to_die_or_duty_to_live here.
+        LOG_ERROR("failed to alloc new stack for child operator to close", K(tmp_ret),
+          "op_type", op_name());
+        right_to_die_or_duty_to_live();
+      } else if (OB_SUCCESS != tmp_ret) {
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
+        LOG_WARN("failed to close child operator", K(ret), "op_type", op_name());
       }
     }
   }

@@ -368,6 +368,7 @@ public:
   const static int64_t MONITOR_RUNNING_TIME_THRESHOLD = 5000000; //5s
   const static int64_t REAL_TIME_MONITOR_THRESHOLD = 1000000; //1s
   const static uint64_t REAL_TIME_MONITOR_TRY_TIMES = 256;
+  const static uint64_t SMART_CALL_CLOSE_RETRY_TIMES = 10;
 
 public:
   ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
