@@ -348,7 +348,7 @@ int ObExprValuesOp::get_real_batch_obj_type(ObDatumMeta &src_meta,
                                             int64_t group_idx)
 {
   int ret = OB_SUCCESS;
-  if ((MY_SPEC.ins_values_batch_opt_ || (ctx_.has_dynamic_values_table() && MY_SPEC.array_group_idx_ >= 0)) &&
+  if ((MY_SPEC.contain_ab_param_ || (ctx_.has_dynamic_values_table() && MY_SPEC.array_group_idx_ >= 0)) &&
       T_QUESTIONMARK == src_expr->type_ &&
       src_expr->frame_idx_ < spec_.plan_->get_expr_frame_info().const_frame_.count() +
                              spec_.plan_->get_expr_frame_info().param_frame_.count()) {
