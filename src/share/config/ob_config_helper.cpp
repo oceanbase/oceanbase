@@ -1630,5 +1630,20 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
   }
   return bret;
 }
+
+bool ObConfigEnableAutoSplitChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  bool enable_auto_split = ObConfigBoolParser::get(t.str(), is_valid);
+  return is_valid && !(GCTX.is_shared_storage_mode() && enable_auto_split);
+}
+
+bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.str(), is_valid);
+  return is_valid && !GCTX.is_shared_storage_mode();
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

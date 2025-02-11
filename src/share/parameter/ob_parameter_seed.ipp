@@ -2069,11 +2069,13 @@ DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable
 DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
         "enable t3m tablet leak checker. The default value is False",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_BOOL(enable_auto_split, OB_TENANT_PARAMETER, "False",
+DEF_BOOL_WITH_CHECKER(enable_auto_split, OB_TENANT_PARAMETER, "False",
+         common::ObConfigEnableAutoSplitChecker,
          "if the auto-partition clause is not used"
          "this config judge whether to enable auto-partition for creating table.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", "[128M,)",
+DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "128M", common::ObConfigAutoSplitTabletSizeChecker,
+        "[128M,)",
         "when create an auto-partitioned table in \"create table\" syntax or "
         "modify a table as an auto-partitioned table in \"alter table\" syntax,"
         "if the splitting threshold of tablet size is not setted,"

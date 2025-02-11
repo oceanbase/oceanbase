@@ -1080,6 +1080,28 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigJavaParamsChecker);
 };
+
+class ObConfigEnableAutoSplitChecker : public ObConfigChecker
+{
+public:
+  ObConfigEnableAutoSplitChecker() {}
+  virtual ~ObConfigEnableAutoSplitChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigEnableAutoSplitChecker);
+};
+
+class ObConfigAutoSplitTabletSizeChecker : public ObConfigChecker
+{
+public:
+  ObConfigAutoSplitTabletSizeChecker() {}
+  virtual ~ObConfigAutoSplitTabletSizeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAutoSplitTabletSizeChecker);
+};
+
+
 } // namespace common
 } // namespace oceanbase
 
