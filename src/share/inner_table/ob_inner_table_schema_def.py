@@ -28198,7 +28198,7 @@ def_table_schema(
           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,
           CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED
         FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B
-        WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan
+        WHERE A.variable_name = 'resource_manager_plan' AND UPPER(A.value) = UPPER(B.plan)
 """.replace("\n", " "),
 )
 
@@ -59199,7 +59199,7 @@ def_table_schema(
           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,
           CAST(NULL AS VARCHAR2(32)) AS PARALLEL_EXECUTION_MANAGED
         FROM SYS.tenant_virtual_global_variable A, SYS.DBA_RSRC_PLANS B
-        WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan
+        WHERE A.variable_name = 'resource_manager_plan' AND UPPER(A.value) = UPPER(B.plan)
 """.replace("\n", " "),
 )
 

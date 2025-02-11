@@ -717,7 +717,7 @@ int ObInnerTableSchema::v_rsrc_plan_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT           CAST(NULL as NUMBER) AS ID,           B.plan NAME,           CAST('TRUE' AS CHAR(5)) AS IS_TOP_PLAN,           CAST('ON' AS CHAR(3)) AS CPU_MANAGED,           CAST(NULL AS CHAR(3)) AS INSTANCE_CAGING,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_ACTIVE,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,           CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED         FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B         WHERE A.variable_name = 'resource_manager_plan' AND A.value = B.plan )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT           CAST(NULL as NUMBER) AS ID,           B.plan NAME,           CAST('TRUE' AS CHAR(5)) AS IS_TOP_PLAN,           CAST('ON' AS CHAR(3)) AS CPU_MANAGED,           CAST(NULL AS CHAR(3)) AS INSTANCE_CAGING,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_ACTIVE,           CAST(NULL AS NUMBER) AS PARALLEL_SERVERS_TOTAL,           CAST(NULL AS CHAR(32)) AS PARALLEL_EXECUTION_MANAGED         FROM oceanbase.__tenant_virtual_global_variable A, oceanbase.dba_rsrc_plans B         WHERE A.variable_name = 'resource_manager_plan' AND UPPER(A.value) = UPPER(B.plan) )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
