@@ -7941,6 +7941,7 @@ def_table_schema(
 # 539: __all_catalog_privilege
 # 540: __all_catalog_privilege_history
 # 541: __all_tenant_flashback_log_scn
+# 542: __sslog_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
