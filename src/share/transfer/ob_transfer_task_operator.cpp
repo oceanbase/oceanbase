@@ -490,8 +490,10 @@ int ObTransferTaskOperator::finish_task_from_init(
       || !task_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id));
-  } else if (old_status.status() != ObTransferStatus::INIT
-      && new_status.status() != ObTransferStatus::COMPLETED) {
+  } else if (ObTransferStatus::INIT != old_status.status()
+      || (ObTransferStatus::COMPLETED != new_status.status()
+      && ObTransferStatus::FAILED != new_status.status()
+      && ObTransferStatus::CANCELED != new_status.status())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("status not match", KR(ret),
         K(tenant_id), K(task_id), K(old_status), K(new_status));

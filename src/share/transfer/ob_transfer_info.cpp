@@ -421,6 +421,7 @@ static const char* TRANSFER_TASK_COMMENT_ARRAY[] =
   "Wait to retry due to the last failure",
   "Wait for tenant major compaction to end",
   "Wait for learner list to be same",
+  "Unable to process task due to all partitions locked",
   "Unknow"/*MAX_COMMENT*/
 };
 

@@ -249,11 +249,25 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     LOG_WARN("lock table and part failed", KR(ret), K(task), K(tablet_ids),
         K(lock_owner_id), K(not_exist_part_list), K(lock_conflict_part_list), K(table_lock_tablet_list));
   } else if (tablet_ids.empty()) {
+    ObTransferStatus transfer_status;
+    ObTransferTaskComment transfer_comment = EMPTY_COMMENT;
+    int result = OB_SUCCESS;
     if (OB_UNLIKELY(not_exist_part_list.empty() && lock_conflict_part_list.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("not exist and lock conflict part list can not be empty when tablet_ids are empty",
           KR(ret), K(task), K(tablet_ids));
-    } else if (OB_FAIL(ObTransferTaskOperator::finish_task_from_init(
+    } else if (not_exist_part_list.empty()) {
+      // indicate that all parts for transfer by this task have lock conflicts
+      transfer_status = ObTransferStatus::FAILED;
+      transfer_comment = PART_LIST_ALL_LOCK_CONFLICT;
+      result = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    } else if (lock_conflict_part_list.empty()) {
+      // indicate that all parts to be transferred by this task does not exist
+      transfer_status = ObTransferStatus::COMPLETED;
+      transfer_comment = TASK_COMPLETED_AS_NO_VALID_PARTITION;
+      result = OB_SUCCESS;
+    }
+    if (FAILEDx(ObTransferTaskOperator::finish_task_from_init(
         trans,
         tenant_id_,
         task_id,
@@ -261,9 +275,9 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
         task.get_part_list(),
         not_exist_part_list,
         lock_conflict_part_list,
-        ObTransferStatus(ObTransferStatus::COMPLETED),
-        OB_SUCCESS,
-        ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION))) {
+        transfer_status,
+        result,
+        transfer_comment))) {
       LOG_WARN("finish task from init failed", KR(ret), K_(tenant_id),
           K(task), K(not_exist_part_list), K(lock_conflict_part_list));
     }
@@ -361,9 +375,6 @@ int ObTenantTransferService::check_if_need_wait_due_to_last_failure_(
       LOG_WARN("last task should be valid", KR(ret), K(task), K(last_task));
     } else if (ObTimeUtil::current_time() - finish_time < wait_interval) {
       if (last_task.get_status().is_failed_status()) { // last failed
-        need_wait = true;
-      } else if (last_task.get_tablet_list().empty()
-          && !last_task.get_lock_conflict_part_list().empty()) { // all part conflicted
         need_wait = true;
       }
     }
@@ -655,7 +666,7 @@ int ObTenantTransferService::lock_table_and_part_(
         }
       }
 
-      if (OB_FAIL(ret) || OB_ISNULL(table_schema) || is_not_exist || is_lock_conflict) {
+      if (OB_FAIL(ret) || OB_ISNULL(table_schema) || is_not_exist) {
         // skip
       } else if (OB_FAIL(add_in_trans_lock_and_refresh_schema_(
           trans,
