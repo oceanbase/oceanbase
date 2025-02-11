@@ -1228,9 +1228,7 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
   }
   if (required_size > 0) {
     if (OB_FAIL(LOCAL_DEVICE_INSTANCE.check_space_full(required_size))) {
-      if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-        ret = OB_SERVER_MIGRATE_IN_DENIED;
-      }
+      // if disk space is not enough, return OB_SERVER_OUTOF_DISK_SPACE
       FLOG_ERROR( "failed to check_is_disk_full, cannot migrate in",
           K(ret), K(required_size));
     }
