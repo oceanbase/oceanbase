@@ -8798,9 +8798,16 @@ int ObPLResolver::resolve_fetch(
                             (right->get_data_type() != NULL && right->get_data_type()->get_meta_type().is_ext()))) {
                   uint64_t left_udt_id = (NULL == left->get_data_type()) ? left->get_user_type_id()
                                                                           : left->get_data_type()->get_udt_id();
+                  ObPLType left_pl_type = (NULL == left->get_data_type()) ? left->get_type()
+                                                                          : static_cast<ObPLType>(left->get_data_type()->get_meta_type().get_extend_type());
                   uint64_t right_udt_id = (NULL == right->get_data_type()) ? right->get_user_type_id()
                                                                             : right->get_data_type()->get_udt_id();
-                  if (left_udt_id != right_udt_id) {
+                  ObPLType right_pl_type = (NULL == right->get_data_type()) ? right->get_type()
+                                                                            : static_cast<ObPLType>(right->get_data_type()->get_meta_type().get_extend_type());
+                  if ((PL_CURSOR_TYPE == left_pl_type || PL_REF_CURSOR_TYPE == left_pl_type)
+                       && (PL_CURSOR_TYPE == right_pl_type || PL_REF_CURSOR_TYPE == right_pl_type)) {
+                    // both cursor type, compatible is true, do nothing.
+                  } else if (left_udt_id != right_udt_id) {
                     is_compatible = false;
                   } else {
                     // same composite type, compatible is true, do nothing.
