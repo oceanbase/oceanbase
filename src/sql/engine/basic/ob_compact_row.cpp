@@ -178,7 +178,7 @@ int64_t ObCompactRow::calc_max_row_size(const ObExprPtrIArray &exprs, int32_t ex
   } else {
     res += tmp_meta.fix_data_off_;
     for (int64_t i = 0; i < exprs.count(); ++i) {
-      if (T_REF_COLUMN == exprs.at(i)->type_) {
+      if (T_REF_COLUMN == exprs.at(i)->type_ && exprs.at(i)->max_length_ > 0) {
         res += exprs.at(i)->max_length_;
       } else {
         res += INT32_MAX;
