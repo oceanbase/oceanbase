@@ -203,10 +203,17 @@ int ObCgroupCtrl::check_cgroup_root_dir()
   char real_cgroup_path[PATH_BUFSIZE];
   if (OB_FAIL(FileDirectoryUtils::is_exists(OBSERVER_ROOT_CGROUP_DIR, exist_cgroup))) {
     ret = OB_ERR_SYS;
+    LOG_WARN("fail check file exist", K(OBSERVER_ROOT_CGROUP_DIR), K(ret));
   } else if (!exist_cgroup) {
     ret = OB_FILE_NOT_EXIST;
+    LOG_WARN("dir not exist", K(OBSERVER_ROOT_CGROUP_DIR), K(ret));
   } else if (-1 == readlink(OBSERVER_ROOT_CGROUP_DIR, real_cgroup_path, PATH_BUFSIZE)) {
     ret = OB_ERR_SYS;
+    LOG_WARN("fail to read link", K(OBSERVER_ROOT_CGROUP_DIR), K(ret));
+  } else if (0 != access(OBSERVER_ROOT_CGROUP_DIR, R_OK | W_OK)) {
+    // access denied
+    ret = OB_ERR_SYS;
+    LOG_WARN("no permission to access", K(OBSERVER_ROOT_CGROUP_DIR), K(ret));
   }
   return ret;
 }
@@ -358,6 +365,8 @@ int ObCgroupCtrl::remove_cgroup_(const uint64_t tenant_id, uint64_t group_id, co
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("remove cgroup directory failed", K(ret), K(group_path), K(tenant_id));
+    ret = OB_SUCCESS;
+    // ignore failure
   } else {
     LOG_INFO("remove cgroup directory success", K(group_path), K(tenant_id));
   }
@@ -591,12 +600,12 @@ int ObCgroupCtrl::set_cpu_shares(
   int ret = OB_SUCCESS;
   if (!(is_background && GCONF.enable_global_background_resource_isolation)) {
     if (OB_FAIL(set_cpu_shares_(tenant_id, cpu, group_id, false /* is_background */))) {
-      LOG_WARN("remove tenant cgroup directory failed", K(ret), K(tenant_id));
+      LOG_WARN("set cpu shares failed", K(ret), K(tenant_id));
     }
   }
   if (OB_SUCC(ret) && GCONF.enable_global_background_resource_isolation) {
     if (OB_FAIL(set_cpu_shares_(tenant_id, cpu, group_id, true /* is_background */))) {
-      LOG_WARN("remove background tenant cgroup directory failed", K(ret), K(tenant_id));
+      LOG_WARN("set background cpu shares failed", K(ret), K(tenant_id));
     }
   }
   return ret;
@@ -606,6 +615,7 @@ int ObCgroupCtrl::get_cpu_shares(
     const uint64_t tenant_id, double &cpu, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
+  cpu = 0;
   char group_path[PATH_BUFSIZE];
   char cpu_shares_value[VALUE_BUFSIZE + 1];
 
@@ -842,6 +852,7 @@ int ObCgroupCtrl::get_cpu_cfs_quota(
     const uint64_t tenant_id, double &cpu, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
+  cpu = 0;
   char group_path[PATH_BUFSIZE];
   if (OB_FAIL(get_group_path(group_path,
           PATH_BUFSIZE,
@@ -859,7 +870,7 @@ int ObCgroupCtrl::get_cpu_time_(
     const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
-
+  cpu_time = 0;
   char group_path[PATH_BUFSIZE];
   char cpuacct_usage_value[VALUE_BUFSIZE + 1];
 
@@ -898,7 +909,7 @@ int ObCgroupCtrl::get_throttled_time_(
     const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
-
+  throttled_time = 0;
   char group_path[PATH_BUFSIZE];
   char cpu_stat_value[VALUE_BUFSIZE + 1];
 
