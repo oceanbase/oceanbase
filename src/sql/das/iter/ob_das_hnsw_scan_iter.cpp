@@ -865,7 +865,7 @@ int ObDASHNSWScanIter::next_state(ObVidAdaLookupStatus& cur_state, ObVectorQuery
 int ObDASHNSWScanIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
 {
   int ret = OB_SUCCESS;
-  const uint64_t OB_HNSW_EF_SEARCH_DEFAULT = 40;
+  const uint64_t OB_HNSW_EF_SEARCH_DEFAULT = 64;  // same as SYS_VAR_OB_HNSW_EF_SEARCH
 
   ObSQLSessionInfo *session = nullptr;
   if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
