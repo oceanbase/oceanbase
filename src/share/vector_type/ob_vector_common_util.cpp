@@ -187,7 +187,7 @@ int ObVectorClusterHelper::get_center_id_from_string(ObCenterId &center_id, cons
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() < OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid cluster center id str", K(ret), K(str));
+    LOG_WARN("invalid cluster center id str", K(ret), KP(str.ptr()), K(str.length()));
   } else {
     const ObCenterId *center_id_ptr = reinterpret_cast<const ObCenterId *>(str.ptr());
     center_id.tablet_id_ = ntohll(center_id_ptr->tablet_id_);

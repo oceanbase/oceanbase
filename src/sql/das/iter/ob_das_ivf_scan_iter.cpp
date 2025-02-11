@@ -1653,6 +1653,9 @@ int ObDASIvfPQScanIter::get_cid_from_pq_rowkey_cid_table(ObIAllocator &allocator
     }
   } else if (OB_FAIL(get_pq_cids_from_datum(allocator, pq_cids_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_).get_string(), pq_cids))) {
     LOG_WARN("fail to get pq cids from datum", K(ret));
+  } else {
+    ObDatum &cid_datum = cid_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_);
+    cid = cid_datum.get_string();
   }
   return ret;
 }
@@ -1745,7 +1748,7 @@ int ObDASIvfPQScanIter::filter_rowkey_by_cid(const ObIArray<IvfCidVecPair> &near
     for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !index_end; ++i) {
       ObString cid;
       ObArrayBinary *pq_center_ids = nullptr;
-      // 1. ivf_pq_rowkey_cid table: Check pre-filter rowkey corresponding to (cid, pq_center_ids)
+      // 1. ivf_pq_rowkey_cid table: Querying the (cid, pq_center_ids) corresponding to the rowkey in the primary table
       if (OB_FAIL(get_cid_from_pq_rowkey_cid_table(tmp_allocator, cid, pq_center_ids))) {
         ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
         index_end = true;
@@ -1875,10 +1878,10 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
       }
     }
 
-    if (OB_ITER_END != ret) {
+    if (OB_FAIL(ret) && OB_ITER_END != ret) {
       LOG_WARN("get next row failed.", K(ret));
     } else {
-      ret = OB_SUCCESS;
+      ret = OB_SUCCESS; // overwrite OB_ITER_END
       // output from nearest_rowkey_heap
       if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {
         LOG_WARN("failed to get top n", K(ret));
