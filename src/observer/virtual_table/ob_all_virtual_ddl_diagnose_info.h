@@ -66,7 +66,7 @@ class ObAllVirtualDDLDiagnoseInfo : public common::ObVirtualTableScannerIterator
 {
 public:
   ObAllVirtualDDLDiagnoseInfo()
-    : is_inited_(false), sql_proxy_(nullptr), ddl_scan_result_(), sql_result_iter_end_(true), diagnose_info_(),
+    : is_inited_(false), sql_proxy_(nullptr), ddl_scan_result_(), ddl_scan_idx_(0), diagnose_info_(),
       sql_monitor_stats_collector_(), diagnose_values_(), idx_(0), value_(), pos_(0)
   {}
   virtual ~ObAllVirtualDDLDiagnoseInfo() = default;
@@ -98,8 +98,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDDLDiagnoseInfo);
   bool is_inited_;
   ObMySQLProxy *sql_proxy_;
-  ObMySQLProxy::MySQLResult ddl_scan_result_;
-  bool sql_result_iter_end_;
+  ObArray<observer::ObDDLDiagnoseValue> ddl_scan_result_;
+  uint64_t ddl_scan_idx_;
   share::ObDDLDiagnoseInfo diagnose_info_;
   share::ObSqlMonitorStatsCollector sql_monitor_stats_collector_;
   ObArray<observer::ObDDLDiagnoseValue> diagnose_values_;

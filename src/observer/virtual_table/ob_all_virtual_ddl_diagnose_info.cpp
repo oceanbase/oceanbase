@@ -269,13 +269,52 @@ int ObAllVirtualDDLDiagnoseInfo::collect_ddl_info(const ObSqlString &scan_sql)
 {
   int ret = OB_SUCCESS;
   sqlclient::ObMySQLResult *scan_result = nullptr;
+  ddl_scan_result_.reset();
   if (!scan_sql.is_valid() || OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("assign get invalid argument", K(ret), K(scan_sql), KP(sql_proxy_));
-  } else if (OB_FAIL(sql_proxy_->read(ddl_scan_result_, common::OB_SYS_TENANT_ID, scan_sql.ptr()))) {
-    LOG_WARN("fail to execute sql", K(ret), K(scan_sql));
   } else {
-    sql_result_iter_end_ = false;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *scan_result = nullptr;
+      if (OB_FAIL(sql_proxy_->read(res, common::OB_SYS_TENANT_ID, scan_sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(scan_sql));
+      } else if (OB_ISNULL(scan_result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(scan_result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next row", K(ret), K(scan_sql));
+            }
+          } else {
+            value_.reset();
+            int32_t optype = 0;
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*scan_result, "execution_id", value_.execution_id_, int64_t, true/*skip_null_error*/, true/*skip_column_error*/, -2/*default_value*/);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "tenant_id", value_.tenant_id_, uint64_t);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "task_id", value_.ddl_task_id_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "object_id", value_.object_id_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_CREATE", value_.start_time_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_MODIFIED", value_.finish_time_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(*scan_result, "ddl_type", optype, int32_t);
+            value_.ddl_type_ = static_cast<share::ObDDLType>(optype);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("failed to get mysql field result", K(ret));
+            } else if (OB_FAIL(databuff_printf(value_.op_name_, common::MAX_LONG_OPS_NAME_LENGTH, "%s",  share::get_ddl_type(value_.ddl_type_)))) {
+              LOG_WARN("failed to print ddl type", K(ret), K(value_.ddl_type_));
+            } else if (OB_FAIL(ddl_scan_result_.push_back(value_))) {
+              LOG_WARN("failed to push back value", K(ret), K(value_));
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ddl_scan_idx_ = 0;
   }
   return ret;
 }
@@ -285,44 +324,20 @@ int ObAllVirtualDDLDiagnoseInfo::collect_task_info()
   int ret = OB_SUCCESS;
   idx_ = 0;
   diagnose_values_.reset();
-  value_.reset();
   sqlclient::ObMySQLResult *scan_result = nullptr;
-  if (sql_result_iter_end_) {
+  if (ddl_scan_idx_ >= ddl_scan_result_.count()) {
     ret = OB_ITER_END;
-  } else if (OB_ISNULL(scan_result = ddl_scan_result_.get_result())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, query result must not be NULL", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < MAX_SQL_MONITOR_BATCH_SIZE; ++i) {
-      if (OB_FAIL(scan_result->next())) {
-        if (OB_ITER_END == ret) {
-          sql_result_iter_end_ = true;
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next row", K(ret));
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < MAX_SQL_MONITOR_BATCH_SIZE && ddl_scan_idx_ < ddl_scan_result_.count(); ++i) {
+      value_ = ddl_scan_result_.at(ddl_scan_idx_);
+      if (OB_FAIL(diagnose_values_.push_back(value_))) {
+        LOG_WARN("failed to push back value", K(ret), K(value_));
+      } else if (OB_FAIL(sql_monitor_stats_collector_.scan_task_id_.push_back(value_.ddl_task_id_))) {
+        LOG_WARN("failed to push back task id", K(ret), K(value_.ddl_task_id_));
+      } else if (OB_FAIL(sql_monitor_stats_collector_.scan_tenant_id_.push_back(value_.tenant_id_))) {
+        LOG_WARN("failed to push back tenant id", K(ret), K(value_.tenant_id_));
       } else {
-        int32_t optype = 0;
-        EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*scan_result, "execution_id", value_.execution_id_, int64_t, true/*skip_null_error*/, true/*skip_column_error*/, -2/*default_value*/);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "tenant_id", value_.tenant_id_, uint64_t);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "task_id", value_.ddl_task_id_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "object_id", value_.object_id_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_CREATE", value_.start_time_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_MODIFIED", value_.finish_time_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*scan_result, "ddl_type", optype, int32_t);
-        value_.ddl_type_ = static_cast<share::ObDDLType>(optype);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to get mysql field result", K(ret));
-        } else if (OB_FAIL(databuff_printf(value_.op_name_, common::MAX_LONG_OPS_NAME_LENGTH, "%s",  share::get_ddl_type(value_.ddl_type_)))) {
-          LOG_WARN("failed to print ddl type", K(ret), K(value_.ddl_type_));
-        } else if (OB_FAIL(diagnose_values_.push_back(value_))) {
-          LOG_WARN("failed to push back value", K(ret), K(value_));
-        } else if (OB_FAIL(sql_monitor_stats_collector_.scan_task_id_.push_back(value_.ddl_task_id_))) {
-          LOG_WARN("failed to push back task id", K(ret), K(value_.ddl_task_id_));
-        } else if (OB_FAIL(sql_monitor_stats_collector_.scan_tenant_id_.push_back(value_.tenant_id_))) {
-          LOG_WARN("failed to push back tenant id", K(ret), K(value_.tenant_id_));
-        }
+        ddl_scan_idx_++;
       }
     }
     if (OB_SUCC(ret) && diagnose_values_.count() > 0) {
