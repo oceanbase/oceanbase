@@ -194,11 +194,12 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
   const ObCollationType cs_type = dst_elem_type->basic_meta_.meta_.get_collation_type();
   ObObj buf_obj;
   const ObObj *res_obj = &src_elem;
-  if (dst_obj_type == ObVarcharType &&
-      OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, src_elem, buf_obj, res_obj))) {
-    LOG_WARN("varchar type length is too long", K(ret), K(src_elem.get_string_len()));
-  } else if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
+
+  if (OB_FAIL(ObObjCaster::to_type(dst_obj_type, cast_ctx, src_elem, res))) {
     LOG_WARN("failed to cast number to double type", K(ret));
+  } else if (dst_obj_type == ObVarcharType &&
+      OB_FAIL(obj_accuracy_check(cast_ctx, out_acc, cs_type, res, buf_obj, res_obj))) {
+    LOG_WARN("varchar type length is too long", K(ret), K(res.get_string_len()));
   } else {
     switch (dst_obj_type) {
       case ObTinyIntType : {
