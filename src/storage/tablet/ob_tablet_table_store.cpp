@@ -3374,10 +3374,10 @@ int ObTabletTableStore::build_split_minor_tables_(
       // update batch split-minors to the table store repeatedly is possible, and update repeatedly without error is necessary.
       const SCN &smallest_start_scn_in_old_store = old_store.minor_tables_.at(0)->get_start_scn();
       const SCN &biggest_end_scn_in_old_store = old_store.minor_tables_.at(old_store.minor_tables_.count() - 1)->get_end_scn();
-      const SCN &smallest_start_scn_in_split_minor = minor_tables.at(0)->get_start_scn();
-      const SCN &biggest_end_scn_in_split_minor = minor_tables.at(minor_tables.count() - 1)->get_end_scn();
-      if (OB_LIKELY(smallest_start_scn_in_old_store == smallest_start_scn_in_split_minor
-        && biggest_end_scn_in_old_store >= biggest_end_scn_in_split_minor)) {
+      const SCN &smallest_start_scn_in_new_input = minor_tables.at(0)->get_start_scn();
+      const SCN &biggest_end_scn_in_new_input = minor_tables.at(minor_tables.count() - 1)->get_end_scn();
+      if (OB_LIKELY(smallest_start_scn_in_old_store <= smallest_start_scn_in_new_input
+        && biggest_end_scn_in_old_store >= biggest_end_scn_in_new_input)) {
         // update batch split-minors to the table store repeatedly again.
         LOG_INFO("update split minors repeatedly, ignore to add again", K(minor_tables), K(old_store.minor_tables_));
         minor_tables.reset(); // reset, to ignore to add split-minors again.
