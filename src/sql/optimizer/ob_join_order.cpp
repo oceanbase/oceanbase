@@ -1794,6 +1794,7 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
   bool vector_index_match = false;
   uint64_t vec_index_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = NULL;
+
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())
     || OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4493,7 +4494,8 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     // for use index hint, get index ids from hint.
     ObSEArray<uint64_t, 4> valid_hint_index_list;
     const bool is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
-    if (OB_FAIL(get_valid_hint_index_list(*stmt, log_table_hint->index_list_, is_link, schema_guard, helper, valid_hint_index_list))) {
+    if (OB_FAIL(get_valid_hint_index_list(*stmt, log_table_hint->index_list_, is_link,
+                                          table_id, ref_table_id, has_aggr, schema_guard, helper, valid_hint_index_list))) {
       LOG_WARN("failed to get valid hint index list", K(ret));
     } else if (OB_FAIL(valid_index_ids.assign(valid_hint_index_list))) {
       LOG_WARN("failed to assign index ids", K(ret));
@@ -18740,6 +18742,35 @@ int ObJoinOrder::param_values_table_expr(ObIArray<ObRawExpr*> &values_vector,
   return ret;
 }
 
+int ObJoinOrder::check_vec_hint_index_id(const ObDMLStmt &stmt,
+                                         ObSqlSchemaGuard *schema_guard,
+                                         const uint64_t table_id,
+                                         const uint64_t ref_table_id,
+                                         const uint64_t hint_index_id,
+                                         const bool has_aggr,
+                                         bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  uint64_t vec_index_tid = OB_INVALID_ID;
+  bool vector_index_match = false;
+  ObRawExpr *vector_expr = NULL;
+  is_valid = false;
+  if (!stmt.has_vec_approx()
+      || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
+    // do nothing, not vec index
+  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id,
+                                                    has_aggr, vector_index_match, vec_index_tid))) {
+      LOG_WARN("failed to get vector index tid", K(ret));
+  } else if (vec_index_tid == OB_INVALID_ID || vec_index_tid != hint_index_id) {
+    // skip
+  } else {
+    is_valid = true;
+  }
+  LOG_DEBUG("check_valid_vec_hint_index_ids is valid",
+    K(ret), K(is_valid), K(vec_index_tid), K(ref_table_id), K(hint_index_id));
+  return ret;
+}
+
 int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                         ObSqlSchemaGuard *schema_guard,
                                         const uint64_t table_id,
@@ -19537,6 +19568,9 @@ bool ObJoinOrder::invalid_index_for_vec_pre_filter(const ObTableSchema *index_hi
 int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
                                            const ObIArray<uint64_t> &hint_index_ids,
                                            const bool is_link_table,
+                                           const uint64_t table_id,
+                                           const uint64_t ref_table_id,
+                                           const bool has_aggr,
                                            ObSqlSchemaGuard *schema_guard,
                                            PathHelper &helper,
                                            ObIArray<uint64_t> &valid_hint_index_ids)
@@ -19558,8 +19592,24 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
       LOG_WARN("unexpected nullptr to index hint table schema", K(ret), K(tid));
     } else if (index_hint_table_schema->is_global_index_table() && has_match_expr_on_table) {
       // scan with both global index and fulltext index is not supported yet
-    } else if (stmt.has_vec_approx() && invalid_index_for_vec_pre_filter(index_hint_table_schema)) {
-      // scan with both global index/fts_index/multi_value_index and vector index is not supported yet
+    } else if (stmt.has_vec_approx()) {
+      if (invalid_index_for_vec_pre_filter(index_hint_table_schema)) {
+         // skip
+      } else {
+        if (index_hint_table_schema->is_vec_index()) {
+          bool is_valid = false;
+          if (OB_FAIL(check_vec_hint_index_id(stmt, schema_guard, table_id, ref_table_id,
+                                              index_hint_table_schema->get_table_id(),
+                                              has_aggr, is_valid))) {
+            LOG_WARN("failed to check vec hint index", K(table_id), K(ref_table_id), K(index_hint_table_schema));
+          } else if (!is_valid) {
+          } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
+            LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
+          }
+        } else {
+          // if hint is not vector index but has vec approx, skip
+        }
+      }
     } else if (index_hint_table_schema->is_fts_index()) {
       bool is_valid = true;
       if (OB_FAIL(has_valid_match_filter_on_index(helper, tid, is_valid))) {

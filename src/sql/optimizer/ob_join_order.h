@@ -2882,6 +2882,13 @@ struct NullAwareAntiJoinInfo {
                                 const bool has_aggr,
                                 uint64_t *index_tid_array,
                                 int64_t &size);
+    int check_vec_hint_index_id(const ObDMLStmt &stmt,
+                                ObSqlSchemaGuard *schema_guard,
+                                const uint64_t table_id,
+                                const uint64_t ref_table_id,
+                                const uint64_t hint_index_id,
+                                const bool has_aggr,
+                                bool &is_valid);
     bool invalid_index_for_vec_pre_filter(const ObTableSchema *index_hint_table_schema) const;
     int find_match_expr_info(const ObIArray<MatchExprInfo> &match_expr_infos,
                             ObRawExpr *match_expr,
@@ -3089,6 +3096,9 @@ struct NullAwareAntiJoinInfo {
     int get_valid_hint_index_list(const ObDMLStmt &stmt,
                                   const ObIArray<uint64_t> &hint_index_ids,
                                   const bool is_link_table,
+                                  const uint64_t table_id,
+                                  const uint64_t ref_table_id,
+                                  const bool has_aggr,
                                   ObSqlSchemaGuard *schema_guard,
                                   PathHelper &helper,
                                   ObIArray<uint64_t> &valid_hint_index_ids);

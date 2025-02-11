@@ -216,7 +216,8 @@ struct ObVecIndexInfo
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
-              KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid));
+              KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
+              K_(vec_type), K_(algorithm_type));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
   ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return algorithm_type_; }
