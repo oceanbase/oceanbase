@@ -595,6 +595,12 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     ObTabletDirectLoadExecContext exec_context;
     if (OB_FAIL(get_tablet_exec_context_with_rlock(exec_id, exec_context))) {
       LOG_WARN("get exec context failed", K(ret), K(exec_id));
+    } else if (OB_ISNULL(handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("handle is invalid", K(ret));
+    } else if (need_commit && handle.get_obj()->get_sqc_build_ctx().build_param_.is_replay_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_WARN("failed to commit, since tablet direct load mgr is build for replay, some info may be invalid, need retry the whole task", K(ret));
     } else if (OB_FAIL(handle.get_obj()->close(exec_context.execution_id_, exec_context.start_scn_))) {
       LOG_WARN("close failed", K(ret));
     } else {
