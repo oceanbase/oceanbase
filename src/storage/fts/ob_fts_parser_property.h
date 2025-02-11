@@ -37,6 +37,8 @@ public:
 
   int parse_from_valid_str(const ObString &str);
 
+  bool is_empty() const;
+
   int config_set_min_token_size(const int64_t size);
   int config_set_max_token_size(const int64_t size);
   int config_set_ngram_token_size(const int64_t size);

@@ -186,6 +186,11 @@ int ObFTParserJsonProps::parse_from_valid_str(const ObString &str)
   return ret;
 }
 
+bool ObFTParserJsonProps::is_empty() const
+{
+  return (root_ == nullptr) || (root_->element_count() == 0);
+}
+
 int ObFTParserJsonProps::to_format_json(ObIAllocator &alloc, ObString &str)
 {
   int ret = OB_SUCCESS;
@@ -727,6 +732,8 @@ int ObFTParserJsonProps::show_parser_properties(const ObFTParserJsonProps &prope
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
+  } else if (properties.is_empty()) {
+    // not output properties
   } else {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "PARSER_PROPERTIES=("))) {
       LOG_WARN("fail to printf parser properties", K(ret), K(buf_len), K(pos), K(properties));
