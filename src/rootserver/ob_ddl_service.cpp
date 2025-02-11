@@ -13339,12 +13339,15 @@ int ObDDLService::add_not_null_column_to_table_schema(
     ObDDLSQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = origin_table_schema.get_tenant_id();
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   AlterColumnSchema *alter_column_schema = nullptr;
   uint64_t curr_udt_set_id = 0;
   ObSEArray<ObString, 4> gen_col_expr_arr;
   share::schema::ObTableSchema::const_column_iterator iter = origin_table_schema.column_begin();
   share::schema::ObTableSchema::const_column_iterator end = origin_table_schema.column_end();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_->get_schema_service();
   for (; OB_SUCC(ret) && iter != end; ++iter) {
     const share::schema::ObColumnSchemaV2 *column = *iter;
     if (OB_ISNULL(column)) {
@@ -13360,10 +13363,11 @@ int ObDDLService::add_not_null_column_to_table_schema(
   const common::ObTimeZoneInfoWrap &tz_info_wrap = alter_table_arg.tz_info_wrap_;
   const common::ObString *nls_formats = alter_table_arg.nls_formats_;
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(tz_info_wrap.get_time_zone_info())
-      || OB_ISNULL(tz_info_wrap.get_time_zone_info()->get_tz_info_map())) {
+  } else if (OB_UNLIKELY(nullptr == schema_service
+      || nullptr == tz_info_wrap.get_time_zone_info()
+      || nullptr == tz_info_wrap.get_time_zone_info()->get_tz_info_map())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tz_info_wrap", K(tz_info_wrap), K(ret));
+    LOG_WARN("invalid tz_info_wrap", K(ret), KP(schema_service), K(tz_info_wrap));
   } else if (OB_ISNULL(nls_formats)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid nls_formats", K(ret));
@@ -13403,8 +13407,11 @@ int ObDDLService::add_not_null_column_to_table_schema(
                       ddl_operator,
                       trans))) {
       LOG_WARN("alter table constraints failed", K(ret));
-    } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema, trans,
-        OB_DDL_ALTER_TABLE, &alter_table_arg.ddl_stmt_str_))) {
+    } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else if (OB_FALSE_IT(new_table_schema.set_schema_version(new_schema_version))) {
+    } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(trans,
+        origin_table_schema, new_table_schema, OB_DDL_ALTER_TABLE, &alter_table_arg.ddl_stmt_str_))) {
       LOG_WARN("failed to update data table schema attribute", K(ret));
     } else {
       ObArray<ObTabletID> new_tablet_ids;
@@ -13500,6 +13507,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
       } else {
         ObDDLSQLTransaction trans(schema_service_);
         int64_t refreshed_schema_version = 0;
+        new_table_schema.set_progressive_merge_round(origin_table_schema->get_progressive_merge_round() + 1);
         if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
