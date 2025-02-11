@@ -9760,28 +9760,6 @@ int ObTableSchema::has_all_column_group(bool &has_all_column_group) const
   return ret;
 }
 
-int ObTableSchema::has_non_default_column_group(bool &has_non_default_column_group) const
-{
-  int ret = OB_SUCCESS;
-  has_non_default_column_group = false;
-  ObSEArray<const ObColumnGroupSchema *, 8> column_group_metas;
-  if (OB_FAIL(get_store_column_groups(column_group_metas, false/*filter_empty_cg*/))) {
-    LOG_WARN("Failed to get column group metas", K(ret), KPC(this));
-  } else {
-    const ObColumnGroupSchema *cg_schema = nullptr;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_group_metas.count(); ++idx) {
-      if (OB_ISNULL(cg_schema = column_group_metas.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null cg_schema", K(ret));
-      } else if (DEFAULT_COLUMN_GROUP != cg_schema->get_column_group_type()) {
-        has_non_default_column_group = true;
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableSchema::adjust_column_group_array()
 {
   // after v435, all cg and rowkey cg should exist in the front of column group array

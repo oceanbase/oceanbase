@@ -6191,10 +6191,8 @@ int ObTableSqlService::update_origin_column_group_with_new_schema(ObISQLClient &
     LOG_WARN("fail to check column store valid for origin table schema", KR(ret), K(origin_table_schema));
   } else if (OB_FAIL(check_column_store_valid(new_table_schema, data_version))) {
     LOG_WARN("fail to check column store valid for new table schema", KR(ret), K(new_table_schema));
-  } else if (OB_FAIL(delete_from_column_group(sql_client, origin_table_schema, delete_schema_version, false /*history table*/))) {
-    LOG_WARN("fail to delete __all_column_group for origin table schema", KR(ret), K(origin_table_schema));
-  } else if (OB_FAIL(delete_from_column_group_mapping(sql_client, origin_table_schema, delete_schema_version, false /*history table*/))) {
-    LOG_WARN("fail to delete __all_column_group_mapping for origin table schema", KR(ret), K(origin_table_schema));
+  } else if (OB_FAIL(delete_column_group(sql_client, origin_table_schema, delete_schema_version))) {
+    LOG_WARN("fail to delete column group for origin table schema", KR(ret), K(origin_table_schema));
   } else if (OB_FAIL(add_column_groups(sql_client, new_table_schema, insert_schema_version, false/*only_history*/))) {
     LOG_WARN("fail to add column groups from new table schema", KR(ret), K(new_table_schema), K(insert_schema_version));
   }

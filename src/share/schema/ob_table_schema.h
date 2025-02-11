@@ -1772,7 +1772,6 @@ public:
                               const bool filter_empty_cg = true) const;
   int remove_column_group(const uint64_t column_group_id);
   int has_all_column_group(bool &has_all_column_group) const;
-  int has_non_default_column_group(bool &has_non_default_column_group) const;
   int adjust_column_group_array();
   // materialized view log related
   template <typename Allocator>

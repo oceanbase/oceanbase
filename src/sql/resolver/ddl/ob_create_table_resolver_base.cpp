@@ -343,13 +343,6 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
   ObTableStoreType table_store_type = OB_TABLE_STORE_INVALID;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const int64_t column_cnt = table_schema.get_column_count();
-  uint64_t all_cg_id = ALL_COLUMN_GROUP_ID;
-#ifdef ERRSIM
-  tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
-  if (OB_TMP_FAIL(tmp_ret)) {
-    all_cg_id = table_schema.get_max_used_column_group_id() + 1;
-  }
-#endif
   if (OB_FAIL(column_ids.reserve(column_cnt))) {
       LOG_WARN("fail to reserve", KR(ret), K(column_cnt));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
@@ -390,6 +383,13 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
 
       /* force to build all cg*/
       ObColumnGroupSchema all_cg;
+      uint64_t all_cg_id = ALL_COLUMN_GROUP_ID;
+#ifdef ERRSIM
+      tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+      if (OB_TMP_FAIL(tmp_ret)) {
+        all_cg_id = table_schema.get_max_used_column_group_id() + 1;
+      }
+#endif
       if (OB_FAIL(ret)) {
       } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
       } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {

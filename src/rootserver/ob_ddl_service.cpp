@@ -5146,8 +5146,23 @@ int ObDDLService::add_column_group(const obrpc::ObAlterTableArg &alter_table_arg
         }
       }
     }
-    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
-      LOG_WARN("fail to adjust cg for offline", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+#ifdef ERRSIM
+    tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      // EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP, code before v4.3.5.0
+      /* note must alter rowkey cg first, else will affect default cg*/
+      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
+        LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
+      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
+        LOG_WARN("fail to alter default column group", K(ret));
+      }
+    }
+#endif
+    if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+      if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+        LOG_WARN("fail to adjust cg for offline", KR(ret));
+      }
     }
   }
   return ret;
@@ -5210,8 +5225,23 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         }
       }
     }
-    if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
-      LOG_WARN("fail to adjust cg for offline", KR(ret));
+    int tmp_ret = OB_SUCCESS;
+#ifdef ERRSIM
+    tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      // EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP, code before v4.3.5.0
+      /* note must alter rowkey cg first, else will affect default cg*/
+      if (OB_FAIL(ObSchemaUtils::alter_rowkey_column_group(new_table_schema))) {
+        LOG_WARN("fail to adjust rowkey column group when add column group", K(ret));
+      } else if (OB_FAIL(ObSchemaUtils::alter_default_column_group(new_table_schema))) {
+        LOG_WARN("fail to alter default column group", K(ret));
+      }
+    }
+#endif
+    if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+      if (OB_FAIL(adjust_cg_for_offline(new_table_schema))) {
+        LOG_WARN("fail to adjust cg for offline", KR(ret));
+      }
     }
   }
   return ret;
@@ -5294,6 +5324,10 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
 {
   /* do adjustment on column group when add or drop column/primary key*/
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+#ifdef ERRSIM
+  tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+#endif
   bool is_each_cg_exist = false;
   bool is_all_cg_exist = false;
   if (!new_table_schema.is_column_store_supported()) {
@@ -5317,7 +5351,7 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       } else if (col->is_virtual_generated_column()) {
         /* skip virtual column group*/
       } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(new_table_schema, col, new_table_schema.get_tenant_id(),
-                                                                  new_table_schema.get_next_single_column_group_id(),
+                                                                  OB_SUCCESS != tmp_ret ? new_table_schema.get_max_used_column_group_id() + 1 : new_table_schema.get_next_single_column_group_id(),
                                                                   new_single_cg))) {
         LOG_WARN("fail to build single column group", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_single_cg))) {
@@ -5330,7 +5364,7 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       new_cg.reset();
       if (OB_FAIL(ObSchemaUtils::build_all_column_group(
                                    new_table_schema, new_table_schema.get_tenant_id(),
-                                   ALL_COLUMN_GROUP_ID, new_cg))) {
+                                   OB_SUCCESS != tmp_ret ? new_table_schema.get_max_used_column_group_id() + 1 : ALL_COLUMN_GROUP_ID, new_cg))) {
         LOG_WARN("fail to build new all column group schema", K(ret));
       } else if (OB_FAIL(new_table_schema.add_column_group(new_cg))) {
         LOG_WARN("fail to add new column group to table schema", K(ret));
@@ -5355,8 +5389,10 @@ int ObDDLService::adjust_cg_for_offline(ObTableSchema &new_table_schema)
       }
     }
     // adjust column group array order
-    if (FAILEDx(new_table_schema.adjust_column_group_array())) {
-      LOG_WARN("fail to adjust column group array", K(ret), K(new_table_schema));
+    if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+      if (OB_FAIL(new_table_schema.adjust_column_group_array())) {
+        LOG_WARN("fail to adjust column group array", K(ret), K(new_table_schema));
+      }
     }
   }
   return ret;
@@ -11080,6 +11116,12 @@ int ObDDLService::add_column_to_column_group(
 {
   int ret = OB_SUCCESS;
   uint64_t cur_column_group_id = origin_table_schema.get_next_single_column_group_id();
+#ifdef ERRSIM
+  int tmp_ret = OB_E(EventTable::EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP) OB_SUCCESS;
+  if (OB_TMP_FAIL(tmp_ret)) {
+    cur_column_group_id = origin_table_schema.get_max_used_column_group_id() + 1;
+  }
+#endif
   ObArray<uint64_t> column_ids;
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
