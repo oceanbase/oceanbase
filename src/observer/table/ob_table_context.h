@@ -458,6 +458,11 @@ public:
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
   }
+  OB_INLINE bool is_delete_or_get() const
+  {
+    return ObTableOperationType::Type::DEL == operation_type_
+      || ObTableOperationType::Type::GET == operation_type_;
+  }
   OB_INLINE bool is_inc() const
   {
     return ObTableOperationType::Type::INCREMENT == operation_type_;
@@ -723,6 +728,7 @@ private:
   int inner_init_common(const common::ObTabletID &arg_tablet_id,
                         const common::ObString &table_name,
                         const int64_t &timeout_ts);
+  int adjust_date_obj(const ObTableColumnInfo &column_info, ObObj &obj);
 private:
   bool is_init_;
   common::ObIAllocator &allocator_; // processor allocator

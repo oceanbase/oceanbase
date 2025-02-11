@@ -582,6 +582,30 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   return ret;
 }
 
+int ObTableCtx::adjust_date_obj(const ObTableColumnInfo &column_info, ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  const ObExprResType &column_type = column_info.type_;
+
+  if (ob_is_mysql_date_tc(column_type.get_type()) && ob_is_date_tc(obj.get_type())) {
+    ObMySQLDate mdate = 0;
+    if (OB_FAIL(ObTimeConverter::date_to_mdate(obj.get_date(), mdate))) {
+      LOG_WARN("fail to convert date to mysql date", K(ret), K(obj));
+    } else {
+      obj.set_mysql_date(mdate);
+    }
+  } else if (ob_is_mysql_datetime(column_type.get_type()) && ob_is_datetime(obj.get_type())) {
+    ObMySQLDateTime mdatetime = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_mdatetime(obj.get_datetime(), mdatetime))) {
+      LOG_WARN("fail to convert datetime to mysql datetime", K(ret), K(obj));
+    } else {
+      obj.set_mysql_datetime(mdatetime);
+    }
+  }
+
+  return ret;
+}
+
 /*
   check user rowkey is valid or not.
   1. rowkey count should equal schema rowkey count, except for auto increment.
@@ -629,8 +653,7 @@ int ObTableCtx::adjust_rowkey()
           need_check = false;
         }
       }
-      if (entity_type_ == ObTableEntityType::ET_HKV &&
-          (operation_type_ == ObTableOperationType::Type::DEL || is_scan_)) {
+      if (is_htable() && (operation_type_ == ObTableOperationType::Type::DEL)) {
         need_check = false;
       }
 
@@ -644,6 +667,8 @@ int ObTableCtx::adjust_rowkey()
           LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
           LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret),
                     K(entity_rowkey_cnt), K(schema_rowkey_cnt), K(rowkey));
+        } else if (is_delete_or_get() && OB_FAIL(adjust_date_obj(*col_info, obj_ptr[idx]))) { // other op adjust in cg write_datum
+          LOG_WARN("fail to adjust date object", K(ret), K(obj_ptr[idx]), KPC(col_info));
         } else if (OB_FAIL(adjust_column_type(*col_info, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
           LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj_ptr[idx]), KPC(col_info));
         } else {
