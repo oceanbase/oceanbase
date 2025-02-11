@@ -145,10 +145,10 @@ int ObBlockManager::init(ObIODevice *io_device, const int64_t block_size) {
                          ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), KP(io_device), K(block_size));
+  } else if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
+    LOG_WARN("fail to set_run_wrapper for timer", K(ret));
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
-  } else if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
-    LOG_WARN("fail to set_run_wrapper for timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT,
                                        ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));

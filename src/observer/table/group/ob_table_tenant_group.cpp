@@ -325,8 +325,9 @@ int ObTableGroupCommitMgr::start_timer()
   int ret = OB_SUCCESS;
 
   if (!timer_.inited()) {
-    timer_.set_run_wrapper(MTL_CTX());
-    if (OB_FAIL(timer_.init("TableGroupCommitMgr"))) {
+    if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
+      LOG_WARN("fail to set timer's run wrapper", KR(ret));
+    } else if (OB_FAIL(timer_.init("TableGroupCommitMgr"))) {
       LOG_WARN("fail to init kv group commit timer", KR(ret));
     } else if (OB_FAIL(timer_.schedule(group_trigger_task_,
                                        ObTableGroupTriggerTask::TASK_SCHEDULE_INTERVAL,

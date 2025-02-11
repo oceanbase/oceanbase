@@ -51,19 +51,19 @@ int ObCheckPointService::init(const int64_t tenant_id)
 int ObCheckPointService::start()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(checkpoint_timer_.set_run_wrapper(MTL_CTX()))) {
+  if (OB_FAIL(checkpoint_timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
     STORAGE_LOG(ERROR, "fail to set checkpoint_timer's run wrapper", K(ret));
   } else if (OB_FAIL(checkpoint_timer_.init("TxCkpt", ObMemAttr(MTL_ID(), "CheckPointTimer")))) {
     STORAGE_LOG(ERROR, "fail to init checkpoint_timer", K(ret));
   } else if (OB_FAIL(checkpoint_timer_.schedule(checkpoint_task_, CHECKPOINT_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule checkpoint task", K(ret));
-  } else if (OB_FAIL(traversal_flush_timer_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(traversal_flush_timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
     STORAGE_LOG(ERROR, "fail to set traversal_timer's run wrapper", K(ret));
   } else if (OB_FAIL(traversal_flush_timer_.init("Flush", ObMemAttr(MTL_ID(), "FlushTimer")))) {
     STORAGE_LOG(ERROR, "fail to init traversal_timer", K(ret));
   } else if (OB_FAIL(traversal_flush_timer_.schedule(traversal_flush_task_, TRAVERSAL_FLUSH_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule traversal_flush task", K(ret));
-  } else if (OB_FAIL(check_clog_disk_usage_timer_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(check_clog_disk_usage_timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
     STORAGE_LOG(ERROR, "fail to set check_clog_disk_usage_timer's run wrapper", K(ret));
   } else if (OB_FAIL(check_clog_disk_usage_timer_.init("CKClogDisk", ObMemAttr(MTL_ID(), "DiskUsageTimer")))) {
     STORAGE_LOG(ERROR, "fail to init check_clog_disk_usage_timer", K(ret));

@@ -894,7 +894,7 @@ int ObTableLoadService::start()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadService not init", KR(ret), KP(this));
   } else {
-    if (OB_FAIL(timer_.set_run_wrapper(MTL_CTX()))) {
+    if (OB_FAIL(timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
       LOG_WARN("fail to set gc timer's run wrapper", KR(ret));
     } else if (OB_FAIL(timer_.init("TLD_Timer", ObMemAttr(MTL_ID(), "TLD_TIMER")))) {
       LOG_WARN("fail to init gc timer", KR(ret));

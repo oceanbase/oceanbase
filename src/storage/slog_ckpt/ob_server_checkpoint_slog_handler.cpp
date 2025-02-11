@@ -60,7 +60,7 @@ int ObServerCheckpointSlogHandler::init(ObStorageLogger *server_slogger)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObServerCheckpointSlogHandler has inited", K(ret));
-  } else if (OB_FAIL(task_timer_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(task_timer_.set_run_wrapper_with_ret(MTL_CTX()))) {
     LOG_WARN("fail to set timer's run wrapper", K(ret));
   } else if (OB_FAIL(task_timer_.init("ServerCkptSlogHandler"))) {
     LOG_WARN("fail to init task timer", K(ret));

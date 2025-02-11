@@ -145,7 +145,6 @@ TEST_F(TestWorkQueue, async_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.wait());
 }
 
-/*
 TEST_F(TestWorkQueue, on_shoot_timer_task)
 {
   ObWorkQueue wqueue;
@@ -252,7 +251,6 @@ TEST_F(TestWorkQueue, immediate_task)
   ASSERT_EQ(OB_SUCCESS, wqueue.stop());
   ASSERT_EQ(OB_SUCCESS, wqueue.wait());
 }
-*/
 
 int main(int argc, char **argv)
 {

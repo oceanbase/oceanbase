@@ -37,9 +37,18 @@ int ObTimer::init(const char* timer_name, const ObMemAttr &attr)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
-    is_inited_ = true;
-    is_stopped_ = false;
-    ObTimerUtil::copy_buff(timer_name_, sizeof(timer_name_), timer_name);
+    if (nullptr == timer_service_) {
+      timer_service_ = &(ObTimerService::get_instance());
+    }
+    IRunWrapper *expect_wrapper = Threads::get_expect_run_wrapper();
+    if (expect_wrapper != nullptr && expect_wrapper != run_wrapper_) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(ERROR, "ObTimer::init tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));
+    } else {
+      is_inited_ = true;
+      is_stopped_ = false;
+      ObTimerUtil::copy_buff(timer_name_, sizeof(timer_name_), timer_name);
+    }
   }
   return ret;
 }
@@ -52,12 +61,7 @@ ObTimer::~ObTimer()
 int ObTimer::start()
 {
   int ret = OB_SUCCESS;
-  IRunWrapper *expect_wrapper = Threads::get_expect_run_wrapper();
-  if (expect_wrapper != nullptr && expect_wrapper != run_wrapper_) {
-    ret = OB_ERR_UNEXPECTED;
-    OB_LOG(ERROR, "ObTimer::start tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));
-    ob_abort();
-  } else if (!is_inited_) {
+  if (!is_inited_) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "timer is not yet initialized", K(ret));
   } else if (is_stopped_) {
@@ -97,15 +101,19 @@ void ObTimer::destroy()
     wait();
     is_inited_ = false;
     timer_service_ = nullptr;
+    run_wrapper_ = nullptr;
     timer_name_[0] = '\0';
   }
 }
 
-int ObTimer::set_run_wrapper(lib::IRunWrapper *run_wrapper)
+int ObTimer::set_run_wrapper_with_ret(lib::IRunWrapper *run_wrapper)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != run_wrapper)
-  {
+  if (is_inited_) {
+    ret = OB_OP_NOT_ALLOW;
+    OB_LOG(ERROR, "can not set run_wrapper after init", K(ret));
+  }
+  if (OB_SUCC(ret) && nullptr != run_wrapper) {
     ObTimerService *service = run_wrapper->get_timer_service();
     if (nullptr == service) {
       ret = OB_ERR_UNEXPECTED;

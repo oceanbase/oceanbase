@@ -239,15 +239,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   }
 #endif
 
-  // start ObTimerService first, because some timers depend on it
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
-      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
-    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
-      LOG_ERROR("start timer service failed", KR(ret));
-    }
-  }
-
   // server parameters be inited here.
   if (OB_SUCC(ret) && OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
@@ -264,6 +255,15 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   }
   // set large page param
   ObLargePageHelper::set_param(config_.use_large_pages);
+
+  // start ObTimerService first, because some timers depend on it
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
+      LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
+    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+      LOG_ERROR("start timer service failed", KR(ret));
+    }
+  }
 
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION

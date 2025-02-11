@@ -658,11 +658,6 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TabletStatRpt, report_tg_id_))) {
     LOG_WARN("failed to create TabletStatRpt thread", K(ret));
-  } else {
-    // just for unittest test_tenant_tablet_stat_mgr, do not set error code
-    NEW_AND_SET_TIMER_SERVICE(tenant_id);
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(TG_START(report_tg_id_))) {
     LOG_WARN("failed to start stat TabletStatRpt thread", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(report_tg_id_, report_stat_task_, TABLET_STAT_PROCESS_INTERVAL, repeat))) {

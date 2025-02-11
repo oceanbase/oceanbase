@@ -166,7 +166,9 @@ TestSqlUtils::TestSqlUtils()
     memset(schema_file_path_, '\0', 128);
     exec_ctx_.set_sql_ctx(&sql_ctx_);
 
+    static ObTimerService timer_service(sys_tenant_id_);
     static ObTenantBase tenant_ctx(sys_tenant_id_);
+    tenant_ctx.set(&timer_service);
     ObTenantEnv::set_tenant(&tenant_ctx);
 
     auto& cluster_version = ObClusterVersion::get_instance();
