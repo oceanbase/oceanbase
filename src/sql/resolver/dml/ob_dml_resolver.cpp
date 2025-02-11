@@ -315,9 +315,6 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
         if (OB_FAIL(ObMultiModeDMLResolver::json_table_resolve_all_column_items(*tmp_table_item, column_items, stmt))) {
           LOG_WARN("resolve json table columns failed", K(ret));
         }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected table type", K_(tmp_table_item->type));
       }
 
       for (int64_t j = 0; OB_SUCC(ret) && j < column_items.count(); ++j) {
