@@ -91,7 +91,19 @@ int ObPlDBMSResourceManager::delete_plan(
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(proxy.delete_plan(tenant_id, plan))) {
+    ObString resource_manager_plan;
+    if (OB_FAIL(ObSchemaUtils::get_tenant_varchar_variable(
+                  tenant_id,
+                  SYS_VAR_RESOURCE_MANAGER_PLAN,
+                  ctx.get_allocator(),
+                  resource_manager_plan))) {
+        LOG_WARN("fail get tenant variable", K(tenant_id), K(resource_manager_plan), K(ret));
+    } else if (0 == plan.case_compare(resource_manager_plan)) {
+      // this plan is active and cannot be deleted.
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "deleting active plan");
+      LOG_WARN("active plan cannot be removed", K(plan));
+    } else if (OB_FAIL(proxy.delete_plan(tenant_id, plan))) {
       LOG_WARN("fail delete plan", K(tenant_id), K(plan), K(ret));
     }
   }
