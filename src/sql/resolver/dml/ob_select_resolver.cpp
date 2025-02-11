@@ -25,6 +25,7 @@
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/resolver/dml/ob_aggr_expr_push_up_analyzer.h"
 #include "sql/resolver/dml/ob_group_by_checker.h"
+#include "sql/resolver/dml/ob_insert_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -7298,6 +7299,17 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
     table_def->access_type_ = ObValuesTableDef::ACCESS_EXPR;
   }
   int64_t column_cnt = 0;
+  ObInsertStmt *insert_stmt = NULL;
+  ObInsertTableInfo *insert_table_info = NULL;
+  if (OB_FAIL(ret)) {
+  } else if (NULL == upper_insert_resolver_) {
+  } else if (OB_ISNULL(insert_stmt = upper_insert_resolver_->get_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null insert stmt", K(ret));
+  } else if (OB_ISNULL(insert_table_info = &insert_stmt->get_insert_table_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null insert table info", K(ret));
+  }
   /* first set, need resolve select_item name*/
   if (OB_SUCC(ret)) {
     const ParseNode *node = reinterpret_cast<const ParseNode *>(leaf_nodes.at(0));
@@ -7312,9 +7324,32 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
     } else {
       column_cnt = select_stmt->get_select_item_size();
       table_def->column_cnt_ = column_cnt;
+      if (insert_table_info != NULL && insert_table_info->values_desc_.count() != column_cnt) {
+        ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+        LOG_WARN("column count mismatch", K(insert_table_info->values_desc_.count()),
+                                          K(select_stmt->get_select_item_size()));
+        LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
         SelectItem &select_item = select_stmt->get_select_item(i);
-        if (OB_FAIL(table_def->access_exprs_.push_back(select_item.expr_))) {
+        if (insert_table_info != NULL
+            && insert_table_info->values_desc_.at(i) != NULL
+            && insert_table_info->values_desc_.at(i)->is_generated_column()
+            && select_item.expr_->get_expr_type() != T_DEFAULT) {
+          // should not insert non-default value to a generated column
+          ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
+          LOG_WARN("non-default value for generated column is not allowed", K(ret));
+          ColumnItem *orig_col_item = NULL;
+          uint64_t column_id = insert_table_info->values_desc_.at(i)->get_column_id();
+          if (NULL != (orig_col_item = insert_stmt->get_column_item_by_id(insert_table_info->table_id_, column_id))
+              && orig_col_item->expr_ != NULL) {
+            const ObString &column_name = orig_col_item->expr_->get_column_name();
+            const ObString &table_name = orig_col_item->expr_->get_table_name();
+            LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN,
+                            column_name.length(), column_name.ptr(),
+                            table_name.length(), table_name.ptr());
+          }
+        } else if (OB_FAIL(table_def->access_exprs_.push_back(select_item.expr_))) {
           LOG_WARN("failed to push back", K(ret));
         }
       }
