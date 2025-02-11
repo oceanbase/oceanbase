@@ -273,7 +273,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   int tmp_ret = OB_SUCCESS;
@@ -298,7 +298,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_,
       false, 3));
@@ -331,7 +331,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   tmp_ret = OB_SUCCESS;
@@ -355,7 +355,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   tmp_ret = OB_SUCCESS;
@@ -383,7 +383,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
   ASSERT_EQ(OB_SUCCESS, meta_iter.get_next(data_macro_meta));
@@ -402,7 +402,7 @@ TEST_F(TestSSTableSecMetaIterator, test_ddl_kv)
   ASSERT_EQ(OB_SUCCESS, meta_iter.open(
       range,
       ObMacroBlockMetaType::DATA_BLOCK_META,
-      ddl_kv_,
+      ddl_memtable_,
       index_read_info,
       allocator_));
 

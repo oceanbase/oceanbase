@@ -107,7 +107,9 @@ struct ObDirectLoadInsertTabletWriteCtx
 {
   blocksstable::ObMacroDataSeq start_seq_;
   share::ObTabletCacheInterval pk_interval_;
-  TO_STRING_KV(K_(start_seq), K_(pk_interval));
+  int64_t slice_idx_;
+  ObDirectLoadInsertTabletWriteCtx() : slice_idx_(0) {}
+  TO_STRING_KV(K_(start_seq), K_(pk_interval), K_(slice_idx));
 };
 
 class ObDirectLoadInsertTabletContext
@@ -126,12 +128,13 @@ public:
   int get_row_info(ObDirectLoadInsertTableRowInfo &row_info, const bool is_delete = false);
   int init_datum_row(blocksstable::ObDatumRow &datum_row, const bool is_delete = false);
   virtual int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq,
+                                 const int64_t slice_idx,
                                  int64_t &slice_id) = 0;
   virtual int fill_sstable_slice(const int64_t &slice_id, ObIStoreRowIterator &iter,
                                  int64_t &affected_rows) = 0;
   virtual int fill_sstable_slice(const int64_t &slice_id,
                                  const blocksstable::ObBatchDatumRows &datum_rows) = 0;
-  virtual int close_sstable_slice(const int64_t slice_id) = 0;
+  virtual int close_sstable_slice(const int64_t slice_id, const int64_t slice_idx) = 0;
 
 protected:
   static const int64_t PK_CACHE_SIZE = 5000000;
@@ -217,8 +220,10 @@ protected:
   common::ObTabletID pk_tablet_id_; // 从哪个tablet_id获取自增pk
   ObDirectLoadInsertLobTabletContext *lob_tablet_ctx_;
   lib::ObMutex mutex_;
+  int64_t slice_idx_;
   blocksstable::ObMacroDataSeq start_seq_;
   share::ObTabletCacheInterval pk_cache_;
+  ObArray<int64_t> closed_slices_;
   int64_t row_count_;
   bool is_inited_;
 };

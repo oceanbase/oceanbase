@@ -32,7 +32,8 @@ public:
            const common::ObIOFlag io_flag,
            const int64_t io_timeout_ms,
            const bool disable_page_cache,
-           const bool disable_block_cache);
+           const bool disable_block_cache,
+           const bool prefetch);
   void reuse();
   void reset();
   bool is_valid() const;
@@ -60,6 +61,7 @@ public:
   OB_INLINE void set_read_offset_in_file(const int64_t offset) { read_offset_in_file_ = offset; }
   OB_INLINE bool is_disable_page_cache() const { return disable_page_cache_; }
   OB_INLINE bool is_disable_block_cache() const { return disable_block_cache_; }
+  OB_INLINE bool is_prefetch() const { return prefetch_; }
   OB_INLINE common::ObIOFlag get_io_flag() const { return io_flag_; }
   OB_INLINE int64_t get_io_timeout_ms() const { return io_timeout_ms_; }
   TO_STRING_KV(K(is_inited_), K(is_read_),
@@ -67,7 +69,7 @@ public:
                K(buf_size_), K(done_size_), K(todo_size_),
                K(read_offset_in_file_),
                K(disable_page_cache_), K(disable_block_cache_),
-               K(io_flag_), K(io_timeout_ms_),
+               K(prefetch_), K(io_flag_), K(io_timeout_ms_),
                K(is_unaligned_write_),
                K(write_persisted_tail_page_cnt_), K(lack_page_cnt_),
                K(is_unaligned_read_),
@@ -226,6 +228,7 @@ private:
                                   // read_offset of file in file's read function
   bool disable_page_cache_;
   bool disable_block_cache_;      // only used in ut, to control whether read data from block cache
+  bool prefetch_;
   common::ObIOFlag io_flag_;
   int64_t io_timeout_ms_;
   common::ObSEArray<ObIOReadHandle, 1> io_handles_;

@@ -159,7 +159,8 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
   ObDirectLoadInsertTabletContext *insert_tablet_ctx,
   const ObDirectLoadInsertTableRowInfo &row_info,
   ObDirectLoadDMLRowHandler *dml_row_handler,
-  ObIAllocator *lob_allocator)
+  ObIAllocator *lob_allocator,
+  ObLoadDataStat *job_stat)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -189,6 +190,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
       direct_datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
       direct_datum_rows_.trans_id_ = row_info.trans_id_;
       dml_row_handler_ = dml_row_handler;
+      job_stat_ = job_stat;
       expect_column_count_ = column_count - 1;
       row_flag_.uncontain_hidden_pk_ = true;
       is_inited_ = true;
@@ -202,7 +204,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
   int ret = OB_SUCCESS;
   if (OB_FAIL(insert_tablet_ctx_->get_write_ctx(write_ctx_))) {
     LOG_WARN("fail to get write ctx", KR(ret));
-  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, slice_id_))) {
+  } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_, write_ctx_.slice_idx_, slice_id_))) {
     LOG_WARN("fail to open sstable slice", KR(ret));
   }
   return ret;
@@ -211,7 +213,7 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init_sstable_slice()
 int ObDirectLoadInsertTableBatchRowDirectWriter::close_sstable_slice()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_))) {
+  if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id_, write_ctx_.slice_idx_))) {
     LOG_WARN("fail to close sstable slice", KR(ret));
   } else {
     slice_id_ = 0;
@@ -248,6 +250,9 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::before_flush_batch(ObBatchDatum
 int ObDirectLoadInsertTableBatchRowDirectWriter::after_flush_batch(ObBatchDatumRows &datum_rows)
 {
   int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(job_stat_)) {
+    ATOMIC_AAF(&job_stat_->store_.merge_stage_write_rows_, datum_rows.row_count_);
+  }
   if (OB_FAIL(dml_row_handler_->handle_insert_batch(tablet_id_, datum_rows))) {
     LOG_WARN("fail to handle insert batch", KR(ret));
   }

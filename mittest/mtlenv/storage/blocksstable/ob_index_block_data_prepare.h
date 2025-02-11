@@ -79,7 +79,7 @@ public:
   void prepare_query_param(const bool is_reverse_scan, ObArenaAllocator *allocator = nullptr);
   void destroy_query_param();
   void prepare_contrastive_sstable();
-  void prepare_ddl_kv();
+  void prepare_ddl_memtable();
   void prepare_merge_ddl_kvs();
   void close_builder_and_prepare_sstable(const int64_t column_cnt);
   void prepare_partial_sstable(const int64_t column_cnt);
@@ -112,10 +112,10 @@ protected:
   ObRowGenerate row_generate_;
   int64_t row_cnt_;
   int64_t partial_sstable_row_cnt_;
-  ObSSTable partial_sstable_;
+  ObCOSSTableV2 partial_sstable_;
   ObSSTable sstable_;
-  storage::ObDDLMemtable ddl_kv_;
-  storage::ObDDLKVHandle ddl_kvs_;
+  storage::ObDDLMemtable ddl_memtable_;
+  storage::ObDDLKVHandle ddl_kv_handle_;
   ObDDLKV *ddl_kv_ptr_;
   ObSSTableIndexBuilder *root_index_builder_;
   ObSSTableIndexBuilder *merge_root_index_builder_;
@@ -142,7 +142,6 @@ protected:
   int64_t mirco_blocks_per_macro_block_;
   bool is_cg_data_;
   bool is_ddl_merge_data_;
-
 };
 
 ObArenaAllocator TestIndexBlockDataPrepare::allocator_;
@@ -304,6 +303,7 @@ void TestIndexBlockDataPrepare::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema_, allocator_));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
+  tablet_handle_.get_obj()->tablet_meta_.ddl_data_format_version_ = DATA_CURRENT_VERSION;
   iter_param_.set_tablet_handle(&tablet_handle_);
   sstable_.key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
 
@@ -323,8 +323,8 @@ void TestIndexBlockDataPrepare::TearDown()
 {
   sstable_.reset();
   partial_sstable_.reset();
-  ddl_kv_.reset();
-  ddl_kvs_.reset();
+  ddl_memtable_.reset();
+  ddl_kv_handle_.reset();
   ddl_kv_ptr_ = nullptr;
   cg_read_info_.reset();
   if (nullptr != root_block_data_buf_.buf_) {
@@ -667,7 +667,7 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   const int64_t column_cnt =
     table_schema_.get_column_count() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   close_builder_and_prepare_sstable(column_cnt);
-  prepare_ddl_kv();
+  prepare_ddl_memtable();
 }
 
 int TestIndexBlockDataPrepare::prepare_cg_read_info(const ObColDesc &col_desc)
@@ -745,9 +745,9 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   close_builder_and_prepare_sstable(column_cnt);
 }
 
-void TestIndexBlockDataPrepare::prepare_ddl_kv()
+void TestIndexBlockDataPrepare::prepare_ddl_memtable()
 {
-  ddl_kv_.reset();
+  ddl_memtable_.reset();
   ObTabletHandle tablet_handle;
   int ret = OB_SUCCESS;
   ObLSID ls_id(ls_id_);
@@ -759,7 +759,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
 
   share::SCN ddl_start_scn;
   ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
-  ASSERT_EQ(OB_SUCCESS, ddl_kv_.init(allocator_, *tablet_handle.get_obj(), sstable_.get_key(), ddl_start_scn, DATA_CURRENT_VERSION));
+  ASSERT_EQ(OB_SUCCESS, ddl_memtable_.init(allocator_, *tablet_handle.get_obj(), sstable_.get_key(), ddl_start_scn, DATA_CURRENT_VERSION));
 
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
     ObDatumRange query_range;
@@ -781,7 +781,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
         macro_handle.set_block_id(data_macro_meta.get_macro_id());
         ObDataMacroBlockMeta *copied_meta = nullptr;
         ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
-        ASSERT_EQ(OB_SUCCESS, ddl_kv_.insert_block_meta_tree(macro_handle, copied_meta, 0));
+        ASSERT_EQ(OB_SUCCESS, ddl_memtable_.insert_block_meta_tree(macro_handle, copied_meta, 0));
       }
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -935,7 +935,7 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ObArray<blocksstable::ObSSTable *> ddl_tables;
   ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(&partial_sstable_));
   for (int64_t i = 0; i < DDL_KVS_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(ddl_kvs_.get_obj()->get_ddl_memtables().at(i)));
+    ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(ddl_kv_handle_.get_obj()->get_ddl_memtables().at(i)));
   }
   share::SCN ddl_start_scn;
   ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
@@ -1143,6 +1143,8 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   param.recycle_version_ = 0;
   param.root_macro_seq_ = 0;
   param.co_base_snapshot_version_ = 0;
+  param.co_base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
+  param.is_co_table_without_cgs_ = true;
 
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -1249,13 +1251,13 @@ void TestIndexBlockDataPrepare::prepare_contrastive_sstable()
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->load_storage_schema(allocator_, storage_schema));
   ASSERT_EQ(OB_SUCCESS, storage_schema->get_stored_column_count_in_sstable(column_cnt));
   close_builder_and_prepare_sstable(column_cnt);
-  prepare_ddl_kv();
+  prepare_ddl_memtable();
   ObTabletObjLoadHelper::free(allocator_, storage_schema);
 }
 
 void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
 {
-  ddl_kvs_.reset();
+  ddl_kv_handle_.reset();
   ObTabletHandle tablet_handle;
   int ret = OB_SUCCESS;
   ObLSID ls_id(ls_id_);
@@ -1268,8 +1270,8 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
   ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
   ASSERT_NE(t3m, nullptr);
-  ASSERT_EQ(OB_SUCCESS, t3m->acquire_ddl_kv(ddl_kvs_));
-  ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->init(ls_id, tablet_id, ddl_start_scn, sstable_.get_data_version(), ddl_start_scn, 4000));
+  ASSERT_EQ(OB_SUCCESS, t3m->acquire_ddl_kv(ddl_kv_handle_));
+  ASSERT_EQ(OB_SUCCESS, ddl_kv_handle_.get_obj()->init(ls_id, tablet_id, ddl_start_scn, sstable_.get_data_version(), ddl_start_scn, 4000));
 
   ObITable::TableKey ddl_key = sstable_.get_key();
   ddl_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
@@ -1277,15 +1279,17 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
     void *buf = allocator_.alloc(sizeof(ObDDLMemtable));
     ASSERT_NE(nullptr, buf);
     ObDDLMemtable *new_ddl_table = new (buf) ObDDLMemtable;
+    ddl_key.slice_range_.start_slice_idx_ = 0;
+    ddl_key.slice_range_.end_slice_idx_ = 0;
     ASSERT_EQ(OB_SUCCESS, new_ddl_table->init(allocator_, *tablet_handle.get_obj(), ddl_key, ddl_start_scn, 4000));
-    ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->get_ddl_memtables().push_back(new_ddl_table));
+    ASSERT_EQ(OB_SUCCESS, ddl_kv_handle_.get_obj()->get_ddl_memtables().push_back(new_ddl_table));
   }
   ObDDLKVHandle kv_handle;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true /*CREATE*/));
-  ddl_kv_mgr_handle.get_obj()->set_ddl_kv(0, ddl_kvs_);
+  ddl_kv_mgr_handle.get_obj()->set_ddl_kv(0, ddl_kv_handle_);
   ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(ddl_start_scn, sstable_.get_data_version(), 4000, ddl_start_scn);
-  ddl_kv_ptr_ = ddl_kvs_.get_obj();
+  ddl_kv_ptr_ = ddl_kv_handle_.get_obj();
   tablet_handle.get_obj()->ddl_kvs_ = &ddl_kv_ptr_;
   tablet_handle.get_obj()->ddl_kv_count_ = 1;
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
@@ -1312,7 +1316,7 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
         if (macro_idx > partial_kv_start_idx_) {
           ObDataMacroBlockMeta *copied_meta = nullptr;
           ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
-          ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->get_ddl_memtables().at(kv_idx)->insert_block_meta_tree(macro_handle, copied_meta, 0));
+          ASSERT_EQ(OB_SUCCESS, ddl_kv_handle_.get_obj()->get_ddl_memtables().at(kv_idx)->insert_block_meta_tree(macro_handle, copied_meta, 0));
           ++kv_idx;
         }
       }

@@ -192,6 +192,7 @@ ob_set_subtarget(ob_storage tmp_file
   tmp_file/ob_tmp_file_thread_job.cpp
   tmp_file/ob_tmp_file_write_buffer_pool.cpp
   tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
+  tmp_file/ob_tmp_file_write_buffer_pool_entry_array.cpp
 )
 
 ob_set_subtarget(ob_storage slog

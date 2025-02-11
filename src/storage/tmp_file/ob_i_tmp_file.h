@@ -45,23 +45,8 @@ public:
     birth_ts_(-1),
     tmp_file_ptr_(nullptr),
     label_(),
-    write_req_cnt_(0),
-    unaligned_write_req_cnt_(0),
-    write_persisted_tail_page_cnt_(0),
-    lack_page_cnt_(0),
-    last_modify_ts_(-1),
-    read_req_cnt_(0),
-    unaligned_read_req_cnt_(0),
-    total_truncated_page_read_cnt_(0),
-    total_kv_cache_page_read_cnt_(0),
-    total_uncached_page_read_cnt_(0),
-    total_wbp_page_read_cnt_(0),
-    truncated_page_read_hits_(0),
-    kv_cache_page_read_hits_(0),
-    uncached_page_read_hits_(0),
-    wbp_page_read_hits_(0),
-    total_read_size_(0),
-    last_access_ts_(-1) {}
+    write_info_(),
+    read_info_() {}
   virtual ~ObTmpFileInfo() { reset(); }
   virtual int init(const ObCurTraceId::TraceId &trace_id,
                    const uint64_t tenant_id,
@@ -96,6 +81,62 @@ public:
                    const int64_t last_access_ts);
   virtual void reset();
 public:
+  struct ObTmpFileWriteInfo
+  {
+  public:
+    ObTmpFileWriteInfo() :
+      write_req_cnt_(0),
+      unaligned_write_req_cnt_(0),
+      write_persisted_tail_page_cnt_(0),
+      lack_page_cnt_(0),
+      last_modify_ts_(-1) {}
+    void reset();
+  public:
+    int64_t write_req_cnt_;
+    int64_t unaligned_write_req_cnt_;
+    int64_t write_persisted_tail_page_cnt_;
+    int64_t lack_page_cnt_;
+    int64_t last_modify_ts_;
+    TO_STRING_KV(K_(write_req_cnt), K_(unaligned_write_req_cnt),
+        K_(write_persisted_tail_page_cnt), K_(lack_page_cnt), K_(last_modify_ts));
+  };
+  struct ObTmpFileReadInfo
+  {
+  public:
+    ObTmpFileReadInfo() :
+      read_req_cnt_(0),
+      unaligned_read_req_cnt_(0),
+      total_truncated_page_read_cnt_(0),
+      total_kv_cache_page_read_cnt_(0),
+      total_uncached_page_read_cnt_(0),
+      total_wbp_page_read_cnt_(0),
+      truncated_page_read_hits_(0),
+      kv_cache_page_read_hits_(0),
+      uncached_page_read_hits_(0),
+      wbp_page_read_hits_(0),
+      total_read_size_(0),
+      last_access_ts_(-1) {}
+    void reset();
+  public:
+    int64_t read_req_cnt_;
+    int64_t unaligned_read_req_cnt_;
+    int64_t total_truncated_page_read_cnt_;          // the total read count of truncated pages
+    int64_t total_kv_cache_page_read_cnt_;           // the total read count of pages in kv_cache
+    int64_t total_uncached_page_read_cnt_;           // the total read count of pages with io
+    int64_t total_wbp_page_read_cnt_;                // the total read count of pages in wbp
+    int64_t truncated_page_read_hits_;               // the hit count of truncated pages when read
+    int64_t kv_cache_page_read_hits_;                // the hit count of pages in kv_cache when read
+    int64_t uncached_page_read_hits_;                // the hit count of persisted pages when read
+    int64_t wbp_page_read_hits_;                     // the hit count of pages in wbp when read
+    int64_t total_read_size_;
+    int64_t last_access_ts_;
+    TO_STRING_KV(K_(read_req_cnt), K_(unaligned_read_req_cnt), K_(total_truncated_page_read_cnt),
+        K_(total_kv_cache_page_read_cnt), K_(total_uncached_page_read_cnt),
+        K_(total_wbp_page_read_cnt), K_(truncated_page_read_hits), K_(kv_cache_page_read_hits),
+        K_(uncached_page_read_hits), K_(wbp_page_read_hits), K_(total_read_size), K_(last_access_ts));
+  };
+
+public:
   // common info
   common::ObCurTraceId::TraceId trace_id_;
   uint64_t tenant_id_;
@@ -111,38 +152,14 @@ public:
   int64_t birth_ts_;
   const void *tmp_file_ptr_;
   ObFixedLengthString<ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1> label_;
-  // write info
-  int64_t write_req_cnt_;
-  int64_t unaligned_write_req_cnt_;
-  int64_t write_persisted_tail_page_cnt_;
-  int64_t lack_page_cnt_;
-  int64_t last_modify_ts_;
-  // read info
-  int64_t read_req_cnt_;
-  int64_t unaligned_read_req_cnt_;
-  int64_t total_truncated_page_read_cnt_;          // the total read count of truncated pages
-  int64_t total_kv_cache_page_read_cnt_;           // the total read count of pages in kv_cache
-  int64_t total_uncached_page_read_cnt_;           // the total read count of pages with io
-  int64_t total_wbp_page_read_cnt_;                // the total read count of pages in wbp
-  int64_t truncated_page_read_hits_;               // the hit count of truncated pages when read
-  int64_t kv_cache_page_read_hits_;                // the hit count of pages in kv_cache when read
-  int64_t uncached_page_read_hits_;                // the hit count of persisted pages when read
-  int64_t wbp_page_read_hits_;                     // the hit count of pages in wbp when read
-  int64_t total_read_size_;
-  int64_t last_access_ts_;
+  ObTmpFileWriteInfo write_info_;
+  ObTmpFileReadInfo read_info_;
 
   TO_STRING_KV(K(trace_id_), K(tenant_id_), K(dir_id_), K(fd_), K(file_size_),
                K(truncated_offset_), K(is_deleting_), K(cached_data_page_num_),
                K(write_back_data_page_num_), K(flushed_data_page_num_),
                K(ref_cnt_), K(birth_ts_), KP(tmp_file_ptr_), K(label_),
-               K(write_req_cnt_), K(unaligned_write_req_cnt_),
-               K(write_persisted_tail_page_cnt_), K(lack_page_cnt_), K(last_modify_ts_),
-               K(read_req_cnt_), K(unaligned_read_req_cnt_),
-               K(total_truncated_page_read_cnt_), K(total_kv_cache_page_read_cnt_),
-               K(total_uncached_page_read_cnt_), K(total_wbp_page_read_cnt_),
-               K(truncated_page_read_hits_), K(kv_cache_page_read_hits_),
-               K(uncached_page_read_hits_), K(wbp_page_read_hits_),
-               K(total_read_size_), K(last_access_ts_));
+               K(write_info_), K(read_info_));
 };
 
 class ObITmpFile

@@ -102,6 +102,7 @@ int WBPTestHelper::alloc_data_pages(const int64_t num, bool notify_dirty)
   if (OB_FAIL(ret)) {
     int64_t allocated_page_num = data_page_ids_.size() - old_data_page_num;
     LOG_INFO("fail to alloc data pages", K(num), K(allocated_page_num));
+    wbp_.print_statistics();
   }
   return ret;
 }
@@ -817,6 +818,151 @@ TEST_F(TestBufferPool, test_buffer_pool_shrink_abort)
 
   // 4. works in old size, allocates all pages normally
   MockIO.check_wbp_free_list(wbp);
+}
+
+TEST_F(TestBufferPool, test_buffer_pool_auto_shrinking)
+{
+  int ret = OB_SUCCESS;
+  MockTmpFilePageCacheController &pc_ctrl =
+      static_cast<MockTenantTmpFileManager *>(MTL(ObTenantTmpFileManager *))->mock_sn_tmp_file_mgr_.mock_page_cache_controller_;
+  ObTmpWriteBufferPool &wbp = pc_ctrl.get_write_buffer_pool();
+  MockTmpFileSwapTg &mock_swap_tg = pc_ctrl.mock_swap_tg_;
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+
+  int64_t fd = 0;
+  WBPTestHelper wbp_test(fd, wbp);
+  const int64_t WBP_MAX_PAGE_NUM = wbp.get_max_page_num();
+  const int64_t ALLOC_PAGE_NUM = WBP_MAX_PAGE_NUM * 0.9;
+  ret = wbp_test.alloc_data_pages(ALLOC_PAGE_NUM);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ALLOC_PAGE_NUM, wbp.used_page_num_);
+  ASSERT_EQ(BIG_WBP_MEM_LIMIT, wbp.capacity_);
+
+  // 1. basic auto shrinking
+  wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int32_t i = 0; i < 5; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  ASSERT_GE(BIG_WBP_MEM_LIMIT, wbp.capacity_); // expect wbp shrinks at least once
+  LOG_INFO("auto shrinking case 1", K(wbp.capacity_), K(wbp.used_page_num_), K(wbp.fat_.size()));
+  wbp.print_statistics();
+
+  // 2. auto shrinking will finally shrink wbp to 2MB if no pages are allocated
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.9);
+  ASSERT_EQ(WBP_MAX_PAGE_NUM * 0.9, wbp.used_page_num_);
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  for (int32_t i = 0; i < 20; i++) {
+    if (i % 5 == 0) { // manually set clock to trigger auto shrinking
+      wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+      LOG_INFO("reset clock", K(i), K(wbp.shrink_ctx_));
+      wbp.print_statistics();
+    }
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  EXPECT_EQ(wbp.fat_.size(), ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 1);
+  LOG_INFO("auto shrinking case 2", K(wbp.capacity_), K(wbp.used_page_num_), K(wbp.fat_.size()));
+
+  // 3. 4MB的wbp自动缩容
+  ret = wbp_test.alloc_data_pages(ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 2, wbp.used_page_num_);
+  ASSERT_EQ(ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 2, wbp.fat_.size());
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(ret, OB_SUCCESS);
+  wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  for (int32_t i = 0; i < 10; i++) {
+    if (i % 5 == 0) {
+      wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+    }
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  LOG_INFO("auto shrinking case 3", K(wbp.fat_.size()), K(wbp.shrink_ctx_));
+  ASSERT_EQ(ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 1, wbp.fat_.size());
+
+  // 4. auto shrinking abort when used page watermark is higher than AUTO_SHRINKING_WATERMARK_L1(20%) during shrinking
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.9); // enlarge wbp to its max size
+  ASSERT_EQ(WBP_MAX_PAGE_NUM * 0.9, wbp.used_page_num_);
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // generate 15% dirty pages
+  ASSERT_EQ(OB_SUCCESS, wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.10, true/*notify_dirty*/));
+  ASSERT_EQ(int(WBP_MAX_PAGE_NUM * 0.10), wbp.used_page_num_);
+  ATOMIC_STORE(&wbp.max_used_watermark_after_shrinking_, 0);
+  wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  mock_swap_tg.shrink_wbp_if_needed_();
+  EXPECT_EQ(true, wbp.shrink_ctx_.is_auto_);
+  LOG_INFO("auto shrinking case 4-1", K(wbp.capacity_), K(wbp.used_page_num_), K(wbp.fat_.size()), K(wbp.shrink_ctx_));
+
+  // auto-shrinking abort if we alloc more pages
+  ASSERT_EQ(OB_SUCCESS, wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.03));
+  ASSERT_EQ(OB_SUCCESS, wbp_test.alloc_meta_pages(WBP_MAX_PAGE_NUM * 0.02));
+  int64_t expect_use_page_num = int(WBP_MAX_PAGE_NUM * 0.10) + int(WBP_MAX_PAGE_NUM * 0.03) + int(WBP_MAX_PAGE_NUM * 0.02);
+  ASSERT_EQ(expect_use_page_num, wbp.used_page_num_);
+  mock_swap_tg.shrink_wbp_if_needed_();
+  ASSERT_EQ(false, wbp.shrink_ctx_.is_valid());
+  LOG_INFO("auto shrinking case 4-2", K(wbp.capacity_), K(wbp.used_page_num_), K(wbp.fat_.size()));
+
+  // 5. auto shrink from 40 WBP_BLOCK to 20 WBP_BLOCK with 15% dirty pages
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.08, true/*notify_dirty*/));
+  ASSERT_EQ(int(WBP_MAX_PAGE_NUM * 0.08), wbp.used_page_num_);
+  wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  mock_swap_tg.shrink_wbp_if_needed_(); // invoke auto shrinking
+
+  ret = wbp_test.free_all_pages(); // purge page to use the front part in the buffer pool
+  ASSERT_EQ(OB_SUCCESS, wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.08, true/*notify_dirty*/));
+  ASSERT_EQ(int(WBP_MAX_PAGE_NUM * 0.08), wbp.used_page_num_);
+  for (int32_t i = 0; i < 10; i++) {
+    mock_swap_tg.shrink_wbp_if_needed_();
+  }
+  LOG_INFO("auto shrinking case 5", K(wbp.fat_.size()), K(wbp.shrink_ctx_));
+  wbp.print_statistics();
+  ASSERT_EQ(ObTmpWriteBufferPool::BLOCK_PAGE_NUMS * 20, wbp.fat_.size());
+  ASSERT_EQ(int(WBP_MAX_PAGE_NUM * 0.08), wbp.used_page_num_);
+
+  // 6. manual shrinking timeout abort
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  wbp.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.15, true/*notify_dirty*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  mock_swap_tg.shrink_wbp_if_needed_();
+  EXPECT_EQ(WBPShrinkContext::SHRINKING_SWAP, wbp.shrink_ctx_.wbp_shrink_state_);
+  wbp.shrink_ctx_.shrink_begin_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  mock_swap_tg.shrink_wbp_if_needed_(); // shrinking max duration is 5min
+  EXPECT_EQ(false, wbp.shrink_ctx_.is_valid());
+  LOG_INFO("auto shrinking case 6", K(wbp.capacity_), K(wbp.used_page_num_), K(wbp.fat_.size()), K(wbp.shrink_ctx_));
+
+  // 7. auto-shrinking not init when used page watermark increases after need_to_shrink() checking
+  ASSERT_EQ(OB_SUCCESS, wbp_test.free_all_pages());
+  wbp.default_wbp_memory_limit_ = BIG_WBP_MEM_LIMIT;
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.90, true/*notify_dirty*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = wbp_test.free_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  wbp.max_used_watermark_after_shrinking_ = 0;
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * ObTmpWriteBufferPool::AUTO_SHRINKING_WATERMARK_L1 / 100, true/*notify_dirty*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  wbp.last_shrink_complete_ts_ = ObTimeUtility::current_time() - 6 * 60 * 1000 * 1000;
+  bool is_auto = false;
+  EXPECT_TRUE(wbp.need_to_shrink(is_auto));
+  EXPECT_TRUE(is_auto);
+
+  // alloc more pages to abort auto-shrinking
+  ret = wbp_test.alloc_data_pages(WBP_MAX_PAGE_NUM * 0.10, true/*notify_dirty*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = wbp.init_shrink_context(is_auto);
+  EXPECT_EQ(OB_OP_NOT_ALLOW, ret);
+  wbp.print_statistics();
+  LOG_INFO("auto shrinking case 7", K(wbp.max_used_watermark_after_shrinking_),
+          K(wbp.used_page_num_), K(wbp.fat_.size()), K(wbp.shrink_ctx_));
 }
 
 TEST_F(TestBufferPool, test_buffer_pool_shrink_range_boundary)

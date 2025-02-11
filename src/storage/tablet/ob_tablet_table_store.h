@@ -264,6 +264,11 @@ private:
       ObTableStoreIterator &iterator,
       const bool allow_no_ready_read,
       const bool skip_major) const;
+  int calculate_ddl_read_tables(
+      const int64_t snapshot_version,
+      const ObTablet &tablet,
+      ObTableStoreIterator &iterator,
+      const ObSSTable *&base_table) const;
   int calculate_read_memtables(const ObTablet &tablet, ObTableStoreIterator &iterator) const;
   bool check_read_tables(
       const ObTablet &tablet,
@@ -431,6 +436,7 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const blocksstable::ObSSTable *new_sstable,
+      const common::ObIArray<const blocksstable::ObSSTable *> &slice_sstables,
       const bool keep_old_ddl_sstable,
       const ObTabletTableStore &old_store);
   bool is_major_sstable_empty(const share::SCN &ddl_commit_scn) const;

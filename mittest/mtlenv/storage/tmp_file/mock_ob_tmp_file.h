@@ -280,12 +280,12 @@ int MockTmpFilePageCacheController::invoke_swap_and_wait(int64_t expect_swap_siz
     case MockTmpFileUtil::MOCK_THREAD_RUNNING_CTRL::SYNC:
       // manually invoke swap and flush in front thread,
       // allowing tmp file write succ even if buffer pool is full
-      mock_swap_tg_.try_work();
+      mock_swap_tg_.swap();
       for (int64_t i = 0; i < 3; ++i) {
         mock_swap_tg_.flush_tg_ref_.try_work();
         usleep(5 * 1000);
       }
-      mock_swap_tg_.try_work();
+      mock_swap_tg_.swap();
       break;
     case MockTmpFileUtil::MOCK_THREAD_RUNNING_CTRL::ASYNC:
       ret = inner_origin_invoke_swap_and_wait_(expect_swap_size, timeout_ms);

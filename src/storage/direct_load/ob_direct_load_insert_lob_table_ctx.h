@@ -36,12 +36,14 @@ public:
 
   //////////////////////// write interface ////////////////////////
 public:
-  int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id) override;
+  int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq,
+                         const int64_t slice_idx,
+                         int64_t &slice_id) override;
   int fill_sstable_slice(const int64_t &slice_id, ObIStoreRowIterator &iter,
                          int64_t &affected_rows) override;
   int fill_sstable_slice(const int64_t &slice_id,
                          const blocksstable::ObBatchDatumRows &datum_rows) override;
-  int close_sstable_slice(const int64_t slice_id) override;
+  int close_sstable_slice(const int64_t slice_id, const int64_t slice_idx) override;
   // 特殊写lob接口, datum_row是主表数据
   int fill_lob_sstable_slice(ObIAllocator &allocator, const int64_t &lob_slice_id,
                              share::ObTabletCacheInterval &pk_interval,

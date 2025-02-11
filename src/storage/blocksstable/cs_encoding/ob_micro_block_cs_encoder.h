@@ -98,6 +98,8 @@ public:
   }
   virtual int64_t get_original_size() const override { return all_headers_size_ + estimate_size_; }
   virtual void dump_diagnose_info() override;
+  virtual bool micro_block_row_data_buffered() const override { return true; }
+  virtual int get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const override;
 
 private:
   enum ObDataFormatType : uint8_t
@@ -169,7 +171,10 @@ private:
                                const ObObjTypeStoreClass store_class,
                                const ObCSColumnHeader::Type type,
                                ObIColumnCSEncoder *&e);
-  int update_previous_info_before_encoding_(const int32_t col_idx, ObIColumnCSEncoder &e);
+  int try_use_previous_encoder_(const int64_t column_idx,
+                                const ObObjTypeStoreClass store_class,
+                                ObIColumnCSEncoder *&e);
+  int update_previous_info_after_choose_encoder_(const int32_t col_idx, ObIColumnCSEncoder &e);
   int update_previous_info_after_encoding_(const int32_t col_idx, ObIColumnCSEncoder &e);
   void free_encoders_();
 
@@ -226,6 +231,7 @@ private:
   bool need_block_level_compression_;
   bool is_all_column_force_raw_;
   bool encoder_freezed_; // if encoder enable append data or build block
+  bool block_generated_;
   uint32_t all_string_data_len_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCSEncoder);

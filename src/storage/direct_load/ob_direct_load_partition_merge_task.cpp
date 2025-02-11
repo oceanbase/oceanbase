@@ -94,7 +94,7 @@ int ObDirectLoadPartitionMergeTask::process()
     // 对于全量导入, 无论一个分区有没有数据, 都需要创建ddl对象来为该分区创建major sstable
     else if (OB_FAIL(ObDDLUtil::init_macro_block_seq(parallel_idx_, block_start_seq))) {
       LOG_WARN("fail to set parallel degree", KR(ret), K(parallel_idx_));
-    } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(block_start_seq, slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx_->open_sstable_slice(block_start_seq, parallel_idx_/*slice_idx*/, slice_id))) {
       LOG_WARN("fail to open sstable slice ", KR(ret), K(block_start_seq));
     } else if (row_iters.empty()) {
       // do nothing
@@ -122,7 +122,7 @@ int ObDirectLoadPartitionMergeTask::process()
       LOG_INFO("add sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_), K(affected_rows_));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id))) {
+      if (OB_FAIL(insert_tablet_ctx_->close_sstable_slice(slice_id, parallel_idx_/*slice_idx*/))) {
         LOG_WARN("fail to close writer", KR(ret));
       }
     }
@@ -197,6 +197,7 @@ void ObDirectLoadPartitionMergeTask::stop()
     insert_tablet_ctx_->cancel();
   }
 }
+
 /**
  * ObDirectLoadPartitionEmptyMergeTask
  */
@@ -268,6 +269,128 @@ int ObDirectLoadPartitionOriginDataMergeTask::construct_row_iters(
     }
   }
   return ret;
+}
+
+/**
+ * ObDirectLoadPartitionOriginDataUnrescanMergeTask
+ */
+
+ObDirectLoadPartitionOriginDataUnrescanMergeTask::ObDirectLoadPartitionOriginDataUnrescanMergeTask()
+  : ctx_(nullptr),
+    merge_param_(nullptr),
+    merge_ctx_(nullptr),
+    insert_tablet_ctx_(nullptr),
+    origin_table_(nullptr),
+    range_(nullptr),
+    parallel_idx_(-1),
+    affected_rows_(0),
+    is_stop_(false),
+    is_inited_(false)
+{
+}
+
+ObDirectLoadPartitionOriginDataUnrescanMergeTask::~ObDirectLoadPartitionOriginDataUnrescanMergeTask()
+{
+}
+
+int ObDirectLoadPartitionOriginDataUnrescanMergeTask::init(
+    ObDirectLoadTabletMergeCtx *merge_ctx,
+    ObDirectLoadOriginTable &origin_table,
+    const ObDatumRange &range,
+    int64_t parallel_idx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObDirectLoadPartitionOriginDataUnrescanMergeTask init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(nullptr == merge_ctx || !merge_ctx->is_valid() ||
+                         !origin_table.is_valid() || !range.is_valid() || parallel_idx < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(merge_ctx), K(origin_table), K(range), K(parallel_idx));
+  } else {
+    ctx_ = merge_ctx->get_param()->ctx_;
+    merge_param_ = merge_ctx->get_param();
+    merge_ctx_ = merge_ctx;
+    insert_tablet_ctx_ = merge_ctx->get_insert_tablet_ctx();
+    origin_table_ = &origin_table;
+    range_ = &range;
+    parallel_idx_ = parallel_idx;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDirectLoadPartitionOriginDataUnrescanMergeTask::process()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadPartitionOriginDataUnrescanMergeTask not init", KR(ret), KP(this));
+  } else {
+    const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
+    ObDirectLoadInsertTableBatchRowDirectWriter direct_writer;
+    ObDirectLoadInsertTableRowInfo row_info;
+    ObArenaAllocator allocator("TLD_UODMerge");
+    allocator.set_tenant_id(MTL_ID());
+    ObDirectLoadOriginTableScanner *row_iter = nullptr;
+    if (OB_FAIL(origin_table_->scan(*range_, allocator, row_iter, false /*skip_read_lob*/))) {
+      LOG_WARN("fail to scan origin table", KR(ret));
+    } else if (OB_FAIL(insert_tablet_ctx_->get_row_info(row_info))) {
+      LOG_WARN("fail to get row info", KR(ret));
+    } else if (OB_FAIL(direct_writer.init(insert_tablet_ctx_,
+                                          row_info,
+                                          merge_param_->dml_row_handler_,
+                                          nullptr,
+                                          ctx_->job_stat_))) {
+      LOG_WARN("fail to init direct writer", KR(ret));
+    } else {
+      LOG_INFO("add sstable slice begin", K(tablet_id), K(parallel_idx_));
+      ObDirectLoadDatumRow datum_row;
+      const ObDirectLoadDatumRow *datum_row_ptr = nullptr;
+      while (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(is_stop_)) {
+          ret = OB_CANCELED;
+          LOG_WARN("merge task canceled", KR(ret));
+        } else if (OB_FAIL(row_iter->get_next_row(datum_row_ptr))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("fail to get next row", KR(ret));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          datum_row.storage_datums_ = datum_row_ptr->storage_datums_ + 1;
+          datum_row.count_ = datum_row_ptr->count_ - 1;
+          if (OB_FAIL(direct_writer.append_row(datum_row))) {
+            LOG_WARN("fail to append row", KR(ret), K(datum_row));
+          } else {
+            affected_rows_++;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(direct_writer.close())) {
+          LOG_WARN("fail to close direct writer", KR(ret));
+        }
+      }
+      LOG_INFO("add sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_), K(affected_rows_));
+    }
+    if (row_iter != nullptr) {
+      row_iter->~ObDirectLoadOriginTableScanner();
+      allocator.free(row_iter);
+      row_iter = nullptr;
+    }
+    allocator.reset();
+  }
+  return ret;
+}
+
+void ObDirectLoadPartitionOriginDataUnrescanMergeTask::stop()
+{
+  is_stop_ = true;
+  if (OB_NOT_NULL(insert_tablet_ctx_)) {
+    insert_tablet_ctx_->cancel();
+  }
 }
 
 /**

@@ -1337,6 +1337,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     slice_info.data_tablet_id_ = param_->dest_tablet_id_;
     slice_info.context_id_ = context_->context_id_;
     slice_info.total_slice_cnt_ = context_->total_slice_cnt_;
+    slice_info.slice_idx_ = task_id_;
     ObInsertMonitor insert_monitor(context_->row_scanned_, context_->row_inserted_, context_->cg_row_inserted_);
     ObDDLInsertRowIterator row_iter;
     ObTabletSliceParam tablet_slice_param(context_->concurrent_cnt_, task_id_);

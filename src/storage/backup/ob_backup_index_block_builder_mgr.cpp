@@ -195,7 +195,7 @@ int ObBackupTaskIndexRebuilderMgr::prepare_index_block_rebuilder_(
     LOG_WARN("sstable index builder should not be null", K(ret));
   } else if (OB_FAIL(rebuilder->init(*sstable_index_builder,
                                      task_idx,
-                                     table_key.is_ddl_merge_sstable()/*is_ddl_merge*/,
+                                     table_key,
                                      &device_handle_array))) {
     LOG_WARN("failed to init index block rebuilder", K(ret), KPC(sstable_index_builder));
   } else {

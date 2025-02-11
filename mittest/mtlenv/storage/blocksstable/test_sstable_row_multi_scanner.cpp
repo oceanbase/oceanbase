@@ -183,7 +183,7 @@ void TestSSTableRowMultiScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, ranges.push_back(mscan_ranges[i]));
   }
   ASSERT_EQ(OB_SUCCESS, scanner.init(iter_param_, context_, &sstable_, &ranges));
-  ASSERT_EQ(OB_SUCCESS, kv_scanner.init(iter_param_, context_, &ddl_kv_, &ranges));
+  ASSERT_EQ(OB_SUCCESS, kv_scanner.init(iter_param_, context_, &ddl_memtable_, &ranges));
   for (int64_t i = 0; i < start_seeds.count(); ++i) {
     for (int64_t j = 0; j < count_per_range; ++j) {
       const int64_t k = is_reverse_scan ? start_seeds.at(i) + count_per_range - j - 1 : start_seeds.at(i) + j;
@@ -212,7 +212,7 @@ void TestSSTableRowMultiScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
             iter_param_,
             context_,
-            &ddl_kv_,
+            &ddl_memtable_,
             &ranges));
     for (int64_t i = 0; i < start_seeds.count(); ++i) {
       for (int64_t j = 0; j < count_per_range; ++j) {
@@ -736,7 +736,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
   row_cnt = 0;
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
@@ -787,7 +787,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
@@ -842,7 +842,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
 
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
@@ -899,7 +899,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
@@ -953,7 +953,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;
@@ -1008,7 +1008,7 @@ void TestSSTableRowMultiScanner::test_multi_scan_multi_get_with_scan(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &ranges));
   for (int64_t i = 0; i < TEST_MULTI_GET_CNT; ++i) {
     const int64_t p = i;

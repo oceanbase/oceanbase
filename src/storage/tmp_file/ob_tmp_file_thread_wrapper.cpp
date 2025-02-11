@@ -920,12 +920,17 @@ void ObTmpFileSwapTG::run1()
   int ret = OB_SUCCESS;
   lib::set_thread_name("TFSwap");
   while (!has_set_stop()) {
-    if (OB_FAIL(try_work())) {
+    if (OB_FAIL(shrink_wbp_if_needed_())) {
+      STORAGE_LOG(WARN, "fail to flush for shrinking wbp", KR(ret), KPC(this));
+    }
+
+    // overwrite ret
+    if (OB_FAIL(swap())) {
       STORAGE_LOG(WARN, "fail to try swap work", KR(ret));
     }
 
+    // overwrite ret
     if (OB_FAIL(flush_tg_ref_.try_work())) {
-      // overwrite ret
       STORAGE_LOG(WARN, "fail to try flush work", KR(ret));
     }
 
@@ -962,7 +967,7 @@ void ObTmpFileSwapTG::clean_up_lists_()
   }
 }
 
-int ObTmpFileSwapTG::try_work()
+int ObTmpFileSwapTG::swap()
 {
   int ret = OB_SUCCESS;
 
@@ -989,10 +994,6 @@ int ObTmpFileSwapTG::do_work_()
   if (OB_SUCC(ret)) {
     if (TC_REACH_TIME_INTERVAL(ObTmpFilePageCacheController::REFRESH_CONFIG_INTERVAL)) {
       pc_ctrl_.refresh_disk_usage_limit();
-    }
-
-    if (OB_FAIL(shrink_wbp_if_needed_())) {
-      STORAGE_LOG(WARN, "fail to flush for shrinking wbp", KR(ret), KPC(this));
     }
 
     if (ATOMIC_LOAD(&swap_job_num_) == 0 && ATOMIC_LOAD(&working_list_size_) == 0) {
@@ -1224,11 +1225,13 @@ int ObTmpFileSwapTG::shrink_wbp_if_needed_()
 {
   int ret = OB_SUCCESS;
   int64_t actual_evict_num = 0;
-  if (wbp_.need_to_shrink()) {
+  bool is_auto = false;
+  ObTimeGuard time_guard("wbp_shrink", 1 * 1000 * 1000);
+  if (wbp_.need_to_shrink(is_auto)) {
     LOG_DEBUG("current wbp shrinking state", K(wbp_.get_shrink_ctx()));
     switch (wbp_.get_wbp_state()) {
       case WBPShrinkContext::INVALID:
-        if (OB_FAIL(wbp_.begin_shrinking())) {
+        if (OB_FAIL(wbp_.begin_shrinking(is_auto))) {
           STORAGE_LOG(WARN, "fail to init shrink context", KR(ret), K(wbp_.get_shrink_ctx()));
         } else {
           pc_ctrl_.set_flush_all_data(true);
@@ -1266,10 +1269,10 @@ int ObTmpFileSwapTG::shrink_wbp_if_needed_()
 
   // abort shrinking if wbp memory limit enlarge or flush fail with OB_SERVER_OUTOF_DISK_SPACE
   int io_finished_ret = flush_tg_ref_.get_flush_io_finished_ret();
-  if (wbp_.get_shrink_ctx().is_valid() && (!wbp_.need_to_shrink() || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
+  if (wbp_.get_shrink_ctx().is_valid() && (!wbp_.need_to_shrink(is_auto) || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
     wbp_.finish_shrinking();
   }
-
+  time_guard.click("wbp_shrink finish one step");
   return ret;
 }
 

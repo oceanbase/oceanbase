@@ -343,7 +343,7 @@ public:
                K_(ddl_start_scn), K_(ddl_commit_scn), K_(ddl_checkpoint_scn),
                K_(ddl_snapshot_version), K_(ddl_execution_id),
                K_(data_format_version), KP_(ddl_redo_callback),
-               KP_(ddl_finish_callback), K_(ddl_replay_status));
+               KP_(ddl_finish_callback), K_(ddl_replay_status), K_(slice_sstables));
 
 public:
   bool keep_old_ddl_sstable_;
@@ -358,6 +358,7 @@ public:
   blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
   // used to decide storage type for replaying ddl clog in cs replica, see ObTabletMeta::ddl_replay_status_ for more detail
   ObCSReplicaDDLReplayStatus ddl_replay_status_;
+  ObArray<const blocksstable::ObSSTable *> slice_sstables_;
 };
 
 struct ObHATableStoreParam final

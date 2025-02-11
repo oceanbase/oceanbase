@@ -260,10 +260,7 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
                                                   ObTmpFileIOCtx &io_ctx)
 {
   int ret = OB_SUCCESS;
-  int64_t total_kv_cache_page_read_cnt = 0;
-  int64_t total_uncached_page_read_cnt = 0;
-  int64_t kv_cache_page_read_hits = 0;
-  int64_t uncached_page_read_hits = 0;
+  ObTmpFileInfo::ObTmpFileReadInfo read_state;
   common::ObArray<ObSharedNothingTmpFileDataItem> data_items;
   if (OB_FAIL(meta_tree_.search_data_items(io_ctx.get_read_offset_in_file(),
                                            expected_read_disk_size, data_items))) {
@@ -290,6 +287,8 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
     const int64_t end_read_offset_in_block = (data_items.count() - 1  == i?
                                               begin_read_offset_in_block + remain_read_size :
                                               end_offset_in_block);
+    // end_offset_in_block represents the range covered by the current data item,
+    // while end_read_offset_in_block denotes the range required by the user.
 
     ObTmpBlockValueHandle block_value_handle;
     if (!io_ctx.is_disable_block_cache() &&
@@ -306,10 +305,11 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
       } else if (OB_FAIL(io_ctx.update_data_size(read_size))) {
         LOG_WARN("fail to update data size", KR(ret), K(read_size));
       } else {
-        kv_cache_page_read_hits++;
-        total_kv_cache_page_read_cnt += (get_page_end_offset_(io_ctx.get_read_offset_in_file()) -
-                                         get_page_begin_offset_(io_ctx.get_read_offset_in_file() - read_size)) /
-                                        ObTmpFileGlobal::PAGE_SIZE;
+        int64_t page_begin_offset = get_page_begin_offset_(io_ctx.get_read_offset_in_file() - read_size);
+        int64_t page_end_offset = get_page_end_offset_(io_ctx.get_read_offset_in_file());
+        read_state.kv_cache_page_read_hits_++;
+        read_state.total_kv_cache_page_read_cnt_ +=
+            (page_end_offset - page_begin_offset) / ObTmpFileGlobal::PAGE_SIZE;
         remain_read_size -= read_size;
         LOG_DEBUG("succ to read data from cached block",
               KR(ret), K(fd_), K(block_index), K(begin_offset_in_block), K(end_offset_in_block),
@@ -333,25 +333,38 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
               K(remain_read_size), K(expected_read_disk_size),
               K(data_items[i]), K(io_ctx), KPC(this));
         } else {
-          uncached_page_read_hits++;
-          total_uncached_page_read_cnt += (get_page_end_offset_(io_ctx.get_read_offset_in_file()) -
-                                           get_page_begin_offset_(io_ctx.get_read_offset_in_file() - read_size)) /
-                                          ObTmpFileGlobal::PAGE_SIZE;
+          int64_t page_begin_offset = get_page_begin_offset_(io_ctx.get_read_offset_in_file() - read_size);
+          int64_t page_end_offset = get_page_end_offset_(io_ctx.get_read_offset_in_file());
+          read_state.uncached_page_read_hits_++;
+          read_state.total_uncached_page_read_cnt_ +=
+              (page_end_offset - page_begin_offset) / ObTmpFileGlobal::PAGE_SIZE;
         }
       } else {
-        if (OB_FAIL(inner_cached_read_from_block_(block_index,
-                                                  begin_read_offset_in_block,
-                                                  end_read_offset_in_block,
-                                                  io_ctx,
-                                                  total_kv_cache_page_read_cnt,
-                                                  total_uncached_page_read_cnt,
-                                                  kv_cache_page_read_hits,
-                                                  uncached_page_read_hits))) {
-          LOG_WARN("fail to cached read from block",
-              KR(ret), K(fd_), K(block_index), K(begin_offset_in_block), K(end_offset_in_block),
-              K(begin_read_offset_in_block), K(end_read_offset_in_block),
-              K(remain_read_size),K(expected_read_disk_size),
-              K(data_items[i]), K(io_ctx), KPC(this));
+        if (io_ctx.is_prefetch()) {
+          if (OB_FAIL(inner_cached_read_from_block_with_prefetch_(block_index,
+                                                                  begin_read_offset_in_block,
+                                                                  end_offset_in_block,
+                                                                  read_size,
+                                                                  io_ctx,
+                                                                  read_state))) {
+            LOG_WARN("fail to cached read from block with prefetch",
+                KR(ret), K(fd_), K(block_index), K(begin_offset_in_block), K(end_offset_in_block),
+                K(begin_read_offset_in_block), K(end_read_offset_in_block),
+                K(remain_read_size),K(expected_read_disk_size),
+                K(data_items[i]), K(io_ctx), KPC(this));
+          }
+        } else {
+          if (OB_FAIL(inner_cached_read_from_block_(block_index,
+                                                    begin_read_offset_in_block,
+                                                    end_read_offset_in_block,
+                                                    io_ctx,
+                                                    read_state))) {
+            LOG_WARN("fail to cached read from block",
+                KR(ret), K(fd_), K(block_index), K(begin_offset_in_block), K(end_offset_in_block),
+                K(begin_read_offset_in_block), K(end_read_offset_in_block),
+                K(remain_read_size),K(expected_read_disk_size),
+                K(data_items[i]), K(io_ctx), KPC(this));
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -366,8 +379,10 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
   } // end for
 
   if (OB_SUCC(ret)) {
-    io_ctx.update_read_kv_cache_page_stat(total_kv_cache_page_read_cnt, kv_cache_page_read_hits);
-    io_ctx.update_sn_read_uncached_page_stat(total_uncached_page_read_cnt, uncached_page_read_hits);
+    io_ctx.update_read_kv_cache_page_stat(read_state.total_kv_cache_page_read_cnt_,
+                                          read_state.kv_cache_page_read_hits_);
+    io_ctx.update_sn_read_uncached_page_stat(read_state.total_uncached_page_read_cnt_,
+                                             read_state.uncached_page_read_hits_);
   }
   return ret;
 }
@@ -424,10 +439,7 @@ int ObSharedNothingTmpFile::inner_cached_read_from_block_(const int64_t block_in
                                                           const int64_t begin_read_offset_in_block,
                                                           const int64_t end_read_offset_in_block,
                                                           ObTmpFileIOCtx &io_ctx,
-                                                          int64_t &total_kv_cache_page_read_cnt,
-                                                          int64_t &total_uncached_page_read_cnt,
-                                                          int64_t &kv_cache_page_read_hits,
-                                                          int64_t &uncached_page_read_hits)
+                                                          ObTmpFileInfo::ObTmpFileReadInfo &read_state)
 {
   int ret = OB_SUCCESS;
   const int64_t begin_page_idx_in_block = get_page_virtual_id_(begin_read_offset_in_block, false);
@@ -452,6 +464,7 @@ int ObSharedNothingTmpFile::inner_cached_read_from_block_(const int64_t block_in
       int64_t end_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
       int64_t begin_read_offset = -1;
       int64_t end_read_offset = -1;
+      int64_t user_read_size = -1;
       if (OB_FAIL(iterator.next_range(is_in_cache, begin_page_id, end_page_id))) {
         LOG_WARN("fail to next range", KR(ret), K(fd_));
       } else if (OB_UNLIKELY(begin_page_id > end_page_id || begin_page_id < 0 ||  end_page_id < 0)) {
@@ -464,6 +477,7 @@ int ObSharedNothingTmpFile::inner_cached_read_from_block_(const int64_t block_in
         end_read_offset = end_page_id == end_page_idx_in_block ?
                           end_read_offset_in_block :
                           get_page_end_offset_by_virtual_id_(end_page_id);
+        user_read_size = end_read_offset - begin_read_offset;
       }
 
       if (OB_FAIL(ret)) {
@@ -474,27 +488,91 @@ int ObSharedNothingTmpFile::inner_cached_read_from_block_(const int64_t block_in
           LOG_WARN("fail to inner read continuous cached pages", KR(ret), K(fd_), K(begin_read_offset),
                                                                  K(end_read_offset), K(io_ctx));
         } else {
-          total_kv_cache_page_read_cnt += end_page_id - begin_page_id + 1;
+          read_state.total_kv_cache_page_read_cnt_ += end_page_id - begin_page_id + 1;
           already_read_cached_page_num += (end_page_id - begin_page_id + 1);
-          kv_cache_page_read_hits++;
+          read_state.kv_cache_page_read_hits_++;
         }
       } else {
         if (OB_FAIL(inner_read_continuous_uncached_pages_(block_index, begin_read_offset,
-                                                          end_read_offset, io_ctx))) {
+                                                          end_read_offset, user_read_size,
+                                                          io_ctx))) {
           LOG_WARN("fail to inner read continuous uncached pages", KR(ret), K(fd_), K(block_index),
                                                                    K(begin_read_offset),
                                                                    K(end_read_offset),
                                                                    K(io_ctx));
         } else {
-          total_uncached_page_read_cnt += (get_page_end_offset_(end_read_offset) -
+          read_state.total_uncached_page_read_cnt_ += (get_page_end_offset_(end_read_offset) -
                                            get_page_begin_offset_(begin_read_offset)) /
-                                          ObTmpFileGlobal::PAGE_SIZE;
-          uncached_page_read_hits++;
+                                           ObTmpFileGlobal::PAGE_SIZE;
+          read_state.uncached_page_read_hits_++;
         }
       }
     }
   }
 
+  return ret;
+}
+
+// This function retrieves data within the range [begin_read_offset_in_block, begin_read_offset_in_block + user_read_size] for the user.
+// it reads the data from the disk in the range [begin_read_offset_in_block, end_offset_in_block] and stores it in the kv cache.
+// consequently end_offset_in_block >= begin_read_offset_in_block + user_read_size.
+int ObSharedNothingTmpFile::inner_cached_read_from_block_with_prefetch_(
+    const int64_t block_index,
+    const int64_t begin_read_offset_in_block,
+    const int64_t end_offset_in_block,
+    const int64_t user_read_size,
+    ObTmpFileIOCtx &io_ctx,
+    ObTmpFileInfo::ObTmpFileReadInfo &read_state)
+{
+  int ret = OB_SUCCESS;
+  bool all_in_cache = true;
+  const int64_t begin_page_idx_in_block = get_page_virtual_id_(begin_read_offset_in_block, false);
+  const int64_t end_page_idx_in_block = get_page_virtual_id_(end_offset_in_block, true);
+
+  ObTmpFileBlockPageBitmap bitmap;
+  ObArray<ObTmpPageValueHandle> page_value_handles;
+  if (OB_FAIL(collect_pages_in_block_(block_index, begin_page_idx_in_block,
+                                      end_page_idx_in_block, bitmap,
+                                      page_value_handles))) {
+    LOG_WARN("fail to collect pages in block", KR(ret), K(fd_), K(block_index),
+                                               K(begin_page_idx_in_block), K(end_page_idx_in_block));
+  } else if (OB_FAIL(bitmap.is_all_true(begin_page_idx_in_block,
+                                        end_page_idx_in_block,
+                                        all_in_cache))) {
+    LOG_WARN("fail to check pages all in kv cache", KR(ret), K(fd_), K(block_index),
+                                                    K(begin_page_idx_in_block),
+                                                    K(end_page_idx_in_block));
+  } else {
+    if (all_in_cache) {
+      int64_t end_read_offset_in_block = begin_read_offset_in_block + user_read_size;
+      if (OB_FAIL(inner_read_continuous_cached_pages_(begin_read_offset_in_block, end_read_offset_in_block,
+                                                      page_value_handles, 0 /*read_page_start_idx*/,
+                                                      io_ctx))) {
+        LOG_WARN("fail to inner read continuous cached pages", KR(ret), K(fd_),
+                                                               K(begin_read_offset_in_block),
+                                                               K(end_read_offset_in_block), K(io_ctx));
+      } else {
+        read_state.total_kv_cache_page_read_cnt_ += (end_page_idx_in_block - begin_page_idx_in_block + 1);
+        read_state.kv_cache_page_read_hits_++;
+      }
+    } else {
+      if (OB_FAIL(inner_read_continuous_uncached_pages_(block_index,
+                                                        begin_read_offset_in_block,
+                                                        end_offset_in_block,
+                                                        user_read_size,
+                                                        io_ctx))) {
+        LOG_WARN("fail to inner read continuous uncached pages", KR(ret), K(fd_),
+                                                                 K(block_index), K(begin_read_offset_in_block),
+                                                                 K(user_read_size), K(io_ctx));
+      } else {
+        read_state.total_uncached_page_read_cnt_ += user_read_size / ObTmpFileGlobal::PAGE_SIZE;
+        read_state.uncached_page_read_hits_++;
+      }
+    }
+  }
+  LOG_DEBUG("inner_cached_read_from_block_with_prefetch_ finish", KR(ret),
+      K(block_index), K(begin_read_offset_in_block),
+      K(end_offset_in_block), K(user_read_size));
   return ret;
 }
 
@@ -536,24 +614,18 @@ int ObSharedNothingTmpFile::collect_pages_in_block_(const int64_t block_index,
 }
 
 int ObSharedNothingTmpFile::inner_read_continuous_uncached_pages_(const int64_t block_index,
-                                                                  const int64_t begin_read_offset_in_block,
-                                                                  const int64_t end_read_offset_in_block,
+                                                                  const int64_t begin_io_read_offset,
+                                                                  const int64_t end_io_read_offset,
+                                                                  const int64_t user_read_size,
                                                                   ObTmpFileIOCtx &io_ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTmpPageCacheKey> page_keys;
-  const int64_t begin_page_idx = get_page_virtual_id_(begin_read_offset_in_block, false);
-  const int64_t end_page_idx = get_page_virtual_id_(end_read_offset_in_block, true);
-  const int64_t block_read_begin_offset = get_page_begin_offset_(begin_read_offset_in_block);
-  const int64_t block_read_end_offset = get_page_end_offset_(end_read_offset_in_block);
-  const int64_t block_read_size = block_read_end_offset - block_read_begin_offset;  // read and cached completed pages from disk
-  const int64_t usr_read_begin_offset = begin_read_offset_in_block;
-  const int64_t usr_read_end_offset = end_read_offset_in_block;
-  // from loaded disk block buf, from "offset_in_block_buf" read "usr_read_size" size data to user's read buf
-  const int64_t offset_in_block_buf = usr_read_begin_offset - block_read_begin_offset;
-  const int64_t usr_read_size = block_read_size -
-                                (usr_read_begin_offset - block_read_begin_offset) -
-                                (block_read_end_offset - usr_read_end_offset);
+  const int64_t begin_page_idx = get_page_virtual_id_(begin_io_read_offset, false);
+  const int64_t end_page_idx = get_page_virtual_id_(end_io_read_offset, true);
+  const int64_t block_read_begin_offset = get_page_begin_offset_(begin_io_read_offset);
+  // from loaded disk block buf, from "offset_in_block_buf" read "user_read_size" size data to user's read buf
+  const int64_t offset_in_block_buf = begin_io_read_offset - block_read_begin_offset;
 
   for (int64_t page_id = begin_page_idx; OB_SUCC(ret) && page_id <= end_page_idx; page_id++) {
     ObTmpPageCacheKey key(block_index, page_id, tenant_id_);
@@ -570,7 +642,7 @@ int ObSharedNothingTmpFile::inner_read_continuous_uncached_pages_(const int64_t 
     char *user_read_buf = io_ctx.get_todo_buffer();
     ObTmpFileIOCtx::ObIOReadHandle io_read_handle(user_read_buf,
                                                   offset_in_block_buf,
-                                                  usr_read_size, block_handle);
+                                                  user_read_size, block_handle);
     ObTmpPageCacheReadInfo read_info;
 
     if (OB_FAIL(io_ctx.get_io_handles().push_back(io_read_handle))) {
@@ -584,11 +656,12 @@ int ObSharedNothingTmpFile::inner_read_continuous_uncached_pages_(const int64_t 
                                             K(block_read_begin_offset), K(io_ctx));
     } else if (OB_FAIL(ObTmpPageCache::get_instance().cached_read(page_keys, read_info, *callback_allocator_))) {
       LOG_WARN("fail to cached_read", KR(ret), K(fd_), K(read_info), K(io_ctx), KP(callback_allocator_));
-    } else if (OB_FAIL(io_ctx.update_data_size(usr_read_size))) {
-      LOG_WARN("fail to update data size", KR(ret), K(fd_), K(usr_read_size));
+    } else if (OB_FAIL(io_ctx.update_data_size(user_read_size))) {
+      LOG_WARN("fail to update data size", KR(ret), K(fd_), K(user_read_size));
     }
   }
-
+  LOG_DEBUG("inner_read_continuous_uncached_pages_", KR(ret),
+      K(block_index), K(begin_io_read_offset), K(end_io_read_offset), K(user_read_size), K(offset_in_block_buf));
   return ret;
 }
 

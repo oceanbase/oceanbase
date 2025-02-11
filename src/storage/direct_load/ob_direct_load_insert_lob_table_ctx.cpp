@@ -126,8 +126,10 @@ int ObDirectLoadInsertLobTabletContext::get_pk_interval(uint64_t count,
 }
 
 int ObDirectLoadInsertLobTabletContext::open_sstable_slice(const ObMacroDataSeq &start_seq,
+                                                           const int64_t slice_idx,
                                                            int64_t &slice_id)
 {
+  UNUSED(slice_idx);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -191,8 +193,10 @@ int ObDirectLoadInsertLobTabletContext::fill_lob_sstable_slice(ObIAllocator &all
   return ret;
 }
 
-int ObDirectLoadInsertLobTabletContext::close_sstable_slice(const int64_t slice_id)
+int ObDirectLoadInsertLobTabletContext::close_sstable_slice(const int64_t slice_id,
+                                                            const int64_t slice_idx)
 {
+  UNUSED(slice_idx);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

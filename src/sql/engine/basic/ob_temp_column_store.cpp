@@ -375,11 +375,11 @@ int ObTempColumnStore::ColumnBlock::get_next_batch(const IVectorPtrs &vectors,
   return ret;
 }
 
-int ObTempColumnStore::Iterator::init(ObTempColumnStore *store)
+int ObTempColumnStore::Iterator::init(ObTempColumnStore *store, const bool async)
 {
   reset();
   column_store_ = store;
-  return BlockReader::init(store);
+  return BlockReader::init(store, async);
 }
 
 int ObTempColumnStore::Iterator::nested_from_vector(ObExpr &expr, ObEvalCtx &ctx, const int64_t start_pos, const int64_t size)
@@ -590,6 +590,12 @@ void ObTempColumnStore::reset_batch_ctx()
     allocator_->free(batch_ctx_);
     batch_ctx_ = NULL;
   }
+}
+
+void ObTempColumnStore::reuse()
+{
+  cur_blk_ = NULL;
+  ObTempBlockStore::reuse();
 }
 
 int ObTempColumnStore::init(const ObExprPtrIArray &exprs,

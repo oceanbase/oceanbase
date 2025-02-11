@@ -1711,7 +1711,7 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),table_key_(),ddl_writer_(), task_id_(0), data_format_version_(0),
     direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1),  parallel_cnt_(0), cg_cnt_(0), kv_mgr_handle_(), need_delay_(false), allocator_(), redo_info_array_(),
-    with_cs_replica_(false), need_submit_io_(true)
+    with_cs_replica_(false), need_submit_io_(true), merge_slice_idx_(0)
 {
   redo_info_array_.set_attr(lib::ObMemAttr(MTL_ID(), "DdlRedoInfo"));
 }
@@ -1807,6 +1807,7 @@ void ObDDLRedoLogWriterCallback::reset()
   allocator_.reuse();
   with_cs_replica_ = false;
   need_submit_io_ = true;
+  merge_slice_idx_ = 0;
 }
 
 bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
@@ -1870,6 +1871,7 @@ int ObDDLRedoLogWriterCallback::write(const ObStorageObjectHandle &macro_handle,
       redo_info.cg_cnt_ = cg_cnt_;
     }
     if (is_column_group_info_valid()) {
+      redo_info.merge_slice_idx_ = merge_slice_idx_;
       redo_info.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;
     }

@@ -67,8 +67,7 @@ public:
     return sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC || ObRoaringBitmapSC == sc;
   }
 
-  static int build_cs_column_encoding_ctx(ObDictEncodingHashTable *ht,
-                                          const ObObjTypeStoreClass store_class,
+  static int build_cs_column_encoding_ctx(const ObObjTypeStoreClass store_class,
                                           const int64_t type_store_size,
                                           ObColumnCSEncodingCtx &ctx);
   static OB_INLINE bool is_int64_vec_value_tc(const VecValueTypeClass tc)
@@ -78,6 +77,17 @@ public:
       tc == VEC_TC_UINTEGER || tc == VEC_TC_BIT || tc == VEC_TC_ENUM_SET ||
       tc == VEC_TC_DOUBLE || tc == VEC_TC_FIXED_DOUBLE;
   }
+
+private:
+  static int build_column_encoding_ctx_with_hash_table_(
+      const ObObjTypeStoreClass store_class,
+      const int64_t precision_bytes,
+      ObColumnCSEncodingCtx &col_ctx);
+  static int build_column_encoding_ctx_with_col_datums_(
+      const ObObjTypeStoreClass store_class,
+      const int64_t precision_bytes,
+      ObColumnCSEncodingCtx &col_ctx);
+
 };
 
 

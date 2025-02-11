@@ -424,6 +424,10 @@ int ObCSVGeneralParser::init_opt_variables()
   if (OB_SUCC(ret)) {
     opt_param_.line_term_c_ = format_.line_term_str_.empty() ? INVALID_TERM_CHAR : format_.line_term_str_[0];
     opt_param_.field_term_c_ = format_.field_term_str_.empty() ? INVALID_TERM_CHAR : format_.field_term_str_[0];
+    opt_param_.max_term_ = std::max(static_cast<unsigned> (opt_param_.field_term_c_),
+                                    static_cast<unsigned> (opt_param_.line_term_c_));
+    opt_param_.min_term_ = std::min(static_cast<unsigned> (opt_param_.field_term_c_),
+                                    static_cast<unsigned> (opt_param_.line_term_c_));
     opt_param_.is_filling_zero_to_empty_field_ = lib::is_mysql_mode();
     opt_param_.is_line_term_by_counting_field_ =
         0 == format_.line_term_str_.compare(format_.field_term_str_);

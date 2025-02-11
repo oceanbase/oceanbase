@@ -320,7 +320,7 @@ int ObIndexBlockScanEstimator::estimate_excluded_border_result(const bool is_mul
 
           if (OB_ITER_END == ret && idx > 0) {
             int64_t ratio = 0;
-            if (0 == border_micro_index_info.get_row_count()) {
+            if (OB_ISNULL(border_micro_index_info.row_header_) || 0 == border_micro_index_info.get_row_count()) {
               ret = common::OB_INVALID_ARGUMENT;
               STORAGE_LOG(WARN, "Border micro index row count should not be 0", K(ret));
             } else if (((is_left && border_micro_index_info.is_data_block()) || !is_left) && is_major) {

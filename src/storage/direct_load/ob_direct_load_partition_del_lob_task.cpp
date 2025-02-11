@@ -149,14 +149,14 @@ int ObDirectLoadPartitionDelLobTask::process()
     if (OB_FAIL(row_iter.init(merge_ctx_, *origin_table_, table_data_desc_, sstable_array_, *range_,
                               parallel_idx_))) {
       LOG_WARN("fail to init row iter", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(data_seq_, slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(data_seq_, 0/*slice_idx*/, slice_id))) {
       LOG_WARN("fail to open lob sstable slice ", KR(ret), K(slice_id), K(data_seq_));
     } else {
       LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(parallel_idx_), K(data_seq_),
                K(slice_id), KPC(range_));
       if (OB_FAIL(insert_tablet_ctx->fill_sstable_slice(slice_id, row_iter, affected_rows))) {
         LOG_WARN("fail to fill lob sstable slice", KR(ret));
-      } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id))) {
+      } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
         LOG_WARN("fail to close sstable slice", KR(ret));
       }
       LOG_INFO("add lob meta sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_),

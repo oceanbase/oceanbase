@@ -107,6 +107,33 @@ private:
   const blocksstable::ObDatumRange *range_;
 };
 
+// 堆表列存表unrescan场景, 对于已有数据也要重新分配主键值
+class ObDirectLoadPartitionOriginDataUnrescanMergeTask : public ObDirectLoadIMergeTask
+{
+public:
+  ObDirectLoadPartitionOriginDataUnrescanMergeTask();
+  virtual ~ObDirectLoadPartitionOriginDataUnrescanMergeTask();
+  int init(ObDirectLoadTabletMergeCtx *merge_ctx,
+           ObDirectLoadOriginTable &origin_table,
+           const blocksstable::ObDatumRange &range,
+           int64_t parallel_idx);
+  int process() override;
+  void stop() override;
+  ObDirectLoadTabletMergeCtx *get_merge_ctx() override { return merge_ctx_; }
+  TO_STRING_KV(KPC_(merge_param), KPC_(merge_ctx), K_(parallel_idx));
+private:
+  observer::ObTableLoadTableCtx *ctx_;
+  const ObDirectLoadMergeParam *merge_param_;
+  ObDirectLoadTabletMergeCtx *merge_ctx_;
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
+  ObDirectLoadOriginTable *origin_table_;
+  const blocksstable::ObDatumRange *range_;
+  int64_t parallel_idx_;
+  int64_t affected_rows_;
+  bool is_stop_;
+  bool is_inited_;
+};
+
 class ObDirectLoadPartitionRangeMultipleMergeTask : public ObDirectLoadPartitionMergeTask
 {
 public:

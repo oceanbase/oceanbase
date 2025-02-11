@@ -48,6 +48,7 @@ protected:
 private:
   ObDatumRow start_row_;
   ObDatumRow end_row_;
+  ObSSTable *ddl_sstable_ptr_array_[1];
 };
 
 TestMultiVersionIndexSSTableEstimator::TestMultiVersionIndexSSTableEstimator()
@@ -79,6 +80,11 @@ void TestMultiVersionIndexSSTableEstimator::SetUp()
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
+  ddl_sstable_ptr_array_[0] = &partial_sstable_;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.reset();
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.sstable_array_ = ddl_sstable_ptr_array_;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.cnt_ = 1;
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.is_inited_ = true;
   prepare_context();
   prepare_query_param(false);
 }
@@ -86,6 +92,7 @@ void TestMultiVersionIndexSSTableEstimator::SetUp()
 void TestMultiVersionIndexSSTableEstimator::TearDown()
 {
   destroy_query_param();
+  tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.reset();
   tablet_handle_.get_obj()->ddl_kv_count_ = 0;
   tablet_handle_.get_obj()->ddl_kvs_ = nullptr;
   tablet_handle_.reset();
@@ -136,7 +143,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_minor_sstable_whole_range
   ObDatumRange range;
   range.set_whole_range();
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 
 }
@@ -146,7 +153,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_minor_sstable_range)
   ObDatumRange range;
   generate_range(100, -1, range);
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 }
 
@@ -155,7 +162,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_major_sstable_left_range)
   ObDatumRange range;
   generate_range(-1, 100, range);
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 }
 
@@ -164,7 +171,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_major_sstable_right_range
   ObDatumRange range;
   generate_range(row_cnt_ - 100, -1, range);
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 }
 
@@ -173,7 +180,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_major_sstable_middle_rang
   ObDatumRange range;
   generate_range(100, row_cnt_ - 100, range);
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 }
 
@@ -182,7 +189,7 @@ TEST_F(TestMultiVersionIndexSSTableEstimator, estimate_major_sstable_noexist_ran
   ObDatumRange range;
   generate_range(row_cnt_, row_cnt_, range);
   get_part_est(sstable_, range);
-  get_part_est(ddl_kv_, range);
+  get_part_est(ddl_memtable_, range);
   get_part_est(partial_sstable_, range);
 }
 

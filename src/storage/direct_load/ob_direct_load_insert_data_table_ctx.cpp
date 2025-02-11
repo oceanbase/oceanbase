@@ -228,6 +228,7 @@ void ObDirectLoadInsertDataTabletContext::cancel()
 //////////////////////// write interface ////////////////////////
 
 int ObDirectLoadInsertDataTabletContext::open_sstable_slice(const ObMacroDataSeq &start_seq,
+                                                            const int64_t slice_idx,
                                                             int64_t &slice_id)
 {
   int ret = OB_SUCCESS;
@@ -246,8 +247,11 @@ int ObDirectLoadInsertDataTabletContext::open_sstable_slice(const ObMacroDataSeq
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = context_id_;
     slice_info.total_slice_cnt_ = param_->parallel_; //mock total slice cnt
+    slice_info.slice_idx_ = slice_idx;
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
+    } else if (OB_FAIL(get_prefix_merge_slice_idx(slice_info.merge_slice_idx_))) {
+      LOG_WARN("get prefix merge slice idx failed", KR(ret));
     } else if (OB_FAIL(ddl_agent_.open_sstable_slice(start_seq, slice_info))) {
       LOG_WARN("fail to construct sstable slice writer", KR(ret), K(slice_info.data_tablet_id_));
     } else {
@@ -310,7 +314,8 @@ int ObDirectLoadInsertDataTabletContext::fill_sstable_slice(const int64_t &slice
   return ret;
 }
 
-int ObDirectLoadInsertDataTabletContext::close_sstable_slice(const int64_t slice_id)
+int ObDirectLoadInsertDataTabletContext::close_sstable_slice(const int64_t slice_id,
+                                                             const int64_t slice_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -328,8 +333,49 @@ int ObDirectLoadInsertDataTabletContext::close_sstable_slice(const int64_t slice
     if (OB_FAIL(
           ddl_agent_.close_sstable_slice(slice_info, nullptr /*insert_monitor*/, unused_seq))) {
       LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id), K(tablet_id_));
+    } else if (OB_FAIL(record_closed_slice(slice_idx))) {
+      LOG_WARN("record closed slice failed", KR(ret), K(slice_idx));
     }
   }
+  return ret;
+}
+
+int ObDirectLoadInsertDataTabletContext::record_closed_slice(const int64_t slice_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    if (OB_FAIL(closed_slices_.push_back(slice_idx))) {
+      LOG_WARN("push back slice idx failed", KR(ret));
+    } else {
+      ob_sort(closed_slices_.begin(), closed_slices_.end());
+    }
+  }
+  LOG_TRACE("push slice idx", KR(ret), K(slice_idx), K(closed_slices_));
+  return ret;
+}
+
+int ObDirectLoadInsertDataTabletContext::get_prefix_merge_slice_idx(int64_t &slice_idx)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_continued_idx = -1;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), KP(this));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < closed_slices_.count(); ++i) {
+      if (i != closed_slices_.at(i)) {
+        max_continued_idx = 0 == i ? 0 : i - 1;
+        break;
+      }
+    }
+    slice_idx = max_continued_idx < 0 ? max(0, closed_slices_.count() - 1) : max_continued_idx;
+  }
+  LOG_TRACE("get merge slice idx", KR(ret), K(max_continued_idx), K(slice_idx), K(closed_slices_.count()));
   return ret;
 }
 

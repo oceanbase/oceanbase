@@ -487,8 +487,8 @@ public:
   ~ObIndexBlockRebuilder();
   int init(
       ObSSTableIndexBuilder &sstable_builder,
-      const int64_t *task_idx = nullptr,
-      const bool is_ddl_merge = false,
+      const int64_t *task_idx,
+      const ObITable::TableKey &table_key,
       common::ObIArray<ObIODevice *> *device_handle_array = nullptr);
   int append_macro_row(
       const char *buf,
@@ -507,7 +507,8 @@ public:
   int get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const;
 
 private:
-  void set_task_type(const bool is_cg, const bool is_ddl_merge, const common::ObIArray<ObIODevice *> *device_handle_array);
+  static bool use_absolute_offset(const ObITable::TableKey &table_key);
+  void set_task_type(const bool is_cg, const bool use_absolute_offset, const common::ObIArray<ObIODevice *> *device_handle_array);
   OB_INLINE bool need_index_tree_dumper() const;
   int check_and_get_abs_offset(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset, int64_t &abs_offset);
   int inner_append_macro_row(

@@ -139,7 +139,7 @@ public:
                  cur_blk_id_(0), rest_row_cnt_(0), read_pos_(0), vectors_(NULL) {}
     virtual ~Iterator() {}
 
-    int init(ObTempColumnStore *store);
+    int init(ObTempColumnStore *store, const bool async = true);
     inline bool has_next() const { return cur_blk_id_ < get_row_cnt(); }
     inline int64_t get_row_cnt() const { return column_store_->get_row_cnt(); }
     inline int64_t get_col_cnt() const { return column_store_->get_col_cnt(); }
@@ -200,6 +200,7 @@ public:
 
   void reset();
   void reset_batch_ctx();
+  void reuse();
 
   int init(const ObExprPtrIArray &exprs,
            const int64_t max_batch_size,
@@ -222,9 +223,9 @@ public:
   int init_batch_ctx(const ObExprPtrIArray &exprs);
   int init_batch_ctx(const IVectorPtrs &vectors);
 
-  int begin(Iterator &it)
+  int begin(Iterator &it, const bool async = true)
   {
-    return it.init(this);
+    return it.init(this, async);
   }
   int add_batch(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &ctx,
                 const ObBatchRows &brs, int64_t &stored_rows_count);

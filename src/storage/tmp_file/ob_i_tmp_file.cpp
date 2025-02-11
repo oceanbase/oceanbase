@@ -77,25 +77,25 @@ int ObTmpFileInfo::init(
   }
 
   // write info
-  write_req_cnt_ = write_req_cnt;
-  unaligned_write_req_cnt_ = unaligned_write_req_cnt;
-  write_persisted_tail_page_cnt_ = write_persisted_tail_page_cnt;
-  lack_page_cnt_ = lack_page_cnt;
-  last_modify_ts_ = last_modify_ts;
+  write_info_.write_req_cnt_ = write_req_cnt;
+  write_info_.unaligned_write_req_cnt_ = unaligned_write_req_cnt;
+  write_info_.write_persisted_tail_page_cnt_ = write_persisted_tail_page_cnt;
+  write_info_.lack_page_cnt_ = lack_page_cnt;
+  write_info_.last_modify_ts_ = last_modify_ts;
 
   // read info
-  read_req_cnt_ = read_req_cnt;
-  unaligned_read_req_cnt_ = unaligned_read_req_cnt;
-  total_truncated_page_read_cnt_ = total_truncated_page_read_cnt;
-  total_kv_cache_page_read_cnt_ = total_kv_cache_page_read_cnt;
-  total_uncached_page_read_cnt_ = total_uncached_page_read_cnt;
-  total_wbp_page_read_cnt_ = total_wbp_page_read_cnt;
-  truncated_page_read_hits_ = truncated_page_read_hits;
-  kv_cache_page_read_hits_ = kv_cache_page_read_hits;
-  uncached_page_read_hits_ = uncached_page_read_hits;
-  wbp_page_read_hits_ = wbp_page_read_hits;
-  total_read_size_ = total_read_size;
-  last_access_ts_ = last_access_ts;
+  read_info_.read_req_cnt_ = read_req_cnt;
+  read_info_.unaligned_read_req_cnt_ = unaligned_read_req_cnt;
+  read_info_.total_truncated_page_read_cnt_ = total_truncated_page_read_cnt;
+  read_info_.total_kv_cache_page_read_cnt_ = total_kv_cache_page_read_cnt;
+  read_info_.total_uncached_page_read_cnt_ = total_uncached_page_read_cnt;
+  read_info_.total_wbp_page_read_cnt_ = total_wbp_page_read_cnt;
+  read_info_.truncated_page_read_hits_ = truncated_page_read_hits;
+  read_info_.kv_cache_page_read_hits_ = kv_cache_page_read_hits;
+  read_info_.uncached_page_read_hits_ = uncached_page_read_hits;
+  read_info_.wbp_page_read_hits_ = wbp_page_read_hits;
+  read_info_.total_read_size_ = total_read_size;
+  read_info_.last_access_ts_ = last_access_ts;
   return ret;
 }
 
@@ -116,13 +116,21 @@ void ObTmpFileInfo::reset()
   birth_ts_ = -1;
   tmp_file_ptr_ = nullptr;
   label_.reset();
-  // write info
+  write_info_.reset();
+  read_info_.reset();
+}
+
+void ObTmpFileInfo::ObTmpFileWriteInfo::reset()
+{
   write_req_cnt_ = 0;
   unaligned_write_req_cnt_ = 0;
   write_persisted_tail_page_cnt_ = 0;
   lack_page_cnt_ = 0;
   last_modify_ts_ = -1;
-  // read info
+}
+
+void ObTmpFileInfo::ObTmpFileReadInfo::reset()
+{
   read_req_cnt_ = 0;
   unaligned_read_req_cnt_ = 0;
   total_truncated_page_read_cnt_ = 0;

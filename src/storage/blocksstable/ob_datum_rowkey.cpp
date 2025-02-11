@@ -560,9 +560,9 @@ DEF_TO_STRING(ObCommonDatumRowkey)
   J_KV(K_(type), K_(key_ptr));
   J_COMMA();
   if (is_compact_rowkey()) {
-    KPC_(rowkey);
+    J_KV(KPC_(rowkey));
   } else if (is_discrete_rowkey()) {
-    KPC_(discrete_rowkey);
+    J_KV(KPC_(discrete_rowkey));
   }
   J_OBJ_END();
   return pos;

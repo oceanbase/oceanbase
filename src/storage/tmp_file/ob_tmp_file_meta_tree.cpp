@@ -2150,6 +2150,13 @@ int ObSharedNothingTmpFileMetaTree::release_tmp_file_page_(
     stat_info_.all_type_flush_page_released_cnt_ += page_num;
   }
 
+  // ignore ret
+  for (int64_t i = 0; i < page_num; ++i) {
+    int64_t page_id = begin_page_id + i;
+    ObTmpPageCacheKey key(block_index, page_id, MTL_ID());
+    ObTmpPageCache::get_instance().erase(key);
+  }
+
   return ret;
 }
 

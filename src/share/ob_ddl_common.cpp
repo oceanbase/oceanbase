@@ -3425,6 +3425,12 @@ bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
   return (GCTX.is_shared_storage_mode() && data_format_version >= DATA_VERSION_4_3_3_0);
 }
 
+bool ObDDLUtil::need_rescan_column_store(const int64_t data_format_version)
+{
+  return true; // force rescan now
+  // return GCTX.is_shared_storage_mode() || data_format_version <= DATA_VERSION_4_3_4_0; //TODO@wenqu: fix data version
+}
+
 int ObDDLUtil::init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq)
 {
   int ret = OB_SUCCESS;

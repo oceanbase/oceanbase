@@ -70,6 +70,7 @@ public:
   ObDirectLoadInsertTableBatchRowDirectWriter()
     : ObDirectLoadInsertTableBatchRowBufferWriter(),
       dml_row_handler_(nullptr),
+      job_stat_(nullptr),
       write_ctx_(),
       direct_datum_rows_(),
       expect_column_count_(0),
@@ -80,7 +81,8 @@ public:
   int init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
            const ObDirectLoadInsertTableRowInfo &row_info,
            ObDirectLoadDMLRowHandler *dml_row_handler,
-           common::ObIAllocator *lob_allocator);
+           common::ObIAllocator *lob_allocator,
+           sql::ObLoadDataStat *job_stat = nullptr);
   int append_batch(const IVectorPtrs &vectors, const int64_t batch_size);
   int append_row(const IVectorPtrs &vectors, const int64_t row_idx);
   int append_row(const ObDirectLoadDatumRow &datum_row);
@@ -95,6 +97,7 @@ private:
 
 private:
   ObDirectLoadDMLRowHandler *dml_row_handler_;
+  sql::ObLoadDataStat *job_stat_;
   ObDirectLoadInsertTabletWriteCtx write_ctx_;
   blocksstable::ObBatchDatumRows direct_datum_rows_;
   int64_t expect_column_count_;

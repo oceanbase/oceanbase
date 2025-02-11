@@ -78,7 +78,8 @@ public:
                K_(trans_id),
                KPC_(data_macro_meta),
                KP_(buf),
-               K_(size));
+               K_(size),
+               K_(merge_slice_idx));
 public:
   ObArenaAllocator allocator_; // used to hold data_macro_meta_
   ObDDLMacroHandle block_handle_;
@@ -92,6 +93,7 @@ public:
   blocksstable::ObDataMacroBlockMeta *data_macro_meta_;
   const char* buf_; // only used for warm up
   int64_t size_;
+  int64_t merge_slice_idx_;
 };
 
 class ObDDLKV;
@@ -109,7 +111,7 @@ public:
   // for incremental direct load
   int set_obj(ObTableHandleV2 &table_handle);
   void reset();
-  TO_STRING_KV(KP_(ddl_kv));
+  DECLARE_TO_STRING;
 private:
   ObDDLKV *ddl_kv_;
   ObTenantMetaMemMgr *t3m_;

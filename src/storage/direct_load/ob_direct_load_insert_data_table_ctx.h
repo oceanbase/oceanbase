@@ -42,14 +42,19 @@ private:
 
   //////////////////////// write interface ////////////////////////
 public:
-  int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id) override;
+  int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq,
+                         const int64_t slice_idx,
+                         int64_t &slice_id) override;
   int fill_sstable_slice(const int64_t &slice_id, ObIStoreRowIterator &iter,
                          int64_t &affected_rows) override;
   int fill_sstable_slice(const int64_t &slice_id,
                          const blocksstable::ObBatchDatumRows &datum_rows) override;
-  int close_sstable_slice(const int64_t slice_id) override;
+  int close_sstable_slice(const int64_t slice_id, const int64_t slice_idx) override;
 
 private:
+  int record_closed_slice(const int64_t slice_idx);
+  int get_prefix_merge_slice_idx(int64_t &slice_idx);
+
   // for ObDirectLoadInsertLobTabletContext
   int open_lob_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id);
   int fill_lob_sstable_slice(ObIAllocator &allocator, const int64_t &lob_slice_id,

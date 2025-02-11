@@ -51,41 +51,69 @@ int ObPreviousCSEncoding::init(const int32_t col_count)
   return ret;
 }
 
-int ObPreviousCSEncoding::check_and_set_state(const int32_t column_idx,
-                                              const ObColumnEncodingIdentifier identifier,
-                                              const int64_t cur_block_count)
+int ObPreviousCSEncoding::update_column_detect_info(const int32_t column_idx,
+                                                 const ObColumnEncodingIdentifier identifier,
+                                                 const int64_t cur_block_count,
+                                                 const int64_t major_working_cluster_version)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObPreviousColumnEncoding &previous_info = previous_encoding_of_columns_.at(column_idx);
-    if (previous_info.is_valid_) {
-      if (previous_info.identifier_ != identifier) {
-        previous_info.is_valid_ = false;
+    ObPreviousColumnEncoding &previous = previous_encoding_of_columns_.at(column_idx);
+    if (previous.is_stream_encoding_type_valid_) {
+      if (previous.identifier_ != identifier) {
+        previous.is_stream_encoding_type_valid_ = false;
       } else {
-        if (0 == cur_block_count % previous_info.redetect_cycle_) {
-          previous_info.need_redetect_ = true;
+        if (previous.force_no_redetect_) {
+          previous.stream_need_redetect_ = false;
+        } else if (0 == cur_block_count % previous.stream_redetect_cycle_) {
+          previous.stream_need_redetect_ = true;
         } else {
-          previous_info.need_redetect_ = false;
-        }
-        if (previous_info.force_no_redetect_) {
-          previous_info.need_redetect_ = false;
+          previous.stream_need_redetect_ = false;
         }
       }
     }
-    previous_info.cur_block_count_ = cur_block_count;
+
+    const int32_t max_redect_cycle = 128;
+    const int32_t min_redect_cycle = 16;
+
+    if (major_working_cluster_version <= DATA_VERSION_4_3_5_0) {
+      // For compatibility, awlays redect column encoding type when version <= 435bp0
+      previous.column_need_redetect_ = true;
+    } else  if (previous.is_column_encoding_type_valid()) {
+      if (previous.force_no_redetect_) {
+        previous.column_need_redetect_ = false;
+      } else if (previous.identifier_.column_encoding_type_ == identifier.column_encoding_type_) {
+        if (previous.column_need_redetect_) { // has done redection and column encoding type not changed
+          previous.column_need_redetect_ = false;
+          previous.column_redetect_cycle_ = previous.column_redetect_cycle_ << 1;
+          previous.column_redetect_cycle_ = std::min(previous.column_redetect_cycle_, max_redect_cycle);
+        } else if (0 == cur_block_count % previous.column_redetect_cycle_) {
+          previous.column_need_redetect_ = true;
+        }
+      } else {
+        previous.identifier_.column_encoding_type_ = identifier.column_encoding_type_;
+        previous.column_redetect_cycle_ = min_redect_cycle;
+      }
+    } else {
+      previous.identifier_.column_encoding_type_ = identifier.column_encoding_type_;
+      previous.column_redetect_cycle_ = min_redect_cycle;
+    }
+
+    previous.column_idx_ = column_idx;
+    previous.cur_block_count_ = cur_block_count;
   }
   return ret;
 }
 
-const int32_t ObPreviousCSEncoding::MAX_REDETECT_CYCLE = 64;
 
-int ObPreviousCSEncoding::update_column_encoding_types(
+int ObPreviousCSEncoding::update_stream_detect_info(
                         const int32_t column_idx,
                         const ObColumnEncodingIdentifier identifier,
                         const ObIntegerStream::EncodingType *stream_types,
+                        const int64_t major_working_cluster_version,
                         bool force_no_redetect)
 {
   int ret = OB_SUCCESS;
@@ -96,35 +124,52 @@ int ObPreviousCSEncoding::update_column_encoding_types(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumnet", KR(ret), KP(stream_types), K(identifier));
   } else {
+    int32_t max_redect_cycle = 0;
+    int32_t min_redect_cycle = 0;
+    if (major_working_cluster_version <= DATA_VERSION_4_3_5_0) {
+      max_redect_cycle = 64;
+      min_redect_cycle = 2;
+    } else {
+      max_redect_cycle = 128;
+      min_redect_cycle = 16;
+    }
     ObPreviousColumnEncoding &previous = previous_encoding_of_columns_.at(column_idx);
-    if (previous.is_valid_ && previous.identifier_ != identifier) {
+    if (previous.is_stream_encoding_type_valid_ && previous.identifier_ != identifier) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("identifier must be same", KR(ret), K(column_idx), K(identifier), K(previous));
-    } else if (previous.is_valid_) {
-      bool stream_encoding_type_not_change = true;
-      for (int32_t i = 0; i < identifier.int_stream_count_; i++) {
-        if (previous.stream_encoding_types_[i] != stream_types[i]) {
-          stream_encoding_type_not_change = false;
-          break;
-        }
-      }
-      if (stream_encoding_type_not_change) {
-        previous.redetect_cycle_ = previous.redetect_cycle_ << 1;
-        previous.redetect_cycle_ = std::min(previous.redetect_cycle_, MAX_REDETECT_CYCLE);
+    } else if (previous.is_stream_encoding_type_valid_) {
+      if (major_working_cluster_version > DATA_VERSION_4_3_5_0 && !previous.stream_need_redetect_) {
+        // Previous stream encoding is valid and no redetection occurs, which represent the previous
+        // encoding has been reused. There is no need to increase the redect_cycle. We fix this case
+        // in OB435bp1.
       } else {
+        bool stream_encoding_type_not_change = true;
         for (int32_t i = 0; i < identifier.int_stream_count_; i++) {
-          previous.stream_encoding_types_[i] = stream_types[i];
+          if (previous.stream_encoding_types_[i] != stream_types[i]) {
+            stream_encoding_type_not_change = false;
+            break;
+          }
         }
-        previous.redetect_cycle_ = 2;
+        if (stream_encoding_type_not_change) {
+          previous.stream_redetect_cycle_ = previous.stream_redetect_cycle_ << 1;
+          previous.stream_redetect_cycle_ = std::min(previous.stream_redetect_cycle_, max_redect_cycle);
+        } else {
+          for (int32_t i = 0; i < identifier.int_stream_count_; i++) {
+            previous.stream_encoding_types_[i] = stream_types[i];
+          }
+          previous.stream_redetect_cycle_ = min_redect_cycle;
+        }
       }
       previous.force_no_redetect_ = force_no_redetect;
     } else {
+      // column_encoding_type_ has been update in check_and_set_identifier, so must be equal here
+      OB_ASSERT(previous.identifier_.column_encoding_type_ == identifier.column_encoding_type_);
       previous.identifier_ = identifier;
       for (int32_t i = 0; i < identifier.int_stream_count_; i++) {
         previous.stream_encoding_types_[i] = stream_types[i];
       }
-      previous.is_valid_ = true;
-      previous.redetect_cycle_ = 2;
+      previous.is_stream_encoding_type_valid_ = true;
+      previous.stream_redetect_cycle_ = min_redect_cycle;
       previous.force_no_redetect_ = force_no_redetect;
     }
   }
@@ -132,21 +177,28 @@ int ObPreviousCSEncoding::update_column_encoding_types(
   return ret;
 }
 
-void ObColumnCSEncodingCtx::try_set_need_sort(const ObCSColumnHeader::Type type, const int64_t column_index,
-                                              const bool micro_block_has_lob_out_row)
+void ObColumnCSEncodingCtx::try_set_need_sort(const ObCSColumnHeader::Type type,
+                                              const int64_t column_index,
+                                              const bool micro_block_has_lob_out_row,
+                                              const int64_t major_working_cluster_version)
 {
-  ObObjTypeClass col_tc = encoding_ctx_->col_descs_->at(column_index).col_type_.get_type_class();
-  ObObjTypeStoreClass col_sc = get_store_class_map()[col_tc];
-  const bool encoding_type_need_sort = (type == ObCSColumnHeader::INT_DICT || type == ObCSColumnHeader::STR_DICT);
-  const bool col_is_lob_out_row = micro_block_has_lob_out_row && store_class_might_contain_lob_locator(col_sc);
-  if (!encoding_type_need_sort) {
-    need_sort_ = false;
-  } else if (col_is_lob_out_row) {
-    need_sort_ = false;
-  } else if (ObCSEncodingUtil::is_no_need_sort_lob(col_sc)) {
-    need_sort_ = false;
+  if (major_working_cluster_version <= DATA_VERSION_4_3_5_0) {
+    ObObjTypeClass col_tc = encoding_ctx_->col_descs_->at(column_index).col_type_.get_type_class();
+    ObObjTypeStoreClass col_sc = get_store_class_map()[col_tc];
+    const bool encoding_type_need_sort = (type == ObCSColumnHeader::INT_DICT || type == ObCSColumnHeader::STR_DICT);
+    const bool col_is_lob_out_row = micro_block_has_lob_out_row && store_class_might_contain_lob_locator(col_sc);
+    if (!encoding_type_need_sort) {
+      need_sort_ = false;
+    } else if (col_is_lob_out_row) {
+      need_sort_ = false;
+    } else if (ObCSEncodingUtil::is_no_need_sort_lob(col_sc)) {
+      need_sort_ = false;
+    } else {
+      need_sort_ = true;
+    }
   } else {
-    need_sort_ = true;
+    // only sort int dict when version > DATA_VERSION_4_3_5_0
+    need_sort_ = (type == ObCSColumnHeader::INT_DICT);
   }
 }
 

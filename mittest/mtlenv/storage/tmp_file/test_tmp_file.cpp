@@ -560,6 +560,132 @@ TEST_F(TestTmpFile, test_cached_read)
   STORAGE_LOG(INFO, "=======================test_cached_read end=======================");
 }
 
+TEST_F(TestTmpFile, test_prefetch_read)
+{
+  STORAGE_LOG(INFO, "=======================test_prefetch_read begin=======================");
+  int ret = OB_SUCCESS;
+  const int64_t write_size = 9 * 1024 * 1024 + 37 * 1024; // 9MB + 37KB, that is, 256 * 4 + 132 + 0.625 pages
+  ObTmpWriteBufferPool &wbp = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.write_buffer_pool_;
+  wbp.default_wbp_memory_limit_ = 10 * WBP_BLOCK_SIZE;
+  const int64_t wbp_mem_limit = wbp.get_memory_limit();
+  char *write_buf = new char [write_size];
+  for (int64_t i = 0; i < write_size;) {
+    int64_t random_length = generate_random_int(1024, 8 * 1024);
+    int64_t random_int = generate_random_int(0, 256);
+    for (int64_t j = 0; j < random_length && i + j < write_size; ++j) {
+      write_buf[i + j] = random_int;
+    }
+    i += random_length;
+  }
+
+  int64_t dir = -1;
+  int64_t fd = -1;
+  ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
+  std::cout << "open temporary file: " << fd << std::endl;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  tmp_file::ObSNTmpFileHandle file_handle;
+  ret = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file(fd, file_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = SMALL_WBP_IDX_CACHE_MAX_CAPACITY;
+
+  ObTmpFileIOInfo io_info;
+  io_info.fd_ = fd;
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+
+  ObTmpFilePageCacheController &pc_ctrl = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_page_cache_controller();
+  ATOMIC_SET(&pc_ctrl.flush_all_data_, true);
+
+  // 1. Write data and wait flushing over
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  sleep(2);
+
+  ObTmpFileEvictionManager &evict_mgr = MTL(ObTenantTmpFileManager *)->get_sn_file_manager().page_cache_controller_.evict_mgr_;
+  const int64_t page_num = write_size / ObTmpFileGlobal::PAGE_SIZE;
+  int64_t actual_evict_page_num = 0;
+  ASSERT_EQ(OB_SUCCESS, evict_mgr.evict(page_num * 2, actual_evict_page_num)); // evict all pages
+  ASSERT_EQ(file_handle.get()->cached_page_nums_, 0);
+
+  // 2. enable prefetch and read data from disk
+  ObTmpFileIOHandle handle;
+  int64_t read_size = 0;
+  int64_t read_offset = 0;
+  char *read_buf = nullptr;
+  const int64_t BLOCK_NUM = upper_align(write_size, ObTmpFileGlobal::SN_BLOCK_SIZE) / ObTmpFileGlobal::SN_BLOCK_SIZE;
+  for (int i = 0; i < BLOCK_NUM + 1; ++i) {
+    if (i != BLOCK_NUM) {
+      read_size = ObTmpFileGlobal::PAGE_SIZE / 2;
+      read_offset = i * ObTmpFileGlobal::SN_BLOCK_SIZE;
+    } else { // last unfinished page occupies 1 data item, and co-occupy the same macro block with prev data item
+      read_size = 10;
+      read_offset = write_size - 20;
+    }
+    read_buf = new char [read_size];
+    io_info.buf_ = read_buf;
+    io_info.size_ = read_size;
+    io_info.disable_page_cache_ = false;
+    io_info.disable_block_cache_ = true;
+    io_info.prefetch_ = true;
+    ret = MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, read_offset, handle);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(io_info.size_, handle.get_done_size());
+    int cmp = memcmp(handle.get_buffer(), write_buf + read_offset, io_info.size_);
+    ASSERT_EQ(0, cmp);
+    handle.reset();
+    delete[] read_buf;
+  }
+
+  // 3. check ALL pages are present in the kv_cache
+  common::ObArray<ObSharedNothingTmpFileDataItem> data_items;
+  ret = file_handle.get()->meta_tree_.search_data_items(0, write_size, data_items);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(false, data_items.empty());
+  int64_t previous_virtual_page_id = data_items.at(0).virtual_page_id_;
+  for (int64_t i = 0; i < data_items.count() && OB_SUCC(ret); ++i) {
+    const ObSharedNothingTmpFileDataItem &data_item = data_items.at(i);
+    LOG_INFO("data item in checking kv cache", K(i), K(data_item));
+    if (i > 0) {
+      ASSERT_GT(data_item.virtual_page_id_, previous_virtual_page_id);
+      previous_virtual_page_id = data_item.virtual_page_id_;
+    }
+    for (int64_t j = 0; j < data_item.physical_page_num_; j++) {
+      int64_t physical_page_id = data_item.physical_page_id_ + j;
+      tmp_file::ObTmpPageCacheKey key(data_item.block_index_, physical_page_id, MTL_ID());
+      tmp_file::ObTmpPageValueHandle handle;
+      ret = tmp_file::ObTmpPageCache::get_instance().get_page(key, handle);
+      if (OB_FAIL(ret)) {
+        _OB_LOG(INFO, "get cached page failed, i:%ld, block_index:%ld, physical_page_id:%ld\n", i, data_item.block_index_, physical_page_id);
+        printf("get cached page failed, i:%ld, block_index:%ld, physical_page_id:%ld\n", i, data_item.block_index_, physical_page_id);
+        ob_abort();
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
+      int64_t cmp_size = (i == data_items.count() - 1 && j == data_item.physical_page_num_ - 1 ?
+                          write_size % ObTmpFileGlobal::PAGE_SIZE :
+                          ObTmpFileGlobal::PAGE_SIZE);
+      int cmp = memcmp(handle.value_->get_buffer(), write_buf + (data_item.virtual_page_id_ + j) * ObTmpFileGlobal::PAGE_SIZE, cmp_size);
+      EXPECT_EQ(0, cmp);
+      if (0 != cmp) {
+        LOG_ERROR("cached page data not match", K(i), K(j), K(data_items.count() - 1), K(data_item.physical_page_num_ - 1), K(cmp_size), K(data_item));
+        ob_abort();
+      }
+    }
+  }
+
+  file_handle.reset();
+  ret = MTL(ObTenantTmpFileManager *)->remove(fd);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  check_final_status();
+
+  STORAGE_LOG(INFO, "=======================test_prefetch_read end=======================");
+}
+
 // 1. append write a uncompleted tail page in memory
 // 2. append write a uncompleted tail page in disk
 TEST_F(TestTmpFile, test_write_tail_page)

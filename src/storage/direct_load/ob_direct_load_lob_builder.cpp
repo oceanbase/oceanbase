@@ -85,6 +85,7 @@ int ObDirectLoadLobBuilder::init_sstable_slice_ctx()
   if (OB_FAIL(insert_lob_tablet_ctx_->get_write_ctx(write_ctx_))) {
     LOG_WARN("fail to get write ctx", KR(ret));
   } else if (OB_FAIL(insert_lob_tablet_ctx_->open_sstable_slice(write_ctx_.start_seq_,
+                                                                0/*slice_idx*/,
                                                                 current_lob_slice_id_))) {
     LOG_WARN("fail to construct sstable slice", KR(ret));
   }
@@ -94,7 +95,7 @@ int ObDirectLoadLobBuilder::init_sstable_slice_ctx()
 int ObDirectLoadLobBuilder::switch_sstable_slice()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_))) {
+  if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
     LOG_WARN("fail to close sstable slice", KR(ret));
   } else if (OB_FAIL(init_sstable_slice_ctx())) {
     LOG_WARN("fail to init sstable slice ctx", KR(ret));
@@ -412,7 +413,7 @@ int ObDirectLoadLobBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet lob builder is closed", KR(ret));
   } else {
-    if (!insert_tablet_ctx_->get_is_index_table() && OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_))) {
+    if (!insert_tablet_ctx_->get_is_index_table() && OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
       LOG_WARN("fail to close sstable slice ", KR(ret));
     } else {
       current_lob_slice_id_ = 0;

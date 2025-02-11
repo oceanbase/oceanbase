@@ -84,7 +84,8 @@ ObDDLMacroBlock::ObDDLMacroBlock()
     trans_id_(),
     data_macro_meta_(nullptr),
     buf_(nullptr),
-    size_(0)
+    size_(0),
+    merge_slice_idx_(0)
 {
 }
 
@@ -111,6 +112,7 @@ int ObDDLMacroBlock::deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator 
     dst_block.end_row_id_ = end_row_id_;
     dst_block.buf_ = nullptr;
     dst_block.size_ = 0;
+    dst_block.merge_slice_idx_ = merge_slice_idx_;
   }
 
   if (OB_FAIL(ret) || !GCTX.is_shared_storage_mode() || ObDDLMacroBlockType::DDL_MB_INDEX_TYPE != block_type_) {
@@ -194,6 +196,15 @@ ObDDLKVHandle &ObDDLKVHandle::operator =(const ObDDLKVHandle &other)
     }
   }
   return *this;
+}
+
+DEF_TO_STRING(ObDDLKVHandle)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(ddl_kv), KP_(t3m), KP_(allocator));
+  J_OBJ_END();
+  return pos;
 }
 
 bool ObDDLKVHandle::is_valid() const

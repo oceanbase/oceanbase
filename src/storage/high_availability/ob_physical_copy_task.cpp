@@ -195,7 +195,7 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
     } else if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, &task_idx_, copy_ctx_->table_key_.is_ddl_merge_sstable()))) {
+            *copy_ctx_->sstable_index_builder_, &task_idx_, copy_ctx_->table_key_))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));

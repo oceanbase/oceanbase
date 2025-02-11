@@ -192,6 +192,7 @@ public:
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
   inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
   const compaction::ObMergeBlockInfo& get_merge_block_info() const { return merge_block_info_; }
+  ObIMacroBlockFlushCallback *get_flush_callback() { return callback_; }
   void inc_incremental_row_count() { ++merge_block_info_.incremental_row_count_; }
 protected:
   virtual int build_micro_block();
@@ -283,7 +284,7 @@ private:
   common::ObArray<uint32_t> micro_rowkey_hashs_;
   blocksstable::ObDatumRow datum_row_;
   blocksstable::ObDatumRow *aggregated_row_;
-  ObSkipIndexAggregator *data_aggregator_;
+  ObSkipIndexDataAggregator *data_aggregator_;
   ObIMacroBlockFlushCallback *callback_;
   ObIODevice *device_handle_;
   ObDataIndexBlockBuilder *builder_;

@@ -91,11 +91,13 @@ ObDirectLoadInsertTabletContext::ObDirectLoadInsertTabletContext()
     tablet_id_(),
     pk_tablet_id_(),
     lob_tablet_ctx_(nullptr),
+    slice_idx_(0),
     start_seq_(),
     pk_cache_(),
     row_count_(0),
     is_inited_(false)
 {
+  closed_slices_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadInsertTabletContext::~ObDirectLoadInsertTabletContext() {}
@@ -149,8 +151,10 @@ int ObDirectLoadInsertTabletContext::get_write_ctx(ObDirectLoadInsertTabletWrite
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = start_seq_.macro_data_seq_;
+      write_ctx.slice_idx_ = slice_idx_;
       // the macro block may not be recycled when load data failed in shared storage mode, TODO(jianming)
       start_seq_.macro_data_seq_ += WRITE_BATCH_SIZE;
+      ++slice_idx_;
     }
   }
   return ret;

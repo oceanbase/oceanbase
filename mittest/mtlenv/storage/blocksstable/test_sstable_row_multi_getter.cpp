@@ -134,7 +134,7 @@ void TestSSTableRowMultiGetter::test_one_case(
     }
     if (part_rowkeys.count() > 0) {
       ASSERT_EQ(OB_SUCCESS, getter.init(iter_param_, context_, &sstable_, &part_rowkeys));
-      ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_kv_, &part_rowkeys));
+      ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_memtable_, &part_rowkeys));
       for (int64_t i = 0; i < part_rowkeys.count(); ++i) {
         ret = getter.inner_get_next_row(prow);
         ASSERT_EQ(OB_SUCCESS, ret);
@@ -152,7 +152,7 @@ void TestSSTableRowMultiGetter::test_one_case(
 
   // in io
   ASSERT_EQ(OB_SUCCESS, getter.init(iter_param_, context_, &sstable_, &rowkeys));
-  ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_kv_, &rowkeys));
+  ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_memtable_, &rowkeys));
   for (int64_t i = 0; i < seeds.count(); ++i) {
     ret = getter.inner_get_next_row(prow);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -177,7 +177,7 @@ void TestSSTableRowMultiGetter::test_one_case(
   // in cache
   if (hit_mode == HIT_ALL) {
     ASSERT_EQ(OB_SUCCESS, getter.init(iter_param_, context_, &sstable_, &rowkeys));
-    ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_kv_, &rowkeys));
+    ASSERT_EQ(OB_SUCCESS, kv_getter.init(iter_param_, context_, &ddl_memtable_, &rowkeys));
     for (int64_t i = 0; i < seeds.count(); ++i) {
       ret = getter.inner_get_next_row(prow);
       ret = kv_getter.inner_get_next_row(kv_prow);

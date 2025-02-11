@@ -177,9 +177,9 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
       LOG_WARN("insert tablet ctx is nullptr", KR(ret));
     } else if (OB_FAIL(insert_tablet_ctx->open())) {
       LOG_WARN("fail to open tablet ctx", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, 0/*slice_idx*/, slice_id))) {
       LOG_WARN("fail to open sstable slice", KR(ret), K(block_start_seq), K(slice_id));
-    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
       LOG_WARN("fail to close sstable slice", KR(ret), K(slice_id));
     } else if (OB_FAIL(insert_tablet_ctx->close())) {
       LOG_WARN("fail to close tablet ctx", KR(ret));

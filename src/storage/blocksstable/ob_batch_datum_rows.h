@@ -25,7 +25,11 @@ namespace blocksstable
 class ObBatchDatumRows
 {
 public:
-  ObBatchDatumRows() : row_count_(0) {}
+  ObBatchDatumRows()
+    : row_count_(0)
+  {
+    vectors_.set_tenant_id(MTL_ID());
+  }
   ~ObBatchDatumRows() {}
   void reset();
 

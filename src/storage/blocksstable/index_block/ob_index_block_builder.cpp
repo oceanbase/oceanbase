@@ -3694,16 +3694,16 @@ void ObIndexBlockRebuilder::reset()
 
 void ObIndexBlockRebuilder::set_task_type(
     const bool is_cg,
-    const bool is_ddl_merge,
+    const bool use_absolute_offset,
     const common::ObIArray<ObIODevice *> *device_handle_array)
 {
   if (device_handle_array != nullptr) {
-    if (is_ddl_merge) {
+    if (use_absolute_offset) {
       index_tree_root_ctx_->task_type_ = ObIndexBuildTaskType::REBUILD_BACKUP_DDL_TASK;
     } else {
       index_tree_root_ctx_->task_type_ = ObIndexBuildTaskType::REBUILD_BACKUP_TASK;
     }
-  } else if (is_ddl_merge) {
+  } else if (use_absolute_offset) {
     index_tree_root_ctx_->task_type_ = ObIndexBuildTaskType::REBUILD_DDL_TASK;
   } else if (is_cg) {
     index_tree_root_ctx_->task_type_ = ObIndexBuildTaskType::REBUILD_CG_SELF_CAL_TASK;
@@ -3719,7 +3719,7 @@ OB_INLINE bool ObIndexBlockRebuilder::need_index_tree_dumper() const
 
 int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
                                 const int64_t *task_idx,
-                                const bool is_ddl_merge,
+                                const ObITable::TableKey &table_key,
                                 common::ObIArray<ObIODevice *> *device_handle_array)
 {
   int ret = OB_SUCCESS;
@@ -3747,7 +3747,7 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
     LOG_WARN("fail to assign leaf store desc", K(ret), KPC(index_store_desc_));
   } else if (OB_FAIL(meta_row_.init(task_allocator_, container_store_desc->get_row_column_count()))) {
     LOG_WARN("fail to init meta row", K(ret), K(container_store_desc->get_row_column_count()));
-  } else if (FALSE_IT(set_task_type(index_store_desc_->is_cg(), is_ddl_merge, device_handle_array))) {
+  } else if (FALSE_IT(set_task_type(index_store_desc_->is_cg(), use_absolute_offset(table_key), device_handle_array))) {
   } else if (index_tree_root_ctx_->is_backup_task()) {
     // device_handle_array size must be 2, and the 1st one is index tree, the 2nd one is meta tree
     if (OB_UNLIKELY(micro_index_clustered())) {
@@ -3898,6 +3898,12 @@ int ObIndexBlockRebuilder::get_macro_meta(const char *buf, const int64_t size,
     STORAGE_LOG(WARN, "fail to get macro meta", K(ret));
   }
   return ret;
+}
+
+bool ObIndexBlockRebuilder::use_absolute_offset(const ObITable::TableKey &table_key)
+{
+  return table_key.is_ddl_merge_sstable()
+    && !table_key.slice_range_.is_merge_slice(); // not ddl merge slice
 }
 
 int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const

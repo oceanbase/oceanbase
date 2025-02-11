@@ -197,6 +197,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       ddl_macro_block_.ddl_start_scn_ = redo_info.start_scn_;
       ddl_macro_block_.table_key_ = redo_info.table_key_;
       ddl_macro_block_.end_row_id_ = redo_info.end_row_id_;
+      ddl_macro_block_.merge_slice_idx_ = redo_info.merge_slice_idx_;
     }
   }
   return ret;

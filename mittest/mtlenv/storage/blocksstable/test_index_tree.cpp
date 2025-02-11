@@ -1084,7 +1084,7 @@ TEST_F(TestIndexTree, test_empty_index_tree)
       ObSSTableIndexBuilder other_sstable_builder(false /* not need writer buffer*/);
       prepare_index_builder(other_data_desc, other_sstable_builder);
       prepare_data_desc(other_data_desc, &other_sstable_builder);
-      OK(rebuilder.init(other_sstable_builder));
+      OK(rebuilder.init(other_sstable_builder, nullptr, ObITable::TableKey()));
       ObSSTablePrivateObjectCleaner cleaner;
       OK(data_writer.open(other_data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
       for(int64_t i = 0; i < 10; ++i) {
@@ -1712,7 +1712,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObSSTableIndexBuilder sstable_builder2(false /* not need writer buffer*/);
   prepare_index_builder(index_desc, sstable_builder2);
   ObIndexBlockRebuilder rebuilder;
-  OK(rebuilder.init(sstable_builder2));
+  OK(rebuilder.init(sstable_builder2, nullptr, ObITable::TableKey()));
   ObMacroBlockHandle macro_handle;
   macro_handle.reset();
   ObMacroBlockReadInfo info;
@@ -1734,7 +1734,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   sstable_builder3.index_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
   sstable_builder3.container_store_desc_.static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
   ObIndexBlockRebuilder other_rebuilder;
-  OK(other_rebuilder.init(sstable_builder3));
+  OK(other_rebuilder.init(sstable_builder3, nullptr, ObITable::TableKey()));
   ObDataMacroBlockMeta macro_meta;
   ObDatumRow meta_row;
   ObIndexBlockLoader index_block_loader;
@@ -2040,7 +2040,7 @@ TEST_F(TestIndexTree, test_rebuilder)
   ASSERT_EQ(true, res1.table_backup_flag_.has_local());
 
   ObIndexBlockRebuilder rebuilder;
-  OK(rebuilder.init(sstable_builder2, nullptr, 0));
+  OK(rebuilder.init(sstable_builder2, nullptr, ObITable::TableKey()));
   // read data blocks
   ObMacroBlockReadInfo info;
   ObMacroBlockHandle macro_handle;
@@ -2263,7 +2263,9 @@ TEST_F(TestIndexTree, test_absolute_offset)
   prepare_index_desc(data_desc, index_desc);
 
   ObIndexBlockRebuilder rebuilder;
-  OK(rebuilder.init(sstable_builder, nullptr, true/*use_absolute_offset*/));
+  ObITable::TableKey ddl_table_key;
+  ddl_table_key.table_type_ = ObITable::DDL_MERGE_CG_SSTABLE;
+  OK(rebuilder.init(sstable_builder, nullptr, ddl_table_key));
 
   ObSSTableIndexBuilder *sst_builder = nullptr;
   mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
@@ -2339,7 +2341,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObSSTableIndexBuilder sstable_builder(false /* not need writer buffer*/);
   OK(sstable_builder.init(index_desc.get_desc()));
   ObIndexBlockRebuilder rebuilder;
-  OK(rebuilder.init(sstable_builder));
+  OK(rebuilder.init(sstable_builder, nullptr, ObITable::TableKey()));
   LOG_INFO("test close with old schema", K(test_row_num));
   for (int64_t i = 0; i < test_row_num; ++i) {
     OK(rebuilder.append_macro_row(*merge_info_list->at(i)));

@@ -216,6 +216,8 @@ private:
   int build_empty_merge_task();
   int build_origin_data_merge_task(const ObDirectLoadTableDataDesc &table_data_desc,
                                    const int64_t max_parallel_degree);
+  int build_origin_data_unrescan_merge_task(const ObDirectLoadTableDataDesc &table_data_desc,
+                                            int64_t max_parallel_degree);
   int get_autoincrement_value(uint64_t count, share::ObTabletCacheInterval &interval);
 
 private:

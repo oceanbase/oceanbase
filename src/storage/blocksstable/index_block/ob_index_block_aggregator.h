@@ -21,6 +21,8 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+class ObIMicroBlockWriter;
+class ObIDatumIter;
 class ObIColAggregator
 {
 public:
@@ -31,6 +33,7 @@ public:
   virtual void reset() = 0;
   virtual void reuse();
   virtual int eval(const ObStorageDatum &datum, const bool is_data) = 0;
+  virtual int eval(ObIDatumIter &datum_iter) = 0;
   virtual int get_result(const ObStorageDatum *&result) = 0;
   VIRTUAL_TO_STRING_KV(K_(can_aggregate));
 
@@ -51,7 +54,7 @@ protected:
   bool can_aggregate_;
 };
 
-class ObColNullCountAggregator : public ObIColAggregator
+class ObColNullCountAggregator final : public ObIColAggregator
 {
 public:
   ObColNullCountAggregator() : null_count_(0) {}
@@ -61,13 +64,14 @@ public:
   void reset() override { new (this) ObColNullCountAggregator(); }
   void reuse() override;
   int eval(const ObStorageDatum &datum, const bool is_data) override;
+  int eval(ObIDatumIter &datum_iter) override;
   int get_result(const ObStorageDatum *&result) override;
 private:
   int64_t null_count_;
   DISALLOW_COPY_AND_ASSIGN(ObColNullCountAggregator);
 };
 
-class ObColMaxAggregator : public ObIColAggregator
+class ObColMaxAggregator final : public ObIColAggregator
 {
 public:
   ObColMaxAggregator() : cmp_func_(nullptr) {}
@@ -77,13 +81,14 @@ public:
   void reset() override { new (this) ObColMaxAggregator(); }
   void reuse() override;
   int eval(const ObStorageDatum &datum, const bool is_data) override;
+  int eval(ObIDatumIter &datum_iter) override;
   int get_result(const ObStorageDatum *&result) override;
 private:
   common::ObDatumCmpFuncType cmp_func_;
   DISALLOW_COPY_AND_ASSIGN(ObColMaxAggregator);
 };
 
-class ObColMinAggregator : public ObIColAggregator
+class ObColMinAggregator final : public ObIColAggregator
 {
 public:
   ObColMinAggregator() : cmp_func_(nullptr) {}
@@ -93,13 +98,14 @@ public:
   void reset() override { new (this) ObColMinAggregator(); }
   void reuse() override;
   int eval(const ObStorageDatum &datum, const bool is_data) override;
+  int eval(ObIDatumIter &datum_iter) override;
   int get_result(const ObStorageDatum *&result) override;
 private:
   common::ObDatumCmpFuncType cmp_func_;
   DISALLOW_COPY_AND_ASSIGN(ObColMinAggregator);
 };
 
-class ObColSumAggregator : public ObIColAggregator
+class ObColSumAggregator final : public ObIColAggregator
 {
 typedef int (ObColSumAggregator::*ObColSumAggEvalFuncCType)(const common::ObDatum &datum);
 public:
@@ -109,6 +115,7 @@ public:
   void reset() override { new (this) ObColSumAggregator(); }
   void reuse() override;
   int eval(const ObStorageDatum &datum, const bool is_data) override;
+  int eval(ObIDatumIter &datum_iter) override;
   int get_result(const ObStorageDatum *&result) override;
 private:
   // eval
@@ -128,11 +135,38 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObColSumAggregator);
 };
 
-class ObSkipIndexAggregator final
+template <typename T, int64_t MAX_COUNT, int64_t BLOCK_SIZE>
+class ObPodFix2dArray;
+class ObEncodingHashTable;
+class ObDictEncodingHashTable;
+
+struct ObMicroDataPreAggParam
+{
+  ObMicroDataPreAggParam() { reset(); }
+  void reset() { memset(this, 0, sizeof(*this)); }
+  bool use_encoding_ht() const { return is_pax_encoding_ && nullptr != encoding_ht_; }
+  bool use_cs_encoding_ht() const { return is_cs_encoding_ && nullptr != cs_encoding_ht_; }
+  TO_STRING_KV(KP_(col_datums), KP_(encoding_ht), K_(null_cnt), K_(min_integer), K_(max_integer),
+      K_(is_integer_aggregated), K_(is_cs_encoding), K_(is_pax_encoding));
+
+  const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
+  union {
+    const ObEncodingHashTable *encoding_ht_;
+    const ObDictEncodingHashTable *cs_encoding_ht_;
+  };
+  uint64_t null_cnt_;
+  uint64_t min_integer_;
+  uint64_t max_integer_;
+  bool is_integer_aggregated_;
+  bool is_cs_encoding_;
+  bool is_pax_encoding_;
+};
+
+class ObISkipIndexAggregator
 {
 public:
-  ObSkipIndexAggregator();
-  virtual ~ObSkipIndexAggregator() { reset(); }
+  ObISkipIndexAggregator();
+  virtual ~ObISkipIndexAggregator() { reset(); }
 
   void reset();
   void reuse(); // clear aggregated result
@@ -140,18 +174,17 @@ public:
   int init(
       const ObIArray<ObSkipIndexColMeta> &full_agg_metas,
       const ObIArray<ObColDesc> &full_col_descs,
-      const bool is_data,
       ObDatumRow &agg_result,
       ObIAllocator &allocator);
 
   // Aggregate with datum row
-  int eval(const ObDatumRow &datum_row);
+  virtual int eval(const ObDatumRow &datum_row) = 0;
   // Aggregate with serialized agg row
   int eval(const char *buf, const int64_t buf_size, const int64_t row_count);
   // Generate aggregated row for serialization
   int get_aggregated_row(const ObDatumRow *&aggregated_row);
   int64_t get_max_agg_size() { return max_agg_size_; }
-  TO_STRING_KV(K_(col_aggs), KPC(agg_result_), K_(max_agg_size), K_(is_data), K_(need_aggregate), K_(is_inited));
+  TO_STRING_KV(K_(col_aggs), KPC(agg_result_), K_(max_agg_size), K_(need_aggregate), K_(is_inited));
 private:
   int calc_max_agg_size(
       const ObIArray<ObSkipIndexColMeta> &full_agg_metas,
@@ -165,7 +198,7 @@ private:
       const ObColDesc &col_desc,
       ObStorageDatum &result_datum,
       ObIAllocator &allocator);
-private:
+protected:
   ObIAllocator *allocator_;
   common::ObFixedArray<ObIColAggregator *, common::ObIAllocator> col_aggs_;
   ObDatumRow *agg_result_;
@@ -173,10 +206,43 @@ private:
   const ObIArray<ObColDesc> *full_col_descs_;
   ObAggRowReader agg_row_reader_;
   int64_t max_agg_size_;
-  bool is_data_;
   bool need_aggregate_;
   bool evaluated_;
   bool is_inited_;
+};
+
+class ObSkipIndexIndexAggregator final : public ObISkipIndexAggregator
+{
+public:
+  ObSkipIndexIndexAggregator();
+  virtual ~ObSkipIndexIndexAggregator() {}
+
+  virtual int eval(const ObDatumRow &datum_row) override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSkipIndexIndexAggregator);
+};
+
+class ObSkipIndexDataAggregator final : public ObISkipIndexAggregator
+{
+public:
+  ObSkipIndexDataAggregator();
+  virtual ~ObSkipIndexDataAggregator() {}
+
+  virtual int eval(const ObDatumRow &datum_row) override;
+  int eval(const ObIMicroBlockWriter &data_micro_writer);
+private:
+  bool can_agg_with_dict(const ObSkipIndexColType idx_type)
+  {
+    return ObSkipIndexColType::SK_IDX_MIN == idx_type || ObSkipIndexColType::SK_IDX_MAX == idx_type;
+  }
+  bool can_use_pre_agg_integer(const ObSkipIndexColMeta &col_meta);
+  int do_col_agg_with_pre_agg_integer(
+      const int64_t agg_idx,
+      const ObSkipIndexColMeta &col_meta,
+      const ObMicroDataPreAggParam &agg_param);
+  template<typename IterParamType>
+  int do_col_agg(const int64_t agg_idx, const IterParamType &iter_param);
+  DISALLOW_COPY_AND_ASSIGN(ObSkipIndexDataAggregator);
 };
 
 struct ObAggregateInfo final
@@ -242,7 +308,7 @@ public:
   TO_STRING_KV(K_(skip_index_aggregator), K_(aggregated_row), K_(aggregate_info),
       K_(need_data_aggregate), K_(has_reused_null_agg_in_this_micro_block), K_(is_inited));
 private:
-  ObSkipIndexAggregator skip_index_aggregator_;
+  ObSkipIndexIndexAggregator skip_index_aggregator_;
   ObDatumRow aggregated_row_;
   ObAggregateInfo aggregate_info_;
   bool need_data_aggregate_;

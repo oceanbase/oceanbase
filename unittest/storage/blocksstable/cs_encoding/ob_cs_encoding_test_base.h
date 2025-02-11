@@ -179,7 +179,8 @@ int ObCSEncodingTestBase::prepare(const ObObjType *col_types, const int64_t rowk
     ctx_.rowkey_column_cnt_ = rowkey_cnt;
     ctx_.column_cnt_ = column_cnt;
     ctx_.col_descs_ = &col_descs_;
-    ctx_.major_working_cluster_version_ = cal_version(4, 1, 0, 0);
+    //ctx_.major_working_cluster_version_ = cal_version(4, 1, 0, 0);
+    ctx_.major_working_cluster_version_ = cal_version(4, 3, 5, 0);
     ctx_.row_store_type_ = common::CS_ENCODING_ROW_STORE;
     ctx_.compressor_type_ = compressor_type;
     ctx_.need_calc_column_chksum_ = true;

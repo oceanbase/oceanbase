@@ -160,25 +160,25 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
           cur_row_.cells_[i].set_int(tmp_file_info->ref_cnt_);
           break;
         case TOTAL_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.write_req_cnt_);
           break;
         case UNALIGNED_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->unaligned_write_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.unaligned_write_req_cnt_);
           break;
         case TOTAL_READS:
-          cur_row_.cells_[i].set_int(tmp_file_info->read_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.read_req_cnt_);
           break;
         case UNALIGNED_READS:
-          cur_row_.cells_[i].set_int(tmp_file_info->unaligned_read_req_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.unaligned_read_req_cnt_);
           break;
         case TOTAL_READ_BYTES:
-          cur_row_.cells_[i].set_int(tmp_file_info->total_read_size_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_read_size_);
           break;
         case LAST_ACCESS_TIME:
-          cur_row_.cells_[i].set_timestamp(tmp_file_info->last_access_ts_);
+          cur_row_.cells_[i].set_timestamp(tmp_file_info->read_info_.last_access_ts_);
           break;
         case LAST_MODIFY_TIME:
-          cur_row_.cells_[i].set_timestamp(tmp_file_info->last_modify_ts_);
+          cur_row_.cells_[i].set_timestamp(tmp_file_info->write_info_.last_modify_ts_);
           break;
         case BIRTH_TIME:
           cur_row_.cells_[i].set_timestamp(tmp_file_info->birth_ts_);
@@ -206,34 +206,34 @@ int ObAllVirtualTmpFileInfo::fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_inf
         case COMPRESSIBLE_FD:
           break;
         case PERSISTED_TAIL_PAGE_WRITES:
-          cur_row_.cells_[i].set_int(tmp_file_info->write_persisted_tail_page_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.write_persisted_tail_page_cnt_);
           break;
         case LACK_PAGE_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->lack_page_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->write_info_.lack_page_cnt_);
           break;
         case TOTAL_TRUNCATED_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->total_truncated_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_truncated_page_read_cnt_);
           break;
         case TRUNCATED_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->truncated_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.truncated_page_read_hits_);
           break;
         case TOTAL_KV_CACHE_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->total_kv_cache_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_kv_cache_page_read_cnt_);
           break;
         case KV_CACHE_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->kv_cache_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.kv_cache_page_read_hits_);
           break;
         case TOTAL_UNCACHED_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->total_uncached_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_uncached_page_read_cnt_);
           break;
         case UNCACHED_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->uncached_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.uncached_page_read_hits_);
           break;
         case TOTAL_WBP_PAGE_READ_CNT:
-          cur_row_.cells_[i].set_int(tmp_file_info->total_wbp_page_read_cnt_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.total_wbp_page_read_cnt_);
           break;
         case WBP_PAGE_HITS:
-          cur_row_.cells_[i].set_int(tmp_file_info->wbp_page_read_hits_);
+          cur_row_.cells_[i].set_int(tmp_file_info->read_info_.wbp_page_read_hits_);
           break;
       #ifdef OB_BUILD_SHARED_STORAGE
         /* columns in ss modes begin */

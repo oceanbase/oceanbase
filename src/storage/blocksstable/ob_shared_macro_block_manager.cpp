@@ -697,7 +697,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to prepare data desc", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
-  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.is_ddl_merge_sstable()))) {
+  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.get_key()))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
   } else if (OB_FAIL(read_sstable_block(old_sstable, block_handle, read_allocator))) {
     LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));

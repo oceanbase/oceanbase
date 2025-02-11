@@ -286,6 +286,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
         }
       }
       int64_t parallel_idx = curr_tablet_seq_cache ? curr_tablet_seq_cache->task_id_ : MAX(tablet_slice_param.slice_idx_, 0);
+      slice_info.slice_idx_ = parallel_idx;
       FLOG_INFO("update ddl parallel id", K(ret), K(notify_tablet_id), K(slice_info), K(parallel_idx), K(tablet_slice_param), K(ctx_.get_px_task_id()), K(is_current_slice_empty),
           K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
 

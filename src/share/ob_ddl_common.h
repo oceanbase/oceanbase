@@ -1356,6 +1356,7 @@ public:
   }
   static int get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, share::schema::ObSchemaGetterGuard &schema_guard);
   static bool use_idempotent_mode(const int64_t data_format_version);
+  static bool need_rescan_column_store(const int64_t data_format_version); // for compat old logic for fill column store
   static int init_macro_block_seq(const int64_t parallel_idx, blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);

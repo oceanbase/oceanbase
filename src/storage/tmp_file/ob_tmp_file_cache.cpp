@@ -171,6 +171,12 @@ int ObTmpBlockCache::put_block(ObKVCacheInstHandle &inst_handle,
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K(inst_handle), KP(kvpair), K(block_handle));
   } else if (OB_FAIL(put_kvpair(inst_handle, kvpair, block_handle.handle_, false/*overwrite*/))) {
     STORAGE_LOG(WARN, "fail to put tmp block to block cache", KR(ret));
+  } else {
+    // refresh the block cache score by calling get_block() to prevent eviction,
+    // otherwise new block's score is 0 and may be evicted immediately
+    ObTmpBlockValueHandle block_value_handle;
+    const ObIKVCacheKey &key = *kvpair->key_;
+    get_block(dynamic_cast<const ObTmpBlockCacheKey &>(key), block_value_handle);
   }
 
   return ret;
@@ -486,6 +492,11 @@ void ObTmpPageCache::try_put_page_to_cache(const ObTmpPageCacheKey &key,
     STORAGE_LOG(WARN, "invalid arguments", KR(ret), K(key), K(value));
   } else if (OB_FAIL(put(key, value, false/*overwrite*/))) {
     STORAGE_LOG(WARN, "fail to put tmp page into cache", KR(ret), K(key), K(value));
+  } else {
+    // refresh the page cache score by calling get_page() to prevent eviction,
+    // otherwise its score is 0 and may be evicted immediately
+    ObTmpPageValueHandle handle;
+    get_page(key, handle);
   }
 }
 

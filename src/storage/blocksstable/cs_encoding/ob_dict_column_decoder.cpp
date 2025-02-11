@@ -601,7 +601,6 @@ int ObDictColumnDecoder::nu_nn_operator(
     ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;
-  int64_t datums_cnt = 0;
   const uint32_t distinct_val_cnt = ctx.dict_meta_->distinct_val_cnt_;
   if (0 == distinct_val_cnt) {
     // all datum is null
@@ -656,6 +655,7 @@ int ObDictColumnDecoder::eq_ne_operator(
     if (OB_SUCC(ret)) {
       int64_t matched_ref_cnt = 0;
       uint64_t matched_ref_val = 0;
+      bool can_get_matched_ref_val = true;
       const bool is_integer_dict = ctx.col_header_->is_integer_dict();
 
       if (!is_integer_dict && is_empty_varying_string(ctx, filter_datum)) {
@@ -681,10 +681,15 @@ int ObDictColumnDecoder::eq_ne_operator(
           } else {
             if (ObCSDecodingUtil::can_convert_to_integer(col_type, is_col_signed)) {
               if (ObCSDecodingUtil::check_datum_not_over_8bytes(filter_val_meta.get_type(),
-                    filter_datum, is_filter_signed, filter_val, filter_val_size)) {
-                if (OB_FAIL(integer_dict_val_cmp_op(ctx, op_type, is_col_signed, filter_val,
+                  filter_datum, is_filter_signed, filter_val, filter_val_size)) {
+                // always use WHITE_OP_EQ here, and if op_type is WHITE_OP_NE,
+                // the set_bitmap_with_bitset_conversely will be used later.
+                if (OB_FAIL(integer_dict_val_cmp_op(ctx, sql::WHITE_OP_EQ, is_col_signed, filter_val,
                     filter_val_size, is_filter_signed, dict_val_cnt, ref_bitset, matched_ref_cnt))) {
-                  LOG_WARN("fail to exe integer_dict_val_cmp_op", KR(ret), K(op_type), K(filter_datum));
+                  LOG_WARN("fail to exe integer_dict_val_cmp_op", KR(ret), K(filter_datum));
+                } else {
+                  // acquire matched_ref_val is not implement in integer_dict_val_cmp_op
+                  can_get_matched_ref_val = false;
                 }
               } else { // over 8bytes, all datum not requal
                 matched_ref_cnt = 0;
@@ -697,7 +702,7 @@ int ObDictColumnDecoder::eq_ne_operator(
       }
 
       if (OB_SUCC(ret)) {
-        if (1 == matched_ref_cnt) {
+        if (1 == matched_ref_cnt && can_get_matched_ref_val) {
           if (OB_FAIL(fast_eq_ne_operator(matched_ref_val, has_null, ctx.ref_ctx_->meta_.width_, ctx.ref_data_,
               dict_val_cnt, filter, pd_filter_info, result_bitmap))) {
             LOG_WARN("fail to exexute fast eq_ne operator", KR(ret), K(matched_ref_val), K(has_null), K(ctx));
@@ -713,13 +718,12 @@ int ObDictColumnDecoder::eq_ne_operator(
             // if exists null, we need to filter the null row
             if (OB_FAIL(set_bitmap_with_bitset_conversely(ref_width_size, ctx.ref_data_, ref_bitset,
                 pd_filter_info.start_, pd_filter_info.count_, has_null, dict_val_cnt, parent, result_bitmap))) {
-              LOG_WARN("fail to set result bitmap conversely", KR(ret), K(ref_width_size), K(matched_ref_cnt),
-                K(has_null), K(dict_val_cnt), K(pd_filter_info));
+              LOG_WARN("fail to set result bitmap conversely", KR(ret), K(ref_width_size),
+                  K(matched_ref_cnt), K(has_null), K(dict_val_cnt), K(pd_filter_info));
             }
           }
         }
       }
-
     }
   }
   return ret;
@@ -1326,18 +1330,14 @@ int ObDictColumnDecoder::in_operator_binary_search(
   ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
   ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
   ObDictValueIterator trav_it = begin_it;
-  const ObFixedArray<ObDatum, ObIAllocator> *params
-          = static_cast<const ObFixedArray<ObDatum, ObIAllocator> *>(&(filter.get_datums()));
-  array::Iterator<ObFixedArrayImpl<ObDatum, ObIAllocator>, const ObDatum> param_it = params->begin();
   bool is_exist = false;
-  while (OB_SUCC(ret) && trav_it != end_it && param_it != params->end()) {
+  while (OB_SUCC(ret) && trav_it != end_it) {
     const ObDatum &dict_datum = *trav_it;
-    if (OB_FAIL(filter.exist_in_datum_array(dict_datum, is_exist, param_it - params->begin()))) {
+    if (OB_FAIL(filter.exist_in_datum_array(dict_datum, is_exist))) {
       LOG_WARN("Failed to check dict datum in param array", K(ret), K(dict_datum));
     } else if (is_exist) {
       ++matched_ref_cnt;
       ref_bitset->set(trav_it - begin_it);
-      ++param_it;
     }
     ++trav_it;
   }
@@ -1473,7 +1473,7 @@ int ObDictColumnDecoder::integer_dict_val_bt_op(
   if (is_param_invalid || is_right_less_than_base) {
     // skip
   } else {
-    const uint32_t store_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
+    const uint32_t store_width_size = stream_meta.get_uint_width_size();
     const int64_t row_cnt = pd_filter_info.count_;
     const int64_t row_start = pd_filter_info.start_;
 
@@ -1489,7 +1489,7 @@ int ObDictColumnDecoder::integer_dict_val_bt_op(
 
     if (need_tranverse) {
       if (~INTEGER_MASK_TABLE[store_width_size] & right_filter_base_diff) {
-        right_filter_val = INTEGER_MASK_TABLE[store_width_size]; // right > MAX_RANGE, right = MAX_RANGE.
+        right_filter_base_diff = INTEGER_MASK_TABLE[store_width_size]; // right > MAX_RANGE, right = MAX_RANGE.
       }
       uint64_t filter_vals[] = {left_filter_base_diff, right_filter_base_diff};
 

@@ -150,7 +150,7 @@ void TestSSTableRowScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
             iter_param_,
             context_,
-            &ddl_kv_,
+            &ddl_memtable_,
             &part_range));
     for (int64_t i = part_start; i <= part_end; ++i) {
       if (i < row_cnt_) {
@@ -176,7 +176,7 @@ void TestSSTableRowScanner::test_one_case(
   ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
           iter_param_,
           context_,
-          &ddl_kv_,
+          &ddl_memtable_,
           &range));
   for (int64_t i = start; i <= end; ++i) {
     int64_t index = 0;
@@ -218,7 +218,7 @@ void TestSSTableRowScanner::test_one_case(
     ASSERT_EQ(OB_SUCCESS, kv_scanner.init(
             iter_param_,
             context_,
-            &ddl_kv_,
+            &ddl_memtable_,
             &range));
     for (int64_t i = start; i <= end; ++i) {
       if (is_reverse_scan) {

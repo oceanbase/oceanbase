@@ -453,6 +453,52 @@ int ObDirectLoadTabletMergeCtx::build_origin_data_merge_task(
   return ret;
 }
 
+int ObDirectLoadTabletMergeCtx::build_origin_data_unrescan_merge_task(
+  const ObDirectLoadTableDataDesc &table_data_desc, const int64_t max_parallel_degree)
+{
+  int ret = OB_SUCCESS;
+  range_array_.reset();
+  if (max_parallel_degree <= 1) {
+    ObDatumRange whole_range;
+    whole_range.set_whole_range();
+    if (OB_FAIL(range_array_.push_back(whole_range))) {
+      LOG_WARN("fail to push back", KR(ret));
+    }
+  } else {
+    ObDirectLoadTableHandleArray empty_table_array;
+    ObDirectLoadMergeRangeSplitter range_splitter;
+    if (OB_FAIL(range_splitter.init(tablet_id_, &origin_table_, empty_table_array, table_data_desc,
+                                    param_->datum_utils_, *param_->col_descs_))) {
+      LOG_WARN("fail to init range splitter", KR(ret));
+    } else if (OB_FAIL(range_splitter.split_range(range_array_, max_parallel_degree, allocator_))) {
+      LOG_WARN("fail to split range", KR(ret));
+    } else if (OB_UNLIKELY(range_array_.count() > max_parallel_degree)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected range count", KR(ret), K(max_parallel_degree), K(range_array_.count()));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < range_array_.count(); ++i) {
+    const ObDatumRange &range = range_array_.at(i);
+    ObDirectLoadPartitionOriginDataUnrescanMergeTask *merge_task = nullptr;
+    if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionOriginDataUnrescanMergeTask, (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadPartitionOriginDataUnrescanMergeTask", KR(ret));
+    } else if (OB_FAIL(merge_task->init(this, origin_table_, range, parallel_idx_++))) {
+      LOG_WARN("fail to init merge task", KR(ret));
+    } else if (OB_FAIL(merge_task_array_.push_back(merge_task))) {
+      LOG_WARN("fail to push back merge task", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != merge_task) {
+        merge_task->~ObDirectLoadPartitionOriginDataUnrescanMergeTask();
+        allocator_.free(merge_task);
+        merge_task = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(
   const ObDirectLoadTableDataDesc &table_data_desc, int64_t max_parallel_degree)
 {

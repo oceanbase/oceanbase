@@ -802,6 +802,7 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
   }
 
   if (OB_SUCC(ret)) {
+    const bool need_pre_agg_evaluation = (nullptr != data_aggregator_) && !micro_writer_->micro_block_row_data_buffered();
     is_macro_or_micro_block_reused_ = false;
     bool is_split = false;
     if (OB_FAIL(append(*row_to_append))) {
@@ -810,7 +811,7 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
       STORAGE_LOG(WARN, "Fail to update_micro_commit_info", K(ret), K(row));
     } else if (OB_FAIL(save_last_key(*row_to_append))) {
       STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(row));
-    } else if (nullptr != data_aggregator_ && OB_FAIL(data_aggregator_->eval(*row_to_append))) {
+    } else if (need_pre_agg_evaluation && OB_FAIL(data_aggregator_->eval(*row_to_append))) {
       STORAGE_LOG(WARN, "Fail to evaluate aggregate data", K(ret));
     } else if (OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(), micro_writer_->get_row_count(),
           split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), is_split))) {
@@ -1262,6 +1263,7 @@ int ObMacroBlockWriter::append_batch_to_micro_block(const ObBatchDatumRows &datu
 {
   int ret = OB_SUCCESS;
   ObDatumRow &last_row = datum_row_;
+  const bool need_pre_agg_evaluation = (nullptr != data_aggregator_) && !micro_writer_->micro_block_row_data_buffered();
 
   if (OB_FAIL(datum_rows.to_datum_row(start + write_row_count - 1, last_row))) {
     LOG_WARN("fail to get last row", KR(ret));
@@ -1273,7 +1275,7 @@ int ObMacroBlockWriter::append_batch_to_micro_block(const ObBatchDatumRows &datu
     STORAGE_LOG(WARN, "Fail to update_micro_commit_info", K(ret), K(datum_rows), K(start), K(write_row_count));
   } else if (OB_FAIL(save_last_key(last_row))) {
     STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(last_row));
-  } else if (nullptr != data_aggregator_ && OB_FAIL(data_aggregator_eval(datum_rows, start, write_row_count))) {
+  } else if (need_pre_agg_evaluation && OB_FAIL(data_aggregator_eval(datum_rows, start, write_row_count))) {
     STORAGE_LOG(WARN, "Fail to evaluate aggregate data", K(ret));
   }
   return ret;
@@ -1359,6 +1361,7 @@ int ObMacroBlockWriter::build_micro_block()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  const bool need_data_aggregate = (nullptr != data_aggregator_) && micro_writer_->micro_block_row_data_buffered();
   int64_t block_size = 0;
   ObMicroBlockDesc micro_block_desc;
   if (micro_writer_->get_row_count() <= 0) {
@@ -1368,6 +1371,8 @@ int ObMacroBlockWriter::build_micro_block()
     STORAGE_LOG(WARN, "Failed to build hash index block", K(ret));
   } else if (OB_FAIL(micro_writer_->build_micro_block_desc(micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to build micro block desc", K(ret));
+  } else if (need_data_aggregate && OB_FAIL(data_aggregator_->eval(*micro_writer_))) {
+    STORAGE_LOG(WARN, "failed to evaluate skip index with micro writer", K(ret), KPC_(micro_writer));
   } else {
     bool reserve_succ_flag = false;
     micro_block_desc.last_rowkey_ = last_key_;
@@ -2308,18 +2313,17 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for pre-aggregated row", K(ret));
     } else if (OB_ISNULL(aggregator_buf = static_cast<char *>(
-        allocator_.alloc(sizeof(ObSkipIndexAggregator))))) {
+        allocator_.alloc(sizeof(ObSkipIndexDataAggregator))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to allocate memory for aggrgator", K(ret));
     } else {
       aggregated_row_ = new (row_buf) ObDatumRow();
-      data_aggregator_ = new (aggregator_buf) ObSkipIndexAggregator();
+      data_aggregator_ = new (aggregator_buf) ObSkipIndexDataAggregator();
       if (OB_FAIL(aggregated_row_->init(allocator_, full_agg_metas.count()))) {
         LOG_WARN("Fail to init aggregated row", K(ret), K(data_store_desc));
       } else if (OB_FAIL(data_aggregator_->init(
           full_agg_metas,
           data_store_desc.get_col_desc_array(),
-          true, /* aggregate from data */
           *aggregated_row_,
           allocator_))) {
         LOG_WARN("Fail to init aggregator", K(ret), K(data_store_desc));
@@ -2336,7 +2340,7 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
 void ObMacroBlockWriter::release_pre_agg_util()
 {
   if (nullptr != data_aggregator_) {
-    data_aggregator_->~ObSkipIndexAggregator();
+    data_aggregator_->~ObSkipIndexDataAggregator();
     allocator_.free(data_aggregator_);
     data_aggregator_ = nullptr;
   }
@@ -2351,7 +2355,7 @@ int ObMacroBlockWriter::agg_micro_block(const ObMicroIndexInfo &micro_index_info
 {
   int ret = OB_SUCCESS;
   if (micro_index_info.is_pre_aggregated() && nullptr != data_aggregator_) {
-    if (OB_FAIL(data_aggregator_->eval(micro_index_info.agg_row_buf_,
+    if (OB_FAIL(data_aggregator_->ObISkipIndexAggregator::eval(micro_index_info.agg_row_buf_,
         micro_index_info.agg_buf_size_, micro_index_info.get_row_count()))) {
       LOG_WARN("Fail to evaluate by micro block", K(ret), K(micro_index_info));
     }

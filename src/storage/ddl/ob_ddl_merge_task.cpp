@@ -635,7 +635,8 @@ int ObDDLTableMergeTask::merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_ha
   return ret;
 }
 
-// the input ddl sstable is sorted with start_scn
+// the input ddl sstable is sorted by: slice_idx asc, start_scn asc, end_scn desc
+// check continue by slice, every slice should be continue
 int ObTabletDDLUtil::check_data_continue(
     ObTableStoreIterator &ddl_sstable_iter,
     bool &is_data_continue,
@@ -658,37 +659,38 @@ int ObTabletDDLUtil::check_data_continue(
       compact_end_scn = SCN::max(compact_end_scn, single_table->get_end_scn());
     }
   } else {
-    ObITable *first_ddl_sstable = nullptr;
-    ObITable *last_ddl_sstable = nullptr;
-    if (OB_FAIL(ddl_sstable_iter.get_boundary_table(false, first_ddl_sstable))) {
-      LOG_WARN("fail to get first ddl sstable", K(ret));
-    } else if (OB_FAIL(ddl_sstable_iter.get_boundary_table(true, last_ddl_sstable))) {
-      LOG_WARN("fail to get last ddl sstable", K(ret));
-    } else {
-      is_data_continue = true;
-      SCN last_end_scn = first_ddl_sstable->get_end_scn();
-      ObITable *table = nullptr;
-      while (OB_SUCC(ddl_sstable_iter.get_next(table))) {
-        if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
+    is_data_continue = true;
+    int64_t last_slice_idx = -1;
+    SCN last_end_scn = SCN::invalid_scn();
+    ObITable *table = nullptr;
+    while (OB_SUCC(ret) && is_data_continue) {
+      if (OB_FAIL(ddl_sstable_iter.get_next(table))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next table from ddl_sstable_iter failed", K(ret));
         } else {
-          ObSSTable *cur_ddl_sstable = static_cast<ObSSTable *>(table);
-          if (cur_ddl_sstable->get_start_scn() <= last_end_scn) {
-            last_end_scn = SCN::max(last_end_scn, cur_ddl_sstable->get_end_scn());
-          } else {
-            is_data_continue = false;
-            LOG_INFO("ddl sstable not continue", K(cur_ddl_sstable->get_key()), K(last_end_scn));
-            break;
-          }
+          ret = OB_SUCCESS;
+          break;
         }
+      } else if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
+      } else if (table->get_slice_idx() < last_slice_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddl sstable should sorted by slice idx asc", K(ret), K(table->get_key()), K(last_slice_idx));
+      } else if (table->get_slice_idx() > last_slice_idx) { // slice idx changed
+        last_end_scn = table->get_end_scn();
+        last_slice_idx = table->get_slice_idx();
       }
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      }
-      if (OB_SUCC(ret) && is_data_continue) {
-        compact_start_scn = SCN::min(compact_start_scn, first_ddl_sstable->get_start_scn());
-        compact_end_scn = SCN::max(compact_end_scn, last_ddl_sstable->get_end_scn());
+      if (OB_SUCC(ret)) {
+        // check scn range continue for each slice
+        if (table->get_start_scn() > last_end_scn) {
+          is_data_continue = false;
+          LOG_INFO("ddl sstable not continue", K(table->get_key()), K(last_end_scn), K(last_slice_idx));
+        } else {
+          last_end_scn = SCN::max(last_end_scn, table->get_end_scn());
+          compact_start_scn = SCN::min(compact_start_scn, table->get_start_scn());
+          compact_end_scn = SCN::max(compact_end_scn, table->get_end_scn());
+        }
       }
     }
   }
@@ -848,7 +850,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
       LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
     } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder,
             nullptr/*task_idx*/,
-            ddl_param.table_key_.is_ddl_merge_sstable()/*is_ddl_merge*/))) {
+            ddl_param.table_key_))) {
       LOG_WARN("fail to alloc index builder", K(ret));
     } else if (meta_array.empty()) {
       // do nothing
@@ -919,12 +921,14 @@ int ObTabletDDLUtil::update_ddl_table_store(
     const ObTabletDDLParam &ddl_param,
     const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
-    blocksstable::ObSSTable *sstable)
+    blocksstable::ObSSTable *sstable,
+    const ObTablesHandleArray &slice_sstable_handles)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ddl_param.is_valid() || OB_ISNULL(storage_schema) || OB_ISNULL(sstable))) {
+  if (OB_UNLIKELY(!ddl_param.is_valid() || OB_ISNULL(storage_schema)
+        || (OB_ISNULL(sstable) && (slice_sstable_handles.empty() || is_incremental_direct_load(ddl_param.direct_load_type_))))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ddl_param), KP(storage_schema), KP(sstable));
+    LOG_WARN("invalid argument", K(ret), K(ddl_param), KP(storage_schema), KP(sstable), K(slice_sstable_handles.get_count()));
   } else {
     const bool is_major_sstable = ddl_param.table_key_.is_major_sstable();
     const int64_t rebuild_seq = ls.get_rebuild_seq();
@@ -958,7 +962,7 @@ int ObTabletDDLUtil::update_ddl_table_store(
         table_store_param.ddl_info_.keep_old_ddl_sstable_ = !is_major_sstable;
         table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
         table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
-        table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
+        table_store_param.ddl_info_.ddl_checkpoint_scn_ = ddl_param.table_key_.is_ddl_dump_sstable() ? ddl_param.table_key_.get_end_scn() : ddl_param.commit_scn_;
         if (ddl_param.table_key_.is_ddl_dump_sstable()) {
           // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.
           table_store_param.ddl_info_.ddl_replay_status_ = tablet.get_tablet_meta().ddl_replay_status_;
@@ -966,12 +970,23 @@ int ObTabletDDLUtil::update_ddl_table_store(
           // data is complete, mark ddl replay status finished
           table_store_param.ddl_info_.ddl_replay_status_ = ddl_param.table_key_.is_co_sstable() ? CS_REPLICA_REPLAY_COLUMN_FINISH : CS_REPLICA_REPLAY_ROW_STORE_FINISH;
         }
+        bool use_slice_ddl_sstable = !ObDDLUtil::need_rescan_column_store(ddl_param.data_format_version_);
+        for (int64_t i = 0; OB_SUCC(ret) && use_slice_ddl_sstable && i < slice_sstable_handles.get_count(); ++i) {
+          const ObSSTable *cur_slice_sstable = static_cast<ObSSTable *>(slice_sstable_handles.get_table(i));
+          if (OB_ISNULL(cur_slice_sstable)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("slice sstable is null", K(ret), K(i), KP(cur_slice_sstable));
+          } else if (OB_FAIL(table_store_param.ddl_info_.slice_sstables_.push_back(cur_slice_sstable))) {
+            LOG_WARN("push back slice ddl sstable failed", K(ret), K(i), KPC(cur_slice_sstable));
+          }
+        }
       } else { // incremental direct load
         table_store_param.compaction_info_.clog_checkpoint_scn_ = sstable->get_end_scn();
         table_store_param.ha_info_.need_check_transfer_seq_ = true;
         table_store_param.ha_info_.transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
       }
-      if (OB_FAIL(ls.update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls.update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
         LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
       } else {
         FLOG_INFO("ddl update table store success", K(ddl_param), KPC(new_tablet_handle.get_obj()), K(table_store_param));
@@ -981,10 +996,21 @@ int ObTabletDDLUtil::update_ddl_table_store(
   return ret;
 }
 
-int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, ObIArray<ObSSTable *> &target_sstables, ObIArray<ObStorageMetaHandle> &meta_handles)
+int get_sstables(ObTableStoreIterator &ddl_sstable_iter,
+                 const int64_t start_slice_idx,
+                 const int64_t end_slice_idx,
+                 const int64_t merged_sliced_idx,
+                 const int64_t cg_idx,
+                 ObIArray<ObSSTable *> &target_sstables,
+                 ObIArray<ObStorageMetaHandle> &meta_handles)
 {
   int ret = OB_SUCCESS;
   ddl_sstable_iter.resume();
+  if (OB_UNLIKELY(!(start_slice_idx < 0 && end_slice_idx < 0)
+        && !(start_slice_idx >= 0 && start_slice_idx <= end_slice_idx))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(start_slice_idx), K(end_slice_idx));
+  }
   while (OB_SUCC(ret)) {
     ObITable *table = nullptr;
     if (OB_FAIL(ddl_sstable_iter.get_next(table))) {
@@ -1011,6 +1037,10 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
       if (OB_ISNULL(cur_co_sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("current co sstable is null", K(ret), KP(cur_co_sstable));
+      } else if (!(start_slice_idx < 0 && end_slice_idx < 0) // negative means all, not satisfied
+          // the slice idx range of current table is between start_slice_idx and end_slice_idx, not satisfied
+          && !(start_slice_idx <= cur_co_sstable->get_key().slice_range_.start_slice_idx_ && cur_co_sstable->get_key().slice_range_.end_slice_idx_ <= end_slice_idx)) {
+        // skip
       } else if (cur_co_sstable->is_cgs_empty_co_table()) {
         // skip
       } else if (OB_FAIL(cur_co_sstable->fetch_cg_sstable(cg_idx, cg_sstable_wrapper))) {
@@ -1019,6 +1049,9 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
         LOG_WARN("get sstable failed", K(ret));
       } else if (OB_ISNULL(cg_sstable)) {
         // skip
+      } else if (merged_sliced_idx > 0 && cg_sstable->get_slice_idx() < merged_sliced_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("should not exit sstable whose slice idx less than merged slice idx", K(ret), K(merged_sliced_idx), K(cg_sstable->get_key()));
       } else if (OB_FAIL(target_sstables.push_back(cg_sstable))) {
         LOG_WARN("push back cg sstable failed", K(ret));
       } else if (cg_sstable_wrapper.get_meta_handle().is_valid()
@@ -1030,15 +1063,25 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
   return ret;
 }
 
-int get_sstables(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs, const int64_t cg_idx, ObIArray<ObSSTable *> &target_sstables)
+int get_sstables(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
+                 const int64_t start_slice_idx,
+                 const int64_t end_slice_idx,
+                 const int64_t merged_sliced_idx,
+                 const int64_t cg_idx,
+                 ObIArray<ObSSTable *> &target_sstables)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!(start_slice_idx < 0 && end_slice_idx < 0)
+        && !(start_slice_idx >= 0 && start_slice_idx <= end_slice_idx))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(start_slice_idx), K(end_slice_idx));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < frozen_ddl_kvs.count(); ++i) {
     ObDDLKV *cur_kv = frozen_ddl_kvs.at(i).get_obj();
-    ObDDLMemtable *target_sstable = nullptr;
     if (OB_ISNULL(cur_kv)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (cg_idx < 0) { // row store
+      ObDDLMemtable *target_sstable = nullptr;
       if (cur_kv->get_ddl_memtables().empty()) {
         // do nothing
       } else if (OB_ISNULL(target_sstable = cur_kv->get_ddl_memtables().at(0))) {
@@ -1047,17 +1090,25 @@ int get_sstables(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs, const int64_t cg
       } else if (OB_FAIL(target_sstables.push_back(target_sstable))) {
         LOG_WARN("push back target sstable failed", K(ret));
       }
-    } else if (OB_FAIL(cur_kv->get_ddl_memtable(cg_idx, target_sstable))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("get ddl memtable failed", K(ret), K(i), K(cg_idx));
-      } else {
-        ret = OB_SUCCESS;
+    } else {
+      const ObIArray<ObDDLMemtable *> &ddl_memtables = cur_kv->get_ddl_memtables();
+      for (int64_t i = 0; OB_SUCC(ret) && i < ddl_memtables.count(); ++i) {
+        ObDDLMemtable *cur_sstable = ddl_memtables.at(i);
+        if (OB_ISNULL(cur_sstable)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("current ddl memtable is null", K(ret), KP(cur_sstable));
+        } else if (cur_sstable->get_key().column_group_idx_ != cg_idx) {
+          // skip
+        } else if (merged_sliced_idx > 0 && cur_sstable->get_slice_idx() <= merged_sliced_idx) {
+          // skip
+        } else if ((start_slice_idx < 0 && end_slice_idx < 0) // negative means all
+            // the slice idx range of current table is between start_slice_idx and end_slice_idx
+            || (start_slice_idx <= cur_sstable->get_key().slice_range_.start_slice_idx_ && cur_sstable->get_key().slice_range_.end_slice_idx_ <= end_slice_idx)) {
+          if (OB_FAIL(target_sstables.push_back(cur_sstable))) {
+            LOG_WARN("push back target sstable failed", K(ret));
+          }
+        }
       }
-    } else if (OB_ISNULL(target_sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("target sstable from ddl kv is null", K(ret), K(i), K(cg_idx), KPC(cur_kv), KP(target_sstable));
-    } else if (OB_FAIL(target_sstables.push_back(target_sstable))) {
-      LOG_WARN("push back target sstable failed", K(ret));
     }
   }
   return ret;
@@ -1161,7 +1212,9 @@ int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int
     ObMacroBlockDesc block_desc;
     block_desc.macro_meta_ = &data_macro_meta;
     if (OB_FAIL(macro_block_iter_->get_next_macro_block(block_desc))) {
-      LOG_WARN("get next macro block failed", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next macro block failed", K(ret));
+      }
     } else {
       end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_ - 1;
     }
@@ -1177,31 +1230,63 @@ int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int
   return ret;
 }
 
+
  // for cg sstable, endkey is end row id, confirm read_info not used
 int get_sorted_meta_array(
+    ObTablet &tablet,
+    const ObTabletDDLParam &ddl_param,
+    const ObStorageSchema *storage_schema,
     const ObIArray<ObSSTable *> &sstables,
     const ObITableReadInfo &read_info,
-    ObBlockMetaTree &meta_tree,
     ObIAllocator &allocator,
     ObArray<ObDDLBlockMeta> &sorted_metas)
 {
   int ret = OB_SUCCESS;
   sorted_metas.reset();
-  if (OB_UNLIKELY(!read_info.is_valid() || !meta_tree.is_valid())) { // allow empty sstable array
+  if (OB_UNLIKELY(!read_info.is_valid())) { // allow empty sstable array
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(sstables), K(read_info), K(meta_tree));
+    LOG_WARN("invalid argument", K(ret), K(sstables), K(read_info));
   } else {
+    // sort sstable by slice_idx
+    ObArray<ObSSTable *> sorted_sstables;
+    struct {
+      bool operator() (ObSSTable *left, ObSSTable *right) {
+        return left->get_slice_idx() < right->get_slice_idx();
+      }
+    } slice_idx_cmp;
+    if (OB_FAIL(sorted_sstables.assign(sstables))) {
+      LOG_WARN("assign sstable array failed", K(ret), K(sstables.count()));
+    } else {
+      lib::ob_sort(sorted_sstables.begin(), sorted_sstables.end(), slice_idx_cmp);
+    }
     ObDatumRange query_range;
     query_range.set_whole_range();
     ObDataMacroBlockMeta data_macro_meta;
-    for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-      ObSSTable *cur_sstable = sstables.at(i);
+    HEAP_VAR(ObBlockMetaTree, meta_tree) {
+    int64_t last_slice_idx = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sorted_sstables.count(); ++i) {
+      ObSSTable *cur_sstable = sorted_sstables.at(i);
       ObDDLMacroBlockIterator block_iter;
       if (OB_ISNULL(cur_sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(cur_sstable));
+      } else if (cur_sstable->get_slice_idx() < last_slice_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sstable should sorted by slice idx asc", K(ret), K(cur_sstable->get_key()), K(last_slice_idx));
+      } else if (cur_sstable->get_slice_idx() > last_slice_idx) {
+        // new slice, save sorted_metas and reset
+        if (meta_tree.is_valid() && OB_FAIL(meta_tree.get_sorted_meta_array(sorted_metas))) {
+          LOG_WARN("get sorted meta array failed", K(ret));
+        } else {
+          meta_tree.destroy();
+          last_slice_idx = cur_sstable->get_slice_idx();
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (cur_sstable->is_empty()) {
         // do nothing, skip
+      } else if (!meta_tree.is_valid() && OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
+        LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
       } else if (OB_FAIL(block_iter.open(cur_sstable, query_range, read_info, allocator))) {
         LOG_WARN("open macro block iterator failed", K(ret), K(read_info), KPC(cur_sstable));
       } else {
@@ -1243,17 +1328,19 @@ int get_sorted_meta_array(
             K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": helper.convert(copied_meta->end_key_), "end_row_offset", end_row_offset);
       }
     }
+    if (OB_SUCC(ret) && meta_tree.is_valid()) { // save sorted_metas from last meta tree
+      if (OB_FAIL(meta_tree.get_sorted_meta_array(sorted_metas))) {
+        LOG_WARN("get sorted meta array failed", K(ret));
+      }
+    }
+    } // heap var meta_tree
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(meta_tree.get_sorted_meta_array(sorted_metas))) {
-      LOG_WARN("get sorted meta array failed", K(ret));
-    } else {
-      int64_t sstable_checksum = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < sorted_metas.count(); ++i) {
-        const ObDataMacroBlockMeta *cur_macro_meta = sorted_metas.at(i).block_meta_;
-        sstable_checksum = ob_crc64_sse42(sstable_checksum, &cur_macro_meta->val_.data_checksum_, sizeof(cur_macro_meta->val_.data_checksum_));
-        FLOG_INFO("sorted meta array", K(i), "macro_block_id", cur_macro_meta->get_macro_id(), "data_checksum", cur_macro_meta->val_.data_checksum_, K(sstable_checksum), "macro_block_end_key", cur_macro_meta->end_key_);
-      }
+    int64_t sstable_checksum = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sorted_metas.count(); ++i) {
+      const ObDataMacroBlockMeta *cur_macro_meta = sorted_metas.at(i).block_meta_;
+      sstable_checksum = ob_crc64_sse42(sstable_checksum, &cur_macro_meta->val_.data_checksum_, sizeof(cur_macro_meta->val_.data_checksum_));
+      FLOG_INFO("sorted meta array", K(i), "macro_block_id", cur_macro_meta->get_macro_id(), "data_checksum", cur_macro_meta->val_.data_checksum_, K(sstable_checksum), "macro_block_end_key", cur_macro_meta->end_key_);
     }
   }
   return ret;
@@ -1271,11 +1358,8 @@ int compact_sstables(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("compact_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObBlockMetaTree meta_tree;
   ObArray<ObDDLBlockMeta> sorted_metas;
-  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
-    LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
-  } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, arena, sorted_metas))) {
+  if (OB_FAIL(get_sorted_meta_array(tablet, ddl_param, storage_schema, sstables, read_info, arena, sorted_metas))) {
     LOG_WARN("get sorted meta array failed", K(ret), K(read_info), K(sstables));
   } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(
           tablet,
@@ -1303,11 +1387,23 @@ int ObTabletDDLUtil::get_compact_meta_array(
 {
   int ret = OB_SUCCESS;
   sorted_metas.reset();
-  ObBlockMetaTree meta_tree;
-  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
-    LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
-  } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, allocator, sorted_metas))) {
+  if (OB_FAIL(get_sorted_meta_array(tablet, ddl_param, storage_schema, sstables, read_info, allocator, sorted_metas))) {
     LOG_WARN("get sorted meta array failed", K(ret), K(read_info), K(sstables));
+  }
+  return ret;
+}
+
+int get_merged_slice_idx(ObTableStoreIterator &ddl_sstable_iter, int64_t &merged_slice_idx)
+{
+  int ret = OB_SUCCESS;
+  merged_slice_idx = -1;
+  ObITable *first_table = nullptr;
+  if (ddl_sstable_iter.count() > 0) {
+    if (OB_FAIL(ddl_sstable_iter.get_boundary_table(false/*is_last*/, first_table))) {
+      LOG_WARN("get first table failed", K(ret));
+    } else if (first_table->get_key().slice_range_.is_merge_slice()) {
+      merged_slice_idx = first_table->get_key().get_slice_idx();
+    }
   }
   return ret;
 }
@@ -1317,13 +1413,14 @@ int compact_co_ddl_sstable(
     ObTableStoreIterator &ddl_sstable_iter,
     const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
     const ObTabletDDLParam &ddl_param,
+    const int64_t start_slice_idx,
+    const int64_t end_slice_idx,
     const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
     ObTablesHandleArray &compacted_cg_sstable_handles,
     ObTableHandleV2 &co_sstable_handle)
 {
   int ret = OB_SUCCESS;
-  compacted_cg_sstable_handles.reset();
   co_sstable_handle.reset();
   const ObITableReadInfo *cg_index_read_info = nullptr;
   if (OB_UNLIKELY(ddl_sstable_iter.count() == 0 && frozen_ddl_kvs.count() == 0) || OB_ISNULL(storage_schema)) {
@@ -1334,18 +1431,25 @@ int compact_co_ddl_sstable(
     ObArray<ObSSTable *> base_sstables;
     ObArray<ObStorageMetaHandle> meta_handles; // hold loaded cg sstable
     ObTabletDDLParam cg_ddl_param = ddl_param;
+    // negative slice_idx means all slice, ignored in table_key
+    cg_ddl_param.table_key_.slice_range_.start_slice_idx_ = MAX(0, start_slice_idx);
+    cg_ddl_param.table_key_.slice_range_.end_slice_idx_ = MAX(0, end_slice_idx);
     bool need_fill_cg_sstables = true;
-    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables, meta_handles))) {
+    int64_t merged_slice_idx = -1;
+    if (OB_FAIL(get_merged_slice_idx(ddl_sstable_iter, merged_slice_idx))) {
+      LOG_WARN("get merged slice idx failed", K(ret));
+    } else if (OB_FAIL(get_sstables(ddl_sstable_iter, start_slice_idx, end_slice_idx, merged_slice_idx, base_cg_idx, base_sstables, meta_handles))) {
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
-    } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
+    } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, start_slice_idx, end_slice_idx, merged_slice_idx, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
-    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), storage_schema, allocator, co_sstable_handle))) {
+    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, cg_ddl_param, tablet.get_rowkey_read_info(), storage_schema, allocator, co_sstable_handle))) {
       LOG_WARN("compact base sstable failed", K(ret));
     } else {
       // empty major co sstable, no need fill cg sstables
-      need_fill_cg_sstables = !static_cast<ObCOSSTableV2 *>(co_sstable_handle.get_table())->is_cgs_empty_co_table();
+      need_fill_cg_sstables = !(co_sstable_handle.get_table()->is_major_sstable() && static_cast<ObCOSSTableV2 *>(co_sstable_handle.get_table())->is_cgs_empty_co_table());
     }
     if (OB_SUCC(ret) && need_fill_cg_sstables) {
+      ObTablesHandleArray cg_sstable_handles;
       if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(cg_index_read_info))) {
         LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret));
       }
@@ -1359,19 +1463,21 @@ int compact_co_ddl_sstable(
         cg_ddl_param.table_key_.column_group_idx_ = cur_cg_idx;
         if (cur_cg_idx == base_cg_idx) {
           // do nothing
-        } else if (OB_FAIL(get_sstables(ddl_sstable_iter, cur_cg_idx, cur_cg_sstables, meta_handles))) {
+        } else if (OB_FAIL(get_sstables(ddl_sstable_iter, start_slice_idx, end_slice_idx, merged_slice_idx, cur_cg_idx, cur_cg_sstables, meta_handles))) {
           LOG_WARN("get current cg sstables failed", K(ret));
-        } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, cur_cg_idx, cur_cg_sstables))) {
+        } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, start_slice_idx, end_slice_idx, merged_slice_idx, cur_cg_idx, cur_cg_sstables))) {
           LOG_WARN("get current cg sstables failed", K(ret));
         } else if (OB_FAIL(compact_sstables(tablet, cur_cg_sstables, cg_ddl_param, *cg_index_read_info, storage_schema, allocator, target_table_handle))) {
           LOG_WARN("compact cg sstable failed", K(ret), K(cur_cg_idx), K(cur_cg_sstables.count()), K(cg_ddl_param), KPC(cg_index_read_info));
+        } else if (OB_FAIL(cg_sstable_handles.add_table(target_table_handle))) {
+          LOG_WARN("push back cg sstable failed", K(ret), K(i), KP(target_table_handle.get_table()));
         } else if (OB_FAIL(compacted_cg_sstable_handles.add_table(target_table_handle))) {
           LOG_WARN("push back compacted cg sstable failed", K(ret), K(i), KP(target_table_handle.get_table()));
         }
       }
       if (OB_SUCC(ret)) { // assemble the cg sstables into co sstable
         ObArray<ObITable *> cg_sstables;
-        if (OB_FAIL(compacted_cg_sstable_handles.get_tables(cg_sstables))) {
+        if (OB_FAIL(cg_sstable_handles.get_tables(cg_sstables))) {
           LOG_WARN("get cg sstables failed", K(ret));
         } else if (OB_FAIL(static_cast<ObCOSSTableV2 *>(co_sstable_handle.get_table())->fill_cg_sstables(cg_sstables))) {
           LOG_WARN("fill cg sstables failed", K(ret));
@@ -1379,7 +1485,138 @@ int compact_co_ddl_sstable(
       }
     }
   }
-  LOG_INFO("compact_co_ddl_sstable", K(ret), K(ddl_sstable_iter), K(ddl_param), KP(&tablet), KPC(co_sstable_handle.get_table()));
+  LOG_INFO("compact_co_ddl_sstable", K(ret), K(ddl_param), K(start_slice_idx), K(end_slice_idx), K(ddl_sstable_iter.count()), KP(&tablet), KPC(co_sstable_handle.get_table()));
+  return ret;
+}
+
+int get_ddl_memtables(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs, ObIArray<const ObSSTable *> &all_ddl_memtables)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < frozen_ddl_kvs.count(); ++i) {
+    const ObDDLKVHandle &cur_kv_handle = frozen_ddl_kvs.at(i);
+    if (OB_ISNULL(cur_kv_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current ddl kv is null", K(ret), K(i), K(cur_kv_handle));
+    } else {
+      const ObIArray<ObDDLMemtable *> &ddl_memtables = cur_kv_handle.get_obj()->get_ddl_memtables();
+      for (int64_t j = 0; OB_SUCC(ret) && j < ddl_memtables.count(); ++j) {
+        const ObDDLMemtable *cur_ddl_memtable = ddl_memtables.at(j);
+        if (OB_ISNULL(cur_ddl_memtable)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ddl memtable is null", K(ret), KP(cur_ddl_memtable), K(i), K(j), KPC(cur_kv_handle.get_obj()));
+        } else if (OB_FAIL(all_ddl_memtables.push_back(cur_ddl_memtable))) {
+          LOG_WARN("push back ddl memtable failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int get_slice_indexes(const ObIArray<const ObSSTable *> &ddl_sstables, hash::ObHashSet<int64_t> &slice_idxes)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ddl_sstables.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_sstables.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_sstables.count(); ++i) {
+      const ObSSTable *cur_sstable = ddl_sstables.at(i);
+      if (OB_ISNULL(cur_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddl memtable is null", K(ret), KP(cur_sstable), K(i));
+      } else if (OB_FAIL(slice_idxes.set_refactored(cur_sstable->get_key().get_slice_idx(), 1/*over_write*/))) {
+        LOG_WARN("put slice index into set failed", K(ret), K(cur_sstable->get_key()));
+      }
+    }
+  }
+  return ret;
+}
+
+int get_merge_slice_idx(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs, int64_t &merge_slice_idx)
+{
+  int ret = OB_SUCCESS;
+  merge_slice_idx = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < frozen_ddl_kvs.count(); ++i) {
+    const ObDDLKVHandle &cur_kv_handle = frozen_ddl_kvs.at(i);
+    if (OB_ISNULL(cur_kv_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current ddl kv is null", K(ret), K(i), K(cur_kv_handle));
+    } else {
+      merge_slice_idx = MAX(merge_slice_idx, cur_kv_handle.get_obj()->get_merge_slice_idx());
+    }
+  }
+  return ret;
+}
+
+int compact_slice_ddl_sstable(
+    ObTablet &tablet,
+    ObTableStoreIterator &ddl_sstable_iter,
+    const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
+    const ObTabletDDLParam &ddl_param,
+    const ObStorageSchema *storage_schema,
+    common::ObArenaAllocator &allocator,
+    ObTablesHandleArray &compacted_cg_sstable_handles,
+    ObTableHandleV2 &co_sstable_handle,
+    ObTablesHandleArray &slice_sstable_handles)
+{
+  int ret = OB_SUCCESS;
+  compacted_cg_sstable_handles.reset();
+  co_sstable_handle.reset();
+  slice_sstable_handles.reset();
+  const ObITableReadInfo *cg_index_read_info = nullptr;
+  if (OB_UNLIKELY(ddl_sstable_iter.count() == 0 && frozen_ddl_kvs.count() == 0) || OB_ISNULL(storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()), KP(storage_schema));
+  } else if (ddl_param.table_key_.is_ddl_merge_sstable()) { // dump ddl kv into slice sstable
+    // get slice_idx set from ddl kv
+    // for each slice_idx
+    //    get ddl memtables from ddl kv
+    //    try to get slice sstable from table store
+    //    create new slice sstable
+    // put all slice sstable into table store
+    ObArray<const ObSSTable*> ddl_sstables;
+    hash::ObHashSet<int64_t> slice_idxes;
+    bool is_data_from_start = (SCN::scn_dec(ddl_param.start_scn_) == ddl_param.table_key_.scn_range_.start_scn_);
+    int64_t merge_slice_idx = 0;
+    if (is_data_from_start && OB_FAIL(get_merge_slice_idx(frozen_ddl_kvs, merge_slice_idx))) {
+      LOG_WARN("get merge slice idx failed", K(ret));
+    } else if (OB_FAIL(slice_idxes.create(1007, ObMemAttr(MTL_ID(), "slice_idx_set")))) {
+      LOG_WARN("create slice index set failed", K(ret));
+    } else if (OB_FAIL(get_ddl_memtables(frozen_ddl_kvs, ddl_sstables))) {
+      LOG_WARN("get ddl memtables failed", K(ret), K(frozen_ddl_kvs));
+    } else if (OB_FAIL(get_slice_indexes(ddl_sstables, slice_idxes))) { // get slice idx from ddl memtable only
+      LOG_WARN("get slice indexes failed", K(ret));
+    }
+    if (OB_SUCC(ret) && merge_slice_idx > 0) {
+      ObTableHandleV2 slice_co_sstable;
+      const int64_t start_slice_idx = 0; // only support merge slice from the start now
+      if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, start_slice_idx, merge_slice_idx, storage_schema, allocator, compacted_cg_sstable_handles, slice_co_sstable))) {
+        LOG_WARN("compact slice co sstable failed", K(ret), K(start_slice_idx), K(merge_slice_idx));
+      } else if (OB_FAIL(slice_sstable_handles.add_table(slice_co_sstable))) {
+        LOG_WARN("add slice co sstable failed", K(ret), K(slice_co_sstable));
+      }
+    }
+    for (hash::ObHashSet<int64_t>::const_iterator it = slice_idxes.begin(); OB_SUCC(ret) && it != slice_idxes.end(); ++it) {
+      const int64_t cur_slice_idx = it->first;
+      ObTableHandleV2 slice_co_sstable;
+      if (merge_slice_idx > 0 && cur_slice_idx <= merge_slice_idx) {
+        // skip
+      } else if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, cur_slice_idx, cur_slice_idx, storage_schema, allocator, compacted_cg_sstable_handles, slice_co_sstable))) {
+        LOG_WARN("compact slice co sstable failed", K(ret), K(cur_slice_idx));
+      } else if (OB_FAIL(slice_sstable_handles.add_table(slice_co_sstable))) {
+        LOG_WARN("add slice co sstable failed", K(ret), K(slice_co_sstable));
+      }
+    }
+  } else if (ddl_param.table_key_.is_major_sstable()) { // merge ddl kv into major sstable
+    const int64_t slice_idx = -1; // negative means all slice
+    if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, slice_idx, slice_idx, storage_schema, allocator, compacted_cg_sstable_handles, co_sstable_handle))) {
+      LOG_WARN("compact slice co sstable failed", K(ret), K(slice_idx));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table key", K(ret), K(ddl_param));
+  }
   return ret;
 }
 
@@ -1398,12 +1635,14 @@ int compact_ro_ddl_sstable(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()));
   } else {
+    const int64_t slice_idx = 0;
+    const int64_t merge_slice_idx = -1;
     const int64_t base_cg_idx = -1; // negative value means row store
     ObArray<ObSSTable *> base_sstables;
     ObArray<ObStorageMetaHandle> meta_handles; // hold loaded cg sstable, dummy here
-    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables, meta_handles))) {
+    if (OB_FAIL(get_sstables(ddl_sstable_iter, slice_idx, slice_idx, merge_slice_idx,  base_cg_idx, base_sstables, meta_handles))) {
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
-    } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
+    } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, slice_idx, slice_idx, merge_slice_idx, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
     } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), storage_schema, allocator, ro_sstable_handle))) {
       LOG_WARN("compact base sstable failed", K(ret));
@@ -1534,9 +1773,8 @@ int ObTabletDDLUtil::compact_ddl_kv(
   int ret = OB_SUCCESS;
   compacted_sstable_handle.reset();
   ObArenaAllocator arena("compact_ddl_kv", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObArray<const ObDataMacroBlockMeta *> sorted_metas;
-  bool is_data_continue = true;
   ObTablesHandleArray compacted_cg_sstable_handles; // for tmp hold handle of macro block until the tablet updated
+  ObTablesHandleArray slice_sstable_handles; // for tmp hold handle of macro block until the tablet updated
   ObStorageSchema *storage_schema = nullptr;
   if (OB_UNLIKELY(!ddl_param.is_valid() || (0 == ddl_sstable_iter.count() && frozen_ddl_kvs.empty()))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1573,8 +1811,15 @@ int ObTabletDDLUtil::compact_ddl_kv(
       }
 #endif
     } else if (ddl_param.table_key_.is_co_sstable()) {
-      if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, storage_schema, allocator, compacted_cg_sstable_handles, compacted_sstable_handle))) {
-        LOG_WARN("compact co ddl sstable failed", K(ret), K(ddl_param));
+      if (ObDDLUtil::need_rescan_column_store(ddl_param.data_format_version_)) {
+        const int64_t slice_idx = 0;
+        if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, slice_idx, slice_idx, storage_schema, allocator, compacted_cg_sstable_handles, compacted_sstable_handle))) {
+          LOG_WARN("compact co ddl sstable failed", K(ret), K(ddl_param));
+        }
+      } else {
+        if (OB_FAIL(compact_slice_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, storage_schema, allocator, compacted_cg_sstable_handles, compacted_sstable_handle, slice_sstable_handles))) {
+          LOG_WARN("compact sliced ddl sstable failed", K(ret), K(ddl_param));
+        }
       }
     } else {
       if (OB_FAIL(compact_ro_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, storage_schema, allocator, compacted_sstable_handle))) {
@@ -1582,7 +1827,7 @@ int ObTabletDDLUtil::compact_ddl_kv(
       }
     }
     if (OB_SUCC(ret)) { // update table store
-      if (OB_FAIL(update_ddl_table_store(ls, tablet, ddl_param, storage_schema, allocator, static_cast<ObSSTable *>(compacted_sstable_handle.get_table())))) {
+      if (OB_FAIL(update_ddl_table_store(ls, tablet, ddl_param, storage_schema, allocator, static_cast<ObSSTable *>(compacted_sstable_handle.get_table()), slice_sstable_handles))) {
         LOG_WARN("update ddl table store failed", K(ret));
       } else {
         LOG_INFO("compact ddl sstable success", K(ddl_param));
@@ -1732,46 +1977,52 @@ int ObTabletDDLUtil::get_compact_scn(
   bool is_data_continue = true;
   compact_start_scn = SCN::max_scn();
   compact_end_scn = SCN::min_scn();
+  SCN ddl_sstables_start_scn = SCN::max_scn();
+  SCN ddl_sstables_end_scn = SCN::min_scn();
+  SCN ddl_kvs_start_scn = SCN::max_scn();
+  SCN ddl_kvs_end_scn = SCN::min_scn();
   ddl_sstable_iter.resume();
   if (OB_UNLIKELY((0 == ddl_sstable_iter.count() && frozen_ddl_kvs.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()));
   } else if (OB_FAIL(check_ddl_sstable_expired(ddl_start_scn, ddl_sstable_iter))) {
     LOG_WARN("check ddl sstable expired failed", K(ret), K(ddl_start_scn), K(ddl_sstable_iter));
-  } else if (ddl_sstable_iter.count() > 0 && OB_FAIL(check_data_continue(ddl_sstable_iter, is_data_continue, compact_start_scn, compact_end_scn))) {
+  } else if (ddl_sstable_iter.count() > 0 && OB_FAIL(check_data_continue(ddl_sstable_iter, is_data_continue, ddl_sstables_start_scn, ddl_sstables_end_scn))) {
     LOG_WARN("check ddl sstable continue failed", K(ret));
   } else if (!is_data_continue) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl sstable not continuous", K(ret), K(ddl_sstable_iter));
   } else if (OB_FAIL(check_ddl_kv_expired(ddl_start_scn, frozen_ddl_kvs))) {
     LOG_WARN("check ddl kv expired failed", K(ret), K(ddl_start_scn), K(frozen_ddl_kvs));
-  } else if (frozen_ddl_kvs.count() > 0 && OB_FAIL(check_data_continue(frozen_ddl_kvs, is_data_continue, compact_start_scn, compact_end_scn))) {
+  } else if (frozen_ddl_kvs.count() > 0 && OB_FAIL(check_data_continue(frozen_ddl_kvs, is_data_continue, ddl_kvs_start_scn, ddl_kvs_end_scn))) {
     LOG_WARN("check ddl sstable continue failed", K(ret));
   } else if (!is_data_continue) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl kv not continuous", K(ret), K(frozen_ddl_kvs));
-  } else if (ddl_sstable_iter.count() > 0 && frozen_ddl_kvs.count() > 0) {
-    ObITable *first_ddl_sstable = nullptr;
-    ObITable *last_ddl_sstable = nullptr;
-    ObDDLKVHandle first_ddl_kv_handle = frozen_ddl_kvs.at(0);
-    ObDDLKVHandle last_ddl_kv_handle = frozen_ddl_kvs.at(frozen_ddl_kvs.count() - 1);
-    if (OB_FAIL(ddl_sstable_iter.get_boundary_table(false/*is_last*/, first_ddl_sstable))) {
-      LOG_WARN("get last ddl sstable failed", K(ret));
-    } else if (OB_FAIL(ddl_sstable_iter.get_boundary_table(true/*is_last*/, last_ddl_sstable))) {
-      LOG_WARN("get last ddl sstable failed", K(ret));
-    } else {
+  } else {
+    if (ddl_sstable_iter.count() > 0 && frozen_ddl_kvs.count() > 0) {
       // |___________________________________________________|
-      // fisrt_ddl_sstable.start_scn                         last_ddl_sstable.end_scn
+      // ddl_sstables_start_scn                              ddl_sstables_end_scn
       //                                 |____________________________________________________________|
-      //                                 first_ddl_kv.start_scn                                       last_ddl_kv.end_scn
-      is_data_continue = first_ddl_kv_handle.get_obj()->get_start_scn() >= first_ddl_sstable->get_start_scn()
-        && first_ddl_kv_handle.get_obj()->get_start_scn() <= last_ddl_sstable->get_end_scn()
-        && last_ddl_kv_handle.get_obj()->get_end_scn() >= last_ddl_sstable->get_end_scn();
+      //                                 ddl_kvs_start_scn                                            ddl_kvs_end_scn
+      is_data_continue = ddl_kvs_start_scn >= ddl_sstables_start_scn
+        && ddl_kvs_start_scn <= ddl_sstables_end_scn
+        && ddl_kvs_end_scn >= ddl_sstables_end_scn;
       if (!is_data_continue) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("scn range not continue between ddl sstable iter and ddl kv array", K(ret), K(ddl_sstable_iter), K(frozen_ddl_kvs));
+        LOG_WARN("scn range not continue between ddl sstable iter and ddl kv array", K(ret), K(ddl_sstables_start_scn), K(ddl_sstables_end_scn), K(ddl_kvs_start_scn), K(ddl_kvs_end_scn), K(ddl_sstable_iter), K(frozen_ddl_kvs));
+      } else {
+        compact_start_scn = ddl_sstables_start_scn;
+        compact_end_scn = ddl_kvs_end_scn;
       }
+    } else if (ddl_sstable_iter.count() > 0) {
+      compact_start_scn = ddl_sstables_start_scn;
+      compact_end_scn = ddl_sstables_end_scn;
+    } else if (frozen_ddl_kvs.count() > 0) {
+      compact_start_scn = ddl_kvs_start_scn;
+      compact_end_scn = ddl_kvs_end_scn;
     }
+    LOG_INFO("get compact scn", K(ret), K(compact_start_scn), K(compact_end_scn), K(ddl_sstable_iter), K(frozen_ddl_kvs));
   }
   return ret;
 }

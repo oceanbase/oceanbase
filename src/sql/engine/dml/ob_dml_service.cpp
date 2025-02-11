@@ -23,7 +23,7 @@
 #include "pl/ob_pl.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
-
+#include "sql/engine/ob_batch_rows.h"
 namespace oceanbase
 {
 using namespace common;
@@ -75,68 +75,96 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     if (OB_FAIL(row.at(col_idx)->eval(eval_ctx, datum))) {
       common::ObString column_name = column_infos.at(i).column_name_;
       ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
-    } else if (!is_nullable && datum->is_null()) {
-      if (is_ignore ||
-          (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
-        ObObj zero_obj;
-        ObExprStrResAlloc res_alloc(*row.at(col_idx), eval_ctx);
-        ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
-        bool is_decimal_int = ob_is_decimal_int(row.at(col_idx)->datum_meta_.type_);
-        if (is_oracle_mode()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("dml with ignore not supported in oracle mode");
-        } else if (ob_is_geometry(row.at(col_idx)->obj_meta_.get_type())) {
-            ret = OB_BAD_NULL_ERROR;
-            LOG_WARN("dml with ignore not supported in geometry type");
-            LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
-        } else if (ob_is_roaringbitmap(row.at(col_idx)->obj_meta_.get_type())) {
-            ret = OB_BAD_NULL_ERROR;
-            LOG_WARN("dml with ignore not supported in roaringbitmap type");
-            LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
-        } else if (ob_is_collection_sql_type(row.at(col_idx)->obj_meta_.get_type())) {
-            ret = OB_BAD_NULL_ERROR;
-            LOG_WARN("dml with ignore not supported in collection type");
-            LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
-        } else if (check_cascaded_reference(row.at(col_idx), row)) {
-          //This column is dependent on other columns and cannot be modified again;
-          //otherwise, it will necessitate a cascading recalculation of the dependent expression results.
+    } else if (OB_ISNULL(datum)) {
+      // impossible
+    } else if (OB_FAIL(check_column_null(dml_op.get_eval_ctx(),
+                                         row,
+                                         column_infos.at(i),
+                                         *datum,
+                                         is_ignore,
+                                         is_single_value,
+                                         session->get_sql_mode()))) {
+      LOG_WARN("failed to check column null", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::check_column_null(
+    ObEvalCtx &eval_ctx,
+    const ObExprPtrIArray &row,
+    const ColumnContent &column_info,
+    ObDatum &datum,
+    const bool is_ignore,
+    const bool is_single_value,
+    const ObSQLMode sql_mode)
+{
+  int ret = OB_SUCCESS;
+  const bool is_nullable = column_info.is_nullable_;
+  uint64_t col_idx = column_info.projector_index_;
+  ObExpr *expr = row.at(col_idx);
+  if (!is_nullable && datum.is_null()) {
+    if (is_ignore || (lib::is_mysql_mode()
+                      && !is_single_value
+                      && !is_strict_mode(sql_mode))) {
+      ObObj zero_obj;
+      ObExprStrResAlloc res_alloc(*expr, eval_ctx);
+      ObDatum &row_datum = expr->locate_datum_for_write(eval_ctx);
+      bool is_decimal_int = ob_is_decimal_int(expr->datum_meta_.type_);
+      if (is_oracle_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dml with ignore not supported in oracle mode");
+      } else if (ob_is_geometry(expr->obj_meta_.get_type())) {
           ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("dml with ignore not supported with cascaded column", KPC(row.at(col_idx)));
-          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
-        } else if (OB_FAIL(ObObjCaster::get_zero_value(
-            row.at(col_idx)->obj_meta_.get_type(),
-            row.at(col_idx)->obj_meta_.get_collation_type(),
-            zero_obj))) {
-          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)), K(row.at(col_idx)->max_length_));
-        } else if (is_decimal_int) {
-          ObDecimalIntBuilder dec_val;
-          dec_val.set_zero(wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
-            row.at(col_idx)->datum_meta_.precision_));
-          row_datum.set_decimal_int(dec_val.get_decimal_int(), dec_val.get_int_bytes());
-        }
-        if (OB_FAIL(ret)) {
-          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)));
-        } else if (OB_FAIL(ObDASUtils::padding_fixed_string_value(row.at(col_idx)->max_length_,
-                                                                  res_alloc,
-                                                                  zero_obj))) {
-          LOG_WARN("padding fixed string value failed", K(ret));
-        } else if (!is_decimal_int && OB_FAIL(row_datum.from_obj(zero_obj))) {
-          LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
-        } else if (zero_obj.is_lob_storage() && zero_obj.has_lob_header() != row.at(col_idx)->obj_meta_.has_lob_header()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("has lob header mark is wrong", K(ret), K(i), K(col_idx),
-            K(zero_obj.get_meta()), K(row.at(col_idx)->obj_meta_));
-        } else {
-          //output warning msg
-          const ObString &column_name = column_infos.at(i).column_name_;
-          LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
-        }
+          LOG_WARN("dml with ignore not supported in geometry type");
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
+      } else if (ob_is_roaringbitmap(expr->obj_meta_.get_type())) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("dml with ignore not supported in roaringbitmap type");
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
+      } else if (ob_is_collection_sql_type(expr->obj_meta_.get_type())) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("dml with ignore not supported in collection type");
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
+      } else if (check_cascaded_reference(expr, row)) {
+        //This column is dependent on other columns and cannot be modified again;
+        //otherwise, it will necessitate a cascading recalculation of the dependent expression results.
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("dml with ignore not supported with cascaded column", KPC(expr));
+        LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
+      } else if (OB_FAIL(ObObjCaster::get_zero_value(
+          expr->obj_meta_.get_type(),
+          expr->obj_meta_.get_collation_type(),
+          zero_obj))) {
+        LOG_WARN("get column default zero value failed", K(ret), K(column_info), K(expr->max_length_));
+      } else if (is_decimal_int) {
+        ObDecimalIntBuilder dec_val;
+        dec_val.set_zero(wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+            expr->datum_meta_.precision_));
+        row_datum.set_decimal_int(dec_val.get_decimal_int(), dec_val.get_int_bytes());
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("get column default zero value failed", K(ret), K(column_info));
+      } else if (OB_FAIL(ObDASUtils::padding_fixed_string_value(expr->max_length_,
+                                                                res_alloc,
+                                                                zero_obj))) {
+        LOG_WARN("padding fixed string value failed", K(ret));
+      } else if (!is_decimal_int && OB_FAIL(row_datum.from_obj(zero_obj))) {
+        LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
+      } else if (zero_obj.is_lob_storage() && zero_obj.has_lob_header() != expr->obj_meta_.has_lob_header()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("has lob header mark is wrong", K(ret), K(col_idx),
+          K(zero_obj.get_meta()), K(expr->obj_meta_));
       } else {
         //output warning msg
-        const ObString &column_name = column_infos.at(i).column_name_;
-        ret = OB_BAD_NULL_ERROR;
-        LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
+        const ObString &column_name = column_info.column_name_;
+        LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
       }
+    } else {
+      //output warning msg
+      const ObString &column_name = column_info.column_name_;
+      ret = OB_BAD_NULL_ERROR;
+      LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
     }
   }
   return ret;
@@ -160,26 +188,46 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
       ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
-    } else if (!datum->is_null() && expr->obj_meta_.is_geometry()) {
-      // geo column type
-      const uint32_t column_srid = column_info.srs_info_.srid_;
-      const ObGeoType column_geo_type = static_cast<ObGeoType>(column_info.srs_info_.geo_type_);
-      ObString wkb = datum->get_string();
-      uint32_t input_srid = UINT32_MAX;
-      if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
-          expr->datum_meta_, expr->obj_meta_.has_lob_header(), wkb))) {
-        LOG_WARN("fail to get real string data", K(ret), K(wkb));
-      } else if (OB_FAIL(ObGeoTypeUtil::check_geo_type(column_geo_type, wkb))) {
-        LOG_WARN("check geo type failed", K(ret), K(wkb));
-        ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
-        LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
-      } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, input_srid))) {
-        LOG_WARN("get srid by wkb failed", K(ret), K(wkb));
-      } else if (OB_FAIL(ObSqlGeoUtils::check_srid(column_srid, input_srid))) {
-        ret = OB_ERR_WRONG_SRID_FOR_COLUMN;
-        LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
-            static_cast<uint64_t>(column_srid));
-      }
+    } else if (OB_ISNULL(datum)) {
+      // impossible
+    } else if (OB_FAIL(check_geometry_type(dml_op.get_eval_ctx(),
+                                           dml_row,
+                                           column_info,
+                                           tmp_allocator,
+                                           *datum))) {
+      LOG_WARN("failed to check geometry type", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::check_geometry_type(
+    ObEvalCtx &eval_ctx,
+    const ExprFixedArray &dml_row,
+    const ColumnContent &column_info,
+    ObIAllocator &allocator,
+    ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  ObExpr *expr = dml_row.at(column_info.projector_index_);
+  if (!datum.is_null() && expr->obj_meta_.is_geometry()) {
+    const uint32_t column_srid = column_info.srs_info_.srid_;
+    const ObGeoType column_geo_type = static_cast<ObGeoType>(column_info.srs_info_.geo_type_);
+    ObString wkb = datum.get_string();
+    uint32_t input_srid = UINT32_MAX;
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, datum,
+        expr->datum_meta_, expr->obj_meta_.has_lob_header(), wkb))) {
+      LOG_WARN("fail to get real string data", K(ret), K(wkb));
+    } else if (OB_FAIL(ObGeoTypeUtil::check_geo_type(column_geo_type, wkb))) {
+      LOG_WARN("check geo type failed", K(ret), K(wkb));
+      ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+      LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, input_srid))) {
+      LOG_WARN("get srid by wkb failed", K(ret), K(wkb));
+    } else if (OB_FAIL(ObSqlGeoUtils::check_srid(column_srid, input_srid))) {
+      ret = OB_ERR_WRONG_SRID_FOR_COLUMN;
+      LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
+          static_cast<uint64_t>(column_srid));
     }
   }
   return ret;
@@ -695,47 +743,289 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
-    } else if (OB_FAIL(filter_row_for_view_check(ins_ctdef.view_check_exprs_,
-                                                 eval_ctx, is_filtered))) {
-      //check column constraint expr
-      LOG_WARN("filter row for check cst failed", K(ret));
-    } else if (OB_UNLIKELY(is_filtered)) {
-      ret = OB_ERR_CHECK_OPTION_VIOLATED;
-      LOG_WARN("view check option violated", K(ret));
-    } else if (OB_FAIL(filter_row_for_check_cst(ins_ctdef.check_cst_exprs_,
-                                                eval_ctx, is_filtered))) {
-      //check column constraint expr
-      LOG_WARN("filter row for check cst failed", K(ret));
-    } else if (OB_UNLIKELY(is_filtered)) {
-      if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore_) {
-        is_skipped = true;
-        LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
-        LOG_WARN("check constraint violated, skip this row", K(ret));
-      } else {
-        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-        LOG_WARN("column constraint check failed", K(ret));
-      }
+    } else if (OB_FAIL(check_filter_row(ins_ctdef, dml_op.get_eval_ctx(), is_skipped))) {
+      LOG_WARN("failed to check filter row", KR(ret));
     }
 
-    if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
-      dml_op.err_log_rt_def_.first_err_ret_ = ret;
-      // cover the err_ret  by design
-      ret = OB_SUCCESS;
-      for (int64_t i = 0; OB_SUCC(ret) && i < ins_ctdef.new_row_.count(); ++i) {
-        ObExpr *expr = ins_ctdef.new_row_.at(i);
-        ObDatum *datum = nullptr;
-        if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-          if (should_catch_err(ret) && !(IS_CONST_TYPE(expr->type_))) {
-            expr->locate_datum_for_write(dml_op.get_eval_ctx()).set_null();
-            expr->set_evaluated_flag(dml_op.get_eval_ctx());
-            ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
+        LOG_WARN("failed to check error ret by row", KR(ret));
+      }
+      // overwrite the ret
+      ret = tmp_ret;
+    }
+  }
+  ret = (ret == OB_SUCCESS ? dml_op.err_log_rt_def_.first_err_ret_ : ret);
+  // If any error occurred before, the error code here is not OB_SUCCESS;
+  return ret;
+}
+
+int ObDMLService::process_insert_batch(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op,
+    const bool use_rich_format)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_column_type_batch(ins_ctdef, dml_op, use_rich_format))) {
+    LOG_WARN("failed to check column type batch", KR(ret), K(ins_ctdef), K(use_rich_format));
+  } else if (OB_FAIL(check_nested_sql_legality(dml_op.get_exec_ctx(), ins_ctdef.das_ctdef_.index_tid_))) {
+    LOG_WARN("failed to check stmt table", KR(ret), K(ins_ctdef.das_ctdef_.index_tid_));
+  } else if (!ins_ctdef.has_instead_of_trigger_ && OB_FAIL(check_filter_row_batch(ins_ctdef, dml_op))) {
+    LOG_WARN("failed to check filter row batch", KR(ret));
+  }
+  return ret;
+}
+
+int ObDMLService::check_column_type_batch(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op,
+    const bool use_rich_format)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
+  ObExecContext &exec_ctx = dml_op.get_exec_ctx();
+  ObBatchRows &batch_rows = dml_op.get_brs();
+  const ExprFixedArray &dml_expr_array = ins_ctdef.new_row_;
+  const ObIArray<ColumnContent> &column_infos = ins_ctdef.column_infos_;
+  const int64_t column_offset = ins_ctdef.is_table_without_pk_ ? 1: 0;
+  // todo@lanyi check column_offset for the order by table
+  const int64_t row_num = 0; // no sense
+  ObUserLoggingCtx::Guard logging_ctx_guard(*(exec_ctx.get_user_logging_ctx()));
+  exec_ctx.set_cur_rownum(row_num);
+  CK (dml_expr_array.count() == column_infos.count() + column_offset);
+
+  for (int64_t i = 0; OB_SUCC(ret) && (i < dml_expr_array.count()); ++i) {
+    if (ins_ctdef.is_table_without_pk_ && (0 == i)) {
+      continue; // skip hidden table pk column
+    } else {
+      const ColumnContent &column_info = column_infos.at(i - column_offset);
+      common::ObString column_name = column_info.column_name_;
+      exec_ctx.set_cur_column_name(&column_name);
+      ObExpr *expr = dml_expr_array.at(column_info.projector_index_);
+      if (use_rich_format) {
+        if (OB_FAIL(expr->eval_vector(eval_ctx, batch_rows))) {
+          LOG_WARN("failed to eval vector", KR(ret));
+        }
+      } else {
+        if (OB_FAIL(expr->eval_batch(eval_ctx, *(batch_rows.skip_), batch_rows.size_))) {
+          LOG_WARN("failed to eval batch", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        ret = log_user_error_inner(ret, row_num, column_name, exec_ctx);
+      } else if (!ins_ctdef.has_instead_of_trigger_) {
+        if (OB_UNLIKELY(expr->obj_meta_.is_geometry())
+            && OB_FAIL(check_geometry_column_batch(ins_ctdef, dml_op, column_info))) {
+          LOG_WARN("failed to check geometry column batch", KR(ret), K(column_info));
+        } else if (!column_info.is_nullable_) {
+          bool need_check_null = use_rich_format ? expr->get_vector(eval_ctx)->has_null() : true;
+          if (need_check_null && OB_FAIL(check_column_null_batch(
+                                    ins_ctdef, dml_op, column_info, use_rich_format))) {
+            LOG_WARN("failed to check column null batch", KR(ret), K(column_info));
           }
         }
       }
     }
   }
-  ret = (ret == OB_SUCCESS ? dml_op.err_log_rt_def_.first_err_ret_ : ret);
-  // If any error occurred before, the error code here is not OB_SUCCESS;
+  return ret;
+}
+
+int ObDMLService::check_geometry_column_batch(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op,
+    const ColumnContent &column_info)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
+  ObBatchRows &batch_rows = dml_op.get_brs();
+  const ExprFixedArray &dml_expr_array = ins_ctdef.new_row_;
+  ObExpr *expr = dml_expr_array.at(column_info.projector_index_);
+  common::ObString column_name = column_info.column_name_;
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+  batch_info_guard.set_batch_size(batch_rows.size_);
+  batch_info_guard.set_batch_idx(0);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  for (int64_t i = 0; OB_SUCC(ret) && (i < batch_rows.size_); ++i) {
+    bool is_skipped = batch_rows.skip_->at(i);
+    batch_info_guard.set_batch_idx(i);
+    if (!is_skipped) {
+      ObDatum &datum = expr->locate_expr_datum(eval_ctx);
+      if (OB_FAIL(check_geometry_type(eval_ctx, dml_expr_array, column_info, tmp_allocator, datum))) {
+        LOG_WARN("failed to check geometry type", KR(ret), K(column_info));
+        if (OB_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
+          LOG_WARN("failed to check error ret by row", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = dml_op.err_log_rt_def_.first_err_ret_;
+      }
+    }
+  } // end for
+  return ret;
+}
+
+int ObDMLService::check_column_null_batch(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op,
+    const ColumnContent &column_info,
+    const bool use_rich_format)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = nullptr;
+  ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
+  ObBatchRows &batch_rows = dml_op.get_brs();
+  const ExprFixedArray &dml_expr_array = ins_ctdef.new_row_;
+  ObExpr *expr = dml_expr_array.at(column_info.projector_index_);
+  common::ObString column_name = column_info.column_name_;
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+  batch_info_guard.set_batch_size(batch_rows.size_);
+  batch_info_guard.set_batch_idx(0);
+  if (OB_ISNULL(session = dml_op.get_exec_ctx().get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session", KR(ret), KP(session));
+  } else if (!column_info.is_nullable_) {
+    for (int64_t i = 0; OB_SUCC(ret) && (i < batch_rows.size_); ++i) {
+      bool is_skipped = batch_rows.skip_->at(i);
+      ObDatum *expr_datum = nullptr;
+      batch_info_guard.set_batch_idx(i);
+      if (!is_skipped) {
+        if (use_rich_format) {
+          ObIVector *vec = expr->get_vector(eval_ctx);
+          if (OB_ISNULL(vec)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null vec", KR(ret), KP(vec));
+          } else if (!vec->is_null(i)) {
+            is_skipped = true;
+          } else {
+            if (OB_FAIL(expr->eval(eval_ctx, expr_datum))) {
+              common::ObString column_name = column_info.column_name_;
+              ret = ObDMLService::log_user_error_inner(ret, 0/*row_num*/, column_name, dml_op.get_exec_ctx());
+            } else if (OB_ISNULL(expr_datum)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null expr datum", KR(ret), KP(expr_datum));
+            }
+          }
+        } else {
+          expr_datum = expr->locate_expr_datumvector(eval_ctx).at(i);
+          if (OB_ISNULL(expr_datum)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null expr datum", KR(ret), KP(expr_datum));
+          } else if (!expr_datum->is_null()) {
+            is_skipped = true;
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!is_skipped && OB_FAIL(check_column_null(eval_ctx,
+                                                     dml_expr_array,
+                                                     column_info,
+                                                     *expr_datum,
+                                                     ins_ctdef.das_ctdef_.is_ignore_,
+                                                     ins_ctdef.is_single_value_,
+                                                     session->get_sql_mode()))) {
+          LOG_WARN("failed to check column null", KR(ret));
+          if (OB_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
+            LOG_WARN("failed to check error ret by row", KR(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = dml_op.err_log_rt_def_.first_err_ret_;
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObDMLService::check_filter_row_batch(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
+  ObBatchRows &batch_rows = dml_op.get_brs();
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+  batch_info_guard.set_batch_size(batch_rows.size_);
+  batch_info_guard.set_batch_idx(0);
+  for (int64_t i = 0; OB_SUCC(ret) && (i < batch_rows.size_); ++i) {
+    bool is_skipped = batch_rows.skip_->at(i);
+    batch_info_guard.set_batch_idx(i);
+    if (!is_skipped) {
+      bool is_filtered = false;
+      if (OB_FAIL(check_filter_row(ins_ctdef, eval_ctx, is_skipped))) {
+        LOG_WARN("failed to check filter row", KR(ret));
+        if (OB_FAIL(check_error_ret_by_row(ins_ctdef, dml_op, ret))) {
+          LOG_WARN("failed to check error ret by row", KR(ret));
+        }
+      } else if (is_skipped) {
+        batch_rows.skip_->set(i);
+      }
+      if (OB_SUCC(ret)) {
+        ret = dml_op.err_log_rt_def_.first_err_ret_;
+      }
+    }
+  } // end for
+  return ret;
+}
+
+int ObDMLService::check_filter_row(
+    const ObInsCtDef &ins_ctdef,
+    ObEvalCtx &eval_ctx,
+    bool &is_skipped)
+{
+  int ret = OB_SUCCESS;
+  bool is_filtered = false;
+  if (OB_FAIL(filter_row_for_view_check(ins_ctdef.view_check_exprs_,
+                                        eval_ctx, is_filtered))) {
+    //check column constraint expr
+    LOG_WARN("filter row for check cst failed", K(ret));
+  } else if (OB_UNLIKELY(is_filtered)) {
+    ret = OB_ERR_CHECK_OPTION_VIOLATED;
+    LOG_WARN("view check option violated", K(ret));
+  } else if (OB_FAIL(filter_row_for_check_cst(ins_ctdef.check_cst_exprs_,
+                                              eval_ctx, is_filtered))) {
+    //check column constraint expr
+    LOG_WARN("filter row for check cst failed", K(ret));
+  } else if (OB_UNLIKELY(is_filtered)) {
+    if (is_mysql_mode() && ins_ctdef.das_ctdef_.is_ignore_) {
+      is_skipped = true;
+      LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+      LOG_WARN("check constraint violated, skip this row", K(ret));
+    } else {
+      ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+      LOG_WARN("column constraint check failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::check_error_ret_by_row(
+    const ObInsCtDef &ins_ctdef,
+    ObTableModifyOp &dml_op,
+    const int errcode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(errcode)
+      && dml_op.is_error_logging_
+      && should_catch_err(errcode)
+      && !ins_ctdef.has_instead_of_trigger_) {
+    dml_op.err_log_rt_def_.first_err_ret_ = errcode;
+    // cover the err_ret  by design
+    ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ins_ctdef.new_row_.count(); ++i) {
+      ObExpr *expr = ins_ctdef.new_row_.at(i);
+      ObDatum *datum = nullptr;
+      if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
+        if (should_catch_err(ret) && !(IS_CONST_TYPE(expr->type_))) {
+          expr->locate_datum_for_write(dml_op.get_eval_ctx()).set_null();
+          expr->set_evaluated_flag(dml_op.get_eval_ctx());
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
   return ret;
 }
 

@@ -33,6 +33,7 @@ public:
   void reuse() override;
   int get_identifier_and_stream_types(
       ObColumnEncodingIdentifier &identifier, const ObIntegerStream::EncodingType *&types) const override;
+  int64_t get_distinct_cnt() const { return dict_encoding_meta_.distinct_val_cnt_; }
 
   INHERIT_TO_STRING_KV("ICSColumnEncoder", ObIColumnCSEncoder, K_(dict_encoding_meta), K_(ref_enc_ctx), K_(max_ref));
 

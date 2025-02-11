@@ -132,7 +132,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
-    const bool is_major_sstable = sstable_->is_major_sstable();
+    const bool is_major_sstable = sstable_->is_major_sstable() || sstable_->is_ddl_sstable();
     int64_t trans_version = INT64_MAX;
     int64_t current;
     row = &row_;

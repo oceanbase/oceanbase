@@ -16,6 +16,7 @@
 #define protected public
 #define private public
 #include "ob_cs_encoding_test_base.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
@@ -500,16 +501,16 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
     stream_types_[0] = {ObIntegerStream::EncodingType(type)};
     stream_types_[1] = {ObIntegerStream::EncodingType(type)};
     LOG_INFO("test stream ecoding type", K(type));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      0, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      1, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STRING, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      2, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STR_DICT, 2, 0), stream_types_, true)); // string dict
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      3, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, true));
-    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_column_encoding_types(
-      4, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INT_DICT, 2, 0), stream_types_, true)); //integer dict
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      0, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      1, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STRING, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      2, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::STR_DICT, 2, 0), stream_types_, DATA_VERSION_4_3_5_0, true)); // string dict
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      3, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INTEGER, 1, 0), stream_types_, DATA_VERSION_4_3_5_0, true));
+    ASSERT_EQ(OB_SUCCESS, encoder.ctx_.previous_cs_encoding_.update_stream_detect_info(
+      4, ObColumnEncodingIdentifier(ObCSColumnHeader::Type::INT_DICT, 2, 0), stream_types_, DATA_VERSION_4_3_5_0, true)); //integer dict
 
     for (int64_t i = 0; i < row_cnt; ++i) {
       ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));

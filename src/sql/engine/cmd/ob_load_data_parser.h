@@ -271,7 +271,9 @@ public:
       is_filling_zero_to_empty_field_(false),
       is_line_term_by_counting_field_(false),
       is_same_escape_enclosed_(false),
-      is_simple_format_(false)
+      is_simple_format_(false),
+      max_term_(0),
+      min_term_(UINT32_MAX)
     {}
     char line_term_c_;
     char field_term_c_;
@@ -279,6 +281,8 @@ public:
     bool is_line_term_by_counting_field_;
     bool is_same_escape_enclosed_;
     bool is_simple_format_;
+    unsigned max_term_;
+    unsigned min_term_;
   };
 public:
   ObCSVGeneralParser() {}
@@ -290,7 +294,7 @@ public:
   const ObCSVGeneralFormat &get_format() { return format_; }
   const OptParams &get_opt_params() { return opt_param_; }
 
-  template<common::ObCharsetType cs_type, typename handle_func, bool NEED_ESCAPED_RESULT = false>
+  template<common::ObCharsetType cs_type, typename handle_func, bool HAS_ENCLOSED, bool SINGLE_CHAR_TERM, bool NEED_ESCAPED_RESULT = false>
   int scan_proto(const char *&str, const char *end, int64_t &nrows,
                  char *escape_buf, char *escaped_buf_end,
                  handle_func &handle_one_line,
@@ -304,56 +308,104 @@ public:
            common::ObIArray<LineErrRec> &errors,
            bool is_end_file = false) {
     int ret = common::OB_SUCCESS;
+    bool has_enclosed = (INT64_MAX != format_.field_enclosed_char_);
+    bool single_char_term = static_cast<unsigned> (opt_param_.field_term_c_) < 0x80
+                               && static_cast<unsigned> (opt_param_.line_term_c_) < 0x80;
     switch (format_.cs_type_) {
     case common::CHARSET_UTF8MB4:
-      ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, NEED_ESCAPED_RESULT>(
+      if (has_enclosed) {
+        if (single_char_term) {
+          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, true, true, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+        } else {
+          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, true, false, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+        }
+      } else {
+        if (single_char_term) {
+          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, true, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+        } else {
+          ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, false, false, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+        }
+      }
       break;
     case common::CHARSET_GBK:
-      ret = scan_proto<common::CHARSET_GBK, handle_func, NEED_ESCAPED_RESULT>(
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_GBK, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_GBK, handle_func, false, false, NEED_ESCAPED_RESULT>(
+            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     case common::CHARSET_GB2312:
-      ret = scan_proto<common::CHARSET_GB2312, handle_func, NEED_ESCAPED_RESULT>(
+      ret = scan_proto<common::CHARSET_GB2312, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_UJIS:
-      ret = scan_proto<common::CHARSET_UJIS, handle_func, NEED_ESCAPED_RESULT>(
+      ret = scan_proto<common::CHARSET_UJIS, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_EUCKR:
-      ret = scan_proto<common::CHARSET_EUCKR, handle_func, NEED_ESCAPED_RESULT>(
+      ret = scan_proto<common::CHARSET_EUCKR, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_EUCJPMS:
-      ret = scan_proto<common::CHARSET_EUCJPMS, handle_func, NEED_ESCAPED_RESULT>(
+      ret = scan_proto<common::CHARSET_EUCJPMS, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_CP932:
-      ret = scan_proto<common::CHARSET_CP932, handle_func, NEED_ESCAPED_RESULT>(
+      ret = scan_proto<common::CHARSET_CP932, handle_func, true, false, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_GB18030:
     case common::CHARSET_GB18030_2022:
-      ret = scan_proto<common::CHARSET_GB18030, handle_func, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_GB18030, handle_func, true, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_GB18030, handle_func, false, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     case common::CHARSET_SJIS:
-      ret = scan_proto<common::CHARSET_SJIS, handle_func, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_SJIS, handle_func, true, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_SJIS, handle_func, false, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     case common::CHARSET_BIG5:
-      ret = scan_proto<common::CHARSET_BIG5, handle_func, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_BIG5, handle_func, true, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_BIG5, handle_func, false, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     case common::CHARSET_HKSCS:
     case common::CHARSET_HKSCS31:
-      ret = scan_proto<common::CHARSET_HKSCS, handle_func, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_HKSCS, handle_func, true, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_HKSCS, handle_func, false, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     default:
-      ret = scan_proto<common::CHARSET_BINARY, handle_func, NEED_ESCAPED_RESULT>(
-            str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      if (has_enclosed) {
+        ret = scan_proto<common::CHARSET_BINARY, handle_func, true, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      } else {
+        ret = scan_proto<common::CHARSET_BINARY, handle_func, false, false, NEED_ESCAPED_RESULT>(
+              str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
+      }
       break;
     }
     return ret;
@@ -393,7 +445,7 @@ private:
   }
 
 
-  inline
+  OB_INLINE
   bool is_null_field(const char* ori_field_begin, int64_t ori_field_len,
                      const char* final_field_begin, int64_t final_field_len) {
     bool ret = false;
@@ -414,7 +466,7 @@ private:
     return ret;
   }
 
-  inline
+  OB_INLINE
   void gen_new_field(const bool is_enclosed, const char *ori_field_begin, const char *ori_field_end,
                      const char *field_begin, const char *field_end, const int field_idx) {
     FieldValue &new_field = fields_per_line_[field_idx - 1];
@@ -430,12 +482,12 @@ private:
       new_field.len_ = static_cast<int32_t>(field_end - field_begin);
     }
   }
-
-  inline bool is_escape_next(const bool is_enclosed, const char cur, const char next) {
+  template <bool HAS_ENCLOSED>
+  OB_INLINE bool is_escape_next(const bool is_enclosed, const char cur, const char next) {
     // 1. the next char escaped by escape_char "A\tB" => A  B
     // 2. enclosed char escaped by another enclosed char in enclosed field. E.g. "A""B" => A"B
     return (format_.field_escaped_char_ == cur && !opt_param_.is_same_escape_enclosed_)
-           || (is_enclosed && format_.field_enclosed_char_ == cur && format_.field_enclosed_char_ == next);
+           || (HAS_ENCLOSED && is_enclosed && format_.field_enclosed_char_ == cur && format_.field_enclosed_char_ == next);
   }
 
 protected:
@@ -445,7 +497,7 @@ protected:
 };
 
 
-template<common::ObCharsetType cs_type, typename handle_func, bool NEED_ESCAPED_RESULT>
+template<common::ObCharsetType cs_type, typename handle_func, bool HAS_ENCLOSED, bool SINGLE_CHAR_TERM, bool NEED_ESCAPED_RESULT>
 int ObCSVGeneralParser::scan_proto(const char *&str,
                                    const char *end,
                                    int64_t &nrows,
@@ -500,13 +552,13 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
       bool is_field_term = false;
       bool is_line_term = false;
 
-      if (format_.field_enclosed_char_ == *str) {
+      if (HAS_ENCLOSED && format_.field_enclosed_char_ == *str) {
         is_enclosed = true;
         str++;
       }
       while (str < end && !is_term) {
         const char *next = str + 1;
-        if (next < end && is_escape_next(is_enclosed, *str, *next)) {
+        if (next < end && is_escape_next<HAS_ENCLOSED>(is_enclosed, *str, *next)) {
           if (NEED_ESCAPED_RESULT) {
             if (last_escaped_str == nullptr) {
               last_escaped_str = field_begin;
@@ -523,21 +575,26 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
             //}
           }
           str += 2;
-        } else if (format_.field_enclosed_char_ == *str) {
+        } else if (HAS_ENCLOSED && format_.field_enclosed_char_ == *str) {
           last_end_enclosed = str;
+          str++;
+        } else if (SINGLE_CHAR_TERM && (static_cast<unsigned> (*str) > opt_param_.max_term_
+                                          || static_cast<unsigned> (*str) < opt_param_.min_term_)) {
           str++;
         } else {
           is_field_term = (*str == opt_param_.field_term_c_
-              && str <= end - format_.field_term_str_.length()
-              && 0 == MEMCMP(str, format_.field_term_str_.ptr(), format_.field_term_str_.length()));
+              && (SINGLE_CHAR_TERM
+                  || (str <= end - format_.field_term_str_.length()
+                      && 0 == MEMCMP(str, format_.field_term_str_.ptr(), format_.field_term_str_.length()))));
 
           is_line_term = (*str == opt_param_.line_term_c_
-              && str <= end - format_.line_term_str_.length()
-              && 0 == MEMCMP(str, format_.line_term_str_.ptr(), format_.line_term_str_.length()));
+              && (SINGLE_CHAR_TERM
+                  || (str <= end - format_.line_term_str_.length()
+                      && 0 == MEMCMP(str, format_.line_term_str_.ptr(), format_.line_term_str_.length()))));
 
           //if field is enclosed, there is a enclose char just before the terminate string
           is_term = (is_field_term || is_line_term)
-                    && (!is_enclosed || (str - 1 == last_end_enclosed));
+                    && (!HAS_ENCLOSED || !is_enclosed || (str - 1 == last_end_enclosed));
 
           if (!is_term) {
             int mb_len = ob_charset_char_len<cs_type>((const unsigned char *)str, (const unsigned char*)end);
