@@ -786,7 +786,7 @@ int ObIOCalibration::write_into_table(ObMySQLTransaction &trans, const ObAddr &a
   // otherwise replace the calibration data
   ObSqlString delete_sql, insert_sql;
   int64_t affected_rows = 0;
-  char ip_str[32] = { 0 };
+  char ip_str[MAX_IP_ADDR_LENGTH] = { 0 };
   if (OB_UNLIKELY(!trans.is_started() || !addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(trans.is_started()), K(addr));
