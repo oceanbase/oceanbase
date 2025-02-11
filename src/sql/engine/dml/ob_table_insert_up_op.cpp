@@ -503,13 +503,19 @@ int ObTableInsertUpOp::guarantee_last_insert_id()
 {
   int ret = OB_SUCCESS;
   if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
-    int64_t last_insert_id = 0;
+    bool is_zero = false;
+    uint64_t casted_value = 0;
     ObDatum *auto_inc_id_datum = nullptr;
     ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
     if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
       LOG_WARN("eval auto_inc_expr failed", K(ret));
+    } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.auto_inc_expr_,
+                                                            auto_inc_id_datum,
+                                                            is_zero,
+                                                            casted_value))) {
+      LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
     } else {
-      plan_ctx->set_last_insert_id_cur_stmt(auto_inc_id_datum->get_int());
+      plan_ctx->set_last_insert_id_cur_stmt(casted_value);
       has_guarantee_last_insert_id_ = true;
     }
   }
@@ -523,12 +529,19 @@ int ObTableInsertUpOp::get_last_insert_id_in_try_ins(int64_t &last_insert_id)
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   if (!record_last_insert_id_try_ins_ && !has_guarantee_last_insert_id_) {
     if (OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
+      bool is_zero = false;
+      uint64_t casted_value = 0;
       ObDatum *auto_inc_id_datum = nullptr;
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
       if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
         LOG_WARN("eval auto_inc_expr failed", K(ret));
+      } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.auto_inc_expr_,
+                                                              auto_inc_id_datum,
+                                                              is_zero,
+                                                              casted_value))) {
+        LOG_WARN("get casted value failed", K(ret), K(is_zero), K(casted_value));
       } else {
-        last_insert_id = auto_inc_id_datum->get_int();
+        last_insert_id = casted_value;
         record_last_insert_id_try_ins_ = true;
       }
     }
