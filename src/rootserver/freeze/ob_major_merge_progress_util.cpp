@@ -90,7 +90,7 @@ int64_t ObLSMergeProgress::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(ls_total_cnt), K_(ls_merging_cnt), K_(ls_verified_cnt), K_(ls_refreshed_cnt));
+    J_KV(K_(ls_total_cnt), K_(ls_merging_cnt), K_(ls_verified_cnt), K_(ls_refreshed_cnt), K_(ls_refreshing_cnt));
     J_OBJ_END();
   }
   return pos;
