@@ -2848,48 +2848,53 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue ret_err;
-  OZ (generator_.generate_goto_label(s));
-  if (OB_FAIL(generator_.generate_fetch(static_cast<const ObPLStmt&>(s),
-                                        static_cast<const ObPLInto&>(s),
-                                        s.get_package_id(),
-                                        s.get_routine_id(),
-                                        s.get_index(),
-                                        s.get_limit(),
-                                        s.get_user_type(),
-                                        ret_err))) {
-    LOG_WARN("failed to generate fetch", K(ret));
-  } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
-    OZ (generator_.check_success(
-      ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
-  } else { //Oracle模式如果是OB_READ_NOTHING错误，吞掉异常不抛出
-    ObLLVMValue is_not_found;
-    ObLLVMBasicBlock fetch_end;
-    ObLLVMBasicBlock fetch_check_success;
-    if (OB_FAIL(generator_.get_helper().create_block(ObString("fetch_end"), generator_.get_func(), fetch_end))) {
-      LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (OB_FAIL(generator_.get_helper().create_block(ObString("fetch_check_success"), generator_.get_func(), fetch_check_success))) {
-      LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (OB_FAIL(generator_.get_helper().create_icmp_eq(ret_err, OB_READ_NOTHING, is_not_found))) {
-      LOG_WARN("failed to create_icmp_eq", K(ret));
-    } else if (OB_FAIL(generator_.get_helper().create_cond_br(is_not_found, fetch_end, fetch_check_success))) {
-      LOG_WARN("failed to create_cond_br", K(ret));
-    } else { /*do nothing*/ }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(generator_.set_current(fetch_check_success))) {
-        LOG_WARN("failed to set current", K(ret));
-      } else if (OB_FAIL(generator_.check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
-        LOG_WARN("failed to check success", K(ret));
-      } else if (OB_FAIL(generator_.get_helper().create_br(fetch_end))) {
-        LOG_WARN("failed to create_br", K(ret));
-      } else if (OB_FAIL(generator_.set_current(fetch_end))) {
-        LOG_WARN("failed to set current", K(ret));
+  if (NULL == generator_.get_current().get_v()) {
+    //控制流已断，后面的语句不再处理
+  } else {
+    OZ (generator_.generate_goto_label(s));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(generator_.generate_fetch(static_cast<const ObPLStmt&>(s),
+                                          static_cast<const ObPLInto&>(s),
+                                          s.get_package_id(),
+                                          s.get_routine_id(),
+                                          s.get_index(),
+                                          s.get_limit(),
+                                          s.get_user_type(),
+                                          ret_err))) {
+      LOG_WARN("failed to generate fetch", K(ret));
+    } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
+      OZ (generator_.check_success(
+        ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
+    } else { //Oracle模式如果是OB_READ_NOTHING错误，吞掉异常不抛出
+      ObLLVMValue is_not_found;
+      ObLLVMBasicBlock fetch_end;
+      ObLLVMBasicBlock fetch_check_success;
+      if (OB_FAIL(generator_.get_helper().create_block(ObString("fetch_end"), generator_.get_func(), fetch_end))) {
+        LOG_WARN("failed to create block", K(s), K(ret));
+      } else if (OB_FAIL(generator_.get_helper().create_block(ObString("fetch_check_success"), generator_.get_func(), fetch_check_success))) {
+        LOG_WARN("failed to create block", K(s), K(ret));
+      } else if (OB_FAIL(generator_.get_helper().create_icmp_eq(ret_err, OB_READ_NOTHING, is_not_found))) {
+        LOG_WARN("failed to create_icmp_eq", K(ret));
+      } else if (OB_FAIL(generator_.get_helper().create_cond_br(is_not_found, fetch_end, fetch_check_success))) {
+        LOG_WARN("failed to create_cond_br", K(ret));
       } else { /*do nothing*/ }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(generator_.set_current(fetch_check_success))) {
+          LOG_WARN("failed to set current", K(ret));
+        } else if (OB_FAIL(generator_.check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+          LOG_WARN("failed to check success", K(ret));
+        } else if (OB_FAIL(generator_.get_helper().create_br(fetch_end))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(generator_.set_current(fetch_end))) {
+          LOG_WARN("failed to set current", K(ret));
+        } else { /*do nothing*/ }
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(generator_.generate_into_restore(s.get_into(), s.get_exprs(), s.get_symbol_table()))) {
-      LOG_WARN("Failed to generate_into", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(generator_.generate_into_restore(s.get_into(), s.get_exprs(), s.get_symbol_table()))) {
+        LOG_WARN("Failed to generate_into", K(ret));
+      }
     }
   }
   return ret;
