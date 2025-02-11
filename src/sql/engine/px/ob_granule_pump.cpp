@@ -1562,22 +1562,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     LOG_WARN("ctx or partition service is null", K(ret));
   } else {
     ObGranulePumpArgs new_arg;
-    if (!(ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_PARTITION_WISE) &&
-        ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_AFFINITIZE)) &&
-        pump_args_.count() > 0) {
-      if (pump_args_.count() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("args is unexpected", K(ret));
-      } else {
-        if (OB_FAIL(init_arg(pump_args_.at(0), ctx, scan_ops, tablet_arrays, partitions_info,
-          external_table_files, modify_op, parallelism, tablet_size, gi_attri_flag,
-          locations_order))) {
-          LOG_WARN("fail to init arg", K(ret));
-        } else if (OB_FAIL(add_new_gi_task(pump_args_.at(0)))) {
-          LOG_WARN("fail to add new gi task", K(ret));
-        }
-      }
-    } else if (OB_FAIL(pump_args_.push_back(new_arg))) {
+    if (OB_FAIL(pump_args_.push_back(new_arg))) {
       LOG_WARN("fail to push back new arg", K(ret));
     } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, scan_ops,
           tablet_arrays, partitions_info, external_table_files, modify_op, parallelism,
