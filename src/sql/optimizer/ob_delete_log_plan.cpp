@@ -180,12 +180,13 @@ int ObDeleteLogPlan::candi_allocate_delete()
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> candi_plans;
   ObSEArray<CandidatePlan, 8> delete_plans;
+  bool need_duplicate_date = false;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
   OPT_TRACE("start generate normal insert plan");
   OPT_TRACE("force no multi part:", force_no_multi_part);
   OPT_TRACE("force multi part:", force_multi_part);
-  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
+  if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_, need_duplicate_date))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, candi_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));

@@ -34,7 +34,8 @@ public:
   inline virtual const ObDelUpdStmt *get_stmt() const override
   { return static_cast<const ObDelUpdStmt *>(stmt_); }
 
-  int check_table_rowkey_distinct(const ObIArray<IndexDMLInfo *> &index_dml_infos);
+  int check_table_rowkey_distinct(const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                  bool &need_duplicate_date);
 
   int check_fullfill_safe_update_mode(ObLogicalOperator *op);
 
@@ -61,6 +62,7 @@ public:
                                              const ObTablePartitionInfo &target_table_partition,
                                              const IndexDMLInfo &index_dml_info,
                                              bool is_index_maintenance,
+                                             bool need_duplicate_date,
                                              ObExchangeInfo &exch_info);
 
   int compute_hash_dist_exprs_for_pdml_del_upd(ObExchangeInfo &exch_info,

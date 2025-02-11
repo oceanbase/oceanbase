@@ -472,10 +472,6 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     if (is_pk_auto_inc) {
       ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_PK_AUTO_INC);
     }
-  } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt())
-             && static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()
-             && static_cast<const ObDelUpdStmt &>(stmt).is_dml_table_from_join()) {
-    can_use_pdml = false;
   } else if (OB_FAIL(check_pdml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),
                                                   session, can_use_pdml))) {
     LOG_WARN("failed to check pdml supported feature", K(ret));
