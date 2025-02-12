@@ -1255,13 +1255,14 @@ int ObVecIndexBuilderUtil::adjust_vec_args(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to adjust vec args", K(ret), K(index_type));
   }
-  LOG_DEBUG("finish adjust_vec_args", K(ret), K(index_type), K(index_arg));
+  LOG_DEBUG("finish adjust_vec_args", K(ret), K(index_type), K(index_arg), K(gen_columns));
   return ret;
 }
 
 /*
  * 1. 生成辅助表的列
    2. 把辅助表的对应的列放入index_arg （主键放入index_column，非主键放入store_column）
+   3. 根据index_arg的index_id，生成对应表的虚拟生成列gen_columns
 */
 int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
     obrpc::ObCreateIndexArg &index_arg,
@@ -1334,7 +1335,27 @@ int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
       }
     }
     if (is_rowkey_vid || is_vid_rowkey) {
-    } else if (is_delta_buffer || is_index_id || is_index_snapshot_data) {
+    } else if (is_delta_buffer) { // generate type, vector
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_type_col)) {
+        type_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_type_column(&index_arg, type_col_id, data_schema, generated_type_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_type_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_vector_col)) {
+        vector_col_id = available_col_id++;
+        if (OB_FAIL(generate_vector_column(&index_arg, vector_col_id, data_schema, generated_vector_col))) {
+          LOG_WARN("failed to generate vector column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_vector_col))) {
+          LOG_WARN("failed to push back vector column", K(ret));
+        }
+      }
+    } else if (is_index_id) {   // generate type, vector, scn
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(existing_type_col)) {
         type_col_id = available_col_id++;
@@ -1363,6 +1384,16 @@ int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
           LOG_WARN("fail to push back generated scn column", K(ret));
         }
       }
+    } else if (is_index_snapshot_data) {  // generate key, data, vector
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_vector_col)) {
+        vector_col_id = available_col_id++;
+        if (OB_FAIL(generate_vector_column(&index_arg, vector_col_id, data_schema, generated_vector_col))) {
+          LOG_WARN("failed to generate vector column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_vector_col))) {
+          LOG_WARN("failed to push back vector column", K(ret));
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(existing_key_col)) {
         key_col_id = available_col_id++;
@@ -1382,6 +1413,7 @@ int ObVecIndexBuilderUtil::adjust_vec_hnsw_args(
         }
       }
     }
+    // generate index_arg
     if (OB_FAIL(ret)) {
     } else if (is_rowkey_vid || is_vid_rowkey) {
       if (OB_FAIL(push_back_gen_col(tmp_cols, existing_vid_col, generated_vid_col))) {
@@ -1466,34 +1498,56 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfflat_args(
     ObColumnSchemaV2 *generated_center_id_col = nullptr;
     ObColumnSchemaV2 *generated_center_vector_col = nullptr;
     ObColumnSchemaV2 *generated_data_vector_col = nullptr;
-    // 1. generate index table columns
-    if (OB_ISNULL(existing_center_id_col)) { // need to generate vid column
-      center_id_col_id = available_col_id++;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
-        LOG_WARN("failed to generate vid column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
-        LOG_WARN("failed to push back vid column", K(ret));
+    // 1. generate index table (generate) columns
+    if (is_centroid_table) {    // generate centroid_id, center_vector column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_center_vector_col)) {
-      center_vector_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+      } else if (OB_ISNULL(existing_center_vector_col)) {
+        center_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_data_vector_col)) {
-      data_vector_col_id = available_col_id++;
+    } else if (is_cid_vector_table) { // generate centroid_id, data_vector column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
+      }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, data_vector_col_id, IVF_FLAT_DATA_VECTOR_COL, data_schema, generated_data_vector_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_data_vector_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+      } else if (OB_ISNULL(existing_data_vector_col)) {
+        data_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, data_vector_col_id, IVF_FLAT_DATA_VECTOR_COL, data_schema, generated_data_vector_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_data_vector_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
+      }
+    } else if (is_rowkey_cid_table) {   // generate centroid_id column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
       }
     }
     // 2. push back columns to every single index table
@@ -1579,54 +1633,76 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfsq8_args(
     ObColumnSchemaV2 *generated_data_vector_col = nullptr;
     ObColumnSchemaV2 *generated_meta_id_col = nullptr;
     ObColumnSchemaV2 *generated_meta_vector_col = nullptr;
-    // 1. generate index table columns
-    if (OB_ISNULL(existing_center_id_col)) { // need to generate vid column
-      center_id_col_id = available_col_id++;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
-        LOG_WARN("failed to generate vid column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
-        LOG_WARN("failed to push back vid column", K(ret));
+    // 1. generate index table (generate) columns
+    if (is_centroid_table) {    // generate center_id, center_vector column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_center_vector_col)) {
-      center_vector_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+      } else if (OB_ISNULL(existing_center_vector_col)) {
+        center_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_data_vector_col)) {
-      data_vector_col_id = available_col_id++;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, data_vector_col_id, IVF_SQ8_DATA_VECTOR_COL, data_schema, generated_data_vector_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_data_vector_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+    } else if (is_cid_vector_table) {   // generate center_id, data_vector column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_meta_id_col)) {
-      meta_id_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, meta_id_col_id, IVF_META_ID_COL, data_schema, generated_meta_id_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_meta_id_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+      } else if (OB_ISNULL(existing_data_vector_col)) {
+        data_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, data_vector_col_id, IVF_SQ8_DATA_VECTOR_COL, data_schema, generated_data_vector_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_data_vector_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_meta_vector_col)) {
-      meta_vector_col_id = available_col_id++;
+    } else if (is_rowkey_cid_table) {   // generate center_id column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate vid column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back vid column", K(ret));
+        }
+      }
+    } else if (is_sq_meta_table) {  // generate meta_id, meta_vector column
+      if (OB_ISNULL(existing_meta_id_col)) {
+        meta_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, meta_id_col_id, IVF_META_ID_COL, data_schema, generated_meta_id_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_meta_id_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
+      }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, meta_vector_col_id, IVF_META_VECTOR_COL, data_schema, generated_meta_vector_col))) {
-        LOG_WARN("failed to generate type column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_meta_vector_col))) {
-        LOG_WARN("failed to push type column", K(ret));
+      } else if (OB_ISNULL(existing_meta_vector_col)) {
+        meta_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, meta_vector_col_id, IVF_META_VECTOR_COL, data_schema, generated_meta_vector_col))) {
+          LOG_WARN("failed to generate type column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_meta_vector_col))) {
+          LOG_WARN("failed to push type column", K(ret));
+        }
       }
     }
     // 2. push back columns to every single index table
@@ -1718,44 +1794,66 @@ int ObVecIndexBuilderUtil::adjust_vec_ivfpq_args(
     ObColumnSchemaV2 *generated_center_vector_col = nullptr;
     ObColumnSchemaV2 *generated_pq_center_id_col = nullptr;
     ObColumnSchemaV2 *generated_pq_center_ids_col = nullptr;
-    // 1. generate index table columns
-    if (OB_ISNULL(existing_center_id_col)) { // need to generate vid column
-      center_id_col_id = available_col_id++;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
-        LOG_WARN("failed to generate ivf column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
-        LOG_WARN("failed to push back ivf column", K(ret));
+    // 1. generate index table (generate) columns
+    if (is_centroid_table) {    // generate center_id, center_vector column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back ivf column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_center_vector_col)) {
-      center_vector_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
-        LOG_WARN("failed to generate ivf column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
-        LOG_WARN("failed to push ivf column", K(ret));
+      } else if (OB_ISNULL(existing_center_vector_col)) {
+        center_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
+          LOG_WARN("failed to push ivf column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_pq_center_id_col)) {
-      pq_center_id_col_id = available_col_id++;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, pq_center_id_col_id, IVF_PQ_CENTER_ID_COL, data_schema, generated_pq_center_id_col))) {
-        LOG_WARN("failed to generate ivf column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_pq_center_id_col))) {
-        LOG_WARN("failed to push ivf column", K(ret));
+    } else if (is_pq_centroid_table) {  // generate center_vector, pq_center_id column
+      if (OB_ISNULL(existing_center_vector_col)) {
+        center_vector_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_vector_col_id, IVF_CENTER_VECTOR_COL, data_schema, generated_center_vector_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_vector_col))) {
+          LOG_WARN("failed to push ivf column", K(ret));
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(existing_pq_center_ids_col)) {
-      pq_center_ids_col_id = available_col_id++;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, pq_center_ids_col_id, IVF_PQ_CENTER_IDS_COL, data_schema, generated_pq_center_ids_col))) {
-        LOG_WARN("failed to generate ivf column", K(ret));
-      } else if (OB_FAIL(gen_columns.push_back(generated_pq_center_ids_col))) {
-        LOG_WARN("failed to push ivf column", K(ret));
+      } else if (OB_ISNULL(existing_pq_center_id_col)) {
+        pq_center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, pq_center_id_col_id, IVF_PQ_CENTER_ID_COL, data_schema, generated_pq_center_id_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_pq_center_id_col))) {
+          LOG_WARN("failed to push ivf column", K(ret));
+        }
+      }
+    } else if (is_pq_code_table || is_pq_rowkey_cid_table) {  // generate center_id, pq_center_ids column
+      if (OB_ISNULL(existing_center_id_col)) {
+        center_id_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, center_id_col_id, IVF_CENTER_ID_COL, data_schema, generated_center_id_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_center_id_col))) {
+          LOG_WARN("failed to push back ivf column", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(existing_pq_center_ids_col)) {
+        pq_center_ids_col_id = available_col_id++;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(generate_vec_ivf_column(&index_arg, pq_center_ids_col_id, IVF_PQ_CENTER_IDS_COL, data_schema, generated_pq_center_ids_col))) {
+          LOG_WARN("failed to generate ivf column", K(ret));
+        } else if (OB_FAIL(gen_columns.push_back(generated_pq_center_ids_col))) {
+          LOG_WARN("failed to push ivf column", K(ret));
+        }
       }
     }
     // 2. push back columns to every single index table
