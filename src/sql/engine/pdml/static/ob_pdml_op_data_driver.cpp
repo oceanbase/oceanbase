@@ -46,8 +46,8 @@ int ObPDMLOpDataDriver::init(const ObTableModifySpec &spec,
   op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::PDML_WRITE_DAS_BUFF_ROW_COUNT;
   op_monitor_info_.otherstat_4_value_ = 0;
   op_monitor_info_.otherstat_4_id_ = ObSqlMonitorStatIds::PDML_SKIP_ROW_COUNT;
-  op_monitor_info_.otherstat_6_value_ = 0;
-  op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::PDML_STORAGE_RETURN_ROW_COUNT;
+  op_monitor_info_.otherstat_5_value_ = 0;
+  op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::PDML_STORAGE_RETURN_ROW_COUNT;
 
   if (OB_ISNULL(reader)
       || OB_ISNULL(writer)) {

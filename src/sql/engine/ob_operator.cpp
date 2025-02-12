@@ -1210,7 +1210,7 @@ int ObOperator::setup_op_feedback_info()
       node.output_row_count_ = op_monitor_info_.output_row_count_;
       node.worker_count_ = 1;
       if (spec_.is_pdml_operator()) {
-        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_6_value_;
+        node.pdml_op_write_rows_ = op_monitor_info_.otherstat_5_value_;
       }
     }
   }
