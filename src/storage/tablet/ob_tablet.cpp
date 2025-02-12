@@ -1615,7 +1615,6 @@ int ObTablet::inner_init_compat_normal_tablet(
   ObStorageSchema *old_storage_schema = nullptr;
   ObDDLKV **ddl_kvs_addr = nullptr;
   int64_t ddl_kv_count = 0;
-  ObLinkedMacroBlockItemWriter linked_writer;
 
   if (CLICK_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
     LOG_WARN("failed to fetch old table store", K(ret), K(old_tablet));
@@ -1678,7 +1677,7 @@ int ObTablet::inner_init_compat_normal_tablet(
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (CLICK_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
-  } else if (CLICK_FAIL(init_aggregated_info(allocator, &linked_writer))) {
+  } else if (CLICK_FAIL(init_aggregated_info(allocator, nullptr))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
   } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
