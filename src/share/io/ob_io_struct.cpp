@@ -1259,7 +1259,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
                 //phy_queue from idle to active
                 int tmp_ret = OB_SUCCESS;
                 tmp_ret = io_clock->try_sync_tenant_clock(io_clock);
-                if (OB_TMP_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
+                if (OB_SUCCESS != io_clock->calc_phyqueue_clock(tmp_phy_queue, req)) {
                   LOG_WARN("calc phyqueue clock failed", K(ret), K(tmp_phy_queue->queue_index_));
                 } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
                   LOG_WARN("sync tenant clock failed", K(tmp_ret));

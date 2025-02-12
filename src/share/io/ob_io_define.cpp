@@ -2471,8 +2471,7 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
         int tmp_ret = push_phyqueue(tmp_phy_queue);
         time_guard.click("R_into_heap");
         if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-          LOG_WARN("re_into heap failed(R schedule)", K(tmp_ret));
-          abort();
+          LOG_ERROR("re_into heap failed(R schedule)", K(tmp_ret));
         }
       }
     } else {
@@ -2571,7 +2570,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
             LOG_WARN("get null next_req", KP(next_req));
           } else {
             int tmp_ret = io_clock->adjust_reservation_clock(tmp_phy_queue, *next_req);
-            if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req))) {
+            if (OB_SUCCESS != io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req)) {
               LOG_WARN("calc phyqueue clock failed", K(ret));
             } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
               LOG_WARN("adjust reservation clock failed", K(tmp_ret), KPC(next_req));
@@ -2581,7 +2580,7 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
       }
       int tmp_ret = push_phyqueue(tmp_phy_queue);
       if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-        LOG_WARN("re_into heap failed(P schedule)", K(tmp_ret));
+        LOG_ERROR("re_into heap failed(P schedule)", K(tmp_ret));
       }
     }
   } else {
