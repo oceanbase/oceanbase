@@ -1445,7 +1445,7 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::get_table_keys(
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablet table info mgr do not init", K(ret));
   } else {
-    for (int64_t i = 0; i < copy_table_info_array_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_info_array_.count(); ++i) {
       const ObMigrationSSTableParam &tmp_copy_table_info = copy_table_info_array_.at(i);
       if (OB_FAIL(table_keys.push_back(tmp_copy_table_info.table_key_))) {
         LOG_WARN("failed to push table key into array", K(ret), K(tmp_copy_table_info));
