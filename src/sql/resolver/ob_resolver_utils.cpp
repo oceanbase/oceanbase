@@ -663,8 +663,8 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
     if (db_name.empty()) {
       real_db_name = current_database;
       if (real_db_name.empty()) {
-        ret = OB_ERR_NO_DB_SELECTED;
-        LOG_WARN("no db select",
+        // ret = OB_ERR_NO_DB_SELECTED;
+        LOG_INFO("no db select",
           K(routine_type), K(db_name), K(package_name), K(routine_name), K(ret));
       }
     }
@@ -816,7 +816,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
         }
       } else if (lib::is_mysql_mode()) { // mysql mode only has system package
         if (OB_FAIL(schema_checker.get_package_id( // try system pacakge
-            OB_SYS_TENANT_ID, OB_SYS_DATABASE_NAME, object_name, compatible_mode, package_id))
+            OB_SYS_TENANT_ID, OB_SYS_DATABASE_NAME, package_name, compatible_mode, package_id))
             || OB_INVALID_ID == package_id) {
           LOG_WARN("failed to get package id", K(ret));
         } else {

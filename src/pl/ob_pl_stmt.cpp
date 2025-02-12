@@ -1678,15 +1678,22 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           LOG_WARN("failed to get session database id", K(ret), K(db_id));
         }
 
-        if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
-          if (OB_FAIL(schema_guard.get_package_info(tenant_id, db_id, name,
-                                                    share::schema::PACKAGE_TYPE,
-                                                    compatible_mode, package_info))) {
+        if (OB_SUCC(ret)) {
+          // db_id == OB_INVALID_ID, search in sys tenant
+          // db_id != OB_INVALID_ID, search in user tenant first, then sys tenant
+          if (OB_INVALID_ID != db_id
+              && OB_FAIL(schema_guard.get_package_info(tenant_id,
+                                                       db_id,
+                                                       name,
+                                                       share::schema::PACKAGE_TYPE,
+                                                       compatible_mode,
+                                                       package_info))) {
             LOG_WARN("get package info failed", K(ret));
-          } else if (OB_ISNULL(package_info)
-                    && (OB_INVALID_INDEX == parent_id
-                        || is_oracle_sys_database_id(parent_id)
-                        || is_oceanbase_sys_database_id(parent_id))) {
+          } else if (OB_INVALID_ID == db_id
+                     || (OB_ISNULL(package_info)
+                         && (OB_INVALID_INDEX == parent_id
+                             || is_oracle_sys_database_id(parent_id)
+                             || is_oceanbase_sys_database_id(parent_id)))) {
             if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID,
                                                       OB_SYS_DATABASE_ID,
                                                       name,
@@ -1701,7 +1708,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             const ObPackageInfo *spec_info = nullptr;
             const ObPackageInfo *body_info = nullptr;
             type = PKG_NS;
-            parent_id = db_id;
+            parent_id = OB_INVALID_ID == db_id ? OB_SYS_DATABASE_ID : db_id;
             var_idx = static_cast<int64_t>(package_info->get_package_id());
             OZ (ObPLPackageManager::get_package_schema_info(schema_guard, package_info->get_package_id(), spec_info, body_info));
             if (OB_NOT_NULL(spec_info)) {
