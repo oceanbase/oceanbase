@@ -204,7 +204,7 @@ int ObIndexTreePrefetcher::lookup_in_cache(ObSSTableReadHandle &read_handle)
   if (OB_SUCC(ret) && !found) {
     read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
   }
-  LOG_DEBUG("[INDEX BLOCK] prefetch in cache info", K(ret), K(read_handle.get_rowkey()), K(read_handle), KPC(this));
+  LOG_DEBUG("lookup in cache", K(ret), K(read_handle.get_rowkey()), K(read_handle), K(access_ctx_->enable_get_row_cache()), KPC(this), K(lbt()));
   return ret;
 }
 

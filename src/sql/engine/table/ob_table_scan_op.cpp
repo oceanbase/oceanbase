@@ -2569,11 +2569,17 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
       ObTableScanParam &scan_param = scan_op->get_scan_param();
       ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
       fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
-      if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.index_back_) {
-        fill_table_scan_stat(scan_param.idx_table_scan_stat_, table_scan_stat);
+      LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
+                                                    K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
+                                                    K(scan_op->is_local_task()), K(table_scan_stat));
+      if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
+        ObTableScanParam *lookup_param = scan_op->get_local_lookup_param();
+        if (OB_NOT_NULL(lookup_param)) {
+          fill_table_scan_stat(lookup_param->main_table_scan_stat_, table_scan_stat);
+        }
+        LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for local index lookup followed by table access", KP(lookup_param), K(table_scan_stat));
       }
       scan_param.main_table_scan_stat_.reset_cache_stat();
-      scan_param.idx_table_scan_stat_.reset_cache_stat();
       iter_end_ = true;
       if (OB_FAIL(report_ddl_column_checksum())) {
         LOG_WARN("report checksum failed", K(ret));
@@ -2702,14 +2708,21 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
 //    } else if (DAS_SCAN_OP->get_scan_param().main_table_scan_stat_.bf_access_cnt_ > 0) {
 //      partition->feedback_scan_access_stat(DAS_SCAN_OP->get_scan_param());
 //    }
-    ObTableScanParam &scan_param = DAS_SCAN_OP(*scan_iter_->begin_task_iter())->get_scan_param();
+    ObDASScanOp *scan_op = DAS_SCAN_OP(*scan_iter_->begin_task_iter());
+    ObTableScanParam &scan_param = scan_op->get_scan_param();
     ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
     fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
-    if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.index_back_) {
-      fill_table_scan_stat(scan_param.idx_table_scan_stat_, table_scan_stat);
+    LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
+                                                    K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
+                                                    K(scan_op->is_local_task()), K(table_scan_stat));
+    if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
+      ObTableScanParam *lookup_param = scan_op->get_local_lookup_param();
+      if (OB_NOT_NULL(lookup_param)) {
+        fill_table_scan_stat(lookup_param->main_table_scan_stat_, table_scan_stat);
+      }
+      LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for local index lookup followed by table access", KP(lookup_param), K(table_scan_stat));
     }
     scan_param.main_table_scan_stat_.reset_cache_stat();
-    scan_param.idx_table_scan_stat_.reset_cache_stat();
     if (OB_FAIL(report_ddl_column_checksum())) {
       LOG_WARN("report checksum failed", K(ret));
     }
@@ -3077,7 +3090,6 @@ void ObTableScanOp::set_cache_stat(const ObPlanStat &plan_stat)
   ObQueryFlag &query_flag = tsc_rtdef_.scan_rtdef_.scan_flag_;
   bool try_use_cache = !(plan_stat.execute_times_ & TRY_USE_CACHE_INTERVAL);
   if (try_use_cache) {
-    query_flag.set_use_row_cache();
     query_flag.set_use_bloomfilter_cache();
   } else {
     if (plan_stat.enable_bf_cache_) {
@@ -3085,8 +3097,20 @@ void ObTableScanOp::set_cache_stat(const ObPlanStat &plan_stat)
     } else {
       query_flag.set_not_use_bloomfilter_cache();
     }
+  }
+  if (try_use_cache && !plan_stat.enable_row_cache_) {
+    query_flag.set_use_row_cache();
+    const int64_t row_cache_access_cnt = plan_stat.row_cache_miss_cnt_ + plan_stat.row_cache_hit_cnt_;
+    tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = row_cache_access_cnt > ObPlanStat::CACHE_ACCESS_THRESHOLD ?
+        (ObPlanStat::ROW_CACHE_GROWTH_SLOPE * plan_stat.row_cache_hit_cnt_ / row_cache_access_cnt) : plan_stat.in_row_cache_threshold_;
+    LOG_DEBUG("[ROW_CACHE_ADJUST] try use row cache, update row cache threshold", K(plan_stat.execute_times_), K(plan_stat.row_cache_hit_cnt_),
+                    K(plan_stat.row_cache_miss_cnt_), K(plan_stat.in_row_cache_threshold_), K(tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_));
+  } else {
     if (plan_stat.enable_row_cache_) {
       query_flag.set_use_row_cache();
+      tsc_rtdef_.scan_rtdef_.in_row_cache_threshold_ = plan_stat.in_row_cache_threshold_;
+      LOG_DEBUG("[ROW_CACHE_ADJUST] update row cache threshold", K(plan_stat.cache_stat_update_times_), K(plan_stat.row_cache_hit_cnt_),
+                                                                 K(plan_stat.row_cache_miss_cnt_), K(plan_stat.in_row_cache_threshold_));
     } else {
       query_flag.set_not_use_row_cache();
     }

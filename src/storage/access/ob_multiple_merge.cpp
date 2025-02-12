@@ -804,6 +804,7 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
+    LOG_DEBUG("[ROW_CACHE_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
   }
   const compaction::ObBasicMergeScheduler *scheduler = nullptr;
   if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {

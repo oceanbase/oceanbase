@@ -315,6 +315,7 @@ int ObDASScanOp::init_scan_param()
 
   scan_param_.is_mds_query_ = false;
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
+  scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -451,6 +452,16 @@ bool ObDASScanOp::is_vec_idx_scan(const ObDASBaseCtDef *attach_ctdef) const
   }
 
   return bret;
+}
+
+storage::ObTableScanParam* ObDASScanOp::get_local_lookup_param()
+{
+  storage::ObTableScanParam* lookup_param = nullptr;
+  if (is_local_task() && ITER_TREE_LOCAL_LOOKUP == get_iter_tree_type() && OB_NOT_NULL(result_)) {
+    ObDASLocalLookupIter *lookup_iter = static_cast<ObDASLocalLookupIter*>(result_);
+    lookup_param = &lookup_iter->get_lookup_param();
+  }
+  return lookup_param;
 }
 
 int ObDASScanOp::init_related_tablet_ids(ObDASRelatedTabletID &related_tablet_ids)
