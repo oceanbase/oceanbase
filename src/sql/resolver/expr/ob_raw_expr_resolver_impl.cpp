@@ -2392,6 +2392,7 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
                                                            fake_exprs,
                                                            var,
                                                            &ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().package_guard_,
+                                                           ctx_.param_list_,
                                                            false,/*is_prepare_protocol*/
                                                            true,/*is_check_mode*/
                                                            ctx_.current_scope_ != T_PL_SCOPE /*is_sql_scope*/))) {

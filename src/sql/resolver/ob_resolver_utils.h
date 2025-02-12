@@ -314,6 +314,7 @@ public:
                                      ObIArray<ObRawExpr*> &real_exprs,
                                      ObRawExpr *&expr,
                                      pl::ObPLPackageGuard *package_guard,
+                                     const ParamStore *params,
                                      bool is_prepare_protocol = false,
                                      bool is_check_mode = false,
                                      bool is_sql_scope = false,
