@@ -748,7 +748,8 @@ int ObMicroBlockReader::filter_pushdown_filter(
               data_begin_ + index_data_[row_idx],
               index_data_[row_idx + 1] - index_data_[row_idx],
               col_idx,
-              tmp_datum))) {
+              tmp_datum,
+              col_params.at(i)))) {
             LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
           } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
             datum.set_int(-tmp_datum.get_int());
@@ -1064,7 +1065,8 @@ int ObMicroBlockReader::get_row_count(
           data_begin_ + index_data_[row_idx],
           index_data_[row_idx + 1] - index_data_[row_idx],
           col_idx,
-          datum))) {
+          datum,
+          col_param))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
       } else if (datum.is_nop()) {
         if (OB_UNLIKELY(nullptr == col_param || col_param->get_orig_default_value().is_nop_value())) {
