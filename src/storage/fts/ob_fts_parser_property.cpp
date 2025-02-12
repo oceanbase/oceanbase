@@ -18,6 +18,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "storage/fts/ob_beng_ft_parser.h"
@@ -194,7 +195,7 @@ int ObFTParserJsonProps::parse_from_valid_str(const ObString &str)
     ret = OB_NOT_INIT;
     LOG_WARN("Props not init", K(ret));
   } else if (str.empty()) {
-    // do nothing
+    // do nothing and use default {}
   } else if (OB_FAIL(ObJsonParser::get_tree(&allocator_, str, root))) {
     LOG_WARN("Fail to parse json", K(ret));
   } else {
@@ -214,11 +215,15 @@ int ObFTParserJsonProps::to_format_json(ObIAllocator &alloc, ObString &str)
   if (!IS_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    ObJsonBuffer j_buf(&alloc);
-    if (OB_FAIL(root_->print(j_buf, false))) {
-      LOG_WARN("Fail to print json", K(ret));
+    if (is_empty()) {
+      str = ObString(); // just make it empty;
     } else {
-      str = j_buf.string();
+      ObJsonBuffer j_buf(&alloc);
+      if (OB_FAIL(root_->print(j_buf, false))) {
+        LOG_WARN("Fail to print json", K(ret));
+      } else {
+        str = j_buf.string();
+      }
     }
   }
   return ret;
@@ -462,12 +467,8 @@ int ObFTParserJsonProps::rebuild_props_for_ddl(const ObString &parser_name,
       if (OB_FAIL(beng_rebuild_props_for_ddl(log_to_user))) {
         LOG_WARN("fail to rebuild props for ddl", K(ret));
       }
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      if (log_to_user) {
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser type is not supported.");
-      }
-      LOG_WARN("Invalid parser type", K(ret), K(parser_name));
+    } else if (OB_FAIL(plugin_rebuild_props_for_ddl(log_to_user))) {
+      LOG_WARN("fail to rebuild props for ddl", K(ret));
     }
   }
 
@@ -738,6 +739,18 @@ int ObFTParserJsonProps::beng_rebuild_props_for_ddl(const bool log_to_user)
       }
     }
   }
+  return ret;
+}
+
+int ObFTParserJsonProps::plugin_rebuild_props_for_ddl(const bool log_to_user)
+{
+  int ret = OB_SUCCESS;
+  if (!is_empty()) {
+    ret = OB_NOT_SUPPORTED;
+    if (log_to_user) {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Non-builtin parser property");
+    }
+  };
   return ret;
 }
 

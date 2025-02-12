@@ -101,6 +101,7 @@ private:
   int ngram_rebuild_props_for_ddl(bool log_to_user);
   int space_rebuild_props_for_ddl(bool log_to_user);
   int beng_rebuild_props_for_ddl(bool log_to_user);
+  int plugin_rebuild_props_for_ddl(bool log_to_user);
 
 private:
   common::ObArenaAllocator allocator_;

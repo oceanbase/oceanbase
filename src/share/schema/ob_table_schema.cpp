@@ -3184,11 +3184,13 @@ int ObTableSchema::set_parser_name_and_properties(
     const common::ObString &parser_properties)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(parser_name.empty() || parser_properties.empty())) {
+  if (OB_UNLIKELY(parser_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(parser_name), K(parser_properties));
   } else if (OB_FAIL(deep_copy_str(parser_name, parser_name_))) {
     LOG_WARN("fail to deep copy parser name", K(ret), K(parser_name));
+  } else if (parser_properties.empty()) {
+    // keep it empty
   } else if (OB_FAIL(deep_copy_str(parser_properties, parser_properties_))) {
     LOG_WARN("fail to deep copy parser properties", K(ret), K(parser_properties));
   }

@@ -61,6 +61,7 @@ private:
   static const char *NGRAM_PARSER_STR;
   static const char *BENG_PARSER_STR;
   static const char *IK_PARSER_STR;
+  static const char *NON_BUILTIN_PARSER_STR;
   static ObFTParser space_parser_;
   static ObFTParser ngram_parser_;
   static ObFTParser beng_parser_;
@@ -84,6 +85,7 @@ const char *TestFTParserProperty::SPACE_PARSER_STR = "space.1";
 const char *TestFTParserProperty::NGRAM_PARSER_STR = "ngram.1";
 const char *TestFTParserProperty::BENG_PARSER_STR = "beng.1";
 const char *TestFTParserProperty::IK_PARSER_STR = "ik.1";
+const char *TestFTParserProperty::NON_BUILTIN_PARSER_STR = "jieba.1";
 
 ObFTParser TestFTParserProperty::space_parser_;
 ObFTParser TestFTParserProperty::ngram_parser_;
@@ -564,6 +566,23 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.show_parser_properties(json_props, output_buf, 128, pos);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(ObString(output), ObString(output_buf));
+  }
+  {
+    int ret = OB_SUCCESS;
+    common::ObString result;
+    ObFTParserJsonProps json_props;
+
+    ret = json_props.init();
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    const common::ObString ik_str = ObString(); // empty
+    ret = json_props.parse_from_valid_str(ik_str);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ret = json_props.rebuild_props_for_ddl(NON_BUILTIN_PARSER_STR,
+                                           ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                           false);
+    ASSERT_EQ(OB_SUCCESS, ret);
   }
 }
 
