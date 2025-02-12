@@ -1031,7 +1031,9 @@ int ObDASHNSWScanIter::get_vector_from_com_aux_vec_table(ObIAllocator &allocator
 
   const ObDASScanCtDef *com_aux_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_com_aux_tbl_idx(), ObTSCIRScanType::OB_VEC_COM_AUX_SCAN);
 
-  if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(rowkey, com_aux_vec_scan_param_, com_aux_vec_ctdef->ref_table_id_))) {
+  if (!com_aux_vec_iter_first_scan_ && OB_FAIL(reuse_com_aux_vec_iter())) {
+    LOG_WARN("failed to reuse com aux vec iter.", K(ret));
+  } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(rowkey, com_aux_vec_scan_param_, com_aux_vec_ctdef->ref_table_id_))) {
     LOG_WARN("failed to set lookup key", K(ret));
   } else if (OB_FAIL(do_com_aux_vec_table_scan())) {
     LOG_WARN("failed to do com aux vec table scan", K(ret));
@@ -1077,13 +1079,6 @@ int ObDASHNSWScanIter::get_vector_from_com_aux_vec_table(ObIAllocator &allocator
                                                                  vector))) {
       LOG_WARN("failed to get real data.", K(ret));
     }
-  }
-
-  int tmp_ret = ret;
-  if (OB_FAIL(reuse_com_aux_vec_iter())) {
-    LOG_WARN("failed to reuse com aux vec iter.", K(ret));
-  } else {
-    ret = tmp_ret;
   }
 
   return ret;
