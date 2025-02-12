@@ -812,10 +812,12 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
     ret = OB_EAGAIN;
     LOG_TRACE("someone else is reading tcb, try again later", KR(ret), K(task_id));
   } else {
+    bool need_unset_interrupt = false;
     ObDASTCBMemProfileKey &mem_profile_key = tcb->mem_profile_key_;
     ObDASMemProfileInfo *mem_profile_info = NULL;
     if ((tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0) &&
-        OB_FAIL(SET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_))) {
+         OB_FAIL(SET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_)) &&
+         FALSE_IT(need_unset_interrupt = true)) {
       LOG_WARN("register interrupt failed", KR(ret));
     } else if (OB_FAIL(tcb->register_reading())) {
       LOG_WARN("unregister reading tcb failed", KR(ret), K(task_id));
@@ -859,7 +861,9 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
       ret = save_ret;
     }
 
-    UNSET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_);
+    if (need_unset_interrupt) {
+      UNSET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_);
+    }
   }
   if (NULL != tcb) {
     tcb_map_.revert(tcb);
