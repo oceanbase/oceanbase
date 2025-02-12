@@ -1641,7 +1641,7 @@ bool ObConfigEnableAutoSplitChecker::check(const ObConfigItem &t) const
 bool ObConfigAutoSplitTabletSizeChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;
-  int64_t value = ObConfigIntParser::get(t.str(), is_valid);
+  int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
   return is_valid && !GCTX.is_shared_storage_mode();
 }
 
