@@ -527,6 +527,8 @@ public:
   static int check_composite_compatible(const ObUserDefinedType *actual_param_type,
                                         const ObUserDefinedType *formal_param_type,
                                         bool &is_compatible);
+  static int check_composite_cast(const ObPLINS &ns,
+                                  ObRawExpr *&expr);
   int check_anonymous_array_compatible( uint64_t actual_param_type_id,
                                         uint64_t formal_param_type_id,
                                         bool &is_compatible);

@@ -468,11 +468,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       } else if (ob_is_extend(dst_type.get_type())
                  || dst_type.is_user_defined_sql_type()
                  || dst_type.is_collection_sql_type()) {
-        if (type1.is_ext() && type1.get_udt_id() != type2.get_udt_id()) { // type1 and dst_type is not the same udt
-          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
-          LOG_WARN("udt_id of type1 is not the same as udt_id of type2 ", K(ret), K(type1), K(type2));
-        }
-        OX (type.set_udt_id(type2.get_udt_id()));
+        type.set_udt_id(type2.get_udt_id());
       } else {
         type.set_length(length);
         if ((ObNumberTC == dst_type.get_type_class() || ObDecimalIntTC == dst_type.get_type_class())
