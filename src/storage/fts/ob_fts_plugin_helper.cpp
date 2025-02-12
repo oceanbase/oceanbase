@@ -242,6 +242,8 @@ int ObFTParseHelper::segment(
     param.parser_version_ = parser_version;
     param.plugin_param_ = plugin_param;
     param.ngram_token_size_ = property.ngram_token_size_;
+    param.ik_param_.mode_
+        = (property.ik_mode_smart_ ? ObFTIKParam::Mode::SMART : ObFTIKParam::Mode::MAX_WORD);
     if (OB_FAIL(parser_desc->segment(&param, iter))) {
       LOG_WARN("fail to segment", K(ret), K(param));
     } else if (OB_ISNULL(iter)) {

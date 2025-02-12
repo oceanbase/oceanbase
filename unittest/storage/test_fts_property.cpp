@@ -558,7 +558,7 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ObString new_json;
     ret = json_props.to_format_json(tmp_alloc, new_json);
 
-    char output[] = R"(PARSER_PROPERTIES=() )";
+    char output[] = R"(PARSER_PROPERTIES=(ik_mode="smart") )";
     char output_buf[128];
     int64_t pos = 0;
     ret = json_props.show_parser_properties(json_props, output_buf, 128, pos);

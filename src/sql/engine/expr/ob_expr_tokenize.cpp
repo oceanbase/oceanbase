@@ -187,7 +187,7 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
       ObString json_str;
       if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, json_str))) {
         LOG_WARN("Fail to tokenize array to props json", K(ret));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser args format not valid.");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser arguments");
       } else {
         properties_ = json_str;
       }

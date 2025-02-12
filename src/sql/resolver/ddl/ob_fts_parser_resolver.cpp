@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -166,6 +167,34 @@ int ObFTParserResolverHelper::resolve_fts_index_parser_properties(
         }
         break;
       }
+      case T_IK_MODE: {
+        if (OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("option_node child is nullptr", K(ret));
+        } else if (OB_UNLIKELY(node->children_[0]->str_len_ <= 0)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret), K(node->children_[0]->str_len_));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "the mode str is empty");
+        } else {
+          ObString ik_mode_str(static_cast<int32_t>(node->children_[0]->str_len_),
+                               (char *)(node->children_[0]->str_value_));
+          if (0 == ik_mode_str.case_compare(ObFTSLiteral::FT_IK_MODE_MAX_WORD)) {
+            if (OB_FAIL(property.config_set_ik_mode(ObFTSLiteral::FT_IK_MODE_MAX_WORD))) {
+              LOG_WARN("fail to set use ik smart", K(ret));
+            }
+          } else if (0 == ik_mode_str.case_compare(ObFTSLiteral::FT_IK_MODE_SMART)) {
+            if (OB_FAIL(property.config_set_ik_mode(ObFTSLiteral::FT_IK_MODE_SMART))) {
+              LOG_WARN("fail to set use ik smart", K(ret));
+            }
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid fts index parser properties option", K(ret), K(ik_mode_str));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, ObFTSLiteral::IK_MODE_SCOPE_STR);
+          }
+        }
+        break;
+      }
+
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid fts index parser properties option", K(ret), K(node->type_));

@@ -32,6 +32,7 @@ public:
   static constexpr const char *CONFIG_NAME_STOPWORD_TABLE = "stopword_table";
   static constexpr const char *CONFIG_NAME_DICT_TABLE = "dict_table";
   static constexpr const char *CONFIG_NAME_QUANTIFIER_TABLE = "quanitfier_table";
+  static constexpr const char *CONFIG_NAME_IK_MODE = "ik_mode";
 
   // config bound
   static constexpr int64_t FT_MIN_TOKEN_SIZE_LOWER_BOUND = 1;
@@ -42,6 +43,9 @@ public:
 
   static constexpr int64_t FT_NGRAM_TOKEN_SIZE_LOWER_BOUND = 1;
   static constexpr int64_t FT_NGRAM_TOKEN_SIZE_UPPER_BOUND = 10;
+
+  static constexpr const char *FT_IK_MODE_SMART = "smart";
+  static constexpr const char *FT_IK_MODE_MAX_WORD = "max_word";
 
   // default config
   static constexpr int64_t FT_DEFAULT_MIN_TOKEN_SIZE = 3;
@@ -67,6 +71,8 @@ public:
       = "the ngram_token_size must be in [1, 10]";
   static constexpr const char *MIN_MAX_TOKEN_SIZE_SCOPE_STR
       = "the max_token_size must be greater than min_token_size";
+
+  static constexpr const char *IK_MODE_SCOPE_STR = "the ik_mode should be max_word or smart";
 };
 
 } //  namespace storage

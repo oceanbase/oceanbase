@@ -45,6 +45,7 @@ public:
   int config_set_stopword_table(const ObString &str);
   int config_set_dict_table(const ObString &str);
   int config_set_quantifier_table(const ObString &str);
+  int config_set_ik_mode(const ObString &ik_mode);
 
   int config_get_min_token_size(int64_t &size) const;
   int config_get_max_token_size(int64_t &size) const;
@@ -52,6 +53,7 @@ public:
   int config_get_stopword_table(ObString &str) const;
   int config_get_dict_table(ObString &str) const;
   int config_get_quantifier_table(ObString &str) const;
+  int config_get_ik_mode(ObString &ik_mode) const;
 
   int rebuild_props_for_ddl(const ObString &parser_name,
                             const common::ObCollationType &type,
@@ -118,7 +120,7 @@ public:
   bool is_equal(const ObFTParserProperty &other) const
   {
     return min_token_size_ == other.min_token_size_ && max_token_size_ == other.max_token_size_
-           && ngram_token_size_ == other.ngram_token_size_
+           && ngram_token_size_ == other.ngram_token_size_ && ik_mode_smart_ == other.ik_mode_smart_
            && stopword_table_ == other.stopword_table_ && dict_table_ == other.dict_table_
            && quantifier_table_ == other.quantifier_table_;
   }
@@ -134,6 +136,7 @@ public:
   int64_t min_token_size_;
   int64_t max_token_size_;
   int64_t ngram_token_size_;
+  bool ik_mode_smart_;
   common::ObString stopword_table_;
   common::ObString dict_table_;
   common::ObString quantifier_table_;

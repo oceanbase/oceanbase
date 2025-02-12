@@ -383,6 +383,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"if", IF},
   {"ignore", IGNORE},
   {"ignore_server_ids", IGNORE_SERVER_IDS},
+  {"ik_mode", IK_MODE},
   {"immediate", IMMEDIATE},
   {"import", IMPORT},
   {"in", IN},
