@@ -434,6 +434,7 @@ constexpr int OB_BACKUP_ZONE_IDC_REGION_INVALID = -9133;
 constexpr int OB_ERR_TMP_FILE_ALREADY_SEALED = -9134;
 constexpr int OB_TMP_FILE_EXCEED_DISK_QUOTA = -9135;
 constexpr int OB_ERR_DUPLICATE_INDEX = -9137;
+constexpr int OB_INVALID_KMS_DEST = -9139;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_HDFS_CONNECT_FS_ERROR = -11019;
