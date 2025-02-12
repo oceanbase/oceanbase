@@ -3904,6 +3904,10 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("variance");
       case T_FUN_APPROX_COUNT_DISTINCT:
         SET_SYMBOL_IF_EMPTY("approx_count_distinct");
+      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
+        SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
+      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+        SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
       case T_FUN_KEEP_WM_CONCAT: {
         SET_SYMBOL_IF_EMPTY("wm_concat");
         DATA_PRINTF("%.*s(", LEN_AND_PTR(symbol));
