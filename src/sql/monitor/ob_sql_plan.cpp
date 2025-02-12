@@ -233,7 +233,9 @@ int ObSqlPlan::get_plan_used_hint_info_one_line(PlanText &plan_text,
     plan_text.is_oneline_ = true;
     plan_text.pos_ = 0;
     BUF_PRINT_CONST_STR("/*+ ", plan_text);
-    if (OB_FAIL(get_plan_tree_used_hint(plan_text, plan->get_plan_root()))) {
+    if (OB_FAIL(reset_plan_tree_outline_flag(plan->get_plan_root()))) {
+      LOG_WARN("failed to reset plan tree outline flag", K(ret));
+    } else if (OB_FAIL(get_plan_tree_used_hint(plan_text, plan->get_plan_root()))) {
       LOG_WARN("failed to get plan tree used hint", K(ret));
     } else if (OB_FAIL(query_hint.print_qb_name_hints(plan_text))) {
       LOG_WARN("failed to print qb name hints", K(ret));
@@ -697,7 +699,9 @@ int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
     BUF_PRINT_CONST_STR("  /*+", temp_text);
     BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
     BUF_PRINT_CONST_STR(OUTPUT_PREFIX, temp_text);
-    if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan_top))) {
+    if (OB_FAIL(reset_plan_tree_outline_flag(plan_top))) {
+      LOG_WARN("failed to reset plan tree outline flag", K(ret));
+    } else if (OB_FAIL(get_plan_tree_used_hint(temp_text, plan_top))) {
       LOG_WARN("failed to get plan tree used hint", K(ret));
     } else if (OB_FAIL(query_hint.print_qb_name_hints(temp_text))) {
       LOG_WARN("failed to print qb name hints", K(ret));
