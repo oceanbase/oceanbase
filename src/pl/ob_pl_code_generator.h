@@ -110,6 +110,7 @@ public:
     jit::ObLLVMFunction spi_init_composite_;
     jit::ObLLVMFunction spi_get_parent_allocator_;
     jit::ObLLVMFunction spi_get_current_expr_allocator_;
+    jit::ObLLVMFunction spi_adjust_error_trace_;
   };
 
   struct EHStack
@@ -835,6 +836,8 @@ public:
 
   int generate_spi_pl_profiler_before_record(const ObPLStmt &s);
   int generate_spi_pl_profiler_after_record(const ObPLStmt &s);
+
+  int generate_spi_adjust_error_trace(const ObPLStmt &s, int level);
 
   int generate_get_parent_allocator(jit::ObLLVMValue &allocator,
                                     jit::ObLLVMValue &parent_allocator,

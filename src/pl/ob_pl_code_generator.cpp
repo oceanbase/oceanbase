@@ -1635,14 +1635,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
         OZ (generator_.set_current(final_branch));
       }
       if (OB_SUCC(ret) && s.is_return_ref_cursor_type()) {
-        ObSEArray<ObLLVMValue, 16> args;
+        ObSEArray<ObLLVMValue, 3> args;
         ObLLVMValue addend;
-        // check ref cursor
+        ObLLVMValue ret_err;
+        OZ (generator_.get_helper().get_int64(1, addend));
         OZ (args.push_back(generator_.get_vars()[generator_.CTX_IDX]));
         OZ (args.push_back(p_result));
-        OZ (generator_.get_helper().get_int64(1, addend));
         OZ (args.push_back(addend));
-        jit::ObLLVMValue ret_err;
         // 这儿为啥需要对ref count +1, 因为一个被return的ref cursor，在函数block结束的时候，会被dec ref
         // 那么这个时候可能会减到0， 从而导致这个被return的ref cursor被close了。
         // 这个+1，在ob_expr_udf那儿会对这个ref cursor -1进行平衡操作。
@@ -1656,31 +1655,24 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
                                      s.get_block()->in_warning()));
       }
     }
-    if (OB_SUCC(ret)) {
-      LOG_DEBUG("generate return stmt, close cursor",
-                                    K(generator_.get_ast().get_cursor_table().get_count()),
-                                    K(s.get_stmt_id()),
-                                    K(generator_.get_ast().get_name()));
-      OZ (generator_.generate_close_loop_cursor(false, 0));
 
-      // close cursor
-      for (int64_t i = 0; OB_SUCC(ret) && i < generator_.get_ast().get_cursor_table().get_count(); ++i) {
-        const ObPLCursor *cursor = generator_.get_ast().get_cursor_table().get_cursor(i);
-        OZ (generator_.generate_handle_ref_cursor(cursor, s, false, false));
-      }
-      ObLLVMValue ret_value;
-      ObLLVMBasicBlock null_block;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(generator_.generate_spi_pl_profiler_after_record(s))) {
-        LOG_WARN("failed to generate spi profiler after record call", K(ret), K(s));
-      } else if (OB_FAIL(generator_.get_helper().create_load(ObString("load_ret"), generator_.get_vars().at(generator_.RET_IDX), ret_value))) {
-        LOG_WARN("failed to create_load", K(ret));
-      } else if (OB_FAIL(generator_.get_helper().create_ret(ret_value))) {
-        LOG_WARN("failed to create_ret", K(ret));
-      } else if (OB_FAIL(generator_.set_current(null_block))) { // Return语句会结束函数, 切断控制流, 后面的语句不再Codegen
-        LOG_WARN("failed to set current", K(s), K(ret));
-      }
+    // close cursor
+    OZ (generator_.generate_close_loop_cursor(false, 0));
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < generator_.get_ast().get_cursor_table().get_count(); ++i) {
+      const ObPLCursor *cursor = generator_.get_ast().get_cursor_table().get_cursor(i);
+      OZ (generator_.generate_handle_ref_cursor(cursor, s, false, false));
     }
+
+    // adjust error trace
+    OZ (generator_.generate_spi_adjust_error_trace(s, 0));
+
+    ObLLVMValue ret_value;
+    ObLLVMBasicBlock null_block;
+    OZ (generator_.generate_spi_pl_profiler_after_record(s));
+    OZ (generator_.get_helper().create_load(ObString("load_ret"), generator_.get_vars().at(generator_.RET_IDX), ret_value));
+    OZ (generator_.get_helper().create_ret(ret_value));
+    OZ (generator_.set_current(null_block));
   }
   return ret;
 }
@@ -3254,42 +3246,39 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
       } else if (OB_FAIL(generator_.get_helper().set_insert_point(entry_blk))) {
         LOG_WARN("failed to set insert point", K(ret));
       } else {
+
         #define GEN_BR_WITH_COLSE_CURSOR(goto_dst) \
         do { \
           for (int64_t i = 0; OB_SUCC(ret) && i < s.get_cursor_stmt_count(); ++i) { \
-            const ObPLCursorForLoopStmt *cs =  \
-                  static_cast<const ObPLCursorForLoopStmt *>(s.get_cursor_stmt(i)); \
-            if (OB_NOT_NULL(cs)) { \
-              CK (OB_NOT_NULL(cs->get_cursor())); \
-              OZ (generator_.generate_close(static_cast<const ObPLStmt&>(*cs), \
-                                            cs->get_cursor()->get_package_id(), \
-                                            cs->get_cursor()->get_routine_id(), \
-                                            cs->get_index()));\
-            } else {\
-              ret = OB_ERR_UNEXPECTED;\
-              LOG_WARN("null goto cursor for loop stmt", K(ret));\
-            }\
-          }\
+            const ObPLCursorForLoopStmt *cs = static_cast<const ObPLCursorForLoopStmt *>(s.get_cursor_stmt(i)); \
+            CK (OB_NOT_NULL(cs)); \
+            CK (OB_NOT_NULL(cs->get_cursor())); \
+            OZ (generator_.generate_close(static_cast<const ObPLStmt&>(*cs), \
+                                          cs->get_cursor()->get_package_id(), \
+                                          cs->get_cursor()->get_routine_id(), \
+                                          cs->get_index())); \
+          } \
           if (OB_SUCC(ret)) { \
-            ObSEArray<ObLLVMValue, 1> args;    \
-            ObLLVMValue result;                \
-            if (OB_FAIL(args.push_back(generator_.get_vars().at(generator_.CTX_IDX)))) {    \
-              LOG_WARN("fail to push back.", K(ret));               \
+            ObSEArray<ObLLVMValue, 1> args; \
+            ObLLVMValue result; \
+            if (OB_FAIL(args.push_back(generator_.get_vars().at(generator_.CTX_IDX)))) { \
+              LOG_WARN("fail to push back.", K(ret)); \
             } else if (OB_FAIL(generator_.get_helper().create_call(ObString("check_early_exit"), generator_.get_spi_service().spi_check_early_exit_, args, result))) { \
-              LOG_WARN("fail to create call check_early_exit", K(ret));      \
-            } else if (OB_FAIL(generator_.check_success(result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {   \
-              LOG_WARN("fail to check success", K(ret));  \
+              LOG_WARN("fail to create call check_early_exit", K(ret)); \
+            } else if (OB_FAIL(generator_.check_success(result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) { \
+              LOG_WARN("fail to check success", K(ret)); \
             } else if (OB_FAIL(generator_.generate_spi_pl_profiler_after_record(s))) { \
               LOG_WARN("failed to generate spi profiler after record call", K(ret), K(s)); \
+            } else if (OB_FAIL(generator_.generate_spi_adjust_error_trace(s, s.get_dst_stmt()->get_level()))) { \
+              LOG_WARN("failed to generate spi adjust error trace", K(ret), K(s), K(s.get_dst_stmt())); \
             } else if (OB_FAIL(generator_.get_helper().create_br(goto_dst))) { \
               LOG_WARN("failed to create br instr", K(ret)); \
-            }\
-          }\
+            } \
+          } \
         } while(0)
 
         hash::HashMapPair<ObPLCodeGenerator::goto_label_flag, std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>> pair;
-        int tmp_ret = generator_.get_goto_label_map().get_refactored(
-                                            s.get_dst_stmt()->get_stmt_id(), pair);
+        int tmp_ret = generator_.get_goto_label_map().get_refactored(s.get_dst_stmt()->get_stmt_id(), pair);
         if (OB_SUCCESS == tmp_ret) {
           if (ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_CG == pair.first) {
             GEN_BR_WITH_COLSE_CURSOR(pair.second.second);
@@ -3299,17 +3288,14 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
         } else if (OB_HASH_NOT_EXIST == tmp_ret) {
           ObLLVMBasicBlock dst_blk;
           ObLLVMBasicBlock stack_save_blk;
-          if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(),
-                      generator_.get_func(), dst_blk))) {
+          if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(), generator_.get_func(), dst_blk))) {
             LOG_WARN("faile to create dst block", K(ret));
-          } else if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(),
-                      generator_.get_func(), stack_save_blk))) {
+          } else if (OB_FAIL(generator_.get_helper().create_block(s.get_dst_label(), generator_.get_func(), stack_save_blk))) {
             LOG_WARN("faile to create stack save block", K(ret));
           } else if (OB_FAIL(pair.init(ObPLCodeGenerator::goto_label_flag::GOTO_LABEL_EXIST,
-                                      std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>(stack_save_blk, dst_blk)))) {
+                                       std::pair<ObLLVMBasicBlock, ObLLVMBasicBlock>(stack_save_blk, dst_blk)))) {
             LOG_WARN("failed to init pair", K(ret));
-          } else if (OB_FAIL(generator_.get_goto_label_map().set_refactored(
-                                          s.get_dst_stmt()->get_stmt_id(), pair))) {
+          } else if (OB_FAIL(generator_.get_goto_label_map().set_refactored(s.get_dst_stmt()->get_stmt_id(), pair))) {
             LOG_WARN("fill hash map failed", K(ret));
           } else {
             GEN_BR_WITH_COLSE_CURSOR(stack_save_blk);
@@ -3321,8 +3307,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
       }
       if (OB_SUCC(ret)) {
         ObLLVMBasicBlock new_blk;
-        if (OB_FAIL(generator_.get_helper().create_block(ObString("after_goto"),
-                         generator_.get_func(), new_blk))) {
+        if (OB_FAIL(generator_.get_helper().create_block(ObString("after_goto"), generator_.get_func(), new_blk))) {
           LOG_WARN("failed to create basic block", K(ret));
         } else if (OB_FAIL(generator_.set_current(new_blk))) {
           LOG_WARN("failed to set current block", K(ret));
@@ -4576,6 +4561,14 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int64_type));                    // level
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_pl_profiler_after_record"), ft, spi_service_.spi_pl_profiler_after_record_));
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (arg_types.push_back(int64_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_adjust_error_trace"), ft, spi_service_.spi_adjust_error_trace_));
   }
 
   return ret;
@@ -7075,8 +7068,9 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
       if (OB_ISNULL(label_info)) { \
         ret = OB_ERR_LABEL_ILLEGAL; \
         LOG_WARN("label info is NULL", K(control.get_next_label()), K(ret)); \
-        LOG_USER_ERROR(OB_ERR_LABEL_ILLEGAL, control.get_next_label().length(), \
-                       control.get_next_label().ptr()); \
+        LOG_USER_ERROR(OB_ERR_LABEL_ILLEGAL, control.get_next_label().length(), control.get_next_label().ptr()); \
+      } else if (OB_FAIL(generate_spi_adjust_error_trace(control, label_info->level_))) { \
+        LOG_WARN("failed to generate spi adjust error trace", K(ret), K(label_info->level_)); \
       } else { \
         LOG_DEBUG("label info is not null", K(control.get_next_label()), K(label_info->name_), K(label_info->level_)); \
         for (int64_t i = get_loop_count() - 1; OB_SUCC(ret) && i >= 0; --i) { \
@@ -7145,18 +7139,16 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
         ret = OB_ERR_EXIT_CONTINUE_ILLEGAL;
         LOG_WARN("illegal EXIT/CONTINUE statement; it must appear inside a loop", K(ret));
       } else {
-        if (OB_SUCC(ret)) {
-          ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? loop_info->exit_ : loop_info->start_;
-          if (OB_ISNULL(next.get_v())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("a loop must have valid body", K(ret));
-          } else if (OB_FAIL(helper_.create_br(next))) {
-            LOG_WARN("failed to create br", K(ret));
-          } else {
-            if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
-              LOG_WARN("failed to set current", K(ret));
-            }
-          }
+        ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? loop_info->exit_ : loop_info->start_;
+        if (OB_ISNULL(next.get_v())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("a loop must have valid body", K(ret));
+        } else if (OB_FAIL(generate_spi_adjust_error_trace(control, loop_info->level_))) {
+          LOG_WARN("failed to generate spi adjust error trace", K(ret));
+        } else if (OB_FAIL(helper_.create_br(next))) {
+          LOG_WARN("failed to create br", K(ret));
+        } else if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
+          LOG_WARN("failed to set current", K(ret));
         }
       }
     }
@@ -10025,7 +10017,27 @@ int ObPLCodeGenerator::get_unreachable_block(ObLLVMBasicBlock &unreachable) {
   if (OB_SUCC(ret)) {
     unreachable = unreachable_;
   }
+  return ret;
+}
 
+int ObPLCodeGenerator::generate_spi_adjust_error_trace(const ObPLStmt &s, int level)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(get_current().get_v())) {
+    ObSEArray<ObLLVMValue, 2> args;
+    ObLLVMValue ret_err;
+    ObLLVMValue value;
+
+    CK (OB_NOT_NULL(s.get_block()));
+    OZ (args.push_back(get_vars().at(CTX_IDX)));
+    OZ (get_helper().get_int64(level, value));
+    OZ (args.push_back(value));
+    OZ (get_helper().create_call(ObString("spi_adjust_error_trace"),
+                                 get_spi_service().spi_adjust_error_trace_,
+                                 args,
+                                 ret_err));
+    OZ (check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+  }
   return ret;
 }
 
