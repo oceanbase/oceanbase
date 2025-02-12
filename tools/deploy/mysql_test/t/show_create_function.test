@@ -27,17 +27,14 @@ delimiter ;//
 create user 'test01' identified by 'test01';
 grant select on *.* to test01;
 grant execute on function test.f1 to test01;
-## flush privileges;
 
 create user test02 identified by 'test02';
 grant select on test.* to test02;
 grant create routine on test.* to test02;
-## flush privileges;
 
 create user test03 identified by 'test03';
 grant select on test.* to test03;
 grant execute on test.* to test03;
-## flush privileges;
 
 delimiter //;
 CREATE DEFINER=test03 FUNCTION f2(a INT, b INT) RETURNS INT DETERMINISTIC
@@ -74,3 +71,12 @@ show create function test.f1;
 --echo
 show create function test.f2;
 disconnect conn3;
+
+--disable_query_log
+connection default;
+drop function if exists test.f1;
+drop function if exists test.f2;
+
+drop user test01;
+drop user test02;
+drop user test03;

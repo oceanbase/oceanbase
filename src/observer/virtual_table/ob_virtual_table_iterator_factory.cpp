@@ -1210,8 +1210,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           {
             ObShowCreateProcedure *create_proc = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowCreateProcedure, create_proc))) {
-              create_proc->set_tenant_id(real_tenant_id);
-              create_proc->set_user_id(session->get_user_id());
               if (OB_FAIL(session->get_session_priv_info(create_proc->get_session_priv()))) {
                 SERVER_LOG(WARN, "fail to get session priv info", K(ret));
               } else if (OB_FAIL(create_proc->get_role_id_array().assign(session->get_enable_role_array()))) {

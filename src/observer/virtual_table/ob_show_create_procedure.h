@@ -41,10 +41,6 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
-  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
-
-  inline void set_user_id(uint64_t user_id) { user_id_ = user_id; }
-
   inline share::schema::ObSessionPrivInfo &get_session_priv()
   { return session_priv_; }
 
@@ -59,8 +55,6 @@ private:
                      const share::schema::ObRoutineInfo &proc_info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateProcedure);
-  uint64_t tenant_id_;
-  uint64_t user_id_;
   EnableRoleIdArray enable_role_id_array_;
   share::schema::ObSessionPrivInfo session_priv_;
 };
