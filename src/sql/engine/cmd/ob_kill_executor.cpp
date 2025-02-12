@@ -185,13 +185,19 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(client_sess_id));
-  } else if (client_sess_id == curr_sess_info->get_client_sessid()) {
-    // If it is kill the session currently executing the kill command
-    // it can directly return the error code to the proxy.
-    sess_info->set_mark_killed(true);
-    ret = OB_ERR_KILL_CLIENT_SESSION;
-    LOG_INFO("current server conclude kill client session", K(arg.sess_id_));
   } else {
+    // sess_info is the session need to be killed.
+    // 1. If the current session is the session currently executing the kill command
+    // it can directly return the error code (OB_ERR_KILL_CLIENT_SESSION) to the proxy.
+    // 2. If not, return OB_SUCCESS.
+    sess_info->set_mark_killed(true);
+    sess_info->set_session_state(SESSION_KILLED);
+    if (client_sess_id == curr_sess_info->get_client_sessid()) {
+      ret = OB_ERR_KILL_CLIENT_SESSION;
+    } else {
+      ret = OB_SUCCESS;
+    }
+    LOG_INFO("current server conclude kill client session", K(arg.sess_id_));
   }
   if (OB_SUCC(ret)) {
     ObAddr cs_addr;
