@@ -11425,6 +11425,12 @@ int ObRootService::set_config_after_bootstrap_()
     }
     if (FAILEDx(sql_proxy_.write(sql.ptr(), affected_rows))) {
       LOG_WARN("failed to set configs", KR(ret), K(sql));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(configs); i++) {
+        if (OB_FAIL(check_config_result(configs[i][0], configs[i][1]))) {
+          LOG_WARN("failed to check_config_result", KR(ret), K(configs[i][0]), K(configs[i][1]));
+        }
+      }
     }
   }
   return ret;
