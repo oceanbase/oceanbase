@@ -1879,8 +1879,8 @@ public:
   bool operator<=(const ObBackupTableListItem &o) const { return !(operator > (o)); }
 
   TO_STRING_KV(K_(database_name), K_(table_name));
-  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_LENGTH + 1> database_name_;
-  common::ObFixedLengthString<OB_MAX_TABLE_NAME_LENGTH + 1> table_name_;
+  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_BINARY_LENGTH + 1> database_name_;
+  common::ObFixedLengthString<OB_MAX_TABLE_NAME_BINARY_LENGTH + 1> table_name_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTableListItem);
 };
