@@ -3066,9 +3066,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
-      case T_OP_GET_SUBPROGRAM_VAR: //fallthrough
-      case T_OP_GET_PACKAGE_VAR: {
+      case T_OP_GET_SUBPROGRAM_VAR: {
         DATA_PRINTF("?");
+        break;
+      }
+      case T_OP_GET_PACKAGE_VAR: {
+        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         break;
       }
       case T_FUN_SYS_SYSDATE: //fallthrough

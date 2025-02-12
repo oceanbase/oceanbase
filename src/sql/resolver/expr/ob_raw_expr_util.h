@@ -832,6 +832,7 @@ public:
                                    share::schema::ObSchemaGetterGuard &schema_guard,
                                    uint64_t package_id,
                                    int64_t var_idx,
+                                   const ObString &var_name,
                                    ObExprResType *result_type,
                                    ObRawExpr *&expr,
                                    const ObSQLSessionInfo *session_info);
