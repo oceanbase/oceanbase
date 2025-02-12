@@ -46,8 +46,6 @@ ObDtlChannelLoop::ObDtlChannelLoop()
       last_dump_channel_time_(0),
       query_timeout_ts_(0)
 {
-  op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
-  op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
   sentinel_node_.prev_link_ = &sentinel_node_;
   sentinel_node_.next_link_ = &sentinel_node_;
 }
@@ -78,8 +76,6 @@ ObDtlChannelLoop::ObDtlChannelLoop(ObMonitorNode &op_monitor_info)
       last_dump_channel_time_(0),
       query_timeout_ts_(0)
 {
-  op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
-  op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
   sentinel_node_.prev_link_ = &sentinel_node_;
   sentinel_node_.next_link_ = &sentinel_node_;
 }
@@ -375,10 +371,14 @@ int ObDtlChannelLoop::process_channels(ObIDltChannelLoopPred *pred, int64_t &nth
     if (first_data_get_) {
       // 第一次命中后的miss计数
       // ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS_AFTER_DATA;
-      ++op_monitor_info_.otherstat_5_value_;
+      // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_.
+      // For now, comment out the DTL.
+      // ++op_monitor_info_.otherstat_5_value_;
     }
     // ObSqlMonitorStatIds::DTL_LOOP_TOTAL_MISS;
-    ++op_monitor_info_.otherstat_6_value_;
+    // The statistics of otherstat_6_value_ will affect all statistics of other operators that use otherstat_6_value_.
+    // For now, comment out the DTL.
+    // ++op_monitor_info_.otherstat_6_value_;
   }
   return ret;
 }
