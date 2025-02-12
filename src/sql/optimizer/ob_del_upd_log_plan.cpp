@@ -44,40 +44,32 @@ int ObDelUpdLogPlan::compute_dml_parallel()
 {
   int ret = OB_SUCCESS;
   use_pdml_ = false;
+  use_parallel_das_dml_ = false;
   max_dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
   int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
-  const ObOptimizerContext &opt_ctx = get_optimizer_context();
-  const ObSQLSessionInfo *session_info = NULL;
-  const ObDelUpdStmt *del_upd_stmt = NULL;
-  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(del_upd_stmt = get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
-  } else if (!opt_ctx.can_use_pdml() && !opt_ctx.get_can_use_parallel_das_dml()) {
-    max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
-    use_pdml_ = false;
-    if (opt_ctx.is_online_ddl()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("a online ddl expect PDML enabled. but it does not!", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "online ddl without pdml");
-    }
-  } else if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  int64_t server_cnt = 0;
+  if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
     LOG_WARN("failed to get parallel info", K(ret));
-  } else if (OB_FAIL(get_parallel_info_from_direct_load(del_upd_stmt, session_info, dml_parallel))) {
+  } else if (OB_FAIL(get_parallel_info_from_direct_load(dml_parallel))) {
     LOG_WARN("failed to get parallel info from direct load", K(ret));
+  } else if (OB_FAIL(compute_dml_dop_by_auto_dop(dml_parallel, dml_parallel))) {
+    LOG_WARN("failed to compute dml dop by auto dop", K(ret));
   } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > dml_parallel)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
   } else if (opt_ctx.can_use_pdml()) {
     max_dml_parallel_ = dml_parallel;
-    use_pdml_ = (opt_ctx.is_online_ddl() ||
-                (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                is_strict_mode(session_info->get_sql_mode())));
+    use_pdml_ = opt_ctx.is_online_ddl() || ObGlobalHint::DEFAULT_PARALLEL < dml_parallel;
+  } else if (OB_UNLIKELY(opt_ctx.is_online_ddl())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("a online ddl expect PDML enabled. but it does not!", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "online ddl without pdml");
   } else if (opt_ctx.get_can_use_parallel_das_dml()) {
     max_dml_parallel_ = dml_parallel;
-    use_parallel_das_dml_ = (!opt_ctx.is_online_ddl() &&
-                                (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
-                                is_strict_mode(session_info->get_sql_mode())));
+    use_parallel_das_dml_ = ObGlobalHint::DEFAULT_PARALLEL < dml_parallel;
+  } else {
+    max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_use_direct_load())) {
@@ -90,32 +82,75 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   return ret;
 }
 
-int ObDelUpdLogPlan::get_parallel_info_from_candidate_plans(int64_t &dop) const
+int ObDelUpdLogPlan::compute_dml_dop_by_auto_dop(const int64_t min_dml_parallel,
+                                                 int64_t &dop) const
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator *op = NULL;
-  dop = get_optimizer_context().get_parallel();
-  int64_t child_parallel = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_UNLIKELY(candidates_.candidate_plans_.empty())) {
+  dop = min_dml_parallel;
+  bool need_calc_dop = false;
+  int64_t calc_dop = ObGlobalHint::UNSET_PARALLEL;
+  const ObDelUpdStmt *stmt = NULL;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
+  if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected params", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (opt_ctx.get_global_hint().has_dml_parallel_hint()) {
+    dop = opt_ctx.get_global_hint().get_dml_parallel_degree();
+  } else if (!opt_ctx.is_use_auto_dop()) {
+    /* do nothing */
+  } else if (OB_FAIL(check_candi_plan_need_calc_dop(need_calc_dop))) {
+    LOG_WARN("failed to check candi plan need calc dop", K(ret));
+  } else if (!need_calc_dop) {
+    /* do nothing */
+  } else if (!stmt->is_update_stmt() && !stmt->is_delete_stmt() && !stmt->is_insert_stmt()) {
+    /* do nothing */
+  } else if (get_optimizer_context().get_direct_load_optimizer_ctx().can_use_direct_load()) {
+    /* do nothing */
+  } else if (OB_FAIL(inner_compute_dml_dop_by_auto_dop(*stmt, calc_dop))) {
+    LOG_WARN("failed to inner compute dml dop by auto dop", K(ret));
+  } else if (min_dml_parallel < calc_dop) {
+    dop = calc_dop;
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
-    if (OB_ISNULL(op = candidates_.candidate_plans_.at(i).plan_tree_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      child_parallel = op->is_single() ? op->get_available_parallel() : op->get_parallel();
-      dop = std::max(dop, child_parallel);
-    }
-  }
-  LOG_DEBUG("finish get max dop from candidate plans", K(dop));
   return ret;
 }
 
-int ObDelUpdLogPlan::get_parallel_info_from_direct_load(const ObDelUpdStmt *del_upd_stmt,
-                                                        const ObSQLSessionInfo *session_info,
-                                                        int64_t &dml_parallel) const
+int ObDelUpdLogPlan::inner_compute_dml_dop_by_auto_dop(const ObDelUpdStmt &stmt, int64_t &dop) const
+{
+  int ret = OB_SUCCESS;
+  dop = ObGlobalHint::UNSET_PARALLEL;
+  double op_cost = 0.0;
+  const ObOptimizerContext &opt_ctx = get_optimizer_context();
+  ObLogicalOperator *child = NULL;
+  if (OB_FAIL(candidates_.get_best_plan(child))) {
+    LOG_WARN("failed to get best plan", K(ret));
+  } else if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(child));
+  } else if (stmt.is_update_stmt() &&
+             OB_FAIL(ObLogUpdate::inner_est_cost(opt_ctx, index_dml_infos_, child->get_card(), op_cost))) {
+    LOG_WARN("failed to get update cost", K(ret));
+  } else if (stmt.is_delete_stmt() &&
+             OB_FAIL(ObLogDelete::inner_est_cost(opt_ctx, index_dml_infos_, child->get_card(), op_cost))) {
+    LOG_WARN("failed to get delete cost", K(ret));
+  } else if (stmt.is_insert_stmt() &&
+             OB_FAIL(ObLogInsert::inner_est_cost(opt_ctx, index_dml_infos_,
+                                static_cast<const ObInsertLogPlan*>(this)->get_insert_up_index_upd_infos(),
+                                child->get_card(),
+                                op_cost))) {
+    LOG_WARN("failed to get insert cost", K(ret));
+  } else {
+    int64_t server_cnt = 1;
+    const double cost_threshold_us = 1000.0 * std::max(10L, opt_ctx.get_parallel_min_scan_time_threshold());
+    const int64_t calc_dop_limit = opt_ctx.get_parallel_degree_limit(server_cnt);
+    int64_t calc_dop = op_cost / cost_threshold_us;
+    dop = std::min(calc_dop, calc_dop_limit);
+    OPT_TRACE("finish compute dml parallel degree:", dop);
+    LOG_TRACE("finish compute dml parallel degree", K(cost_threshold_us), K(op_cost), K(calc_dop_limit), K(calc_dop), K(dop));
+  }
+  return ret;
+}
+
+int ObDelUpdLogPlan::get_parallel_info_from_direct_load(int64_t &dml_parallel) const
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext &opt_ctx = get_optimizer_context();
@@ -127,8 +162,7 @@ int ObDelUpdLogPlan::get_parallel_info_from_direct_load(const ObDelUpdStmt *del_
     // do nothing
   } else if (direct_load_opt_ctx.can_use_direct_load() && direct_load_opt_ctx.is_optimized_by_default_load_mode()) {
     const int64_t default_direct_insert_parallel = 2;
-    bool can_use_pdml = opt_ctx.can_use_pdml() && (opt_ctx.is_online_ddl() || is_strict_mode(session_info->get_sql_mode()));
-    if (can_use_pdml) {
+    if (opt_ctx.can_use_pdml()) {
       dml_parallel = MAX(dml_parallel, default_direct_insert_parallel);
     }
   }
@@ -181,12 +215,16 @@ int ObDelUpdLogPlan::get_pdml_parallel_degree(const int64_t target_part_cnt,
 {
   int ret = OB_SUCCESS;
   dop = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_UNLIKELY(!use_pdml_ || ObGlobalHint::DEFAULT_PARALLEL > max_dml_parallel_
+  if (OB_ISNULL(get_optimizer_context().get_query_ctx()) ||
+      OB_UNLIKELY(!use_pdml_ || ObGlobalHint::DEFAULT_PARALLEL > max_dml_parallel_
                   || target_part_cnt < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected params", K(ret), K(use_pdml_), K(max_dml_parallel_), K(target_part_cnt));
-  } else if (ObGlobalHint::DEFAULT_PARALLEL == max_dml_parallel_
+    LOG_WARN("get unexpected params", K(ret), K(get_optimizer_context().get_query_ctx()),
+                                            K(use_pdml_), K(max_dml_parallel_), K(target_part_cnt));
+  } else if (get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP1)
+             || ObGlobalHint::DEFAULT_PARALLEL == max_dml_parallel_
              || !get_optimizer_context().is_use_auto_dop()
+             || ObGlobalHint::DEFAULT_PARALLEL <= get_optimizer_context().get_global_hint().get_dml_parallel_degree()
              || target_part_cnt >= max_dml_parallel_) {
     dop = max_dml_parallel_;
   } else if (OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
@@ -546,7 +584,8 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo
     LOG_WARN("failed to compute pdml hash dist exprs", K(ret));
   } else if (OB_FAIL(target_table_partition.get_all_servers(exch_info.server_list_))) {
     LOG_WARN("failed to get all servers", K(ret));
-  } else if (OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
+  } else if (!is_index_maintenance &&
+             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
                                               exch_info.parallel_))) {
     LOG_WARN("failed to get pdml parallel degree", K(ret));
   } else {
@@ -643,6 +682,7 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
                                                            const ObTablePartitionInfo &target_table_partition,
                                                            const IndexDMLInfo &index_dml_info,
                                                            bool is_index_maintenance,
+                                                           bool is_pdml_update_split,
                                                            ObExchangeInfo &exch_info)
 {
   int ret = OB_SUCCESS;
@@ -661,7 +701,8 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
     LOG_WARN("failed to compute repartition func info", K(ret));
   } else if (OB_FAIL(target_table_partition.get_all_servers(exch_info.server_list_))) {
     LOG_WARN("failed to get all servers", K(ret));
-  } else if (OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
+  } else if (!is_index_maintenance && !is_pdml_update_split &&
+             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
                                               exch_info.parallel_))) {
     LOG_WARN("failed to get pdml parallel degree", K(ret));
   } else {
@@ -1191,6 +1232,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
                                                              *target_table_partition,
                                                              *index_dml_info,
                                                              is_index_maintenance,
+                                                             is_pdml_update_split,
                                                              exch_info))) {
       LOG_WARN("failed to compute exchange info for insert", K(ret));
     } else if (get_optimizer_context().is_online_ddl() && !get_optimizer_context().is_heap_table_ddl() &&

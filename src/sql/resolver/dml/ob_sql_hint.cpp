@@ -1807,6 +1807,17 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   return ret;
 }
 
+int ObLogPlanHint::get_aggregation_dop(int64_t &dop) const
+{
+  int ret = OB_SUCCESS;
+  dop = ObGlobalHint::UNSET_PARALLEL;
+  const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
+  if (NULL != pq_hint) {
+    dop = pq_hint->get_parallel();
+  }
+  return ret;
+}
+
 int ObLogPlanHint::get_distinct_info(bool &force_use_hash,
                                      bool &force_use_merge,
                                      bool &force_basic,

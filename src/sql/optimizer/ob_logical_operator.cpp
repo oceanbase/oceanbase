@@ -29,6 +29,7 @@
 #include "ob_log_temp_table_access.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_merge.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 
@@ -1143,6 +1144,9 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
     if (get_parallel() != parallel) {
       set_parallel(parallel);
       set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
+    }
+    if (is_dml_operator()) {
+      static_cast<ObDelUpdLogPlan*>(get_plan())->set_max_dml_parallel(parallel);
     }
   }
   return ret;

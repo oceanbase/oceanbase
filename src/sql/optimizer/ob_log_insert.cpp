@@ -279,45 +279,49 @@ int ObLogInsert::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
 int ObLogInsert::inner_est_cost(double child_card, double &op_cost)
 {
   int ret = OB_SUCCESS;
-  ObDelUpCostInfo cost_info(0,0,0);
-  cost_info.affect_rows_ = child_card;
-  cost_info.index_count_ = get_index_dml_infos().count();
-  if (0 == cost_info.index_count_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected index count", K(ret), K(get_index_dml_infos()));
-  } else {
-  const IndexDMLInfo *insert_dml_info = get_index_dml_infos().at(0);
-  if (OB_ISNULL(insert_dml_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (get_insert_up()) {
-    if (get_insert_up_index_dml_infos().empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("insert_up_index_dml_infos is empty", K(ret));
-    } else {
-      const IndexDMLInfo *upd_pri_dml_info = get_insert_up_index_dml_infos().at(0);
-      if (OB_ISNULL(upd_pri_dml_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ins_pri_dml_info or upd_pri_dml_info is null", K(ret));
-      } else {
-        cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count()
-                                      + upd_pri_dml_info->ck_cst_exprs_.count();
-      }
-    }
-  } else {
-    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count();
-  }
-  }
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(get_insert_up() && get_insert_up_index_dml_infos().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert_up_index_dml_infos is empty", K(ret));
+  } else if (OB_FAIL(inner_est_cost(get_plan()->get_optimizer_context(),
+                                    get_index_dml_infos(),
+                                    get_insert_up_index_dml_infos(),
+                                    child_card,
+                                    op_cost))) {
+    LOG_WARN("failed to get insert cost", K(ret));
+  }
+  return ret;
+}
+
+int ObLogInsert::inner_est_cost(const ObOptimizerContext &opt_ctx,
+                                const ObIArray<IndexDMLInfo*> &index_infos,
+                                const ObIArray<IndexDMLInfo*> &insert_up_index_infos,
+                                const double child_card,
+                                double &op_cost)
+{
+  int ret = OB_SUCCESS;
+  ObDelUpCostInfo cost_info(0,0,0);
+  cost_info.affect_rows_ = child_card;
+  cost_info.index_count_ = index_infos.count();
+  const IndexDMLInfo *insert_dml_info = NULL;
+  const IndexDMLInfo *upd_pri_dml_info = NULL;
+  if (OB_UNLIKELY(0 == cost_info.index_count_) || OB_ISNULL(insert_dml_info = index_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(index_infos));
+  } else if (insert_up_index_infos.empty()) {
+    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count();
+  } else if (OB_ISNULL(upd_pri_dml_info = insert_up_index_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins_pri_dml_info or upd_pri_dml_info is null", K(ret));
   } else {
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    if (OB_FAIL(ObOptEstCost::cost_insert(cost_info, 
-                                          op_cost, 
-                                          opt_ctx))) {
-      LOG_WARN("failed to get insert cost", K(ret));
-    }
+    cost_info.constraint_count_ = insert_dml_info->ck_cst_exprs_.count()
+                                  + upd_pri_dml_info->ck_cst_exprs_.count();
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObOptEstCost::cost_insert(cost_info, op_cost, opt_ctx))) {
+    LOG_WARN("failed to get insert cost", K(ret));
   }
   return ret;
 }

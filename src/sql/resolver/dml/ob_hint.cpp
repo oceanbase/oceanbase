@@ -210,6 +210,17 @@ void ObGlobalHint::merge_parallel_hint(int64_t parallel)
   }
 }
 
+void ObGlobalHint::merge_dml_parallel_hint(int64_t dml_parallel)
+{
+  if (UNSET_PARALLEL < dml_parallel) {
+    if (UNSET_PARALLEL >= dml_parallel_) {
+      dml_parallel_ = dml_parallel;
+    } else {
+      dml_parallel_ = std::min(dml_parallel, dml_parallel_);
+    }
+  }
+}
+
 void ObGlobalHint::merge_dynamic_sampling_hint(int64_t dynamic_sampling)
 {
   if (dynamic_sampling != UNSET_DYNAMIC_SAMPLING) {
@@ -350,6 +361,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || false != force_refresh_lc_
          || !log_level_.empty()
          || has_parallel_hint()
+         || has_dml_parallel_hint()
          || false != monitor_
          || ObPDMLOption::NOT_SPECIFIED != pdml_option_
          || ObParamOption::NOT_SPECIFIED != param_option_
@@ -384,6 +396,7 @@ void ObGlobalHint::reset()
   force_refresh_lc_ = false;
   log_level_.reset();
   parallel_ = UNSET_PARALLEL;
+  dml_parallel_ = UNSET_PARALLEL;
   monitor_ = false;
   pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
   param_option_ = ObParamOption::NOT_SPECIFIED;
@@ -420,6 +433,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   force_trace_log_ |= other.force_trace_log_;
   merge_max_concurrent_hint(other.max_concurrent_);
   merge_parallel_hint(other.parallel_);
+  merge_dml_parallel_hint(other.dml_parallel_);
   monitor_ |= other.monitor_;
   merge_param_option_hint(other.param_option_);
   merge_opt_features_version_hint(other.opt_features_version_);
@@ -551,6 +565,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
     } else if (enable_manual_dop()) {
       PRINT_GLOBAL_HINT_STR("PARALLEL( MANUAL )");
     }
+  }
+  if (OB_SUCC(ret) && has_dml_parallel_hint() && !ignore_parallel_for_dblink) { //DML_PARALLEL
+    PRINT_GLOBAL_HINT_NUM("DML_PARALLEL", dml_parallel_);
   }
   if (OB_SUCC(ret) && monitor_) { //MONITOR
     PRINT_GLOBAL_HINT_STR("MONITOR");
@@ -2815,6 +2832,8 @@ int ObPQHint::print_hint_desc(PlanText &plan_text) const
     LOG_WARN("unexpected null", K(ret), K(dist_method_));
   } else if (OB_FAIL(BUF_PRINTF(" %s", str))) {
     LOG_WARN("failed to print dist method", K(ret));
+  } else if (ObGlobalHint::UNSET_PARALLEL < parallel_ && OB_FAIL(BUF_PRINTF(" %ld", parallel_))) {
+    LOG_WARN("fail to print parallel", K(ret));
   }
   return ret;
 }

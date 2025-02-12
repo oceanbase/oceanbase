@@ -406,7 +406,7 @@ int ObLogExchange::compute_op_parallel_and_server_info()
   } else {
     // set_exchange_info not set these info, use child parallel and server info.
     if (OB_FAIL(ret)) {
-    } else if (is_pq_hash_dist()) {
+    } else if (is_pq_hash_dist() || is_pq_random()) {
       server_list_.reuse();
       common::ObAddr all_server_list;
       all_server_list.set_max(); // a special ALL server list indicating hash data distribution

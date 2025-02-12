@@ -16207,6 +16207,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_DML_PARALLEL: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.merge_dml_parallel_hint(child0->value_);
+      }
+      break;
+    }
     case T_MONITOR: {
       global_hint.monitor_ = true;
       break;
@@ -17220,7 +17226,7 @@ int ObDMLResolver::resolve_normal_pq_hint(const ParseNode &hint_node,
   ObPQHint *pq_hint = NULL;
   ObString qb_name;
   if (OB_UNLIKELY(T_PQ_GBY_HINT != hint_node.type_ && T_PQ_DISTINCT_HINT != hint_node.type_)
-      || OB_UNLIKELY(2 != hint_node.num_child_)
+      || OB_UNLIKELY(3 != hint_node.num_child_)
       || OB_ISNULL(dist_method_node = hint_node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected pq_gby/pq_distinct hint node", K(ret), K(hint_node.num_child_),
@@ -17234,6 +17240,9 @@ int ObDMLResolver::resolve_normal_pq_hint(const ParseNode &hint_node,
   } else {
     pq_hint->set_qb_name(qb_name);
     pq_hint->set_dist_method(dist_method_node->type_);
+    if (NULL != hint_node.children_[2]) {
+      pq_hint->set_parallel(hint_node.children_[2]->value_);
+    }
     opt_hint = pq_hint;
   }
   return ret;

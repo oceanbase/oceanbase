@@ -360,6 +360,7 @@ struct ObGlobalHint {
   void reset_tm_sessid_tx_id_hint();
   void merge_max_concurrent_hint(int64_t max_concurrent);
   void merge_parallel_hint(int64_t parallel);
+  void merge_dml_parallel_hint(int64_t dml_parallel);
   void merge_parallel_dml_hint(ObPDMLOption pdml_option);
   void merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option);
   void merge_param_option_hint(ObParamOption opt);
@@ -382,8 +383,10 @@ struct ObGlobalHint {
   int64_t get_dblink_tx_id_hint() const { return dblink_hints_.tx_id_; }
   uint32_t get_dblink_tm_sessid_hint() const { return dblink_hints_.tm_sessid_; }
   int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
+  int64_t get_dml_parallel_degree() const { return dml_parallel_; }
   bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
+  bool has_dml_parallel_hint() const { return UNSET_PARALLEL < dml_parallel_; }
   bool enable_auto_dop() const { return SET_ENABLE_AUTO_DOP == parallel_; }
   bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
@@ -445,6 +448,7 @@ struct ObGlobalHint {
                K_(force_refresh_lc),
                K_(log_level),
                K_(parallel),
+               K_(dml_parallel),
                K_(monitor),
                K_(pdml_option),
                K_(param_option),
@@ -475,6 +479,7 @@ struct ObGlobalHint {
   bool force_refresh_lc_;
   common::ObString log_level_;
   int64_t parallel_;
+  int64_t dml_parallel_;
   bool monitor_;
   ObPDMLOption pdml_option_;
   ObParamOption param_option_;
@@ -1282,7 +1287,8 @@ class ObPQHint : public ObOptHint
   public:
   ObPQHint(ObItemType hint_type)
     : ObOptHint(hint_type),
-      dist_method_(T_INVALID)
+      dist_method_(T_INVALID),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_PQ);
   }
@@ -1296,10 +1302,13 @@ class ObPQHint : public ObOptHint
   inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
   inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
   inline bool is_force_pull_to_local() const { return T_DISTRIBUTE_LOCAL == dist_method_; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method), K_(parallel));
 private:
   ObItemType dist_method_;
+  int64_t parallel_;
 };
 
 class ObJoinOrderHint : public ObOptHint {

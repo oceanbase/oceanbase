@@ -374,6 +374,9 @@ int ObOptimizer::check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
     // not user request
     can_use_parallel_das_dml = false;
     LOG_TRACE("not user request, can't support parallel_das_dml");
+  } else if (!is_strict_mode(session.get_sql_mode())) {
+    can_use_parallel_das_dml = false;
+    LOG_TRACE("not strict mode, can't support parallel_das_dml");
   } else if (OB_FAIL(check_parallel_das_dml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),
                                                               session,
                                                               can_use_parallel_das_dml))) {
@@ -467,6 +470,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else if (!can_use_pdml || ctx_.is_online_ddl() ||
              (stmt::T_INSERT == stmt.get_stmt_type() && static_cast< const ObInsertStmt &>(stmt).is_normal_table_overwrite())) {
     // do nothing
+  } else if (!is_strict_mode(session.get_sql_mode())) {
+    can_use_pdml = false;
+    LOG_TRACE("not strict mode, can't support PDML");
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
     // 1. enable parallel dml by hint
   } else if (ctx_.get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE

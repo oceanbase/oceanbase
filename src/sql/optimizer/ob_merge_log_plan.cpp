@@ -263,6 +263,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
                                                           *target_table_partition,
                                                           *index_dml_info,
                                                           false,/*is_index_maintenance*/
+                                                          false,/*is_pdml_update_split*/
                                                           exch_info))) {
     LOG_WARN("failed to compute exchange info for insert", K(ret));
   } else if (!get_stmt()->has_insert_clause() &&

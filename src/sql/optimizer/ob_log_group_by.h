@@ -109,6 +109,7 @@ public:
         has_push_down_(false),
         use_part_sort_(false),
         dist_method_(T_INVALID),
+        gby_dop_(ObGlobalHint::UNSET_PARALLEL),
         is_pushdown_scalar_aggr_(false),
         hash_rollup_info_()
   {}
@@ -229,7 +230,8 @@ public:
   void set_group_by_outline_info(DistAlgo algo,
                                  bool use_hash_aggr,
                                  bool has_push_down,
-                                 bool use_part_sort = false)
+                                 bool use_part_sort = false,
+                                 int64_t dop = ObGlobalHint::UNSET_PARALLEL)
   {
     dist_method_ = DistAlgo::DIST_BASIC_METHOD == algo ? T_DISTRIBUTE_BASIC :
                   (DistAlgo::DIST_PARTITION_WISE == algo ? T_DISTRIBUTE_NONE :
@@ -238,6 +240,7 @@ public:
     use_hash_aggr_ = use_hash_aggr;
     has_push_down_ = has_push_down;
     use_part_sort_ = use_part_sort;
+    gby_dop_ = dop;
   }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
@@ -290,6 +293,8 @@ private:
   bool has_push_down_;
   bool use_part_sort_;
   ObItemType dist_method_;
+  int64_t gby_dop_;
+  // end use print outline
   bool is_pushdown_scalar_aggr_;
   ObHashRollupInfo hash_rollup_info_;
 };

@@ -167,7 +167,7 @@ FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 ENABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DAS_DML DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
 MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION BLOCKING RESOURCE_GROUP
-PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT
+PX_NODE_POLICY PX_NODE_ADDRS PX_NODE_COUNT DML_PARALLEL
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -11866,6 +11866,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 {
   $$ = $3;
 }
+| DML_PARALLEL '(' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DML_PARALLEL, 1, $3);
+}
 | NO_PARALLEL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_NO_PARALLEL);
@@ -12580,11 +12584,16 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix '
 }
 | PQ_GBY '(' qb_name_option distribute_method ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_GBY_HINT, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_GBY_HINT, 3, $3, $4, NULL);
+}
+| PQ_GBY '(' qb_name_option distribute_method opt_comma INTNUM ')'
+{
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_GBY_HINT, 3, $3, $4, $6);
 }
 | PQ_DISTINCT '(' qb_name_option distribute_method ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTINCT_HINT, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTINCT_HINT, 3, $3, $4, NULL);
 }
 ;
 

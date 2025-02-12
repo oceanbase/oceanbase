@@ -162,21 +162,35 @@ int ObLogUpdate::do_re_est_cost(EstimateCostInfo &param, double &card, double &o
 int ObLogUpdate::inner_est_cost(double child_card, double &op_cost)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(inner_est_cost(get_plan()->get_optimizer_context(),
+                                    get_index_dml_infos(),
+                                    child_card,
+                                    op_cost))) {
+    LOG_WARN("failed to get update cost", K(ret));
+  }
+  return ret;
+}
+
+int ObLogUpdate::inner_est_cost(const ObOptimizerContext &opt_ctx,
+                                const ObIArray<IndexDMLInfo*> &index_infos,
+                                const double child_card,
+                                double &op_cost)
+{
+  int ret = OB_SUCCESS;
   ObDelUpCostInfo cost_info(0,0,0);
   cost_info.affect_rows_ = child_card;
-  cost_info.index_count_ = get_index_dml_infos().count();
-  IndexDMLInfo* update_dml_info = nullptr;
-  if (OB_ISNULL(get_plan()) || OB_UNLIKELY(cost_info.index_count_ <= 0) ||
-      OB_ISNULL(update_dml_info = get_index_dml_infos().at(0))) {
+  cost_info.index_count_ = index_infos.count();
+  const IndexDMLInfo *update_dml_info = nullptr;
+  if (OB_UNLIKELY(cost_info.index_count_ <= 0) ||
+      OB_ISNULL(update_dml_info = index_infos.at(0))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(update_dml_info));
-  } else {
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    cost_info.constraint_count_ = update_dml_info->ck_cst_exprs_.count();
-    if (OB_FAIL(ObOptEstCost::cost_update(cost_info, op_cost,
-                                          opt_ctx))) {
-      LOG_WARN("failed to get update cost", K(ret));
-    }
+    LOG_WARN("get unexpected null", K(ret), K(update_dml_info));
+  } else if (OB_FALSE_IT(cost_info.constraint_count_ = update_dml_info->ck_cst_exprs_.count())) {
+  } else if (OB_FAIL(ObOptEstCost::cost_update(cost_info, op_cost, opt_ctx))) {
+    LOG_WARN("failed to get update cost", K(ret));
   }
   return ret;
 }

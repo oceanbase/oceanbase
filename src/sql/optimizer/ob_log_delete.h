@@ -30,6 +30,10 @@ public:
   virtual int est_cost();
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
+  static int inner_est_cost(const ObOptimizerContext &opt_ctx,
+                            const ObIArray<IndexDMLInfo*> &index_infos,
+                            const double child_card,
+                            double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual const char *get_name() const;

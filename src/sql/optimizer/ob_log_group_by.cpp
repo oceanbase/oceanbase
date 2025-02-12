@@ -554,6 +554,7 @@ int ObLogGroupBy::print_outline_data(PlanText &plan_text)
     if (OB_SUCC(ret) && T_DISTRIBUTE_BASIC != dist_method_) {
       ObPQHint hint(T_PQ_GBY_HINT);
       hint.set_qb_name(qb_name);
+      hint.set_parallel(gby_dop_);
       if (hash_rollup_info_.valid() && is_partition_wise() && dist_method_ == T_DISTRIBUTE_HASH) {
         hint.set_dist_method(T_DISTRIBUTE_NONE);
       } else {

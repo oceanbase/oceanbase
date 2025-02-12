@@ -79,8 +79,9 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     OSGShareInfo *osg_info = NULL;
     double online_sample_percent = 100.;
     if (OB_SUCC(ret)) {
-      // compute parallel before check allocate stats gather
-      if (OB_FAIL(compute_dml_parallel())) {
+      if (OB_FAIL(prepare_dml_infos())) {
+        LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (OB_FAIL(compute_dml_parallel())) {
         LOG_WARN("failed to compute dml parallel", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -123,21 +124,17 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         } else {
           LOG_TRACE("succeed to allocate select into clause", K(candidates_.candidate_plans_.count()));
         }
-      } else {
-        if (OB_FAIL(prepare_dml_infos())) {
-          LOG_WARN("failed to prepare dml infos", K(ret));
-        } else if (use_pdml()) {
-          if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {
-            LOG_WARN("failed to allocate pdml insert", K(ret));
-          } else {
-            LOG_TRACE("succeed to allocate pdml insert operator",
-                K(candidates_.candidate_plans_.count()));
-          }
-        } else if (OB_FAIL(candi_allocate_insert(osg_info))) {
-          LOG_WARN("failed to allocate insert operator", K(ret));
+      } else if (use_pdml()) {
+        if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {
+          LOG_WARN("failed to allocate pdml insert", K(ret));
         } else {
-          LOG_TRACE("succeed to allocate insert operator", K(candidates_.candidate_plans_.count()));
+          LOG_TRACE("succeed to allocate pdml insert operator",
+              K(candidates_.candidate_plans_.count()));
         }
+      } else if (OB_FAIL(candi_allocate_insert(osg_info))) {
+        LOG_WARN("failed to allocate insert operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate insert operator", K(candidates_.candidate_plans_.count()));
       }
     }
     if (OB_SUCC(ret) && insert_stmt->get_returning_aggr_item_size() > 0) {
@@ -1751,7 +1748,8 @@ int ObInsertLogPlan::candi_allocate_select_into_for_insert()
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> select_into_plans;
   int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
-  if (OB_FAIL(get_parallel_info_from_candidate_plans(dml_parallel))) {
+  int64_t server_cnt = 0;
+  if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
     LOG_WARN("failed to get parallel info from candidate plans", K(ret));
   } else if (dml_parallel > 1) {
     exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;

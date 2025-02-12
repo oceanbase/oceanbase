@@ -692,6 +692,7 @@ class Path
                                                    double &cost_threshold_us,
                                                    int64_t &server_cnt,
                                                    int64_t &cur_parallel_degree_limit) const;
+    int get_dop_limit_by_pushdown_limit(int64_t &dop_limit) const;
     int prepare_estimate_parallel(const int64_t pre_parallel,
                                   const int64_t parallel_degree_limit,
                                   const double cost_threshold_us,
@@ -2192,11 +2193,9 @@ struct NullAwareAntiJoinInfo {
     int generate_values_table_paths();
     int generate_temp_table_paths();
 
-    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths, ObIndexInfoCache &index_info_cache);
+    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
 
-    int set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
-                                            ObIndexInfoCache &index_info_cache,
-                                            const int64_t cur_idx);
+    int set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths, const int64_t cur_idx);
     int compute_sharding_info_with_part_info(ObTableLocationType location_type,
                                             ObTablePartitionInfo* table_partition_info,
                                             ObShardingInfo *&sharding_info);

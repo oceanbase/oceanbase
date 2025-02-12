@@ -175,10 +175,10 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
 
     // step. allocate update operator
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before call prepare_dml_infos
-        LOG_WARN("failed to compute dml parallel", K(ret));
-      } else if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
+      } else if (OB_FAIL(compute_dml_parallel())) {
+        LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml()) {
         // PDML计划
         if (OB_FAIL(candi_allocate_pdml_update())) {
