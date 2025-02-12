@@ -19,6 +19,26 @@ using namespace observer;
 namespace share
 {
 
+const char *DataDiskSuggestedOperationType::get_str(const TYPE &type)
+{
+  const char *str = "UNKNOWN";
+  switch (type) {
+    case NONE:
+      str = "NONE";
+      break;
+    case EXPAND:
+      str = "EXPAND";
+      break;
+    case SHRINK:
+      str = "SHRINK";
+      break;
+    default:
+      str = "UNKNOWN";
+      break;
+  }
+  return str;
+}
+
 const char *server_service_status_to_str(const ServerServiceStatus status)
 {
   const char *str = "UNKNOWN";
@@ -73,6 +93,9 @@ void ObServerResourceInfo::reset()
   data_disk_total_ = 0;
   report_data_disk_assigned_ = 0;
   data_disk_in_use_ = 0;
+
+  report_data_disk_suggested_operation_ = DataDiskSuggestedOperationType::NONE;
+  report_data_disk_suggested_size_ = 0;
 }
 
 bool ObServerResourceInfo::is_valid() const
@@ -155,7 +178,9 @@ OB_SERIALIZE_MEMBER(ObServerResourceInfo,
                     data_disk_total_,   // 'disk_total_' in earlier version  // FARM COMPAT WHITELIST
                     data_disk_in_use_,  // 'disk_in_use_' in earlier version // FARM COMPAT WHITELIST
                     report_data_disk_assigned_,
-                    log_disk_in_use_);
+                    log_disk_in_use_,
+                    report_data_disk_suggested_operation_,
+                    report_data_disk_suggested_size_);
 
 DEF_TO_STRING(ObServerResourceInfo)
 {

@@ -12802,6 +12802,8 @@ def_table_schema(
       ('memory_limit', 'int'),
       ('data_disk_allocated', 'int'),
       ('data_disk_assigned', 'int', 'true'),
+      ('data_disk_suggested_operation', 'varchar:MAX_OPERATOR_NAME_LENGTH', 'true'),
+      ('data_disk_suggested_size', 'int', 'true'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

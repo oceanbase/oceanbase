@@ -155,6 +155,20 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
         case MEMORY_LIMIT:
           cur_row_.cells_[i].set_int(GMEMCONF.get_server_memory_limit());
           break;
+        case DATA_DISK_SUGGESTED_OPERATION:
+          if (GCTX.is_shared_storage_mode()) {
+            cur_row_.cells_[i].set_varchar(share::DataDiskSuggestedOperationType::get_str(resource_info.report_data_disk_suggested_operation_));
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
+          break;
+        case DATA_DISK_SUGGESTED_SIZE:
+          if (GCTX.is_shared_storage_mode()) {
+            cur_row_.cells_[i].set_int(resource_info.report_data_disk_suggested_size_);
+          } else {
+            cur_row_.cells_[i].set_null();
+          }
+          break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", KR(ret), K(col_id));
