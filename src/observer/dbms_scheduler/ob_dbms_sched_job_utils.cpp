@@ -31,6 +31,7 @@ using namespace sql;
 
 namespace dbms_scheduler
 {
+ObDBMSSchedFuncSet ObDBMSSchedFuncSet::instance_;
 
 int ObDBMSSchedJobUtils::check_is_valid_name(const ObString &name)
 {

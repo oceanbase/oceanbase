@@ -103,7 +103,11 @@ int ObDBMSSchedJobExecutor::init_session(
       OZ (session.get_enable_role_array().push_back(user_info->get_role_id_array().at(i)));
     }
   }
-  OX (session.set_shadow(true));
+  if (job_info.is_shadow()) {
+    OX (session.set_shadow(true));
+  } else {
+    OX (session.set_shadow(false));
+  }
   if (OB_SUCC(ret)) {
     if (job_info.is_mview_job()) {
       // set larger timeout for mview scheduler jobs
