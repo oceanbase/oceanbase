@@ -17,6 +17,7 @@
 #include "lib/runtime.h"
 #include "lib/trace/ob_trace.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
+#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -69,7 +70,11 @@ int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t &pos)
 int init_packet(ObRpcProxy& proxy, ObRpcPacket& pkt, ObRpcPacketCode pcode, const ObRpcOpts &opts,
                 const bool unneed_response)
 {
-  return proxy.init_pkt(&pkt, pcode, opts, unneed_response);
+  int ret = proxy.init_pkt(&pkt, pcode, opts, unneed_response);
+  if (common::OB_INVALID_CLUSTER_ID == pkt.get_dst_cluster_id()) {
+    pkt.set_dst_cluster_id(ObRpcNetHandler::CLUSTER_ID);
+  }
+  return ret;
 }
 
 int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcPacket*& ret_pkt)

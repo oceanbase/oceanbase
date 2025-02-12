@@ -136,12 +136,12 @@ template <typename T>
       if (session_id) {
         pkt.set_session_id(session_id);
       }
-    }
-    if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
-      RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
-    } else {
-      req = header_buf;
-      req_sz = header_sz + payload_sz;
+      if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
+        RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
+      } else {
+        req = header_buf;
+        req_sz = header_sz + payload_sz;
+      }
     }
   }
   return ret;
