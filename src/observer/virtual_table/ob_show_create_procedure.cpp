@@ -149,7 +149,6 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
         }
         case OB_APP_MIN_COLUMN_ID + 2: {
           // create_routine
-          SERVER_LOG(INFO, "print column function");
           bool sql_quote_show_create = true;
           bool ansi_quotes = false;
           bool print_column_priv = false;
