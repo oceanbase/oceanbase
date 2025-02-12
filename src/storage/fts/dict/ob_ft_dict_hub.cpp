@@ -45,31 +45,35 @@ int ObFTDictHub::destroy()
   return ret;
 }
 
-int ObFTDictHub::push_dict_version(const uint64_t &name)
+int ObFTDictHub::push_dict_version(const ObFTDictInfoKey &key)
 {
   int ret = OB_SUCCESS;
   if (!IS_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("dict hub not init", K(ret));
   }
+  // not push now.
   return ret;
 }
 
-int ObFTDictHub::get_dict_info(const uint64_t &name, ObFTDictInfo &info)
+int ObFTDictHub::get_dict_info(const ObFTDictInfoKey &key, ObFTDictInfo &info)
 {
   int ret = OB_SUCCESS;
   if (!IS_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("dict hub not init", K(ret));
-  } else if (OB_FAIL(dict_map_.get_refactored(name, info))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get dict info failed", K(ret));
+  } else {
+    ObBucketHashRLockGuard guard(rw_dict_lock_, key.hash());
+    if (OB_FAIL(dict_map_.get_refactored(key, info))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("get dict info failed", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObFTDictHub::put_dict_info(const uint64_t &name, const ObFTDictInfo &info)
+int ObFTDictHub::put_dict_info(const ObFTDictInfoKey &key, const ObFTDictInfo &info)
 {
   int ret = OB_SUCCESS;
   ObFTDictInfo tmp;
@@ -77,20 +81,21 @@ int ObFTDictHub::put_dict_info(const uint64_t &name, const ObFTDictInfo &info)
     ret = OB_NOT_INIT;
     LOG_WARN("dict hub not init", K(ret));
   } else {
+    ObBucketHashWLockGuard guard(rw_dict_lock_, key.hash());
     // remove old if exist
-    if (OB_FAIL(dict_map_.get_refactored(name, tmp))) {
+    if (OB_FAIL(dict_map_.get_refactored(key, tmp))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("get dict info failed", K(ret));
       } else {
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(dict_map_.remove_refactored(name))) {
+    } else if (OB_FAIL(dict_map_.remove_refactored(key))) {
       LOG_WARN("remove dict info failed", K(ret));
     }
 
     // put new
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(dict_map_.put_refactored(name, info))) {
+    } else if (OB_FAIL(dict_map_.put_refactored(key, info))) {
       LOG_WARN("put dict info failed", K(ret));
     }
   }

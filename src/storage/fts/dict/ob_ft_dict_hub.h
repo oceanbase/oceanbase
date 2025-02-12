@@ -48,25 +48,47 @@ public:
   int32_t range_count_;
 };
 
+struct ObFTDictInfoKey
+{
+public:
+  ObFTDictInfoKey() : type_(0) {}
+  uint64_t hash() const
+  {
+    uint64_t hash = 0;
+    hash = common::murmurhash(&type_, sizeof(int64_t), hash);
+    return hash;
+  }
+
+  bool operator==(const ObFTDictInfoKey &other) const { return type_ == other.type_; }
+
+  int compare(const ObFTDictInfoKey &other) const { return type_ - other.type_; }
+
+public:
+  uint64_t type_;
+  // name
+};
+
 class ObFTDictHub
 {
 public:
-  ObFTDictHub() : is_inited_(false), dict_map_() {}
+  ObFTDictHub() : is_inited_(false), dict_map_(), rw_dict_lock_() {}
+  ~ObFTDictHub() {}
 
   int init();
 
   int destroy();
 
-  int get_dict_info(const uint64_t &name, ObFTDictInfo &info);
+  int get_dict_info(const ObFTDictInfoKey &key, ObFTDictInfo &info);
 
-  int put_dict_info(const uint64_t &name, const ObFTDictInfo &info);
+  int put_dict_info(const ObFTDictInfoKey &key, const ObFTDictInfo &info);
 
-  int push_dict_version(const uint64_t &dict_name);
+  int push_dict_version(const ObFTDictInfoKey &key);
 
 private:
   bool is_inited_;
   // holds info of dict
-  common::ObConcurrentHashMap<uint64_t, ObFTDictInfo> dict_map_;
+  common::ObConcurrentHashMap<ObFTDictInfoKey, ObFTDictInfo> dict_map_;
+  ObBucketLock rw_dict_lock_;
 };
 
 } //  namespace storage

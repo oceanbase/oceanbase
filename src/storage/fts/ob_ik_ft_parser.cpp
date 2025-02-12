@@ -467,14 +467,15 @@ bool ObIKFTParser::should_read_newest_table() const { return false; }
 int ObIKFTParser::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &container)
 {
   int ret = OB_SUCCESS;
-  const uint64_t dict_name = static_cast<uint64_t>(desc.type_); // fake name by id;
+  ObFTDictInfoKey key;
+  key.type_ = static_cast<uint64_t>(desc.type_);
   ObFTDictInfo info;
 
   container.reset();
   if (OB_FAIL(ObFTRangeDict::build_cache(desc, container))) {
     LOG_WARN("Failed to build cache", K(ret));
   } else if (FALSE_IT(info.range_count_ = container.get_handles().size())) {
-  } else if (OB_FAIL(hub_->put_dict_info(dict_name, info))) {
+  } else if (OB_FAIL(hub_->put_dict_info(key, info))) {
     LOG_WARN("Failed to put dict info", K(ret));
   }
 
@@ -486,8 +487,9 @@ int ObIKFTParser::load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &
   int ret = OB_SUCCESS;
   ObFTDictInfo info;
   container.reset();
-  const uint64_t dict_name = static_cast<uint64_t>(desc.type_); // fake name by id;
-  if (OB_FAIL(hub_->get_dict_info(dict_name, info)) && OB_ENTRY_NOT_EXIST != ret) {
+  ObFTDictInfoKey key;
+  key.type_ = static_cast<uint64_t>(desc.type_);
+  if (OB_FAIL(hub_->get_dict_info(key, info)) && OB_ENTRY_NOT_EXIST != ret) {
     LOG_WARN("Failed to get dict info", K(ret));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     // dict not exist, make new one, by caller
