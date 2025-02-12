@@ -1943,6 +1943,7 @@ int ObRecordType::get_serialize_size(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
+  OV (record->get_count() == record_members_.count(), OB_ERR_WRONG_TYPE_FOR_VAR, KPC(record), K(record_members_));
   OX (size += record->get_serialize_size());
   OX (size += serialization::encoded_length(record->get_count()));
 
