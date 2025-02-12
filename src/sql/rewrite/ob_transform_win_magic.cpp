@@ -1180,7 +1180,7 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(), rm_semi_infos)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(main_stmt->get_semi_infos(), rm_semi_infos))) {
     LOG_WARN("failed to remove semi infos", K(ret));
   }
 
@@ -1685,6 +1685,8 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
     } else if (OB_ISNULL(col_expr = col_in_transed->get_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col expr is null", K(ret));
+    } else if (has_exist_in_array(old_col, col_expr)) {
+      // do nothing
     } else if (FALSE_IT(type = (lib::is_oracle_mode() ? 
                (agg_expr->get_expr_type() == T_FUN_COUNT ? 
                                              T_FUN_SUM : agg_expr->get_expr_type()) : 
