@@ -795,11 +795,7 @@ OB_INLINE int ObExprDateFormat::calc_year_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
   if (std::is_same<IN_TYPE, ObMySQLDate>::value || std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
     ret = ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time);
-    year = ob_time.parts_[DT_YEAR];
-    hour = ob_time.parts_[DT_HOUR];
-    minute = ob_time.parts_[DT_MIN];
-    sec = ob_time.parts_[DT_SEC];
-    fsec = ob_time.parts_[DT_USEC];
+    get_parts(ob_time);
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
@@ -816,11 +812,8 @@ OB_INLINE int ObExprDateFormat::calc_yday_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
   if (std::is_same<IN_TYPE, ObMySQLDate>::value || std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
     ret = ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time, false);
+    get_parts(ob_time);
     dt_yday = ObTimeConverter::calc_yday(ob_time);
-    hour = ob_time.parts_[DT_HOUR];
-    minute = ob_time.parts_[DT_MIN];
-    sec = ob_time.parts_[DT_SEC];
-    fsec = ob_time.parts_[DT_USEC];
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
@@ -837,11 +830,7 @@ OB_INLINE int ObExprDateFormat::calc_week_only(COMMON_PART_FORMAT_FUNC_ARG_DECL)
   IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
   if (std::is_same<IN_TYPE, ObMySQLDate>::value || std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
     ret = ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time, true);
-    dt_wday = ob_time.parts_[DT_WDAY];
-    hour = ob_time.parts_[DT_HOUR];
-    minute = ob_time.parts_[DT_MIN];
-    sec = ob_time.parts_[DT_SEC];
-    fsec = ob_time.parts_[DT_USEC];
+    get_parts(ob_time);
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset, lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
   } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
