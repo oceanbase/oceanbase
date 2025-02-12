@@ -357,7 +357,8 @@ struct EstimateCostInfo {
       parallel_(ObGlobalHint::UNSET_PARALLEL),
       op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
       available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
-      server_cnt_(1)
+      server_cnt_(1),
+      inherit_sharding_index_(-1)
     {  }
     Path(ObJoinOrder* parent)
       : parent_(parent),
@@ -388,7 +389,8 @@ struct EstimateCostInfo {
         server_cnt_(1),
         server_list_(),
         is_pipelined_path_(false),
-        is_nl_style_pipelined_path_(false)
+        is_nl_style_pipelined_path_(false),
+        inherit_sharding_index_(-1)
     {  }
     virtual ~Path() {}
     int assign(const Path &other, common::ObIAllocator *allocator);
@@ -515,7 +517,8 @@ struct EstimateCostInfo {
                  K_(phy_plan_type),
                  K_(location_type),
                  K_(is_pipelined_path),
-                 K_(is_nl_style_pipelined_path));
+                 K_(is_nl_style_pipelined_path),
+                 K_(inherit_sharding_index));
   public:
     /**
      * 表示当前join order最终的父join order节点
@@ -556,6 +559,8 @@ struct EstimateCostInfo {
     common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
     bool is_pipelined_path_;
     bool is_nl_style_pipelined_path_;
+    //Used to indicate which child node the current sharding inherits from
+    int64_t inherit_sharding_index_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
@@ -798,8 +803,7 @@ struct EstimateCostInfo {
         contain_normal_nl_(false),
         can_use_batch_nlj_(false),
         is_naaj_(false),
-        is_sna_(false),
-        inherit_sharding_index_(-1)
+        is_sna_(false)
       {
       }
     virtual ~JoinPath() {}
@@ -1029,8 +1033,6 @@ struct EstimateCostInfo {
     bool can_use_batch_nlj_;
     bool is_naaj_; // is null aware anti join
     bool is_sna_; // is single null aware anti join
-    //Used to indicate which child node the current sharding inherits from
-    int64_t inherit_sharding_index_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JoinPath);
   };
@@ -1474,14 +1476,16 @@ struct NullAwareAntiJoinInfo {
                                                   ObLogicalOperator &subplan_root,
                                                   const uint64_t table_id,
                                                   ObShardingInfo *&output_strong_sharding,
-                                                  ObIArray<ObShardingInfo*> &output_weak_sharding);
+                                                  ObIArray<ObShardingInfo*> &output_weak_sharding,
+                                                  bool &is_inherited_sharding);
 
     static int convert_subplan_scan_sharding_info(ObLogPlan &plan,
                                                   ObLogicalOperator &subplan_root,
                                                   const uint64_t table_id,
                                                   bool is_strong,
                                                   ObShardingInfo *input_sharding,
-                                                  ObShardingInfo *&output_sharding);
+                                                  ObShardingInfo *&output_sharding,
+                                                  bool &is_inherited_sharding);
 
     int compute_table_meta_info(const uint64_t table_id, const uint64_t ref_table_id);
 
