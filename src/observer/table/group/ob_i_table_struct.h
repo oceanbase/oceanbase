@@ -67,6 +67,7 @@ public:
     timeout_ts_ = 0;
     timeout_ = 0;
   }
+  virtual void reset_result() = 0;
 public:
   ObTableGroupType type_;
   rpc::ObRequest *req_; // rpc request

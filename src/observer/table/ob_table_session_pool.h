@@ -55,7 +55,7 @@ public:
   public:
     DynamicSysVars()
         : binlog_row_image_(-1),
-          kv_group_commit_batch_size_(1),
+          kv_group_commit_batch_size_(10),
           group_rw_mode_(0),
           query_record_size_limit_(-1),
           enable_query_response_time_stats_(true)

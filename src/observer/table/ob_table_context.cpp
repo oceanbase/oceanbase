@@ -682,6 +682,11 @@ int ObTableCtx::adjust_properties()
     ObTableEntity *entity = static_cast<ObTableEntity*>(const_cast<ObITableEntity *>(entity_));
     const ObIArray<ObString> &prop_names = entity->get_properties_names();
     const ObIArray<ObObj> &prop_objs = entity->get_properties_values();
+    if (prop_names.count() != prop_objs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("property name count is not equal to property obj count", K(ret),
+                K(prop_names.count()), K(prop_objs.count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < prop_names.count(); i++) {
       const ObString &col_name = prop_names.at(i);
       ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));

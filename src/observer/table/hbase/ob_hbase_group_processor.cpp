@@ -161,6 +161,7 @@ int ObHbaseOpProcessor::init_result(const int64_t total_tablet_count, ObTableMul
       for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_result_idx++) { // loop tablet
         ObTableTabletOpResult &tablet_result = op->result_.at(j);
         ObTableBatchOperationResult &batch_result = result.get_results().at(batch_result_idx);
+        batch_result.set_attr(ObMemAttr(MTL_ID(), "ObHbaseGrpRes"));
         int64_t single_op_count = tablet_result.count();
         for (int64_t k = 0; OB_SUCC(ret) && k < single_op_count; k++) { // loop single op
           if (OB_FAIL(batch_result.push_back(tablet_result.at(k)))) {
@@ -177,53 +178,48 @@ int ObHbaseOpProcessor::init_result(const int64_t total_tablet_count, ObTableMul
 int ObHbaseOpProcessor::process()
 {
   int ret = OB_SUCCESS;
-  ObTableMultiBatchRequest *req = nullptr;
-  ObTableMultiBatchResult *result = nullptr;
-  const int64_t op_count = ops_->count();
-  const int64_t total_tablet_count = get_tablet_count();
-
   if (!IS_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("processor not init", K(ret));
-  } else if (OB_ISNULL(req = OB_NEWx(ObTableMultiBatchRequest, (&allocator_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc multi batch request", K(ret));
-  } else if (OB_ISNULL(result = OB_NEWx(ObTableMultiBatchResult, (&allocator_), allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc multi batch result", K(ret));
-  } else if (OB_FAIL(req->get_ops().prepare_allocate(total_tablet_count))) {
-    LOG_WARN("fail to reserve request ops", K(ret), K(total_tablet_count));
   } else {
-    int64_t batch_req_idx = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < op_count; i++) { // loop op
-      ObHbaseOp *op = static_cast<ObHbaseOp*>(ops_->at(i));
-      int64_t tablet_count = op->ls_req_.ls_op_.count();
-      for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_req_idx++) { // loop tablet
-        const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_.at(j);
-        ObTableBatchOperation &batch_op = req->get_ops().at(batch_req_idx);
-        batch_op.set_entity_factory(&default_entity_factory_);
-        if (OB_FAIL(fill_batch_op(tablet_op, batch_op))) {
-          LOG_WARN("fail to fill batch op", K(ret), KPC(op));
-        } else if (OB_FAIL(req->get_tablet_ids().push_back(tablet_op.get_tablet_id()))) {
-          LOG_WARN("fail to add tablet id", K(ret));
+    const int64_t op_count = ops_->count();
+    const int64_t total_tablet_count = get_tablet_count();
+    SMART_VARS_2((ObTableMultiBatchRequest, req), (ObTableMultiBatchResult, result, allocator_)) {
+      if (OB_FAIL(req.get_ops().prepare_allocate(total_tablet_count))) {
+        LOG_WARN("fail to reserve request ops", K(ret), K(total_tablet_count));
+      } else {
+        int64_t batch_req_idx = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && i < op_count; i++) { // loop op
+          ObHbaseOp *op = static_cast<ObHbaseOp*>(ops_->at(i));
+          int64_t tablet_count = op->ls_req_.ls_op_.count();
+          for (int64_t j = 0; OB_SUCC(ret) && j < tablet_count; j++, batch_req_idx++) { // loop tablet
+            const ObTableTabletOp &tablet_op = op->ls_req_.ls_op_.at(j);
+            ObTableBatchOperation &batch_op = req.get_ops().at(batch_req_idx);
+            batch_op.set_entity_factory(&default_entity_factory_);
+            if (OB_FAIL(fill_batch_op(tablet_op, batch_op))) {
+              LOG_WARN("fail to fill batch op", K(ret), KPC(op));
+            } else if (OB_FAIL(req.get_tablet_ids().push_back(tablet_op.get_tablet_id()))) {
+              LOG_WARN("fail to add tablet id", K(ret));
+            }
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(init_result(total_tablet_count, result))) {
+          LOG_WARN("fail to init result", K(ret));
+        } else if (OB_FAIL(ObTableGroupExecuteService::start_trans(*multi_batch_ctx_))) {
+          LOG_WARN("fail to start trans", K(ret));
+        } else if (OB_FAIL(ObTableMultiBatchService::execute(*multi_batch_ctx_, req, result))) {
+          LOG_WARN("fail to execute multi batch operation", K(ret));
         }
       }
-    }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(init_result(total_tablet_count, *result))) {
-      LOG_WARN("fail to init result", K(ret));
-    } else if (OB_FAIL(ObTableGroupExecuteService::start_trans(*multi_batch_ctx_))) {
-      LOG_WARN("fail to start trans", K(ret));
-    } else if (OB_FAIL(ObTableMultiBatchService::execute(*multi_batch_ctx_, *req, *result))) {
-      LOG_WARN("fail to execute multi batch operation", K(ret));
-    }
-
-    // end trans
-    int tmp_ret = OB_SUCCESS;
-    bool is_rollback = ret != OB_SUCCESS;
-    if (OB_TMP_FAIL(ObTableGroupExecuteService::end_trans(*multi_batch_ctx_, group_ctx_->create_cb_functor_, is_rollback))) {
-      LOG_WARN("fail to end trans", K(ret), K(tmp_ret));
+      // end trans
+      int tmp_ret = OB_SUCCESS;
+      bool is_rollback = ret != OB_SUCCESS;
+      if (OB_TMP_FAIL(ObTableGroupExecuteService::end_trans(*multi_batch_ctx_, group_ctx_->create_cb_functor_, is_rollback))) {
+        LOG_WARN("fail to end trans", K(ret), K(tmp_ret));
+      }
     }
   }
 

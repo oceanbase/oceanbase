@@ -88,6 +88,7 @@ public:
     reset();
   }
   int init();
+  virtual void reset_result() { /* do nothing, result_enity of hbase put is empty */ }
 public:
   bool is_inited_;
   ObTableLSOpRequest ls_req_;
