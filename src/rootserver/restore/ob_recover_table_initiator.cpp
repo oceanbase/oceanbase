@@ -18,6 +18,7 @@
 #include "share/restore/ob_recover_table_persist_helper.h"
 #include "share/restore/ob_import_table_persist_helper.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "share/restore/ob_import_util.h"
 
 using namespace oceanbase;
 using namespace share::schema;
@@ -100,6 +101,8 @@ int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg
     LOG_WARN("failed to fill aux tenant resetore info", K(ret), K(arg));
   } else if (OB_FAIL(fill_recover_table_arg_(arg, job))) {
     LOG_WARN("failed to fill recover table arg", K(ret));
+  } else if (OB_FAIL(check_recover_table_target_schema_(job))) {
+    LOG_WARN("failed to check recover table arg", K(ret), K(job));
   } else if (OB_FAIL(insert_sys_job_(job, physical_restore_job))) {
     LOG_WARN("failed to insert sys recover table job", K(ret));
   } else {
@@ -537,5 +540,247 @@ int ObRecoverTableInitiator::fill_recover_table_restore_type_(share::ObPhysicalR
 
   LOG_INFO("[RECOVER_TABLE] set recover table restore type", "restore_type", QUICK_RESTORE_TYPE,
     "progress_display_mode", TABLET_CNT_DISPLAY_MODE);
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_specified_database_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const share::ObImportDatabaseArray &db_array = import_table_arg.get_import_database_array();
+
+  // check specified remap target database
+  ARRAY_FOREACH(db_array.get_items(), i) {
+    const share::ObImportDatabaseItem &db_item = db_array.get_items().at(i);
+    share::ObImportDatabaseItem remap_db_item;
+    bool is_no_remap_database = false;
+    if (OB_FAIL(import_remap_arg.get_remap_database(db_item, remap_db_item))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // no remap, set target database name the same as source.
+        remap_db_item = db_item;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get remap database", K(ret), K(import_remap_arg), K(db_item));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      const ObString &target_database = remap_db_item.name_;
+      bool is_exist = false;
+      if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
+                                                                 target_tenant_id,
+                                                                 target_database,
+                                                                 is_exist))) {
+        LOG_WARN("failed to check target database schema exist", K(ret));
+      } else if (!is_exist) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_INFO("target database not exist", K(ret), K(target_database));
+        // "database not exist '%.*s'"
+        LOG_USER_ERROR(OB_ERR_BAD_DATABASE, target_database.length(), target_database.ptr());
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_specified_table_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const share::ObImportTableArray &table_array = import_table_arg.get_import_table_array();
+
+  // check target database & target table
+  ARRAY_FOREACH(table_array.get_items(), i) {
+    const share::ObImportTableItem &table_item = table_array.get_items().at(i);
+    share::ObImportTableItem remap_table_item;
+    if (OB_FAIL(import_remap_arg.get_remap_table(table_item, remap_table_item))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // no remap, set target name the same as source.
+        remap_table_item = table_item;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get remap table", K(ret), K(import_remap_arg), K(table_item));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      const ObString &target_database = remap_table_item.database_name_;
+      const ObString &target_table = remap_table_item.table_name_;
+      int tmp_ret = OB_SUCCESS;
+      bool is_exist = false;
+      if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
+                                                                 target_tenant_id,
+                                                                 target_database,
+                                                                 is_exist))) {
+        LOG_WARN("failed to check target database schema exist", K(ret));
+      } else if (!is_exist) {
+        ret = OB_ERR_BAD_DATABASE;;
+        LOG_INFO("target database not exist", K(ret), K(target_database));
+        // "database not exist '%.*s'"
+        LOG_USER_ERROR(OB_ERR_BAD_DATABASE, target_database.length(), target_database.ptr());
+      } else if (OB_FAIL(ObImportTableUtil::check_table_schema_exist(*schema_service_,
+                                                                     target_tenant_id,
+                                                                     target_database,
+                                                                     target_table,
+                                                                     is_exist))) {
+        LOG_WARN("failed to check target table schema exist", K(ret), K(target_database), K(target_table));
+      } else if (is_exist) {
+        ret = OB_ERR_TABLE_EXIST;
+        LOG_INFO("target table exist", K(ret), K(target_database), K(target_table));
+        int tmp_ret = OB_SUCCESS;
+        common::ObFixedLengthString<DEFAULT_BUF_LENGTH> target_table_name;
+        if (OB_TMP_FAIL(databuff_printf(target_table_name.ptr(), target_table_name.capacity(), "%.*s.%.*s",
+          target_database.length(), target_database.ptr(), target_table.length(), target_table.ptr()))) {
+          LOG_WARN("failed to databuff printf", K(ret));
+        } else {
+          // "Table '%.*s' already exists"
+          LOG_USER_ERROR(OB_ERR_TABLE_EXIST, static_cast<int>(target_table_name.size()), target_table_name.ptr());
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const share::ObRemapDatabaseArray &remap_db_array = import_remap_arg.get_remap_database_array();
+  const share::ObRemapTableArray &remap_table_array = import_remap_arg.get_remap_table_array();
+
+  // check all remap target database
+  ARRAY_FOREACH(remap_db_array.get_remap_items(), i) {
+    const share::ObRemapDatabaseItem &remap_db_item = remap_db_array.get_remap_items().at(i);
+    const ObString &target_database = remap_db_item.target_.name_;
+    bool is_exist = false;
+    if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
+                                                               target_tenant_id,
+                                                               target_database,
+                                                               is_exist))) {
+      LOG_WARN("failed to check target database schema exist", K(ret));
+    } else if (!is_exist) {
+      ret = OB_ERR_BAD_DATABASE;;
+      LOG_INFO("target database not exist", K(ret), K(target_database));
+      // "database not exist '%.*s'"
+      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, target_database.length(), target_database.ptr());
+    }
+  }
+
+  // check all remap target table
+  ARRAY_FOREACH(remap_table_array.get_remap_items(), i) {
+    const share::ObRemapTableItem &remap_table_item = remap_table_array.get_remap_items().at(i);
+    const ObString &target_database = remap_table_item.target_.database_name_;
+    const ObString &target_table = remap_table_item.target_.database_name_;
+    bool is_exist = false;
+    if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
+                                                               target_tenant_id,
+                                                               target_database,
+                                                               is_exist))) {
+      LOG_WARN("failed to check target database schema exist", K(ret));
+    } else if (!is_exist) {
+      ret = OB_ERR_BAD_DATABASE;;
+      LOG_INFO("target database not exist", K(ret), K(target_database));
+      // "Unknown database '%.*s'"
+      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, target_database.length(), target_database.ptr());
+    } else if (OB_FAIL(ObImportTableUtil::check_table_schema_exist(*schema_service_,
+                                                                    target_tenant_id,
+                                                                    target_database,
+                                                                    target_table,
+                                                                    is_exist))) {
+      LOG_WARN("failed to check target table schema exist", K(ret), K(target_database), K(target_table));
+    } else if (is_exist) {
+      ret = OB_ERR_TABLE_EXIST;
+      LOG_INFO("target table exist", K(ret), K(target_database), K(target_table));
+      int tmp_ret = OB_SUCCESS;
+      common::ObFixedLengthString<DEFAULT_BUF_LENGTH> target_table_name;
+      if (OB_TMP_FAIL(databuff_printf(target_table_name.ptr(), target_table_name.capacity(), "%.*s.%.*s",
+        target_database.length(), target_database.ptr(), target_table.length(), target_table.ptr()))) {
+        LOG_WARN("failed to databuff printf", K(ret));
+      } else {
+        // "Table '%.*s' already exists"
+        LOG_USER_ERROR(OB_ERR_TABLE_EXIST, static_cast<int>(target_table_name.size()), target_table_name.ptr());
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_remap_tablegroup_target_(const share::ObRemapTablegroupArray &remap_tablegroup_array, uint64_t target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  ARRAY_FOREACH(remap_tablegroup_array.get_remap_items(), i) {
+    const share::ObRemapTablegroupItem &remap_tablegroup_item = remap_tablegroup_array.get_remap_items().at(i);
+    const ObString &target_tablegroup = remap_tablegroup_item.target_.name_;
+    int tmp_ret = OB_SUCCESS;
+    bool is_exist = false;
+    if (OB_FAIL(ObImportTableUtil::check_tablegroup_exist(*schema_service_,
+                                                          target_tenant_id,
+                                                          target_tablegroup,
+                                                          is_exist))) {
+      LOG_WARN("failed to check tablegroup exist", K(ret));
+    } else if (!is_exist) {
+      ret = OB_TABLEGROUP_NOT_EXIST;
+      LOG_INFO("remap target tablegroup not exist", K(ret), K(target_tablegroup));
+      // "Tablegroup does not exist"
+      LOG_USER_ERROR(OB_TABLEGROUP_NOT_EXIST);
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_remap_tablespace_target_(const share::ObRemapTablespaceArray &remap_tablespace_array,
+    uint64_t target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  // check remap target tablespace
+  ARRAY_FOREACH(remap_tablespace_array.get_remap_items(), i) {
+    const share::ObRemapTablespaceItem &remap_tablespace_item = remap_tablespace_array.get_remap_items().at(i);
+    const ObString &target_tablespace = remap_tablespace_item.target_.name_;
+    bool is_exist = false;
+    int tmp_ret = OB_SUCCESS;
+    if (FAILEDx(ObImportTableUtil::check_tablespace_exist(*schema_service_,
+                                                          target_tenant_id,
+                                                          target_tablespace,
+                                                          is_exist))) {
+      LOG_WARN("failed to check tablespace exist", K(ret));
+    } else if (!is_exist) {
+      ret = OB_TABLESPACE_NOT_EXIST;
+      LOG_INFO("remap target tablespace not exist", K(ret), K(target_tablespace));
+      // "Tablespace '%.*s' does not exist"
+      LOG_USER_ERROR(OB_TABLESPACE_NOT_EXIST, target_tablespace.length(), target_tablespace.ptr());
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableInitiator::check_recover_table_target_schema_(const share::ObRecoverTableJob &job)
+{
+  int ret = OB_SUCCESS;
+  const share::ObImportTableArg &import_table_arg = job.get_import_arg().get_import_table_arg();
+  const share::ObImportRemapArg &import_remap_arg = job.get_import_arg().get_remap_table_arg();
+  uint64_t target_tenant_id = job.get_target_tenant_id();
+
+  if (OB_FAIL(check_specified_database_remap_table_target_(import_table_arg, import_remap_arg, target_tenant_id))) {
+    LOG_WARN("check specified dababase remap table target failed", K(ret), K(job));
+  } else if (OB_FAIL(check_specified_table_remap_table_target_(import_table_arg, import_remap_arg, target_tenant_id))) {
+    LOG_WARN("check specified table remap table target failed", K(ret), K(job));
+  } else if (OB_FAIL(check_remap_table_target_(import_table_arg, import_remap_arg, target_tenant_id))) {
+    LOG_WARN("check specified table remap table target failed", K(ret), K(job));
+  } else if (OB_FAIL(check_remap_tablegroup_target_(import_remap_arg.get_remap_tablegroup_array(), target_tenant_id))) {
+    LOG_WARN("check specified table remap table target failed", K(ret), K(job));
+  } else if (OB_FAIL(check_remap_tablespace_target_(import_remap_arg.get_remap_tablespace_array(), target_tenant_id))) {
+    LOG_WARN("check specified table remap table target failed", K(ret), K(job));
+  }
+
   return ret;
 }

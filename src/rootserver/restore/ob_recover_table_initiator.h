@@ -85,6 +85,18 @@ private:
       share::ObImportRemapArg &import_remap_arg);
   int fill_recover_table_restore_type_(share::ObPhysicalRestoreJob &job);
 
+  int check_specified_database_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id);
+  int check_specified_table_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id);
+  int check_remap_table_target_(const share::ObImportTableArg &import_table_arg,
+    const share::ObImportRemapArg &import_remap_arg, const uint64_t target_tenant_id);
+  int check_remap_tablegroup_target_(const share::ObRemapTablegroupArray &remap_tablegroup_array,
+    uint64_t target_tenant_id);
+  int check_remap_tablespace_target_(const share::ObRemapTablespaceArray &remap_tablespace_array,
+    uint64_t target_tenant_id);
+  int check_recover_table_target_schema_(const share::ObRecoverTableJob &job);
+
 private:
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
