@@ -104,6 +104,9 @@ int ObDasVecScanUtils::get_real_search_vec(common::ObArenaAllocator &allocator,
                                                                origin_vec->obj_meta_.has_lob_header(),
                                                                real_search_vec))) {
     LOG_WARN("failed to get real data.", K(ret));
+  } else if (OB_ISNULL(real_search_vec.ptr())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null pointer", K(ret), KP(real_search_vec.ptr()));
   }
 
   return ret;
