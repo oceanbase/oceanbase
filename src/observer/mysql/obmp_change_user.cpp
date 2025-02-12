@@ -210,6 +210,7 @@ int ObMPChangeUser::process()
   } else if (FALSE_IT(session->post_sync_session_info())) {
   } else {
     need_disconnect = false;
+    get_conn()->client_cs_type_ = charset_;
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
     if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
