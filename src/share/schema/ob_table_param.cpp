@@ -1450,12 +1450,12 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
   share::schema::ObColumnParam *col_param = nullptr;
   use_lob_locator = false;
   bool has_row_id = true;
+  const int64_t rowkey_count = table_schema.get_rowkey_info().get_size();
   if (is_use_lob_locator_v2) {
-    for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < access_projector.count(); i++) {
-      int32_t idx = access_projector.at(i);
-      if (OB_ISNULL(col_param = storage_project_columns.at(idx))) {
+    for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < storage_project_columns.count(); i++) {
+      if (OB_ISNULL(col_param = storage_project_columns.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected null col param", K(ret), K(idx), K(storage_project_columns));
+        LOG_WARN("Unexpected null col param", K(ret), K(i), K(storage_project_columns));
       } else {
         ObObjType type = col_param->get_meta_type().get_type();
         use_lob_locator = is_lob_storage(type);
@@ -1467,18 +1467,17 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
     if (table_schema.is_sys_table()
         || table_schema.is_sys_view()
         || table_schema.is_vir_table()
-        || (table_schema.get_rowkey_info().get_size() == 0)
+        || rowkey_count == 0
         || lib::is_mysql_mode()) {
       has_row_id = false; // need lob locator without rowid
       rowid_version = ObURowIDData::INVALID_ROWID_VERSION;
     }
   } else {
     if (!(table_schema.is_sys_table() || table_schema.is_sys_view() || table_schema.is_vir_table())) {
-      for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < access_projector.count(); i++) {
-        int32_t idx = access_projector.at(i);
-        if (OB_ISNULL(col_param = storage_project_columns.at(idx))) {
+      for (int64_t i = 0; OB_SUCC(ret) && !use_lob_locator && i < storage_project_columns.count(); i++) {
+        if (OB_ISNULL(col_param = storage_project_columns.at(i))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null col param", K(ret), K(idx), K(storage_project_columns));
+          LOG_WARN("Unexpected null col param", K(ret), K(i), K(storage_project_columns));
         } else {
           use_lob_locator = col_param->get_meta_type().get_type() == ObLongTextType;
         }
@@ -1487,7 +1486,7 @@ int ObTableParam::construct_lob_locator_param(const ObTableSchema &table_schema,
     // Virtual table may not contain primary key columns, i.e. TENANT_VIRTUAL_SESSION_VARIABLE.
     // When access such virtual table, get_column_ids_serialize_to_rowid may return failure because
     // of the null rowkey info. So here skip the lob locator.
-    if (use_lob_locator && 0 == table_schema.get_rowkey_info().get_size()) {
+    if (use_lob_locator && 0 == rowkey_count) {
       use_lob_locator = false;
     }
   }
