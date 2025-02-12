@@ -984,11 +984,6 @@ public:
                                     share::schema::ObSchemaGetterGuard &schema_guard);
   //----End of functions for row level security----
 
-  int insert_dependency_infos(common::ObMySQLTransaction &trans,
-                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                              uint64_t tenant_id,
-                              uint64_t dep_obj_id,
-                              uint64_t schema_version, uint64_t owner_id);
 
   virtual int insert_temp_table_info(common::ObMySQLTransaction &trans,
                                      const share::schema::ObTableSchema &table_schema);

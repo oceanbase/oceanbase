@@ -8643,7 +8643,7 @@ int ObDDLOperator::create_routine(ObRoutineInfo &routine_info,
       LOG_WARN("insert routine info failed", K(routine_info), K(ret));
     }
   }
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
                                 routine_info.get_schema_version(),
                                 routine_info.get_owner_id()));
 
@@ -8752,7 +8752,7 @@ int ObDDLOperator::replace_routine(ObRoutineInfo &routine_info,
     LOG_WARN("replace routine info failed", K(routine_info), K(ret));
   }
 
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
                                 routine_info.get_schema_version(),
                                 routine_info.get_owner_id()));
   if (OB_SUCC(ret)) {
@@ -9050,7 +9050,7 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
                                      new_schema_version,
                                      old_package_info->get_object_type()));
     }
-    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, new_package_info.get_package_id(),
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, new_package_info.get_package_id(),
                                 new_package_info.get_schema_version(),
                                 new_package_info.get_owner_id()));
     if (OB_SUCC(ret)) {
@@ -9357,7 +9357,7 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                                           trigger_info.get_trigger_id(),
                                                           trigger_info.get_schema_version(),
                                                           trigger_info.get_object_type()));
-    OZ (insert_dependency_infos(trans, dep_infos, trigger_info.get_tenant_id(), trigger_info.get_trigger_id(),
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, trigger_info.get_tenant_id(), trigger_info.get_trigger_id(),
                                 trigger_info.get_schema_version(), trigger_info.get_owner_id()));
 
     if (OB_SUCC(ret) && is_replace && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
@@ -9776,7 +9776,7 @@ int ObDDLOperator::create_udt(ObUDTTypeInfo &udt_info,
     }
   }
   if (OB_SUCC(ret) && !is_inner_pl_udt_id(new_udt_id)) {
-    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
                                 new_schema_version,
                                 udt_info.get_database_id()));
   }
@@ -9915,7 +9915,7 @@ int ObDDLOperator::replace_udt(ObUDTTypeInfo &udt_info,
       }
     }
   }
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
                                 udt_info.get_schema_version(),
                                 udt_info.get_database_id()));
   if (OB_SUCC(ret)) {
@@ -12152,33 +12152,6 @@ int ObDDLOperator::init_tenant_keystore(int64_t tenant_id,
   return ret;
 }
 
-int ObDDLOperator::insert_dependency_infos(common::ObMySQLTransaction &trans,
-                                           ObIArray<ObDependencyInfo> &dep_infos,
-                                           uint64_t tenant_id,
-                                           uint64_t dep_obj_id,
-                                           uint64_t schema_version, uint64_t owner_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == owner_id
-   || OB_INVALID_ID == dep_obj_id
-   || OB_INVALID_ID == tenant_id
-   || OB_INVALID_SCHEMA_VERSION == schema_version) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
-                                                   K(owner_id), K(dep_obj_id));
-  } else {
-    for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
-      ObDependencyInfo & dep = dep_infos.at(i);
-      dep.set_tenant_id(tenant_id);
-      dep.set_dep_obj_id(dep_obj_id);
-      dep.set_dep_obj_owner_id(owner_id);
-      dep.set_schema_version(schema_version);
-      OZ (dep.insert_schema_object_dependency(trans));
-    }
-  }
-
-  return ret;
-}
 
 int ObDDLOperator::update_table_status(const ObTableSchema &orig_table_schema,
                                        const int64_t schema_version,

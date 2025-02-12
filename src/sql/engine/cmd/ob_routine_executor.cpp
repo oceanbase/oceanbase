@@ -498,12 +498,23 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
     ObMySQLTransaction trans;
     const ObRoutineInfo *routine_info = nullptr;
     ObSchemaGetterGuard schema_guard;
+    int64_t new_schema_version = OB_INVALID_VERSION;
+    ObSArray<ObDependencyInfo> &dep_infos =
+                      const_cast<ObSArray<ObDependencyInfo> &>(alter_routine_arg.dependency_infos_);
     OZ (ctx.get_task_exec_ctx().schema_service_->
         get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), schema_guard));
     OZ(schema_guard.get_routine_info(tenant_id, alter_routine_arg.routine_info_.get_routine_id(), routine_info));
     CK (OB_NOT_NULL(routine_info));
     OZ (trans.start(GCTX.sql_proxy_, tenant_id, true));
     OZ (alter_routine_arg.error_info_.handle_error_info(trans, routine_info));
+    OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
+                                    routine_info->get_routine_id(),
+                                    new_schema_version,
+                                    routine_info->get_object_type()));
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id,
+                              routine_info->get_routine_id(),
+                              routine_info->get_schema_version(),
+                              routine_info->get_owner_id()));
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
