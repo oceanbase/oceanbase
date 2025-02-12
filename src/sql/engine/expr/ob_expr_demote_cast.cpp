@@ -534,7 +534,7 @@ int ObExprDemoteCast::eval_demoted_val(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   int ret = OB_SUCCESS;
   TypeDemotionRes res(demoted_val);
   if (OB_FAIL(demote_cast(expr, ctx, res))) {
-    LOG_WARN("fail to demote cast", K(ret), K(res));
+    LOG_WARN("fail to demote cast", K(ret));
   } else if (OB_UNLIKELY(res.is_outside())) {
     // Expected error, in order to prevent the calculable expr from getting a result
     ret = OB_DATA_OUT_OF_RANGE;
@@ -596,7 +596,7 @@ int ObExprRangePlacement::eval_range_placement(const ObExpr &expr, ObEvalCtx &ct
   demoted_val.pack_ = 0;
   TypeDemotionRes res(demoted_val);
   if (OB_FAIL(demote_cast(expr, ctx, res))) {
-    LOG_WARN("fail to demote cast", K(ret), K(res));
+    LOG_WARN("fail to demote cast", K(ret));
   } else {
     // set range placement value as datum result
     range_placement.set_int32(static_cast<int32_t>(res.rp_));
