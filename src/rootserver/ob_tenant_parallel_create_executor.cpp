@@ -137,10 +137,12 @@ int ObParallelCreateTenantExecutor::wait_all_(
     } else if (OB_FAIL(ret_code)) {
     } else if (OB_FAIL(wait_ls_leader_(user_tenant_id, true/*force_renew*/))) {
       LOG_WARN("failed to wait user sys ls exists in meta table", KR(ret), K(user_tenant_id));
+      // To avoid load_sys_package and tenant DDL operations competing for DDL threads
+      // wait for all load_sys_package tasks to complete before returning to the user.
+      // ObCompatibilityMode::OCEANBASE_MODE means wait both mysql and oracle sys package
     } else if (OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_,
-            user_tenant_schema_.get_compatibility_mode()))) {
-      LOG_WARN("failed to wait sys package ready", KR(ret), K(ctx_),
-          "compat_mode", user_tenant_schema_.get_compatibility_mode());
+            ObCompatibilityMode::OCEANBASE_MODE))) {
+      LOG_WARN("failed to wait sys package ready", KR(ret), K(ctx_));
     }
   }
   return ret;
