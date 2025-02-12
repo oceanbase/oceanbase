@@ -1,0 +1,76 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner : diqinhao.dqh
+# owner group: SQL
+# description:
+#
+
+--disable_query_log
+--disable_warnings
+use test;
+drop user if exists test01;
+drop user if exists test02;
+drop user if exists test03;
+
+drop function if exists test.f1;
+drop function if exists test.f2;
+--enable_warnings
+
+delimiter //; 
+CREATE FUNCTION f1(a INT, b INT) RETURNS INT DETERMINISTIC
+BEGIN
+    RETURN a + b;
+END//
+delimiter ;//
+
+create user 'test01' identified by 'test01';
+grant select on *.* to test01;
+grant execute on function test.f1 to test01;
+## flush privileges;
+
+create user test02 identified by 'test02';
+grant select on test.* to test02;
+grant create routine on test.* to test02;
+## flush privileges;
+
+create user test03 identified by 'test03';
+grant select on test.* to test03;
+grant execute on test.* to test03;
+## flush privileges;
+
+delimiter //;
+CREATE DEFINER=test03 FUNCTION f2(a INT, b INT) RETURNS INT DETERMINISTIC
+BEGIN
+    RETURN a + b; 
+END//
+delimiter ;//
+
+--enable_query_log
+
+connect (conn1,$OBMYSQL_MS0,test01@mysql,test01,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,test02@mysql,test02,test,$OBMYSQL_PORT);
+connect (conn3,$OBMYSQL_MS0,test03@mysql,test03,test,$OBMYSQL_PORT);
+
+--echo ------connect to test01------
+connection conn1;
+show create function test.f1;
+--echo
+show create function test.f2;
+disconnect conn1;
+
+--echo
+--echo ------connect to test02------
+connection conn2;
+show create function test.f1;
+--echo
+show create function test.f2;
+disconnect conn2;
+
+--echo
+--echo ------connect to test03------
+connection conn3;
+show create function test.f1;
+--echo
+show create function test.f2;
+disconnect conn3;
