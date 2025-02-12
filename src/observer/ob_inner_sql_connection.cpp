@@ -132,7 +132,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       use_external_session_(false),
       group_id_(0),
       user_timeout_(0),
-      diagnostic_info_(nullptr)
+      diagnostic_info_(nullptr),
+      inner_sess_query_locked_(false)
 
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
@@ -222,6 +223,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
 int ObInnerSQLConnection::destroy()
 {
   int ret = OB_SUCCESS;
+  try_release_query_lock();
   // uninited connection can be destroy too
   if (inited_) {
     if (0 < ref_cnt_) {
@@ -281,6 +283,31 @@ void ObInnerSQLConnection::unref()
     } else {
       // see
       // extern_session_ = NULL;
+    }
+  }
+}
+
+int ObInnerSQLConnection::try_acquire_query_lock()
+{
+  int ret = OB_SUCCESS;
+  if (!inner_sess_query_locked_) {
+    if (OB_FAIL(inner_session_->get_query_lock().lock())) {
+      LOG_WARN("fail to acquire query lock", K(ret), KPC(inner_session_));
+    } else {
+      inner_sess_query_locked_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObInnerSQLConnection::try_release_query_lock()
+{
+  int ret = OB_SUCCESS;
+  if (inner_sess_query_locked_) {
+    if (OB_FAIL(inner_session_->get_query_lock().unlock())) {
+      LOG_WARN("fail to release query lock", K(ret), KPC(inner_session_));
+    } else {
+      inner_sess_query_locked_ = false;
     }
   }
 }
@@ -473,6 +500,9 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
           diagnostic_info_ = di;
         }
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(try_acquire_query_lock())) {
+      LOG_WARN("failed to acquire inner session query lock", K(ret));
     }
   } else {
     extern_session_ = extern_session;
@@ -2291,6 +2321,7 @@ int ObInnerSQLConnection::destroy_inner_session()
   int ret = OB_SUCCESS;
   LOG_DEBUG("begin destroying inner session", K(ret), KP(inner_session_), K(free_session_ctx_), K(lbt()));
   if (NULL != inner_session_) {
+    try_release_query_lock();
     if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
       inner_session_->set_session_sleep();
       inner_session_->~ObSQLSessionInfo();
