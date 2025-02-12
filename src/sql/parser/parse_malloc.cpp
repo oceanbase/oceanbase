@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_PARSER
 #include "parse_malloc.h"
 #include <lib/alloc/alloc_assist.h>
+#include "parse_node.h"
 #include "lib/charset/ob_ctype.h"
 #include "sql/parser/parse_define.h"
 #include "sql/parser/parser_proxy_func.h"
@@ -28,6 +29,8 @@ char* charset_upper(const struct ObCharsetInfo* src_cs,
   } else if (OB_ISNULL(src_cs->cset)) {
   } else if (OB_ISNULL(malloc_pool)) {
   } else if (OB_UNLIKELY(src_len <= 0)) {
+  } else if (src_cs->number == ob_charset_bin.number) {
+    buf = str_toupper(src_ptr, src_len);
   } else {
     int casemulti = src_cs->caseup_multiply;
     int64_t buf_len = src_len * casemulti;

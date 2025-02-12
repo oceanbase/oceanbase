@@ -616,7 +616,7 @@ char *str_toupper(char *buff, int64_t len)
 {
   if (OB_LIKELY(NULL != buff)) {
     char *ptr = buff;
-	char *end = buff + len;
+	  char *end = buff + len;
     unsigned char ch = *ptr;
     while (ptr != end) {
       ch = *ptr;
