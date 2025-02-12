@@ -749,7 +749,8 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
                                             common::ObIAllocator &allocator,
                                             common::ObMySQLProxy &sql_proxy,
                                             ObUDFInfo &udf_info,
-                                            pl::ObPLDbLinkGuard &dblink_guard)
+                                            pl::ObPLDbLinkGuard &dblink_guard,
+                                            pl::ObPLEnumSetCtx &enum_set_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -785,6 +786,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
     if (ret_param->is_schema_routine_param()) {
       const ObRoutineParam *iparam = static_cast<const ObRoutineParam*>(ret_param);
       CK (OB_NOT_NULL(iparam));
+      OX (ret_pl_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(iparam,
                                                   schema_guard,
                                                   session_info,
@@ -833,6 +835,7 @@ int ObRawExprUtils::resolve_udf_param_types(const ObIRoutineInfo* func_info,
     } else if (iparam->is_schema_routine_param()) {
       const ObRoutineParam *rparam = static_cast<const ObRoutineParam*>(iparam);
       CK (OB_NOT_NULL(rparam));
+      OX (param_pl_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(rparam,
                                                   schema_guard,
                                                   session_info,
@@ -867,7 +870,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
                                             sql::ObRawExprFactory &expr_factory,
                                             common::ObMySQLProxy &sql_proxy,
                                             ExternalParams *extern_param_info,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            pl::ObPLEnumSetCtx &enum_set_ctx)
 {
   int ret = OB_SUCCESS;
   ObResolverParams params;
@@ -881,7 +885,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
   if (OB_NOT_NULL(extern_param_info)) {
     params.external_param_info_.assign(*extern_param_info);
   }
-  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info))) {
+  if (OB_FAIL(resolve_udf_param_exprs(params, func_info, udf_info, enum_set_ctx))) {
     SQL_LOG(WARN, "failed to exec resovle udf exprs", K(ret), K(udf_info));
   }
   return ret;
@@ -898,7 +902,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(const ObIRoutineInfo* func_info,
  */
 int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                                             const ObIRoutineInfo *func_info,
-                                            ObUDFInfo &udf_info)
+                                            ObUDFInfo &udf_info,
+                                            pl::ObPLEnumSetCtx &enum_set_ctx)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> param_exprs;
@@ -1150,6 +1155,7 @@ do {                                                                            
                 CK (OB_NOT_NULL(params.session_info_));
                 CK (OB_NOT_NULL(params.allocator_));
                 CK (OB_NOT_NULL(params.sql_proxy_));
+                OX (param_type.set_enum_set_ctx(&enum_set_ctx));
                 OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                           *(params.schema_checker_->get_schema_guard()),
                                                           *(params.session_info_),

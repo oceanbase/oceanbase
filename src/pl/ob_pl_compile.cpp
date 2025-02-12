@@ -464,6 +464,7 @@ int ObPLCompiler::compile(
       ObPLDataType param_type;
       ObSEArray<ObSchemaObjVersion, 1> deps;
       CK (OB_NOT_NULL(param));
+      OX (param_type.set_enum_set_ctx(&func_ast.get_enum_set_ctx()));
       OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                   schema_guard_,
                                                   session_info_,
@@ -475,7 +476,7 @@ int ObPLCompiler::compile(
       } else if (param->is_ret_param()) {
         func_ast.set_ret_type(param_type);
         if (ob_is_enum_or_set_type(param->get_param_type().get_obj_type())) {
-          OZ (func_ast.set_ret_type_info(param->get_extended_type_info()));
+          OZ (func_ast.set_ret_type_info(param->get_extended_type_info(), &func_ast.get_enum_set_ctx()));
          }
       } else {
         OZ (func_ast.add_argument(param->get_param_name(),

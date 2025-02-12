@@ -51,7 +51,7 @@ DEF_TO_STRING(ObPLDataType)
   J_COMMA();
   J_KV(K_(pls_type));
   J_COMMA();
-  J_KV(K_(type_info));
+  J_KV(K_(type_info_id));
   J_COMMA();
   if (is_obj_type()) {
     J_KV(K_(obj_type));
@@ -349,7 +349,9 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
     // do nothing ...
   } else if (!iparam->is_extern_type()) {
     ObDataType *data_type = NULL;
+    ObPLEnumSetCtx* enum_set_ctx_bk = pl_type.get_enum_set_ctx();
     OX (pl_type = iparam->get_pl_data_type());
+    OX (pl_type.set_enum_set_ctx(enum_set_ctx_bk));
     OZ (pl_type.set_type_info(iparam->get_extended_type_info()));
     OX (data_type = pl_type.get_data_type());
     CK (OB_NOT_NULL(data_type));
@@ -548,6 +550,7 @@ int ObPLDataType::transform_and_add_routine_param(const pl::ObPLRoutineParam *pa
   return ret;
 }
 
+//is same enum_set_ctx, only need to copy type_info_id_
 int ObPLDataType::deep_copy(common::ObIAllocator &alloc, const ObPLDataType &other)
 {
   int ret = OB_SUCCESS;
@@ -557,8 +560,26 @@ int ObPLDataType::deep_copy(common::ObIAllocator &alloc, const ObPLDataType &oth
   obj_type_ = other.obj_type_;
   pls_type_ = other.pls_type_;
   not_null_ = other.not_null_;
-  if (OB_FAIL(deep_copy_type_info(alloc, other.get_type_info()))) {
-    LOG_WARN("fail to deep copy type info", K(ret));
+  enum_set_ctx_ = other.enum_set_ctx_;
+  type_info_id_ = other.type_info_id_;
+  return ret;
+}
+
+//is not same enum_set_ctx, need to set type_info_id independently
+int ObPLDataType::deep_copy(ObPLEnumSetCtx &enum_set_ctx, const ObPLDataType &other)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObString> *type_info = NULL;
+  type_ = other.type_;
+  type_from_ = other.type_from_;
+  user_type_id_ = other.user_type_id_;
+  obj_type_ = other.obj_type_;
+  pls_type_ = other.pls_type_;
+  not_null_ = other.not_null_;
+  OZ (other.get_type_info(type_info));
+  if (OB_NOT_NULL(type_info)) {
+    enum_set_ctx_ = &enum_set_ctx;
+    OZ (set_type_info(*type_info));
   }
   return ret;
 }
@@ -571,7 +592,9 @@ bool ObPLDataType::operator==(const ObPLDataType &other) const
       && not_null_ == other.not_null_
       && pls_type_ == other.pls_type_
       && (!is_obj_type() ? user_type_id_ == other.user_type_id_ : true)
-      && is_array_equal(type_info_, other.type_info_);
+      && (is_enum_or_set_type() //enum or set type maybe not in the same enum_set_ctx_, so check array is equal
+          ? (enum_set_ctx_ != NULL && other.enum_set_ctx_ != NULL && is_array_equal(*(enum_set_ctx_->get_enum_type_info(type_info_id_)), *(other.enum_set_ctx_->get_enum_type_info(other.type_info_id_))))
+          : true);
 }
 
 void ObPLDataType::set_data_type(const common::ObDataType &obj_type)
@@ -1334,48 +1357,59 @@ int ObPLDataType::get_all_depended_user_type(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObPLDataType::set_type_info(const common::ObIArray<common::ObString> *type_info)
+int ObPLDataType::set_type_info(const ObIArray<common::ObString>& type_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(type_info) && OB_FAIL(set_type_info(*type_info))) {
-    LOG_WARN("fail to set type info", K(ret));
-  }
-  return ret;
-}
-
-int ObPLDataType::set_type_info(const common::ObIArray<common::ObString>& type_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(type_info_.assign(type_info))) {
-    LOG_WARN("fail to assign type info", K(ret));
-  }
-  return ret;
-}
-
-int ObPLDataType::deep_copy_type_info(common::ObIAllocator &allocator,
-                                      const common::ObIArray<common::ObString>& type_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCC(ret)) {
-    type_info_.reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < type_info.count(); ++i) {
-      const ObString &info = type_info.at(i);
-      if (OB_UNLIKELY(0 == info.length())) {
-        if (OB_FAIL(type_info_.push_back(ObString(0, NULL)))) {
-          LOG_WARN("fail to push back info", K(i), K(info), K(ret));
-        }
+  bool found = false;
+  uint16_t type_info_id;
+  if (0 == type_info.count()) { //does not need to set type_info_id
+    type_info_id_ = OB_INVALID_ID;
+  } else if (OB_ISNULL(enum_set_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("enum_set_ctx_ is null", K(ret), K(this), K(type_info));
+  } else if ( !enum_set_ctx_->is_inited() && OB_FAIL(enum_set_ctx_->init())) {
+    LOG_WARN("enum type info ctx init failed", K(ret));
+  } else if (OB_FAIL(enum_set_ctx_->get_type_info_id(&type_info, type_info_id))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get enum type info id by type info", K(ret), K(type_info));
+    } else { //set a new enum type info
+      ret = OB_SUCCESS;
+      ObIArray<common::ObString>* dst_type_info = NULL;
+      if (OB_FAIL(enum_set_ctx_->deep_copy_type_info(enum_set_ctx_->get_allocator(),
+                                                         dst_type_info,
+                                                         type_info))) {
+        LOG_WARN("failed to deep copy type info");
+      } else if (OB_FAIL(enum_set_ctx_->get_new_enum_type_info_id(type_info_id))) {
+        LOG_WARN("failed to get new enum type info id", K(ret));
+      } else if (OB_FAIL(enum_set_ctx_->set_enum_type_info(type_info_id, dst_type_info))) {
+        LOG_WARN("failed to set new enum type info", K(ret));
       } else {
-        char *buf = NULL;
-        if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(info.length())))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(i), K(info), K(ret));
-        } else if (FALSE_IT(MEMCPY(buf, info.ptr(), info.length()))) {
-        } else if (OB_FAIL(type_info_.push_back(ObString(info.length(), buf)))) {
-          LOG_WARN("fail to push back info", K(i), K(info), K(ret));
-        }
+        type_info_id_ = type_info_id;
       }
     }
+  } else { // type_info already exists
+    type_info_id_ = type_info_id;
   }
+  return ret;
+}
+
+int ObPLDataType::get_type_info(ObIArray<common::ObString> *&type_info) const
+{
+  int ret = OB_SUCCESS;
+  if (is_enum_or_set_type()) {
+    if (NULL == enum_set_ctx_ || !enum_set_ctx_->is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("enum_set_ctx is null or not inited", K(ret), KPC(enum_set_ctx_));
+    } else if (OB_INVALID_ID == type_info_id_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type_info_id_", K(ret), K(type_info_id_));
+    } else if (OB_FAIL(enum_set_ctx_->get_enum_type_info(type_info_id_, type_info))) {
+      LOG_WARN("failed to get enum type info", K(ret), K(type_info_id_));
+    }
+  } else {
+    type_info = NULL;
+  }
+
   return ret;
 }
 
@@ -1502,6 +1536,128 @@ int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)
     if (OB_FAIL(ObPLDataType::obj_is_null(*(ObObj*)param->extend_obj_, is_null))) {
       LOG_WARN("check obj is null failed", K(ret), K(param->extend_obj_));
     }
+  }
+  return ret;
+}
+
+int ObPLEnumSetCtx::init()
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("enum type info ctx already inited", K(ret), K(*this));
+  } else {
+    if (OB_FAIL(enum_type_info_reverse_map_.create(common::hash::cal_next_prime(32), ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_NODE))) {
+      LOG_WARN("failed to create enum_type_info_reverse_map_", K(ret));
+    } else {
+      is_inited_ = true;
+      used_type_info_id_ = 0;
+    }
+  }
+  return ret;
+}
+
+void ObPLEnumSetCtx::reset() {
+  if (is_inited_) {
+    enum_type_info_array_.destroy();
+    enum_type_info_reverse_map_.destroy();
+    is_inited_ = false;
+    used_type_info_id_ = 0;
+    LOG_DEBUG("enum type info ctx reset", KP(this), K(lbt()));
+  }
+}
+
+int ObPLEnumSetCtx::get_new_enum_type_info_id(uint16_t &type_info_id)
+{
+  int ret = OB_SUCCESS;
+  if (UINT16_MAX == used_type_info_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("more then 64K different enum type info", K(ret));
+  } else {
+    type_info_id = used_type_info_id_++;
+  }
+  return ret;
+}
+
+int ObPLEnumSetCtx::ensure_array_capacity(const uint16_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(count >= enum_type_info_array_.get_capacity()) &&
+      OB_FAIL(enum_type_info_array_.reserve(next_pow2(count)))) {
+    LOG_WARN("fail to reserve array capacity", K(ret), K(count), K(enum_type_info_array_));
+  } else if (OB_FAIL(enum_type_info_array_.prepare_allocate(count))) {
+    LOG_WARN("fail to prepare allocate array", K(ret), K(count), K(enum_type_info_array_));
+  }
+  return ret;
+}
+
+int ObPLEnumSetCtx::get_type_info_id(const ObIArray<common::ObString>* type_info, uint16_t &type_info_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t temp_type_info_id;
+  ObPLEnumSetCtx::ObPLTypeInfoKey enum_type_info_key((ObIArray<common::ObString>*)type_info);
+  if (OB_FAIL(enum_type_info_reverse_map_.get_refactored(enum_type_info_key, temp_type_info_id))) {
+    LOG_WARN("failed to get enum_type_info id", K(ret), K(type_info));
+  } else {
+    type_info_id = temp_type_info_id;
+  }
+  return ret;
+}
+
+int ObPLEnumSetCtx::set_enum_type_info(uint16_t type_info_id, ObIArray<common::ObString>* type_info)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<common::ObString>* temp_value;
+  ObPLEnumSetCtx::ObPLTypeInfoKey enum_type_info_key(type_info);
+  if (OB_FAIL(ensure_array_capacity(type_info_id + 1))) {
+    LOG_WARN("failed to ensure array capacity", K(ret));
+  }  else if (OB_FAIL(enum_type_info_reverse_map_.set_refactored(enum_type_info_key, type_info_id))) {
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+      enum_type_info_array_.at(type_info_id) = type_info;
+    } else {
+      LOG_WARN("set enum type info reverse map failed", K(ret), K(type_info), K(type_info_id));
+    }
+  } else {
+    enum_type_info_array_.at(type_info_id) = type_info;
+  }
+  return ret;
+}
+
+int ObPLEnumSetCtx::get_enum_type_info(uint16_t type_info_id, ObIArray<common::ObString> *&type_info) const
+{
+  int ret = OB_SUCCESS;
+  CK (type_info_id < enum_type_info_array_.count());
+  OX (type_info = enum_type_info_array_.at(type_info_id));
+  return ret;
+}
+
+int ObPLEnumSetCtx::deep_copy_type_info(common::ObIAllocator &allocator,
+                                           common::ObIArray<common::ObString>* &dst_type_info,
+                                           const common::ObIArray<common::ObString>& type_info)
+{
+  int ret = OB_SUCCESS;
+  void *mem = NULL;
+  ObFixedArray<ObString, ObIAllocator> *type_info_value = NULL;
+  if (OB_ISNULL(mem = allocator.alloc(sizeof(ObFixedArray<ObString, ObIAllocator>)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc type info", K(ret));
+  } else {
+    type_info_value = new(mem) ObFixedArray<ObString, ObIAllocator>(allocator);
+    if (OB_FAIL(type_info_value->init(type_info.count()))) {
+      LOG_WARN("fail to init array", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < type_info.count(); ++i) {
+        const ObString &info = type_info.at(i);
+        ObString dst_info;
+        if OB_FAIL(ob_write_string(allocator, info, dst_info)) {
+          LOG_WARN("failed to write string", K(info), K(ret));
+        } else if (OB_FAIL(type_info_value->push_back(dst_info))) {
+          LOG_WARN("fail to push back info", K(i), K(dst_info), K(ret));
+        }
+      }
+    }
+    OX (dst_type_info = type_info_value);
   }
   return ret;
 }

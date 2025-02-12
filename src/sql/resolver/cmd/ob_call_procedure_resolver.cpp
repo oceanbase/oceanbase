@@ -474,6 +474,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
           CK (OB_NOT_NULL(params_.sql_proxy_));
           CK (OB_NOT_NULL(session_info_));
+          OX (pl_type.set_enum_set_ctx(&call_proc_info->get_enum_set_ctx()));
           OZ (pl::ObPLDataType::transform_from_iparam(param_info,
                                                       *(schema_checker_->get_schema_mgr()),
                                                       *(session_info_),

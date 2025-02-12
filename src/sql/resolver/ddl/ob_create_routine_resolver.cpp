@@ -610,7 +610,9 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
       }
     } else { // Basic Type
       ObPLDataType data_type;
+      pl::ObPLEnumSetCtx enum_set_ctx(*allocator_);
       data_type.reset();
+      OX (data_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (ObPLResolver::resolve_sp_scalar_type(*allocator_,
                                                type_node,
                                                param_name,
@@ -627,8 +629,12 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
                        "character set ANY_CS not supported in standalone function/procedure");
         LOG_WARN("character set ANY_CS not supported in standalone function/procedure", K(ret));
       }
+      common::ObIArray<common::ObString>* type_info = NULL;
       CK (OB_NOT_NULL(data_type.get_data_type()));
-      OZ (routine_param.set_extended_type_info(data_type.get_type_info()));
+      OZ (data_type.get_type_info(type_info));
+      if (OB_NOT_NULL(type_info)) {
+        OZ (routine_param.set_extended_type_info(*type_info));
+      }
       OX (routine_param.set_param_type(*(data_type.get_data_type())));
     }
   }
@@ -756,6 +762,8 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
             ObObjType src_type = ObMaxType;
             uint64_t src_type_id = OB_INVALID_ID;
             ObRoutineMatchInfo::MatchInfo match_info;
+            pl::ObPLEnumSetCtx enum_set_ctx(*params_.allocator_);
+            pl_type.set_enum_set_ctx(&enum_set_ctx);
             OZ (pl::ObPLDataType::transform_from_iparam(&(routine_param),
                                                         *(schema_checker_->get_schema_guard()),
                                                         *(session_info_),
@@ -804,9 +812,11 @@ int ObCreateRoutineResolver::resolve_clause_list(
     ObPLDataType ret_type;
     if (func_info.is_function()) {
       const ObRoutineParam *routine_param = NULL;
+      pl::ObPLEnumSetCtx enum_set_ctx(*(params_.allocator_));
       CK (OB_NOT_NULL(func_info.get_ret_info()));
       OX (routine_param = static_cast<const ObRoutineParam*>(func_info.get_ret_info()));
       CK (OB_NOT_NULL(routine_param));
+      OX (ret_type.set_enum_set_ctx(&enum_set_ctx));
       OZ (pl::ObPLDataType::transform_from_iparam(routine_param,
                                                   *schema_checker_->get_schema_guard(),
                                                   *session_info_,

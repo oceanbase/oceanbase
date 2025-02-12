@@ -773,7 +773,10 @@ int ObPLRoutineTable::make_routine_ast(ObIAllocator &allocator,
           CK (OB_NOT_NULL(ret_param->get_type().get_data_type()));
           if (OB_SUCC(ret)
               && ob_is_enum_or_set_type(ret_param->get_type().get_data_type()->get_obj_type())) {
-            OZ (routine_ast->set_ret_type_info(ret_param->get_type().get_type_info()));
+            common::ObIArray<common::ObString>* type_info = NULL;
+            OZ (ret_param->get_type().get_type_info(type_info));
+            CK (OB_NOT_NULL(type_info));
+            OZ (routine_ast->set_ret_type_info(*type_info, &routine_ast->get_enum_set_ctx()));
           }
         }
       }
@@ -787,10 +790,12 @@ int ObPLRoutineTable::make_routine_ast(ObIAllocator &allocator,
           ret = OB_ERR_SP_UNDECLARED_TYPE;
           LOG_WARN("undeclare type", K(ret), KPC(param));
         }
+        common::ObIArray<common::ObString>* type_info = NULL;
+        OZ (param->get_type().get_type_info(type_info));
         OZ (routine_ast->add_argument(param->get_name(),
                                       param->get_type(),
                                       NULL,
-                                      &(param->get_type().get_type_info()),
+                                      type_info,
                                       param->is_in_param(),
                                       param->is_self_param()));
       }
@@ -4851,7 +4856,8 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(type_info) && OB_FAIL(copy.set_type_info(type_info))) {
+    copy.set_enum_set_ctx(&get_enum_set_ctx());
+    if (OB_NOT_NULL(type_info) && type_info->count() != 0 && OB_FAIL(copy.set_type_info(*type_info))) {
       LOG_WARN("fail to set type info", K(ret));
     } else if (OB_NOT_NULL(expr)
                && OB_FAIL(get_exprs().push_back(const_cast<ObRawExpr*>(expr)))) {

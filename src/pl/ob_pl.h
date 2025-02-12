@@ -175,8 +175,9 @@ public:
 
   inline const ObPLDataType &get_ret_type() const { return ret_type_; }
   inline void set_ret_type(const ObPLDataType &ret_type) { ret_type_ = ret_type; }
-  inline int set_ret_type_info(const common::ObIArray<common::ObString>& type_info)
+  inline int set_ret_type_info(const common::ObIArray<common::ObString>& type_info, ObPLEnumSetCtx *enum_set_ctx)
   {
+    ret_type_.set_enum_set_ctx(enum_set_ctx);
     return ret_type_.set_type_info(type_info);
   }
   inline bool is_function()
@@ -255,6 +256,7 @@ public:
   void init_routine_table(int64_t count) { routine_table_.set_capacity(static_cast<uint32_t>(count)); }
   inline const ObIArray<ObUserDefinedType *> &get_type_table() const { return type_table_; }
 
+  inline ObPLEnumSetCtx & get_enum_set_ctx() { return enum_set_ctx_; }
   inline jit::ObLLVMHelper &get_helper() { return helper_; }
   inline jit::ObLLVMDIHelper &get_di_helper() { return di_helper_; }
 
@@ -279,6 +281,8 @@ protected:
 
   common::ObFixedArray<ObPLFunction*, common::ObIAllocator> routine_table_;
   common::ObArray<ObUserDefinedType *> type_table_;
+
+  pl::ObPLEnumSetCtx enum_set_ctx_;
 
   jit::ObLLVMHelper helper_;
   jit::ObLLVMDIHelper di_helper_;

@@ -3880,9 +3880,11 @@ do {                                                                  \
                 && lib::is_oracle_mode()) {
               cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
             }
-            if (OB_FAIL(ObExprColumnConv::convert_with_null_check(
-                  tmp, params->at(i), result_type, is_strict, cast_ctx,
-                  &(func_.get_variables().at(i).get_type_info())))) {
+            common::ObIArray<common::ObString>* type_info = NULL;
+            if (OB_FAIL(func_.get_variables().at(i).get_type_info(type_info))) {
+              LOG_WARN("failed to get type info", K(ret));
+            } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(
+                      tmp, params->at(i), result_type, is_strict, cast_ctx, type_info))) {
               LOG_WARN("Cast result type failed",
                         K(ret), K(params->at(i)), K(result_type), K(is_strict), K(i),
                         K(params->count()), K(func_.get_is_all_sql_stmt()),
@@ -4755,7 +4757,7 @@ void ObPLCompileUnit::dump_deleted_log_info(const bool is_debug_log /* = true */
 ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
                                  lib::MemoryContext &mem_context)
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
-      type_table_(), helper_(allocator_), di_helper_(allocator_),
+      type_table_(), enum_set_ctx_(allocator_), helper_(allocator_), di_helper_(allocator_),
       can_cached_(true),
       has_incomplete_rt_dep_error_(false),
       exec_env_(),
@@ -4789,7 +4791,7 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
     if (OB_ISNULL(symbol_table.get_symbol(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("symbol var is NULL", K(i), K(symbol_table.get_symbol(i)), K(ret));
-    } else if (OB_FAIL(type.deep_copy(allocator_, symbol_table.get_symbol(i)->get_type()))) {
+    } else if (OB_FAIL(type.deep_copy(enum_set_ctx_, symbol_table.get_symbol(i)->get_type()))) {
       LOG_WARN("fail to deep copy pl data type", K(symbol_table.get_symbol(i)->get_type()), K(ret));
     } else {
       if (type.get_meta_type() != NULL && type.get_meta_type()->is_lob_storage()) {

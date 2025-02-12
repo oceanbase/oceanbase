@@ -1599,6 +1599,7 @@ public:
        cursor_table_(allocator),
        routine_table_(allocator),
        dependency_table_(),
+       enum_set_ctx_(allocator),
        compile_flag_(),
        can_cached_(true),
        priv_user_(),
@@ -1652,6 +1653,7 @@ public:
   inline const ObPLRoutineTable &get_routine_table() const { return routine_table_; }
   inline const ObPLDependencyTable &get_dependency_table() const { return dependency_table_; }
   inline ObPLDependencyTable &get_dependency_table() { return dependency_table_; }
+  inline pl::ObPLEnumSetCtx &get_enum_set_ctx() { return enum_set_ctx_; }
   int add_dependency_objects(
                   const common::ObIArray<share::schema::ObSchemaObjVersion> &dependency_objects);
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version);
@@ -1739,6 +1741,7 @@ protected:
   ObPLCursorTable cursor_table_;
   ObPLRoutineTable routine_table_;
   ObPLDependencyTable dependency_table_;
+  ObPLEnumSetCtx enum_set_ctx_;
   ObPLCompileFlag compile_flag_;
   bool can_cached_;
   ObString priv_user_;

@@ -7645,7 +7645,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     } else {
       LOG_DEBUG("column convert", K(i), K(obj.get_meta()), K(result_types[i].get_meta_type()),
                                   K(current_type.at(i)), K(result_types[i].get_accuracy()));
-      const ObIArray<ObString> *type_info = NULL;
+      ObIArray<ObString> *type_info = NULL;
       // only mysql mode will run this logic
       if (ob_is_enum_or_set_type(result_types[i].get_obj_type())) {
         if (OB_ISNULL(result_expr)) {
@@ -7659,7 +7659,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
             ret = OB_ARRAY_OUT_OF_RANGE;
             LOG_WARN("param idx out of range", K(ret), K(param_idx));
           } else {
-            type_info = &(ctx->func_->get_variables().at(param_idx).get_type_info());
+            OZ(ctx->func_->get_variables().at(param_idx).get_type_info(type_info));
           }
         }
       }

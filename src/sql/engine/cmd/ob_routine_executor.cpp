@@ -348,9 +348,12 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             if (call_proc_info->is_out_param(i)) {
               if (ob_is_enum_or_set_type(params.at(i).get_type())) {
+                common::ObIArray<common::ObString>* type_info = NULL;
+                OZ (call_proc_info->get_out_type().at(idx).get_type_info(type_info));
+                CK (OB_NOT_NULL(type_info));
                 OZ (ObSPIService::cast_enum_set_to_string(
                   ctx,
-                  call_proc_info->get_out_type().at(idx).get_type_info(),
+                  *type_info,
                   params.at(i),
                   ctx.get_output_row()->cells_[idx]));
                 OX (idx++);
