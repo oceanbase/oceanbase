@@ -256,6 +256,11 @@ public:
     return (stmt_type == stmt::T_START_TRANS || stmt_type == stmt::T_END_TRANS);
   }
 
+  static inline bool is_physical_restore_stmt(stmt::StmtType stmt_type)
+  {
+    return (stmt_type == stmt::T_PHYSICAL_RESTORE_TENANT);
+  }
+
   static inline bool is_ddl_stmt(stmt::StmtType stmt_type, bool has_global_variable)
   {
     return (

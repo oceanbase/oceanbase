@@ -907,8 +907,9 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
     if (ObStmt::is_ddl_stmt(sess_info->get_stmt_type(), true) ||
         sess_info->get_ddl_info().is_ddl() ||
         sess_info->is_real_inner_session() ||
-        OB_NOT_NULL(sess_info->get_pl_context())) {
-      //filter out DDL and PL statements, because they are not subject to query timeout control.
+        OB_NOT_NULL(sess_info->get_pl_context()) ||
+        ObStmt::is_physical_restore_stmt(sess_info->get_stmt_type())) {
+      //filter out DDL, PL and physical restore tenant statements, because they are not subject to query timeout control.
     } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("failed to get sesion variable", K(ret));
     } else if (sess_info->get_query_start_time() > 0 &&
