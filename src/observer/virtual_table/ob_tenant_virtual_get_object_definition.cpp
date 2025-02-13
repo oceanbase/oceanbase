@@ -949,6 +949,14 @@ int ObGetObjectDefinition::get_package_definition(ObString &ddl_str,
                                                       compatible_mode,
                                                       package_info))){
     LOG_WARN("get package info failed", K(ret), K(tenant_id), K(database_id), K(package_name));
+  } else if (OB_ISNULL(package_info) && 0 == db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME) &&
+             OB_FAIL(schema_guard_->get_package_info(OB_SYS_TENANT_ID,
+                                                     OB_SYS_DATABASE_ID,
+                                                     package_name,
+                                                     package_type,
+                                                     compatible_mode,
+                                                     package_info))) {
+    LOG_WARN("get package info failed in system tenant", K(ret), K(tenant_id), K(database_id), K(package_name));
   } else if (OB_ISNULL(package_info)
              || OB_INVALID_ID == (package_id = package_info->get_package_id())) {
     ret = print_error_log(object_type, db_name, package_name);
@@ -963,8 +971,8 @@ int ObGetObjectDefinition::get_package_definition(ObString &ddl_str,
     } else {
       ObSchemaPrinter schema_printer(*schema_guard_);
       int64_t pos = 0;
-      if (OB_FAIL(schema_printer.print_package_definition(tenant_id,
-                                                          package_id,
+      if (OB_FAIL(schema_printer.print_package_definition(package_info->get_tenant_id(),
+                                                          package_info->get_package_id(),
                                                           pkg_def_buf,
                                                           pkg_def_buf_size,
                                                           pos))) {
