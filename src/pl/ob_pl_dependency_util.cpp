@@ -91,6 +91,9 @@ int ObPLDependencyUtil::collect_synonym_deps(uint64_t tenant_id,
         obj_version.object_id_ = synonym_ids.at(i);
         obj_version.object_type_ = DEPENDENCY_SYNONYM;
         obj_version.version_ = schema_version;
+        if (0 == i) {
+          obj_version.is_db_explicit_ = true;
+        }
         bool exists = false;
         for (int64_t i = 0; !exists && i < deps->count(); ++i) {
           const ObSchemaObjVersion &cur_obj_version = deps->at(i);

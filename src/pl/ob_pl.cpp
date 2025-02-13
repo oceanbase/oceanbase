@@ -3478,11 +3478,11 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));
       OV (OB_NOT_NULL(formal_type) && OB_NOT_NULL(actual_type), OB_ERR_UNEXPECTED, formal_udt_id, actual_udt_id);
       OZ (ObPLResolver::check_composite_compatible(actual_type, formal_type, is_compatible));
-      OV (is_compatible, OB_INVALID_ARGUMENT, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
+      OV (is_compatible, OB_ERR_SP_WRONG_ARG_NUM, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_ERR_SP_WRONG_ARG_NUM != ret) {
     LOG_WARN("param type not match, procedure/function could have been replaced",
              K(ret), K(actual_param), K(formal_param_type));
     ret = OB_ERR_UNEXPECTED;  // replace errno, indicating that it's an internal error
@@ -3505,7 +3505,7 @@ int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &co
   OX (need_cast = src_coll->get_type() != coll_type->get_type());
   if (OB_FAIL(ret)) {
   } else if (coll_type->get_element_type().is_obj_type() ^ src_coll->get_element_desc().is_obj_type()) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_SP_WRONG_ARG_NUM;
     LOG_WARN("incorrect argument type, diff type", K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
   } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
     const ObDataType *src_data_type = &src_coll->get_element_desc();
@@ -3518,7 +3518,7 @@ int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &co
                               dst_data_type->get_collation_type())) {
       need_cast = true; // do nothing ...
     } else {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_ERR_SP_WRONG_ARG_NUM;
       LOG_WARN("incorrect argument type, diff type", K(ret));
     }
   } else {
@@ -3530,7 +3530,7 @@ int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &co
       OX (need_cast = true);
     }
     if (OB_SUCC(ret) && !is_compatible) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_ERR_SP_WRONG_ARG_NUM;
       LOG_WARN("incorrect argument type", K(ret));
     }
   }
