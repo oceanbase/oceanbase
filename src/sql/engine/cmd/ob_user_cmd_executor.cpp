@@ -14,6 +14,7 @@
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/file/ob_string_util.h"
 #include "sql/resolver/dcl/ob_create_user_stmt.h"
 #include "sql/resolver/dcl/ob_drop_user_stmt.h"
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"
@@ -28,6 +29,7 @@ namespace oceanbase
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
+using namespace obsys;
 namespace sql
 {
 int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,

@@ -16302,6 +16302,13 @@ user opt_host_name IDENTIFIED opt_auth_plugin BY password
   need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $7, need_enc_node, $2, $4);
 }
+| user opt_host_name IDENTIFIED opt_auth_plugin AS password
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $6, need_enc_node, $2, $4);
+}
 | CURRENT_USER IDENTIFIED opt_auth_plugin BY password
 {
   ParseNode *need_enc_node = NULL;
