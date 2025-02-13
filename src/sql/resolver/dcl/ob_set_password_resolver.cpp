@@ -177,10 +177,10 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 != password.length()) {//set password
-            bool passwd_need_enc;
-            if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, passwd_need_enc))) {
+            bool plain_password;
+            if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
               LOG_WARN("failed to check feature enable", K(ret));
-            } else if (lib::is_oracle_mode() || !passwd_need_enc) {
+            } else if (lib::is_oracle_mode() || !plain_password) {
               bool need_enc = (1 == node->children_[2]->value_) ? true : false;
               if (!need_enc && (!is_valid_mysql41_passwd(password))) {
                 ret = OB_ERR_PASSWORD_FORMAT;
