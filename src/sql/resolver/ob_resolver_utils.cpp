@@ -6984,6 +6984,7 @@ int ObResolverUtils::resolve_str_charset_info(const ParseNode &type_node,
   const ParseNode *charset_node = NULL;
   const ParseNode *collation_node = NULL;
   const ParseNode *binary_node = NULL;
+  const bool is_string_lob = (2 == type_node.int32_values_[1]);
 
   if (OB_ISNULL(type_node.children_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7030,6 +7031,13 @@ int ObResolverUtils::resolve_str_charset_info(const ParseNode &type_node,
         LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
       }
     }
+  }
+  if (OB_SUCC(ret) && is_string_lob &&
+      ((NULL != charset_node && CHARSET_UTF8MB4 != charset_type) ||
+       (NULL != collation_node && CS_TYPE_UTF8MB4_0900_BIN != collation_type))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "charset or collation for string");
+    LOG_WARN("not supported charset or collate for string", K(ret));
   }
 
   if (OB_SUCC(ret)) {
