@@ -200,7 +200,8 @@ public:
 
   void reset();
 
-  TO_STRING_KV(KP_(allocator), KP_(parser_desc), K_(is_inited));
+  TO_STRING_KV(KP_(allocator), K_(parser_name), KP_(parser_desc), K_(is_inited));
+
 private:
   static int segment(
       const ObFTParserProperty &property,

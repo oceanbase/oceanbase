@@ -1146,7 +1146,7 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
             K(ft_meta), K(ft), KPC(store_row), K(is_fts_index_aux), K(rows), KPC(main_ctdef_));
       }
     }
-    if (OB_ITER_END || OB_SUCC(ret)) {
+    if (OB_ITER_END == ret || OB_SUCC(ret)) {
       ret = OB_SUCCESS;
       if (OB_UNLIKELY(rows_.count() != rows.count())) {
         ret = OB_ERR_DEFENSIVE_CHECK;
