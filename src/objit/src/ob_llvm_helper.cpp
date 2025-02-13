@@ -2025,6 +2025,55 @@ int ObLLVMHelper::create_block(const common::ObString &name, ObLLVMFunction &par
   return ret;
 }
 
+int ObLLVMHelper::acc_struct_field_rec(const ObLLVMType &type, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(type.get_v())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("type is NULL", K(ret), K(type), K(lbt()));
+  } else if (llvm::Type::StructTyID == type.get_id()) {
+    int64_t child_count = type.get_num_child();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_count; ++i) {
+      ObLLVMType curr = type.get_child(i);
+
+      if (OB_ISNULL(type.get_v())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("child type is NULL", K(ret), K(type), K(lbt()));
+      // in most cases, structs are not deeply nested, this path can avoid a recursive call
+      } else if (OB_LIKELY(llvm::Type::StructTyID != curr.get_id())) {
+        count += 1;
+      } else if (OB_FAIL(SMART_CALL(acc_struct_field_rec(curr, count)))) {
+        LOG_WARN("failed to acc_struct_field_rec", K(ret), K(i), K(curr), K(type), K(child_count));
+      }
+    }
+  } else {
+    count += 1;
+  }
+
+  return ret;
+}
+
+int ObLLVMHelper::check_struct_type(common::ObIArray<ObLLVMType> &elem_types)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t field_count = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < elem_types.count(); ++i) {
+    if (OB_FAIL(acc_struct_field_rec(elem_types.at(i), field_count))) {
+      LOG_WARN("failed to acc_struct_field_rec", K(ret), K(i), K(elem_types), K(field_count));
+    } else if (std::numeric_limits<unsigned short>::max() < field_count) {  // when we switch to LLVM GlobalISel, this limit may be dropped.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("too many struct fields", K(ret), K(i), K(elem_types), K(field_count), K(lbt()));
+      LOG_USER_WARN(OB_NOT_SUPPORTED, "struct fields exceed 65535 is");
+    }
+  }
+
+  return ret;
+}
+
 int ObLLVMHelper::create_struct_type(const common::ObString &name, common::ObIArray<ObLLVMType> &elem_types, ObLLVMType &type)
 {
   int ret = OB_SUCCESS;
@@ -2034,6 +2083,8 @@ int ObLLVMHelper::create_struct_type(const common::ObString &name, common::ObIAr
   } else if (elem_types.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("element types is empty", K(ret));
+  } else if (OB_FAIL(check_struct_type(elem_types))) {
+    LOG_WARN("failed to check_struct_type", K(ret), K(elem_types));
   } else {
     common::ObFastArray<ObIRType*, 64> array(allocator_);
     for (int64_t i = 0; OB_SUCC(ret) && i < elem_types.count(); ++i) {

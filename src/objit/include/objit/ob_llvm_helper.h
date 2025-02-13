@@ -469,6 +469,8 @@ public:
 private:
   int check_insert_point(bool &is_valid);
   static int init_llvm();
+  static int acc_struct_field_rec(const ObLLVMType &type, int64_t &count);
+  static int check_struct_type(common::ObIArray<ObLLVMType> &elem_types);
 
 private:
   bool is_inited_;
