@@ -187,6 +187,7 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
         if (NULL != node->children_[i]) { \
           OZ (SMART_CALL(resolve(node->children_[i], compile_unit))); \
         } \
+        OZ (fast_check_status()); \
       } \
     } \
   } while (0)
@@ -200,6 +201,9 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
       LOG_WARN("failed to resolve pl stmt", K(parse_tree->type_), K(parse_tree), K(stmt), K(ret)); \
     } else if (type != PL_SQL) { \
       func.set_is_all_sql_stmt(false); \
+    } \
+    if (OB_SUCC(ret) && OB_FAIL(fast_check_status())) { \
+       LOG_WARN("fast check status failed", K(ret)); \
     } \
   } while (0)
 
@@ -966,6 +970,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLPackageAST &pack
     case T_SP_OBJECT_BODY_DEF: {
       for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree->num_child_; ++i) {
         OZ (SMART_CALL(resolve(parse_tree->children_[i], package_ast)));
+        OZ (fast_check_status());
       }
     }
       break;
@@ -1203,6 +1208,9 @@ int ObPLResolver::resolve_object_elem_spec_list(const ParseNode *parse_tree,
       const ParseNode *element_spec = element_spec_list->children_[i];
       if (OB_FAIL(resolve_object_elem_spec_def(element_spec, package_ast))) {
         LOG_WARN("failed to resolve type spec", K(ret));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(fast_check_status())) {
+        LOG_WARN("fast check status failed", K(ret));
       }
     }
   }
@@ -1766,7 +1774,9 @@ int ObPLResolver::resolve_declare_record_type(const ParseNode *type_node,
       OZ (record_type->record_members_init(&resolve_ctx_.allocator_, record_member_list->num_child_));
       for (int64_t i = 0; OB_SUCC(ret) && i < record_member_list->num_child_; ++i) {
         const ParseNode *member_node = record_member_list->children_[i];
-        if (OB_ISNULL(member_node)) {
+        if (OB_FAIL(fast_check_status())) {
+          LOG_WARN("fast check status failed", K(ret));
+        } else if (OB_ISNULL(member_node)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("member_node is null");
         } else if (OB_UNLIKELY(member_node->type_ != T_RECORD_MEMBER)) {
@@ -6209,6 +6219,7 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
       }
 
       OZ (using_params.push_back(InOutParam(func.get_expr_count() - 1, using_param_mode, out_idx)));
+      OZ (OB_FAIL(fast_check_status()));
     }
   }
   return ret;
@@ -6781,7 +6792,9 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
             ObPLConditionValue value;
             bool dup = false;
             ObPLConditionType actual_type = INVALID_TYPE;
-            if (OB_FAIL(resolve_handler_condition(handler_list->children_[i], value, func))) {
+            if (OB_FAIL(fast_check_status())) {
+              LOG_WARN("fast check status failed", K(ret));
+            } else if (OB_FAIL(resolve_handler_condition(handler_list->children_[i], value, func))) {
               LOG_WARN("failed to resolve condition value", K(handler_list->children_[i]), K(ret));
             } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup))) {
               LOG_WARN("failed to check duplication", K(value), K(ret));
@@ -8280,7 +8293,9 @@ int ObPLResolver::resolve_cursor_formal_param(
       const ParseNode *type_node = NULL;
       param_name.reset();
       param_type.reset();
-      if (OB_ISNULL(param_node)
+      if (OB_FAIL(fast_check_status())) {
+        LOG_WARN("fast check status failed", K(ret));
+      } else if (OB_ISNULL(param_node)
           || OB_UNLIKELY(param_node->type_ != T_SP_PARAM)
           || OB_ISNULL(param_node->children_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -8570,7 +8585,9 @@ int ObPLResolver::resolve_cursor_actual_params(
     const ObIArray<int64_t> &params_list = cursor->get_formal_params();
     for (int64_t i = 0; OB_SUCC(ret) && i < params_list.count(); ++i) {
       const ObPLVar *var = NULL;
-      if (cursor->is_package_cursor()) {
+      if (OB_FAIL(fast_check_status())) {
+        LOG_WARN("fast check status failed", K(ret));
+      } else if (cursor->is_package_cursor()) {
         OZ (stmt->get_namespace()->get_package_var(resolve_ctx_,
                                                    cursor->get_package_id(),
                                                    params_list.at(i),
@@ -15519,6 +15536,8 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
       ObRawExpr* expr = NULL;
       CK (OB_NOT_NULL(into_list->children_[i]))
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(fast_check_status())) {
+        LOG_WARN("fast check status failed", K(ret));
       } else if (T_SP_OBJ_ACCESS_REF == into_list->children_[i]->type_/*Oracle mode*/) {
         OZ (resolve_obj_access_idents(*into_list->children_[i], q_name.access_idents_, func));
       } else if (lib::is_oracle_mode() && into.is_bulk()
@@ -17029,7 +17048,9 @@ int ObPLResolver::resolve_routine_decl_param_list(const ParseNode *param_list,
       default_cast = false;
       param_type.reset();
       extern_type_info.reset();
-      if (OB_ISNULL(param_node)
+      if (OB_FAIL(fast_check_status())) {
+        LOG_WARN("fast check status failed", K(ret));
+      } else if (OB_ISNULL(param_node)
           || OB_UNLIKELY(param_node->type_ != T_SP_PARAM)
           || OB_ISNULL(param_node->children_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -18575,6 +18596,15 @@ int ObPLResolver::recursive_replace_expr(ObRawExpr *expr,
     } else if (expr->get_param_expr(i)->get_param_count() > 0) {
       OZ (recursive_replace_expr(expr->get_param_expr(i), qualified_name, real_expr));
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::fast_check_status(uint64_t n) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((++fast_check_status_times_ & n) == n)) {
+    ret = THIS_WORKER.check_status();
   }
   return ret;
 }
