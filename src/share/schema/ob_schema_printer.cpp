@@ -4413,15 +4413,34 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
                       package_info->get_package_name().length(),
                       package_info->get_package_name().ptr()));
   CK (!package_info->get_source().empty());
-  OZ (parser.parse_package(package_info->get_source(), package_stmt, ObDataTypeCastParams(), NULL, false));
+  OZ (parser.parse_package(package_info->get_source(),
+                           package_stmt,
+                           ObDataTypeCastParams(),
+                           NULL,
+                           false,
+                           nullptr,
+                           false));
   CK (OB_NOT_NULL(package_stmt));
   CK (T_STMT_LIST == package_stmt->type_);
   CK (1 == package_stmt->num_child_);
   CK (OB_NOT_NULL(package_stmt->children_[0]));
   OX (package_stmt = package_stmt->children_[0]);
-  CK (package_info->is_package() ? T_PACKAGE_BLOCK == package_stmt->type_
-                                 : T_PACKAGE_BODY_BLOCK == package_stmt->type_);
-  OX (actully_package_body = ObString(package_stmt->str_len_, package_stmt->str_value_));
+  if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (T_CREATE_WRAPPED_PACKAGE == package_stmt->type_
+             || T_CREATE_WRAPPED_PACKAGE_BODY == package_stmt->type_) {
+    const ParseNode *cipher_node = nullptr;
+    OZ (pl::ObPLParser::check_wrapped_parse_tree_legal(*package_stmt));
+    OX (cipher_node = package_stmt->children_[1]);
+    OZ (print_base64_cipher(allocator,
+                            ObString(cipher_node->str_len_, cipher_node->str_value_),
+                            actully_package_body));
+#endif  // OB_BUILD_ORACLE_PL
+  } else {
+    CK (package_info->is_package() ? T_PACKAGE_BLOCK == package_stmt->type_
+                                   : T_PACKAGE_BODY_BLOCK == package_stmt->type_);
+    OX (actully_package_body = ObString(package_stmt->str_len_, package_stmt->str_value_));
+  }
   CK (!actully_package_body.empty());
   OZ (databuff_printf(buf, buf_len, pos, "%.*s",
                       actully_package_body.length(),
