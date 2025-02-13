@@ -4394,6 +4394,7 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
   ObArenaAllocator allocator;
   pl::ObPLParser parser(allocator, ObCharsets4Parser());
   ObStmtNodeTree *package_stmt = NULL;
+  const ObStmtNodeTree *real_package_stmt = NULL;
   OZ (schema_guard_.get_package_info(tenant_id, package_id, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -4424,22 +4425,34 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
   CK (T_STMT_LIST == package_stmt->type_);
   CK (1 == package_stmt->num_child_);
   CK (OB_NOT_NULL(package_stmt->children_[0]));
-  OX (package_stmt = package_stmt->children_[0]);
+  OX (real_package_stmt = package_stmt->children_[0]);
+  if (OB_SUCC(ret) && T_SP_PRE_STMTS == real_package_stmt->type_) {
+    OZ (pl::ObPLResolver::resolve_condition_compile(
+     allocator,
+     NULL,
+     &schema_guard_,
+     NULL,
+     NULL,
+     &(package_info->get_exec_env()),
+     real_package_stmt,
+     real_package_stmt,
+     true /*inner_parse*/));
+  }
   if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_ORACLE_PL
-  } else if (T_CREATE_WRAPPED_PACKAGE == package_stmt->type_
-             || T_CREATE_WRAPPED_PACKAGE_BODY == package_stmt->type_) {
+  } else if (T_CREATE_WRAPPED_PACKAGE == real_package_stmt->type_
+             || T_CREATE_WRAPPED_PACKAGE_BODY == real_package_stmt->type_) {
     const ParseNode *cipher_node = nullptr;
-    OZ (pl::ObPLParser::check_wrapped_parse_tree_legal(*package_stmt));
-    OX (cipher_node = package_stmt->children_[1]);
+    OZ (pl::ObPLParser::check_wrapped_parse_tree_legal(*real_package_stmt));
+    OX (cipher_node = real_package_stmt->children_[1]);
     OZ (print_base64_cipher(allocator,
                             ObString(cipher_node->str_len_, cipher_node->str_value_),
                             actully_package_body));
 #endif  // OB_BUILD_ORACLE_PL
   } else {
-    CK (package_info->is_package() ? T_PACKAGE_BLOCK == package_stmt->type_
-                                   : T_PACKAGE_BODY_BLOCK == package_stmt->type_);
-    OX (actully_package_body = ObString(package_stmt->str_len_, package_stmt->str_value_));
+    CK (package_info->is_package() ? T_PACKAGE_BLOCK == real_package_stmt->type_
+                                 : T_PACKAGE_BODY_BLOCK == real_package_stmt->type_);
+    OX (actully_package_body = ObString(real_package_stmt->str_len_, real_package_stmt->str_value_));
   }
   CK (!actully_package_body.empty());
   OZ (databuff_printf(buf, buf_len, pos, "%.*s",

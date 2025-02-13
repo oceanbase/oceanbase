@@ -178,13 +178,16 @@ int ObGetObjectDefinition::get_ddl_creation_str(ObString &ddl_str,
     case T_GET_DDL_PACKAGE:
       ret = get_package_definition(ddl_str,object_name, db_name, PACKAGE_TYPE, object_type);
       if(OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
         ObString ddl_body_str;
-        ret = get_package_definition(ddl_body_str,object_name, db_name, PACKAGE_BODY_TYPE, object_type);
-        if(OB_SUCC(ret)) {
+        tmp_ret = get_package_definition(ddl_body_str,object_name, db_name, PACKAGE_BODY_TYPE, object_type);
+        if (OB_ERR_OBJECT_NOT_FOUND == tmp_ret || OB_SUCC(tmp_ret)) {
           MEMCPY(ddl_str.ptr() + ddl_str.length(), "\n", sizeof("\n"));
           ddl_str.set_length(ddl_str.length() + sizeof("\n"));
           MEMCPY(ddl_str.ptr() + ddl_str.length(), ddl_body_str.ptr(), ddl_body_str.length());
           ddl_str.set_length(ddl_str.length() + ddl_body_str.length());
+        } else {
+          ret = tmp_ret;
         }
       }
       break;
