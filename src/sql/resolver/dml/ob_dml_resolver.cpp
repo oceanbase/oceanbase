@@ -2993,16 +2993,6 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       && OB_FAIL(check_col_param_on_expr(expr))) {
     LOG_WARN("illegal param on func_expr", K(ret));
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(expr) &&
-      T_QUESTIONMARK == expr->get_expr_type() &&
-      ObExtendType == expr->get_result_type().get_type() &&
-      ((NULL == params_.secondary_namespace_ && NULL == session_info_->get_pl_context()) ||
-      (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_FROM_SCOPE && current_scope_ != T_INTO_SCOPE) ||
-      (get_basic_stmt()->is_insert_stmt() && current_scope_ == T_INTO_SCOPE))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-  }
   return ret;
 }
 
@@ -3067,197 +3057,109 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
   return ret;
 }
 
+int ObDMLResolver::try_resolve_external_symbol(ObQualifiedName &q_name,
+                                               ObIArray<ObQualifiedName> &columns,
+                                               ObIArray<ObRawExpr*> &real_exprs,
+                                               ObRawExpr *&real_ref_expr,
+                                               bool &is_external)
+{
+  int ret = OB_SUCCESS;
+  is_external = true;
+  if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
+    is_external = false;
+    LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
+  } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()
+             || T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
+    is_external = false;
+  }
+  return ret;
+}
+
+int ObDMLResolver::try_resolve_sql_symbol(ObQualifiedName &q_name,
+                                          ObIArray<ObQualifiedName> &columns,
+                                          ObIArray<ObRawExpr*> &real_exprs,
+                                          ObRawExpr *&real_ref_expr,
+                                          bool keey_ret)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resolve_column_ref_expr(q_name, real_ref_expr))) {
+    LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed", K(ret), K(q_name), K(columns));
+  }
+  if (OB_ERR_BAD_FIELD_ERROR == ret) {
+    if (OB_FAIL(ObRawExprUtils::resolve_sequence_object(q_name,
+                                                        this,
+                                                        session_info_,
+                                                        params_.expr_factory_,
+                                                        sequence_namespace_checker_,
+                                                        real_ref_expr,
+                                                        false))) {
+      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed", K(ret), K(q_name), K(columns));
+    }
+  }
+  if (OB_ERR_BAD_FIELD_ERROR == ret) {
+    if (OB_FAIL(resolve_pseudo_column(q_name, real_ref_expr))) {
+      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve pseudo column failed", K(ret), K(q_name), K(columns));
+      ret = keey_ret ? ret : OB_ERR_BAD_FIELD_ERROR;
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
                                                 ObIArray<ObQualifiedName> &columns,
                                                 ObIArray<ObRawExpr*> &real_exprs,
                                                 ObRawExpr *&real_ref_expr)
 {
   int ret = OB_SUCCESS;
-  bool is_external = false;
-  if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
+  bool is_external = false; // identifier can not calc in sql context, should replace to question mark.
+  if (OB_ISNULL(get_basic_stmt()) || OB_ISNULL(get_basic_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
-  } else if (q_name.is_sys_func()) {
+  } else if (q_name.is_sys_func()) { // buildin function.
     if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
       LOG_WARN("sys func param number not match", K(ret));
     } else {
       real_ref_expr = static_cast<ObRawExpr *>(q_name.access_idents_.at(0).sys_func_expr_);
       is_external = (T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type());
     }
-  } else if (q_name.is_pl_udf() || q_name.is_pl_var() || q_name.is_col_ref_access()) {
-    is_external = true;
-    if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
-      LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
-    } else if (real_ref_expr->is_udf_expr()) {
-      ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
-      if (OB_ISNULL(udf)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("udf is null", K(ret), K(udf));
-      } else if (udf->has_param_out()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
-            that contained an OUT parameter. This is not allowed.", K(ret), K(q_name));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06572: function name has out arguments");
-      } else if (udf->is_pkg_body_udf()) {
-        ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
-        LOG_WARN("function 'string' may not be used in SQL", K(ret), KPC(udf));
-      } else {
-        OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
-        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
-      }
-    } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()) {
-      if (!params_.is_resolve_table_function_expr_) {
-        //such as insert into tbl values(1,3, coll('a', 1));
-        if ((!stmt_->is_select_stmt() && params_.secondary_namespace_ == NULL && session_info_->get_pl_context() == NULL)
-            || (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE && current_scope_ != T_WHERE_SCOPE)) {
-          if (ObObjUDTUtil::ob_is_supported_sql_udt(real_ref_expr->get_result_type().get_udt_id())) {
-            is_external = false;
-          } else {
-            // dml with udt supported
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-          }
-        } else {
-          is_external = false;
-        }
-      } else {
-        is_external = false;
-      }
-    } else if (T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
-      if ((current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE) ||
-          (get_basic_stmt()->is_insert_stmt() && current_scope_ == T_INTO_SCOPE)) {
-        if (ObObjUDTUtil::ob_is_supported_sql_udt(real_ref_expr->get_result_type().get_udt_id())) {
-          is_external = false;
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-        }
-      } else {
-        is_external = false;
-      }
+  } else if (q_name.is_pl_udf() || q_name.is_pl_var() || q_name.is_col_ref_access()) { // must be external symbol.
+    if (OB_FAIL(try_resolve_external_symbol(q_name, columns, real_exprs, real_ref_expr, is_external))) {
+      LOG_WARN("failed to resolve external name", K(ret), K(q_name), K(columns));
     }
   } else if (lib::is_oracle_mode() && q_name.col_name_.length() == 0) {
-    //对于长度为0的identifier报错和oracle兼容
     ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
-    LOG_WARN("illegal zero-length identifier", K(ret));
-  } else {
-    CK (OB_NOT_NULL(get_basic_stmt()));
-    if (OB_SUCC(ret)) {
-      if (lib::is_oracle_mode()
-      && NULL != params_.secondary_namespace_
-      && ((get_basic_stmt()->is_insert_stmt()
-             && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
-           || T_CURRENT_OF_SCOPE == current_scope_)
-      && T_FIELD_LIST_SCOPE != current_scope_) {
-        //In Oracle Mode, current of ident, insert values(ident), ident should explain to pl/sql variable
-        if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
-          if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
-            LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name));
-          } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()) {
-            //such as insert into tbl values(1,3, coll('a', 1));
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-          } else if (ObExtendType == real_ref_expr->get_result_type().get_type() &&
-                     T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type() &&
-                     (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id())) &&
-                     current_scope_ != T_CURRENT_OF_SCOPE) {
-            bool is_support = false;
-            const ObUserDefinedType *user_type = NULL;
-            uint64_t udt_id = real_ref_expr->get_result_type().get_udt_id();
-            OZ (params_.secondary_namespace_->get_pl_data_type_by_id(udt_id, user_type));
-            CK (OB_NOT_NULL(user_type));
-            if (OB_SUCC(ret) && user_type->is_udt_type()) {
-              is_support = true;
-            }
-            if (OB_SUCC(ret)) {
-              if (!is_support) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-              } else {
-                is_external = true;
-              }
-            }
-          } else if ((ObMaxType == real_ref_expr->get_result_type().get_type())
-                   && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())
-                   && (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id()))) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-          } else {
-            is_external = true;
-          }
-        }
-
-        if (OB_ERR_BAD_FIELD_ERROR == ret || q_name.access_idents_.empty()) {
-          if (OB_FAIL(resolve_column_ref_expr(q_name, real_ref_expr))) {
-            if (OB_ERR_BAD_FIELD_ERROR == ret) {
-              if (OB_FAIL(ObRawExprUtils::resolve_sequence_object(q_name, this, session_info_,
-                                                                 params_.expr_factory_,
-                                                                 sequence_namespace_checker_,
-                                                                 real_ref_expr, false))) {
-                LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed", K(ret), K(q_name));
-              }
-            }
-
-            if (OB_ERR_BAD_FIELD_ERROR == ret) {
-              if (OB_FAIL(resolve_pseudo_column(q_name, real_ref_expr))) {
-                LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve pseudo column failed", K(ret), K(q_name));
-                if (!ObPLResolver::is_unrecoverable_error(ret)) {
-                  ret = OB_ERR_BAD_FIELD_ERROR;
-                }
-              }
-            }
-          }
-        }
-      } else {
-        if (OB_FAIL(resolve_column_ref_expr(q_name, real_ref_expr))) {
-          if (OB_ERR_BAD_FIELD_ERROR == ret) {
-            if (OB_FAIL(ObRawExprUtils::resolve_sequence_object(q_name, this, session_info_,
-                                                                params_.expr_factory_,
-                                                                sequence_namespace_checker_,
-                                                                real_ref_expr, false))) {
-              LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed", K(ret), K(q_name));
-            }
-          }
-
-          if (OB_ERR_BAD_FIELD_ERROR == ret) {
-            if (OB_FAIL(resolve_pseudo_column(q_name, real_ref_expr))) {
-              LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve pseudo column failed", K(ret), K(q_name));
-            }
-          }
-          if (OB_ERR_BAD_FIELD_ERROR == ret && !q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
-            if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
-              LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name));
-              if (!ObPLResolver::is_unrecoverable_error(ret)) {
-                ret = OB_ERR_BAD_FIELD_ERROR; // TODO: 单测test_resolver_select.test:465 select 1 as a from t1,t2 having c1=1; 失败
-              }
-            } else {
-              is_external = true;
-            }
-          } else if (!OB_SUCC(ret)) {
-            LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
-          }
+    LOG_WARN("illegal zero-length identifier", K(ret), K(q_name));
+  } else { // may sql symbol or external symbol, try it.
+    if (lib::is_oracle_mode()
+        && NULL != params_.secondary_namespace_
+        && ((get_basic_stmt()->is_insert_stmt() && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
+             || T_CURRENT_OF_SCOPE == current_scope_)
+        && T_FIELD_LIST_SCOPE != current_scope_) {
+      //In Oracle Mode, 'current of ident' or 'insert values(ident)', ident should explain to pl/sql variable first.
+      if (!q_name.access_idents_.empty()) {
+        if (OB_FAIL(try_resolve_external_symbol(q_name, columns, real_exprs, real_ref_expr, is_external))) {
+          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name), K(columns));
         }
       }
-      if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr)) {
-        if (T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
-          ret = OB_ERR_SP_UNDECLARED_VAR;
-          LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
-        } else if (real_ref_expr->is_udf_expr()) {
-          ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
-          if (OB_ISNULL(udf)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed cast udf raw expr", K(ret));
-          } else {
-            stmt_->get_query_ctx()->has_pl_udf_ = true;
-            stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable();
-          }
+      if (OB_ERR_BAD_FIELD_ERROR == ret || q_name.access_idents_.empty()) {
+        if (OB_FAIL(try_resolve_sql_symbol(q_name, columns, real_exprs, real_ref_expr))) {
+          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sql symbol failed", K(ret), K(q_name), K(columns));
         }
       }
+    } else {
+      if (OB_FAIL(try_resolve_sql_symbol(q_name, columns, real_exprs, real_ref_expr, true))) {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sql symbol failed", K(ret), K(q_name), K(columns));
+      }
+      if (OB_ERR_BAD_FIELD_ERROR == ret && !q_name.access_idents_.empty()) {
+        if (OB_FAIL(try_resolve_external_symbol(q_name, columns, real_exprs, real_ref_expr, is_external))) {
+          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name), K(columns));
+          ret = OB_ERR_BAD_FIELD_ERROR;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
+      ret = OB_ERR_SP_UNDECLARED_VAR;
+      LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
     }
   }
 
@@ -3269,7 +3171,6 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     }
   }
 
-  //把需要传给PL的表达式整体替换成param
   if (OB_SUCC(ret)
       && q_name.is_access_root()
       && is_external

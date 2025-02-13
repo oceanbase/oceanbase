@@ -11842,6 +11842,12 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
                                                 resolve_ctx_.extern_param_info_,
                                                 udf_info,
                                                 *resolve_ctx_.enum_set_ctx_), udf_info);
+    if (OB_SUCC(ret) && resolve_ctx_.is_sql_scope_ && OB_NOT_NULL(udf_info.ref_expr_) && udf_info.ref_expr_->has_param_out()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
+                that contained an OUT parameter. This is not allowed.", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06572: function name has out arguments");
+    }
   // 需要做类似 ObPLResolver::resolve_udf_info 最后的 params_type 设置吗？
   }
   OX (unit_ast.set_can_cached(false));
