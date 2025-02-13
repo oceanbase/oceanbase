@@ -305,9 +305,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
     trans_state.set_end_trans_executed(OB_SUCC(ret));
   }
 
-  OX (session->get_raw_audit_record().seq_num_ = session->get_tx_desc() ?
-                                                 session->get_tx_desc()->get_tx_seq().get_seq() :
-                                                 0);
+  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   if (is_explicit && hint.length()) {
     LOG_INFO("explicit end trans with hint",
              "trans_id", tx_id, "action", (is_rollback ? "ROLLBACK" : "COMMIT"),
