@@ -106,19 +106,19 @@ void flush_trace()
                    buf);
           buf[0] = '\0';
           IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
-          if (0 != span->end_ts_) {
-            current_span.remove(span);
-            trace.freed_span_.add_first(span);
-          }
-          span->tags_ = nullptr;
+        } else {
+          LIB_LOG(WARN, "call SMART_VAR failed", K(ret));
         }
+        // whether or not the call to SMART_VAR succeeds, the span and tags_ are cleaned up
+        if (0 != span->end_ts_) {
+          current_span.remove(span);
+          trace.freed_span_.add_first(span);
+        }
+        span->tags_ = nullptr;
       }
       span = next;
     }
     trace.offset_ = trace.buffer_size_ / 2;
-#ifdef ENABLE_SANITY
-    trace.offset_ = upper_align(trace.offset_, 8);
-#endif
   }
 }
 uint64_t UUID::gen_rand()
@@ -371,13 +371,9 @@ ObTrace::ObTrace(int64_t buffer_size)
     policy_(0),
     seq_(0)
 {
-#ifdef ENABLE_SANITY
-  offset_ = upper_align(offset_, 8);
-#endif
   for (int i = 0; i < (offset_ / sizeof(ObSpanCtx)); ++i) {
     IGNORE_RETURN freed_span_.add_last(new(data_ + i * sizeof(ObSpanCtx)) ObSpanCtx);
   }
-  SANITY_POISON(data_ + offset_, buffer_size_ - offset_);
 }
 
 void ObTrace::init(UUID trace_id, UUID root_span_id, uint8_t policy)
@@ -494,9 +490,6 @@ void ObTrace::reset_span()
     }
   }
   offset_ = buffer_size_ / 2;
-#ifdef ENABLE_SANITY
-  offset_ = upper_align(offset_, 8);
-#endif
 }
 
 int ObTrace::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
@@ -554,9 +547,6 @@ void ObTrace::reset()
   }
   #endif
   offset_ = buffer_size_ / 2;
-#ifdef ENABLE_SANITY
-  offset_ = upper_align(offset_, 8);
-#endif
   freed_span_.push_range(current_span_);
   last_active_span_ = nullptr;
   trace_id_ = UUID();

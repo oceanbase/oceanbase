@@ -160,10 +160,6 @@ struct ObTagCtxBase
     }
     return ret;
   }
-#ifdef ENABLE_SANITY
-public:
-  int64_t guard_ = 0x7BEEDEAD7BEEDEAD;
-#endif
 protected:
   ObTagCtxBase* next_;
   uint16_t tag_type_;
@@ -305,17 +301,12 @@ struct ObTrace
     if (offset_ + sizeof(ObTagCtx<T>) >= buffer_size_) {
       // do nothing
     } else {
-      SANITY_UNPOISON(data_ + offset_, sizeof(ObTagCtx<T>));
       ObTagCtx<T>* tag = new (data_ + offset_) ObTagCtx<T>;
-      SANITY_POISON(&(tag->guard_), sizeof(tag->guard_));
       tag->next_ = last_active_span_->tags_;
       last_active_span_->tags_ = tag;
       tag->tag_type_ = tag_type;
       tag->data_ = value;
       offset_ += sizeof(ObTagCtx<T>);
-#ifdef ENABLE_SANITY
-      offset_ = upper_align(offset_, 8);
-#endif
       ret = true;
     }
     return ret;
@@ -334,18 +325,13 @@ struct ObTrace
     if (offset_ + sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*) >= buffer_size_) {
       // do nothing
     } else {
-      SANITY_UNPOISON(data_ + offset_, sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*));
       ObTagCtx<void*>* tag = new (data_ + offset_) ObTagCtx<void*>;
-      SANITY_POISON(&(tag->guard_), sizeof(tag->guard_));
       tag->next_ = last_active_span_->tags_;
       last_active_span_->tags_ = tag;
       tag->tag_type_ = tag_type;
       memcpy(&(tag->data_), v.ptr(), l);
       offset_ += (sizeof(ObTagCtx<void*>) + l + 1 - sizeof(void*));
       data_[offset_ - 1] = '\0';
-#ifdef ENABLE_SANITY
-      offset_ = upper_align(offset_, 8);
-#endif
       ret = true;
     }
     return ret;
