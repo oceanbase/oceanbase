@@ -19,6 +19,7 @@
 #include "sql/ob_spi.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/schema/ob_schema_printer.h"
+#include "common/object/ob_obj_type.h"
 
 using namespace oceanbase::common;
 
@@ -407,7 +408,9 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
                                           int64_t param_length,
                                           int64_t param_precision,
                                           int64_t param_scale,
-                                          int64_t param_coll_type)
+                                          int64_t param_coll_type,
+                                          ObString &exec_env_str,
+                                          ObString &routine_body)
 {
   int ret = OB_SUCCESS;
   char *returns_buf = NULL;
@@ -417,6 +420,28 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
   ObSEArray<common::ObString, 4> extended_type_info;
+  uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX);
+  if (ob_is_geometry_tc(static_cast<ObObjType>(param_type))) {
+    sql::ObExecEnv exec_env;
+    ParseNode *create_node = nullptr;
+    if OB_FAIL(exec_env.init(exec_env_str)) {
+      SERVER_LOG(WARN, "failed to exec enc init",
+                 K(ret), K(routine_body), K(exec_env));
+    } else if (OB_FAIL(extract_create_node_from_routine_info(
+               calc_alloc, routine_body, exec_env, create_node))) {
+      SERVER_LOG(WARN, "failed to extract create node from routine info",
+                 K(ret), K(routine_body), K(exec_env), K(create_node));
+    }
+    if (OB_SUCC(ret)) {
+      if(!OB_ISNULL(create_node) && !OB_ISNULL(create_node->children_[3])) {
+        ParseNode *return_node = create_node->children_[3];
+        sub_type = return_node->int32_values_[1];
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "unexpected parse node type of routine body", K(create_node->type_));
+      }
+    }
+  }
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(NULL == (returns_buf = static_cast<char *>(calc_alloc.alloc(OB_MAX_VARCHAR_LENGTH))))) {
@@ -431,7 +456,8 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
                                           param_precision,
                                           param_scale,
                                           static_cast<ObCollationType>(param_coll_type),
-                                          extended_type_info))) {
+                                          extended_type_info,
+                                          sub_type))) {
       SHARE_SCHEMA_LOG(WARN, "fail to get data type str with coll", K(ret), K(param_type), K(param_length), K(param_precision), K(param_scale), K(param_coll_type));
     }
 
@@ -826,7 +852,7 @@ int ObExprMysqlProcInfo::calc_mysql_proc_info_arg_cnt_9(const ObExpr &expr,
       LOG_WARN("get param_list info failed", K(ret), K(routine_body), K(exec_env));
     }
   } else if (0 == info_name.case_compare("RETURNS")) {
-    if (OB_FAIL(get_returns_info(expr, ctx, expr_datum, param_type, param_length, param_precision, param_scale, param_coll_type))) {
+    if (OB_FAIL(get_returns_info(expr, ctx, expr_datum, param_type, param_length, param_precision, param_scale, param_coll_type, exec_env, routine_body))) {
       LOG_WARN("get returns info failed", K(ret), K(param_type), K(param_length), K(param_precision), K(param_scale), K(param_coll_type));
     }
   } else if (0 == info_name.case_compare("BODY")) {

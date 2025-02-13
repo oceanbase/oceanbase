@@ -68,7 +68,9 @@ private:
                               int64_t param_length,
                               int64_t param_precision,
                               int64_t param_scale,
-                              int64_t param_coll_type);
+                              int64_t param_coll_type,
+                              ObString &exec_env_str,
+                              ObString &routine_body);
   static int get_body_info(const ObExpr &expr,
                            ObEvalCtx &ctx,
                            ObDatum &expr_datum,
