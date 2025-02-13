@@ -47,23 +47,9 @@ int ObStmtExprReplacer::add_skip_expr(const ObRawExpr *skip_expr)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(skip_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null expr", K(ret), KP(skip_expr));
-  } else if (!skip_exprs_.created()) {
-    if (OB_FAIL(skip_exprs_.create(8))) {
-      LOG_WARN("failed to create expr set", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    int tmp_ret = skip_exprs_.exist_refactored(reinterpret_cast<uint64_t>(skip_expr));
-    if (OB_HASH_EXIST == tmp_ret) {
-    } else if (OB_HASH_NOT_EXIST == tmp_ret) {
-      if (OB_FAIL(skip_exprs_.set_refactored(reinterpret_cast<uint64_t>(skip_expr)))) {
-        LOG_WARN("failed to add replace expr into set", K(ret));
-      }
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("failed to get expr from set", K(ret));
-    }
+    LOG_WARN("unexpected null", K(ret), KP(skip_expr));
+  } else if (OB_FAIL(replacer_.add_skip_expr(skip_expr))) {
+    LOG_WARN("failed to add skip expr", K(ret));
   }
   return ret;
 }
@@ -85,32 +71,10 @@ int ObStmtExprReplacer::add_replace_exprs(const ObIArray<ObRawExpr *> &from_expr
   return ret;
 }
 
-int ObStmtExprReplacer::check_expr_need_skip(const ObRawExpr *expr, bool &need_skip)
-{
-  int ret = OB_SUCCESS;
-  need_skip = false;
-  uint64_t key = reinterpret_cast<uint64_t>(expr);
-  if (skip_exprs_.created()) {
-    int tmp_ret = skip_exprs_.exist_refactored(key);
-    if (OB_HASH_NOT_EXIST == tmp_ret) {
-    } else if (OB_HASH_EXIST == tmp_ret) {
-      need_skip = true;
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("failed to get expr from hash map", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObStmtExprReplacer::do_visit(ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  bool need_skip = false;
-  if (OB_FAIL(check_expr_need_skip(expr, need_skip))) {
-    LOG_WARN("failed to check expr need skip", K(ret), K(expr));
-  } else if (need_skip) {
-  } else if (OB_FAIL(replacer_.replace(expr))) {
+  if (OB_FAIL(replacer_.replace(expr))) {
     LOG_WARN("failed to replace", K(ret), K(expr));
   } else { /* do nothing */ }
   return ret;

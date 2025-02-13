@@ -410,6 +410,38 @@ int ObRawExprReplacer::try_init_expr_map(int64_t bucket_size)
   return ret;
 }
 
+bool ObRawExprReplacer::is_existed(const ObRawExpr *target) const
+{
+  bool bret = false;
+  if (OB_LIKELY(expr_replace_map_.created())) {
+    uint64_t key = reinterpret_cast<uint64_t>(target);
+    uint64_t val = 0;
+    if (OB_SUCCESS == expr_replace_map_.get_refactored(key, val)) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
+int ObRawExprReplacer::add_skip_expr(const ObRawExpr *target)
+{
+  int ret = OB_SUCCESS;
+  bool is_existed = false;
+  if (OB_ISNULL(target)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", KP(target), K(ret));
+  } else if (OB_FAIL(try_init_expr_map(DEFAULT_BUCKET_SIZE))) {
+    LOG_WARN("failed to init expr map", K(ret));
+  } else if (OB_FAIL(check_skip_expr(*target, is_existed))) {
+    LOG_WARN("failed to check skip expr", K(ret));
+  } else if (is_existed) {
+    /* do nothing */
+  } else if (OB_FAIL(to_exprs_.set_refactored(reinterpret_cast<uint64_t>(target)))) {
+    LOG_WARN("failed to add replace expr into set", K(ret));
+  }
+  return ret;
+}
+
 int ObRawExprReplacer::check_from_expr_existed(const ObRawExpr *from_expr,
                                                const ObRawExpr *to_expr,
                                                const bool overwrite,

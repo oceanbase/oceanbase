@@ -190,10 +190,8 @@ public:
   bool is_skip_bool_param_mysql() { return replacer_.is_skip_bool_param_mysql(); }
 private:
   int add_skip_expr(const ObRawExpr *skip_expr);
-  int check_expr_need_skip(const ObRawExpr *skip_expr, bool &need_skip);
 private:
   ObRawExprReplacer replacer_;
-  hash::ObHashSet<uint64_t> skip_exprs_;
 };
 
 class ObStmtExprCopier : public ObStmtExprVisitor
