@@ -15651,14 +15651,18 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       bool is_adding_constraint = false;
       bool is_column_store = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
-      if (orig_table_schema->required_by_mview_refresh()) {
+      if (orig_table_schema->has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("double table long running ddl on table required by materialized view refresh is "
-                 "not supported",
+        LOG_WARN("double table long running ddl on table with materialized view log is not supported",
                  KR(ret));
-        LOG_USER_ERROR(
-            OB_NOT_SUPPORTED,
-            "double table long running ddl on table required by materialized view refresh is");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "double table long running ddl on table with materialized view log is");
+      } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("double table long running ddl on table required by materialized view is not supported",
+                 KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "double table long running ddl on table required by materialized view is");
       } else if (orig_table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("double table long running ddl on materialized view log is not supported", KR(ret));
@@ -18948,11 +18952,16 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
               LOG_WARN("rename materialized view log is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename materialized view log is");
-            } else if (table_schema->required_by_mview_refresh()) {
+            } else if (table_schema->has_mlog_table()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("rename table required by materialized view refresh is not supported",
+              LOG_WARN("rename table with materialized view log is not supported",
                   KR(ret), K(table_schema->get_table_name()));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table with materialized view log is");
+            } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("rename table required by materialized view is not supported",
+                  KR(ret), K(table_schema->get_table_name()));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
             } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(
                            tenant_id, table_schema->get_table_id(), trans, all_dep_objs))) {
               LOG_WARN("failed to collect dep info", K(ret));
@@ -24942,11 +24951,16 @@ int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &a
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
   } else if (table_schema.is_user_table() || table_schema.is_mysql_tmp_table()) {
-    if (table_schema.required_by_mview_refresh()) {
+    if (table_schema.has_mlog_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("truncate table required by materialized view refresh is not supported",
-          KR(ret), K(table_schema), K(table_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view refresh is");
+      LOG_WARN("truncate table with materialized view log is not supported", KR(ret),
+               K(table_schema), K(table_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
+    } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("truncate table required by materialized view is not supported", KR(ret),
+               K(table_schema), K(table_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view is");
     } else if (check_foreign_key &&
                OB_FAIL(check_is_foreign_key_parent_table(table_schema, trans))) {
       LOG_WARN("failed to check table is foreign key's parent table", KR(ret), K(table_name), K(table_id));
@@ -25187,11 +25201,16 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         }
       } else if (OB_FAIL(check_enable_sys_table_ddl(*orig_table_schema, OB_DDL_TRUNCATE_TABLE_CREATE))) {
         LOG_WARN("ddl is not allowed on system table", K(ret));
-      } else if (orig_table_schema->required_by_mview_refresh()) {
+      } else if (orig_table_schema->has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("truncate table required by materialized view refresh is not supported",
+        LOG_WARN("truncate table with materialized view log is not supported",
             KR(ret), KPC(orig_table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
+      } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("truncate table required by materialized view is not supported",
+            KR(ret), KPC(orig_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view is");
       } else if (!orig_table_schema->check_can_do_ddl()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
@@ -25825,13 +25844,19 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg)
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.origin_db_name_), to_cstring(arg.origin_table_name_),
                        "BASE TABLE");
         LOG_WARN("create table like inner table not allowed", K(ret), K(arg));
-      } else if (orig_table_schema->required_by_mview_refresh()) {
+      } else if (orig_table_schema->has_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
-            "create table like on table required by materialized view refresh is not supported",
+            "create table like on table with materialized view log is not supported",
             KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "create table like on table required by materialized view refresh is");
+                       "create table like on table with materialized view log is");
+      } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN(
+            "create table like on table required by materialized view is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "create table like on table required by materialized view is");
       } else if (OB_FAIL(schema_guard.get_table_schema(
                      tenant_id, arg.new_db_name_, arg.new_table_name_, false, new_table_schema))) {
       } else if (NULL != new_table_schema) {
@@ -27809,11 +27834,14 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (table_schema->is_materialized_view() && OB_ISNULL(data_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data_table_schema should not be null", KR(ret));
-        } else if ((table_schema->required_by_mview_refresh() && !table_schema->is_index_table()) ||
-                   (table_schema->is_materialized_view() && data_table_schema->required_by_mview_refresh())) {
+        } else if (table_schema->has_mlog_table() || (table_schema->is_materialized_view() && data_table_schema->has_mlog_table())) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("drop table required by materialized view refresh is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view refresh is");
+          LOG_WARN("drop table with materialized view log is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table with materialized view log is");
+        } else if (table_schema->table_referenced_by_fast_lsm_mv() && !table_schema->is_index_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("drop table required by materialized view is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view is");
         } else if (OB_FAIL(tmp_table_schema.assign(*table_schema))) {
           LOG_WARN("fail to assign table schema", K(ret));
         } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(

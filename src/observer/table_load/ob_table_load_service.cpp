@@ -509,10 +509,14 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with trigger enabled", tmp_prefix);
     }
     // check if table has mlog
-    else if (table_schema->required_by_mview_refresh() && !table_schema->mv_container_table()) {
+    else if (table_schema->has_mlog_table() && !table_schema->mv_container_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support table required by materialized view refresh", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view refresh", tmp_prefix);
+      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with materialized view log", tmp_prefix);
+    } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table required by materialized view", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view", tmp_prefix);
     }
     // check for columns
     else if (OB_FAIL(check_support_direct_load_for_columns(table_schema, load_mode))) {

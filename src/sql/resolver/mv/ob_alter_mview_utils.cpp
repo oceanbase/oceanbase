@@ -243,6 +243,71 @@ int ObAlterMviewUtils::resolve_mlog_options(const ParseNode &node,
   return ret;
 }
 
+int ObAlterMviewUtils::check_column_option_for_mlog_master(const ObTableSchema &table_schema,
+                                                           const ObItemType type)
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.required_by_mview_refresh()) {
+    if (T_COLUMN_ADD == type) {
+    } else {
+      if (table_schema.has_mlog_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "modify column to table with materialized view log is");
+        LOG_WARN("modify column to table with materialized view log is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+      } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "modify column to table required by materialized view is");
+        LOG_WARN("modify column to table required by materialized view is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table type", KR(ret), K(table_schema), K(type));
+      }
+    }
+    SQL_RESV_LOG(INFO, "resolve the master of mlog for modify column", K(ret), K(type), K(table_schema));
+  }
+  return ret;
+}
+
+int ObAlterMviewUtils::check_action_node_for_mlog_master(const ObTableSchema &table_schema,
+                                                         const ObItemType type)
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.required_by_mview_refresh()) {
+    if (T_TABLE_OPTION_LIST == type
+        || T_ALTER_COLUMN_OPTION == type
+        || T_ALTER_INDEX_OPTION_ORACLE == type
+        || T_ALTER_CHECK_CONSTRAINT_OPTION == type
+        || T_DROP_CONSTRAINT == type
+        || T_ALTER_FOREIGN_KEY_OPTION == type
+        || T_ALTER_INDEX_OPTION == type
+        || T_ALTER_MLOG_OPTIONS == type) {
+    } else {
+      if (table_schema.has_mlog_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "this alter table to table with materialized view log is");
+        LOG_WARN("this alter table to table with materialized view log is not supported", KR(ret),
+                 K(table_schema.get_table_name()));
+      } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "this alter table to table required by materialized view is");
+        LOG_WARN("this alter table to table required by materialized view is not supported",
+                 KR(ret), K(table_schema.get_table_name()));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table type", KR(ret), K(table_schema), K(type));
+      }
+    }
+    SQL_RESV_LOG(INFO, "resolve the master of mlog for alter table", K(ret), K(type), K(table_schema));
+  }
+  return ret;
+}
+
 template<typename T>
 int ObAlterMviewUtils::resolve_interval_node(const ParseNode &node,
                                              ObSQLSessionInfo *session_info,

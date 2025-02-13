@@ -5187,9 +5187,12 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   // materialized view will not be dropped into recyclebin
   if (table_schema.get_table_type() == MATERIALIZED_VIEW) {
     LOG_WARN("bypass recyclebin for materialized view");
-  } else if (OB_UNLIKELY(table_schema.required_by_mview_refresh())) {
+  } else if (OB_UNLIKELY(table_schema.has_mlog_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table required by materialized view refresh should not come to recyclebin", KR(ret));
+    LOG_WARN("table with materialized view log should not come to recyclebin", KR(ret));
+  } else if (OB_UNLIKELY(table_schema.table_referenced_by_fast_lsm_mv())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table required by materialized view should not come to recyclebin", KR(ret));
   } else if (OB_UNLIKELY(table_schema.get_table_type() == MATERIALIZED_VIEW_LOG)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("materialized view log should not come to recyclebin", KR(ret));

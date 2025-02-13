@@ -3740,9 +3740,11 @@ int ObDMLResolver::check_is_table_supported_for_mview(const TableItem &table_ite
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "synonym in materialized view is");
   } else if (OB_UNLIKELY(!(table_schema.is_user_table()
                            || table_schema.is_materialized_view()))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupported table type in materialized view", K(ret), K(table_schema), K(table_item));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
+    ret = OB_ERR_MVIEW_INVALID_TABLE_TYPE;
+    LOG_WARN("Table type is not valid, the materialized view definition can only reference user "
+             "tables or other materialized views",
+             K(ret), K(table_schema), K(table_item));
+    LOG_USER_ERROR(OB_ERR_MVIEW_INVALID_TABLE_TYPE);
   }
   return ret;
 }

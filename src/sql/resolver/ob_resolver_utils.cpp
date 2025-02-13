@@ -10443,50 +10443,102 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
       // generate more specific error messages
       if (is_alter_pk) {
         if (ObIndexArg::ADD_PRIMARY_KEY == pk_action_type) {
-          LOG_WARN(
-              "add primary key to table required by materialized view refresh is not supported",
-              KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "add primary key to table required by materialized view refresh is");
+          if (table_schema.has_mlog_table()) {
+            LOG_WARN("add primary key to table with materialized view log is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "add primary key to table with materialized view log is");
+          } else {
+            LOG_WARN(
+                "add primary key to table required by materialized view is not supported",
+                KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "add primary key to table required by materialized view is");
+          }
         } else if (ObIndexArg::DROP_PRIMARY_KEY == pk_action_type) {
-          LOG_WARN("drop the primary key of table required by materialized view refresh is not "
-                   "supported",
-                   KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "drop the primary key of table required by materialized view refresh is");
+          if (table_schema.has_mlog_table()) {
+            LOG_WARN("drop the primary key of table with materialized view log is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "drop the primary key of table with materialized view log is");
+          } else {
+            LOG_WARN("drop the primary key of table required by materialized view is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(
+                OB_NOT_SUPPORTED,
+                "drop the primary key of table required by materialized view is");
+          }
         } else {
-          LOG_WARN("alter the primary key of table required by materialized view refresh is not "
-                   "supported",
-                   KR(ret), K(table_schema.get_table_name()));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "alter the primary key of table required by materialized view refresh is");
+          if (table_schema.has_mlog_table()) {
+            LOG_WARN("alter the primary key of table with materialized view log is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "alter the primary key of table with materialized view log is");
+          } else {
+            LOG_WARN("alter the primary key of table required by materialized view is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "alter the primary key of table required by materialized view is");
+          }
         }
       } else if (arg.is_alter_columns_) {
-        LOG_WARN("alter column of table required by materialized view refresh is not supported",
-                 KR(ret), K(table_schema.get_table_name()));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "alter column of table required by materialized view refresh is");
-      } else if (arg.is_alter_partitions_) {
-        LOG_WARN("alter partition of table required by materialized view refresh is not supported",
-                 KR(ret), K(table_schema.get_table_name()));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "alter partition of table required by materialized view refresh is");
-      } else if (arg.is_alter_options_) {
-        if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
-          LOG_WARN("alter name of table required by materialized view refresh is not supported",
+        if (table_schema.has_mlog_table()) {
+          LOG_WARN("alter column of table with materialized view log is not supported",
                    KR(ret), K(table_schema.get_table_name()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "alter name of table required by materialized view refresh is");
+                         "alter column of table with materialized view log is");
         } else {
-          LOG_WARN("alter option of table required by materialized view refresh is not supported",
-                   KR(ret), K(table_schema.get_table_name()), K(arg));
+          LOG_WARN("alter column of table required by materialized view is not supported",
+                   KR(ret), K(table_schema.get_table_name()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                         "alter option of table required by materialized view refresh is");
+                         "alter column of table required by materialized view is");
+        }
+      } else if (arg.is_alter_partitions_) {
+        if (table_schema.has_mlog_table()) {
+          LOG_WARN("alter partition of table with materialized view log is not supported",
+                   KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "alter partition of table with materialized view log is");
+        } else {
+          LOG_WARN("alter partition of table required by materialized view is not supported",
+                   KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "alter partition of table required by materialized view is");
+        }
+      } else if (arg.is_alter_options_) {
+        if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
+          if (table_schema.has_mlog_table()) {
+            LOG_WARN("alter name of table with materialized view log is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter name of table with materialized view log is");
+          } else {
+            LOG_WARN("alter name of table required by materialized view is not supported",
+                     KR(ret), K(table_schema.get_table_name()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "alter name of table required by materialized view is");
+          }
+        } else {
+          if (table_schema.has_mlog_table()) {
+            LOG_WARN("alter option of table with materialized view log is not supported",
+                     KR(ret), K(table_schema.get_table_name()), K(arg));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter option of table with materialized view log is");
+          } else {
+            LOG_WARN("alter option of table required by materialized view is not supported",
+                     KR(ret), K(table_schema.get_table_name()), K(arg));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                           "alter option of table required by materialized view is");
+          }
         }
       } else {
-        LOG_WARN("alter table required by materialized view refresh is not supported", KR(ret),
-                 K(table_schema.get_table_name()), K(arg));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table required by materialized view refresh is");
+        if (table_schema.has_mlog_table()) {
+          LOG_WARN("alter table with materialized view log is not supported", KR(ret),
+                   K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
+        } else {
+          LOG_WARN("alter table required by materialized view is not supported", KR(ret),
+                   K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table required by materialized view is");
+        }
       }
     }
   }

@@ -812,49 +812,6 @@ int ObAlterTableResolver::resolve_external_partition_options(const ParseNode &no
   return ret;
 }
 
-int ObAlterTableResolver::check_column_option_for_mlog_master(
-    const ObTableSchema &table_schema,
-    const ObItemType type)
-{
-  int ret = OB_SUCCESS;
-  if (table_schema.required_by_mview_refresh()) {
-    if (T_COLUMN_ADD == type) {
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column to table required by materialized view refresh is");
-      LOG_WARN("modify column to table required by materialized view refresh is not supported",
-          KR(ret), K(table_schema.get_table_name()));
-    }
-    SQL_RESV_LOG(INFO, "resolve the master of mlog for modify column", K(ret), K(type), K(table_schema));
-  }
-  return ret;
-}
-
-int ObAlterTableResolver::check_action_node_for_mlog_master(
-    const ObTableSchema &table_schema,
-    const ObItemType type)
-{
-  int ret = OB_SUCCESS;
-  if (table_schema.required_by_mview_refresh()) {
-    if (T_TABLE_OPTION_LIST == type
-        || T_ALTER_COLUMN_OPTION == type
-        || T_ALTER_INDEX_OPTION_ORACLE == type
-        || T_ALTER_CHECK_CONSTRAINT_OPTION == type
-        || T_DROP_CONSTRAINT == type
-        || T_ALTER_FOREIGN_KEY_OPTION == type
-        || T_ALTER_INDEX_OPTION == type
-        || T_ALTER_MLOG_OPTIONS == type) {
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this alter table to table required by materialized view refresh is");
-      LOG_WARN("this alter table to table required by materialized view refresh is not supported",
-          KR(ret), K(table_schema.get_table_name()));
-    }
-    SQL_RESV_LOG(INFO, "resolve the master of mlog for alter table", K(ret), K(type), K(table_schema));
-  }
-  return ret;
-}
-
 int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -928,7 +885,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                                                            static_cast<int64_t>(action_node->type_))) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter external table option is");
-      } else if (OB_FAIL(check_action_node_for_mlog_master(*table_schema_, action_node->type_))) {
+      } else if (OB_FAIL(ObAlterMviewUtils::check_action_node_for_mlog_master(
+                     *table_schema_, action_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
       } else {
         switch (action_node->type_) {
@@ -1550,7 +1508,8 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
       if (OB_ISNULL(column_node)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
-      } else if (OB_FAIL(check_column_option_for_mlog_master(*table_schema_, column_node->type_))) {
+      } else if (OB_FAIL(ObAlterMviewUtils::check_column_option_for_mlog_master(
+                     *table_schema_, column_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
       } else {
         switch(column_node->type_) {
