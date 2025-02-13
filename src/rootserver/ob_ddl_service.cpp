@@ -31102,7 +31102,8 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
 int ObDDLService::alter_routine(const ObRoutineInfo &routine_info,
                                 ObErrorInfo &error_info,
                                 const ObString *ddl_stmt_str,
-                                share::schema::ObSchemaGetterGuard &schema_guard)
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObSArray<ObDependencyInfo> &dep_infos)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = routine_info.get_tenant_id();
@@ -31120,7 +31121,7 @@ int ObDDLService::alter_routine(const ObRoutineInfo &routine_info,
                                                     ddl_operator, *schema_service_))) {
       LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.alter_routine(
-                       routine_info, trans, error_info, ddl_stmt_str))) {
+                       routine_info, trans, error_info, ddl_stmt_str, dep_infos))) {
       LOG_WARN("alter routine failed!", K(ret));
     }
     if (trans.is_started()) {

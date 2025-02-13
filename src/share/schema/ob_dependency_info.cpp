@@ -558,6 +558,33 @@ int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, s
   return ret;
 }
 
+int ObDependencyInfo::insert_dependency_infos(common::ObMySQLTransaction &trans,
+                                           ObIArray<ObDependencyInfo> &dep_infos,
+                                           uint64_t tenant_id,
+                                           uint64_t dep_obj_id,
+                                           uint64_t schema_version, uint64_t owner_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == owner_id
+   || OB_INVALID_ID == dep_obj_id
+   || OB_INVALID_ID == tenant_id
+   || OB_INVALID_SCHEMA_VERSION == schema_version) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
+                                                   K(owner_id), K(dep_obj_id));
+  } else {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
+      ObDependencyInfo & dep = dep_infos.at(i);
+      dep.set_tenant_id(tenant_id);
+      dep.set_dep_obj_id(dep_obj_id);
+      dep.set_dep_obj_owner_id(owner_id);
+      dep.set_schema_version(schema_version);
+      OZ (dep.insert_schema_object_dependency(trans));
+    }
+  }
+  return ret;
+}
+
 void ObDependencyInfo::reset()
 {
   tenant_id_ = OB_INVALID_ID;

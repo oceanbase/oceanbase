@@ -6150,8 +6150,10 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
         LOG_WARN("failed to alter routine with create", K(ret));
       }
     } else {
+      ObSArray<ObDependencyInfo> &dep_infos =
+                      const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
       if (OB_FAIL(ddl_service_.alter_routine(*routine_info, error_info, &arg.ddl_stmt_str_,
-                                             schema_guard))) {
+                                             schema_guard, dep_infos))) {
         LOG_WARN("alter routine failed", K(ret), K(arg.routine_info_), K(error_info));
       }
     }

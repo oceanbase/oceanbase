@@ -894,7 +894,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   virtual int alter_routine(const share::schema::ObRoutineInfo &routine_info,
                             share::schema::ObErrorInfo &error_info,
                             const ObString *ddl_stmt_str,
-                            share::schema::ObSchemaGetterGuard &schema_guard);
+                            share::schema::ObSchemaGetterGuard &schema_guard,
+                            ObSArray<ObDependencyInfo> &dep_infos);
   virtual int drop_routine(const share::schema::ObRoutineInfo &routine_info,
                            share::schema::ObErrorInfo &error_info,
                            const common::ObString *ddl_stmt_str,
