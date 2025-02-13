@@ -70,7 +70,7 @@ int ObDirectLoadLobBuilder::init(ObDirectLoadInsertTabletContext *insert_tablet_
     lob_column_cnt_ = lob_column_idxs_->count();
     extra_rowkey_cnt_ = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     lob_inrow_threshold_ = insert_tablet_ctx->get_lob_inrow_threshold();
-    if (!insert_tablet_ctx->get_is_index_table() && OB_FAIL(init_sstable_slice_ctx())) {
+    if (OB_FAIL(init_sstable_slice_ctx())) {
       LOG_WARN("fail to init sstable slice ctx", KR(ret));
     } else {
       is_inited_ = true;
@@ -111,17 +111,7 @@ int ObDirectLoadLobBuilder::check_can_skip(char *ptr, uint32_t len, bool &can_sk
     LOG_WARN("unexpected lob column is empty data", KR(ret), KP(ptr), K(len));
   } else {
     ObLobLocatorV2 locator(ptr, len, true /*has_lob_header*/);
-    if (insert_tablet_ctx_->get_is_index_table()) {
-      if (!locator.is_inrow_disk_lob_locator() || len - sizeof(ObLobCommon) > lob_inrow_threshold_) {
-        ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-        LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
-        STORAGE_LOG(WARN, "invalid lob", K(ret), K(locator), KP(ptr), K(len));
-      } else {
-        can_skip = true;
-      }
-    } else {
-      can_skip = (locator.is_inrow_disk_lob_locator() && (len - sizeof(ObLobCommon) <= lob_inrow_threshold_));
-    }
+    can_skip = (locator.is_inrow_disk_lob_locator() && (len - sizeof(ObLobCommon) <= lob_inrow_threshold_));
   }
   return ret;
 }
@@ -413,7 +403,7 @@ int ObDirectLoadLobBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet lob builder is closed", KR(ret));
   } else {
-    if (!insert_tablet_ctx_->get_is_index_table() && OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
+    if (OB_FAIL(insert_lob_tablet_ctx_->close_sstable_slice(current_lob_slice_id_, 0/*slice_idx*/))) {
       LOG_WARN("fail to close sstable slice ", KR(ret));
     } else {
       current_lob_slice_id_ = 0;

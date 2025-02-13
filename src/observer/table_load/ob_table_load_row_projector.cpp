@@ -32,13 +32,21 @@ using namespace share::schema;
 using namespace storage;
 
 ObTableLoadRowProjector::ObTableLoadRowProjector()
- : src_column_num_(0), dest_column_num_(0), is_inited_(false)
+  : src_column_num_(0),
+    dest_column_num_(0),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    index_has_lob_(false),
+    is_inited_(false)
 {
+  index_column_descs_.set_attr(ObMemAttr(MTL_ID(), "TLProject"));
+  main_table_rowkey_col_flag_.set_attr(ObMemAttr(MTL_ID(), "TLProject"));
 }
 
 ObTableLoadRowProjector::~ObTableLoadRowProjector()
 {
   col_projector_.reset();
+  index_column_descs_.reset();
+  main_table_rowkey_col_flag_.reset();
   tablet_projector_.destroy();
   dest_tablet_id_to_part_id_map_.destroy();
 }
@@ -63,6 +71,7 @@ int ObTableLoadRowProjector::init(const ObTableSchema *src_table_schema,
     LOG_WARN("fail to get store column count", KR(ret));
   } else {
     dest_column_num_ = col_projector_.count();
+    lob_inrow_threshold_ = src_table_schema->get_lob_inrow_threshold();
     is_inited_ = true;
   }
   return ret;
@@ -165,6 +174,9 @@ int ObTableLoadRowProjector::project_row(const ObDirectLoadDatumRow &src_datum_r
     const int64_t column_idx = col_projector_.at(i);
     dest_datum_row.storage_datums_[i] = src_datum_row.storage_datums_[column_idx];
   }
+  if (OB_SUCC(ret) && OB_FAIL(check_index_lob_inrow(dest_datum_row))) {
+    LOG_WARN("index lob is not valid inrow lob", K(ret), K(dest_datum_row));
+  }
   return ret;
 }
 
@@ -186,6 +198,9 @@ int ObTableLoadRowProjector::project_row(const ObDatumRow &src_datum_row,
       column_idx += extra_col_cnt;
     }
     dest_datum_row.storage_datums_[i] = src_datum_row.storage_datums_[column_idx];
+  }
+  if (OB_SUCC(ret) && OB_FAIL(check_index_lob_inrow(dest_datum_row))) {
+    LOG_WARN("index lob is not valid inrow lob", K(ret), K(dest_datum_row));
   }
   return ret;
 }
@@ -215,6 +230,30 @@ int ObTableLoadRowProjector::project_row(const blocksstable::ObBatchDatumRows &s
       LOG_WARN("fail to get datum", KR(ret));
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(check_index_lob_inrow(dest_datum_row))) {
+    LOG_WARN("index lob is not valid inrow lob", K(ret), K(dest_datum_row));
+  }
+  return ret;
+}
+
+int ObTableLoadRowProjector::check_index_lob_inrow(storage::ObDirectLoadDatumRow &dest_datum_row) const
+{
+  int ret = OB_SUCCESS;
+  if (index_has_lob_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_projector_.size(); ++i) {
+      const ObDatum &datum = dest_datum_row.storage_datums_[i];
+      if (index_column_descs_.at(i).col_type_.is_lob_storage() && !datum.is_null() && !datum.is_nop()) {
+        const ObString &data = datum.get_string();
+        ObLobLocatorV2 locator(data, true);
+        if (!locator.is_inrow_disk_lob_locator() ||
+            (!main_table_rowkey_col_flag_.at(i) && datum.len_ - sizeof(ObLobCommon) > lob_inrow_threshold_)) {
+          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+          LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+          STORAGE_LOG(WARN, "invalid lob", K(ret), K(locator), K(datum), K(data));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -242,19 +281,26 @@ int ObTableLoadMainToIndexProjector::build_row_projector(
   } else {
     src_rowkey_column_num_ = src_table_schema->get_rowkey_column_num();
     ObArray<ObColDesc> main_column_descs;
-    ObArray<ObColDesc> index_column_descs;
     if (OB_FAIL(src_table_schema->get_column_ids(main_column_descs, true))) {
       LOG_WARN("fail to get column ids", KR(ret));
-    } else if (OB_FAIL(dest_table_schema->get_column_ids(index_column_descs, true))) {
+    } else if (OB_FAIL(dest_table_schema->get_column_ids(index_column_descs_, true))) {
       LOG_WARN("fail to get column ids", KR(ret));
     } else {
-      FOREACH_X(iter, index_column_descs, OB_SUCC(ret))
+      FOREACH_X(iter, index_column_descs_, OB_SUCC(ret))
       {
         ObColDesc index_col_desc = *iter;
+        const ObColumnSchemaV2 *column_schema = nullptr;
         for (int64_t i = 0; OB_SUCC(ret) && i < main_column_descs.count(); i++) {
           if (index_col_desc.col_id_ == main_column_descs.at(i).col_id_) {
             if (OB_FAIL(col_projector_.push_back(i))) {
               LOG_WARN("fail to push back", KR(ret), K(i));
+            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(index_col_desc.col_id_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null column schema", KR(ret), K(index_col_desc));
+            } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column_schema->is_rowkey_column()))) {
+              LOG_WARN("fail to push back rowkey column flag", K(ret), KPC(column_schema));
+            } else if (index_col_desc.col_type_.is_lob_storage()) {
+              index_has_lob_ = true;
             }
           }
         }
@@ -339,22 +385,29 @@ int ObTableLoadMainToUniqueIndexProjector::build_row_projector(
     dest_rowkey_cnt_ = dest_table_schema->get_rowkey_info().get_size();
     dest_spk_cnt_ = dest_table_schema->get_shadow_rowkey_info().get_size();
     dest_index_rowkey_cnt_ = dest_rowkey_cnt_ - dest_spk_cnt_;
-    ObArray<ObColDesc> src_column_descs;
-    ObArray<ObColDesc> dest_column_descs;
-    if (OB_FAIL(src_table_schema->get_column_ids(src_column_descs, true))) {
+    ObArray<ObColDesc> main_column_descs;
+    if (OB_FAIL(src_table_schema->get_column_ids(main_column_descs, true))) {
       LOG_WARN("fail to get column ids", KR(ret));
-    } else if (OB_FAIL(dest_table_schema->get_column_ids(dest_column_descs))) {
+    } else if (OB_FAIL(dest_table_schema->get_column_ids(index_column_descs_))) {
       LOG_WARN("fail to get column ids", KR(ret));
     } else {
-      FOREACH_X(iter, dest_column_descs, OB_SUCC(ret))
+      FOREACH_X(iter, index_column_descs_, OB_SUCC(ret))
       {
-        ObColDesc dest_col_desc = *iter;
-        for (int64_t i = 0; OB_SUCC(ret) && i < src_column_descs.count(); i++) {
-          if ((is_shadow_column(dest_col_desc.col_id_)
-                 ? dest_col_desc.col_id_ - OB_MIN_SHADOW_COLUMN_ID
-                 : dest_col_desc.col_id_) == src_column_descs.at(i).col_id_) {
+        ObColDesc index_col_desc = *iter;
+        const ObColumnSchemaV2 *column_schema = nullptr;
+        for (int64_t i = 0; OB_SUCC(ret) && i < main_column_descs.count(); i++) {
+          if ((is_shadow_column(index_col_desc.col_id_)
+                 ? index_col_desc.col_id_ - OB_MIN_SHADOW_COLUMN_ID
+                 : index_col_desc.col_id_) == index_column_descs_.at(i).col_id_) {
             if (OB_FAIL(col_projector_.push_back(i))) {
               LOG_WARN("fail to push back", KR(ret), K(i));
+            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(index_col_desc.col_id_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null column schema", KR(ret), K(index_col_desc));
+            } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column_schema->is_rowkey_column()))) {
+              LOG_WARN("fail to push back rowkey column flag", K(ret), KPC(column_schema));
+            } else if (index_col_desc.col_type_.is_lob_storage()) {
+              index_has_lob_ = true;
             }
             break;
           }

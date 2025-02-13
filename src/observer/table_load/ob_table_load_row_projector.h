@@ -16,6 +16,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/ob_define.h"
 #include "ob_tablet_id.h"
+#include "share/schema/ob_table_param.h"
 
 namespace oceanbase
 {
@@ -81,14 +82,20 @@ protected:
                   const int64_t src_rowkey_column_num,
                   storage::ObDirectLoadDatumRow &dest_datum_row) const;
 
+  int check_index_lob_inrow(storage::ObDirectLoadDatumRow &dest_datum_row) const;
+
 protected:
   common::ObArray<int64_t> col_projector_;
   common::hash::ObHashMap<ObTabletID, ObTabletID, common::hash::NoPthreadDefendMode>
     tablet_projector_;
   common::hash::ObHashMap<ObTabletID, ObObjectID, common::hash::NoPthreadDefendMode>
     dest_tablet_id_to_part_id_map_;
+  ObSEArray<share::schema::ObColDesc, 16> index_column_descs_;
+  ObSEArray<bool, 16> main_table_rowkey_col_flag_;
   int64_t src_column_num_;
   int64_t dest_column_num_;
+  int64_t lob_inrow_threshold_;
+  bool index_has_lob_;
   bool is_inited_;
 };
 

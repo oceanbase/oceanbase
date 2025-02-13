@@ -362,6 +362,7 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
     insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =
@@ -883,6 +884,7 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
     insert_table_param.max_batch_size_ = store_ctx_->ctx_->param_.batch_size_;
+    insert_table_param.is_index_table_ = schema_->is_index_table_;
     // new ObDirectLoadInsertDataTableContext
     ObDirectLoadInsertDataTableContext *insert_data_table_ctx = nullptr;
     if (OB_ISNULL(insert_table_ctx_ = insert_data_table_ctx =

@@ -161,6 +161,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.online_sample_percent_ = 1.0;
   insert_table_param.is_no_logging_ = ddl_param.is_no_logging_;
   insert_table_param.max_batch_size_ = 256;
+  insert_table_param.is_index_table_ = table_load_schema.is_index_table_;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(tmp_insert_table_ctx.init(insert_table_param,

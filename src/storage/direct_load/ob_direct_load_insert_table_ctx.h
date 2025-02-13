@@ -191,7 +191,7 @@ public:
 
   OB_INLINE bool has_lob_storage() const
   {
-    return nullptr != param_ ? !param_->lob_column_idxs_->empty() : false;
+    return nullptr != param_ ? (!param_->is_index_table_ && !param_->lob_column_idxs_->empty()) : false;
   }
   OB_INLINE bool is_incremental() const
   {
