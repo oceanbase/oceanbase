@@ -29996,6 +29996,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
 {
   int ret = OB_SUCCESS;
   int64_t refresh_count = 0;
+  DEBUG_SYNC(BEFORE_REFRESH_SCHEMA);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else {

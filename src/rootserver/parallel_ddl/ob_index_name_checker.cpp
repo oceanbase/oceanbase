@@ -236,7 +236,6 @@ int ObIndexNameCache::try_load_cache_()
       LOG_WARN("fail to get timeout", KR(ret));
     } else {
       int64_t original_timeout_ts = THIS_WORKER.get_timeout_ts();
-      int64_t schema_version = OB_INVALID_VERSION;
       THIS_WORKER.set_timeout_ts(timeout_ts);
 
       ObSchemaGetterGuard guard;
