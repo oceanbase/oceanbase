@@ -135,8 +135,6 @@ public:
   bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 
-  // 兼容性需求，兼容老的SPFILE格式
-  int deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos);
   OB_UNIS_VERSION(1);
 
 public:

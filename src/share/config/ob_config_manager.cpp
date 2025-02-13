@@ -138,7 +138,7 @@ int ObConfigManager::load_config(const char *path)
       ret = OB_BUF_NOT_ENOUGH;
       LOG_ERROR("Config file is too long", K(path), K(ret));
     } else {
-      ret = server_config_.deserialize_with_compat(buf, len, pos);
+      ret = server_config_.deserialize(buf, len, pos);
     }
     if (OB_FAIL(ret)) {
       LOG_ERROR("Deserialize server config failed", K(path), K(ret));

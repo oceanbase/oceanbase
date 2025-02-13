@@ -104,7 +104,6 @@ protected:
   virtual int add_extra_config_unsafe(const char *config_str,
                                const int64_t version,
                                const bool check_config);
-  static const int64_t MIN_LENGTH = 20;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCommonConfig);

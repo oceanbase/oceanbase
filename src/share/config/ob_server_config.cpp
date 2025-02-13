@@ -197,49 +197,6 @@ double ObServerConfig::get_sys_tenant_default_max_cpu()
   return max_cpu;
 }
 
-int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (data_len - pos < MIN_LENGTH) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else {
-    /*
-     * Extra 'OB_UNIS_VERSION' and 'len' field are added by using new version
-     * serialization framework, which makes it hard to use header.version_ for
-     * compatible distinguish, also makes codes bellow ugly.
-     * TODO: remove this code after 2.2
-     */
-    const int64_t saved_pos = pos;
-    if (OB_FAIL(deserialize(buf, data_len, pos))) {
-      /* try old version */
-      pos = saved_pos;
-      ObRecordHeader header;
-      const char *const p_header = buf + pos;
-      const char *const p_data = p_header + header.get_serialize_size();
-      const int64_t pos_data = pos + header.get_serialize_size();
-      if (OB_FAIL(header.deserialize(buf, data_len, pos))) {
-        LOG_ERROR("deserialize header failed", K(ret));
-      } else if (OB_FAIL(header.check_header_checksum())) {
-        LOG_ERROR("check header checksum failed", K(ret));
-      } else if (OB_CONFIG_MAGIC != header.magic_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check magic number failed", K_(header.magic), K(ret));
-      } else if (data_len - pos_data != header.data_zlength_) {
-        ret = OB_INVALID_DATA;
-        LOG_ERROR("check data len failed",
-                  K(data_len), K(pos_data), K_(header.data_zlength), K(ret));
-      } else if (OB_FAIL(header.check_payload_checksum(p_data, data_len - pos_data))) {
-        LOG_ERROR("check data checksum failed", K(ret));
-      } else if (OB_FAIL(add_extra_config(buf + pos, 0, false))) {
-        LOG_ERROR("Read server config failed", K(ret));
-      } else {
-        pos += header.data_length_;
-      }
-    } // if
-  }
-  return ret;
-}
-
 ObServerMemoryConfig::ObServerMemoryConfig()
   : memory_limit_(0), system_memory_(0), hidden_sys_memory_(0)
 {}
