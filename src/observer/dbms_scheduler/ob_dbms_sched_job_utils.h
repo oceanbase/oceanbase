@@ -400,6 +400,9 @@ public:
   */
   static int check_is_valid_max_run_duration(const int64_t max_run_duration);
 
+  static int check_not_buildin_job_class(const ObString &str);
+  static int check_is_valid_log_history(const int64_t log_history);
+
   //TO DO DELETE 连雨
   static int generate_job_id(int64_t tenant_id, int64_t &max_job_id);
   /**

@@ -147,6 +147,26 @@ int ObDBMSSchedJobUtils::check_is_valid_max_run_duration(const int64_t max_run_d
   return ret;
 }
 
+int ObDBMSSchedJobUtils::check_not_buildin_job_class(const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (str.empty() || 0 == str.case_compare("MYSQL_EVENT_JOB_CLASS") || 0 == str.case_compare("OLAP_ASYNC_JOB_CLASS")
+      || 0 == str.case_compare("DATE_EXPRESSION_JOB_CLASS")) {
+      ret = OB_NOT_SUPPORTED;
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_is_valid_log_history(const int64_t log_history)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_LOG_HISTORY = 1000000;
+  if (log_history < 0 || log_history > MAX_LOG_HISTORY) {
+    ret = OB_NOT_SUPPORTED;
+  }
+  return ret;
+}
+
 int ObDBMSSchedJobUtils::zone_check_impl(int64_t tenant_id, const ObString &zone)
 {
   int ret = OB_SUCCESS;
@@ -696,7 +716,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("failed to set zone", K(ret), K(job_info), K(job_attribute_value.get_string()));
     }
   } else if (0 ==  job_attribute_name.case_compare("job_class")) {
-    if (0 != job_attribute_value.get_string().compare("DEFAULT_JOB_CLASS") && OB_FAIL(job_class_check_impl(tenant_id, job_attribute_value.get_string()))) {
+    if (0 != job_attribute_value.get_string().case_compare("DEFAULT_JOB_CLASS") && OB_FAIL(job_class_check_impl(tenant_id, job_attribute_value.get_string()))) {
       LOG_WARN("failed to check job_class", K(ret), K(job_info), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("job_class", job_attribute_value.get_string()))) {
       LOG_WARN("failed to set job_class", K(ret), K(job_info), K(job_attribute_value.get_string()));
