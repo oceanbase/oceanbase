@@ -904,22 +904,28 @@ bool ObSQLSessionMgr::CheckSessionFunctor::operator()(sql::ObSQLSessionMgr::Key 
     int64_t cur_time = common::ObTimeUtility::current_time();
     int64_t query_timeout = 0;
     ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
-    if (ObStmt::is_ddl_stmt(sess_info->get_stmt_type(), true) ||
+    if ((sess_info->get_stmt_type() != stmt::T_SELECT &&
+         sess_info->get_stmt_type() != stmt::T_UPDATE &&
+         sess_info->get_stmt_type() != stmt::T_INSERT &&
+         sess_info->get_stmt_type() != stmt::T_DELETE &&
+         sess_info->get_stmt_type() != stmt::T_MERGE &&
+         sess_info->get_stmt_type() != stmt::T_REPLACE &&
+         sess_info->get_stmt_type() != stmt::T_EXPLAIN) ||
         sess_info->get_ddl_info().is_ddl() ||
-        sess_info->is_real_inner_session() ||
         OB_NOT_NULL(sess_info->get_pl_context()) ||
-        ObStmt::is_physical_restore_stmt(sess_info->get_stmt_type())) {
+        !sess_info->is_user_session() ||
+        sess_info->is_remote_session() ||
+        sess_info->get_current_trace_id().is_invalid()) {
       //filter out DDL, PL and physical restore tenant statements, because they are not subject to query timeout control.
     } else if (OB_FAIL(sess_info->get_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout))) {
       LOG_WARN("failed to get sesion variable", K(ret));
     } else if (sess_info->get_query_start_time() > 0 &&
-               cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout) {
+               cur_time - sess_info->get_query_start_time() > timeout_multiplier * query_timeout + 1000000) {
       LOG_ERROR("detect sql hung!!!", K(sess_info->get_current_trace_id()),
                                       K(sess_info->get_cur_sql_id()),
                                       K(sess_info->get_thread_id()),
                                       K(cur_time - sess_info->get_query_start_time()),
                                       K(query_timeout), K(timeout_multiplier),
-                                      K(sess_info->is_user_session()),
                                       "session_state", ObString::make_string(sess_info->get_session_state_str()),
                                       K(sess_info->get_current_query_string()));
       //dump stack of all threads of observer
