@@ -377,6 +377,11 @@ public:
   int print_foreign_key_definition(const uint64_t tenant_id,
                                    const share::schema::ObForeignKeyInfo &foreign_key_info,
                                    char *buf, int64_t buf_len, int64_t &pos) const;
+  int print_package_definition(const uint64_t tenant_id,
+                               uint64_t package_id,
+                               char* buf,
+                               const int64_t& buf_len,
+                               int64_t &pos) const;
   int print_udt_definition(const uint64_t tenant_id,
                            const uint64_t udt_id,
                            char* buf,
