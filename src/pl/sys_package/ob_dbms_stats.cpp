@@ -7578,7 +7578,6 @@ int ObDbmsStats::get_stats_consumer_group_id(ObTableStatParam &param)
                                                                              ObFunctionType::PRIO_OPT_STATS,
                                                                              consumer_group_id))) {
     LOG_WARN("fail to get group id by function", K(param.tenant_id_));
-  } else if (FALSE_IT(SET_FUNCTION_TYPE(ObFunctionType::PRIO_OPT_STATS))) {
   } else if (is_resource_manager_group(consumer_group_id)) {
     param.consumer_group_id_ = consumer_group_id;
     ObRefHolder<ObTenantIOManager> tenant_holder;
