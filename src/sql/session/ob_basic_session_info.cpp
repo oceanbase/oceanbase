@@ -5954,11 +5954,11 @@ int ObBasicSessionInfo::get_activate_all_role_on_login(bool &v) const
   return get_bool_sys_var(SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN, v);
 }
 
-int ObBasicSessionInfo::get_mview_refresh_dop(int64_t &v) const
+int ObBasicSessionInfo::get_mview_refresh_dop(uint64_t &v) const
 {
   int ret = OB_SUCCESS;
   if (exec_min_cluster_version_ >= CLUSTER_VERSION_4_3_5_1) {
-    ret = get_int64_sys_var(SYS_VAR_MVIEW_REFRESH_DOP, v);
+    ret = get_uint64_sys_var(SYS_VAR_MVIEW_REFRESH_DOP, v);
   } else {
     v = 0;
   }

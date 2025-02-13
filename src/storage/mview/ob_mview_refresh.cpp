@@ -698,7 +698,7 @@ int ObMViewRefresher::calc_mv_refresh_parallelism(int64_t explict_parallelism,
                                                   int64_t &final_parallelism)
 {
   int ret = OB_SUCCESS;
-  int64_t session_parallelism = 0;
+  uint64_t session_parallelism = 0;
   final_parallelism = 1;
 
   if (OB_ISNULL(session_info)) {
@@ -711,9 +711,6 @@ int ObMViewRefresher::calc_mv_refresh_parallelism(int64_t explict_parallelism,
     final_parallelism = explict_parallelism;
   } else if (OB_FAIL(session_info->get_mview_refresh_dop(session_parallelism))) {
     LOG_WARN("fail to get materialized view parallelism", KR(ret));
-  } else if (session_parallelism < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session parallelism is invalid", KR(ret), K(session_parallelism));
   } else if (session_parallelism != 0) {
     final_parallelism = session_parallelism;
   } else {

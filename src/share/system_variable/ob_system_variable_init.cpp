@@ -11359,7 +11359,7 @@ static struct VarsInit{
       ObSysVars[829].default_value_ = "4" ;
       ObSysVars[829].info_ = "The default refresh parallelism of materialized view" ;
       ObSysVars[829].name_ = "mview_refresh_dop" ;
-      ObSysVars[829].data_type_ = ObIntType ;
+      ObSysVars[829].data_type_ = ObUInt64Type ;
       ObSysVars[829].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
       ObSysVars[829].id_ = SYS_VAR_MVIEW_REFRESH_DOP ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MVIEW_REFRESH_DOP)) ;

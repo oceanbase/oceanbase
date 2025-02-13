@@ -11700,7 +11700,7 @@
     "name": "mview_refresh_dop",
     "default_value": "4",
     "base_value": "4",
-    "data_type": "int",
+    "data_type": "uint",
     "info": "The default refresh parallelism of materialized view",
     "flags": "GLOBAL | SESSION ",
     "publish_version": "435",

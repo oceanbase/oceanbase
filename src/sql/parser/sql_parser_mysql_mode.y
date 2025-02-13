@@ -9566,10 +9566,6 @@ alter_mview_action_list
 {
   $$ = $1;
 }
-|
-{
-  $$ = NULL;
-}
 ;
 
 alter_mview_action_list:
@@ -9650,10 +9646,6 @@ alter_mlog_actions:
 alter_mlog_action_list
 {
   $$ = $1;
-}
-|
-{
-  $$ = NULL;
 }
 ;
 
