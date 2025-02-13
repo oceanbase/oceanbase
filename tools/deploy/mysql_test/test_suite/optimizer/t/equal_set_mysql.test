@@ -8,7 +8,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 
 #test equal set in elimiating sort
 --disable_warnings
-drop table if exists t1, t2, t3;
+drop table if exists t1, t2, t3, car_config, material;
 --enable_warnings
 create table t1(a int primary key, b int, c int, d int, key k1(b,c));
 create table t2(a int primary key, b int, c int, d int, key k2(b,c));
@@ -540,6 +540,72 @@ explain select * from t1 left join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
 explain select * from t1 right join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
 explain select * from t1 full join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
 
+
+CREATE TABLE `car_config` (
+ `car_config_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+ `puid` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' COMMENT 'PUID，唯一',
+ `before_car_code` varchar(60) NOT NULL DEFAULT '' COMMENT '配置前整车',
+ `configurator_id` varchar(100) NOT NULL DEFAULT '' COMMENT '配置器id',
+ `configurator_name` varchar(100) NOT NULL DEFAULT '' COMMENT '配置器名称',
+ `configurator_desc` varchar(100) NOT NULL DEFAULT '' COMMENT '配置器描述',
+ `after_car_code` varchar(60) NOT NULL DEFAULT '' COMMENT '配置后整车',
+ `after_car_code_prefix` varchar(15) NOT NULL DEFAULT '',
+ `configure_rule` varchar(100) NOT NULL DEFAULT '' COMMENT '配置规则',
+ `option_value` varchar(100) NOT NULL DEFAULT '' COMMENT '选项值',
+ `update_time` datetime NOT NULL COMMENT '最后修改时间',
+ `configure_value` varchar(3000) DEFAULT '' COMMENT '配置文本',
+ `maktx` varchar(100) NOT NULL DEFAULT '' COMMENT '物料名称',
+ `feature` json DEFAULT NULL,
+ `process_state` int(11) NOT NULL DEFAULT '0' COMMENT '处理状态',
+ `AB00` varchar(100) GENERATED ALWAYS AS (json_unquote(json_extract(`feature`,'$.AB00.optionValueDesc'))) VIRTUAL,
+ PRIMARY KEY (`car_config_id`),
+ UNIQUE KEY `uk_puid` (`puid`) BLOCK_SIZE 16384 LOCAL,
+ KEY `idx_AB00` (`AB00`) BLOCK_SIZE 16384 LOCAL,
+ KEY `idx_matnr` (`after_car_code`) BLOCK_SIZE 16384 LOCAL
+) AUTO_INCREMENT = 26420 AUTO_INCREMENT_MODE = 'ORDER' DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 COMMENT = '整车配置';
+
+CREATE TABLE `material` (
+ `material_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+ `mtart` varchar(6) DEFAULT NULL COMMENT '物料类型',
+ `werks` varchar(6) DEFAULT NULL COMMENT '工厂',
+ `matnr` varchar(60) DEFAULT NULL COMMENT '物料编号\t',
+ `maktx` varchar(60) DEFAULT NULL COMMENT '物料描述\t',
+ `maktx_l` varchar(300) DEFAULT NULL COMMENT '物料长描述',
+ `meins` varchar(5) DEFAULT NULL COMMENT '基本计量单位\t',
+ `mmsta` varchar(3) DEFAULT NULL COMMENT '工厂特定的物料状态',
+ `mesds` varchar(3) DEFAULT NULL COMMENT 'MES数据抓取',
+ `mesnr` varchar(12) DEFAULT NULL COMMENT '配送码',
+ `mfrgr` varchar(12) DEFAULT NULL COMMENT '物料运输组',
+ `m_model` varchar(96) DEFAULT NULL COMMENT '物料制造商规格型号',
+ `m_name` varchar(192) DEFAULT NULL COMMENT '制造商名称',
+ `sobsl` varchar(3) DEFAULT NULL COMMENT '特殊采购类型',
+ `bstme` varchar(5) DEFAULT NULL COMMENT '采购订单计量单位',
+ `umren` varchar(5) DEFAULT NULL COMMENT '转换为基本计量单位的分母',
+ `umrez` varchar(5) DEFAULT NULL COMMENT '基本计量单位转换分子',
+ `bstrf` varchar(12) DEFAULT NULL COMMENT '采购订单数量的舍入值',
+ `matkl` varchar(16) DEFAULT NULL COMMENT '物料组',
+ `ekgrp` varchar(5) DEFAULT NULL COMMENT '采购组',
+ `vtype` varchar(6) DEFAULT NULL COMMENT '车型信息',
+ `lvorm` varchar(1) DEFAULT NULL COMMENT '删除标识符',
+ `ersda` varchar(20) DEFAULT NULL COMMENT '创建日期',
+ `laeda` varchar(20) DEFAULT NULL COMMENT '上次更改的日期',
+ `last_changed_time` varchar(20) DEFAULT NULL COMMENT '最后更改时间',
+ `ematn` varchar(60) DEFAULT NULL COMMENT '按照制造商零件编号的物料编号',
+ `maktx_en` varchar(60) DEFAULT NULL COMMENT '物料描述',
+ `bstmi` varchar(12) DEFAULT NULL COMMENT '最小批量',
+ `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+ `matnr_src` varchar(2) DEFAULT '',
+ `beskz` varchar(1) NOT NULL DEFAULT '' COMMENT '采购类型',
+ `dispo` varchar(3) NOT NULL DEFAULT '' COMMENT 'MRP控制者',
+ PRIMARY KEY (`material_id`),
+ UNIQUE KEY `uk_matnr_werks_ematn` (`matnr`, `werks`, `ematn`) BLOCK_SIZE 16384 LOCAL,
+ KEY `idx_matnr_src_beskz` (`matnr_src`, `beskz`) BLOCK_SIZE 16384 LOCAL,
+ KEY `idx_mtart` (`mtart`) BLOCK_SIZE 16384 LOCAL
+) AUTO_INCREMENT = 1991844 AUTO_INCREMENT_MODE = 'ORDER' DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 COMMENT = '物料主数据';
+
+SELECT COUNT(*) AS total FROM car_config t1 LEFT JOIN material ON t1.after_car_code = material.matnr LEFT JOIN car_config t2 ON t1.after_car_code_prefix = t2.after_car_code_prefix AND JSON_UNQUOTE(t1.feature->'$.TA00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.TA00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.AB00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.AB00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.AA00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.AA00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.AC00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.AC00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.CC00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.CC00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.LR00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.LR00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SA00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SA00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SC00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SC00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SD00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SD00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.ZA00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.ZA00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.ZB00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.ZB00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.ZE00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.ZE00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.M100.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.M100.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SF00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SF00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SE00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SE00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.AE00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.AE00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SJ00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SJ00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.TH00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.TH00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.SK00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.SK00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.ZG00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.ZG00.optionValueDesc') AND JSON_UNQUOTE(t1.feature->'$.AD00.optionValueDesc') = JSON_UNQUOTE(t2.feature->'$.AD00.optionValueDesc') AND t1.after_car_code != t2.after_car_code WHERE t2.after_car_code IS NOT NULL AND substr(matnr, -3, 1) != 'P' AND substr(t2.after_car_code, -3, 1) != 'P' AND material.werks IN ('1011') AND JSON_UNQUOTE(t1.feature->'$.AB00.optionValueDesc') = 'T03EV18';
+
 --disable_warnings
-drop table if exists t1, t2, t3;
+drop table if exists t1, t2, t3, car_config, material;
 --enable_warnings 

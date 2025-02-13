@@ -115,6 +115,8 @@ int ObEqualAnalysis::feed_equal_sets(const EqualSets &input_equal_sets)
     if (OB_ISNULL(eset)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null equal set", K(ret));
+    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
     } else if (OB_ISNULL(equal_set = new_equal_set())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create new equal set failed", K(ret));
@@ -191,6 +193,9 @@ int ObEqualAnalysis::get_equal_sets(ObIAllocator *alloc, EqualSets &equal_sets) 
   ObSEArray<ObRawExpr *, 8> raw_equal_set;
   DLIST_FOREACH(equal_set, equal_sets_) {
     raw_equal_set.reuse();
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    }
     for (ObExprEqualSet::ColumnIterator iter = equal_set->column_begin();
         OB_SUCC(ret) && iter != equal_set->column_end(); ++iter) {
       if (OB_FAIL(raw_equal_set.push_back(
@@ -234,7 +239,9 @@ int ObEqualAnalysis::find_equal_set(int64_t expr_idx, const ObRawExpr *new_expr,
       LOG_ERROR("equal set is null");
     } else if ((same_expr = equal_set->get_expr(expr_idx)) != NULL) {
       bool can_be = false;
-      if (OB_FAIL(expr_can_be_add_to_equal_set(*equal_set, *same_expr, new_expr, can_be))) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(expr_can_be_add_to_equal_set(*equal_set, *same_expr, new_expr, can_be))) {
         LOG_WARN("check expr whether can be add to equal set failed", K(ret));
       } else if (can_be) {
         equal_set_ret = equal_set;
@@ -319,6 +326,8 @@ int ObEqualAnalysis::finish_feed()
       if (OB_ISNULL(another_set)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("equal set is null", K(another_set));
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(check_whether_can_be_merged(*equal_set, 
                                                      *another_set, 
                                                      can_be))) {

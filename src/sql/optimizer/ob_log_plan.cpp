@@ -3894,6 +3894,7 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
     } else if (T_OP_EQ == cur_expr->get_expr_type() &&
                2 == cur_expr->get_param_count() &&
                cur_expr->get_param_expr(0) != cur_expr->get_param_expr(1)) {
+      EqualSets tmp_equal_sets;
       if (OB_ISNULL(left_expr = cur_expr->get_param_expr(0)) ||
           OB_ISNULL(right_expr = cur_expr->get_param_expr(1))) {
         ret = OB_ERR_UNEXPECTED;
@@ -3922,9 +3923,12 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
         // remove preds which is equation between two exprs in the same equal sets
         has_checked.at(i) = true;
         OPT_TRACE("remove redundancy join condition:", cur_expr);
+      } else if (OB_FAIL(tmp_equal_sets.assign(equal_sets))) {
+        LOG_WARN("failed to append fd equal set", K(ret));
+      } else if (FALSE_IT(equal_sets.reuse())) {
       } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator_,
                                                             cur_expr,
-                                                            equal_sets,
+                                                            tmp_equal_sets,
                                                             equal_sets))) {
         LOG_WARN("failed to compute equal sets for inner join", K(ret));
       } else if (OB_FAIL(new_join_pred.push_back(cur_expr))) {
