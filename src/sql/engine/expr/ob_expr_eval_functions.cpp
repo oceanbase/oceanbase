@@ -1364,6 +1364,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprArrayReplace::eval_array_replace,                    /* 826 */
   NULL, // ObExprArrayPopfront::eval_array_popfront,                  /* 827 */
   NULL, // ObExprCurrentCatalog::eval_current_catalog,                /* 828 */
+  NULL, // ObExprInnerInfoColsColumnDefPrinter::eval_column_def,      /* 829 */
+  NULL, // ObExprInnerInfoColsCharLenPrinter::eval_column_char_len,   /* 830 */
+  NULL, // ObExprInnerInfoColsCharNamePrinter::eval_column_char_name, /* 831 */
+  NULL, // ObExprInnerInfoColsCollNamePrinter::eval_column_collation_name, /* 832 */
+  NULL, // ObExprInnerInfoColsPrivPrinter::eval_column_priv,          /* 833 */
+  NULL, // ObExprInnerInfoColsExtraPrinter::eval_column_extra,        /* 834 */
+  NULL, // ObExprInnerInfoColsDataTypePrinter::eval_column_data_type, /* 835 */
+  NULL, // ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type, /* 836 */
 
 };
 
