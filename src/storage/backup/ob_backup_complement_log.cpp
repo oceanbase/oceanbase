@@ -1898,6 +1898,7 @@ int ObBackupLSLogFileTask::inner_process_(const ObBackupPieceFile &piece_file)
                     "round_id", piece_file.round_id_,
                     "piece_id", piece_file.piece_id_,
                     "file_id", piece_file.file_id_);
+    DEBUG_SYNC(AFTER_REPORT_BACKUP_COMPL_LOG);
     LOG_INFO("inner backup complement log", K(piece_file), K(src_path), K(dst_path));
   }
   return ret;
