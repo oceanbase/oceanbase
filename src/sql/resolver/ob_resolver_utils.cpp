@@ -5057,10 +5057,6 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             } else {
               file_column_expr->set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
             }
-          } else if (ob_is_mysql_date_tc(column_expr->get_data_type())) {
-            file_column_expr->set_data_type(ObDateType);
-          } else if (ob_is_mysql_datetime_tc(column_expr->get_data_type())) {
-            file_column_expr->set_data_type(ObDateTimeType);
           }
         }
       } else {
@@ -5163,11 +5159,6 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
     file_column_expr->set_meta_type(column_schema->get_meta_type());
     file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
     file_column_expr->set_accuracy(column_schema->get_accuracy());
-    if (ob_is_mysql_date_tc(column_schema->get_data_type())) {
-      file_column_expr->set_data_type(ObDateType);
-    } else if (ob_is_mysql_datetime_tc(column_schema->get_data_type())) {
-      file_column_expr->set_data_type(ObDateTimeType);
-    }
     if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {

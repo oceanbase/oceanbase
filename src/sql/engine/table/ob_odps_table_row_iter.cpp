@@ -625,7 +625,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
       {
-        if (ObDateTimeType == ob_type) {
+        if (ob_is_datetime_or_mysql_datetime(ob_type)) {
           // odps_type to ob_type is valid
           if (ob_type_scale < 6) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -1589,14 +1589,20 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
               {
-                if (ObDateTimeType == type && !is_oracle_mode()) {
+                if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const apsara::odps::sdk::TimeStamp* v = records_[row_idx]->GetTimestampNTZValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
                     } else {
                       int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
-                      datums[row_idx].set_datetime(datetime);
+                      if (ObMySQLDateTimeType == type) {
+                        ObMySQLDateTime mdt_value;
+                        ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                        datums[row_idx].set_mysql_datetime(mdt_value);
+                      } else {
+                        datums[row_idx].set_datetime(datetime);
+                      }
                     }
                   }
                 } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
@@ -1616,18 +1622,21 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_DATE:
               {
-                if (ObDateType == type && !is_oracle_mode()) {
+                if (ob_is_date_or_mysql_date(type) && !is_oracle_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDateValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
+                    } else if (ObMySQLDateType == type) {
+                      ObMySQLDate md_value = 0;
+                      ret = ObTimeConverter::date_to_mdate(*v, md_value);
+                      datums[row_idx].set_mysql_date(md_value);
                     } else {
                       int32_t date = *v;
                       datums[row_idx].set_date(date);
                     }
                   }
-                } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type)
-                           && is_oracle_mode()) {
+                } else if (false && ObDateTimeType == type && is_oracle_mode()) {
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
                     const int64_t* v = records_[row_idx]->GetDateValue(target_idx);
                     if (v == NULL) {
@@ -1644,7 +1653,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_DATETIME:
               {
-                if (ObDateTimeType == type && !is_oracle_mode()) {
+                if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                   int32_t tmp_offset = 0;
                   int64_t res_offset = 0;
                   if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
@@ -1656,6 +1665,10 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                     const int64_t* v = records_[row_idx]->GetDatetimeValue(target_idx);
                     if (v == NULL) {
                       datums[row_idx].set_null();
+                    } else if (ObMySQLDateTimeType == type) {
+                      ObMySQLDateTime mdt_value;
+                      ret = ObTimeConverter::datetime_to_mdatetime(*v * 1000 + res_offset, mdt_value);
+                      datums[row_idx].set_mysql_datetime(mdt_value);
                     } else {
                       int64_t datetime = *v * 1000 + res_offset;
                       datums[row_idx].set_datetime(datetime);
@@ -2257,10 +2270,15 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
             {
-              if (ObDateTimeType == type && !is_oracle_mode()) {
+              if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                 const apsara::odps::sdk::TimeStamp* v = record_->GetTimestampNTZValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
+                } else if (ob_is_mysql_datetime(type)) {
+                  int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
+                  ObMySQLDateTime mdt_value;
+                  ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                  datum.set_mysql_datetime(mdt_value);
                 } else {
                   int64_t datetime = v->GetSecond() * USECS_PER_SEC + (v->GetNano() + 500) / 1000;
                   datum.set_datetime(datetime);
@@ -2280,15 +2298,19 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_DATE:
             {
-              if (ObDateType == type && !is_oracle_mode()) {
+              if (ob_is_date_or_mysql_date(type) && is_mysql_mode()) {
                 const int64_t* v = record_->GetDateValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
+                } else if (ObMySQLDateType == type) {
+                  ObMySQLDate md_value = 0;
+                  ret = ObTimeConverter::date_to_mdate(*v, md_value);
+                  datum.set_mysql_date(md_value);
                 } else {
                   int32_t date = *v;
                   datum.set_date(date);
                 }
-              } else if (false && (ObDateTimeType == type || ObMySQLDateTimeType == type) && is_oracle_mode()) {
+              } else if (false && ObDateTimeType == type && is_oracle_mode()) {
                 const int64_t* v = record_->GetDateValue(target_idx);
                 if (v == NULL) {
                   datum.set_null();
@@ -2303,7 +2325,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_DATETIME:
             {
-              if (ObDateTimeType == type && !is_oracle_mode()) {
+              if (ob_is_datetime_or_mysql_datetime(type) && is_mysql_mode()) {
                 const int64_t* v = record_->GetDatetimeValue(target_idx);
                 int32_t tmp_offset = 0;
                 int64_t res_offset = 0;
@@ -2314,7 +2336,13 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                 } else {
                   res_offset = SEC_TO_USEC(tmp_offset);
                   int64_t datetime = *v * 1000 + res_offset;
-                  datum.set_datetime(datetime);
+                  if (ObMySQLDateTimeType == type) {
+                    ObMySQLDateTime mdt_value;
+                    ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdt_value);
+                    datum.set_mysql_datetime(mdt_value);
+                  } else {
+                    datum.set_datetime(datetime);
+                  }
                 }
               } else if (false && ObTimestampNanoType == type && is_oracle_mode()) {
                 const int64_t* v = record_->GetDatetimeValue(target_idx);

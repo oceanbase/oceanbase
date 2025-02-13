@@ -403,10 +403,10 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       }
     }
   } else if (log_type->is_timestamp() && parquet::Type::INT64 == phy_type
-             && (ob_is_otimestamp_type(datum_type.type_) || ob_is_datetime_tc(datum_type.type_))) {
+             && (ob_is_otimestamp_type(datum_type.type_) || ob_is_datetime_or_mysql_datetime_tc(datum_type.type_))) {
     switch (static_cast<const parquet::TimestampLogicalType*>(log_type)->time_unit()) {
       case parquet::LogicalType::TimeUnit::unit::MILLIS: {
-        if (ob_is_datetime_tc(datum_type.type_)
+        if (ob_is_datetime_or_mysql_datetime_tc(datum_type.type_)
             || ObTimestampLTZType == datum_type.type_
             || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_millis_col;
@@ -418,7 +418,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
             || (ObDateTimeType == datum_type.type_ && !is_parquet_store_utc(log_type))) {
           //mysql timestamp storing utc timestamp as int64 values
           func = &DataLoader::load_int64_to_int64_vec;
-        } else if (ob_is_datetime_tc(datum_type.type_)
+        } else if (ob_is_datetime_or_mysql_datetime_tc(datum_type.type_)
                    || ObTimestampLTZType == datum_type.type_
                    || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_micros_col;
@@ -426,7 +426,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
         break;
       }
       case parquet::LogicalType::TimeUnit::unit::NANOS: {
-        if (ob_is_datetime_tc(datum_type.type_)
+        if (ob_is_datetime_or_mysql_datetime_tc(datum_type.type_)
             || ObTimestampLTZType == datum_type.type_
             || ObTimestampNanoType == datum_type.type_) {
           func = &DataLoader::load_timestamp_nanos_col;
@@ -1202,6 +1202,10 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_millis_col()
         int64_t adjusted_value = values.at(j++) * USECS_PER_MSEC + adjust_us;
         if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, adjusted_value);
+        } else if (ob_is_mysql_datetime_tc(file_col_expr_->datum_meta_.type_)) {
+          ObMySQLDateTime mdatetime;
+          ObTimeConverter::datetime_to_mdatetime(adjusted_value, mdatetime);
+          dec_vec->set_mysql_datetime(i + row_offset_, mdatetime);
         } else {
           ObOTimestampData data;
           data.time_us_ = adjusted_value;
@@ -1235,6 +1239,10 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_micros_col()
         int64_t adjusted_value = (values.at(j++) + adjust_us);
         if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, adjusted_value);
+        } else if (ob_is_mysql_datetime_tc(file_col_expr_->datum_meta_.type_)) {
+          ObMySQLDateTime mdatetime;
+          ObTimeConverter::datetime_to_mdatetime(adjusted_value, mdatetime);
+          dec_vec->set_mysql_datetime(i + row_offset_, mdatetime);
         } else {
           ObOTimestampData data;
           data.time_us_ = adjusted_value;
@@ -1267,6 +1275,10 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_nanos_col()
       } else {
         if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, values.at(j++) / NSECS_PER_USEC + adjust_us);
+        } else if (ob_is_mysql_datetime_tc(file_col_expr_->datum_meta_.type_)) {
+          ObMySQLDateTime mdatetime;
+          ObTimeConverter::datetime_to_mdatetime(values.at(j++) / NSECS_PER_USEC + adjust_us, mdatetime);
+          dec_vec->set_mysql_datetime(i + row_offset_, mdatetime);
         } else {
           ObOTimestampData data;
           int64_t cur_value = values.at(j++);
@@ -1305,6 +1317,10 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_hive()
         int64_t utc_timestamp =((int64_t)julian_date_value - 2440588LL) * 86400000000LL + (int64_t)(nsec_time_value / NSECS_PER_USEC);
         if (ob_is_datetime_tc(file_col_expr_->datum_meta_.type_)) {
           dec_vec->set_timestamp(i + row_offset_, utc_timestamp + adjust_us);
+        } else if (ob_is_mysql_datetime_tc(file_col_expr_->datum_meta_.type_)) {
+          ObMySQLDateTime mdatetime;
+          ObTimeConverter::datetime_to_mdatetime(utc_timestamp + adjust_us, mdatetime);
+          dec_vec->set_mysql_datetime(i + row_offset_, mdatetime);
         } else {
           ObOTimestampData data;
           data.time_us_ = utc_timestamp + adjust_us;

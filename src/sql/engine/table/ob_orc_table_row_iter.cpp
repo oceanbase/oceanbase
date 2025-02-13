@@ -496,8 +496,8 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     } else {
       func = NULL;
     }
-  } else if (ob_is_date_tc(datum_type.type_) ||
-             ob_is_datetime(datum_type.type_) ||
+  } else if (ob_is_date_or_mysql_date(datum_type.type_) ||
+             ob_is_datetime_or_mysql_datetime(datum_type.type_) ||
              ob_is_time_tc(datum_type.type_) ||
              ob_is_otimestamp_type(datum_type.type_) ||
              ObTimestampType == datum_type.type_) {
@@ -514,8 +514,8 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
       case orc::TypeKind::TIMESTAMP:
       case orc::TypeKind::TIMESTAMP_INSTANT:
         LOG_DEBUG("show type kind", K(type_kind), K(orc::TypeKind::TIMESTAMP_INSTANT));
-        if (ob_is_date_tc(datum_type.type_) ||
-             ob_is_datetime(datum_type.type_) ||
+        if (ob_is_date_or_mysql_date(datum_type.type_) ||
+             ob_is_datetime_or_mysql_datetime(datum_type.type_) ||
              ob_is_time_tc(datum_type.type_) ||
              ObTimestampType == datum_type.type_ ||
              ObTimestampLTZType == datum_type.type_ ||
@@ -527,6 +527,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
         if (ob_is_date_tc(datum_type.type_)) {
           func = &DataLoader::load_int32_vec;
         } else if (ob_is_time_tc(datum_type.type_) ||
+                   ob_is_mysql_date_tc(datum_type.type_) ||
                    ObTimestampType == datum_type.type_ ||
                    ObTimestampLTZType == datum_type.type_) {
           func = &DataLoader::load_date_to_time_or_stamp;
@@ -1093,6 +1094,14 @@ int ObOrcTableRowIterator::DataLoader::load_timestamp_vec()
                   dec_vec->set_datetime(i, adjusted_value);
                 } else if (ObDateType == file_col_expr_->datum_meta_.type_) {
                   dec_vec->set_date(i, adjusted_value / USECS_PER_DAY);
+                } else if (ObMySQLDateTimeType == file_col_expr_->datum_meta_.type_) {
+                  ObMySQLDateTime mdt_value;
+                  ret = ObTimeConverter::datetime_to_mdatetime(adjusted_value, mdt_value);
+                  dec_vec->set_mysql_datetime(i, mdt_value);
+                } else if (ObMySQLDateType == file_col_expr_->datum_meta_.type_) {
+                  ObMySQLDate md_value;
+                  ret = ObTimeConverter::date_to_mdate(adjusted_value / USECS_PER_DAY, md_value);
+                  dec_vec->set_mysql_date(i, md_value);
                 } else if (ObTimeType == file_col_expr_->datum_meta_.type_) {
                   dec_vec->set_time(i, adjusted_value);
                 } else {
@@ -1169,6 +1178,14 @@ int ObOrcTableRowIterator::DataLoader::load_date_to_time_or_stamp()
                   dec_vec->set_datetime(i, date_batch->data[i] * USECS_PER_DAY);
                 } else if (ObDateType == file_col_expr_->datum_meta_.type_) {
                   dec_vec->set_date(i, adjusted_value / USECS_PER_DAY);
+                } else if (ObMySQLDateTimeType == file_col_expr_->datum_meta_.type_) {
+                  ObMySQLDateTime mdt_value;
+                  ret = ObTimeConverter::datetime_to_mdatetime(date_batch->data[i] * USECS_PER_DAY, mdt_value);
+                  dec_vec->set_mysql_datetime(i, mdt_value);
+                } else if (ObMySQLDateType == file_col_expr_->datum_meta_.type_) {
+                  ObMySQLDate md_value;
+                  ret = ObTimeConverter::date_to_mdate(adjusted_value / USECS_PER_DAY, md_value);
+                  dec_vec->set_mysql_date(i, md_value);
                 } else if (ObTimeType == file_col_expr_->datum_meta_.type_) {
                   dec_vec->set_time(i, adjusted_value);
                 } else {
