@@ -189,7 +189,6 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                 set_pwd_stmt->set_need_enc(need_enc);
               }
             } else {
-              SERVER_LOG(INFO, "set password hash", K(password));
               set_pwd_stmt->set_need_enc(true);
             }
           } else {

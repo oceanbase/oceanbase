@@ -88,7 +88,6 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                       SERVER_LOG(INFO, "failed to upper password");
                       cells[col_idx].set_varchar(user_info->get_passwd_str());
                     } else {
-                      SERVER_LOG(INFO, "upper password", K(upper_passwd_str));
                       cells[col_idx].set_varchar(upper_passwd_str);
                     }
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
