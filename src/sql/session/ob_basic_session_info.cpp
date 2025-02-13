@@ -2558,6 +2558,11 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
         // 这里不设置错误码
         LOG_WARN("invalid collation", K(coll_int64), K(val));
         OX (sys_vars_cache_.set_character_set_connection(CHARSET_INVALID));
+
+        ObCStringHelper helper;
+        const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+        const char *info = (NULL == extra_info) ? NULL : helper.convert(*extra_info);
+        LOG_WARN("debug for invalid collation", K(lbt()), K(info));
       } else {
         OX (sys_vars_cache_.set_character_set_connection(
             ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64))));
