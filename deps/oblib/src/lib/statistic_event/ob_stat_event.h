@@ -804,6 +804,13 @@ STAT_EVENT_ADD_DEF(SS_MAJOR_MACRO_CACHE_MISS, "ss_major_macro_cache miss count",
 
 STAT_EVENT_ADD_DEF(OBJECT_STORAGE_IO_HEAD_COUNT, "object storage io head count", ObStatClassIds::STORAGE, 240022, true, true, true)
 STAT_EVENT_ADD_DEF(OBJECT_STORAGE_IO_HEAD_FAIL_COUNT, "object storage io head fail count", ObStatClassIds::STORAGE, 240023, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_COMMON_ADD_COUNT, "ss_micro_cache add micro_block count of common_io", ObStatClassIds::CACHE, 240024, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_COMMON_GET_COUNT, "ss_micro_cache get micro_block count of common_io", ObStatClassIds::CACHE, 240025, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_NEW_ADD_COUNT, "ss_micro_cache total new added micro_block count", ObStatClassIds::CACHE, 240026, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_COMMON_NEW_ADD_COUNT, "ss_micro_cache new added micro_block count of common_io", ObStatClassIds::CACHE, 240027, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_EVICT_COUNT, "ss_micro_cache total evicted micro_block count", ObStatClassIds::CACHE, 240028, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DELETE_COUNT, "ss_micro_cache total deleted micro_block count", ObStatClassIds::CACHE, 240029, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache released phy_block count by reorgan_task", ObStatClassIds::CACHE, 240030, true, true, true)
 
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
@@ -861,7 +868,7 @@ STAT_EVENT_SET_DEF(SYSTEM_MEMORY, "effective system memory", ObStatClassIds::RES
 STAT_EVENT_SET_DEF(HIDDEN_SYS_MEMORY, "effective hidden sys memory", ObStatClassIds::RESOURCE, 140016, false, true, true)
 STAT_EVENT_SET_DEF(MAX_SESSION_NUM, "max session num", ObStatClassIds::RESOURCE, 140017, false, true, true)
 STAT_EVENT_SET_DEF(KV_CACHE_HOLD, "kvcache hold", ObStatClassIds::RESOURCE, 140018, false, true, true)
-STAT_EVENT_SET_DEF(UNMANAGED_MEMORY_SIZE, "unmanaged memory size", ObStatClassIds::RESOURCE, 140019, false, true, true)
+STAT_EVENT_SET_DEF(UNMANAGED_MEMORY_SIZE, "unmanaged memory size", ObStatClassIds::RESOURCE, 140019, false, true, true) // FARM COMPAT WHITELIST
 
 //CLOG
 
@@ -915,24 +922,17 @@ STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpf
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_INCREMENTAL_DATA_USED_DISK_SIZE, "ss_local_cache incremental data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE, "ss_local_cache major macro used disk size", ObStatClassIds::CACHE, 245010, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_ADD_COUNT, "ss_micro_cache add micro_block count of common_io", ObStatClassIds::CACHE, 245011, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_GET_COUNT, "ss_micro_cache get micro_block count of common_io", ObStatClassIds::CACHE, 245012, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_NEW_ADD_COUNT, "ss_micro_cache total new added micro_block count", ObStatClassIds::CACHE, 245013, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_NEW_ADD_COUNT, "ss_micro_cache new added micro_block count of common_io", ObStatClassIds::CACHE, 245014, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_EVICT_COUNT, "ss_micro_cache total evicted micro_block count", ObStatClassIds::CACHE, 245015, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_DELETE_COUNT, "ss_micro_cache total deleted micro_block count", ObStatClassIds::CACHE, 245016, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache released phy_block count by reorgan_task", ObStatClassIds::CACHE, 245017, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOT_MICRO_LACK_COUNT, "ss_micro_cache hot micro_block lack count", ObStatClassIds::CACHE, 245018, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_IOPS, "ss_micro_cache read iops of common_io", ObStatClassIds::CACHE, 245019, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_THROUGHPUT, "ss_micro_cache read throughput of common_io", ObStatClassIds::CACHE, 245020, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_IOPS, "ss_micro_cache write iops of common_io", ObStatClassIds::CACHE, 245021, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_THROUGHPUT, "ss_micro_cache write throughput of common_io", ObStatClassIds::CACHE, 245022, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_IOPS, "ss_micro_cache read iops of prewarm_io", ObStatClassIds::CACHE, 245023, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_THROUGHPUT, "ss_micro_cache read throughput of prewarm_io", ObStatClassIds::CACHE, 245024, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_IOPS, "ss_micro_cache write iops of prewarm_io", ObStatClassIds::CACHE, 245025, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_THROUGHPUT, "ss_micro_cache write throughput of prewarm_io", ObStatClassIds::CACHE, 245026, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_CNT, "ss_micro_cache valid micro_block count", ObStatClassIds::CACHE, 245027, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_SIZE, "ss_micro_cache valid micro_block size", ObStatClassIds::CACHE, 245028, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOT_MICRO_LACK_COUNT, "ss_micro_cache hot micro_block lack count", ObStatClassIds::CACHE, 245011, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_IOPS, "ss_micro_cache read iops of common_io", ObStatClassIds::CACHE, 245012, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_READ_THROUGHPUT, "ss_micro_cache read throughput of common_io", ObStatClassIds::CACHE, 245013, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_IOPS, "ss_micro_cache write iops of common_io", ObStatClassIds::CACHE, 245014, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_COMMON_WRITE_THROUGHPUT, "ss_micro_cache write throughput of common_io", ObStatClassIds::CACHE, 245015, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_IOPS, "ss_micro_cache read iops of prewarm_io", ObStatClassIds::CACHE, 245016, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_READ_THROUGHPUT, "ss_micro_cache read throughput of prewarm_io", ObStatClassIds::CACHE, 245017, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_IOPS, "ss_micro_cache write iops of prewarm_io", ObStatClassIds::CACHE, 245018, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_PREWARM_WRITE_THROUGHPUT, "ss_micro_cache write throughput of prewarm_io", ObStatClassIds::CACHE, 245019, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_CNT, "ss_micro_cache valid micro_block count", ObStatClassIds::CACHE, 245020, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_VALID_SIZE, "ss_micro_cache valid micro_block size", ObStatClassIds::CACHE, 245021, false, true, true)
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
