@@ -12117,10 +12117,11 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   bool use_shared_hash_join = false;
   ObSQLSessionInfo *session = NULL;
   int64_t max_path_parallel = max(left_path.parallel_, right_path.parallel_);
-  can_slave_mapping =
-      path_info.force_slave_mapping_ && max_path_parallel > ObGlobalHint::DEFAULT_PARALLEL;
+  can_slave_mapping = path_info.force_slave_mapping_
+                      && max_path_parallel > ObGlobalHint::DEFAULT_PARALLEL
+                      && NESTED_LOOP_JOIN != join_algo;
   if (path_info.force_slave_mapping_ && !can_slave_mapping) {
-    OPT_TRACE("Disable slave mapping because parallel is 1");
+    OPT_TRACE("Disable slave mapping because parallel is 1 or join algorithm is NLJ");
   }
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
