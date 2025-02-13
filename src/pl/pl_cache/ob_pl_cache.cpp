@@ -468,7 +468,9 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           if (TABLE_SCHEMA == schema_obj1->schema_type_) {
             ObSEArray<ObPLTableColumnInfo, 6> column_infos;
             OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
-            OX (is_old_version = !schema_obj1->match_columns(column_infos));
+            OX (is_old_version =
+                  schema_obj1->table_name_ != schema_obj2.table_name_ ||
+                  !schema_obj1->match_columns(column_infos));
           } else if (SEQUENCE_SCHEMA == schema_obj1->schema_type_) {
             // alter sequence should not make pl cache obj expired
           } else {

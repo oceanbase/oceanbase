@@ -19,6 +19,7 @@
 #include "share/schema/ob_user_sql_service.h"
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_table_sql_service.h"
+#include "share/schema/ob_dependency_info.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #ifdef OB_BUILD_ORACLE_PL
@@ -74,7 +75,7 @@ int ObPLDDLOperator::create_routine(share::schema::ObRoutineInfo &routine_info,
       LOG_WARN("insert routine info failed", K(routine_info), K(ret));
     }
   }
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
                                 routine_info.get_schema_version(),
                                 routine_info.get_owner_id()));
 
@@ -183,7 +184,7 @@ int ObPLDDLOperator::replace_routine(share::schema::ObRoutineInfo &routine_info,
     LOG_WARN("replace routine info failed", K(routine_info), K(ret));
   }
 
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, routine_info.get_routine_id(),
                                 routine_info.get_schema_version(),
                                 routine_info.get_owner_id()));
   if (OB_SUCC(ret)) {
@@ -370,7 +371,7 @@ int ObPLDDLOperator::create_udt(share::schema::ObUDTTypeInfo &udt_info,
     }
   }
   if (OB_SUCC(ret) && !is_inner_pl_udt_id(new_udt_id)) {
-    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
                                 new_schema_version,
                                 udt_info.get_database_id()));
   }
@@ -510,7 +511,7 @@ int ObPLDDLOperator::replace_udt(share::schema::ObUDTTypeInfo &udt_info,
       }
     }
   }
-  OZ (insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
+  OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
                                 udt_info.get_schema_version(),
                                 udt_info.get_database_id()));
   if (OB_SUCC(ret)) {
@@ -788,7 +789,7 @@ int ObPLDDLOperator::create_package(const ObPackageInfo *old_package_info,
                                      new_schema_version,
                                      old_package_info->get_object_type()));
     }
-    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, new_package_info.get_package_id(),
+    OZ (ObDependencyInfo::insert_dependency_infos(trans, dep_infos, tenant_id, new_package_info.get_package_id(),
                                 new_package_info.get_schema_version(),
                                 new_package_info.get_owner_id()));
     if (OB_SUCC(ret)) {
@@ -1110,7 +1111,7 @@ int ObPLDDLOperator::create_trigger(share::schema::ObTriggerInfo &trigger_info,
                                                           trigger_info.get_trigger_id(),
                                                           trigger_info.get_schema_version(),
                                                           trigger_info.get_object_type()));
-    OZ (insert_dependency_infos(trans,
+    OZ (ObDependencyInfo::insert_dependency_infos(trans,
                                 dep_infos,
                                 trigger_info.get_tenant_id(),
                                 trigger_info.get_trigger_id(),
@@ -1491,34 +1492,6 @@ int ObPLDDLOperator::fill_trigger_id(share::schema::ObSchemaService &schema_serv
   OZ (schema_service.fetch_new_trigger_id(trigger_info.get_tenant_id(), new_trigger_id),
       trigger_info.get_trigger_name());
   OX (trigger_info.set_trigger_id(new_trigger_id));
-  return ret;
-}
-
-int ObPLDDLOperator::insert_dependency_infos(common::ObMySQLTransaction &trans,
-                                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                                              uint64_t tenant_id,
-                                              uint64_t dep_obj_id,
-                                              uint64_t schema_version,
-                                              uint64_t owner_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == owner_id
-   || OB_INVALID_ID == dep_obj_id
-   || OB_INVALID_ID == tenant_id
-   || OB_INVALID_SCHEMA_VERSION == schema_version) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
-                                                   K(owner_id), K(dep_obj_id));
-  } else {
-    for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
-      ObDependencyInfo & dep = dep_infos.at(i);
-      dep.set_tenant_id(tenant_id);
-      dep.set_dep_obj_id(dep_obj_id);
-      dep.set_dep_obj_owner_id(owner_id);
-      dep.set_schema_version(schema_version);
-      OZ (dep.insert_schema_object_dependency(trans));
-    }
-  }
   return ret;
 }
 

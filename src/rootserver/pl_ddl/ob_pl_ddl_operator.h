@@ -141,12 +141,6 @@ public:
 
   //----End of functions for managing trigger----
 private:
-  static int insert_dependency_infos(common::ObMySQLTransaction &trans,
-                                     common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                                     uint64_t tenant_id,
-                                     uint64_t dep_obj_id,
-                                     uint64_t schema_version,
-                                     uint64_t owner_id);
   int del_routines_in_package(const share::schema::ObPackageInfo &package_info,
                               common::ObMySQLTransaction &trans,
                               share::schema::ObSchemaGetterGuard &schema_guard);
