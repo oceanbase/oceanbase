@@ -680,6 +680,8 @@ int get_query_begin_version_for_mlog(
   ObDatum *datum = NULL;
   begin_version = -1;
   int64_t end_version = -1;
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+  batch_info_guard.set_batch_size(1);
   for (int64_t i = 0; OB_SUCC(ret) && i < op_filters.count(); ++i) {
     if (OB_ISNULL(e = op_filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
