@@ -65,7 +65,6 @@ private:
                                ObOpRawExpr &op_expr,
                                int64_t replaced_expr_idx);
   int demote_type_in_or_not_in(ObOpRawExpr &expr);
-  bool op_row_params_is_all_const(const ObOpRawExpr &op_row) const;
   int add_range_placement_constraint(const ObColumnRefRawExpr &column_ref,
                                      const ObConstRawExpr &const_expr,
                                      const RangePlacement rp);

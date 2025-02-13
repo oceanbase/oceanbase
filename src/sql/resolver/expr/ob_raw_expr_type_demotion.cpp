@@ -434,9 +434,8 @@ int ObRawExprTypeDemotion::demote_type_in_or_not_in(ObOpRawExpr &expr)
              OB_ISNULL(right = expr.get_param_expr(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param expr is null", K(ret), KP(left), KP(right));
-  } else if (T_OP_ROW != right->get_expr_type()
-      || !op_row_params_is_all_const(*static_cast<const ObOpRawExpr*>(right))) {
-    // if in list is not op_row and params is not all const expr, skip type demotion
+  } else if (T_OP_ROW != right->get_expr_type()) {
+    // if in list is not op_row, skip type demotion
   } else if (T_REF_COLUMN == left->get_expr_type()) {
     // col in (a, b, c)
     const ObColumnRefRawExpr *column_ref = static_cast<const ObColumnRefRawExpr*>(left);
@@ -493,24 +492,6 @@ int ObRawExprTypeDemotion::demote_type_in_or_not_in(ObOpRawExpr &expr)
     }
   }
   return ret;
-}
-
-// Check whether all parameters in the right child of the IN/NOT_IN expr are constants. No longer
-// verify the number and structural validity of the parameters here, as this has already been
-// handled in function `ObRawExprDeduceType::check_expr_param`.
-bool ObRawExprTypeDemotion::op_row_params_is_all_const(const ObOpRawExpr &op_row) const
-{
-  bool is_all_const = true;
-  for (int64_t i = 0; is_all_const && i < op_row.get_param_count(); ++i) {
-    if (OB_ISNULL(op_row.get_param_expr(i))) {
-    } else if (T_OP_ROW == op_row.get_param_expr(i)->get_expr_type()) {
-      const ObOpRawExpr *child_op_row = static_cast<const ObOpRawExpr *>(op_row.get_param_expr(i));
-      is_all_const = op_row_params_is_all_const(*child_op_row);
-    } else {
-      is_all_const = op_row.get_param_expr(i)->is_static_const_expr();
-    }
-  }
-  return is_all_const;
 }
 
 // Since plans are stored in the plan cache, for comparisons that require type demotion,
