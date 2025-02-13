@@ -50,7 +50,8 @@ TEST(OB_ADDR, TEST1)
   addr.set_ip_addr("1.0.0.1", 1);
   addr2.set_ip_addr("1.0.0.1", 2);
   EXPECT_LT(addr, addr2);
-  int ret = addr.ip_port_to_string(NULL, 10);
+  char *buf_null = NULL;
+  int ret = addr.ip_port_to_string(buf_null, 10);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   char buf[64];
   ret = addr.ip_port_to_string(buf, 0);

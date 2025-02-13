@@ -815,9 +815,9 @@ int TableAccessor::get_server_stop_status(bool &is_server_stopped)
   int64_t pos = 0;
   const char *columns[1] = {"stop_time"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  char svr_ip_string[16] = {0};
+  char svr_ip_string[MAX_IP_ADDR_LENGTH] = {0};
   int64_t stop_time = 0;
-  if (!GCTX.self_addr().ip_to_string(svr_ip_string, 16)) {
+  if (!GCTX.self_addr().ip_to_string(svr_ip_string, MAX_IP_ADDR_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(INFO, "self ip to string failed");
   } else if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where svr_ip='%s' and svr_port=%d", svr_ip_string, GCTX.self_addr().get_port()))) {

@@ -1012,11 +1012,10 @@ int ObDbmsSpace::generate_part_key_str(ObSqlString &target_str,
 {
   int ret = OB_SUCCESS;
   target_str.reset();
-  const static int MAX_IP_BUFFER_LEN = 32;
-  char host[MAX_IP_BUFFER_LEN];
+  char host[MAX_IP_ADDR_LENGTH];
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); i++) {
     host[0] = '\0';
-    if (!addr_list.at(i).ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+    if (!addr_list.at(i).ip_to_string(host, MAX_IP_ADDR_LENGTH)) {
       ret = OB_BUF_NOT_ENOUGH;
       SQL_ENG_LOG(WARN, "fail to get host.", K(ret));
     } else if (OB_FAIL(target_str.append_fmt((i == addr_list.count() - 1) ? "('%.*s', %d)" : "('%.*s', %d),",

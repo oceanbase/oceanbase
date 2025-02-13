@@ -14301,7 +14301,7 @@ def_table_schema(
     ('tid',                 'int'),
     ('tname',               'varchar:16'),
     ('status',              'varchar:32'),
-    ('wait_event',          'varchar:64'),
+    ('wait_event',          'varchar:96'),
     ('latch_wait',          'varchar:16'),
     ('latch_hold',          'varchar:256'),
     ('trace_id',            'varchar:40'),
