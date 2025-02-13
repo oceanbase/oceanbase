@@ -243,6 +243,8 @@ public:
 
   inline bool get_can_cached() { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
+  inline bool has_incomplete_rt_dep_error() { return has_incomplete_rt_dep_error_; }
+  inline void set_has_incomplete_rt_dep_error(bool has_incomplete_rt_dep_error) { has_incomplete_rt_dep_error_ = has_incomplete_rt_dep_error; }
   inline const ObIArray<ObPLFunction*> &get_routine_table() const { return routine_table_; }
   inline ObIArray<ObPLFunction*> &get_routine_table() { return routine_table_; }
   inline int set_routine_table(ObIArray<ObPLFunction*> &table)
@@ -286,6 +288,7 @@ protected:
   jit::ObLLVMDIHelper di_helper_;
 
   bool can_cached_;
+  bool has_incomplete_rt_dep_error_;
   sql::ObExecEnv exec_env_;
 
   std::pair<uint64_t, ObProcType> profiler_unit_info_;

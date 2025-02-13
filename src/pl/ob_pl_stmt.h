@@ -1760,7 +1760,8 @@ public:
       subprogram_path_(allocator),
       is_all_sql_stmt_(true),
       is_pipelined_(false),
-      has_return_(false) {}
+      has_return_(false),
+      has_incomplete_rt_dep_error_(false) {}
   virtual ~ObPLFunctionAST() {}
 
   inline void set_db_name(const common::ObString &db_name) { db_name_ = db_name; }
@@ -1799,6 +1800,8 @@ public:
 
   inline void set_return() { has_return_ = true; }
   inline bool has_return() { return has_return_; }
+  inline void set_has_incomplete_rt_dep_error(bool has_incomplete_rt_dep_error) { has_incomplete_rt_dep_error_ = has_incomplete_rt_dep_error; }
+  inline bool has_incomplete_rt_dep_error() { return has_incomplete_rt_dep_error_; }
 
   INHERIT_TO_STRING_KV("compile", ObPLCompileUnitAST, K(NULL));
 private:
@@ -1813,6 +1816,7 @@ private:
   bool is_all_sql_stmt_;
   bool is_pipelined_;
   bool has_return_;
+  bool has_incomplete_rt_dep_error_;
 };
 
 enum ObPLStmtType

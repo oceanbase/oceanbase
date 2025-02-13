@@ -1692,9 +1692,10 @@ int ObPL::execute(ObExecContext &ctx,
       CK (OB_NOT_NULL(result));
       OX (*result = local_result);
     }
-    if(OB_SUCC(ret) && lib::is_mysql_mode() && !routine.get_can_cached()) {
+
+    if(OB_SUCC(ret) && lib::is_mysql_mode()
+        && routine.has_incomplete_rt_dep_error()) {
       LOG_USER_WARN(OB_ERR_COMPILE_RESULT_NOT_ADD_CACHE, routine.get_function_name().length(), routine.get_function_name().ptr());
-      LOG_WARN("The compilation result cannot be added to the cache", K(routine.get_function_name()));
     }
 
     //当前层 pl 执行时间
@@ -2650,7 +2651,6 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
         }
         OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
-
         if (OB_SUCC(ret) && OB_ISNULL(routine)) {
           OZ (generate_pl_function(ctx, routine_id, cacheobj_guard), K(routine_id));
           OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
@@ -4735,6 +4735,7 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
       type_table_(), enum_set_ctx_(allocator_), helper_(allocator_), di_helper_(allocator_),
       can_cached_(true),
+      has_incomplete_rt_dep_error_(false),
       exec_env_(),
       profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
 {
