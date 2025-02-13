@@ -181,6 +181,7 @@ int ObExprSubstr::calc_result_length_oracle(const ObExprResType *types_array,
           if (result_type.is_varchar_or_char() && LS_BYTE == result_type.get_length_semantics()) {
             res_len *= mbmaxlen;
           }
+          res_len = MIN(res_len, INT32_MAX);
         }
       }
     }
