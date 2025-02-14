@@ -2430,6 +2430,7 @@ int ObRawExprResolverImpl::check_sys_func(ObQualifiedName &q_name, bool &is_sys_
   is_sys_func = 1 == q_name.access_idents_.count()
       && (IS_FUN_SYS_TYPE(ObExprOperatorFactory::get_type_by_name(q_name.access_idents_.at(0).access_name_))
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlerrm")
+          || 0 == q_name.access_idents_.at(0).access_name_.case_compare("sqlcode")
           || 0 == q_name.access_idents_.at(0).access_name_.case_compare("xmlagg"))
       && q_name.access_idents_.at(0).access_name_.case_compare("nextval") != 0
       && q_name.access_idents_.at(0).access_name_.case_compare("currval") != 0;
@@ -2615,6 +2616,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           ObRawExpr *func_expr = NULL;
           if (0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLERRM")) {
             OZ (process_sqlerrm_node(&func_node, func_expr));
+          } else if (0 == q_name.access_idents_.at(0).access_name_.case_compare("SQLCODE")) {
+            OZ (process_sqlcode_node(&func_node, func_expr));
           } else if (0 == q_name.access_idents_.at(0).access_name_.case_compare("json_equal")) {
             ret = OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE;
             LOG_WARN("JSON_EQUAL used outside predicate", K(ret));
@@ -6194,6 +6197,28 @@ int ObRawExprResolverImpl::process_sqlerrm_node(const ParseNode *node, ObRawExpr
     CK (OB_NOT_NULL(param_expr));
     OZ (func_expr->add_param_expr(param_expr));
   }
+  OX (expr = func_expr);
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sqlcode_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPLSQLCodeSQLErrmRawExpr *func_expr = NULL;
+  ObString name, func_name;
+  CK (OB_NOT_NULL(node));
+  OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_PL_SQLCODE_SQLERRM, func_expr));
+  CK (OB_NOT_NULL(func_expr));
+  OX (name = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_));
+  CK (OB_LIKELY(0 == name.case_compare("SQLCODE")));
+  OZ (ob_write_string(ctx_.expr_factory_.get_allocator(), N_PL_GET_SQLCODE_SQLERRM, func_name));
+  OX (func_expr->set_func_name(func_name));
+  OX (func_expr->set_is_sqlcode(true));
+  if (OB_SUCC(ret) && 1 != node->num_child_) {
+    ret = OB_INVALID_ARGUMENT_NUM;
+    LOG_WARN("invalid argument number for SQLCODE", K(node->num_child_));
+  }
+
   OX (expr = func_expr);
   return ret;
 }
