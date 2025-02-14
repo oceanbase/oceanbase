@@ -142,6 +142,9 @@ int ObExprCollectionConstruct::check_match(const ObObj &element_obj, pl::ObElemD
         OZ (pl::ObPLResolver::check_composite_compatible(ns, composite->get_id(),
                                                          desc.get_udt_id(),
                                                          is_comp));
+      } else if (pl::is_mocked_anonymous_array_id(composite->get_id())) {
+        // anonymous_array compatible check has done in resolve phase
+        is_comp = true;
       } else {
         is_comp = false;
       }
