@@ -2486,7 +2486,6 @@ int ObSQLSessionInfo::replace_user_variable(
       if (!((name[i] >= '0' && name[i] <= '9')
             || (name[i] >= 'a' && name[i] <= 'z'))) {
         is_package_variable = false;
-        LOG_INFO("===henry:not package var===", K(name));
       }
     }
   }
@@ -2578,7 +2577,7 @@ int ObSQLSessionInfo::set_package_variable(
     OZ (package_guard.init());
     if (OB_SUCC(ret)) {
       bool is_invalid = false;
-      LOG_INFO("===henry:sync package var===", K(key), K(value));
+
       if (key.prefix_match(pl::package_key_prefix_v2)) {
         bool is_oversize_value = false;
         OZ (name.decode_key(allocator, key));
@@ -2602,7 +2601,6 @@ int ObSQLSessionInfo::set_package_variable(
           } else if (match) {
             for (hash::ObHashMap<int64_t, ObPackageVarEncodeInfo>::iterator it = value_map.begin();
                   OB_SUCC(ret) && it != value_map.end(); ++it) {
-              LOG_INFO("===henry:sync package var===", K(name.package_id_), K(it->second.var_idx_), K(from_proxy));
               OZ (pl_manager.set_package_var_val(resolve_ctx,
                                                   ctx,
                                                   name.package_id_,
@@ -2612,6 +2610,7 @@ int ObSQLSessionInfo::set_package_variable(
                                                   from_proxy));
             }
           } else {
+            LOG_INFO("PLPACKAGE:disable package var", K(name.package_id_), K(from_proxy));
             OZ (ObPLPackageState::disable_expired_user_variables(*this, key));
           }
           if (value_map.created()) {

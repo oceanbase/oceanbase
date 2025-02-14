@@ -1498,20 +1498,21 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
     LOG_WARN("fail to check version", K(ret));
   } else if (!valid) {
     OZ (resolve_ctx.session_info_.del_package_state(package_id));
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !resolve_ctx.is_sync_package_var_) {
       ObString key;
       if (OB_FAIL(package_state->encode_pkg_var_key(resolve_ctx.allocator_, key))) {
         LOG_WARN("fail to encode pkg var key", K(ret));
       } else if (OB_FAIL(ObPLPackageState::disable_expired_user_variables(resolve_ctx.session_info_, key))) {
         LOG_WARN("fail to disable expired usr var", K(ret));
-      } else {
-        LOG_INFO("package state expired, try to reconstruct it", K(package_id));
-        package_state->reset(&(resolve_ctx.session_info_));
-        package_state->~ObPLPackageState();
-        session_allocator.free(package_state);
-        package_state = NULL;
-        need_new = true;
       }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("PLPACKAGE:package state expired, try to reconstruct it", K(package_id), K(resolve_ctx.is_sync_package_var_));
+      package_state->reset(&(resolve_ctx.session_info_));
+      package_state->~ObPLPackageState();
+      session_allocator.free(package_state);
+      package_state = NULL;
+      need_new = true;
     }
   }
   if (OB_SUCC(ret) && need_new) {

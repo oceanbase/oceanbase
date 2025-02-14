@@ -338,9 +338,7 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     if (OB_FAIL(execute_init_routine(resolve_ctx.allocator_, exec_ctx))) {
       LOG_WARN("execute init routine failed", K(ret));
     }
-    LOG_INFO("===henry:execute init routine===", K(package_state.get_package_id()), K(lbt()));
   }
-  LOG_INFO("===henry:init package state===", K(lbt()));
   return ret;
 }
 
