@@ -3701,7 +3701,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
             LOG_WARN("fail to get base cid", K(ret));
           } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
             // do nothing
-          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.auto_inc_expr_))) {
+          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.ins_auto_inc_expr_))) {
             LOG_WARN("fail to cg auto_inc_expr", K(ret));
           } else {
             founded = true;

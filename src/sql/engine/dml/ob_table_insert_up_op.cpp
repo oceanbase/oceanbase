@@ -43,7 +43,8 @@ OB_DEF_SERIALIZE(ObTableInsertUpSpec)
   OB_UNIS_ENCODE(conflict_checker_ctdef_);
   OB_UNIS_ENCODE(all_saved_exprs_);
   OB_UNIS_ENCODE(has_global_unique_index_);
-  OB_UNIS_ENCODE(auto_inc_expr_);
+  OB_UNIS_ENCODE(ins_auto_inc_expr_);
+  OB_UNIS_ENCODE(upd_auto_inc_expr_);
   return ret;
 }
 
@@ -66,7 +67,8 @@ OB_DEF_DESERIALIZE(ObTableInsertUpSpec)
   OB_UNIS_DECODE(conflict_checker_ctdef_);
   OB_UNIS_DECODE(all_saved_exprs_);
   OB_UNIS_DECODE(has_global_unique_index_);
-  OB_UNIS_DECODE(auto_inc_expr_);
+  OB_UNIS_DECODE(ins_auto_inc_expr_);
+  OB_UNIS_DECODE(upd_auto_inc_expr_);
   return ret;
 }
 
@@ -87,7 +89,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertUpSpec)
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
   OB_UNIS_ADD_LEN(has_global_unique_index_);
-  OB_UNIS_ADD_LEN(auto_inc_expr_);
+  OB_UNIS_ADD_LEN(ins_auto_inc_expr_);
+  OB_UNIS_ADD_LEN(upd_auto_inc_expr_);
   return len;
 }
 
@@ -502,14 +505,14 @@ int ObTableInsertUpOp::do_insert_up_cache()
 int ObTableInsertUpOp::guarantee_last_insert_id()
 {
   int ret = OB_SUCCESS;
-  if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
+  if (!has_guarantee_last_insert_id_ && OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
     bool is_zero = false;
     uint64_t casted_value = 0;
     ObDatum *auto_inc_id_datum = nullptr;
     ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-    if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+    if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
       LOG_WARN("eval auto_inc_expr failed", K(ret));
-    } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.auto_inc_expr_,
+    } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
                                                             auto_inc_id_datum,
                                                             is_zero,
                                                             casted_value))) {
@@ -528,14 +531,14 @@ int ObTableInsertUpOp::get_last_insert_id_in_try_ins(int64_t &last_insert_id)
   ObDatum *auto_inc_id_datum = nullptr;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   if (!record_last_insert_id_try_ins_ && !has_guarantee_last_insert_id_) {
-    if (OB_NOT_NULL(MY_SPEC.auto_inc_expr_)) {
+    if (OB_NOT_NULL(MY_SPEC.ins_auto_inc_expr_)) {
       bool is_zero = false;
       uint64_t casted_value = 0;
       ObDatum *auto_inc_id_datum = nullptr;
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-      if (OB_FAIL(MY_SPEC.auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
+      if (OB_FAIL(MY_SPEC.ins_auto_inc_expr_->eval(eval_ctx_, auto_inc_id_datum))) {
         LOG_WARN("eval auto_inc_expr failed", K(ret));
-      } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.auto_inc_expr_,
+      } else if (OB_FAIL(ObExprAutoincNextval::get_uint_value(*MY_SPEC.ins_auto_inc_expr_,
                                                               auto_inc_id_datum,
                                                               is_zero,
                                                               casted_value))) {
