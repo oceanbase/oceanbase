@@ -169,8 +169,8 @@ struct BlockNumStat
   }
   int64_t tab_macro_cnt_;
   int64_t tab_micro_cnt_;
-  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_macro_cnt_arr_;
-  ObSEArray<int64_t, 1, common::ModulePageAllocator, true> cg_micro_cnt_arr_;
+  ObSEArray<int64_t, 32, common::ModulePageAllocator, true> cg_macro_cnt_arr_;
+  ObSEArray<int64_t, 32, common::ModulePageAllocator, true> cg_micro_cnt_arr_;
   int64_t sstable_row_cnt_;
   int64_t memtable_row_cnt_;
   TO_STRING_KV(K(tab_macro_cnt_),

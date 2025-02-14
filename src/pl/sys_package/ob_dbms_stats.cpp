@@ -7780,6 +7780,7 @@ int ObDbmsStats::gather_table_stats_by_parts(ObExecContext &ctx,
     // init
     ObTableStatParam temp_stat_param;
     temp_stat_param.assign(stat_param);
+    temp_stat_param.no_invalidate_ = true;
     if (OB_FAIL(construct_part_to_subpart_map(stat_param,
                                               part_id_to_approx_part_map,
                                               part_id_to_subpart_map))) {
@@ -7957,20 +7958,29 @@ int ObDbmsStats::do_batch_gather_table_stats(ObExecContext &ctx,
                                                         duration_time,
                                                         temp_stat_param.duration_time_))) {
     LOG_WARN("failed to get valid duration time", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx,
-                                                             temp_stat_param,
-                                                             running_monitor))) {
-    LOG_WARN("failed to gather table stats", K(ret), K(temp_stat_param));
-    int temp_ret = ret;
-    if (OB_FAIL(collect_executed_part_ids(temp_stat_param, failed_part_ids))) {
-       LOG_WARN("collect executed part-ids failed", K(ret), K(temp_stat_param));
-    }
-    ret = temp_ret;
   } else {
-    if (OB_FAIL(collect_executed_part_ids(temp_stat_param, succ_part_and_subpart_ids))) {
-       LOG_WARN("collect executed part-ids failed", K(ret));
+    lib::ContextParam param;
+    param.set_mem_attr(ctx.get_my_session()->get_rpc_tenant_id(), "StatsCollect", ObCtxIds::DEFAULT_CTX_ID)
+        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
+        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+    CREATE_WITH_TEMP_CONTEXT(param)
+    {
+      ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_my_session()->get_effective_tenant_id());
+      temp_stat_param.allocator_ = &tmp_alloc;
+      if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, temp_stat_param, running_monitor))) {
+        LOG_WARN("failed to gather table stats", K(ret), K(temp_stat_param));
+        int temp_ret = ret;
+        if (OB_FAIL(collect_executed_part_ids(temp_stat_param, failed_part_ids))) {
+          LOG_WARN("collect executed part-ids failed", K(ret), K(temp_stat_param));
+        }
+        ret = temp_ret;
+      } else {
+        if (OB_FAIL(collect_executed_part_ids(temp_stat_param, succ_part_and_subpart_ids))) {
+          LOG_WARN("collect executed part-ids failed", K(ret));
+        }
+        ret = OB_SUCCESS;
+      }
     }
-    ret = OB_SUCCESS;
   }
 
   if (OB_SUCC(ret)) {
@@ -7991,6 +8001,8 @@ int ObDbmsStats::do_batch_gather_table_stats(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && OB_FAIL(succed_part_ids.assign(temp_stat_param.no_regather_partition_ids_))) {
       LOG_WARN("failed to assign succed_part_ids ", K(ret));
+    } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), temp_stat_param, &running_monitor))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {
       temp_stat_param.subpart_infos_.reset();
       temp_stat_param.part_infos_.reset();
