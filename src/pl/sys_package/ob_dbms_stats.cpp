@@ -3421,10 +3421,10 @@ int ObDbmsStats::update_stat_cache(const uint64_t tenant_id,
     if (OB_SUCC(ret) && !failed_server_arr.empty() && running_monitor != NULL) {
       ObSqlString tmp_str;
       char *buf = NULL;
-      if (failed_server_arr.count() * (common::MAX_IP_ADDR_LENGTH + 1) <= common::MAX_VALUE_LENGTH) {
+      if (failed_server_arr.count() * (common::MAX_IP_PORT_LENGTH + 1) <= common::MAX_VALUE_LENGTH) {
         for (int64_t i = 0; OB_SUCC(ret) && i < failed_server_arr.count(); ++i) {
-          char svr_buf[common::MAX_IP_ADDR_LENGTH] = {0};
-          failed_server_arr.at(i).get_addr().to_string(svr_buf, common::MAX_IP_ADDR_LENGTH);
+          char svr_buf[common::MAX_IP_PORT_LENGTH] = {0};
+          failed_server_arr.at(i).get_addr().to_string(svr_buf, common::MAX_IP_PORT_LENGTH);
           if (OB_FAIL(tmp_str.append_fmt("%s%s", svr_buf, i == 0 ? "" : ","))) {
             LOG_WARN("failed to append fmt", K(ret));
           }

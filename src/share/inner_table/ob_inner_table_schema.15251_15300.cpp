@@ -10927,7 +10927,7 @@ int ObInnerTableSchema::all_virtual_thread_ora_schema(ObTableSchema &table_schem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      64, //column_length
+      96, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable

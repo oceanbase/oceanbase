@@ -782,12 +782,11 @@ int ObLogRestoreProxyUtil::detect_tenant_mode_(common::sqlclient::ObMySQLServerP
         if (OB_FAIL(server_provider->get_server(idx, server))) {
           LOG_WARN("[RESTORE PROXY] failed to get server", KR(ret), K(idx), K(svr_cnt));
         } else {
-          const static int MAX_IP_BUFFER_LEN = 32;
-          char host[MAX_IP_BUFFER_LEN] = { 0 };
+          char host[MAX_IP_ADDR_LENGTH] = { 0 };
           const char *default_db_name = "";
           int32_t port = server.get_port();
 
-          if (!server.ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+          if (!server.ip_to_string(host, MAX_IP_ADDR_LENGTH)) {
             ret = OB_BUF_NOT_ENOUGH;
             LOG_WARN("fail to get host.", K(server), K(ret));
           } else if (NULL == (mysql = mysql_init(NULL))) {

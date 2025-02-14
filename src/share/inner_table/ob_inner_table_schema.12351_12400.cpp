@@ -6254,7 +6254,7 @@ int ObInnerTableSchema::all_virtual_thread_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      64, //column_length
+      96, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

@@ -216,13 +216,12 @@ int ObServerTraceMap::get_rpc_port_status(const ObAddr &addr, const int64_t sql_
   int ret = OB_SUCCESS;
   bool found = false;
   for (int64_t i = 0; (i < server_info_arr_.count()) && !found; i++) {
-    const static int MAX_IP_BUFFER_LEN = 32;
-    char server_ip_buf[MAX_IP_BUFFER_LEN];
+    char server_ip_buf[MAX_IP_ADDR_LENGTH];
     server_ip_buf[0] = '\0';
-    char addr_buf[MAX_IP_BUFFER_LEN];
+    char addr_buf[MAX_IP_ADDR_LENGTH];
     addr_buf[0] = '\0';
-    server_info_arr_.at(i).get_server().ip_to_string(server_ip_buf, MAX_IP_BUFFER_LEN);
-    addr.ip_to_string(addr_buf, MAX_IP_BUFFER_LEN);
+    server_info_arr_.at(i).get_server().ip_to_string(server_ip_buf, MAX_IP_ADDR_LENGTH);
+    addr.ip_to_string(addr_buf, MAX_IP_ADDR_LENGTH);
     if (0 == strcmp(server_ip_buf, addr_buf) && server_info_arr_.at(i).get_sql_port() == sql_port) {
       status = server_info_arr_.at(i);
       rpc_port = server_info_arr_.at(i).get_server().get_port();

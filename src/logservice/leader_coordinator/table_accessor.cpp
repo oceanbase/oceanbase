@@ -607,11 +607,11 @@ int TableAccessor::get_all_ls_election_reference_info(common::ObIArray<LsElectio
         COORDINATOR_LOG_(WARN, "push back new election reference info failed");
       } else {
         LsElectionReferenceInfo &back = all_ls_election_reference_info.at(all_ls_election_reference_info.count() - 1);
-        char ip_port_string[32] = {0};
+        char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
         back.element<0>() = lines[idx].element<0>();// ls_id
         if (CLICK_FAIL(calculate_zone_priority_score(lines[idx].element<1>()/*zone_priority*/, zone_name_holder, back.element<1>()))) {// self server score
           COORDINATOR_LOG_(WARN, "get self zone score failed");
-        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 32))) {
+        } else if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
           COORDINATOR_LOG_(WARN, "ip port to string failed");
         } else {
           back.element<2>() = (lines[idx].element<2>().get_ob_string().case_compare(ip_port_string) == 0);// is_manual_leader
@@ -834,9 +834,9 @@ int TableAccessor::get_server_stop_status(bool &is_server_stopped)
   int64_t pos = 0;
   const char *columns[1] = {"stop_time"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  char svr_ip_string[16] = {0};
+  char svr_ip_string[MAX_IP_ADDR_LENGTH] = {0};
   int64_t stop_time = 0;
-  if (!GCTX.self_addr().ip_to_string(svr_ip_string, 16)) {
+  if (!GCTX.self_addr().ip_to_string(svr_ip_string, MAX_IP_ADDR_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(INFO, "self ip to string failed");
   } else if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where svr_ip='%s' and svr_port=%d", svr_ip_string, GCTX.self_addr().get_port()))) {
