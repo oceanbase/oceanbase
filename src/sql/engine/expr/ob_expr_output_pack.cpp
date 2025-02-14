@@ -207,9 +207,10 @@ int ObExprOutputPack::encode_cell(const ObObj &cell, const common::ObIArray<ObFi
 {
   int ret = OB_SUCCESS;
   const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-  ret = ObSMUtils::cell_str(buf, len, cell, encode_type, pos, column_num, bitmap,
-                            dtc_params, &param_fields.at(column_num), schema_guard,
-                            session->get_effective_tenant_id());
+  CK (OB_NOT_NULL(session));
+  OZ (ObSMUtils::cell_str(buf, len, cell, encode_type, pos, column_num, bitmap,
+                            dtc_params, &param_fields.at(column_num), *session, schema_guard,
+                            session->get_effective_tenant_id()));
   return ret;
 }
 

@@ -18,6 +18,7 @@
 #include "observer/mysql/obmp_stmt_execute.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "observer/mysql/ob_query_driver.h"
 #include "pl/ob_pl_dependency_util.h"
 namespace oceanbase
 {
@@ -993,6 +994,7 @@ int ObPLDataType::deserialize(
 // -------------------- End for Package Session Variable Serialize/DeSerialize ------
 
 int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const sql::ObSQLSessionInfo &session,
                             const ObTimeZoneInfo *tz_info,
                             MYSQL_PROTOCOL_TYPE type,
                             char *&src,
@@ -1022,7 +1024,19 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to serialize pl data type, data type inconsistent with pl type",
                  K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
-      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, NULL))) {
+      } else if (obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry()) {
+        ObArenaAllocator local_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        if (OB_FAIL(ObQueryDriver::process_lob_locator_results(obj,
+                                                               session.is_client_use_lob_locator(),
+                                                               session.is_client_support_lob_locatorv2(),
+                                                               &local_allocator,
+                                                               &session,
+                                                               NULL))) {
+          LOG_WARN("failed to process lob locator_results", K(ret), K(obj), K(session.is_client_use_lob_locator()), K(session.is_client_support_lob_locatorv2()));
+        } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
+          LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
       } else {
         LOG_DEBUG("success serialize pl data type", K(*this), K(obj),
@@ -1048,7 +1062,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user type is null", K(ret), K(user_type));
-    } else if (OB_FAIL(user_type->serialize(schema_guard, tz_info, type, src, dst, dst_len, dst_pos))) {
+    } else if (OB_FAIL(user_type->serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos))) {
       LOG_WARN("failed to deserialize user type", K(ret));
     }
   }

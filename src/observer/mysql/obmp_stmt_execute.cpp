@@ -422,6 +422,7 @@ int ObMPStmtExecute::response_result_for_arraybinding(
         ObSMRow sm_row(BINARY,
                 *arraybinding_row_,
                 dtc_params,
+                session_info,
                 arraybinding_columns_,
                 ctx_.schema_guard_,
                 session_info.get_effective_tenant_id());

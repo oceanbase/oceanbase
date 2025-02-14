@@ -360,6 +360,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
       ObSMRow sm_row(protocol_type,
                      *row,
                      dtc_params,
+                     *tmp_session,
                      result.get_field_columns(),
                      ctx_.schema_guard_,
                      tmp_session->get_effective_tenant_id());
