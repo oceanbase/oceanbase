@@ -658,6 +658,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
                                          lib::Worker::CompatMode::MYSQL;
       empty_session.set_compatibility_mode(static_cast<ObCompatibilityMode>(compat_mode));
       empty_session.set_sql_mode(ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(compat_mode)));
+      empty_session.set_inner_session();
       if (is_oracle_mode) {
         uint64_t database_id = OB_INVALID_ID;
         if (OB_FAIL(schema_guard_.get_database_id(tenant_id, database_name, database_id))) {

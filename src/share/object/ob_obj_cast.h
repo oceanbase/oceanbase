@@ -65,6 +65,7 @@ namespace common
 #define CM_GEOMETRY_TYPE_RESERVED4       (1ULL << 15)
 #define CM_GEOMETRY_TYPE_RESERVED5       (1ULL << 16)
 #define CM_SQL_TO_JSON_SCALAR            (1ULL << 17)
+#define CM_ORA_SYS_VIEW_CAST             (1ULL << 23)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -143,6 +144,7 @@ typedef uint64_t ObCastMode;
   ((mode) &= ~(CM_CS_LEVEL_MASK << CM_CS_LEVEL_SHIFT), \
   (mode) |= ((level & CM_CS_LEVEL_MASK) << CM_CS_LEVEL_SHIFT))
 #define CM_IS_ADD_ZEROFILL(mode)                 ((CM_ADD_ZEROFILL & (mode)) != 0)
+#define CM_IS_ORA_SYS_VIEW_CAST(mode)            ((CM_ORA_SYS_VIEW_CAST & (mode)) != 0)
 struct ObObjCastParams
 {
   // add params when necessary
