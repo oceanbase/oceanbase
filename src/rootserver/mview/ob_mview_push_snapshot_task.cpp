@@ -159,6 +159,7 @@ void ObMViewPushSnapshotTask::runTimerTask()
   }
 }
 
+ERRSIM_POINT_DEF(ERRSIM_MVIEW_CHECK_SPACE_OCCUPY);
 int ObMViewPushSnapshotTask::check_space_occupy_(bool &space_danger)
 {
   int ret = OB_SUCCESS;
@@ -190,7 +191,16 @@ int ObMViewPushSnapshotTask::check_space_occupy_(bool &space_danger)
       }
     }
   }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = ERRSIM_MVIEW_CHECK_SPACE_OCCUPY ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim mview check space occupy", K(ret));
+      space_danger = true;
+      ret = OB_SUCCESS;
+    }
+  }
+#endif
   return ret;
 }
 
