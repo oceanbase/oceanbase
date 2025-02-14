@@ -2497,6 +2497,16 @@ ERRSIM_DEF_INT(errsim_ls_restore_status, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_INT(errsim_ls_backup_create_task_failed_round, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "Control task creation failures in a specific round."
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_ls_backup_push_child_dag_failed_round, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "Control pushing child dag failures in a specific round."
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_auth_switch, OB_CLUSTER_PARAMETER, "True",
          "Control whether to use auth_switch.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

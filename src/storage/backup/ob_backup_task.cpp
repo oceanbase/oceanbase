@@ -49,7 +49,8 @@ namespace backup {
 #endif
 ERRSIM_POINT_DEF(EN_LS_BACKUP_FAILED);
 ERRSIM_POINT_DEF(EN_BACKUP_DATA_TASK_FAILED);
-
+ERRSIM_POINT_DEF(EN_CREATE_FIRST_TASK_FAILED);
+ERRSIM_POINT_DEF(EN_PUSH_CHILD_DAG_FAILED);
 static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
@@ -4563,6 +4564,7 @@ int ObLSBackupPrepareTask::process()
   for (int i = 0; OB_SUCC(ret) && i < concurrency_; ++i) {
     ObPrefetchBackupInfoDag *child_dag = NULL;
     int64_t prefetch_task_id = 0;
+    bool add_dag_success = false;
     if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
@@ -4583,6 +4585,11 @@ int ObLSBackupPrepareTask::process()
                    *index_kv_cache_,
                    rebuild_dag))) {
       LOG_WARN("failed to init child dag", K(ret), K(param_));
+#ifdef ERRSIM
+    } else if (GCONF.errsim_ls_backup_create_task_failed_round == i
+                  && OB_FAIL(EN_CREATE_FIRST_TASK_FAILED ? : OB_SUCCESS)) {
+      FLOG_INFO("fake EN_CREATE_FIRST_TASK_FAILED");
+#endif
     } else if (OB_FAIL(child_dag->create_first_task())) {
       LOG_WARN("failed to create first task for child dag", K(ret), KPC(child_dag));
     } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*child_dag))) {
@@ -4592,7 +4599,6 @@ int ObLSBackupPrepareTask::process()
     } else if (OB_FAIL(child_dag->add_child_without_inheritance(*rebuild_dag))) {
       LOG_WARN("failed to add child without inheritance", K(ret), KPC(rebuild_dag));
     } else {
-      bool add_dag_success = false;
 #ifdef ERRSIM
       if (OB_SUCC(ret) && 0 != i) {
         ret = OB_E(EventTable::EN_ADD_BACKUP_PREFETCH_DAG_FAILED) OB_SUCCESS;
@@ -4607,16 +4613,23 @@ int ObLSBackupPrepareTask::process()
         } else {
           LOG_WARN("may exist same dag", K(ret), K(i));
         }
+      } else if (FALSE_IT(add_dag_success = true)) {
+#ifdef ERRSIM
+      } else if (GCONF.errsim_ls_backup_push_child_dag_failed_round == i
+                    && OB_FAIL(EN_PUSH_CHILD_DAG_FAILED ? : OB_SUCCESS)) {
+      FLOG_INFO("fake EN_PUSH_CHILD_DAG_FAILED");
+#endif
       } else if (OB_FAIL(success_add_prefetch_dags.push_back(child_dag))) {
         LOG_WARN("failed to push back", K(ret), KP(child_dag));
       } else {
         LOG_INFO("success to alloc prefetch backup info dag", K(ret), K(i));
-        add_dag_success = true;
       }
-      if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
-        if (!add_dag_success) {
-          scheduler->free_dag(*child_dag);
-        }
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
+      if (!add_dag_success) {
+        scheduler->free_dag(*child_dag);
+      } else {
+        scheduler->cancel_dag(child_dag);
       }
     }
   }
