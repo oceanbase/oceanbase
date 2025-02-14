@@ -198,7 +198,7 @@ int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
   is_inited_ = false;
   // wait until ls_freeze finish
   while(!ls_freeze_finished_) {
-    ob_usleep(1000 * 1000);
+    ob_throttle_usleep(1000 * 1000, 0, ls_->get_ls_id().id());
     if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
       STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ls freeze cost too much time", K(ls_->get_ls_id()));
       ret = OB_ERR_UNEXPECTED;
@@ -463,7 +463,7 @@ void ObDataCheckpoint::ls_frozen_to_active_(int64_t &last_time)
     }
 
     if (!ls_frozen_list_is_empty) {
-      ob_usleep(LOOP_TRAVERSAL_INTERVAL_US);
+      ob_throttle_usleep(LOOP_TRAVERSAL_INTERVAL_US, ret, ls_->get_ls_id().id());
       if (task_reach_time_interval(3 * 1000 * 1000, last_time)) {
         STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cost too much time in ls_frozen_list_", K(ret), K(ls_->get_ls_id()));
         RLOCK(LS_FROZEN);
@@ -523,7 +523,7 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
     }
 
     if (!ls_frozen_list_is_empty) {
-      ob_usleep(LOOP_TRAVERSAL_INTERVAL_US);
+      ob_throttle_usleep(LOOP_TRAVERSAL_INTERVAL_US, ret, ls_->get_ls_id().id());
       if (task_reach_time_interval(3 * 1000 * 1000, last_time)) {
         STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cost too much time in ls_frozen_list_", K(ls_->get_ls_id()));
         RLOCK(LS_FROZEN);
@@ -533,7 +533,7 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
       break;
     }
     if (OB_EAGAIN == ret) {
-      ob_usleep(100000);
+      ob_throttle_usleep(100000, ret, ls_->get_ls_id().id());
     }
   } while (true);
 

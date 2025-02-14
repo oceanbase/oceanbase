@@ -139,7 +139,7 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
       if (OB_FAIL(c->get_base_summary().get_tenant_add_stats(
               tenant_id, diag_info.get_add_stat_stats()))) {
         LOG_WARN("failed to get base summary", K(ret));
-      } else if (c->get_base_summary().get_tenant_event(tenant_id, diag_info.get_event_stats())) {
+      } else if (OB_FAIL(c->get_base_summary().get_tenant_event(tenant_id, diag_info.get_event_stats()))) {
         LOG_WARN("failed to get base summary", K(ret));
         // latch stat only record in global stat.
         // } else if (c->get_base_summary().get_tenant_latch_stat(
@@ -158,10 +158,10 @@ int ObDiagnosticInfoUtil::get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenant
       if (OB_FAIL(c->get_base_summary().get_tenant_add_stats(
               tenant_id, diag_info.get_add_stat_stats()))) {
         LOG_WARN("failed to get base summary", K(ret));
-      } else if (c->get_base_summary().get_tenant_event(tenant_id, diag_info.get_event_stats())) {
+      } else if (OB_FAIL(c->get_base_summary().get_tenant_event(tenant_id, diag_info.get_event_stats()))) {
         LOG_WARN("failed to get base summary", K(ret));
-      } else if (c->get_base_summary().get_tenant_latch_stat(
-                     tenant_id, diag_info.get_latch_stats())) {
+      } else if (OB_FAIL(c->get_base_summary().get_tenant_latch_stat(
+                     tenant_id, diag_info.get_latch_stats()))) {
         LOG_WARN("failed to get base summary", K(ret));
       }
     }

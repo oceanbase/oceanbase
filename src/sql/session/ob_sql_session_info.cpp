@@ -3364,8 +3364,12 @@ int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   MEMSET(module_buf_, 0x00, common::OB_MAX_MOD_NAME_LENGTH);
   MEMCPY(module_buf_, mod.ptr(), size);
   client_app_info_.module_name_.assign(&module_buf_[0], size);
-  MEMCPY(ObActiveSessionGuard::get_stat().module_, mod.ptr(),
-      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().module_)), size));
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().module_, mod.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().module_)), size));
+    di->get_ash_stat().has_user_module_ = true;
+  }
   return ret;
 }
 
@@ -3375,8 +3379,12 @@ int ObSQLSessionInfo::set_action_name(const common::ObString &act) {
   MEMSET(action_buf_, 0x00, common::OB_MAX_ACT_NAME_LENGTH);
   MEMCPY(action_buf_, act.ptr(), size);
   client_app_info_.action_name_.assign(&action_buf_[0], size);
-  MEMCPY(ObActiveSessionGuard::get_stat().action_, act.ptr(),
-      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().action_)), size));
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().action_, act.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().action_)), size));
+    di->get_ash_stat().has_user_action_ = true;
+  }
   return ret;
 }
 
@@ -3386,8 +3394,11 @@ int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   MEMSET(client_info_buf_, 0x00, common::OB_MAX_CLIENT_INFO_LENGTH);
   MEMCPY(client_info_buf_, client_info.ptr(), size);
   client_app_info_.client_info_.assign(&client_info_buf_[0], size);
-  MEMCPY(ObActiveSessionGuard::get_stat().client_id_, client_info.ptr(),
-      min(static_cast<int64_t>(sizeof(ObActiveSessionGuard::get_stat().client_id_)), size));
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    MEMCPY(di->get_ash_stat().client_id_, client_info.ptr(),
+        min(static_cast<int64_t>(sizeof(di->get_ash_stat().client_id_)), size));
+  }
   return ret;
 }
 
@@ -4945,7 +4956,10 @@ int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRec
   if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
     LOG_WARN("failed to assign executing sql stat record");
   } else {
-    ObLocalDiagnosticInfo::get()->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().record_cur_query_start_ts(get_is_in_retry());
+    }
   }
   return ret;
 }
@@ -5011,32 +5025,30 @@ int ObSQLSessionInfo::check_service_name_and_failover_mode() const
 
 void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 {
-  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-    ObBasicSessionInfo::set_ash_stat_value(ash_stat);
-    if (!get_module_name().empty()) {
-      int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
-                        ? ASH_MODULE_STR_LEN
-                        : get_module_name().length();
-      MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
-      ash_stat.module_[size] = '\0';
-    }
+  ObBasicSessionInfo::set_ash_stat_value(ash_stat);
+  if (!get_module_name().empty()) {
+    int64_t size = get_module_name().length() > ASH_MODULE_STR_LEN
+                      ? ASH_MODULE_STR_LEN
+                      : get_module_name().length();
+    MEMCPY(ash_stat.module_, get_module_name().ptr(), size);
+    ash_stat.module_[size] = '\0';
+  }
 
-    // fill action for user session
-    if (!get_action_name().empty()) {
-      int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
-                        ? ASH_ACTION_STR_LEN
-                        : get_action_name().length();
-      MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
-      ash_stat.action_[size] = '\0';
-    }
+  // fill action for user session
+  if (!get_action_name().empty()) {
+    int64_t size = get_action_name().length() > ASH_ACTION_STR_LEN
+                      ? ASH_ACTION_STR_LEN
+                      : get_action_name().length();
+    MEMCPY(ash_stat.action_, get_action_name().ptr(), size);
+    ash_stat.action_[size] = '\0';
+  }
 
-    // fill client id for user session
-    if (!get_client_identifier().empty()) {
-      int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
-                        ? ASH_CLIENT_ID_STR_LEN
-                        : get_client_identifier().length();
-      MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
-      ash_stat.client_id_[size] = '\0';
-    }
+  // fill client id for user session
+  if (!get_client_identifier().empty()) {
+    int64_t size = get_client_identifier().length() > ASH_CLIENT_ID_STR_LEN
+                      ? ASH_CLIENT_ID_STR_LEN
+                      : get_client_identifier().length();
+    MEMCPY(ash_stat.client_id_, get_client_identifier().ptr(), size);
+    ash_stat.client_id_[size] = '\0';
   }
 }

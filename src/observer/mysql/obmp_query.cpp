@@ -509,7 +509,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.set_curr_trans_last_stmt_end_time(0);
 
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -842,7 +841,9 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
     if (enable_perf_event) {
       audit_record.exec_record_.record_end();
-      record_stat(stmt_type, exec_end_timestamp_, session, ret);
+      bool is_rollback = (0 == sql.case_compare("rollback"));
+      bool is_commit = (0 == sql.case_compare("commit"));
+      record_stat(stmt_type, exec_end_timestamp_, session, ret, is_commit, is_rollback);
       audit_record.stmt_type_ = stmt_type;
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
       audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
@@ -1189,7 +1190,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       if (enable_perf_event) {
         audit_record.exec_record_.record_end();
-        record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret);
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret, result.is_commit_cmd(), result.is_rollback_cmd());
         audit_record.stmt_type_ = result.get_stmt_type();
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
@@ -1704,7 +1705,9 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
 inline void ObMPQuery::record_stat(const stmt::StmtType type,
                                    const int64_t end_time,
                                    const sql::ObSQLSessionInfo& session,
-                                   const int64_t ret) const
+                                   const int64_t ret,
+                                   const bool is_commit_cmd,
+                                   const bool is_rollback_cmd) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
@@ -1733,6 +1736,26 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
       ADD_STMT_STAT(REPLACE);
       ADD_STMT_STAT(UPDATE);
       ADD_STMT_STAT(DELETE);
+      case stmt::T_END_TRANS:
+        if (is_commit_cmd) {
+          EVENT_ADD(SQL_COMMIT_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_COMMIT_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        } else if (is_rollback_cmd) {
+          EVENT_ADD(SQL_ROLLBACK_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_ROLLBACK_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
+        }
+        break;
+
     default:
     {
       EVENT_ADD(SQL_OTHER_TIME, time_cost);

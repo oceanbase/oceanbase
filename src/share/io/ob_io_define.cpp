@@ -309,6 +309,7 @@ ObIOCallback::~ObIOCallback()
 
 int ObIOCallback::process(const char *data_buffer, const int64_t size)
 {
+  ObDIActionGuard ag(get_cb_name());
   lib::set_compat_mode(compat_mode_);
   return inner_process(data_buffer, size);
 }
@@ -1020,8 +1021,7 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     LOG_WARN("Invalid argument, ", K(timeout_ms), K(ret));
   } else if (!req_->is_finished_) {
     ObWaitEventGuard wait_guard(req_->io_info_.flag_.get_wait_event(),
-                                timeout_ms,
-                                req_->io_info_.size_);
+                                timeout_ms);
     const int64_t data_storage_timeout = OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_;
     const int64_t real_wait_timeout = min(data_storage_timeout, timeout_ms);
 
@@ -1055,6 +1055,11 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     } else {
       ret = OB_TIMEOUT;
     }
+    ObLocalDiagnosticInfo::set_io_time(
+      get_io_interval(req_->time_log_.dequeue_ts_, req_->time_log_.enqueue_ts_),
+      get_io_interval(req_->time_log_.return_ts_, req_->time_log_.submit_ts_),
+      get_io_interval(req_->time_log_.callback_finish_ts_, req_->time_log_.callback_enqueue_ts_)
+    );
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(req_->ret_code_.io_ret_)) {
@@ -1065,7 +1070,6 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     ret = OB_TIMEOUT;
   }
   estimate();
-
   return ret;
 }
 
@@ -1082,7 +1086,6 @@ void ObIOHandle::estimate()
     const int64_t callback_process_delay = get_io_interval(time_log.callback_finish_ts_, time_log.callback_dequeue_ts_);
     const int64_t finish_notify_delay = get_io_interval(time_log.end_ts_, max(time_log.callback_finish_ts_, time_log.return_ts_));
     const int64_t request_delay = get_io_interval(time_log.end_ts_, time_log.begin_ts_);
-    oceanbase::common::ObTenantStatEstGuard guard(req_->get_tenant_id());
     if (req_->io_info_.flag_.is_read()) {
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);
       EVENT_ADD(ObStatEventIds::IO_READ_BYTES, req_->io_info_.size_);

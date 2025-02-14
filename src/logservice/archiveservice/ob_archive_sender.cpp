@@ -234,6 +234,7 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask *task)
 void ObArchiveSender::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSender thread start", K_(tenant_id));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSender");
   lib::set_thread_name("ArcSender");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -261,7 +262,7 @@ void ObArchiveSender::do_thread_task_()
       ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
     const int64_t sleep_time = cal_thread_run_interval();
-    usleep(sleep_time);
+    ob_usleep(sleep_time, true /*idle sleep*/);
   }
 
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {

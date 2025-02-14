@@ -155,7 +155,6 @@ int ObPxTaskProcess::process()
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-    ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
     session->get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
@@ -170,7 +169,10 @@ int ObPxTaskProcess::process()
     arg_.exec_ctx_->set_px_sqc_id(arg_.task_.get_sqc_id());
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-    session->set_ash_stat_value(ObActiveSessionGuard::get_stat());
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      session->set_ash_stat_value(di->get_ash_stat());
+    }
     if (enable_perf_event) {
       exec_record.record_start();
     }
@@ -217,7 +219,7 @@ int ObPxTaskProcess::process()
     if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
       sqlstat_record.record_sqlstat_end_value();
       ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
-      ObString sql = ObString::make_string("PX DFO EXECUTING");
+      ObString sql = ObString::make_string("");
       sqlstat_record.set_is_plan_cache_hit(arg_.exec_ctx_->get_sql_ctx()->plan_cache_hit_);
       sqlstat_record.move_to_sqlstat_cache(*session,
                             sql, phy_plan, true/*is_px_remote_exec*/);

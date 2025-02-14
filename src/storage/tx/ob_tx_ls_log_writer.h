@@ -84,6 +84,7 @@ public:
 public:
   int on_success();
   int on_failure();
+  const char *get_cb_name() const override { return "TxLSLogCb"; }
 
 public:
   INHERIT_TO_STRING_KV("ObTxBaseLogCb", ObTxBaseLogCb, K(type_), KP(log_buf_), K(pos_), KP(base_wr_));

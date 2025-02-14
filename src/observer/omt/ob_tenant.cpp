@@ -285,10 +285,10 @@ void ObPxPool::run(int64_t idx)
 void ObPxPool::run1()
 {
   int ret = OB_SUCCESS;
-  set_px_thread_name();
   ObTLTaGuard ta_guard(tenant_id_);
   common::ObBackGroundSessionGuard backgroud_session_guard(tenant_id_, group_id_);
-  ObLocalDiagnosticInfo::set_thread_name(ob_get_tenant_id(), "PxWorker");
+  ObDIActionGuard action_guard("PxPool", "PxWorker", "");
+  set_px_thread_name();
   auto *pm = common::ObPageManager::thread_local_instance();
   if (OB_LIKELY(nullptr != pm)) {
     pm->set_tenant_ctx(tenant_id_, common::ObCtxIds::DEFAULT_CTX_ID);
@@ -1549,7 +1549,6 @@ int ObTenant::recv_request(ObRequest &req)
   }
 
   if (OB_SUCC(ret)) {
-    ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
 
@@ -1576,7 +1575,6 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
     LOG_ERROR("recv large request failed", "tenant_id", id_);
   } else {
-    ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
   }
   return ret;

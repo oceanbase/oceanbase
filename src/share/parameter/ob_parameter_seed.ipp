@@ -1950,11 +1950,17 @@ DEF_BOOL(_ob_ash_enable, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_ob_ash_disk_write_enable, OB_CLUSTER_PARAMETER, "True",
          "enable active session history early flush",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_diagnostic_info_cache, OB_CLUSTER_PARAMETER, "True",
+         "enable diagnostic info cache",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_sqlstat_enable, OB_TENANT_PARAMETER, "True", "enable/disable sql stat",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable inner session mgr",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_enable_di_experimental_feature_flags, OB_CLUSTER_PARAMETER, "0", "[0, +∞)"
+         "enable diagnostic info experimental feature",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // for set errsim module types, format like transfer;migration
 ERRSIM_DEF_STR_LIST(errsim_module_types, OB_TENANT_PARAMETER, "",

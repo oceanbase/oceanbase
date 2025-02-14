@@ -145,6 +145,7 @@ public:
     int inner_process(const char *data_buffer, const int64_t size) override;
     int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
+    const char *get_cb_name() const override { return "TmpPageIOCB"; }
     TO_STRING_KV(KP_(data_buf));
   private:
     friend class ObTmpPageCache;
@@ -159,6 +160,7 @@ public:
     int inner_process(const char *data_buffer, const int64_t size) override;
     int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
     const char *get_data() override;
+    const char *get_cb_name() const override { return "TmpMultiPageIOCB"; }
     TO_STRING_KV(KP_(data_buf));
   private:
     friend class ObTmpPageCache;

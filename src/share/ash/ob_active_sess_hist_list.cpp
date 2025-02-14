@@ -18,7 +18,15 @@
 #include "share/config/ob_server_config.h"
 #include "lib/guard/ob_shared_guard.h"          // ObShareGuard
 #include "lib/ob_running_mode.h"
-
+namespace oceanbase
+{
+namespace common
+{
+share::ObActiveSessHistList* __attribute__((used)) lib_get_ash_list_instance() {
+  return &share::ObActiveSessHistList::get_instance();
+}
+}
+}
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
@@ -39,11 +47,12 @@ ObActiveSessHistList::ObActiveSessHistList()
   }
 }
 
-ObActiveSessHistList &ObActiveSessHistList::get_instance()
+ObActiveSessHistList& ObActiveSessHistList::get_instance()
 {
   static ObActiveSessHistList the_one;
   return the_one;
 }
+
 
 int ObActiveSessHistList::init()
 {

@@ -57,7 +57,7 @@ int ObExprSleep::sleep(int64_t usec)
   int64_t usec_rem = usec;
   useconds_t usec_req = static_cast<useconds_t>(MIN(CHECK_INTERVAL_IN_US, usec_rem));
   while(usec_req > 0) {
-    ob_usleep(usec_req);
+    ob_usleep<ObWaitEventIds::EXPR_FUNC_SLEEP>(usec_req);
     if (OB_FAIL(THIS_WORKER.check_status())) {
       break;
     } else {

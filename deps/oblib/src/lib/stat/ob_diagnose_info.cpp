@@ -27,13 +27,13 @@ namespace common
  * -----------------------------------------------------------ObLatchStat------------------------------------------------------
  */
 ObLatchStat::ObLatchStat()
-  : gets_(0),
-    misses_(0),
-    sleeps_(0),
-    immediate_gets_(0),
-    immediate_misses_(0),
-    spin_gets_(0),
-    wait_time_(0)
+    : gets_(0),
+      misses_(0),
+      sleeps_(0),
+      immediate_gets_(0),
+      immediate_misses_(0),
+      spin_gets_(0),
+      wait_time_(0)
 {
 }
 
@@ -107,7 +107,7 @@ void ObLatchStatArray::reset()
 }
 
 static constexpr int NODE_NUM =
-  common::hash::NodeNumTraits<ObLatchStat, common::OB_MALLOC_MIDDLE_BLOCK_SIZE>::NODE_NUM;
+    common::hash::NodeNumTraits<ObLatchStat, common::OB_MALLOC_MIDDLE_BLOCK_SIZE>::NODE_NUM;
 using LatchStatAlloc = hash::SimpleAllocer<ObLatchStat, NODE_NUM>;
 
 LatchStatAlloc &get_latch_stat_alloc()
@@ -442,13 +442,13 @@ void ObWaitEventHistory::reset()
 }
 
 ObDiagnoseSessionInfo::ObDiagnoseSessionInfo()
-  : curr_wait_(),
-    max_wait_(NULL),
-    total_wait_(NULL),
-    event_history_(),
-    event_stats_(),
-    stat_add_stats_(),
-    tenant_id_(0)
+    : curr_wait_(),
+      max_wait_(NULL),
+      total_wait_(NULL),
+      event_history_(),
+      event_stats_(),
+      stat_add_stats_(),
+      tenant_id_(0)
 {
 }
 
@@ -532,11 +532,6 @@ int ObDiagnoseSessionInfo::set_tenant_id(uint64_t tenant_id)
   return ret;
 }
 
-ObDiagnosticInfo *ObDiagnoseSessionInfo::get_local_diagnose_info()
-{
-  return ObLocalDiagnosticInfo::get();
-}
-
 ObDiagnoseTenantInfo::ObDiagnoseTenantInfo(ObIAllocator *allocator)
   : event_stats_(),
     stat_add_stats_(),
@@ -618,27 +613,15 @@ int ObDiagnoseTenantInfo::set_stat(const int16_t stat_no, const int64_t value)
   return ret;
 }
 
-ObDiagnosticInfo *ObDiagnoseTenantInfo::get_local_diagnose_info()
-{
-  return ObLocalDiagnosticInfo::get();
-}
-
-ObWaitEventGuard::ObWaitEventGuard(
-  const int64_t event_no,
-  const uint64_t timeout_ms,
-  const int64_t p1,
-  const int64_t p2,
-  const int64_t p3,
-  const bool is_atomic)
-  : event_no_(0),
-    di_(nullptr),
-    is_atomic_(is_atomic)
+ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeout_ms,
+    const int64_t p1, const int64_t p2, const int64_t p3, const bool is_atomic)
+    : event_no_(0), di_(nullptr), is_atomic_(is_atomic)
 {
   di_ = ObLocalDiagnosticInfo::get();
-  if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ && oceanbase::lib::is_diagnose_info_enabled()) {
+  if (OB_NOT_NULL(di_) && di_->get_ash_stat().is_active_session_ &&
+      oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     event_no_ = event_no;
-    di_ = ObLocalDiagnosticInfo::get();
     di_->begin_wait_event(event_no, timeout_ms, p1, p2, p3);
   } else {
     need_record_ = false;
@@ -652,34 +635,49 @@ ObWaitEventGuard::~ObWaitEventGuard()
     if (di_ != curr_di) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "diagnositc info mismatch", K(curr_di), K(di_));
     }
-    curr_di->end_wait_event(event_no_, OB_WAIT_EVENTS[event_no_].wait_class_ == ObWaitClassIds::IDLE);
+    if (OB_NOT_NULL(curr_di)) {
+      curr_di->end_wait_event(event_no_, OB_WAIT_EVENTS[event_no_].wait_class_ == ObWaitClassIds::IDLE);
+    }
   }
 }
 
-ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait)
-  : prev_wait_(NULL), di_(nullptr)
+ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait) : max_wait_(max_wait)
 {
+  di_ = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di_) && OB_NOT_NULL(max_wait)) {
+    need_record_ = true;
+    di_->reset_max_wait();
+  } else {
+    need_record_ = false;
+  }
 }
 
 ObMaxWaitGuard::~ObMaxWaitGuard()
 {
+  if (need_record_) {
+    OB_ASSERT(di_ == ObLocalDiagnosticInfo::get());
+    max_wait_->assign(di_->get_max_wait());
+  }
 }
 
 ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait)
-  : total_wait_(total_wait), di_(nullptr)
+    : total_wait_(total_wait), di_(nullptr)
 {
   di_ = ObLocalDiagnosticInfo::get();
-  OB_ASSERT(di_ != nullptr);
-  di_->reset_total_wait();
+  if (OB_NOT_NULL(di_)) {
+    di_->reset_total_wait();
+  }
 }
 
 ObTotalWaitGuard::~ObTotalWaitGuard()
 {
   if (OB_UNLIKELY(di_ != ObLocalDiagnosticInfo::get())) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED,"diagnostic info switched wrongly.", KPC(di_), K(ObLocalDiagnosticInfo::get()));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "diagnostic info switched wrongly.", KPC(di_),
+        K(ObLocalDiagnosticInfo::get()));
+    di_ = ObLocalDiagnosticInfo::get();
   }
-  if (OB_NOT_NULL(total_wait_)) {
-    total_wait_->add(ObLocalDiagnosticInfo::get()->get_total_wait());
+  if (OB_NOT_NULL(total_wait_) && OB_NOT_NULL(di_)) {
+    total_wait_->add(di_->get_total_wait());
   }
 }
 

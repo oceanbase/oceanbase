@@ -25,7 +25,7 @@ int ObByPassOperator::get_next_row()
   int ret = common::OB_SUCCESS;
   if (by_pass_) {
     begin_cpu_time_counting();
-    begin_ash_line_id_reg();
+    ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
     }
@@ -67,7 +67,7 @@ int ObByPassOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRow
   int ret = common::OB_SUCCESS;
   if (by_pass_) {
     begin_cpu_time_counting();
-    begin_ash_line_id_reg();
+    ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
     if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
     }

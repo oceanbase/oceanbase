@@ -415,7 +415,7 @@ int ObWrSyncUserModifySettingsTaskP::process()
                       OB_WR_CONTROL_TNAME, TOPN_SQL_COLUMN_NAME, arg.get_topnsql(), arg.get_tenant_id()))) {
           LOG_WARN("failed to format update snapshot info sql", KR(ret));
         } else if (OB_FAIL(
-                      GCTX.sql_proxy_->write(gen_meta_tenant_id(arg.get_tenant_id()), sql.ptr(), affected_rows))) {
+                      ObWrCollector::exec_write_sql_with_retry(gen_meta_tenant_id(arg.get_tenant_id()), sql.ptr(), affected_rows))) {
           LOG_WARN("failed to write snapshot_info", KR(ret), K(sql), K(gen_meta_tenant_id( arg.get_tenant_id())));
         } else if (affected_rows != 1) {
           LOG_TRACE("affected rows is not 1", KR(ret), K(affected_rows), K(sql));

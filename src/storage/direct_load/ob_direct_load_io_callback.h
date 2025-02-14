@@ -26,6 +26,7 @@ public:
   const char *get_data() override { return data_buf_; }
   int64_t size() const override { return sizeof(*this); }
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  const char *get_cb_name() const override { return "DirectLoadIOCB"; }
   TO_STRING_KV(K_(data_buf));
 protected:
   int inner_process(const char *data_buffer, const int64_t size) override;

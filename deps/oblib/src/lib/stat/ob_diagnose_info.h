@@ -165,7 +165,6 @@ public:
   ObWaitEventDesc &get_curr_wait();
   int inc_stat(const int16_t stat_no);
   int update_stat(const int16_t stat_no, const int64_t delta);
-  static ObDiagnosticInfo *get_local_diagnose_info();
   inline ObWaitEventHistory &get_event_history()  { return event_history_; }
   inline ObWaitEventStatArray &get_event_stats()  { return event_stats_; }
   inline ObStatEventAddStatArray &get_add_stat_stats()  { return stat_add_stats_; }
@@ -209,7 +208,6 @@ public:
   int inc_stat(const int16_t stat_no);
   int update_stat(const int16_t stat_no, const int64_t delta);
   int set_stat(const int16_t stat_no, const int64_t value);
-  static ObDiagnosticInfo *get_local_diagnose_info();
   inline ObWaitEventStatArray &get_event_stats()  { return event_stats_; }
   inline ObStatEventAddStatArray &get_add_stat_stats()  { return stat_add_stats_; }
   inline ObStatEventSetStatArray &get_set_stat_stats()  { return stat_set_stats_; }
@@ -273,13 +271,11 @@ class ObMaxWaitGuard
 public:
   explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait);
   ~ObMaxWaitGuard();
-  TO_STRING_KV(K_(prev_wait), K_(di), K_(need_record), K_(max_wait));
+  TO_STRING_KV(K_(need_record), K_(max_wait));
 private:
-  ObWaitEventDesc *prev_wait_;
-  ObDiagnoseSessionInfo *di_;
-  //Do you need statistics
   bool need_record_;
   ObWaitEventDesc *max_wait_;
+  ObDiagnosticInfo *di_;
 };
 
 class ObTotalWaitGuard

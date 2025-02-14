@@ -868,7 +868,7 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
   }
   while (busy_wait) {
     if (tx.flags_.BLOCK_) {
-      ob_usleep(500);
+      ob_throttle_usleep(500, ret, tx.get_tx_id().get_id());
     } else {
       ObSpinLockGuard guard(tx.lock_);
       tx.flags_.INTERRUPTED_ = false;

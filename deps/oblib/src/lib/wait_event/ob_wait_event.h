@@ -15,22 +15,22 @@
 // symbol, id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy, enable
 // USER_IO & SYSTEM_IO
 WAIT_EVENT_DEF(NULL_EVENT, 10000, "", "", "", "", OTHER, true, true)
-WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_DATA_INDEX_READ, 10002, "db file data `index read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_COMPACT_READ, 11001, "db file compact read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_COMPACT_WRITE, 11002, "db file compact write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_READ, 11003, "db file index build read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_WRITE, 11004, "db file index build write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_MIGRATE_READ, 11005, "db file migrate read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(DB_FILE_MIGRATE_WRITE, 11006, "db file migrate write", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(BLOOM_FILTER_BUILD_READ, 11007, "bloomfilter build read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(INTERM_RESULT_DISK_WRITE, 11008, "interm result disk write", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(INTERM_RESULT_DISK_READ, 11009, "interm result disk read", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(ROW_STORE_DISK_WRITE, 11010, "row store disk write", "fd", "offset", "size", USER_IO, false, true)
-WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "fd", "offset", "size", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_DATA_READ, 10001, "db file data read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_DATA_INDEX_READ, 10002, "db file data `index read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_COMPACT_READ, 11001, "db file compact read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_COMPACT_WRITE, 11002, "db file compact write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_READ, 11003, "db file index build read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_INDEX_BUILD_WRITE, 11004, "db file index build write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_MIGRATE_READ, 11005, "db file migrate read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(DB_FILE_MIGRATE_WRITE, 11006, "db file migrate write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(BLOOM_FILTER_BUILD_READ, 11007, "bloomfilter build read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(INTERM_RESULT_DISK_WRITE, 11008, "interm result disk write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(INTERM_RESULT_DISK_READ, 11009, "interm result disk read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(ROW_STORE_DISK_WRITE, 11010, "row store disk write", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
+WAIT_EVENT_DEF(ROW_STORE_DISK_READ, 11011, "row store disk read", "schedule_queue_delay", "device_delay", "callback_delay", USER_IO, false, true)
 WAIT_EVENT_DEF(MEMSTORE_MEM_PAGE_ALLOC_WAIT, 11015, "memstore memory page alloc wait", "cur_mem_hold", "sleep_interval", "cur_ts", CONFIGURATION, false, true)
-WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "fd", "offset", "size", SYSTEM_IO, false, true)
-WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "fd", "offset", "size", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(PALF_READ, 11016, "palf read", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
+WAIT_EVENT_DEF(PALF_WRITE, 11017, "palf write", "schedule_queue_delay", "device_delay", "callback_delay", SYSTEM_IO, false, true)
 
 // SCHEDULER
 WAIT_EVENT_DEF(OMT_WAIT, 12001, "sched wait", "req type", "req start timestamp", "wait start timestamp", SCHEDULER, true, false)
@@ -48,6 +48,7 @@ WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter"
 WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waiter","owner",APPLICATION,false, false)
 WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock holder tx id","data seq number","holder lock time",APPLICATION,false, true)
 WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder tx id","data seq number","holder lock time", APPLICATION, false , false)
+WAIT_EVENT_DEF(EXPR_FUNC_SLEEP, 14005, "sleep: wait for user calls", "sleep_interval", "", "", APPLICATION, true, true)
 // CONCURRENCY
 // condition wait has one parameter e.g. address of the condition variable
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
@@ -117,6 +118,11 @@ WAIT_EVENT_DEF(STORAGE_HA_FINISH_TRANSFER, 20006, "sleep: finish transfer sleep 
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external storage io task wait", "", "", "", SYSTEM_IO, true, true)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, true, false)
+
+//sleep part-2
+//For rate limiting periodic tasks.
+//It involves intentionally adding a sleep interval during task retries or periodic execution to prevent the task from running too frequently.
+WAIT_EVENT_DEF(TASK_THROTTLE_SLEEP, 20200, "sleep: periodic task throttle wait", "sleep_interval", "task errcode", "custom info", CONCURRENCY, true, true)
 
 // inner sql
 WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sql class", "inner session id", "", OTHER, true, true)
@@ -256,6 +262,20 @@ struct ObWaitEventDesc
   inline bool operator==(const ObWaitEventDesc &other) const;
   inline bool operator!=(const ObWaitEventDesc &other) const;
   inline int add(const ObWaitEventDesc &other);
+  inline void assign(const ObWaitEventDesc &other)
+  {
+    event_no_ = other.event_no_;
+    p1_ = other.p1_;
+    p2_ = other.p2_;
+    p3_ = other.p3_;
+    wait_begin_time_ = other.wait_begin_time_;
+    wait_end_time_ = other.wait_end_time_;
+    wait_time_ = other.wait_time_;
+    timeout_ms_ = other.timeout_ms_;
+    level_ = other.level_;
+    parent_ = other.parent_;
+    is_phy_ = other.is_phy_;
+  }
   bool is_valid();
   void reset()
   {

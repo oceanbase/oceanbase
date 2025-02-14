@@ -5942,7 +5942,11 @@ def_table_schema(
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
     ('tablet_id', 'int', 'true'),
-    ('proxy_sid', 'int', 'true')
+    ('proxy_sid', 'int', 'true'),
+    ('delta_read_io_requests', 'int', 'true', '0'),
+    ('delta_read_io_bytes', 'int', 'true', '0'),
+    ('delta_write_io_requests', 'int', 'true', '0'),
+    ('delta_write_io_bytes', 'int', 'true', '0')
   ],
 )
 
@@ -7257,6 +7261,29 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+  owner = 'roland.qk',
+  table_id = 526,
+  table_name = '__wr_res_mgr_sysstat',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('group_id', 'int'),
+    ('cluster_id', 'int'),
+    ('snap_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('stat_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('value', 'int', 'true'),
+  ],
+)
+
 all_kv_redis_table_def = dict(
   owner = 'maochongxin.mcx',
   table_name = '__all_kv_redis_table',
@@ -7310,6 +7337,30 @@ def_table_schema(
   is_cluster_private = False,
   normal_columns = [
     ('weight', 'int', 'false'),
+  ],
+)
+
+def_table_schema(
+  owner = 'zhangyiqiang.zyq',
+  table_id = 530,
+  table_name = '__wr_sql_plan_aux_key2snapshot',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+      ('plan_hash', 'uint'),
+      ('id', 'uint', 'false', '0'),
+      ('plan_id', 'int'),
+      ('snap_id', 'int'),
+      ('cluster_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
   ],
 )
 
@@ -12601,6 +12652,10 @@ def_table_schema(
     ('STMT_TYPE', 'int', 'true'),
     ('TABLET_ID', 'int', 'true'),
     ('PROXY_SID', 'int', 'true'),
+    ('DELTA_READ_IO_REQUESTS', 'int', 'false', '0'),
+    ('DELTA_READ_IO_BYTES', 'int', 'false', '0'),
+    ('DELTA_WRITE_IO_REQUESTS', 'int', 'false', '0'),
+    ('DELTA_WRITE_IO_BYTES', 'int', 'false', '0')
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -14670,6 +14725,12 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sql_plan']))
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12502',
+  table_name = '__all_virtual_wr_res_mgr_sysstat',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_res_mgr_sysstat']))
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12503',
   table_name = '__all_virtual_kv_redis_table',
@@ -14728,6 +14789,12 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12509',
   table_name = '__all_virtual_object_balance_weight',
   keywords = all_def_keywords['__all_object_balance_weight']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12511',
+  table_name = '__all_virtual_wr_sql_plan_aux_key2snapshot',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_sql_plan_aux_key2snapshot']))
 
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15201,11 +15268,14 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15472', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15473', all_def_keywords['__all_pkg_coll_type']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15481', all_def_keywords['__all_virtual_wr_sql_plan'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15482', all_def_keywords['__all_virtual_res_mgr_sysstat'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15483', all_def_keywords['__all_virtual_wr_res_mgr_sysstat'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_keywords['__all_ncomp_dll_v2']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15487', all_def_keywords['__all_virtual_logstore_service_status'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15488', all_def_keywords['__all_virtual_logstore_service_info'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keywords['__all_virtual_tablet_pointer_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15490', all_def_keywords['__all_object_balance_weight'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492', all_def_keywords['__all_virtual_wr_sql_plan_aux_key2snapshot'])))
+
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -26156,7 +26226,12 @@ PLSQL_SUBPROGRAM_ID,
 PLSQL_SUBPROGRAM_NAME,
 BLOCKING_SESSION_ID,
 TABLET_ID,
-PROXY_SID
+PROXY_SID,
+TX_ID,
+DELTA_READ_IO_REQUESTS,
+DELTA_READ_IO_BYTES,
+DELTA_WRITE_IO_REQUESTS,
+DELTA_WRITE_IO_BYTES
 FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
   normal_columns  = [],
@@ -26235,7 +26310,12 @@ PLSQL_SUBPROGRAM_ID,
 PLSQL_SUBPROGRAM_NAME,
 BLOCKING_SESSION_ID,
 TABLET_ID,
-PROXY_SID
+PROXY_SID,
+TX_ID,
+DELTA_READ_IO_REQUESTS,
+DELTA_READ_IO_BYTES,
+DELTA_WRITE_IO_REQUESTS,
+DELTA_WRITE_IO_BYTES
 FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -31226,7 +31306,12 @@ def_table_schema(
       ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
       ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.TX_ID AS TX_ID,
+      ASH.DELTA_READ_IO_REQUESTS AS DELTA_READ_IO_REQUESTS,
+      ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,
+      ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
+      ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history ASH
@@ -31312,7 +31397,12 @@ def_table_schema(
       ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
       ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.TX_ID AS TX_ID,
+      ASH.DELTA_READ_IO_REQUESTS AS DELTA_READ_IO_REQUESTS,
+      ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,
+      ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
+      ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
     (
       oceanbase.__all_virtual_wr_active_session_history ASH
@@ -34528,7 +34618,12 @@ def_table_schema(
       CAST(PLSQL_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_SUBPROGRAM_NAME,
       CAST(BLOCKING_SESSION_ID AS SIGNED) AS BLOCKING_SESSION_ID,
       CAST(TABLET_ID AS SIGNED) AS TABLET_ID,
-      CAST(PROXY_SID AS SIGNED) AS PROXY_SID
+      CAST(PROXY_SID AS SIGNED) AS PROXY_SID,
+      CAST(TX_ID AS SIGNED) AS TX_ID,
+      CAST(DELTA_READ_IO_REQUESTS AS SIGNED) AS DELTA_READ_IO_REQUESTS,
+      CAST(DELTA_READ_IO_BYTES AS SIGNED) AS DELTA_READ_IO_BYTES,
+      CAST(DELTA_WRITE_IO_REQUESTS AS SIGNED) AS DELTA_WRITE_IO_REQUESTS,
+      CAST(DELTA_WRITE_IO_BYTES AS SIGNED) AS DELTA_WRITE_IO_BYTES
   FROM oceanbase.__all_virtual_ash ASH LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
 """.replace("\n", " "),
   normal_columns  = [],
@@ -34609,7 +34704,12 @@ def_table_schema(
       PLSQL_SUBPROGRAM_NAME,
       BLOCKING_SESSION_ID,
       TABLET_ID,
-      PROXY_SID
+      PROXY_SID,
+      TX_ID,
+      DELTA_READ_IO_REQUESTS,
+      DELTA_READ_IO_BYTES,
+      DELTA_WRITE_IO_REQUESTS,
+      DELTA_WRITE_IO_BYTES
       FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
@@ -36611,6 +36711,72 @@ def_table_schema(
     (
       oceanbase.__all_virtual_wr_sql_plan SQLPLAN
     )
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_RES_MGR_SYSSTAT',
+  table_id        = '21614',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.CLUSTER_ID AS CLUSTER_ID,
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.GROUP_ID AS GROUP_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.STAT_ID AS STAT_ID,
+      STAT.VALUE AS VALUE
+  FROM
+    (
+      oceanbase.__all_virtual_wr_res_mgr_sysstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+    )
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'CDB_WR_RES_MGR_SYSSTAT',
+  table_id        = '21615',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      STAT.CLUSTER_ID AS CLUSTER_ID,
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.GROUP_ID AS GROUP_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.STAT_ID AS STAT_ID,
+      STAT.VALUE AS VALUE
+  FROM
+    (
+      oceanbase.__all_virtual_wr_res_mgr_sysstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+    )
+  WHERE
+    SNAP.STATUS = 0;
   """.replace("\n", " ")
 )
 
@@ -55234,7 +55400,12 @@ def_table_schema(
       ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,
       ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,
       ASH.TABLET_ID AS TABLET_ID,
-      ASH.PROXY_SID AS PROXY_SID
+      ASH.PROXY_SID AS PROXY_SID,
+      ASH.TX_ID AS TX_ID,
+      ASH.DELTA_READ_IO_REQUESTS AS DELTA_READ_IO_REQUESTS,
+      ASH.DELTA_READ_IO_BYTES AS DELTA_READ_IO_BYTES,
+      ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
+      ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
     SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -62521,7 +62692,12 @@ PLSQL_SUBPROGRAM_ID,
 PLSQL_SUBPROGRAM_NAME,
 BLOCKING_SESSION_ID,
 TABLET_ID,
-PROXY_SID
+PROXY_SID,
+TX_ID,
+DELTA_READ_IO_REQUESTS,
+DELTA_READ_IO_BYTES,
+DELTA_WRITE_IO_REQUESTS,
+DELTA_WRITE_IO_BYTES
 FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
 )
@@ -62602,7 +62778,12 @@ def_table_schema(
       PLSQL_SUBPROGRAM_NAME,
       BLOCKING_SESSION_ID,
       TABLET_ID,
-      PROXY_SID
+      PROXY_SID,
+      TX_ID,
+      DELTA_READ_IO_REQUESTS,
+      DELTA_READ_IO_BYTES,
+      DELTA_WRITE_IO_REQUESTS,
+      DELTA_WRITE_IO_BYTES
       FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -64697,7 +64878,12 @@ def_table_schema(
       CAST(PLSQL_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_SUBPROGRAM_NAME,
       CAST(BLOCKING_SESSION_ID AS NUMBER) AS BLOCKING_SESSION_ID,
       CAST(TABLET_ID AS NUMBER) AS TABLET_ID,
-      CAST(PROXY_SID AS NUMBER) AS PROXY_SID
+      CAST(PROXY_SID AS NUMBER) AS PROXY_SID,
+      CAST(TX_ID AS NUMBER) AS TX_ID,
+      CAST(DELTA_READ_IO_REQUESTS AS NUMBER) AS DELTA_READ_IO_REQUESTS,
+      CAST(DELTA_READ_IO_BYTES AS NUMBER) AS DELTA_READ_IO_BYTES,
+      CAST(DELTA_WRITE_IO_REQUESTS AS NUMBER) AS DELTA_WRITE_IO_REQUESTS,
+      CAST(DELTA_WRITE_IO_BYTES AS NUMBER) AS DELTA_WRITE_IO_BYTES
     FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
 """.replace("\n", " "),
 )
@@ -64777,7 +64963,12 @@ PLSQL_SUBPROGRAM_ID,
 PLSQL_SUBPROGRAM_NAME,
 BLOCKING_SESSION_ID,
 TABLET_ID,
-PROXY_SID
+PROXY_SID,
+TX_ID,
+DELTA_READ_IO_REQUESTS,
+DELTA_READ_IO_BYTES,
+DELTA_WRITE_IO_REQUESTS,
+DELTA_WRITE_IO_BYTES
 FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
@@ -67404,6 +67595,40 @@ def_table_schema(
     SYS.ALL_VIRTUAL_WR_SQL_PLAN SQLPLAN
   WHERE
     SQLPLAN.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_RES_MGR_SYSSTAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28260',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    STAT.CLUSTER_ID AS CLUSTER_ID,
+    STAT.TENANT_ID AS TENANT_ID,
+    STAT.GROUP_ID AS GROUP_ID,
+    STAT.SNAP_ID AS SNAP_ID,
+    STAT.SVR_IP AS SVR_IP,
+    STAT.SVR_PORT AS SVR_PORT,
+    STAT.STAT_ID AS STAT_ID,
+    STAT.VALUE AS VALUE
+  FROM
+    SYS.ALL_VIRTUAL_WR_RES_MGR_SYSSTAT STAT,
+    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+    AND STAT.TENANT_ID = SNAP.TENANT_ID
+    AND STAT.SNAP_ID = SNAP.SNAP_ID
+    AND SNAP.STATUS = 0;
   """.replace("\n", " ")
 )
 

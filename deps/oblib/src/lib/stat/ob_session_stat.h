@@ -21,21 +21,6 @@ namespace oceanbase
 namespace common
 {
 
-class ObSessionStatEstGuard
-{
-public:
-  ObSessionStatEstGuard(const uint64_t tenant_id,
-                        const uint64_t session_id,
-                        const bool reset_wait_stat = true);
-  virtual ~ObSessionStatEstGuard();
-};
-
-class ObTenantStatEstGuard
-{
-public:
-  explicit ObTenantStatEstGuard(uint64_t tenant_id = OB_SYS_TENANT_ID);
-  virtual ~ObTenantStatEstGuard();
-};
 
 } /* namespace common */
 } /* namespace oceanbase */

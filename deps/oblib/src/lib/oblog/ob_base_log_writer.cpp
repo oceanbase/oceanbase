@@ -241,6 +241,7 @@ void *ObBaseLogWriter::flush_log_thread(void *arg)
     pthread_cleanup_push(cleanup_log_thread, arg);
     ObBaseLogWriter *log_writer = reinterpret_cast<ObBaseLogWriter*> (arg);
     lib::set_thread_name(log_writer->thread_name_);
+    ObDIActionGuard ag("flush log");
     log_writer->flush_log();
     pthread_cleanup_pop(1);
   }

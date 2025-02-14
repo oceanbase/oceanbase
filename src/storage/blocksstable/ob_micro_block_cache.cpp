@@ -510,6 +510,7 @@ int64_t ObSingleMicroBlockIOCallback::size() const
 int ObSingleMicroBlockIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("SingleMicroBlockIOCallback");
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid micro block cache callback, ", KP_(cache), K(ret));
@@ -585,6 +586,7 @@ int64_t ObMultiDataBlockIOCallback::size() const
 int ObMultiDataBlockIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("MultiDataBlockIOCallback");
   if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid micro block cache callback, ", KP_(cache), K(ret));

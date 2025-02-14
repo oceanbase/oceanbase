@@ -416,6 +416,7 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   ob_setup_tsi_warning_buffer(NULL);
   session.reset_plsql_exec_time();
   session.reset_plsql_compile_time();
+  ObQueryRetryAshGuard::reset_info();
   return ret;
 }
 

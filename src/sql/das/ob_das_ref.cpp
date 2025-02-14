@@ -656,7 +656,10 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     task_op->set_tablet_id(tablet_loc->tablet_id_);
     task_op->set_ls_id(tablet_loc->ls_id_);
     task_op->set_tablet_loc(tablet_loc);
-    task_op->set_plan_line_id(ObActiveSessionGuard::get_stat().plan_line_id_);
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      task_op->set_plan_line_id(di->get_ash_stat().plan_line_id_);
+    }
     if (is_do_gts_opt() && OB_FAIL(task_op->init_das_gts_opt_info(session->get_tx_isolation()))) {
       LOG_WARN("fail to init gts opt info", K(ret), K(session->get_tx_isolation()));
     } else if (OB_FAIL(add_aggregated_task(task_op, op_type))) {

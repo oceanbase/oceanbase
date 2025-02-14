@@ -54,7 +54,6 @@ ObSyncPlanDriver::~ObSyncPlanDriver()
 int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
-  ObRetryWaitEventInfoGuard retry_info_guard(session_);
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL

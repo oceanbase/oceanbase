@@ -33,7 +33,6 @@ using namespace storage;
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 {
   OB_ASSERT(OB_NOT_NULL(scheduler_));
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
   const int64_t thread_count = get_thread_count();
   // LOG_INFO("table load task thread start", KP(this), "pid", get_tid_cache(), "thread_idx", get_thread_idx());
   // 启动成功的线程数+1

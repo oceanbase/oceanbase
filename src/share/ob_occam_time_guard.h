@@ -86,6 +86,7 @@ public:
       }
       if (OB_FAIL(back_thread_->init_and_start([this]() {
         while(true) {
+          common::ObDIActionGuard ag("OccamThreadPool", "ThreadHungDetector", "detect task");
           IGNORE_RETURN lib::Thread::update_loop_ts();
           if (!back_thread_->is_stopped()) {
             for (int64_t idx = 0; idx < MAX_THREAD_NUM; ++idx) {

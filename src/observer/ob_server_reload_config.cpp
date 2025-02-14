@@ -34,6 +34,7 @@
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/ash/ob_active_sess_hist_list.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -132,6 +133,8 @@ int ObServerReloadConfig::operator()()
     if (OB_TMP_FAIL(ObActiveSessHistList::get_instance().resize_ash_size())) {
       LOG_WARN("failed to change ash size", KR(tmp_ret));
     }
+    ObDiagnosticInfoContainer::get_di_experimental_feature_flag().set_flags(
+        GCONF._enable_di_experimental_feature_flags);
   }
   {
     GMEMCONF.reload_config(GCONF);

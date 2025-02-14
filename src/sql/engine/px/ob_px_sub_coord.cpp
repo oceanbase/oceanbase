@@ -305,6 +305,7 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
                                  const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, root.id_);
   if (IS_PX_RECEIVE(root.get_type())) {
     ObPxReceiveSpec *receive_op = reinterpret_cast<ObPxReceiveSpec *>(&root);
     ObOperatorKit *kit = ctx.get_operator_kit(receive_op->id_);

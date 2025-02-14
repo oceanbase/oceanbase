@@ -88,7 +88,10 @@ private:
                                   ObDatum &expr_datum,
                                   uint64_t routine_id,
                                   uint64_t field_id);
-
+  static int get_sys_package_name_info(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       ObDatum &expr_datum,
+                                       uint64_t package_id);
   static int get_info_by_field_id(const ObExpr &expr,
                                   ObEvalCtx &ctx,
                                   ObDatum &expr_datum,

@@ -498,6 +498,8 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
 int ObTableScanIterator::get_next_row(ObNewRow *&row)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
   int ret = OB_SUCCESS;
   ObDatumRow *store_row = NULL;
 
@@ -535,6 +537,8 @@ int ObTableScanIterator::get_next_row(ObNewRow *&row)
 int ObTableScanIterator::get_next_rows(int64_t &count, int64_t capacity)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
+  ObASHTabletIdSetterGuard ash_tablet_id_guard(scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
+  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, scan_param_ != nullptr? scan_param_->tablet_id_.id() : 0);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

@@ -18,18 +18,12 @@
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "common/ob_smart_var.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 
 namespace oceanbase
 {
 namespace common
 {
-int __attribute__((weak, noinline)) lib_switch_tenant(int64_t tenant_id, void *&ptr)
-{
-  UNUSED(tenant_id);
-  UNUSED(ptr);
-  return OB_NOT_IMPLEMENT;
-}
-
 void __attribute__((weak, noinline)) lib_release_tenant(void *ptr)
 {
   UNUSED(ptr);
@@ -58,6 +52,16 @@ void __attribute__((weak, noinline)) lib_mtl_switch(int64_t tenant_id, std::func
 int64_t __attribute__((weak, noinline)) lib_mtl_cpu_count()
 {
   return 1;
+}
+
+bool __attribute__((weak, noinline)) lib_enable_diagnostic_info_cache()
+{
+  return false;
+}
+
+share::ObActiveSessHistList *__attribute__((weak, noinline)) lib_get_ash_list_instance()
+{
+  return nullptr;
 }
 
 } /* namespace common */

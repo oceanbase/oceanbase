@@ -998,7 +998,7 @@ public:
   const ObString get_cur_sql_id() const { return ObString(sql_id_); }
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
-  void reset_cur_sql_id() {sql_id_[0] = '\0';}
+  void reset_cur_sql_id() { sql_id_[0] = '\0'; }
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
@@ -1404,7 +1404,11 @@ public:
   inline stmt::StmtType get_first_need_txn_stmt_type() const { return first_need_txn_stmt_type_; }
   inline void set_need_recheck_txn_readonly(bool need) { need_recheck_txn_readonly_ = need; }
   inline bool need_recheck_txn_readonly() const { return need_recheck_txn_readonly_; }
-  void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
+  void set_stmt_type(stmt::StmtType stmt_type)
+  {
+    stmt_type_ = stmt_type;
+    GET_DIAGNOSTIC_INFO->get_ash_stat().stmt_type_ = stmt_type;
+  }
   stmt::StmtType get_stmt_type() const { return stmt_type_; }
 
   int get_session_label(uint64_t policy_id, share::ObLabelSeSessionLabel &session_label) const;

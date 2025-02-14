@@ -76,7 +76,7 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
       if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
         LOG_WARN("fail to get table schema, will retry", KR(ret), K(i), K(tenant_id), K(table_id),
                  K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
-        USLEEP(idle_time_us);
+        ob_throttle_usleep(idle_time_us, OB_SCHEMA_EAGAIN, (int64_t)table_id);
         ret = OB_SUCCESS;
       } else {
         ret = OB_TIMEOUT;

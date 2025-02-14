@@ -225,10 +225,9 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
       }
     }
   }
-  if (OB_NOT_NULL(conn.di_)) {
-    common::ObLocalDiagnosticInfo::dec_ref(conn.di_);
-    common::ObLocalDiagnosticInfo::return_diagnostic_info(conn.di_);
-    conn.di_ = nullptr;
+  common::ObDiagnosticInfo *di = conn.get_diagnostic_info();
+  if (OB_NOT_NULL(di)) {
+    conn.reset_diagnostic_info();
   }
 
   sm_conn_unlock_tenant(conn);

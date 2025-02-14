@@ -19,6 +19,7 @@
 #include "lib/lock/ob_latch.h"
 #include "rpc/obmysql/ob_packet_record.h"
 #include "rpc/obmysql/ob_2_0_protocol_struct.h"
+#include "lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {
@@ -178,6 +179,25 @@ public:
   inline void set_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED; }
   inline bool is_logined() const { return logined_; }
   inline void set_logined(bool logined) { logined_ = logined; }
+  common::ObDiagnosticInfo *get_diagnostic_info()
+  {
+    return di_;
+  };
+  void set_diagnostic_info(common::ObDiagnosticInfo *ptr)
+  {
+    if (OB_NOT_NULL(ptr)) {
+      OB_ASSERT(di_ == nullptr);
+      common::ObLocalDiagnosticInfo::inc_ref(ptr);
+      di_ = ptr;
+    }
+  };
+  void reset_diagnostic_info()
+  {
+    if (OB_NOT_NULL(di_)) {
+      common::ObLocalDiagnosticInfo::dec_ref(di_);
+      di_ = nullptr;
+    }
+  };
 public:
   obmysql::ObMySQLCapabilityFlags cap_flags_;
   bool is_proxy_;
@@ -230,6 +250,7 @@ public:
   int32_t client_addr_port_;
   int64_t client_create_time_;
   bool has_service_name_;
+private:
   common::ObDiagnosticInfo *di_;
   bool logined_;
 };

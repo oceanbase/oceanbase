@@ -176,16 +176,31 @@ uint64_t get_cpufreq_khz()
 {
     char line[256];
     FILE *stream = NULL;
+    double freq_ghz = 0.0;
     double freq_mhz = 0.0;
     uint64_t freq_khz = 0;
+    const char *freq_str = NULL;
 
     stream = fopen("/proc/cpuinfo", "r");
     if (NULL == stream) {
     } else {
         while (fgets(line, sizeof(line), stream)) {
-            if (sscanf(line, "cpu MHz\t: %lf", &freq_mhz) == 1) {
-                freq_khz = (uint64_t)(freq_mhz * 1000UL);
+            if ((freq_str = strstr(line, "CPU @ ")) != NULL
+                 && strstr(freq_str, "GHz") != NULL) {
+                sscanf(freq_str, "CPU @ %lfGHz", &freq_ghz);
+                freq_khz = (uint64_t)(freq_ghz * 1000UL * 1000UL);
                 break;
+            }
+        }
+        if (0 == freq_khz) {
+            //The name model is not in a format like "Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz"
+            //fetch the freq_khz from cpu MHz
+            rewind(stream);
+            while (fgets(line, sizeof(line), stream)) {
+                if (sscanf(line, "cpu MHz\t: %lf", &freq_mhz) == 1) {
+                    freq_khz = (uint64_t)(freq_mhz * 1000UL);
+                    break;
+                }
             }
         }
         fclose(stream);

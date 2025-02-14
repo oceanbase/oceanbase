@@ -49,11 +49,12 @@ public:
   void add(ObActiveSessionStat &stat)
   {
     int64_t idx = ash_buffer_->append(stat);
-    if (stat.event_no_) {
+    if (stat.event_no_|| stat.sql_id_[0] == '\0' || stat.plan_id_ == 0 || stat.plan_hash_ == 0 ) {
       // Once session can see fixup index, it surely can see fixup_buffer.
-      stat.set_fixup_buffer(ash_buffer_);
-      MEM_BARRIER();
       stat.set_fixup_index(idx);
+#ifdef ENABLE_DEBUG_LOG
+      stat.check_fixup_ash_buffer();
+#endif
     } else {
       // we cannot reset fixup buffer here. Because user thread would reset fixup buffer too. Causing a race condition.
       // Bottom line is that we cannot introduce any lock in worker thread.
@@ -66,6 +67,9 @@ public:
   inline int64_t free_slots_num() const { return ash_buffer_->free_slots_num(); }
   const ObActiveSessionStatItem &get(int64_t pos) const {
     return ash_buffer_->get(pos);
+  }
+  inline common::ObSharedGuard<ObAshBuffer>& get_ash_buffer() {
+    return ash_buffer_;
   }
 public:
   class Iterator

@@ -410,7 +410,6 @@ The following macro definition is used to record sql audit, how to use:
   table::ObTableAudit<decltype(op)> audit(op, table_name, sess_guard, audit_ctx);         \
   common::ObMaxWaitGuard max_wait_guard(&audit.record_.exec_record_.max_wait_event_);     \
   common::ObTotalWaitGuard total_wait_guard(&audit.total_wait_desc_);                     \
-  common::ObTenantStatEstGuard stat_guard((credential).tenant_id_);                       \
   observer::ObProcessMallocCallback pmcb(0, audit.record_.request_memory_used_);          \
   lib::ObMallocCallbackGuard malloc_guard_(pmcb);                                         \
   if (audit.need_audit_ && OB_NOT_NULL(audit_ctx)) {                                      \

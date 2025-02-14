@@ -804,7 +804,7 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
                node_type,
                cflict_info.conflict_happened_addr_);
     set_ash_rowlock_diag_info(cflict_info);
-    ObActiveSessionGuard::get_stat().begin_retry_wait_event(
+    GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
         ObWaitEventIds::ROW_LOCK_WAIT,
         cflict_info.conflict_tx_id_,
         cflict_info.conflict_tx_hold_seq_.get_seq(),
@@ -1852,7 +1852,7 @@ void ObLockWaitMgr::begin_row_lock_wait_event(const Node * const node)
     rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
     if (OB_NOT_NULL(req)) {
       ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
-        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
         : req->get_diagnostic_info();
       if (OB_NOT_NULL(di)) {
         ObActiveSessionStat &ash_stat = di->get_ash_stat();
@@ -1869,7 +1869,7 @@ void ObLockWaitMgr::end_row_lock_wait_event(const Node * const node)
     rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
     if (OB_NOT_NULL(req)) {
       ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
-        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->di_
+        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
         : req->get_diagnostic_info();
       if (OB_NOT_NULL(di)) {
         ObActiveSessionStat &ash_stat = di->get_ash_stat();

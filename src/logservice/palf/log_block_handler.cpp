@@ -602,8 +602,6 @@ int LogBlockHandler::inner_write_impl_(const char *buf,
   int ret = OB_SUCCESS;
   int64_t write_size = 0;
   int64_t time_interval = OB_INVALID_TIMESTAMP;
-  ObWaitEventGuard wait_event(ObWaitEventIds::PALF_WRITE,
-    PALF_IO_WAIT_EVENT_TIMEOUT_MS, io_fd_.second_id_, offset, buf_len);
   int64_t start_ts = ObTimeUtility::fast_current_time();
   ATOMIC_STORE(&last_pwrite_start_time_us_, start_ts);
   ATOMIC_STORE(&last_pwrite_size_, buf_len);

@@ -664,7 +664,6 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   if (OB_FAIL(sessinfo_map_.del(Key(sessid)))) {
     LOG_WARN("fail to remove session from session map", K(ret), K(sessid), K(proxy_sessid));
   } else if (tenant_id != 0 && sessid != 0 && has_inc) {
-    ObTenantStatEstGuard guard(tenant_id);
     EVENT_DEC(ACTIVE_SESSIONS);
   }
   return ret;

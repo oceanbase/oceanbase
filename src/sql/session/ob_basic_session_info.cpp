@@ -740,7 +740,7 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
       LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
     } else {
       user_id_ = user_id;
-      ObActiveSessionGuard::get_stat().user_id_ = get_user_id();
+      GET_DIAGNOSTIC_INFO->get_ash_stat().user_id_ = get_user_id();
     }
   }
   return ret;
@@ -2198,11 +2198,14 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
-    if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-      ObActiveSessionGuard::get_stat().plan_id_ = plan_id_;
-      ObActiveSessionGuard::get_stat().plan_hash_ = plan_hash_;
-      MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
-          min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      di->get_ash_stat().plan_id_ = plan_id_;
+      di->get_ash_stat().plan_hash_ = plan_hash_;
+      MEMMOVE(di->get_ash_stat().sql_id_, sql_id_,
+          min(sizeof(di->get_ash_stat().sql_id_), sizeof(sql_id_)));
+      di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(), di->get_ash_stat().session_id_, sql_id_, plan_id_, plan_hash_);
     }
   }
   return ret;
@@ -2210,17 +2213,17 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 
 void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
 {
-  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-    ash_stat.stmt_type_ = get_stmt_type();
-    ash_stat.plan_id_ = plan_id_;
-    ash_stat.plan_hash_ = plan_hash_;
-    MEMMOVE(ash_stat.sql_id_, sql_id_,
-        min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
-    ash_stat.tenant_id_ = tenant_id_;
-    ash_stat.user_id_ = get_user_id();
-    ash_stat.tid_ = GETTID();
-    ash_stat.group_id_ = THIS_WORKER.get_group_id();
-  }
+  ash_stat.stmt_type_ = get_stmt_type();
+  ash_stat.plan_id_ = plan_id_;
+  ash_stat.plan_hash_ = plan_hash_;
+  MEMMOVE(ash_stat.sql_id_, sql_id_,
+      min(sizeof(ash_stat.sql_id_), sizeof(sql_id_)));
+  ash_stat.tenant_id_ = tenant_id_;
+  ash_stat.user_id_ = get_user_id();
+  ash_stat.trace_id_ = get_current_trace_id();
+  ash_stat.tid_ = GETTID();
+  ash_stat.group_id_ = THIS_WORKER.get_group_id();
+  ash_stat.fixup_last_stat(*ObCurTraceId::get_trace_id(), ash_stat.session_id_, sql_id_, plan_id_, plan_hash_);
 }
 
 void ObBasicSessionInfo::set_current_trace_id(common::ObCurTraceId::TraceId *trace_id)
@@ -2244,9 +2247,11 @@ void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
   } else {
     MEMCPY(sql_id_, sql_id, common::OB_MAX_SQL_ID_LENGTH);
     sql_id_[32] = '\0';
-    if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-      MEMMOVE(ObActiveSessionGuard::get_stat().sql_id_, sql_id_,
-          min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(sql_id_)));
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      MEMMOVE(di->get_ash_stat().sql_id_, sql_id_,
+          min(sizeof(di->get_ash_stat().sql_id_), sizeof(sql_id_)));
+      di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(), di->get_ash_stat().session_id_, sql_id_, 0, 0);
     }
   }
 }
@@ -6414,7 +6419,11 @@ int ObBasicSessionInfo::set_session_active()
     LOG_WARN("fail to set session state", K(ret));
   } else {
     thread_data_.is_request_end_ = false;
-    set_ash_stat_value(ObActiveSessionGuard::get_stat());
+    ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      set_ash_stat_value(di->get_ash_stat());
+      ObQueryRetryAshGuard::setup_info(get_retry_info_for_update().get_retry_ash_info());
+    }
   }
   return ret;
 }
@@ -6426,9 +6435,11 @@ void ObBasicSessionInfo::set_session_sleep()
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
-  if (retry_info_.get_retry_cnt() > 0 && ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-    ObActiveSessionGuard::get_stat().end_retry_wait_event();
-    ObActiveSessionGuard::get_stat().block_sessid_ = 0;
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().end_retry_wait_event();
+    di->get_ash_stat().block_sessid_ = 0;
+    ObQueryRetryAshGuard::reset_info();
   }
 }
 

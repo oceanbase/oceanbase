@@ -770,7 +770,7 @@ int ObInnerConnectionLockUtil::request_lock_(
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
@@ -843,7 +843,7 @@ int ObInnerConnectionLockUtil::request_lock_(
 
   const bool local_execute = conn->is_local_execute(GCONF.cluster_id, tenant_id);
 
-  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session())
+  SMART_VAR(ObInnerSQLResult, res, conn->get_session(), conn->is_inner_session(), conn->get_diagnostic_info())
   {
     if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;

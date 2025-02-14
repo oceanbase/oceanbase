@@ -561,11 +561,13 @@ void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
   }
 
   if (need_cluster_heartbeat_(begin_tstamp)) {
+    ObDIActionGuard ag("do_cluster_heartbeat");
     do_cluster_heartbeat_();
     time_guard.click("do_cluster_heartbeat");
   }
 
   if (need_generate_cluster_version_(begin_tstamp)) {
+    ObDIActionGuard ag("gen_cluster_version");
     generate_cluster_version_();
     time_guard.click("generate_cluster_version");
   }

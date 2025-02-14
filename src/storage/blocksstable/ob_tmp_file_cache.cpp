@@ -259,6 +259,7 @@ ObTmpPageCache::ObTmpPageIOCallback::~ObTmpPageIOCallback()
 int ObTmpPageCache::ObTmpPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("TmpPageIOCallback");
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback or allocator", KP_(cache), KP_(allocator), K(ret));
@@ -324,6 +325,7 @@ ObTmpPageCache::ObTmpMultiPageIOCallback::~ObTmpMultiPageIOCallback()
 int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("ObTmpMultiPageIOCallback");
   if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callbackor allocator", KP_(cache), KP_(allocator), K(ret));

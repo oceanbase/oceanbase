@@ -501,6 +501,7 @@ public:
     temp_table_id_(0),
     slave_mapping_type_(SlaveMappingType::SM_NONE),
     part_ch_map_(),
+    dist_method_(ObPQDistributeMethod::NONE),
     total_task_cnt_(0),
     pkey_table_loc_id_(0),
     tsc_op_cnt_(0),

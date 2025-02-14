@@ -3472,7 +3472,10 @@ int ObServer::refresh_cpu_frequency()
   int ret = OB_SUCCESS;
   uint64_t cpu_frequency = get_cpufreq_khz();
 
-  cpu_frequency = cpu_frequency < 1 ? 1 : cpu_frequency;
+  if (0 == cpu_frequency) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
+    cpu_frequency = ObServer::DEFAULT_CPU_FREQUENCY;
+  }
   if (cpu_frequency != cpu_frequency_) {
     LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
     cpu_frequency_ = cpu_frequency;

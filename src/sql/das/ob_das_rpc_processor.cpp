@@ -52,15 +52,21 @@ int ObDASBaseAccessP<pcode>::before_process()
   mem_attr.label_ = "DASRpcPCtx";
   exec_ctx_.get_allocator().set_attr(mem_attr);
   // ash stat should be setted already in rpc thread.
-  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
-    ObActiveSessionGuard::get_stat().exec_phase().in_das_remote_exec_ = true;
-    ObActiveSessionGuard::get_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
-    ObActiveSessionGuard::get_stat().trace_id_ = *ObCurTraceId::get_trace_id();
-    ObActiveSessionGuard::get_stat().user_id_ = das_remote_info_.user_id_;
-    ObActiveSessionGuard::get_stat().plan_id_ = das_remote_info_.plan_id_;
-    ObActiveSessionGuard::get_stat().plan_hash_ = das_remote_info_.plan_hash_;
-    MEMCPY(ObActiveSessionGuard::get_stat().sql_id_, das_remote_info_.sql_id_,
-        min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_das_remote_exec_ = true;
+    di->get_ash_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
+    di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
+    di->get_ash_stat().user_id_ = das_remote_info_.user_id_;
+    di->get_ash_stat().plan_id_ = das_remote_info_.plan_id_;
+    di->get_ash_stat().plan_hash_ = das_remote_info_.plan_hash_;
+    MEMCPY(di->get_ash_stat().sql_id_, das_remote_info_.sql_id_,
+        min(sizeof(di->get_ash_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
+    di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(),
+                                       di->get_ash_stat().session_id_,
+                                       das_remote_info_.sql_id_,
+                                       das_remote_info_.plan_id_,
+                                       das_remote_info_.plan_hash_);
   }
 
   {
@@ -121,7 +127,7 @@ int ObDASBaseAccessP<pcode>::process()
   } else {
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       task_op = task_ops.at(i);
-      ObActiveSessionGuard::get_stat().plan_line_id_ = task_op->plan_line_id_;
+      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = task_op->plan_line_id_;
       ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
       if (OB_FAIL(das_factory->create_das_task_result(task_op->get_type(), op_result))) {
         LOG_WARN("create das task result failed", K(ret));
@@ -216,7 +222,7 @@ int ObDASBaseAccessP<pcode>::after_process(int error_code)
 template<obrpc::ObRpcPacketCode pcode>
 void ObDASBaseAccessP<pcode>::cleanup()
 {
-  ObActiveSessionGuard::get_stat().exec_phase().in_das_remote_exec_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
   if (das_remote_info_.trans_desc_ != nullptr) {

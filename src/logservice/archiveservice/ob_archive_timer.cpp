@@ -100,6 +100,7 @@ void ObArchiveTimer::wait()
 void ObArchiveTimer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveTimer thread start", K(tenant_id_));
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveTimer");
   lib::set_thread_name("ArcTimer");
   common::ObCurTraceId::init(GCONF.self_addr_);
 

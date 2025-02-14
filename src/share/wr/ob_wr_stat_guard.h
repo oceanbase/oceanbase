@@ -41,7 +41,7 @@ public:
     int64_t elapse_time = ::oceanbase::common::ObTimeUtility::current_time() - begin_ts_;
     int64_t cpu_time = get_ru_utime() - begin_ru_cputime_;
     oceanbase::common::ObDiagnosticInfo *tenant_info =
-        oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();
+        oceanbase::common::ObLocalDiagnosticInfo::get();
     if (NULL != tenant_info) {
       tenant_info->add_stat(elapse_time_id, elapse_time);
       tenant_info->add_stat(cpu_time_id, cpu_time);

@@ -323,6 +323,7 @@ public:
   virtual int init(const ObIODOpts &opts) = 0;
   virtual int reconfig(const ObIODOpts &opts) = 0;
   virtual int get_config(ObIODOpts &opts) = 0;
+  int get_device_name(char *buf, int32_t len);
   virtual void destroy() = 0;
 
   virtual int start(const ObIODOpts &opts) = 0;

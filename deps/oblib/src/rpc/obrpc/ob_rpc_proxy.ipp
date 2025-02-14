@@ -475,12 +475,15 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
   } else if (NULL == req.pkt() || NULL == req.buf()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     RPC_OBRPC_LOG(WARN, "request packet is NULL", K(req), K(ret));
-  } else if (FALSE_IT(ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = true)){
-  } else if (OB_FAIL(common::serialization::encode(
-                     req.buf(), payload, pos, args))) {
-    ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = false;
+  } else if (FALSE_IT(nullptr != ObLocalDiagnosticInfo::get()
+                          ? (ObLocalDiagnosticInfo::get()->get_ash_stat().in_rpc_encode_ = true)
+                          : false)) {
+  } else if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
+    GET_DIAGNOSTIC_INFO->get_ash_stat().in_rpc_encode_ = false;
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload), K(ret));
-  } else if (FALSE_IT(ObActiveSessionGuard::get_stat().exec_phase().in_rpc_encode_ = false)){
+  } else if (FALSE_IT(nullptr != ObLocalDiagnosticInfo::get()
+                          ? (ObLocalDiagnosticInfo::get()->get_ash_stat().in_rpc_encode_ = false)
+                          : false)) {
   } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
     RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
   } else if (OB_FAIL(init_pkt(req.pkt(), pcode, opts, false))) {

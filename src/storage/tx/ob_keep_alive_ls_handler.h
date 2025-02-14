@@ -155,6 +155,7 @@ public:
 
   int try_submit_log(const share::SCN &min_start_scn, MinStartScnStatus status);
   void print_stat_info();
+  const char *get_cb_name() const override { return "KeepAliveLSHandler"; }
 public:
 
   bool is_busy() { return ATOMIC_LOAD(&is_busy_); }

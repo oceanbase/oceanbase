@@ -131,6 +131,7 @@ void ObArchiveSequencer::signal()
 void ObArchiveSequencer::run1()
 {
   ARCHIVE_LOG(INFO, "ObArchiveSequencer thread start");
+  ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSequencer");
   lib::set_thread_name("ArcSeq");
   const int64_t thread_run_interval = cal_thread_run_interval();
   ObCurTraceId::init(GCONF.self_addr_);

@@ -151,6 +151,12 @@ private:
 void PxWorkerFunctor::operator ()(bool need_exec)
 {
   int ret = OB_SUCCESS;
+  const char *px_parallel_rule_str = nullptr;
+  if (task_arg_.op_spec_root_ != nullptr && task_arg_.op_spec_root_->plan_ != nullptr) {
+    PXParallelRule px_parallel_rule = task_arg_.op_spec_root_->plan_->get_px_parallel_rule();
+    px_parallel_rule_str = ob_px_parallel_rule_str(px_parallel_rule);
+  }
+  ObDIActionGuard action_guard(px_parallel_rule_str);
   ObCurTraceId::set(env_arg_.get_trace_id());
   GET_DIAGNOSTIC_INFO->get_ash_stat().trace_id_ = env_arg_.get_trace_id();
   /**
@@ -344,6 +350,7 @@ int ObPxThreadWorker::exit()
 int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("FastDFO");
   ObPxSqcHandler *h = task_arg.get_sqc_handler();
 
   if (OB_ISNULL(h)) {

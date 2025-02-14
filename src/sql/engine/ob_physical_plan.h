@@ -185,6 +185,8 @@ public:
   bool is_use_px() const { return use_px_; }
   void set_px_dop(int64_t px_dop) { px_dop_ = px_dop; }
   int64_t get_px_dop() const { return px_dop_; }
+  inline void set_px_parallel_rule(PXParallelRule parallel_rule) { px_parallel_rule_ = parallel_rule; }
+  inline PXParallelRule get_px_parallel_rule() const { return px_parallel_rule_; }
   void set_expected_worker_count(int64_t c) { stat_.expected_worker_count_ = c; }
   int64_t get_expected_worker_count() const { return stat_.expected_worker_count_; }
   void set_minimal_worker_count(int64_t c) { stat_.minimal_worker_count_ = c; }
@@ -584,6 +586,7 @@ private:
   bool require_local_execution_; // not need serialize
   bool use_px_;
   int64_t px_dop_;
+  PXParallelRule px_parallel_rule_;
   uint32_t next_phy_operator_id_; //share val
   uint32_t next_expr_operator_id_; //share val
   // for regexp expression's compilation
@@ -609,6 +612,7 @@ private:
   bool contain_oracle_session_level_temporary_table_; // not used
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_session_scope_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> immediate_refresh_external_table_ids_;
 
   //for outline use
   ObOutlineState outline_state_;
@@ -715,10 +719,19 @@ public:
   bool udf_has_dml_stmt_;
   std::atomic<bool> can_set_feedback_info_;
 private:
+  common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
+  bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_replace_; // for incremental direct load
+  bool insert_overwrite_; // for insert overwrite
+  double online_sample_percent_; // for incremental direct load
+  bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
+  bool data_complement_gen_doc_id_;
+private:
   // used to record transaction modified tables and
   // further cursor stmt will check agains
   // to decide whether it read uncommitted data
   common::ObSEArray<uint64_t, 1> dml_table_ids_;
+  bool direct_load_need_sort_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

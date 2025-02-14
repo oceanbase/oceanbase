@@ -168,6 +168,7 @@ void ObLogRestoreService::signal()
 void ObLogRestoreService::run1()
 {
   LOG_INFO("ObLogRestoreService thread run", "tenant_id", MTL_ID());
+  ObDIActionGuard ag("LogService", "LogRestoreService", "loop task");
   lib::set_thread_name("LogRessvr");
   ObCurTraceId::init(GCONF.self_addr_);
 
@@ -211,6 +212,7 @@ void ObLogRestoreService::do_thread_task_()
     }
 
     if (reach_time_interval_(current_ts, SCHEDULE_FETCH_LOG_INTERVAL, schedule_fetch_log_ts_)) {
+      ObDIActionGuard(ObDIActionGuard::NS_ACTION, "SourceType[%s]", ObLogRestoreSourceItem::get_source_type_str(source.type_));
       if (restore_source_.is_valid()) {
         // log restore source exist, do schedule
         // source_exist means tenant_role is standby or restore and log_restore_source exists

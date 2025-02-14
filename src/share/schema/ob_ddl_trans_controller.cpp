@@ -79,6 +79,7 @@ ObDDLTransController::~ObDDLTransController()
 
 void ObDDLTransController::run1()
 {
+  ObDIActionGuard ag("DDLService", "DDLTransCtr", "detect task");
   lib::set_thread_name("DDLTransCtr");
   while (!has_set_stop()) {
     int ret = OB_SUCCESS;
@@ -106,6 +107,7 @@ void ObDDLTransController::run1()
           int64_t schema_version = OB_INVALID_VERSION;
           int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
+          ObDIActionGuard(ObDIActionGuard::NS_ACTION, "control tenant[T_%ld]", tenant_id);
 
           if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_unit_manager().get_tenant_unit_servers(tenant_id, zone, server_list))) {
             LOG_WARN("get alive server failed", KR(ret));

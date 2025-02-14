@@ -85,7 +85,7 @@ struct ObExecRecord
 #define RECORD(se) \
   do { \
     oceanbase::common::ObDiagnosticInfo *diag_session_info = \
-        oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
+        oceanbase::common::ObLocalDiagnosticInfo::get(); \
     if (NULL != diag_session_info) { \
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats(); \
       io_read_count_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT); \
@@ -121,8 +121,6 @@ struct ObExecRecord
     RECORD(start);
   }
 
-  /// WARN: current sression's di address can be changed by time. So please always using
-  /// get_local_diagnose_info() to get latest di paramter.
   void record_end() {
     RECORD(end);
   }
@@ -154,7 +152,7 @@ struct ObExecRecord
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
     oceanbase::common::ObDiagnosticInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
     uint64_t cur_memstore_read_row_count = 0;
     if (NULL != diag_session_info) {
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
@@ -167,7 +165,7 @@ struct ObExecRecord
 
   uint64_t get_cur_ssstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
     oceanbase::common::ObDiagnosticInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
     uint64_t cur_ssstore_read_row_count = 0;
     if (NULL != diag_session_info) {
       oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();

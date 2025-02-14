@@ -579,17 +579,20 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
-        ObLocalDiagnosticInfo::get()->get_ash_stat().exec_phase().in_committing_ = true;
-        ObLocalDiagnosticInfo::get()->begin_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
-        callback->set_diagnostic_info(ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_
-                                          ? ObLocalDiagnosticInfo::get()
-                                          : nullptr);
+        ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+        if (OB_NOT_NULL(di)) {
+          di->get_ash_stat().in_committing_ = true;
+          di->begin_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
+        }
+        callback->set_diagnostic_info(di);
         if(OB_FAIL(txs->submit_commit_tx(*tx_ptr, expire_ts, *callback, &trace_info))) {
           LOG_WARN("submit commit tx fail", K(ret), KP(callback), K(expire_ts), KPC(tx_ptr));
           callback->reset_diagnostic_info();
           GCTX.session_mgr_->revert_session(session);
-          ObLocalDiagnosticInfo::get()->get_ash_stat().exec_phase().in_committing_ = false;
-          ObLocalDiagnosticInfo::get()->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
+          if (OB_NOT_NULL(di)) {
+            di->get_ash_stat().in_committing_ = false;
+            di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
+          }
           callback->handin();
         }
       }

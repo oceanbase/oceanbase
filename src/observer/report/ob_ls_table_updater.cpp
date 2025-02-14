@@ -414,7 +414,7 @@ void ObLSTableUpdater::throttle(
   }
   const static int64_t sleep_step_us = 20 * 1000; // 20ms
   for (; !stopped && sleep_us > 0; sleep_us -= sleep_step_us) {
-    ob_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)));
+    ob_throttle_usleep(static_cast<int32_t>(std::min(sleep_step_us, sleep_us)), return_code);
   }
 }
 

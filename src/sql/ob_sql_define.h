@@ -517,7 +517,7 @@ enum PXParallelRule
 
 inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
 {
-  const char *ret = "USE_PX_DEFAULT";
+  const char *ret = "MAX_OPTION";
   static const char *parallel_rule_type_to_str[] =
   {
     "USE_PX_DEFAULT",

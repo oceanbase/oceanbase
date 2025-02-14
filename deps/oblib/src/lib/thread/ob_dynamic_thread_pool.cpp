@@ -149,6 +149,7 @@ void ObDynamicThreadPool::run1()
 {
   int tmp_ret = OB_SUCCESS;
   const uint64_t idx = get_thread_idx();
+  ObDIActionGuard ag("DynamicThreadPool", thread_name_, "detect task");
   if (OB_NOT_NULL(thread_name_)) {
     lib::set_thread_name(thread_name_, idx);
   }
@@ -339,8 +340,11 @@ void *ObDynamicThreadPool::task_thread_func(void *data)
           } else {
             COMMON_LOG_RET(WARN, tmp_ret, "failed to pop task", K(tmp_ret));
           }
-        } else if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
-          COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
+        } else {
+          common::ObDIActionGuard ag(typeid(*task));
+          if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
+            COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
+          }
         }
       }
     }
@@ -532,6 +536,7 @@ ObSimpleThreadPoolDynamicMgr::~ObSimpleThreadPoolDynamicMgr()
 
 void ObSimpleThreadPoolDynamicMgr::run1()
 {
+  ObDIActionGuard ag("DynamicThreadPool", "DynamicMgrCheck", "detect task");
   lib::set_thread_name("qth_mgr");
   int64_t last_access_ts = 0;
   int64_t last_idle_ts = 0;
@@ -542,6 +547,7 @@ void ObSimpleThreadPoolDynamicMgr::run1()
     {
       SpinRLockGuard guard(simple_thread_pool_list_lock_);
       DLIST_FOREACH_NORET(pool, simple_thread_pool_list_) {
+        ObDIActionGuard ag1(pool->name_);
         if (pool->min_thread_cnt_ > pool->max_thread_cnt_) {
           continue;
         }
@@ -581,7 +587,7 @@ void ObSimpleThreadPoolDynamicMgr::run1()
       dec_pools[i]->dec_ref();
     }
     ++loop_cnt;
-    ob_usleep(CHECK_INTERVAL_US);
+    ob_usleep(CHECK_INTERVAL_US, true);
   }
 }
 

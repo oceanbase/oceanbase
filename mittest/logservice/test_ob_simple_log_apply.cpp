@@ -87,6 +87,8 @@ public:
     return OB_SUCCESS;
   }
 
+  const char *get_cb_name() const override { return "MockAppendCb"; }
+
   void init(const int64_t log_id,
             MockLSAdapter *ls_adapter)
   {

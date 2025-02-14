@@ -194,31 +194,31 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case IN_PARSE: {
-        cells[cell_idx].set_bool(node.time_model_.in_parse_);
+        cells[cell_idx].set_bool(node.in_parse_);
         break;
       }
       case IN_PL_PARSE: {
-        cells[cell_idx].set_bool(node.time_model_.in_pl_parse_);
+        cells[cell_idx].set_bool(node.in_pl_parse_);
         break;
       }
       case IN_PLAN_CACHE: {
-        cells[cell_idx].set_bool(node.time_model_.in_get_plan_cache_);
+        cells[cell_idx].set_bool(node.in_get_plan_cache_);
         break;
       }
       case IN_SQL_OPTIMIZE: {
-        cells[cell_idx].set_bool(node.time_model_.in_sql_optimize_);
+        cells[cell_idx].set_bool(node.in_sql_optimize_);
         break;
       }
       case IN_SQL_EXECUTION: {
-        cells[cell_idx].set_bool(node.time_model_.in_sql_execution_);
+        cells[cell_idx].set_bool(node.in_sql_execution_);
         break;
       }
       case IN_PX_EXECUTION: {
-        cells[cell_idx].set_bool(node.time_model_.in_px_execution_);
+        cells[cell_idx].set_bool(node.in_px_execution_);
         break;
       }
       case IN_SEQUENCE_LOAD: {
-        cells[cell_idx].set_bool(node.time_model_.in_sequence_load_);
+        cells[cell_idx].set_bool(node.in_sequence_load_);
         break;
       }
       case MODULE: {
@@ -270,23 +270,23 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case TIME_MODEL: {
-        cells[cell_idx].set_uint64(node.time_model_.time_model_);
+        cells[cell_idx].set_uint64(node.time_model_);
         break;
       }
       case IN_COMMITTING: {
-        cells[cell_idx].set_bool(node.time_model_.in_committing_);
+        cells[cell_idx].set_bool(node.in_committing_);
         break;
       }
       case IN_STORAGE_READ: {
-        cells[cell_idx].set_bool(node.time_model_.in_storage_read_);
+        cells[cell_idx].set_bool(node.in_storage_read_);
         break;
       }
       case IN_STORAGE_WRITE: {
-        cells[cell_idx].set_bool(node.time_model_.in_storage_write_);
+        cells[cell_idx].set_bool(node.in_storage_write_);
         break;
       }
       case IN_REMOTE_DAS_EXECUTION: {
-        cells[cell_idx].set_bool(node.time_model_.in_das_remote_exec_);
+        cells[cell_idx].set_bool(node.in_das_remote_exec_);
         break;
       }
       case PROGRAM: {
@@ -320,11 +320,11 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case IN_PLSQL_COMPILATION: {
-        cells[cell_idx].set_bool(node.time_model_.in_plsql_compilation_);
+        cells[cell_idx].set_bool(node.in_plsql_compilation_);
         break;
       }
       case IN_PLSQL_EXECUTION: {
-        cells[cell_idx].set_bool(node.time_model_.in_plsql_execution_);
+        cells[cell_idx].set_bool(node.in_plsql_execution_);
         break;
       }
       case PLSQL_ENTRY_OBJECT_ID: {
@@ -390,7 +390,7 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case IN_FILTER_ROWS: {
-        cells[cell_idx].set_bool(node.time_model_.in_filter_rows_);
+        cells[cell_idx].set_bool(node.in_filter_rows_);
         break;
       }
       case GROUP_ID: {
@@ -447,6 +447,22 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       }
       case PROXY_SID: {
         cells[cell_idx].set_int(node.proxy_sid_);
+        break;
+      }
+      case DELTA_READ_IO_REQUESTS: {
+        cells[cell_idx].set_int(node.delta_read_.count_);
+        break;
+      }
+      case DELTA_READ_IO_BYTES: {
+        cells[cell_idx].set_int(node.delta_read_.size_);
+        break;
+      }
+      case DELTA_WRITE_IO_REQUESTS: {
+        cells[cell_idx].set_int(node.delta_write_.count_);
+        break;
+      }
+      case DELTA_WRITE_IO_BYTES: {
+        cells[cell_idx].set_int(node.delta_write_.size_);
         break;
       }
       default: {

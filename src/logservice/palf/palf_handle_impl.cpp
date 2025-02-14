@@ -1850,7 +1850,7 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote,
   // wait until replica_property_meta has been flushed
   if (OB_SUCC(ret)) {
     while(allow_vote != state_mgr_.is_allow_vote_persisted()) {
-      ob_usleep(500);
+      ob_throttle_usleep(500, 0, palf_id_);
     }
   }
   return ret;

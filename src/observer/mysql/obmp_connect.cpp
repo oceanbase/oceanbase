@@ -216,7 +216,6 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   int ret = OB_SUCCESS;
   const ObString &sql = multi_stmt_item.get_sql();
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   ObSchemaGetterGuard schema_guard;
   // init_connect可以执行query和dml语句，必须加上req_timeinfo_guard
   observer::ObReqTimeGuard req_timeinfo_guard;
@@ -339,7 +338,7 @@ int ObMPConnect::process()
   } else if (OB_FAIL(conn->ret_)) {
     LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
   } else {
-    ObDiagnosticInfoSwitchGuard di_guard(conn->di_);
+    ObDiagnosticInfoSwitchGuard di_guard(conn->get_diagnostic_info());
     if (OB_FAIL(get_user_tenant(*conn))) {
       LOG_WARN("get user name and tenant name failed", K(ret));
     } else if ((SS_INIT == GCTX.status_ || SS_STARTING == GCTX.status_)
@@ -506,7 +505,6 @@ int ObMPConnect::process()
       //Action!!:must revert it after no use it
       revert_session(session);
     }
-    common::ObTenantStatEstGuard guard(tenant_id);
     if (OB_SUCCESS != proc_ret) {
       if (NULL != session) {
         free_session();
@@ -2059,8 +2057,8 @@ int ObMPConnect::check_common_property(ObSMConnection &conn, ObMySQLCapabilityFl
     conn.client_addr_port_ = client_addr_port;
     conn.client_create_time_ = client_create_time;
     conn.sess_create_time_ = sess_create_time;
-    if (conn.di_ != nullptr) {
-      conn.di_->get_ash_stat().proxy_sid_ = proxy_sessid;
+    if (conn.get_diagnostic_info() != nullptr) {
+      conn.get_diagnostic_info()->get_ash_stat().proxy_sid_ = proxy_sessid;
     }
     int64_t code = 0;
     LOG_INFO("construct session id", K(conn.client_sessid_), K(conn.sessid_),
@@ -2283,7 +2281,6 @@ int ObMPConnect::verify_identify(ObSMConnection &conn, ObSQLSessionInfo &session
 {
   int ret = OB_SUCCESS;
   //at this point, tenant_id and sessid are valid
-  ObSessionStatEstGuard guard(tenant_id, conn.sessid_);
   ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
   if (OB_ISNULL(req_)) {
     ret = OB_ERR_UNEXPECTED;

@@ -64,7 +64,7 @@ void ObInitSqcP::destroy()
 
 int ObInitSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().exec_phase().in_px_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -237,7 +237,7 @@ int ObInitSqcP::after_process(int error_code)
     session->set_session_sleep();
   }
 
-  ObActiveSessionGuard::get_stat().exec_phase().in_px_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_px_execution_ = false;
   /**
    * 此处需要清理中断，并把分配的线程数和handler释放.
    * worker正常启动后，此时它的引用计数被更新成了
@@ -393,7 +393,7 @@ void ObInitFastSqcP::destroy()
 
 int ObInitFastSqcP::process()
 {
-  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   int ret = OB_SUCCESS;
   LOG_TRACE("receive dfo", K_(arg));
   ObPxSqcHandler *sqc_handler = arg_.sqc_handler_;
@@ -442,7 +442,7 @@ int ObInitFastSqcP::process()
     ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
 
-  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   if (OB_NOT_NULL(sqc_handler)) {
     // link channel之前或者link过程可能会失败.
     // 如果sqc和qc没有link, 由response将 ret 通知给px.
@@ -475,6 +475,7 @@ int ObInitFastSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    ObDIActionGuard action_guard("PX SUB COORDINATOR");
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {

@@ -171,6 +171,7 @@ public:
   virtual int64_t size() const = 0;
   virtual int inner_process(const char *data_buffer, const int64_t size) = 0;
   virtual int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&copied_callback) const = 0;
+  virtual const char *get_cb_name() const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 
 private:

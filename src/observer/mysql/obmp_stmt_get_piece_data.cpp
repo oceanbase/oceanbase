@@ -189,7 +189,6 @@ int ObMPStmtGetPieceData::process_get_piece_data_stmt(ObSQLSessionInfo &session)
   setup_wb(session);
 
   ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   ret = do_process(session);
   ObThreadLogLevelUtils::clear();

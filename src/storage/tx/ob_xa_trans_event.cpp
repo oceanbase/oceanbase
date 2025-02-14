@@ -53,217 +53,186 @@ void ObXATransStatistics::reset()
 
 void ObXATransStatistics::inc_xa_start_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_START_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_start_count_);
 }
 
 void ObXATransStatistics::add_xa_start_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_START_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_start_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_start_remote_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_START_REMOTE_COUNT, 1);
   ATOMIC_INC(&xa_start_remote_count_);
 }
 
 void ObXATransStatistics::inc_xa_start_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_START_FAIL_COUNT, 1);
   ATOMIC_INC(&xa_start_fail_count_);
 }
 
 void ObXATransStatistics::inc_xa_end_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_END_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_end_count_);
 }
 
 void ObXATransStatistics::add_xa_end_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_END_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_end_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_end_remote_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_END_REMOTE_COUNT, 1);
   ATOMIC_INC(&xa_end_remote_count_);
 }
 
 void ObXATransStatistics::inc_xa_end_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_END_FAIL_COUNT, 1);
   ATOMIC_INC(&xa_end_fail_count_);
 }
 
 void ObXATransStatistics::inc_xa_prepare_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_PREPARE_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_prepare_count_);
 }
 
 void ObXATransStatistics::add_xa_prepare_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_PREPARE_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_prepare_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_prepare_remote_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_PREPARE_REMOTE_COUNT, 1);
   ATOMIC_INC(&xa_prepare_remote_count_);
 }
 
 void ObXATransStatistics::inc_xa_prepare_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_PREPARE_FAIL_COUNT, 1);
   ATOMIC_INC(&xa_prepare_fail_count_);
 }
 
 void ObXATransStatistics::inc_xa_commit_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_COMMIT_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_commit_count_);
 }
 
 void ObXATransStatistics::add_xa_commit_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_COMMIT_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_commit_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_commit_remote_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_COMMIT_REMOTE_COUNT, 1);
   ATOMIC_INC(&xa_commit_remote_count_);
 }
 
 void ObXATransStatistics::inc_xa_commit_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_COMMIT_FAIL_COUNT, 1);
   ATOMIC_INC(&xa_commit_fail_count_);
 }
 
 void ObXATransStatistics::inc_xa_rollback_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_ROLLBACK_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_rollback_count_);
 }
 
 void ObXATransStatistics::add_xa_rollback_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_ROLLBACK_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_rollback_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_rollback_remote_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_ROLLBACK_REMOTE_COUNT, 1);
   ATOMIC_INC(&xa_rollback_remote_count_);
 }
 
 void ObXATransStatistics::inc_xa_rollback_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_ROLLBACK_FAIL_COUNT, 1);
   ATOMIC_INC(&xa_rollback_fail_count_);
 }
 
 void ObXATransStatistics::inc_xa_trans_start_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_TRANS_START_COUNT, 1);
   ATOMIC_INC(&xa_trans_start_count_);
 }
 
 void ObXATransStatistics::inc_xa_read_only_trans_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_READ_ONLY_TRANS_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_read_only_trans_count_);
 }
 
 void ObXATransStatistics::inc_xa_one_phase_commit_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_ONE_PHASE_COMMIT_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_one_phase_commit_count_);
 }
 
 void ObXATransStatistics::inc_xa_inner_sql_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_SQL_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_inner_sql_count_);
 }
 
 void ObXATransStatistics::add_xa_inner_sql_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_SQL_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_inner_sql_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_inner_rpc_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_RPC_TOTAL_COUNT, 1);
   ATOMIC_INC(&xa_inner_rpc_count_);
 }
 
 void ObXATransStatistics::add_xa_inner_rpc_total_used_time(const int64_t value)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_RPC_TOTAL_USED_TIME, value);
   ATOMIC_FAA(&xa_inner_rpc_used_time_us_, value);
 }
 
 void ObXATransStatistics::inc_xa_inner_sql_ten_ms_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_SQL_TEN_MS_COUNT, 1);
   ATOMIC_INC(&xa_inner_sql_ten_ms_count_);
 }
 
 void ObXATransStatistics::inc_xa_inner_sql_twenty_ms_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_SQL_TWENTY_MS_COUNT, 1);
   ATOMIC_INC(&xa_inner_sql_twenty_ms_count_);
 }
 
 void ObXATransStatistics::inc_xa_inner_rpc_ten_ms_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_RPC_TEN_MS_COUNT, 1);
   ATOMIC_INC(&xa_inner_rpc_ten_ms_count_);
 }
 
 void ObXATransStatistics::inc_xa_inner_rpc_twenty_ms_total_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(XA_INNER_RPC_TWENTY_MS_COUNT, 1);
   ATOMIC_INC(&xa_inner_rpc_twenty_ms_count_);
 }
@@ -451,175 +420,150 @@ void ObDBLinkTransStatistics::reset()
 
 void ObDBLinkTransStatistics::inc_dblink_trans_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_COUNT, 1);
   ATOMIC_INC(&dblink_trans_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_callback_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_CALLBACK_COUNT, 1);
   ATOMIC_INC(&dblink_trans_callback_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_promotion_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_PROMOTION_COUNT, 1);
   ATOMIC_INC(&dblink_trans_promotion_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_commit_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_COMMIT_COUNT, 1);
   ATOMIC_INC(&dblink_trans_commit_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_commit_used_time(const int64_t used_time)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_COMMIT_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_commit_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_commit_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_COMMIT_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_commit_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_rollback_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_ROLLBACK_COUNT, 1);
   ATOMIC_INC(&dblink_trans_rollback_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_rollback_used_time(const int64_t used_time)
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_ROLLBACK_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_rollback_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_rollback_fail_count()
 {
-  common::ObTenantStatEstGuard guard(tenant_id_);
   EVENT_ADD(DBLINK_TRANS_ROLLBACK_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_rollback_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_start_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_START_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_start_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_xa_start_used_time(const int64_t used_time)
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_START_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_xa_start_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_start_fail_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_START_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_start_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_end_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_END_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_end_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_xa_end_used_time(const int64_t used_time)
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_END_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_xa_end_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_end_fail_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_END_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_end_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_prepare_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_PREPARE_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_prepare_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_xa_prepare_used_time(const int64_t used_time)
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_PREPARE_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_xa_prepare_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_prepare_fail_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_PREPARE_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_prepare_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_commit_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_COMMIT_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_commit_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_xa_commit_used_time(const int64_t used_time)
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_COMMIT_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_xa_commit_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_commit_fail_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_COMMIT_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_commit_fail_count_);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_rollback_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_ROLLBACK_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_rollback_count_);
 }
 
 void ObDBLinkTransStatistics::add_dblink_trans_xa_rollback_used_time(const int64_t used_time)
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_ROLLBACK_USED_TIME, used_time);
   ATOMIC_FAA(&dblink_trans_xa_rollback_used_time_, used_time);
 }
 
 void ObDBLinkTransStatistics::inc_dblink_trans_xa_rollback_fail_count()
 {
-  // common::ObTenantStatEstGuard guard(tenant_id_);
   // EVENT_ADD(DBLINK_TRANS_XA_ROLLBACK_FAIL_COUNT, 1);
   ATOMIC_INC(&dblink_trans_xa_rollback_fail_count_);
 }

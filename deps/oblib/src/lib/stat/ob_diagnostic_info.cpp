@@ -24,8 +24,6 @@ namespace oceanbase
 namespace common
 {
 
-ObDiagnosticInfo ObDiagnosticInfo::dummy_di_ __attribute__((init_priority(102)));
-
 int64_t ObListWaitEventStat::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -200,6 +198,7 @@ int ObDiagnosticInfo::init(
     tenant_id_ = tenant_id;
     group_id_ = group_id;
     session_id_ = session_id;
+    need_aggregate_ = true;
     ash_stat_.tenant_id_ = tenant_id;
     ash_stat_.group_id_ = group_id_;
     ash_stat_.session_id_ = session_id;
@@ -231,7 +230,11 @@ void ObDiagnosticInfo::inner_begin_wait_event(const int64_t event_no, const uint
     curr_wait_.p3_ = p3;
     curr_wait_.timeout_ms_ = timeout_ms;
     curr_wait_.wait_begin_time_ = rdtsc();
-    ash_stat_.wait_event_begin_ts_ = curr_wait_.wait_begin_time_;
+    if (ash_stat_.retry_wait_event_no_ == 0) {
+      // If it's already in a retry wait event,
+      // we should not update wait_begin_time here
+      ash_stat_.wait_event_begin_ts_ = curr_wait_.wait_begin_time_;
+    }
   } else {
     // do noting
   }
@@ -253,13 +256,20 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
     curr_wait_.wait_end_time_ = rdtsc();
     curr_wait_.wait_time_ = (curr_wait_.wait_end_time_ - curr_wait_.wait_begin_time_) * 1000 /
                             static_cast<int64_t>(lib_get_cpu_khz());
-    // TODO(roland.qk): unify wait event record source.
-    const int64_t cur_wait_time = (curr_wait_.wait_end_time_ - ash_stat_.wait_event_begin_ts_) * 1000 /
-                            static_cast<int64_t>(lib_get_cpu_khz());
-    if (!is_idle) {
-      ash_stat_.total_non_idle_wait_time_ += cur_wait_time;
+    if (ash_stat_.retry_wait_event_no_ > 0) {
+      // ash is in retry wait event. so we don't update total_wait_.
     } else {
-      ash_stat_.total_idle_wait_time_ += cur_wait_time;
+      // TODO(roland.qk): unify wait event record source.
+      const int64_t cur_wait_time = (curr_wait_.wait_end_time_ - ash_stat_.wait_event_begin_ts_) * 1000 /
+                              static_cast<int64_t>(lib_get_cpu_khz());
+      if (!is_idle) {
+        ash_stat_.total_non_idle_wait_time_ += cur_wait_time;
+      } else {
+        ash_stat_.total_idle_wait_time_ += cur_wait_time;
+      }
+    }
+    if (max_wait_.wait_time_ < curr_wait_.wait_time_) {
+      max_wait_.assign(curr_wait_);
     }
 
     ObWaitEventDesc desc;
@@ -289,6 +299,25 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
   } else {
     // do noting
   }
+}
+
+bool ObDiagnosticInfo::set_mysql_ref()
+{
+  bool is_success = true;
+  if (OB_UNLIKELY(ATOMIC_CAS(&hold_by_mysql_obrequest_, false, true) != false)) {
+    is_success = false;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "mysql obrequest set di ref conflict", KPC(this));
+  }
+  return is_success;
+}
+bool ObDiagnosticInfo::reset_mysql_ref()
+{
+  bool is_success = true;
+  if (OB_UNLIKELY(ATOMIC_CAS(&hold_by_mysql_obrequest_, true, false) != true)) {
+    is_success = false;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "mysql obrequest reset di ref conflict", KPC(this));
+  }
+  return is_success;
 }
 
 } /* namespace common */

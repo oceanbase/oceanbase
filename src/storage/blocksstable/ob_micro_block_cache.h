@@ -198,6 +198,7 @@ public:
       char *buf, const int64_t buf_len,
       ObIOCallback *&callback) const override;
   virtual const char *get_data() override;
+  virtual const char *get_cb_name() const override { return "SingleMicroBlockIOCB"; }
   TO_STRING_KV(KP_(micro_block), K_(cache_handle), K_(need_write_extra_buf), K_(offset));
 private:
   friend class ObIMicroBlockCache;
@@ -217,6 +218,7 @@ public:
       char *buf, const int64_t buf_len,
       ObIOCallback *&callback) const override;
   virtual const char *get_data() override;
+  virtual const char *get_cb_name() const override { return "MultiDataBlockIOCB"; }
   TO_STRING_KV(K_(io_ctx), K_(offset));
 private:
   friend class ObDataMicroBlockCache;

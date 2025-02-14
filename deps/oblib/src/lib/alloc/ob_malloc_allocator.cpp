@@ -718,6 +718,11 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
                      "label", first_label,
                      "backtrace", first_bt);
+          } else if (0 == strncmp("Diagnostic", first_label, 10) && di_leaked_times_++ < 10) {
+            LOG_WARN("tenant memory leak!!!", K(tenant_id), K(ctx_id),
+                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
+                      "label", first_label,
+                      "backtrace", first_bt);
           } else {
             LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
                       "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),

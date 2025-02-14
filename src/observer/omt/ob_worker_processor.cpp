@@ -21,6 +21,7 @@
 #include "lib/oblog/ob_warning_buffer.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
 #include "share/config/ob_server_config.h"
@@ -109,12 +110,20 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
                OB_ID(receive_ts), req.get_receive_timestamp(),
                OB_ID(enqueue_ts), req.get_enqueue_timestamp());
   ObRequest::Type req_type = req.get_type(); // bugfix note: must be obtained in advance
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (di != nullptr && !di->get_ash_stat().has_user_module_) {
+    //di->get_ash_stat().has_user_module_ == true means these module and action specified by user, we can't rewrite it
+    ObLocalDiagnosticInfo::set_service_module(THIS_THWORKER.get_module_name());
+  }
   if (ObRequest::OB_RPC == req_type) {
     // internal RPC request
     const obrpc::ObRpcPacket &packet
         = static_cast<const obrpc::ObRpcPacket&>(req.get_packet());
     NG_TRACE_EXT(start_rpc, OB_ID(addr), RPC_REQ_OP.get_peer(&req), OB_ID(pcode), packet.get_pcode());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
+    if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
+      ObLocalDiagnosticInfo::set_service_action(obrpc::ObRpcPacketSet::instance().name_of_pcode(packet.get_pcode()));
+    }
 
 #ifdef ERRSIM
     THIS_WORKER.set_module_type(packet.get_module_type());
@@ -131,7 +140,12 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   } else if (ObRequest::OB_MYSQL == req_type) {
     NG_TRACE_EXT(start_sql, OB_ID(addr), SQL_REQ_OP.get_peer(&req));
     // mysql command request
+      const obmysql::ObMySQLRawPacket &pkt
+          = static_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
+    if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
+      ObLocalDiagnosticInfo::set_service_action(obmysql::ObMySQLPacket::get_mysql_cmd_name(pkt.get_cmd()));
+    }
   }
   // record trace id
   ObTraceIdAdaptor trace_id_adaptor;

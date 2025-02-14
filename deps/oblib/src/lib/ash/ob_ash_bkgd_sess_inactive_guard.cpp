@@ -20,10 +20,11 @@ using namespace oceanbase::common;
 
 ObBKGDSessInActiveGuard::ObBKGDSessInActiveGuard()
 {
-  if (ObLocalDiagnosticInfo::get() != &ObDiagnosticInfo::dummy_di_) {
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
     need_record_ = true;
-    prev_stat_ = ObActiveSessionGuard::get_stat().is_active_session_;
-    ObActiveSessionGuard::set_sess_inactive();
+    prev_stat_ = di->get_ash_stat().is_active_session_;
+    di->get_ash_stat().set_sess_inactive();
   } else {
     need_record_ = false;
   }

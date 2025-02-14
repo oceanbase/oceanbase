@@ -88,6 +88,7 @@ int ObTabletBufferInfo::fill_info(const ObTabletPoolType &pool_type, ObMetaObjBu
 
 void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
 {
+  ObDIActionGuard ag("TabletGCTask");
   int ret = OB_SUCCESS;
   bool all_tablet_cleaned = false;
   if (OB_FAIL(t3m_->gc_tablets_in_queue(all_tablet_cleaned))) {
@@ -97,6 +98,7 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
 
 void ObTenantMetaMemMgr::TableGCTask::runTimerTask()
 {
+  ObDIActionGuard ag("TableGCTask");
   int ret = OB_SUCCESS;
   bool all_table_cleaned = false; // no use
   if (OB_FAIL(t3m_->gc_tables_in_queue(all_table_cleaned))) {
@@ -106,6 +108,7 @@ void ObTenantMetaMemMgr::TableGCTask::runTimerTask()
 
 void ObTenantMetaMemMgr::RefreshConfigTask::runTimerTask()
 {
+  ObDIActionGuard ag("RefreshConfigTask");
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));

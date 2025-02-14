@@ -23,32 +23,5 @@ namespace oceanbase
 namespace common
 {
 
-/**
- *--------------------------------------------------------ObSessionStatEstGuard---------------------------------------------
- */
-ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id, const bool reset_wait_stat /* = true */)
-{
-  if (ObLocalDiagnosticInfo::get()->get_tenant_id() != tenant_id) {
-    LOG_DEBUG("missing session level diagnostic info", K(tenant_id), K(ObLocalDiagnosticInfo::get()->get_tenant_id()));
-  }
-  if (ObLocalDiagnosticInfo::get()->get_session_id() != session_id) {
-    LOG_DEBUG("missing session level diagnostic info", K(session_id), K(ObLocalDiagnosticInfo::get()->get_session_id()));
-  }
-}
-
-ObSessionStatEstGuard::~ObSessionStatEstGuard()
-{
-}
-
-ObTenantStatEstGuard::ObTenantStatEstGuard(uint64_t tenant_id)
-{
-  if (ObLocalDiagnosticInfo::get()->get_tenant_id() != tenant_id) {
-    LOG_DEBUG("missing tenant level diagnostic info", K(tenant_id), K(ObLocalDiagnosticInfo::get()->get_tenant_id()));
-  }
-}
-ObTenantStatEstGuard::~ObTenantStatEstGuard()
-{
-}
-
 } /* namespace common */
 } /* namespace oceanbase */

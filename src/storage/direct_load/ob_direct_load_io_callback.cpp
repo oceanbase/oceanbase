@@ -16,7 +16,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_utility.h"
 #include "share/ob_errno.h"
-
+#include "lib/stat/ob_diagnostic_info_guard.h"
 namespace oceanbase
 {
 namespace storage
@@ -39,6 +39,7 @@ ObDirectLoadIOCallback::~ObDirectLoadIOCallback()
 int ObDirectLoadIOCallback::inner_process(const char *data_buffer, const int64_t size)
 {
   int ret = OB_SUCCESS;
+  ObDIActionGuard action_guard("DirectLoadIOCallback");
   if (OB_UNLIKELY(size <= 0 || data_buffer == nullptr)) {
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid data buffer size", K(ret), K(size), KP(data_buffer));

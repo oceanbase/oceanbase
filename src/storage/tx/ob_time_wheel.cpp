@@ -368,6 +368,7 @@ int ObTimeWheel::init(const int64_t precision, const int64_t real_thread_num, co
     precision_ = precision;
     tname_[sizeof(tname_) - 1] = '\0';
     (void)snprintf(tname_, sizeof(tname_) - 1, "%s", name);
+    ObLocalDiagnosticInfo::set_thread_name(ob_get_tenant_id(), tname_);
     TRANS_LOG(INFO, "ObTimeWheel init success", K(precision), K(real_thread_num));
   }
 

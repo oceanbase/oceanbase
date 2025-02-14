@@ -67,6 +67,7 @@ public:
 public:
   int on_success();
   int on_failure();
+  const char *get_cb_name() const override { return "PresistIDLogCb"; }
 
 public:
   TO_STRING_KV(K_(log_ts), K_(log_buf), K_(pos), K_(id_srv_type), K_(limited_id));

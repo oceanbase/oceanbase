@@ -143,5 +143,17 @@ int ObIODevice::scan_dir_with_prefix(
   return scan_dir(dir_name, f_prefix);
 }
 
+int ObIODevice::get_device_name(char *buf, int32_t len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(buf), K(len));
+  } else {
+    snprintf(buf, len, "DeviceType:%d/MediaID:%ld", device_type_, media_id_);
+  }
+  return ret;
+}
+
 }
 }

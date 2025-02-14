@@ -138,6 +138,7 @@ public:
   virtual int64_t size() const override { return sizeof(TestIOCallback); }
   virtual int inner_deep_copy(char *buf, const int64_t buf_len, ObIOCallback *&callback) const override;
   virtual int inner_process(const char *data_buffer, const int64_t size) override;
+  virtual const char *get_cb_name() const override { return "TestIOCB"; }
   TO_STRING_KV(KP(number_), KP(allocator_), KP(help_buf_));
 
 public:

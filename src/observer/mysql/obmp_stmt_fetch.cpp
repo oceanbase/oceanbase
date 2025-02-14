@@ -641,7 +641,6 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
   ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,

@@ -115,7 +115,6 @@ int ObTableLoginP::process()
     ObRpcProcessor::require_rerouting_ = true;
     LOG_WARN("[TABLE] login require rerouting", K(ret), "require_rerouting", ObRpcProcessor::require_rerouting_);
   }
-  ObTenantStatEstGuard stat_guard(result_.tenant_id_);
 #ifndef NDEBUG
     LOG_INFO("[TABLE] login", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout());
 #else

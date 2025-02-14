@@ -159,7 +159,7 @@ int ObLatchMutex::wait(const int64_t abs_timeout_us, const uint32_t uid)
 {
   // performance critical, do not double check the parameters
   int ret = OB_SUCCESS;
-  ObDiagnosticInfo *dsi = (!record_stat_ ? NULL : ObDiagnoseSessionInfo::get_local_diagnose_info());
+  ObDiagnosticInfo *dsi = (!record_stat_ ? NULL : ObLocalDiagnosticInfo::get());
   int64_t timeout = 0;
   int lock = 0;
 
@@ -256,7 +256,7 @@ int ObLatchWaitQueue::wait(
     int64_t timeout = 0;
     bool conflict = false;
     struct timespec ts;
-    ObDiagnosticInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    ObDiagnosticInfo *dsi = ObLocalDiagnosticInfo::get();
 
     //check if need wait
     if (OB_FAIL(try_lock(bucket, proc, latch_id, uid, lock_func))) {

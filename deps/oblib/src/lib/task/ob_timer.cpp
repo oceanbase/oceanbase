@@ -360,6 +360,8 @@ void ObTimer::run1()
   Token token(0, 0, NULL);
   thread_id_ = syscall(__NR_gettid);
   OB_LOG(INFO, "timer thread started", KP(this), "tid", syscall(__NR_gettid), KCSTRING(lbt()));
+  const char *module_name = thread_name_ != nullptr ? thread_name_ : "DefaultTimer";
+  ObDIActionGuard("TimerThreadPool", module_name, nullptr);
   if (OB_NOT_NULL(thread_name_)) {
     set_thread_name(thread_name_);
   } else {
@@ -461,6 +463,7 @@ void ObTimer::run1()
       if (timeout_check) {
         ObTimerMonitor::get_instance().start_task(thread_id_, start_time, token.delay, token.task);
       }
+      ObDIActionGuard(typeid(*token.task));
       token.task->runTimerTask();
       ObMonitor<Mutex>::Lock guard(monitor_);
       running_task_ = NULL;

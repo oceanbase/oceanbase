@@ -449,6 +449,7 @@ int ObDASScanOp::do_local_index_lookup()
       } else {
         op->set_tablet_id(related_tablet_ids_.at(0));
         op->set_ls_id(ls_id_);
+        op->set_index_tablet_id(scan_param_.tablet_id_);
       }
     }
   } else {
@@ -470,6 +471,7 @@ int ObDASScanOp::do_local_index_lookup()
       } else {
         op->set_tablet_id(related_tablet_ids_.at(0));
         op->set_ls_id(ls_id_);
+        op->set_index_tablet_id(scan_param_.tablet_id_);
       }
     }
   }
@@ -687,6 +689,7 @@ int ObDASScanOp::rescan()
   } else if (lookup_op != nullptr) {
     lookup_op->set_tablet_id(related_tablet_ids_.at(0));
     lookup_op->set_ls_id(ls_id_);
+    lookup_op->set_index_tablet_id(scan_param_.tablet_id_);
     //lookup op's table_rescan will be drive by its get_next_row()
     //so will can not call it here
   }
@@ -1034,6 +1037,7 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
 int ObLocalIndexLookupOp::get_next_row_from_index_table()
 {
   int ret = OB_SUCCESS;
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(index_tablet_id_.id());
   if (OB_FAIL(rowkey_iter_->get_next_row())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from index scan failed", K(ret));
@@ -1045,6 +1049,8 @@ int ObLocalIndexLookupOp::get_next_row_from_index_table()
 int ObLocalIndexLookupOp::get_next_rows_from_index_table(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+    common::ObASHTabletIdSetterGuard ash_tablet_id_guard(index_tablet_id_.id());
+
   if (OB_FAIL(rowkey_iter_->get_next_rows(count, capacity))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from index scan failed", K(ret));
@@ -1172,6 +1178,7 @@ int ObLocalIndexLookupOp::do_index_lookup()
 int ObLocalIndexLookupOp::get_next_row_from_data_table()
 {
   int ret = OB_SUCCESS;
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id_.id());
   do_clear_evaluated_flag();
   if (scan_param_.key_ranges_.empty()) {
     ret= OB_ITER_END;
@@ -1189,6 +1196,7 @@ int ObLocalIndexLookupOp::get_next_row_from_data_table()
 int ObLocalIndexLookupOp::get_next_rows_from_data_table(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  common::ObASHTabletIdSetterGuard ash_tablet_id_guard(tablet_id_.id());
   lookup_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
   if (scan_param_.key_ranges_.empty()) {
     ret = OB_ITER_END;

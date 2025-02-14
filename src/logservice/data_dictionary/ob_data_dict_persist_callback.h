@@ -45,6 +45,7 @@ public:
     ATOMIC_SET(&is_callback_invoked_, true);
     return OB_SUCCESS;
   }
+  const char *get_cb_name() const override { return "DataDictPersistCallback"; }
 public:
   TO_STRING_KV(K_(is_callback_invoked), K_(is_success));
   OB_INLINE bool is_invoked() const { return ATOMIC_LOAD(&is_callback_invoked_); }

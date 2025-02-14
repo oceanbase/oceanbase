@@ -945,6 +945,7 @@ public:
   }
 private:
   void handle_epoll_event() {
+    ObDIActionGuard ag("HandleEpollEvent");
     const int maxevents = 512;
     struct epoll_event events[maxevents];
     int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
@@ -972,6 +973,7 @@ private:
   }
 
   void handle_close_req_queue() {
+    ObDIActionGuard ag("HandleCloseReq");
     ObSqlSock* s = NULL;
     while((s = (ObSqlSock*)close_req_queue_.pop())) {
       prepare_destroy(s);
@@ -985,6 +987,7 @@ private:
   }
 
   void handle_pending_destroy_list() {
+    ObDIActionGuard ag("HandlePendingDestroy");
     ObDLink* head = pending_destroy_list_.head();
     ObLink* cur = head->next_;
     while(cur != head) {
@@ -1054,6 +1057,7 @@ private:
     return ret;
   }
   void handle_write_req_queue() {
+    ObDIActionGuard ag("HandleWriteReq");
     ObLink* p = NULL;
     while((p = (ObLink*)write_req_queue_.pop())) {
       ObSqlSock* s = CONTAINER_OF(p, ObSqlSock, write_task_link_);

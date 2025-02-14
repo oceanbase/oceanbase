@@ -71,6 +71,7 @@ public:
   inline bool is_failed() const { return status_.is_failed(); }
   inline bool is_finished() const { return status_.is_finished(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLClogCb"; }
 private:
   ObDDLClogCbStatus status_;
 };
@@ -88,6 +89,7 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLStartClogCb"; }
   TO_STRING_KV(K(is_inited_), K(status_), K_(table_key), K_(data_format_version), K_(execution_id), K_(lock_tid));
 private:
   bool is_inited_;
@@ -116,6 +118,7 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLMacroBlockClogCb"; }
 private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
@@ -145,6 +148,7 @@ public:
   inline bool is_finished() const { return status_.is_finished(); }
   int get_ret_code() const { return status_.get_ret_code(); }
   void try_release();
+  const char *get_cb_name() const override { return "DDLCommitClogCb"; }
   TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_scn_), K_(lock_tid));
 private:
   bool is_inited_;

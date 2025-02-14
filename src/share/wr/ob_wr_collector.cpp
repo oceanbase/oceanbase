@@ -74,7 +74,7 @@ int ObWrCollector::init()
                   OB_WR_SNAPSHOT_TNAME, LAST_SNAPSHOT_RECORD_SNAP_ID, tenant_id))) {
       LOG_WARN("failed to format sql", KR(ret));
     } else if (OB_FAIL(
-                  GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+                  ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
       LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -121,6 +121,8 @@ int ObWrCollector::collect()
     LOG_WARN("failed to collect sql text", KR(ret));
   } else if (OB_FAIL(collect_sql_plan())) {
     LOG_WARN("failed to collect sql plan", KR(ret));
+  } else if (OB_FAIL(collect_res_mgr_sysstat())) {
+    LOG_WARN("failed to collect res mgr sysstat", KR(ret));
   }
 
   if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE)) {
@@ -151,7 +153,7 @@ int ObWrCollector::collect_sysstat()
                    "__all_virtual_sysstat where tenant_id=%ld",
                    query_timeout, tenant_id))) {
       LOG_WARN("failed to assign sysstat query string", KR(ret));
-    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
       LOG_WARN("failed to fetch sysstat", KR(ret), K(tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -200,7 +202,87 @@ int ObWrCollector::collect_sysstat()
       }
       if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
           OB_FAIL(write_to_wr(dml_splicer, OB_WR_SYSSTAT_TNAME, tenant_id))) {
-            LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+        LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObWrCollector::collect_res_mgr_sysstat()
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = MTL_ID();
+  int64_t cluster_id = ObServerConfig::get_instance().cluster_id;
+  ObDMLSqlSplicer dml_splicer;
+  ObSqlString sql;
+  int64_t tmp_real_str_len = 0;
+  int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_UNLIKELY(query_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, group_id, stat_id, value from "
+                   "__all_virtual_res_mgr_sysstat where tenant_id=%ld",
+                   query_timeout, tenant_id))) {
+      LOG_WARN("failed to assign res mgr sysstat query string", KR(ret));
+    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("failed to fetch res mgr sysstat", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next row", KR(ret));
+          }
+        } else {
+          ObWrResMgrSysstat sysstat;
+          EXTRACT_STRBUF_FIELD_MYSQL(
+              *result, "svr_ip", sysstat.svr_ip_, OB_IP_STR_BUFF, tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", sysstat.svr_port_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "stat_id", sysstat.stat_id_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "group_id", sysstat.group_id_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "value", sysstat.value_, int64_t);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
+              LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
+            } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
+              LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {
+              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", sysstat.svr_ip_))) {
+              LOG_WARN("failed to add column svr_ip", KR(ret), K(sysstat));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", sysstat.svr_port_))) {
+              LOG_WARN("failed to add column svr_port", KR(ret), K(sysstat));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("stat_id", sysstat.stat_id_))) {
+              LOG_WARN("failed to add column stat_id", KR(ret), K(sysstat));
+            } else if (OB_FAIL(dml_splicer.add_pk_column("group_id", sysstat.group_id_))) {
+              LOG_WARN("failed to add column group_id", KR(ret), K(sysstat));
+            } else if (OB_FAIL(dml_splicer.add_column("value", sysstat.value_))) {
+              LOG_WARN("failed to add column value", KR(ret), K(sysstat));
+            } else if (OB_FAIL(dml_splicer.finish_row())) {
+              LOG_WARN("failed to finish row", KR(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_BATCH_SIZE) {
+          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_RES_MGR_SYSSTAT_TNAME, tenant_id))) {
+            LOG_WARN("failed to batch write to wr", KR(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
+          OB_FAIL(write_to_wr(dml_splicer, OB_WR_RES_MGR_SYSSTAT_TNAME, tenant_id))) {
+        LOG_WARN("failed to batch write remaining part to wr", KR(ret));
       }
     }
   }
@@ -263,7 +345,8 @@ int ObWrCollector::collect_ash()
             "tm_delta_db_time, "
             "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
             "plsql_object_id, "
-            "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid from "
+            "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid, "
+            "delta_read_io_requests, delta_read_io_bytes, delta_write_io_requests, delta_write_io_bytes from "
             "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
             "svr_ip='%s' and svr_port=%d";
@@ -277,7 +360,7 @@ int ObWrCollector::collect_ash()
                       query_timeout, tenant_id, snapshot_begin_time_, snapshot_end_time_,
                       svr_ip, svr_port))) {
           LOG_WARN("failed to assign ash query string", KR(ret));
-        } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+        } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
           LOG_WARN("failed to fetch ash", KR(ret), K(tenant_id), K(sql));
         } else if (OB_ISNULL(result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;
@@ -354,6 +437,14 @@ int ObWrCollector::collect_ash()
                   skip_null_error, skip_column_error, default_value);
               EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "proxy_sid", ash.proxy_sid_, int64_t,
                   skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_read_io_requests", ash.delta_read_io_requests_,
+                  int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_read_io_bytes", ash.delta_read_io_bytes_,
+                  int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_write_io_requests", ash.delta_write_io_requests_,
+                  int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "delta_write_io_bytes", ash.delta_write_io_bytes_,
+                  int64_t, skip_null_error, skip_column_error, default_value);
 
               char plan_hash_char[64] = "";
               if (OB_SUCC(ret)) {
@@ -389,9 +480,9 @@ int ObWrCollector::collect_ash()
                   LOG_WARN("failed to add column event_no", KR(ret), K(ash));
                 } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_no", ash.event_no_))) {
                   LOG_WARN("failed to add column event_no", KR(ret), K(ash));
-                } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_id"))) {
+                } else if (ash.event_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_id"))) {
                   LOG_WARN("failed to add column event_id", KR(ret), K(ash));
-                } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_id", ash.event_id_))) {
+                } else if (ash.event_id_ >= 0 && OB_FAIL(dml_splicer.add_column("event_id", ash.event_id_))) {
                   LOG_WARN("failed to add column event_id", KR(ret), K(ash));
                 } else if (ash.time_waited_ < 0 && OB_FAIL(dml_splicer.add_column(true, "time_waited"))) {
                   LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
@@ -527,6 +618,22 @@ int ObWrCollector::collect_ash()
                   LOG_WARN("failed to add column blocking_session_id", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.add_column("proxy_sid", ash.proxy_sid_))) {
                   LOG_WARN("failed to add column proxy_sid", KR(ret), K(ash));
+                } else if (ash.delta_read_io_requests_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_read_io_requests"))) {
+                  LOG_WARN("failed to add column delta_read_io_requests", KR(ret), K(ash));
+                } else if (ash.delta_read_io_requests_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_read_io_requests", ash.delta_read_io_requests_))) {
+                  LOG_WARN("failed to add column delta_read_io_requests", KR(ret), K(ash));
+                } else if (ash.delta_read_io_bytes_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_read_io_bytes"))) {
+                  LOG_WARN("failed to add column delta_read_io_bytes", KR(ret), K(ash));
+                } else if (ash.delta_read_io_bytes_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_read_io_bytes", ash.delta_read_io_bytes_))) {
+                  LOG_WARN("failed to add column delta_read_io_bytes", KR(ret), K(ash));
+                } else if (ash.delta_write_io_requests_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_write_io_requests"))) {
+                  LOG_WARN("failed to add column delta_write_io_requests", KR(ret), K(ash));
+                } else if (ash.delta_write_io_requests_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_write_io_requests", ash.delta_write_io_requests_))) {
+                  LOG_WARN("failed to add column delta_write_io_requests", KR(ret), K(ash));
+                } else if (ash.delta_write_io_bytes_ < 0 && OB_FAIL(dml_splicer.add_column(true, "delta_write_io_bytes"))) {
+                  LOG_WARN("failed to add column delta_write_io_bytes", KR(ret), K(ash));
+                } else if (ash.delta_write_io_bytes_ >= 0 && OB_FAIL(dml_splicer.add_column("delta_write_io_bytes", ash.delta_write_io_bytes_))) {
+                  LOG_WARN("failed to add column delta_write_io_bytes", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }
@@ -607,8 +714,8 @@ int ObWrCollector::collect_statname()
     if (expected_rows > 0) {
       int64_t affected_rows = 0;
       uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-      if (OB_FAIL(GCTX.sql_proxy_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
-          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+      if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(exec_tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else if (OB_UNLIKELY(affected_rows > 0)) {
         LOG_TRACE("the stat name has changed, there are new statname.", K(affected_rows));
       } else if (OB_UNLIKELY(affected_rows < 0)) {
@@ -663,8 +770,8 @@ int ObWrCollector::collect_eventname()
     if (expected_rows > 0) {
       int64_t affected_rows = 0;
       uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-      if (OB_FAIL(GCTX.sql_proxy_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
-          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+      if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(exec_tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else if (OB_UNLIKELY(affected_rows > 0)) {
         LOG_TRACE("the event name has changed, there are new event name.", K(affected_rows));
       } else if (OB_UNLIKELY(affected_rows < 0)) {
@@ -699,7 +806,7 @@ int ObWrCollector::collect_system_event()
                    "__all_virtual_system_event where tenant_id=%ld",
                    query_timeout, tenant_id))) {
       LOG_WARN("failed to assign sysstat query string", KR(ret));
-    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
       LOG_WARN("failed to fetch sysstat", KR(ret), K(tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -790,7 +897,7 @@ int ObWrCollector::collect_sqlstat()
                   "select /*+ workload_repository_snapshot query_timeout(%ld) */ topnsql "
                   "from oceanbase.DBA_WR_CONTROL", query_timeout))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
-      } else if (OB_FAIL(sql_proxy->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+      } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("failed to fetch ash", KR(ret), K(OB_SYS_TENANT_ID), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -871,7 +978,7 @@ int ObWrCollector::collect_sqlstat()
                   "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port",
                   query_timeout, tenant_id, tenant_id, topnsql, topnsql, topnsql, topnsql, topnsql ))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
-      } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
         LOG_WARN("failed to fetch sql stat", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1188,7 +1295,7 @@ int ObWrCollector::update_last_snapshot_end_time()
     } else if (OB_FAIL(dml_splicer.splice_insert_update_sql(OB_WR_SNAPSHOT_TNAME, sql))) {
       LOG_WARN("failed to generate snapshot insertion sql", KR(ret), K(tenant_id));
     } else if (OB_FAIL(
-                  GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+                  ObWrCollector::exec_write_sql_with_retry(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
       LOG_WARN("failed to write snapshot_info", KR(ret), K(sql), K(gen_meta_tenant_id(tenant_id)));
     } else if (affected_rows != 1 && affected_rows != 2) {
       ret = OB_ERR_UNEXPECTED;
@@ -1225,7 +1332,7 @@ int ObWrCollector::collect_sqltext()
                     "tenant_id = %ld and snap_id = %ld and query_sql <> '')  group by sql_id ",
                   query_timeout, tenant_id, tenant_id, snap_id_))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
-      } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
         LOG_WARN("failed to fetch sql stat", KR(ret), K(tenant_id), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1273,7 +1380,7 @@ int ObWrCollector::collect_sqltext()
                   tenant_id, cluster_id, snap_id_, sqltext.sql_id_,
                   static_cast<int>(strlen(query_sql)), query_sql, sqltext.sql_type_))) {
                 LOG_WARN("failed to assign insert query string", KR(tmp_ret));
-              } else if (OB_TMP_FAIL(GCTX.sql_proxy_->write(exec_tenant_id, insert_sql.ptr(), affected_rows))) {
+              } else if (OB_TMP_FAIL(ObWrCollector::exec_write_sql_with_retry(exec_tenant_id, insert_sql.ptr(), affected_rows))) {
                 LOG_WARN("execute sql failed", KR(tmp_ret), K(tenant_id), K(exec_tenant_id), K(insert_sql));
               } else if (OB_UNLIKELY(affected_rows != 1)) {
                 // ret = OB_ERR_UNEXPECTED;
@@ -1296,6 +1403,7 @@ int ObWrCollector::collect_sql_plan()
   const uint64_t tenant_id = MTL_ID();
   int64_t cluster_id = ObServerConfig::get_instance().cluster_id;
   ObDMLSqlSplicer dml_splicer;
+  ObDMLSqlSplicer dml_splicer_aux;
   ObSqlString sql;
   int64_t tmp_real_str_len = 0;
   int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
@@ -1316,7 +1424,7 @@ int ObWrCollector::collect_sql_plan()
                    "oceanbase.__all_virtual_wr_sqlstat where tenant_id = %ld and snap_id = %ld)  group by sql_id",
                    query_timeout, tenant_id, tenant_id, snap_id_))) {
       LOG_WARN("failed to assign sqlplan query string", KR(ret));
-    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
       LOG_WARN("failed to fetch sqlplan", KR(ret), K(tenant_id), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1469,9 +1577,37 @@ int ObWrCollector::collect_sql_plan()
               LOG_WARN("failed to finish row", KR(ret));
             }
           }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(dml_splicer_aux.add_pk_column(K(tenant_id)))) {
+              LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column(K(cluster_id)))) {
+              LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("SNAP_ID", snap_id_))) {
+              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("svr_ip", sqlplan.svr_ip_))) {
+              LOG_WARN("failed to add column svr_ip", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("svr_port", sqlplan.svr_port_))) {
+              LOG_WARN("failed to add column svr_port", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("SQL_ID", sqlplan.sql_id_))) {
+              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(sqlplan.sql_id_));
+            } else if (OB_FAIL(dml_splicer_aux.add_uint64_pk_column("plan_hash", sqlplan.plan_hash_))) {
+              LOG_WARN("failed to add column plan_hash", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("plan_id", sqlplan.plan_id_))) {
+              LOG_WARN("failed to add column plan_id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer_aux.add_pk_column("id", sqlplan.id_))) {
+              LOG_WARN("failed to add column id", KR(ret), K(sqlplan));
+            } else if (OB_FAIL(dml_splicer_aux.finish_row())) {
+              LOG_WARN("failed to finish row", KR(ret));
+            }
+          }
         }
         if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_SQL_PLAN_BATCH_SIZE) {
-          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
+          if (OB_FAIL(write_to_wr_sql_plan_and_aux(dml_splicer,
+                  dml_splicer_aux,
+                  OB_WR_SQL_PLAN_TNAME,
+                  OB_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_TNAME,
+                  tenant_id,
+                  need_insert_ignore))) {
             if (OB_FAIL(check_if_ignore_errorcode(ret))) {
               LOG_WARN("failed to batch write to wr", KR(ret));
             } else {
@@ -1482,9 +1618,14 @@ int ObWrCollector::collect_sql_plan()
         }
       }
       if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0 &&
-          OB_FAIL(write_to_wr(dml_splicer, OB_WR_SQL_PLAN_TNAME, tenant_id, need_insert_ignore))) {
+          OB_FAIL(write_to_wr_sql_plan_and_aux(dml_splicer,
+                  dml_splicer_aux,
+                  OB_WR_SQL_PLAN_TNAME,
+                  OB_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_TNAME,
+                  tenant_id,
+                  need_insert_ignore))) {
         if (OB_FAIL(check_if_ignore_errorcode(ret))) {
-          LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+          LOG_WARN("failed to batch write to wr", KR(ret));
         } else {
           dml_splicer.reset();
           LOG_WARN("failed to batch write remaining part to wr but ignore error", KR(ret));
@@ -1507,7 +1648,7 @@ int ObWrCollector::write_to_wr(
   } else if (ignore_error && OB_FAIL(dml_splicer.splice_batch_insert_ignore_sql(table_name, sql))) {
     LOG_WARN("failed to generate sql", KR(ret), K(tenant_id));
   } else if (OB_FAIL(
-                 GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+                 ObWrCollector::exec_write_sql_with_retry(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write wr data", KR(ret), K(sql), K(gen_meta_tenant_id(tenant_id)));
   } else if (affected_rows != cur_row) {
     ret = OB_ERR_UNEXPECTED;
@@ -1515,6 +1656,49 @@ int ObWrCollector::write_to_wr(
   } else {
     LOG_TRACE("execute wr batch insertion sql success", K(sql), K(affected_rows));
     dml_splicer.reset();
+  }
+  return ret;
+}
+
+int ObWrCollector::write_to_wr_sql_plan_and_aux(ObDMLSqlSplicer &dml_splicer, ObDMLSqlSplicer &dml_splicer_aux, const char *table_name,
+    const char *table_name_aux, int64_t tenant_id, bool ignore_error)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  int64_t cur_row = dml_splicer.get_row_count();
+  int64_t cur_row_aux = dml_splicer_aux.get_row_count();
+  ObMySQLTransaction trans;
+  if(OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is NULL", K(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("failed to start trans", K(ret), K(tenant_id), K(gen_meta_tenant_id(tenant_id)));
+  } else if (!ignore_error && OB_FAIL(dml_splicer.splice_batch_insert_sql(table_name, sql))) {
+    LOG_WARN("failed to generate sql", K(ret), K(tenant_id));
+  } else if (ignore_error && OB_FAIL(dml_splicer.splice_batch_insert_ignore_sql(table_name, sql))) {
+    LOG_WARN("failed to generate sql", K(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write wr sql plan and aux", K(ret), K(sql), K(gen_meta_tenant_id(tenant_id)));
+  } else if (affected_rows != cur_row) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid affected rows", K(ret), K(affected_rows), K(cur_row), K(sql));
+  } else if (OB_FAIL(dml_splicer_aux.splice_batch_insert_sql(table_name_aux, sql))) {
+    LOG_WARN("failed to generate sql", K(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write wr sql plan and aux", K(ret), K(sql), K(gen_meta_tenant_id(tenant_id)));
+  } else if (affected_rows != cur_row_aux) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid affected rows", K(ret), K(affected_rows), K(cur_row), K(sql));
+  } else {
+    dml_splicer.reset();
+    dml_splicer_aux.reset();
+    LOG_TRACE("insert wr sql and aux", K(sql), K(affected_rows));
+  }
+  if (trans.is_started() && OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+    LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
   return ret;
 }
@@ -1535,7 +1719,7 @@ int ObWrCollector::fetch_snapshot_id_sequence_curval(int64_t &snap_id)
     } else if (OB_FAIL(sql.assign_fmt(
                    "SELECT /*+ WORKLOAD_REPOSITORY */ %s.currval as snap_id FROM DUAL", WR_SNAP_ID_SEQNENCE_NAME))) {
       LOG_WARN("failed to assign create sequence sql string", KR(ret));
-    } else if (OB_FAIL(sql_proxy->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
       LOG_WARN("failed to fetch cur snap_id sequence", KR(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1567,7 +1751,7 @@ int ObWrCollector::get_cur_snapshot_id_for_ahead_snapshot(int64_t &snap_id)
                    "SELECT max(snap_id)+1 as snap_id FROM %s", OB_WR_SNAPSHOT_TNAME))) {
       LOG_WARN("failed to assign select sql string", KR(ret));
     } else if (OB_FAIL(
-                   GCTX.sql_proxy_->read(res, gen_meta_tenant_id(OB_SYS_TENANT_ID), sql.ptr()))) {
+                   ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(OB_SYS_TENANT_ID), sql.ptr()))) {
       LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1604,7 +1788,7 @@ int ObWrCollector::get_begin_interval_time(int64_t &begin_interval_time)
                    OB_WR_SNAPSHOT_TNAME, tenant_id, snap_id_))) {
       LOG_WARN("failed to format sql", KR(ret));
     } else if (OB_FAIL(
-                   GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+                   ObWrCollector::exec_read_sql_with_retry(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
       LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1678,6 +1862,17 @@ int ObWrDeleter::do_delete()
                    OB_WR_SQLTEXT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
       LOG_WARN(
           "failed to delete __wr_sqltext data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
+    } else if (OB_FAIL(delete_expired_data_from_wr_sql_plan_and_aux(OB_WR_SQL_PLAN_TNAME,
+                   OB_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_TNAME,
+                   tenant_id,
+                   cluster_id,
+                   snap_id,
+                   query_timeout))) {
+      LOG_WARN("failed to delete __wr_sql_plan and __wr_sql_plan_aux_key2snapshot",
+          K(ret),
+          K(tenant_id),
+          K(cluster_id),
+          K(snap_id));
     }
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
@@ -1711,7 +1906,7 @@ int ObWrDeleter::delete_expired_data_from_wr_table(const char *const table_name,
   } else if (OB_FAIL(sql.append_fmt("tenant_id='%lu' and cluster_id='%lu' and snap_id='%ld'",
                  tenant_id, cluster_id, snap_id))) {
     LOG_WARN("sql append failed", K(ret));
-  } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(meta_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
   } else if (OB_UNLIKELY(affected_rows == 0)) {
     LOG_TRACE("the snapshot does not have any data.", K(snap_id), K(tenant_id), K(affected_rows),
@@ -1721,6 +1916,51 @@ int ObWrDeleter::delete_expired_data_from_wr_table(const char *const table_name,
     LOG_WARN("unexpected affected_rows", KR(ret), K(snap_id), K(tenant_id), K(affected_rows));
   }
 
+  LOG_TRACE("delete wr table ", K(ret), K(table_name), K(tenant_id), K(snap_id), "time_consumed",
+      ObTimeUtility::current_time() - start);
+  return ret;
+}
+
+int ObWrDeleter::delete_expired_data_from_wr_sql_plan_and_aux(const char *const table_name,
+    const char *const table_name_aux, const uint64_t tenant_id, const int64_t cluster_id, const int64_t snap_id,
+    const int64_t query_timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(query_timeout <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout on wr data deletion", K(ret), K(query_timeout));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is nullptr", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "DELETE /*+ WORKLOAD_REPOSITORY_PURGE QUERY_TIMEOUT(%ld) */  t1, t2 FROM %s t1 "
+                 "INNER JOIN %s t2 ",
+                 query_timeout,
+                 table_name,
+                 table_name_aux))) {
+    LOG_WARN("sql assign failed", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("on t1.tenant_id=t2.tenant_id and t1.svr_ip=t2.svr_ip and t1.svr_port=t2.svr_port "
+                                "and t1.sql_id=t2.sql_id and t1.plan_hash=t2.plan_hash and t1.id=t2.id and "
+                                "t1.plan_id=t2.plan_id and t1.snap_id=t2.snap_id and t1.cluster_id=t2.cluster_id "))) {
+    LOG_WARN("sql append failed", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("where t1.tenant_id='%lu' and t1.cluster_id='%lu' and t1.snap_id='%ld' ",
+                 tenant_id,
+                 cluster_id,
+                 snap_id))) {
+    LOG_WARN("sql append failed", K(ret));
+  } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+  } else if (OB_UNLIKELY(affected_rows == 0)) {
+    LOG_TRACE("the snapshot does not have any data.", K(snap_id), K(tenant_id), K(affected_rows),
+        K(table_name));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(snap_id), K(tenant_id), K(affected_rows));
+  }
   LOG_TRACE("delete wr table ", K(ret), K(table_name), K(tenant_id), K(snap_id), "time_consumed",
       ObTimeUtility::current_time() - start);
   return ret;
@@ -1745,7 +1985,7 @@ int ObWrDeleter::modify_snapshot_status(const uint64_t tenant_id, const int64_t 
                      query_timeout, OB_WR_SNAPSHOT_TNAME, status, tenant_id,
                      cluster_id, snap_id))) {
     LOG_WARN("sql assign failed", K(ret));
-  } else if (OB_FAIL(GCTX.sql_proxy_->write(meta_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(meta_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
   } else if (OB_UNLIKELY(affected_rows == 0)) {
     LOG_TRACE("the snapshot is already marked as deleted, execute delete process anyway", K(snap_id), K(tenant_id), K(affected_rows));
@@ -1792,5 +2032,90 @@ int ObUpdateSqlStatOp::operator()(common::hash::HashMapPair<sql::ObCacheObjID, s
   }
   return ret;
 }
+
+int ObWrCollector::exec_read_sql_with_retry(common::ObCommonSqlProxy::ReadResult &res, const uint64_t tenant_id, const char *sql)
+{
+  int ret = OB_SUCCESS;
+  auto f = [&res, &tenant_id, &sql]() { return GCTX.sql_proxy_->read(res, tenant_id, sql);};
+  if (OB_FAIL(ObWrCollector::exec_sql_with_retry(tenant_id, sql, f))) {
+    LOG_WARN("failed to exec wr sql with retry", K(ret), K(sql), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObWrCollector::exec_write_sql_with_retry(const uint64_t tenant_id, const char *sql, int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  auto f = [&tenant_id, &sql, &affected_rows]() { return GCTX.sql_proxy_->write(tenant_id, sql, affected_rows);};
+  if (OB_FAIL(ObWrCollector::exec_sql_with_retry(tenant_id, sql, f))) {
+    LOG_WARN("failed to exec wr sql with retry", K(ret), K(sql), K(tenant_id));
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(EN_WR_SNAPSHOT_ERRSIM);
+template <typename T>
+int ObWrCollector::exec_sql_with_retry(const uint64_t tenant_id, const char * sql, T function)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(sql)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ or sql is null", K(ret), K(GCTX.sql_proxy_), K(sql));
+  } else {
+    const int64_t max_timeout = 1 * 60 * 1000 * 1000L; // 1 min
+    const int64_t old_worker_timeout_ts = THIS_WORKER.get_timeout_ts();
+    if (THIS_WORKER.get_timeout_ts() >= (common::ObTimeUtility::current_time() + max_timeout)) {
+      LOG_INFO("the query timeout is too big!!!", K(ret), K(old_worker_timeout_ts), K(max_timeout), K(common::ObTimeUtility::current_time()));
+      THIS_WORKER.set_timeout_ts(common::ObTimeUtility::current_time() + max_timeout);
+    }
+
+    int retry_cnt = 0;
+    do {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_UNLIKELY(common::ObTimeUtility::current_time() >= THIS_WORKER.get_timeout_ts())) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("exec wr inner sql timeout", K(ret), K(retry_cnt), K(THIS_WORKER.get_timeout_ts()));
+        break;
+      } else if (OB_TMP_FAIL(function())) {
+        LOG_WARN("failed to read or write wr need data", K(ret), K(tmp_ret), K(sql), K(retry_cnt));
+      }
+
+      if (OB_UNLIKELY(EN_WR_SNAPSHOT_ERRSIM)) {
+        tmp_ret = EN_WR_SNAPSHOT_ERRSIM;
+        LOG_WARN("wr retry sql errsim, ret is ", K(tmp_ret));
+      }
+
+      if (OB_TMP_FAIL(tmp_ret)) {
+        if (is_can_retry(tmp_ret)) {
+          ++retry_cnt;
+          ret = OB_NEED_RETRY;
+          ob_usleep(1000L * 1000L); //1s
+          LOG_INFO("wr sql execute failed , need retry", K(ret), K(tmp_ret), K(retry_cnt), K(sql));
+        } else {
+          ret = tmp_ret;
+        }
+      }
+    } while (ret == OB_NEED_RETRY);
+
+    THIS_WORKER.set_timeout_ts(old_worker_timeout_ts);
+  }
+  return ret;
+}
+
+bool ObWrCollector::is_can_retry(const int ret)
+{
+  bool bret = false;
+  observer::ObQueryRetryCtrl::retry_func retry_func = nullptr;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(observer::ObQueryRetryCtrl::get_func(ret, true/*is_inner*/, retry_func))) {
+    LOG_WARN("get retry func failed", K(tmp_ret), K(ret));
+  } else if (retry_func != nullptr && retry_func != observer::ObQueryRetryCtrl::empty_proc) {
+    bret = true;
+  }
+  return bret;
+}
+
+
+
 }  // end of namespace share
 }  // end of namespace oceanbase

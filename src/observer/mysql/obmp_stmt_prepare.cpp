@@ -302,7 +302,6 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   int64_t sys_version = 0;
   setup_wb(session);
 
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
   } else {

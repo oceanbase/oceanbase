@@ -119,6 +119,9 @@ int ObSqlSockProcessor::build_sql_req(ObSqlSockSession& sess, rpc::ObPacket* pkt
 {
   int ret = OB_SUCCESS;
   ObRequest* ret_req = &sess.sql_req_;
+  if (OB_UNLIKELY(ret_req->get_diagnostic_info())) {
+    LOG_ERROR("diagnostic info not released for last mysql request", KPC(ret_req->get_diagnostic_info()));
+  }
   new(ret_req)ObRequest(ObRequest::OB_MYSQL, 1);
   ret_req->set_server_handle_context(&sess);
   ret_req->set_packet(pkt);

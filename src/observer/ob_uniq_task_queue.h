@@ -341,6 +341,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
   Group *group = NULL;
   const int64_t batch_exec_cnt = common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM;
   common::ObArray<Task> tasks;
+  ObDIActionGuard ag("UniqTaskThreadPool", thread_name_, nullptr);
   if (thread_name_ != nullptr) {
     lib::set_thread_name(thread_name_, get_thread_idx());
   }
@@ -494,6 +495,7 @@ int ObUniqTaskQueue<Task, Process>::process_barrier(Task &task)
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task> &tasks)
 {
+  common::ObDIActionGuard ag(typeid(Task));
   int ret = common::OB_SUCCESS;
   bool stopped = lib::Thread::current().has_set_stop();
   if (0 == tasks.count()) {

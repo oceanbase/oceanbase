@@ -32,29 +32,6 @@ bool mtl_is_mini_mode()
 
 namespace common
 {
-int __attribute__((used)) lib_switch_tenant(int64_t tenant_id, void *&ptr)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr attr;
-  attr.label_ = "lib_mtl";
-  attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
-  attr.tenant_id_ = tenant_id;
-  ptr = ob_malloc(sizeof(share::ObTenantSwitchGuard), attr);
-  if (OB_NOT_NULL(ptr)) {
-    share::ObTenantSwitchGuard *g =
-        new (ptr) share::ObTenantSwitchGuard(share::_make_tenant_switch_guard());
-    if (g->loop_num_ == 0) {
-      g->loop_num_++;
-      ret = g->switch_to(tenant_id);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-    }
-  } else {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  }
-
-  return ret;
-}
 
 void __attribute__((used)) lib_release_tenant(void *ptr)
 {
@@ -88,6 +65,11 @@ void __attribute__((used)) lib_mtl_switch(int64_t tenant_id, std::function<void(
 int64_t __attribute__((used)) lib_mtl_cpu_count()
 {
   return share::ObTenantEnv::get_tenant()->unit_max_cpu();
+}
+
+bool __attribute__((used)) lib_enable_diagnostic_info_cache()
+{
+  return GCONF._enable_diagnostic_info_cache;
 }
 
 }

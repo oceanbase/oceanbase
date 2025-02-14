@@ -57,7 +57,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
                                                  int64_t sys_schema_version,
                                                  const DependenyTableStore &dependency_tables)
 {
-  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = true;
   bool table_version_equal = false;
   int ret = OB_SUCCESS;
   process_timestamp_ = ObTimeUtility::current_time();
@@ -548,7 +548,7 @@ bool ObRemoteBaseExecuteP<T>::query_can_retry_in_remote(int &last_err,
           LOG_INFO("query retry in remote", K(retry_times), K(last_err));
           ++retry_times;
           int64_t base_sleep_us = 1000;
-          ob_usleep(base_sleep_us * retry_times);
+          ob_throttle_usleep(base_sleep_us * retry_times, err);
         }
       }
     }
@@ -668,7 +668,6 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
-    ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
     SQL_INFO_GUARD(task.get_remote_sql_info()->remote_sql_, session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //
@@ -854,7 +853,7 @@ int ObRemoteBaseExecuteP<T>::base_after_process()
     //slow mini task, print trace info
     FORCE_PRINT_TRACE(THE_TRACE, "[slow remote task]");
   }
-  ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
   return ret;
 }
 
@@ -983,9 +982,6 @@ int ObRpcRemoteExecuteP::process()
   // 设置诊断功能环境
   if (OB_SUCC(ret)) {
     const bool enable_sqlstat =  session->is_sqlstat_enabled();
-    ObSessionStatEstGuard stat_est_guard(
-        session->get_effective_tenant_id(),
-        session->get_sessid());
     SQL_INFO_GUARD(task.get_sql_string(), session->get_cur_sql_id());
     // 初始化ObTask的执行环节
     //

@@ -286,19 +286,20 @@ public:
   // 1ms，重试write dml等待时间
   static const uint32_t WAIT_RETRY_WRITE_DML_US = 1 * 1000;
 
-private:
+public:
   /* functions */
   typedef void (*retry_func)(ObRetryParam &);
 
   // find err code processor in map_
-  int get_func(int err, bool is_inner, retry_func &func);
+  static int get_func(int err, bool is_inner, retry_func &func);
+  static void empty_proc(ObRetryParam &v);
 
+private:
   // default processor hook
   static void before_func(ObRetryParam &v);
   static void after_func(ObRetryParam &v);
 
   // various processors for error codes
-  static void empty_proc(ObRetryParam &v);
   static void px_thread_not_enough_proc(ObRetryParam &v);
   static void trx_set_violation_proc(ObRetryParam &v);
   static void trx_can_not_serialize_proc(ObRetryParam &v);

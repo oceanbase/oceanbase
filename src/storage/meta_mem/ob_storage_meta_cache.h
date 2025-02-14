@@ -262,6 +262,7 @@ private:
     virtual int inner_process(const char *data_buffer, const int64_t size) override;
     virtual int64_t size() const override;
     virtual const char *get_data() override;
+    const char *get_cb_name() const override { return "StorageMetaIOCB"; }
     bool is_valid() const;
     TO_STRING_KV(K_(offset), K_(buf_size), KP_(data_buf), K_(key), KP_(tablet), KP_(arena_allocator));
   private:

@@ -39,7 +39,8 @@ extern bool USE_CO_LATCH;
 
 #define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)                                     \
   // do {                                                                                    \
-  //   if (record_stat_ && lib::is_diagnose_info_enabled()) {                                \
+  //   if (record_stat_ && lib::is_diagnose_info_enabled() &&                                \
+  //       OB_NOT_NULL(ObLocalDiagnosticInfo::get())) {                                      \
   //     ObTenantDiagnosticInfoSummaryGuard g(ObLocalDiagnosticInfo::get()->get_tenant_id(), \
   //         ObLocalDiagnosticInfo::get()->get_group_id(), true);                            \
   //     ObLatchStat *latch_stat = ObLocalDiagnosticInfo::get_latch_stat(latch_id);          \
@@ -54,9 +55,10 @@ extern bool USE_CO_LATCH;
   //   }                                                                                     \
   // } while (0)
 
-#define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)                               \
+#define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt) \
   // do {                                                                                        \
-  //   if (record_stat_ && lib::is_diagnose_info_enabled()) {                                    \
+  //   if (record_stat_ && lib::is_diagnose_info_enabled() &&                                    \
+  //    OB_NOT_NULL(ObLocalDiagnosticInfo::get())) {                                             \
   //     ObTenantDiagnosticInfoSummaryGuard g(ObLocalDiagnosticInfo::get()->get_tenant_id(),     \
   //         ObLocalDiagnosticInfo::get()->get_group_id(), true);                                \
   //     ObLatchStat *latch_stat = ObLocalDiagnosticInfo::get_latch_stat(latch_id);              \

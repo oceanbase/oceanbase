@@ -630,23 +630,13 @@ protected:
       total_time_ += (rdtsc() - cpu_begin_time_);
     }
   }
-  inline void begin_ash_line_id_reg()
-  {
-    // begin with current operator
-    GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.id_);//TODO(xiaochu.yh): fix uint64 to int32
-  }
   inline void end_ash_line_id_reg(int ret)
   {
-    // move back to parent operator
-    // known issue: when switch from batch to row in same op,
-    // we shift line id to parent op un-intently. but we tolerate this inaccuracy
-    if (OB_LIKELY(spec_.get_parent())) {
-      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = static_cast<int32_t>(spec_.get_parent()->id_);//TODO(xiaochu.yh): fix uint64 to int32
-    } else {
-      GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = -1;
-    }
-    if (OB_FAIL(ret) && -1 == common::ObActiveSessionGuard::get_stat().retry_plan_line_id_) {
-      common::ObActiveSessionGuard::get_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
+    ObDiagnosticInfo *di = common::ObLocalDiagnosticInfo::get();
+    if (OB_NOT_NULL(di)) {
+      if (OB_FAIL(ret) && -1 == di->get_ash_stat().retry_plan_line_id_) {
+        di->get_ash_stat().retry_plan_line_id_ = static_cast<int32_t>(spec_.id_);
+      }
     }
   }
   #ifdef ENABLE_DEBUG_LOG

@@ -684,7 +684,7 @@ int ObChecksumValidatorBase::batch_write_ckm_and_update_report_scn(
       ++fail_count;
       LOG_WARN("fail to write_ckm_and_update_report_scn", KR(ret), K_(tenant_id), K(fail_count),
                K(sleep_time_us), K(frozen_scn), K(expected_epoch));
-      USLEEP(sleep_time_us);
+      ob_throttle_usleep(sleep_time_us, ret, frozen_scn.get_val_for_tx());
       sleep_time_us *= 2;
     }
   }

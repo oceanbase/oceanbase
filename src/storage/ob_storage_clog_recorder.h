@@ -57,6 +57,7 @@ protected:
     {
       ATOMIC_SET(&update_version_, update_version);
     }
+    const char *get_cb_name() const override { return "StorageCLogCb"; }
   private:
     ObIStorageClogRecorder &recorder_;
     int64_t update_version_;

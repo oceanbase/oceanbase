@@ -1433,6 +1433,82 @@ int ObInnerTableSchema::wr_active_session_history_schema(ObTableSchema &table_sc
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj delta_read_io_requests_default;
+    delta_read_io_requests_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("delta_read_io_requests", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      delta_read_io_requests_default,
+      delta_read_io_requests_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj delta_read_io_bytes_default;
+    delta_read_io_bytes_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("delta_read_io_bytes", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      delta_read_io_bytes_default,
+      delta_read_io_bytes_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj delta_write_io_requests_default;
+    delta_write_io_requests_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("delta_write_io_requests", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      delta_write_io_requests_default,
+      delta_write_io_requests_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj delta_write_io_bytes_default;
+    delta_write_io_bytes_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("delta_write_io_bytes", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      delta_write_io_bytes_default,
+      delta_write_io_bytes_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

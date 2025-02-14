@@ -748,7 +748,6 @@ public:
       int close_all(sql::ObSQLSessionInfo &session)
       {
         int ret = OB_SUCCESS;
-        ObSessionStatEstGuard guard(session.get_effective_tenant_id(), session.get_sessid());
         while (pl_cursor_map_.size() > 0) { // ignore error, just log, try to close all cursor in this loop.
           int ret = OB_SUCCESS;
           CursorMap::iterator iter = pl_cursor_map_.begin();

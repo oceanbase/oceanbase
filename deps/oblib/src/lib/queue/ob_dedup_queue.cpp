@@ -17,6 +17,97 @@ namespace oceanbase
 {
 namespace common
 {
+template<int N>
+struct ObDedupTaskTypeTraits
+{
+  static_assert(N != N, "This ObDedupTaskTypeTraits template has not been specialized for the given template argument.");
+  constexpr static const char *name_ = nullptr;
+};
+
+#define REGISTER_DEDUP_TASK_TYPE_NAME(type, name)                       \
+  template<>                                                            \
+  struct ObDedupTaskTypeTraits<type>                                    \
+  {                                                                     \
+    constexpr static const char *name_ = name;                          \
+  }
+
+REGISTER_DEDUP_TASK_TYPE_NAME(T_BLOOMFILTER, "BloomFilterBuild");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_SCHEMA, "Schema");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_BF_WARMUP, "BloomFilterWarmup");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_MAINTENANCE, "PartitionTableMainTenance");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PL_UPDATE, "PartitionLocationUpdate");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_MERGE, "PartitionLocationMerge");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_CHECK, "PartitionLocationCheck");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PL_FETCH, "PartitionLocationFetch");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_MIGRATE, "PartitionLocationMigrate");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_LOCAL_INDEX_BUILD, "PartLocalIndexBuild");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_CONN_ID_FETCH, "ConnectionIdFetch");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_VIP_TENANT_FETCH, "VipTenantFetch");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_CLUSTER_RESOURCE_INIT, "ClusterResourceInit");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_SS_FETCH, "ServerStateFetch");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_RS_ET_UPDATE, "RSEventFetch");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_SYS_VAR_FETCH, "RenewSystemVariable");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PT_FREEZE, "PartitionTableFreeze");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_ELECTION_ET_UPDATE, "ElectionEventUpdate");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_WARM_UP_TASK, "WarmUpTask");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_MAIN_ST_MERGE, "MainSStableMerge");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_INDEX_ST_MERGE, "IndexSStableMerge");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_MAIN_MB_MERGE, "MainMacroBlockMerge");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_INDEX_MB_MERGE, "IndexMacroBlockMerge");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_REFRESH_LOCALITY, "RefreshLocality");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_TRANSFER_COPY_SSTORE, "TransferCopySStore");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_DANGLING_REPLICA_CHECK, "DanglingReplicaCheck");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_PL_LEADER_UPDATE, "PartitionLocationLeaderUpdate");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_REFRESH_OPT_STAT, "RefreshOptimizerStat");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_SCHEMA_RELEASE, "SchemaRelease");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_BLOOMFILTER_LOAD, "BloomFilterLoad");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_SCHEMA_ASYNC_REFRESH, "SchemaAsyncRefresh");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_CHECK_PG_RECOVERY_FINISHED, "CheckPGRecoveryFinished");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_UPDATE_FILE_RECOVERY_STATUS, "UpdateFileRecoveryStatus");
+REGISTER_DEDUP_TASK_TYPE_NAME(T_UPDATE_FILE_RECOVERY_STATUS_V2, "UpdateFileRecoveryStatusV2");
+//append new task type name here
+
+//REGISTER_DEDUP_TASK_TYPE_NAME(T_DEDUP_TASK_TYPE_MAX, "ErrorType");
+
+static const char *G_DEDUP_TASK_TYPE_NAME[T_DEDUP_TASK_TYPE_MAX];
+
+template<int N>
+struct DedupTaskTypeNameInitFunc
+{
+  static void init_array()
+  {
+    G_DEDUP_TASK_TYPE_NAME[N] = ObDedupTaskTypeTraits<N>::name_;
+  }
+};
+
+template <int N, template <int> class INITER, int IDX = 0>
+struct ObDedupConstIniter
+{
+  constexpr static int NEXT = IDX + 1;
+  static bool init()
+  {
+    INITER<IDX>::init_array();
+    return ObDedupConstIniter<N, INITER, NEXT>::init();
+  }
+};
+
+template <int N, template <int> class INITER>
+struct ObDedupConstIniter<N, INITER, N>
+{
+  static bool init() { return true; }
+};
+
+bool G_DEDUP_TASK_NAME_FUNC_SET = ObDedupConstIniter<T_DEDUP_TASK_TYPE_MAX, DedupTaskTypeNameInitFunc>::init();
+
+const char *IObDedupTask::get_task_name() const
+{
+  const char *name = "InvalidType";
+  if (type_ >= 0 && type_ < T_DEDUP_TASK_TYPE_MAX) {
+    name = G_DEDUP_TASK_TYPE_NAME[type_];
+  }
+  return name;
+}
+
 #define ERASE_FROM_LIST(head, tail, node) \
   do \
   { \
@@ -359,6 +450,7 @@ void ObDedupQueue::run1()
   ThreadMeta &thread_meta = thread_metas_[thread_pos];
   thread_meta.init();
   COMMON_LOG(INFO, "dedup queue thread start", KP(this));
+  ObDIActionGuard("DedupQueueThreadPool", thread_name_, nullptr);
   if (OB_NOT_NULL(thread_name_)) {
     lib::set_thread_name(thread_name_);
   }
@@ -368,6 +460,7 @@ void ObDedupQueue::run1()
       if (OB_SUCCESS != (tmp_ret = task_queue_.pop(task2process)) && OB_UNLIKELY(tmp_ret != OB_ENTRY_NOT_EXIST)) {
         COMMON_LOG_RET(WARN, tmp_ret, "task_queue_.pop error", K(tmp_ret), K(task2process));
       } else if (NULL != task2process) {
+        ObDIActionGuard ag1(task2process->get_task_name());
         thread_meta.on_process_start(task2process);
         task2process->process();
         thread_meta.on_process_end();

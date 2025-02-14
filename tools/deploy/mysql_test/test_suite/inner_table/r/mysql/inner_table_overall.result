@@ -292,9 +292,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 523	__all_pkg_type_attr	0	201001	1
 524	__all_pkg_coll_type	0	201001	1
 525	__wr_sql_plan	0	201001	1
+526	__wr_res_mgr_sysstat	0	201001	1
 527	__all_kv_redis_table	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
 529	__all_object_balance_weight	0	201001	1
+530	__wr_sql_plan_aux_key2snapshot	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -745,11 +747,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12499	__all_virtual_pkg_coll_type	2	201001	1
 12500	__all_virtual_kv_client_info	2	201001	1
 12501	__all_virtual_wr_sql_plan	2	201001	1
+12502	__all_virtual_wr_res_mgr_sysstat	2	201001	1
 12503	__all_virtual_kv_redis_table	2	201001	1
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
 12507	__all_virtual_logstore_service_status	2	201001	1
 12508	__all_virtual_logstore_service_info	2	201001	1
 12509	__all_virtual_object_balance_weight	2	201001	1
+12511	__all_virtual_wr_sql_plan_aux_key2snapshot	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1220,6 +1224,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21611	V$OB_RES_MGR_SYSSTAT	1	201001	1
 21612	DBA_WR_SQL_PLAN	1	201001	1
 21613	CDB_WR_SQL_PLAN	1	201001	1
+21614	DBA_WR_RES_MGR_SYSSTAT	1	201001	1
+21615	CDB_WR_RES_MGR_SYSSTAT	1	201001	1
 21616	DBA_OB_SPM_EVO_RESULT	1	201001	1
 21617	CDB_OB_SPM_EVO_RESULT	1	201001	1
 21618	DBA_OB_KV_REDIS_TABLE	1	201001	1

@@ -68,10 +68,11 @@ void ObEndTransAsyncCallback::callback(int cb_param)
   // set the ash flag named  `in_committing_` to true.
   ObDiagnosticInfoSwitchGuard g(diagnostic_info_);
   if (OB_NOT_NULL(diagnostic_info_)) {
+    common::ObDiagnosticInfo *di = diagnostic_info_;
     reset_diagnostic_info();
-    ObActiveSessionGuard::get_stat().exec_phase().in_committing_ = false;
-    ObActiveSessionGuard::get_stat().exec_phase().in_sql_execution_ = true;
-    ObLocalDiagnosticInfo::get()->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
+    di->get_ash_stat().in_committing_ = false;
+    di->get_ash_stat().in_sql_execution_ = true;
+    di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT, false);
   }
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {

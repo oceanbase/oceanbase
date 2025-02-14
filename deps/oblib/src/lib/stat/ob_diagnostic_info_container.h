@@ -22,6 +22,7 @@ namespace common
 {
 
 class ObRunningDiagnosticInfoContainer;
+class ObDiagnosticInfoContainer;
 class ObDISessionCollect;
 
 typedef common::ObServerObjectPool<ObWaitEventStatArray> ObWaitEventPool;
@@ -48,6 +49,10 @@ public:
   {
     return di_infos_.size();
   };
+  int64_t get_alloc_conut() const
+  {
+    return di_infos_.get_alloc_handle().get_alloc_count();
+  }
   void reset()
   {
     di_infos_.destroy();
@@ -58,7 +63,6 @@ private:
   friend class ObRunningDiagnosticInfoContainer;
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   ObDiInfos di_infos_;
-  lib::ObMutex mutex_;
 };
 
 class ObRunningDiagnosticInfoContainer
@@ -79,6 +83,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(slot_count), K_(slot_mask), K_(is_inited));
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   void reset();
+  int64_t get_value_alloc_count() const;
 
 private:
   int64_t tenant_id_;
@@ -101,10 +106,10 @@ public:
     stop();
   };
   DISABLE_COPY_ASSIGN(ObDiagnosticInfoContainer);
-  int init(int64_t cpu_cnt);
+  int init(int64_t cpu_cnt, bool is_global = false);
   // NOTICE: after acquire, need to revert and return di_info accordingly.
-  int acquire_diagnostic_info(
-      int64_t tenant_id, int64_t group_id, int64_t session_id, ObDiagnosticInfo *&di_info);
+  int acquire_diagnostic_info(int64_t tenant_id, int64_t group_id, int64_t session_id,
+      ObDiagnosticInfo *&di_info, bool using_cache = false);
   void revert_diagnostic_info(ObDiagnosticInfo *di);
   int for_each_running_di(std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn)
   {
@@ -114,11 +119,19 @@ public:
   {
     return is_inited_;
   }
+  bool is_global_container() const
+  {
+    return is_global_container_;
+  }
+  void set_global_container()
+  {
+    is_global_container_ = true;
+  }
   static int mtl_new(ObDiagnosticInfoContainer *&container);
   static int mtl_init(ObDiagnosticInfoContainer *&container);
   static void mtl_wait(ObDiagnosticInfoContainer *&container);
   static void mtl_destroy(ObDiagnosticInfoContainer *&container);
-  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(runnings), K_(summarys));
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(runnings), K_(summarys), K_(cache));
 
   // WARN: only use this on observer bootstrap phase.
   static ObDiagnosticInfoContainer *get_global_di_container()
@@ -131,10 +144,16 @@ public:
   {
     if (get_global_di_container()->is_inited()) {
       get_global_di_container()->stop();
+      get_global_di_container()->clear_di_cache();
       get_global_di_container()->summarys_.reset();
       get_global_di_container()->runnings_.reset();
       COMMON_LOG(INFO, "clear global di container");
     }
+  }
+  static ObDiExperimentalFeatureFlags &get_di_experimental_feature_flag()
+  {
+    static ObDiExperimentalFeatureFlags flags;
+    return flags;
   }
   ObBaseDiagnosticInfoSummary &get_base_summary()
   {
@@ -155,21 +174,30 @@ public:
   {
     return wait_event_pool_;
   };
+  int return_di_to_cache(ObDiagnosticInfo *di_info);
+  bool check_element_all_freed() const;
+  void print_all_running_dis();
 
 private:
   int aggregate_diagnostic_info_summary(ObDiagnosticInfo *di_info);
   int return_diagnostic_info(ObDiagnosticInfo *di_info);
+  int push_element_to_cache();
+  // inc ref in link hashmap
   int inc_ref(ObDiagnosticInfo *di)__attribute__((deprecated("pls use ObLocalDiagnosticInfo::inc_ref instead")));
+  // di only take 1 ref for link_hash_map, when it deducted, erase it automatically.
   void dec_ref(ObDiagnosticInfo *di);
+  void clear_di_cache();
   bool is_inited_;
   bool stop_;
+  bool is_global_container_;
   int64_t tenant_id_;
   ObFixedClassAllocator<ObDiagnosticInfo> di_allocator_;
   ObFixedClassAllocator<ObDiagnosticInfoCollector> di_collector_allocator_;
-  // NOTICE: do not alter order for below 3 elements(pool/summarys/runnings).
+  // NOTICE: do not alter order for below 4 elements(pool/summarys/runnings/cache).
   ObWaitEventPool wait_event_pool_;
   ObBaseDiagnosticInfoSummary summarys_;
   ObRunningDiagnosticInfoContainer runnings_;
+  ObDiagnosticInfoCache<ObDiagnosticInfo> cache_;
 };
 
 } /* namespace common */
