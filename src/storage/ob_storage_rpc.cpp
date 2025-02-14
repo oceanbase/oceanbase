@@ -131,6 +131,27 @@ int ObCopyMacroBlockListArg::assign(const ObCopyMacroBlockListArg &arg)
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockListArg, tenant_id_, ls_id_, table_key_, arg_list_);
 
+ObCopyMacroBlockInfo::ObCopyMacroBlockInfo()
+  : logical_id_(),
+    data_type_(ObCopyMacroBlockDataType::MAX)
+{
+}
+
+void ObCopyMacroBlockInfo::reset()
+{
+  logical_id_.reset();
+  data_type_ = ObCopyMacroBlockDataType::MAX;
+}
+
+bool ObCopyMacroBlockInfo::is_valid() const
+{
+  return logical_id_.is_valid()
+      && data_type_ >= ObCopyMacroBlockDataType::MACRO_DATA
+      && data_type_ < ObCopyMacroBlockDataType::MAX;
+}
+
+OB_SERIALIZE_MEMBER(ObCopyMacroBlockInfo, logical_id_, data_type_);
+
 ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
@@ -187,7 +208,7 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
-    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_);
+    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_, copy_macro_block_infos_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),

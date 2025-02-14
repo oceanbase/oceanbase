@@ -88,6 +88,21 @@ enum ObCopyMacroBlockDataType {
   MAX
 };
 
+struct ObCopyMacroBlockInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCopyMacroBlockInfo();
+  ~ObCopyMacroBlockInfo() {}
+  void reset();
+  bool is_valid() const;
+
+  TO_STRING_KV(K_(logical_id), K_(data_type));
+public:
+  ObLogicMacroBlockId logical_id_;
+  ObCopyMacroBlockDataType data_type_;
+};
+
 struct ObCopyMacroBlockRangeArg final
 {
   OB_UNIS_VERSION(2);
@@ -108,6 +123,7 @@ public:
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
+  ObSArray<ObCopyMacroBlockInfo> copy_macro_block_infos_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
