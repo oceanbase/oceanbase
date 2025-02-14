@@ -197,6 +197,7 @@ private:
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
   int check_read_integrity_(const block_id_t &block_id);
   bool is_log_cache_inited_();
+  bool check_in_flashback_(const int64_t flashback_version) const;
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;

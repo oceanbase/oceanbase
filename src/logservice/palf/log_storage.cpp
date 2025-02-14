@@ -426,9 +426,14 @@ int LogStorage::begin_flashback(const LSN &start_lsn_of_block)
     // make tmp block be writeable, set log_tail_ to start_lsn_of_block.
     reset_log_tail_for_last_block_(start_lsn_of_block, true);
     ObSpinLockGuard guard(tail_info_lock_);
-    // In process of flashback, each block after start_lsn_of_block is still readable.
-    readable_log_tail_ = origin_log_tail;
-    PALF_EVENT("[BEGIN STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    if (check_in_flashback_(flashback_version_)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "unexpected error, flashback_version_ must be even number", KPC(this), K(start_lsn_of_block));
+    } else {
+      // In process of flashback, each block after start_lsn_of_block is still readable.
+      readable_log_tail_ = origin_log_tail;
+      PALF_EVENT("[BEGIN STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    }
   }
   return ret;
 }
@@ -441,30 +446,40 @@ int LogStorage::end_flashback(const LSN &start_lsn_of_block)
 {
   int ret = OB_SUCCESS;
   const block_id_t block_id = lsn_2_block(start_lsn_of_block, logical_block_size_);
-  // to ensure the integrity of each read data, before delete blocks,
-  // reset readable_log_tail_ and inc flashback_version_ firstly.
-  {
-    ObSpinLockGuard guard(tail_info_lock_);
-    readable_log_tail_ = log_tail_;
-    flashback_version_++;
-  }
-  // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
-  // we make sure that the content in each block_id which is greater than or equal to
-  // 'expected_next_block_id' are not been used.
-  // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
-  // must exist.(we will delete each block after 'block_id', not include 'block_id')
-  const block_id_t expected_next_block_id = block_id + 1;
-  if (OB_FAIL(update_manifest_(expected_next_block_id))) {
-    PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id),
-				K(expected_next_block_id), K(start_lsn_of_block));
-	} else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
-    PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
-				KPC(this), K(start_lsn_of_block));
-  } else if (OB_FAIL(block_mgr_.rename_tmp_block_handler_to_normal(block_id))) {
-    PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
-        K(start_lsn_of_block));
+  if (check_in_flashback_(flashback_version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "unexpected error, flashback_version_ must be even number", KPC(this), K(start_lsn_of_block));
   } else {
-    PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    // to ensure the integrity of each read data, before delete blocks,
+    // reset readable_log_tail_
+    {
+      ObSpinLockGuard guard(tail_info_lock_);
+      readable_log_tail_ = log_tail_;
+      flashback_version_ ++;
+    }
+
+    // constriaints: 'expected_next_block_id' is used to check whether blocks on disk are integral,
+    // we make sure that the content in each block_id which is greater than or equal to
+    // 'expected_next_block_id' are not been used.
+    // we can set 'expected_next_block_id' to 'block_id' + 1 because of the block of 'start_lsn_of_block'
+    // must exist.(we will delete each block after 'block_id', not include 'block_id')
+    const block_id_t expected_next_block_id = block_id + 1;
+    if (OB_FAIL(update_manifest_(expected_next_block_id))) {
+      PALF_LOG(WARN, "update_manifest_ failed", K(ret), KPC(this), K(block_id),
+				K(expected_next_block_id), K(start_lsn_of_block));
+	  } else if (OB_FAIL(block_mgr_.delete_block_from_back_to_front_until(block_id))) {
+      PALF_LOG(ERROR, "delete_block_from_back_to_front_until failed", K(ret),
+				KPC(this), K(start_lsn_of_block));
+    } else if (OB_FAIL(block_mgr_.rename_tmp_block_handler_to_normal(block_id))) {
+      PALF_LOG(ERROR, "LogBlockMgr rename_tmp_block_handler_to_normal failed", K(ret), KPC(this),
+          K(start_lsn_of_block));
+    } else {
+      PALF_EVENT("[END STORAGE FLASHBACK]", palf_id_, KPC(this), K(start_lsn_of_block));
+    }
+    {
+      ObSpinLockGuard guard(tail_info_lock_);
+      flashback_version_ ++;
+    }
   }
   return ret;
 }
@@ -690,7 +705,7 @@ int LogStorage::check_read_out_of_bound_(const block_id_t &block_id,
   // to avoid unnecessary failure, only check flashback_version when read block need to be overwriting.
   // NB: update 'reabable_log_tail_' and 'flashback_version_' is atomic, and updating is performed before
   //     overwriting.
-  } else if (block_id >= readable_end_block_id && flashback_version != curr_flashback_version) {
+  } else if (block_id >= readable_end_block_id && (flashback_version != curr_flashback_version || check_in_flashback_(curr_flashback_version))) {
     ret = OB_NEED_RETRY;
     PALF_LOG(WARN, "there is flashbacking during read data, need read retry",
              KPC(this), K(flashback_version), K(curr_flashback_version),
@@ -1001,6 +1016,11 @@ void LogStorage::reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_
 int LogStorage::update_manifest_(const block_id_t expected_next_block_id, const bool in_restart)
 {
   return update_manifest_cb_(expected_next_block_id, in_restart);
+}
+
+bool LogStorage::check_in_flashback_(const int64_t flashback_version) const
+{
+  return 1 == (flashback_version_ & 1);
 }
 
 int LogStorage::get_logical_block_size(int64_t &logical_block_size) const

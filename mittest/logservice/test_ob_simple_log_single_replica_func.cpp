@@ -1995,6 +1995,42 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_log_service_interface)
   EXPECT_EQ(OB_SUCCESS, log_service->check_palf_exist(ls_id, is_exist));
 }
 
+TEST_F(TestObSimpleLogClusterSingleReplica, test_flashback_concurrent_with_read)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_flashback_concurrent_with_read");
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  OB_LOGGER.set_log_level("TRACE");
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  PalfHandleImplGuard raw_write_leader;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  PalfHandleImpl *palf_handle_impl = leader.palf_handle_impl_;
+  const int64_t id_raw_write = ATOMIC_AAF(&palf_id_, 1);
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_raw_write, leader_idx, raw_write_leader));
+  EXPECT_EQ(OB_SUCCESS, change_access_mode_to_raw_write(raw_write_leader));
+
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx, MAX_LOG_BODY_SIZE));
+  SCN max_scn1 = leader.palf_handle_impl_->get_max_scn();
+  LSN end_pos_of_log1 = leader.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+  ObSimpleLogServer *log_server = dynamic_cast<ObSimpleLogServer*>(get_cluster()[0]);
+  EXPECT_EQ(OB_ITER_END, read_and_submit_group_log(leader, raw_write_leader));
+  std::thread flashback_thread([&]() {
+    int64_t mode_version;
+    ObTenantEnv::set_tenant(log_server->tenant_base_);
+    switch_append_to_flashback(raw_write_leader, mode_version);
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->flashback(mode_version, max_scn1 , timeout_ts_us));
+  });
+  std::thread read_thread([&]() {
+    ObTenantEnv::set_tenant(log_server->tenant_base_);
+    EXPECT_NE(OB_INVALID_DATA, read_log(raw_write_leader));
+  });
+  flashback_thread.join();
+  read_thread.join();
+}
+
 TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_write_concurrent_lsn)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_raw_write_concurrent_lsn");
