@@ -1568,7 +1568,8 @@ private:
     uint32_t split_info_;
     struct {
       uint32_t is_data_incomplete_: 1; // whether the data of split dest tablet is complete.
-      uint32_t reserved: 31;
+      uint32_t can_reuse_macro_block_: 1;
+      uint32_t reserved: 30;
     };
   };
   ObTabletID split_src_tablet_id_;

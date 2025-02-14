@@ -4423,9 +4423,7 @@ public:
   ObCreateTabletExtraInfo() { reset(); }
   ~ObCreateTabletExtraInfo() { reset(); }
   int init(const uint64_t tenant_data_version,
-
            const bool need_create_empty_major,
-
            const bool micro_index_clustered,
            const ObTabletID &split_src_tablet_id);
   void reset();
@@ -4435,10 +4433,12 @@ public:
   bool need_create_empty_major_;
   bool micro_index_clustered_;
   ObTabletID split_src_tablet_id_;
+  bool split_can_reuse_macro_block_;
   TO_STRING_KV(K_(tenant_data_version),
                K_(need_create_empty_major),
                K_(micro_index_clustered),
-               K_(split_src_tablet_id));
+               K_(split_src_tablet_id),
+               K_(split_can_reuse_macro_block));
 };
 
 struct ObBatchCreateTabletArg
