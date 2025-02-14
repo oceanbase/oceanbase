@@ -263,9 +263,9 @@ protected:
   int extract_assignment_subqueries(ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs);
+  int check_use_direct_load();
 private:
   int get_parallel_info_from_direct_load(int64_t &dml_parallel) const;
-  int check_use_direct_load();
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

@@ -79,7 +79,9 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     OSGShareInfo *osg_info = NULL;
     double online_sample_percent = 100.;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(check_use_direct_load())) {
+        LOG_WARN("failed to check use direct load", K(ret));
+      } else if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
       } else if (OB_FAIL(compute_dml_parallel())) {
         LOG_WARN("failed to compute dml parallel", K(ret));

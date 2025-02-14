@@ -71,11 +71,6 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   } else {
     max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_use_direct_load())) {
-      LOG_WARN("failed to check use direct load", K(ret));
-    }
-  }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_), K(use_parallel_das_dml_),
                               K(opt_ctx.can_use_pdml()), K(opt_ctx.is_online_ddl()),
                               K(opt_ctx.get_parallel_rule()), K(opt_ctx.get_parallel()));
@@ -175,20 +170,31 @@ int ObDelUpdLogPlan::check_use_direct_load()
   ObOptimizerContext &opt_ctx = get_optimizer_context();
   ObDirectLoadOptimizerCtx &direct_load_opt_ctx = opt_ctx.get_direct_load_optimizer_ctx();
   ObExecContext *exec_ctx = nullptr;
+  int64_t dml_parallel = ObGlobalHint::UNSET_PARALLEL;
+  int64_t server_cnt = 0;
   if (OB_ISNULL(exec_ctx = opt_ctx.get_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(opt_ctx.get_exec_ctx()));
+  } else if (!direct_load_opt_ctx.can_use_direct_load()) {
+    /* do nothing */
+  } else if (OB_FAIL(get_parallel_info_from_candidate_plans(server_cnt, dml_parallel))) {
+    LOG_WARN("failed to get parallel info", K(ret));
+  } else if (OB_FAIL(get_parallel_info_from_direct_load(dml_parallel))) {
+    LOG_WARN("failed to get parallel info from direct load", K(ret));
   } else {
+    dml_parallel = opt_ctx.get_global_hint().has_dml_parallel_hint()
+                   ? opt_ctx.get_global_hint().get_dml_parallel_degree() : dml_parallel;
+    bool use_pdml = opt_ctx.can_use_pdml() && ObGlobalHint::DEFAULT_PARALLEL < dml_parallel;
     bool use_direct_load = false;
     if (direct_load_opt_ctx.is_insert_overwrite()) {
-      if (OB_UNLIKELY(!use_pdml_)) {
+      if (OB_UNLIKELY(!use_pdml)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "PDML is disabled, insert overwrite is");
       } else {
         use_direct_load = true;
       }
     } else if (direct_load_opt_ctx.can_use_direct_load()) {
-      if (OB_UNLIKELY(!use_pdml_)) {
+      if (OB_UNLIKELY(!use_pdml)) {
         bool allow_fallback = false;
         if (OB_FAIL(ObDirectLoadOptimizerCtx::check_direct_load_allow_fallback(direct_load_opt_ctx, exec_ctx, allow_fallback))) {
           LOG_WARN("fail to check support direct load allow fallback", K(ret));
