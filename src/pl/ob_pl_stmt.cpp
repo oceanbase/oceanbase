@@ -1575,6 +1575,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
   case INVALID_VAR: {
     //first search package header var
     if (OB_NOT_NULL(parent_ns_)) {
+      ObPLDependencyGuard guard(this, parent_ns_->get_external_ns());
       if (OB_FAIL(
           SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
         LOG_WARN("resolve package symbol failed", K(ret));
@@ -2832,6 +2833,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         && OB_INVALID_INDEX == var_idx
         && OB_INVALID_INDEX == parent_id) {
       if (OB_NOT_NULL(pre_ns_)) {
+        ObPLDependencyGuard guard(external_ns_, pre_ns_->get_external_ns());
         if (OB_FAIL(SMART_CALL(pre_ns_->resolve_symbol(var_name, type, data_type, parent_id, var_idx)))) {
           LOG_WARN("get var index by name failed", K(var_name), K(ret));
         }

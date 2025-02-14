@@ -8208,6 +8208,7 @@ int ObPLResolver::resolve_declare_cursor(
       ObString name;
       ObPLDataType return_type;
       ObArray<int64_t> formal_params;
+      ObArray<ObSchemaObjVersion> formal_deps;
       int64_t cursor_index = common::OB_INVALID_INDEX;
       ObPLStmtBlock *current_block = current_block_;
       ObPLStmtBlock *cursor_block = current_block_;
@@ -8226,7 +8227,15 @@ int ObPLResolver::resolve_declare_cursor(
             NULL == current_block ? NULL : &current_block->get_namespace()));
           OX (set_current(*cursor_block));
         }
-        OZ (resolve_cursor_formal_param(param_node, func, formal_params));
+        if (OB_SUCC(ret)) {
+          ObPLDependencyTable cursor_dependency_table;
+          ObPLExternalNS external_ns(resolve_ctx_, nullptr);
+          external_ns.set_dependency_table(&cursor_dependency_table);
+          ObPLDependencyGuard guard(&external_ns, get_current_namespace().get_external_ns());
+          OZ (resolve_cursor_formal_param(param_node, func, formal_params));
+          OZ (formal_deps.assign(cursor_dependency_table));
+        }
+        OZ (func.add_dependency_objects(formal_deps));
         OX (set_current(*current_block));
       }
 
@@ -8274,6 +8283,15 @@ int ObPLResolver::resolve_declare_cursor(
           } else if (OB_NOT_NULL(stmt)) {
             stmt->set_cursor_index(cursor_index);
           } else { /*do nothing*/ }
+          if (OB_SUCC(ret)) {
+            ObPLCursor* cursor = current_block_->get_namespace().get_cursor_table()->get_cursor(cursor_index);
+            if (OB_ISNULL(cursor)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cursor", K(ret));
+            } else if (OB_FAIL(cursor->set_ref_objects(formal_deps))) {
+              LOG_WARN("fail to add ref objects", K(ret));
+            }
+          }
         }
       }
     }

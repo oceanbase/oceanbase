@@ -3507,6 +3507,29 @@ public:
   virtual int visit(const ObPLCaseStmt &s) = 0;
 };
 
+class ObPLDependencyGuard
+{
+public:
+  ObPLDependencyGuard(const ObPLExternalNS *src_external_ns, const ObPLExternalNS *dst_external_ns)
+  : old_external_ns_(nullptr), old_dependency_table_(nullptr) {
+    if (OB_NOT_NULL(src_external_ns)
+    && OB_NOT_NULL(dst_external_ns)
+    && dst_external_ns->get_dependency_table() != src_external_ns->get_dependency_table()) {
+      old_external_ns_ = const_cast<ObPLExternalNS *>(dst_external_ns);
+      old_dependency_table_ = old_external_ns_->get_dependency_table();
+      old_external_ns_->set_dependency_table(const_cast<ObPLExternalNS *>(src_external_ns)->get_dependency_table());
+    }
+  }
+  ~ObPLDependencyGuard() {
+    if (OB_NOT_NULL(old_external_ns_)) {
+      old_external_ns_->set_dependency_table(old_dependency_table_);
+    }
+  }
+private:
+  ObPLExternalNS *old_external_ns_;
+  ObPLDependencyTable *old_dependency_table_;
+};
+
 }
 }
 
