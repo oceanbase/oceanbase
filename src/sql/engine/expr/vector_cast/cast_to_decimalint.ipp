@@ -42,30 +42,31 @@ struct ToDecimalintCastImpl
             bool can_fast_strtoll = true;
             ObString in_str(arg_vec_->get_length(idx), arg_vec_->get_payload(idx));
             OUT_TYPE out_val = CastHelperImpl::fast_strtoll(in_str, expr.datum_meta_.precision_, can_fast_strtoll);
-            if (can_fast_strtoll && !wide::mul_overflow(out_val, sf_, out_val)) {
+            OUT_TYPE mul_val;
+            if (can_fast_strtoll && !wide::mul_overflow(out_val, sf_, mul_val)) {
               switch (get_decimalint_type(expr.datum_meta_.precision_)) {
                 case common::DECIMAL_INT_32: {
-                  int32_t out_val2 = out_val;
+                  int32_t out_val2 = mul_val;
                   res_vec_->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *> (&out_val2), sizeof(out_val2));
                   break;
                 }
                 case common::DECIMAL_INT_64: {
-                  int64_t out_val2 = out_val;
+                  int64_t out_val2 = mul_val;
                   res_vec_->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *> (&out_val2), sizeof(out_val2));
                   break;
                 }
                 case common::DECIMAL_INT_128: {
-                  int128_t out_val2 = out_val;
+                  int128_t out_val2 = mul_val;
                   res_vec_->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *> (&out_val2), sizeof(out_val2));
                   break;
                 }
                 case common::DECIMAL_INT_256: {
-                  int256_t out_val2 = out_val;
+                  int256_t out_val2 = mul_val;
                   res_vec_->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *> (&out_val2), sizeof(out_val2));
                   break;
                 }
                 case common::DECIMAL_INT_512: {
-                  int512_t out_val2 = out_val;
+                  int512_t out_val2 = mul_val;
                   res_vec_->set_decimal_int(idx, reinterpret_cast<ObDecimalInt *> (&out_val2), sizeof(out_val2));
                   break;
                 }
