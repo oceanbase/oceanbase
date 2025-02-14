@@ -294,9 +294,9 @@ int ObTableLoadMainToIndexProjector::build_row_projector(
           if (index_col_desc.col_id_ == main_column_descs.at(i).col_id_) {
             if (OB_FAIL(col_projector_.push_back(i))) {
               LOG_WARN("fail to push back", KR(ret), K(i));
-            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(index_col_desc.col_id_))) {
+            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(main_column_descs.at(i).col_id_))) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null column schema", KR(ret), K(index_col_desc));
+              LOG_WARN("unexpected null column schema", KR(ret), K(i), K(main_column_descs.at(i)));
             } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column_schema->is_rowkey_column()))) {
               LOG_WARN("fail to push back rowkey column flag", K(ret), KPC(column_schema));
             } else if (index_col_desc.col_type_.is_lob_storage()) {
@@ -398,12 +398,12 @@ int ObTableLoadMainToUniqueIndexProjector::build_row_projector(
         for (int64_t i = 0; OB_SUCC(ret) && i < main_column_descs.count(); i++) {
           if ((is_shadow_column(index_col_desc.col_id_)
                  ? index_col_desc.col_id_ - OB_MIN_SHADOW_COLUMN_ID
-                 : index_col_desc.col_id_) == index_column_descs_.at(i).col_id_) {
+                 : index_col_desc.col_id_) == main_column_descs.at(i).col_id_) {
             if (OB_FAIL(col_projector_.push_back(i))) {
               LOG_WARN("fail to push back", KR(ret), K(i));
-            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(index_col_desc.col_id_))) {
+            } else if (OB_ISNULL(column_schema = src_table_schema->get_column_schema(main_column_descs.at(i).col_id_))) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null column schema", KR(ret), K(index_col_desc));
+              LOG_WARN("unexpected null column schema", KR(ret), K(i), K(main_column_descs.at(i)));
             } else if (OB_FAIL(main_table_rowkey_col_flag_.push_back(column_schema->is_rowkey_column()))) {
               LOG_WARN("fail to push back rowkey column flag", K(ret), KPC(column_schema));
             } else if (index_col_desc.col_type_.is_lob_storage()) {
