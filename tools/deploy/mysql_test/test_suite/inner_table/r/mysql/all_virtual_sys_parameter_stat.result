@@ -402,6 +402,7 @@ _enable_ss_migration_prewarm
 _enable_ss_replica_prewarm
 _enable_system_tenant_memory_limit
 _enable_tenant_sql_net_thread
+_enable_topn_runtime_filter
 _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing

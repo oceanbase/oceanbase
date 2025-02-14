@@ -1662,6 +1662,7 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         OC( (allocate_runtime_filter_for_hash_join)(*alloc_bf_ctx));
         if (OB_FAIL(ret)) {
         } else if (LOG_SORT == get_type()
+                   && get_plan()->get_optimizer_context().enable_topn_runtime_filter()
                    && OB_FAIL(static_cast<ObLogSort *>(this)
                                   ->try_allocate_pushdown_topn_runtime_filter())) {
           LOG_WARN("failed to allocate topn runtime filter for sort");

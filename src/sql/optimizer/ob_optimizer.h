@@ -233,6 +233,7 @@ namespace sql
     int init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int init_px_node_opt_info(int64_t tenant_id);
+    int check_enable_topn_runtime_filter();
 
   private:
     ObOptimizerContext &ctx_;

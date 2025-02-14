@@ -213,6 +213,7 @@ struct ObOptParamHint
     DEF(DISABLE_GTT_SESSION_ISOLATION,)             \
     DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
     DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
+    DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

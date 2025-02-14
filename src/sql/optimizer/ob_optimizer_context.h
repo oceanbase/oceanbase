@@ -274,7 +274,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_opt_row_goal_(ObEnableOptRowGoal::MAX),
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
-    enable_distributed_das_scan_(true)
+    enable_distributed_das_scan_(true),
+    enable_topn_runtime_filter_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -772,6 +773,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   }
   inline bool is_enable_distributed_das_scan() const { return enable_distributed_das_scan_; }
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
+  inline bool enable_topn_runtime_filter() const { return enable_topn_runtime_filter_; }
+  inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -894,6 +897,7 @@ private:
   ObPxNodePolicy px_node_policy_;
   ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
+  bool enable_topn_runtime_filter_;
 };
 }
 }

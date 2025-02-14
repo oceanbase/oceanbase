@@ -546,6 +546,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_nlj_spf_use_rich_format_ = tenant_config->_enable_nlj_spf_use_rich_format;
     enable_distributed_das_scan_ = tenant_config->_enable_distributed_das_scan;
     enable_das_batch_rescan_flag_ = tenant_config->_enable_das_batch_rescan_flag;
+    enable_topn_runtime_filter_ = tenant_config->_enable_topn_runtime_filter;
   }
 
   return ret;
@@ -636,6 +637,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%ld,", enable_das_batch_rescan_flag_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_das_batch_rescan_flag_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", enable_topn_runtime_filter_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_topn_runtime_filter_));
   } else {
     // do nothing
   }
