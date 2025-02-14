@@ -1181,7 +1181,8 @@ int ObStaticEngineExprCG::generate_calculable_exprs(
 }
 
 int ObStaticEngineExprCG::generate_calculable_expr(ObRawExpr *raw_expr,
-                                                   ObPreCalcExprFrameInfo &pre_calc_frame)
+                                                   ObPreCalcExprFrameInfo &pre_calc_frame,
+                                                   ObExpr *&rt_expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(raw_expr)) {
@@ -1197,6 +1198,8 @@ int ObStaticEngineExprCG::generate_calculable_expr(ObRawExpr *raw_expr,
 
       if (OB_FAIL(generate_calculable_exprs(calculable_exprs, pre_calc_frame))) {
         LOG_WARN("failed to generate pre calculate exprs", K(ret));
+      } else {
+        rt_expr = get_rt_expr(*raw_expr);
       }
     }
   }

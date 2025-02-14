@@ -207,7 +207,6 @@ public:
     original_param_cnt_ = 0;
     param_frame_capacity_ = 0;
   }
-  int extend_datum_param_store(DatumParamStore &ext_datum_store);
   ObRemoteSqlInfo &get_remote_sql_info() { return remote_sql_info_; }
   bool is_terminate(int &ret) const;
   void set_cur_time(const int64_t &session_val)

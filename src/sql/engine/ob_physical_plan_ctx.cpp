@@ -435,41 +435,6 @@ int ObPhysicalPlanCtx::switch_implicit_cursor()
   return ret;
 }
 
-int ObPhysicalPlanCtx::extend_datum_param_store(DatumParamStore &ext_datum_store)
-{
-  int ret = OB_SUCCESS;
-  if (ext_datum_store.count() <= 0) {
-    // do nothing
-  } else {
-    const int64_t old_size = datum_param_store_.count();
-    for (int i = 0; OB_SUCC(ret) && i < ext_datum_store.count(); i++) {
-      if (OB_FAIL(datum_param_store_.push_back(ext_datum_store.at(i)))) {
-        LOG_WARN("failed to push back element", K(ret));
-      }
-    } // for end
-
-    LOG_DEBUG("try to extend param frame",
-              K(ext_datum_store), K(datum_param_store_), K(param_store_));
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(extend_param_frame(old_size))) {
-      LOG_WARN("failed to extend param frame", K(ret));
-    } else {
-      // transform ext datums to obj params and push back to param_store_
-      for (int i = 0; OB_SUCC(ret) && i < ext_datum_store.count(); i++) {
-        ObObjParam tmp_obj_param;
-        if (OB_FAIL(ext_datum_store.at(i).to_objparam(tmp_obj_param, &allocator_))) {
-          LOG_WARN("failed to transform expr datum to obj param", K(ret));
-        } else if (OB_FAIL(param_store_.push_back(tmp_obj_param))) {
-          LOG_WARN("failed to push back element", K(ret));
-        }
-      } // for end
-    }
-    LOG_DEBUG("after extended param frame", K(param_store_));
-  }
-  return ret;
-}
-
 void ObPhysicalPlanCtx::reset_datum_frame(char *frame, int64_t expr_cnt)
 {
   const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);

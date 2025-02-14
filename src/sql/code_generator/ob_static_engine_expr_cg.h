@@ -121,7 +121,8 @@ public:
                                 ObPreCalcExprFrameInfo &pre_calc_frame);
 
   int generate_calculable_expr(ObRawExpr *raw_expr,
-                               ObPreCalcExprFrameInfo &pre_calc_frame);
+                               ObPreCalcExprFrameInfo &pre_calc_frame,
+                               ObExpr *&rt_expr);
 
   static int generate_rt_expr(const ObRawExpr &src,
                               common::ObIArray<ObRawExpr *> &exprs,
