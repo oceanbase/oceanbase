@@ -859,7 +859,9 @@ TEST_F(TestSSTableMeta, test_sstable_deep_copy)
 TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
 {
   int ret = OB_SUCCESS;
-  ObSSTableMeta src_meta;
+  char *src_meta_buf = (char *)ob_malloc(sizeof(ObSSTableMeta), ObMemAttr());
+  MEMSET(src_meta_buf, 0x0, sizeof(ObSSTableMeta));
+  ObSSTableMeta &src_meta = *(new (src_meta_buf) ObSSTableMeta());
   // add salt
   src_meta.basic_meta_.data_checksum_ = 20240514;
 
