@@ -97,6 +97,12 @@ int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &
 {
   int ret = OB_SUCCESS;
   column_param.set_meta_type(meta_type_);
+  if (meta_type_.is_decimal_int()) {
+    ObAccuracy accuracy;
+    accuracy.set_precision(meta_type_.get_stored_precision());
+    accuracy.set_scale(meta_type_.get_scale());
+    column_param.set_accuracy(accuracy);
+  }
   if (orig_default_value_.is_fixed_len_char_type()) {
     blocksstable::ObStorageDatum datum;
     ObObj obj;
