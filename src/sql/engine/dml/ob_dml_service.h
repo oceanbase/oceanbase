@@ -55,6 +55,9 @@ public:
                                            ObExecContext *root_ctx,
                                            SeRowkeyDistCtx *&rowkey_dist_ctx);
 
+  static int check_table_cycle(const DASTableIdList* parent_table_set,
+                               const uint64_t table_id, bool &exist);
+  static int delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef);
   static int check_lob_column_changed(ObEvalCtx &eval_ctx,
               const ObExpr& old_expr, ObDatum& old_datum,
               const ObExpr& new_expr, ObDatum& new_datum,
@@ -252,7 +255,7 @@ public:
                                   int64_t row_num,
                                   common::ObString &column_name,
                                   ObExecContext &ctx);
-  static int get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, ObExecContext* &needed_ctx);
+  static int get_root_exec_ctx_for_fk_cascading(ObExecContext *ctx, ObExecContext* &needed_ctx);
 
 private:
   static int check_agg_task_state(ObDMLRtCtx &dml_rtctx, ObIDASTaskOp *das_op, int64_t row_size, bool &reach_mem_limit);

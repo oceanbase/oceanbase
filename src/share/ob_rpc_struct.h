@@ -2707,7 +2707,7 @@ public:
     foreign_key_name_(),
     enable_flag_(true),
     is_modify_enable_flag_(false),
-    ref_cst_type_(share::schema::CONSTRAINT_TYPE_INVALID),
+    fk_ref_type_(share::schema::FK_REF_TYPE_INVALID),
     ref_cst_id_(common::OB_INVALID_ID),
     validate_flag_(CST_FK_VALIDATED),
     is_modify_validate_flag_(false),
@@ -2735,7 +2735,7 @@ public:
     foreign_key_name_.reset();
     enable_flag_ = true;
     is_modify_enable_flag_ = false;
-    ref_cst_type_ = share::schema::CONSTRAINT_TYPE_INVALID;
+    fk_ref_type_ = share::schema::FK_REF_TYPE_INVALID;
     ref_cst_id_ = common::OB_INVALID_ID;
     validate_flag_ = CST_FK_VALIDATED;
     is_modify_validate_flag_ = false;
@@ -2765,7 +2765,7 @@ public:
       foreign_key_name_ = other.foreign_key_name_;
       enable_flag_ = other.enable_flag_;
       is_modify_enable_flag_ = other.is_modify_enable_flag_;
-      ref_cst_type_ = other.ref_cst_type_;
+      fk_ref_type_ = other.fk_ref_type_;
       ref_cst_id_ = other.ref_cst_id_;
       validate_flag_ = other.validate_flag_;
       is_modify_validate_flag_ = other.is_modify_validate_flag_;
@@ -2792,8 +2792,9 @@ public:
   common::ObString foreign_key_name_;
   bool enable_flag_;
   bool is_modify_enable_flag_;
-  share::schema::ObConstraintType ref_cst_type_;
-  uint64_t ref_cst_id_;
+  // foreign key type (ref primary key/unique key/non-unique key)
+  share::schema::ObForeignKeyRefType fk_ref_type_; // FARM COMPAT WHITELIST for ref_cst_type_
+  uint64_t ref_cst_id_; // the id of index referenced by foreign key
   ObCstFkValidateFlag validate_flag_;
   bool is_modify_validate_flag_;
   bool rely_flag_;

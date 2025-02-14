@@ -55,7 +55,8 @@ private:
                          const ObForeignKeyArg &fk_arg,
                          const ObExprPtrIArray &row,
                          ObForeignKeyChecker *fk_checker,
-                         bool expect_zero);
+                         bool expect_zero,
+                         bool use_das_scan);
   static int check_exist_inner_sql(ObTableModifyOp &modify_op,
                                    const ObForeignKeyArg &fk_arg,
                                    const ObExprPtrIArray &row,

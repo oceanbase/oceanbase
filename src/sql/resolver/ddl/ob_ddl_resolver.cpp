@@ -9176,14 +9176,14 @@ int ObDDLResolver::check_foreign_key_reference(
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_uk_pk_column(
+          } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_index_column(
               *parent_table_schema, *schema_checker_, parent_columns, index_arg_list, !lib::is_mysql_mode()/*is_oracle_mode*/,
-              arg.ref_cst_type_, arg.ref_cst_id_, is_matched))) {
+              arg.fk_ref_type_, arg.ref_cst_id_, is_matched))) {
             LOG_WARN("Failed to check reference columns in parent table");
           } else if (!is_matched) {
             if (lib::is_mysql_mode()) {
               ret = OB_ERR_CANNOT_ADD_FOREIGN;
-              LOG_WARN("reference columns aren't reference to pk or uk in parent table", K(ret));
+              LOG_WARN("reference columns aren't reference to the index in parent table", K(ret));
             } else { // oracle mode
               ret = OB_ERR_NO_MATCHING_UK_PK_FOR_COL_LIST;
               LOG_WARN("reference columns aren't reference to pk or uk in parent table", K(ret));

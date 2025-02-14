@@ -2812,7 +2812,12 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (need_handle) {
-    if (check_parent_table) {
+    /* For non-unique indexes, we do not use das scan, and use inner SQL. */
+    if (!fk_info.is_ref_unique_index()) {
+      fk_arg.use_das_scan_ = false;
+    }
+    /* For non-unique indexes, we do not generate das scan parameters */
+    if (check_parent_table && fk_arg.use_das_scan_) {
       ObDMLCtDefAllocator<ObForeignKeyCheckerCtdef> fk_allocator(cg_.phy_plan_->get_allocator());
       if (OB_ISNULL(fk_arg.fk_ctdef_ = fk_allocator.alloc())) {
         LOG_WARN("failed to alocate foreign key ctdef", K(ret));

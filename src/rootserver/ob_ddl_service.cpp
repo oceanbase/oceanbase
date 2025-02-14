@@ -1315,7 +1315,10 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &tabl
   bool is_match = false;
   for (int64_t i = 1; OB_SUCC(ret) && !is_match && i < table_schemas.count(); ++i) {
     const ObTableSchema &index_table_schema = table_schemas.at(i);
-    if (index_table_schema.is_unique_index()) {
+    if (index_table_schema.get_data_table_id() != table_schemas.at(0).get_table_id()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the data table of the index table is wrong.", K(ret), K(index_table_schema.get_data_table_id()), K(table_schemas.at(0).get_table_id()));
+    } else if (index_table_schema.is_unique_index()) {
       const ObColumnSchemaV2 *index_col = NULL;
       const ObIndexInfo &index_info = index_table_schema.get_index_info();
       ObSEArray<ObString, 8> uk_columns;
@@ -1325,7 +1328,6 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &tabl
           LOG_WARN("get index column schema failed", K(ret));
         } else if (index_col->is_hidden() || index_col->is_shadow_column()) { // do nothing
         } else if (OB_FAIL(uk_columns.push_back(index_col->get_column_name()))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("push back index column failed", K(ret));
         } else {} // do nothing
       }
@@ -1334,9 +1336,91 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &tabl
         if (OB_FAIL(sql::ObResolverUtils::check_match_columns(parent_columns, uk_columns, is_match))) {
           LOG_WARN("Failed to check_match_columns", K(ret));
         } else if (is_match) {
-          foreign_key_info.ref_cst_type_ = foreign_key_arg.ref_cst_type_;
+          foreign_key_info.fk_ref_type_ = foreign_key_arg.fk_ref_type_;
           foreign_key_info.ref_cst_id_ = index_table_schema.get_table_id();
         }
+      }
+    }
+  }
+
+  return ret;
+}
+
+
+int ObDDLService::get_index_cst_id_for_self_ref(const ObIArray<ObTableSchema> &table_schemas,
+                                             const ObCreateForeignKeyArg &foreign_key_arg,
+                                             ObForeignKeyInfo &foreign_key_info)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_match = false;
+
+  /* 1.检查自引用primary key的前缀 */
+  if (table_schemas.count() < 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the parameters passed to get_index_cst_id_for_self_ref is wrong.", K(ret), K(table_schemas));
+  } else if (!table_schemas.at(0).is_user_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the first table in table_schemas is wrong.", K(ret), K(table_schemas.at(0)));
+  } else {
+    const ObTableSchema& parent_table_schema = table_schemas.at(0);
+    const ObRowkeyInfo &rowkey_info = parent_table_schema.get_rowkey_info();
+    common::ObSEArray<ObString, 8> pk_columns;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+      uint64_t column_id = 0;
+      const ObColumnSchemaV2 *col_schema = NULL;
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get rowkey info", K(ret), K(i), K(rowkey_info));
+      } else if (NULL == (col_schema = parent_table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get pk column schema failed", K(ret));
+      } else if (col_schema->is_hidden() || col_schema->is_shadow_column()) {
+        // do nothing
+      } else if(OB_FAIL(pk_columns.push_back(col_schema->get_column_name()))) {
+        LOG_WARN("push back pk column failed", K(ret));
+      } else { } // do nothing
+    }
+    if (OB_SUCC(ret)) {
+      const ObIArray<ObString> &parent_columns = foreign_key_arg.parent_columns_;
+      if (OB_FAIL(sql::ObResolverUtils::check_partial_match_columns(parent_columns, pk_columns, is_match))) {
+        LOG_WARN("Failed to check_match_columns", K(ret));
+      } else if (is_match) {
+        foreign_key_info.fk_ref_type_ = foreign_key_arg.fk_ref_type_;
+        foreign_key_info.ref_cst_id_ = parent_table_schema.get_table_id();
+      }
+    }
+  }
+
+  /* 2.检查自引用unique key的前缀 */
+  for (int64_t i = 1; OB_SUCC(ret) && !is_match && i < table_schemas.count(); ++i) {
+    const ObTableSchema &index_table_schema = table_schemas.at(i);
+    const ObColumnSchemaV2 *index_col = NULL;
+    const ObIndexInfo &index_info = index_table_schema.get_index_info();
+    ObSEArray<ObString, 8> index_columns;
+    if (index_table_schema.get_data_table_id() != table_schemas.at(0).get_table_id()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the data table of the index table is wrong.", K(ret), K(index_table_schema.get_data_table_id()), K(table_schemas.at(0).get_table_id()));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < index_info.get_size(); ++j) {
+      if (OB_ISNULL(index_info.get_column(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index_info get_column returns nullptr.", K(ret), K(j));
+      } else if (OB_ISNULL(index_col = index_table_schema.get_column_schema(index_info.get_column(j)->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get index column schema failed", K(ret));
+      } else if (index_col->is_hidden() || index_col->is_shadow_column()) { // do nothing
+      } else if (OB_FAIL(index_columns.push_back(index_col->get_column_name()))) {
+        LOG_WARN("push back index column failed", K(ret));
+      } else {} // do nothing
+    }
+    if (OB_SUCC(ret)) {
+      const ObIArray<ObString> &parent_columns = foreign_key_arg.parent_columns_;
+      if (OB_FAIL(sql::ObResolverUtils::check_partial_match_columns(parent_columns, index_columns, is_match))) {
+        LOG_WARN("Failed to check_match_columns", K(ret));
+      } else if (is_match) {
+        foreign_key_info.fk_ref_type_ = foreign_key_arg.fk_ref_type_;
+        foreign_key_info.ref_cst_id_ = index_table_schema.get_table_id();
       }
     }
   }
@@ -1653,7 +1737,7 @@ int ObDDLService::deal_with_cst_for_alter_table(
         foreign_key_info.enable_flag_ = foreign_key_arg.enable_flag_;
         foreign_key_info.validate_flag_ = foreign_key_arg.validate_flag_;
         foreign_key_info.rely_flag_ = foreign_key_arg.rely_flag_;
-        foreign_key_info.ref_cst_type_ = foreign_key_arg.ref_cst_type_;
+        foreign_key_info.fk_ref_type_ = foreign_key_arg.fk_ref_type_;
         foreign_key_info.ref_cst_id_ = foreign_key_arg.ref_cst_id_;
         foreign_key_info.is_parent_table_mock_ = foreign_key_arg.is_parent_table_mock_;
         foreign_key_info.name_generated_type_ = foreign_key_arg.name_generated_type_;
@@ -6218,7 +6302,20 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                                           have_index))) {
               LOG_WARN("fail to check index on foreign key", K(ret), K(foreign_key_infos), KPC(index_table_schema));
             } else if (have_index) {
-              ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+              if (index_table_schema->is_unique_index()) {
+                ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK;
+              } else {
+                ObString index_name;
+                if (OB_FAIL(ObTableSchema::get_index_name(allocator,
+                  index_table_schema->get_data_table_id(),
+                  index_table_schema->get_table_name_str(),
+                  index_name))) {
+                  LOG_WARN("failed to build index table name", K(ret));
+                } else {
+                  ret = OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX;
+                  LOG_USER_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX, index_name.length(), index_name.ptr());
+                }
+              }
               LOG_WARN("cannot delete index with foreign key dependency", K(ret));
             } else if (!drop_index_arg->is_inner_ && index_table_schema->is_unavailable_index()) {
               ret = OB_NOT_SUPPORTED;
@@ -6809,7 +6906,7 @@ int ObDDLService::gen_mock_fk_parent_table_for_drop_table(
           const int64_t invalid_cst_id = 0;
           tmp_foreign_key_info.set_parent_table_id(mock_fk_parent_table_schema.get_mock_fk_parent_table_id());
           tmp_foreign_key_info.set_is_parent_table_mock(true);
-          tmp_foreign_key_info.set_ref_cst_type(CONSTRAINT_TYPE_INVALID);
+          tmp_foreign_key_info.set_fk_ref_type(FK_REF_TYPE_INVALID);
           tmp_foreign_key_info.set_ref_cst_id(invalid_cst_id);
           if (OB_FAIL(mock_fk_parent_table_schema.add_foreign_key_info(tmp_foreign_key_info))) {
             LOG_WARN("fail to add_foreign_key_info for mock_fk_parent_table_schema", K(ret), K(mock_fk_parent_table_schema), K(tmp_foreign_key_info));
@@ -6932,7 +7029,6 @@ int ObDDLService::get_uk_cst_id_for_replacing_mock_fk_parent_table(
           LOG_WARN("get index column schema failed", K(ret), K(index_info.get_column(j)->column_id_));
         } else if (index_col->is_hidden() || index_col->is_shadow_column()) { // do nothing
         } else if (OB_FAIL(uk_columns.push_back(index_info.get_column(j)->column_id_))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("push back index column failed", K(ret), KPC(index_col));
         }
       }
@@ -6940,7 +7036,7 @@ int ObDDLService::get_uk_cst_id_for_replacing_mock_fk_parent_table(
         if (OB_FAIL(sql::ObResolverUtils::check_match_columns(foreign_key_info.parent_column_ids_, uk_columns, is_match))) {
           LOG_WARN("Failed to check_match_columns", K(ret));
         } else if (is_match) {
-          foreign_key_info.ref_cst_type_ = CONSTRAINT_TYPE_UNIQUE_KEY;
+          foreign_key_info.fk_ref_type_ = FK_REF_TYPE_UNIQUE_KEY;
           foreign_key_info.ref_cst_id_ = index_table_schema->get_table_id();
         }
       }
@@ -6979,7 +7075,7 @@ int ObDDLService::gen_mock_fk_parent_table_for_replacing_mock_fk_parent_table(
     bool is_column_exist = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < ori_mock_fk_infos_array.count(); ++i) {
       mock_fk_parent_table_schema.get_foreign_key_infos().at(i).parent_column_ids_.reuse();
-      mock_fk_parent_table_schema.get_foreign_key_infos().at(i).ref_cst_type_ = CONSTRAINT_TYPE_INVALID;
+      mock_fk_parent_table_schema.get_foreign_key_infos().at(i).fk_ref_type_ = FK_REF_TYPE_INVALID;
       mock_fk_parent_table_schema.get_foreign_key_infos().at(i).is_parent_table_mock_ = false;
       mock_fk_parent_table_schema.get_foreign_key_infos().at(i).parent_table_id_ = real_parent_table.get_table_id();
       for (int64_t j = 0;  OB_SUCC(ret) && j < ori_mock_fk_infos_array.at(i).parent_column_ids_.count(); ++j) {
@@ -7014,7 +7110,6 @@ int ObDDLService::gen_mock_fk_parent_table_for_replacing_mock_fk_parent_table(
         } else if (col_schema->is_hidden() || col_schema->is_shadow_column()) {
           // do nothing
         } else if(OB_FAIL(pk_column_ids.push_back(col_schema->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("push back column_id failed", K(ret), K(col_schema->get_column_id()));
         }
       }
@@ -7023,14 +7118,14 @@ int ObDDLService::gen_mock_fk_parent_table_for_replacing_mock_fk_parent_table(
       } else if (OB_FAIL(sql::ObResolverUtils::check_match_columns(pk_column_ids, mock_fk_parent_table_schema.get_foreign_key_infos().at(i).parent_column_ids_, is_match))) {
         LOG_WARN("check_match_columns failed", K(ret));
       } else if (is_match) {
-        mock_fk_parent_table_schema.get_foreign_key_infos().at(i).ref_cst_type_ = CONSTRAINT_TYPE_PRIMARY_KEY;
+        mock_fk_parent_table_schema.get_foreign_key_infos().at(i).fk_ref_type_ = FK_REF_TYPE_PRIMARY_KEY;
       } else { // pk is not match, check if uk match
         if (OB_FAIL(get_uk_cst_id_for_replacing_mock_fk_parent_table(
             uk_index_schemas, mock_fk_parent_table_schema.get_foreign_key_infos().at(i)))) {
           LOG_WARN("fail to get_uk_cst_id_for_replacing_mock_fk_parent_table", K(ret));
-        } else if (CONSTRAINT_TYPE_INVALID == mock_fk_parent_table_schema.get_foreign_key_infos().at(i).ref_cst_type_) {
+        } else if (FK_REF_TYPE_INVALID == mock_fk_parent_table_schema.get_foreign_key_infos().at(i).fk_ref_type_) {
           ret = OB_ERR_CANNOT_ADD_FOREIGN;
-          LOG_WARN("ref_cst_type is invalid", K(ret), KPC(mock_fk_parent_table_ptr));
+          LOG_WARN("fk_ref_type is invalid", K(ret), KPC(mock_fk_parent_table_ptr));
         }
       }
     }
@@ -9702,7 +9797,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
         } else if (column->is_generated_column()) {
           const common::ObObj* ObObjtmp = &column->get_cur_default_value();
           if (OB_FAIL(gen_col_expr_arr.push_back(ObObjtmp->get_string()))) {
-            LOG_WARN("push back failed", K(ret));
+            LOG_WARN("failed to pushback to gen_col_expr_arr", K(ret));
           }
         }
         if (OB_SUCC(ret) && is_lob_storage(column->get_data_type())) {
@@ -18274,7 +18369,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
         LOG_WARN("failed to fetch new foreign key id", K(ret), K(tenant_id));
       } else if (original_fk_info.parent_table_id_ == orig_table_schema.get_table_id()) {
         // update referenced constraint id
-        if (CONSTRAINT_TYPE_PRIMARY_KEY == foreign_key_info.ref_cst_type_) {
+        if (FK_REF_TYPE_PRIMARY_KEY == foreign_key_info.fk_ref_type_) {
           if (is_oracle_mode) {
             const ObConstraint *pk_cst = hidden_table_schema.get_pk_constraint();
             if (OB_ISNULL(pk_cst)) {
@@ -19128,7 +19223,7 @@ int ObDDLService::check_and_replace_fk_info_on_demand(
       if (FAILEDx(schema_checker.init(dst_tenant_schema_guard))) {
         LOG_WARN("init schema checker failed", K(ret));
       } else if (OB_FAIL(check_rebuild_foreign_key_satisfy(create_fk_arg, *dst_parent_schema, *dst_child_schema,
-          schema_checker, new_fk_info.ref_cst_type_))) {
+          schema_checker, new_fk_info.fk_ref_type_))) {
         LOG_WARN("check rebuild foreign key satisfy failed", K(ret), K(create_fk_arg));
       } else {
         // used to fetch unique index schema when reference to unique column.
@@ -19144,7 +19239,7 @@ int ObDDLService::check_rebuild_foreign_key_satisfy(
     const ObTableSchema &parent_table_schema,
     const ObTableSchema &child_table_schema,
     sql::ObSchemaChecker &schema_checker,
-    const ObConstraintType &expected_cst_type)
+    const ObForeignKeyRefType &expected_cst_type)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
@@ -19173,19 +19268,19 @@ int ObDDLService::check_rebuild_foreign_key_satisfy(
                                                                      create_fk_arg.parent_columns_,
                                                                      nullptr))) {
     LOG_WARN("Failed to check_foreign_key_columns_type", K(ret));
-  } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_uk_pk_column(
+  } else if (OB_FAIL(ObResolverUtils::foreign_key_column_match_index_column(
       parent_table_schema, schema_checker, create_fk_arg.parent_columns_, index_arg_list/*without initialization is expected*/,
-      is_oracle_mode, create_fk_arg.ref_cst_type_, create_fk_arg.ref_cst_id_, is_matched))) {
+      is_oracle_mode, create_fk_arg.fk_ref_type_, create_fk_arg.ref_cst_id_, is_matched))) {
     LOG_WARN("Failed to check reference columns in parent table");
-  } else if (!is_matched || expected_cst_type != create_fk_arg.ref_cst_type_) {
+  } else if (!is_matched || expected_cst_type != create_fk_arg.fk_ref_type_) {
     if (!is_oracle_mode) {
       ret = OB_ERR_CANNOT_ADD_FOREIGN;
       LOG_WARN("reference to pk or uk in parent table failed or cst type mismatched", K(ret),
-          K(expected_cst_type), "real_cst_type", create_fk_arg.ref_cst_type_);
+          K(expected_cst_type), "real_cst_type", create_fk_arg.fk_ref_type_);
     } else { // oracle mode
       ret = OB_ERR_NO_MATCHING_UK_PK_FOR_COL_LIST;
       LOG_WARN("reference to pk or uk in parent table failed or cst type mismatched", K(ret),
-          K(expected_cst_type), "real_cst_type", create_fk_arg.ref_cst_type_);
+          K(expected_cst_type), "real_cst_type", create_fk_arg.fk_ref_type_);
     }
   } else if (OB_FAIL(ObResolverUtils::check_foreign_key_set_null_satisfy(create_fk_arg, child_table_schema, !is_oracle_mode))) {
     LOG_WARN("check fk set null satisfy failed", K(ret), K(create_fk_arg), K(is_oracle_mode));

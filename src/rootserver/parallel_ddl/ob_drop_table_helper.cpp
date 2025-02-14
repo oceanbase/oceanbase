@@ -1012,7 +1012,7 @@ int ObDropTableHelper::gen_mock_fk_parent_table_for_drop_table_(
         const uint64_t invalid_cst_id = 0;
         tmp_fk_info.set_parent_table_id(mock_fk_parent_table_schema.get_mock_fk_parent_table_id());
         tmp_fk_info.set_is_parent_table_mock(true);
-        tmp_fk_info.set_ref_cst_type(CONSTRAINT_TYPE_INVALID);
+        tmp_fk_info.set_fk_ref_type(FK_REF_TYPE_INVALID);
         tmp_fk_info.set_ref_cst_id(invalid_cst_id);
         if (OB_FAIL(mock_fk_parent_table_schema.add_foreign_key_info(tmp_fk_info))) {
           LOG_WARN("fail to add foreign key info for mock fk parent table schema", KR(ret), K(tmp_fk_info));

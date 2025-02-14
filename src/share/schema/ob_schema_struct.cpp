@@ -11990,7 +11990,7 @@ ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator *allocator)
     rely_flag_(false),
     is_modify_rely_flag_(false),
     is_modify_fk_state_(false),
-    ref_cst_type_(CONSTRAINT_TYPE_INVALID),
+    fk_ref_type_(FK_REF_TYPE_INVALID),
     ref_cst_id_(common::OB_INVALID_ID),
     is_modify_fk_name_flag_(false),
     is_parent_table_mock_(false),
@@ -12019,7 +12019,7 @@ int ObForeignKeyInfo::assign(const ObForeignKeyInfo &other)
     rely_flag_ = other.rely_flag_;
     is_modify_rely_flag_ = other.is_modify_rely_flag_;
     is_modify_fk_state_ = other.is_modify_fk_state_;
-    ref_cst_type_ = other.ref_cst_type_;
+    fk_ref_type_ = other.fk_ref_type_;
     ref_cst_id_ = other.ref_cst_id_;
     foreign_key_name_ = other.foreign_key_name_; // Shallow copy
     is_modify_fk_name_flag_ = other.is_modify_fk_name_flag_;
@@ -12073,7 +12073,7 @@ OB_SERIALIZE_MEMBER(ObForeignKeyInfo,
                     update_action_,
                     delete_action_,
                     foreign_key_name_,
-                    ref_cst_type_,
+                    fk_ref_type_, // FARM COMPAT WHITELIST for ref_cst_type_
                     ref_cst_id_,
                     is_modify_fk_name_flag_,
                     is_parent_table_mock_,

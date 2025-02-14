@@ -97,7 +97,7 @@ private:
                                 bool &has_null);
   int get_scan_result_count(int64_t &get_row_count);
   int init_clear_exprs(ObForeignKeyCheckerCtdef &fk_ctdef, const ObExprPtrIArray &row);
-  int check_fk_column_type(const ObObjMeta &col_obj_meta, const ObObjMeta &dst_obj_meta);
+  int check_fk_column_type(const ObObjMeta &col_obj_meta, const ObObjMeta &dst_obj_meta, bool &need_extra_cast);
 public:
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
   ObDASScanRtDef das_scan_rtdef_;
