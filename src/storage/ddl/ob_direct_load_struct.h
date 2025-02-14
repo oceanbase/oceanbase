@@ -358,7 +358,7 @@ public:
   virtual ~ObDDLSliceRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version),
-    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table));
+    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table), K_(index_has_lob));
 private:
   sql::ObPxMultiPartSSTableInsertOp *op_;
   common::ObTabletID tablet_id_; // data_tablet_id rather than lob_meta_tablet_id.
@@ -374,7 +374,7 @@ private:
   bool is_next_row_cached_;
   bool need_idempotent_autoinc_val_;
   bool is_index_table_;
-  bool has_lob_rowkey_;
+  bool index_has_lob_;
 };
 
 // for ddl insert row.

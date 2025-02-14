@@ -1198,7 +1198,7 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), table_name_.length(), table_name_.ptr());
       } else {
-        if (ob_is_text_tc(column_schema->get_data_type())) {
+        if (column_schema->is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
         } else if (ob_is_roaringbitmap_tc(column_schema->get_data_type())) {
@@ -4230,7 +4230,7 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "VECTOR, TEXT column can't be unique key", K(column), K(ret));
-        } else if (ob_is_text_tc(column.get_data_type())) {
+        } else if (column.is_key_forbid_lob()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
@@ -5182,7 +5182,7 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
       resolve_stat.is_primary_key_ = true;
       // primary key should not be nullable
       column.set_nullable(false);
-      if (ob_is_text_tc(column.get_data_type())) {
+      if (column.is_key_forbid_lob()) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
         SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(column), K(ret));
@@ -5216,11 +5216,11 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
     }
     case T_CONSTR_UNIQUE_KEY: {
       resolve_stat.is_unique_key_ = true;
-      if (ob_is_text_tc(column.get_data_type())) {
+      if (column.is_key_forbid_lob()) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
         SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
-      } else if (ob_is_text_tc(column.get_data_type())) {
+      } else if (ob_is_roaringbitmap_tc(column.get_data_type())) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
         SQL_RESV_LOG(WARN, "roaringbitmap column can't be unique key", K(column), K(ret));

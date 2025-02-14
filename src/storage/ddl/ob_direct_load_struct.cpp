@@ -72,7 +72,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     is_next_row_cached_(true),
     need_idempotent_autoinc_val_(need_idempotent_autoinc_val),
     is_index_table_(is_index_table),
-    has_lob_rowkey_(true)
+    index_has_lob_(true)
 {
 }
 
@@ -142,7 +142,7 @@ int ObDDLSliceRowIterator::get_next_row(
               LOG_WARN("expr is NULL", K(ret), K(i));
             } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
               LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
-            } else if (is_index_table_ && has_lob_rowkey_ && i < rowkey_col_cnt_) {
+            } else if (is_index_table_ && index_has_lob_) {
               if (e->obj_meta_.is_lob_storage()) {
                 has_lob = true;
                 if (!datum->is_null() && !datum->is_nop()) {
@@ -166,11 +166,12 @@ int ObDDLSliceRowIterator::get_next_row(
             }
           }
           if (OB_SUCC(ret)) {
-            has_lob_rowkey_ = has_lob;
+            index_has_lob_ = has_lob;
             // add extra rowkey
             current_row_.storage_datums_[rowkey_col_cnt_].set_int(-snapshot_version_);
             current_row_.storage_datums_[rowkey_col_cnt_ + 1].set_int(0);
-            LOG_DEBUG("ddl row iter get next row", K(row_tablet_id), K(tablet_id_), K(row_tablet_slice_param), K(ddl_slice_param_), K(current_row_), K(has_lob), K_(has_lob_rowkey));
+            LOG_DEBUG("ddl row iter get next row", K(row_tablet_id), K(tablet_id_), K(row_tablet_slice_param),
+              K(ddl_slice_param_), K(current_row_), K(has_lob), K_(index_has_lob));
           }
         }
       }
