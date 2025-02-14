@@ -314,7 +314,7 @@ public:
   int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,
                                 const share::ObLSID &ls_id,
                                 const MacroBlockId &macro_id,
-                                const ObCommonDatumRowkey &common_rowkey);
+                                const ObDatumRowkey &common_rowkey);
 
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler

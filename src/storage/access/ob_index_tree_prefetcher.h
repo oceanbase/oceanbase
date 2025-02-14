@@ -45,6 +45,7 @@ public:
       range_idx_(-1),
       micro_begin_idx_(-1),
       micro_end_idx_(-1),
+      current_rows_info_idx_(-1),
       query_range_(nullptr),
       index_block_info_(),
       row_handle_(),
@@ -62,6 +63,7 @@ public:
     range_idx_ = -1;
     micro_begin_idx_ = -1;
     micro_end_idx_ = -1;
+    current_rows_info_idx_ = -1;
     query_range_ = nullptr;
     index_block_info_.reset();
     row_handle_.reset();
@@ -76,6 +78,7 @@ public:
     range_idx_ = -1;
     micro_begin_idx_ = -1;
     micro_end_idx_ = -1;
+    current_rows_info_idx_ = -1;
     query_range_ = nullptr;
     micro_handle_ = nullptr;
     index_block_info_.reset();
@@ -84,6 +87,10 @@ public:
   OB_INLINE bool is_valid() const { return nullptr != query_range_; }
   OB_INLINE bool need_read_block() const { return ObSSTableRowState::IN_BLOCK == row_state_; }
   OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey()
+  {
+    return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_) : *rowkey_;
+  }
+  OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey() const
   {
     return is_sorted_multi_get_ ? rowkeys_info_->get_rowkey(range_idx_) : *rowkey_;
   }
@@ -114,6 +121,7 @@ public:
   int64_t range_idx_;
   int64_t micro_begin_idx_;
   int64_t micro_end_idx_;
+  int64_t current_rows_info_idx_;
   union {
     const blocksstable::ObDatumRowkey *rowkey_;
     const blocksstable::ObDatumRange *range_;

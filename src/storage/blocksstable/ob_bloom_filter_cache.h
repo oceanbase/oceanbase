@@ -224,8 +224,8 @@ public:
       STORAGE_LOG(INFO, "current bloomfilter task queue size,", K(qsize), K_(bf_cache_miss_count_threshold));
     }
   }
-  int check_need_build(const ObBloomFilterCacheKey &bf_key,
-      bool &need_build);
+  int check_need_build(const ObBloomFilterCacheKey &bf_key, bool &need_build);
+  int check_need_load(const ObBloomFilterCacheKey &bf_key, bool &need_load);
   TO_STRING_KV(K_(bf_cache_miss_count_threshold));
 
 private:

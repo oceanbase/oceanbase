@@ -2865,7 +2865,7 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
       } else {
         const int64_t max_agg_data_size = index_block_aggregator_.get_max_agg_size();
         const int64_t max_macro_block_bf_size
-            = data_store_desc_->enable_macro_block_bloom_filter() ? 64 * 1024 /* max 64KB for bf */ : 0;
+            = data_store_desc_->enable_macro_block_bloom_filter() ? ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE : 0;
         // for cs_encoding, the estimate_block_size calculated by build_block
         // may less than the real block_size, because the the cs_encoding has
         // compression for string column and the real macro meta data may has

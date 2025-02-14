@@ -68,20 +68,20 @@ ObBloomFilterLoadTaskQueue::ValuePair::ValuePair(const ValuePair &src)
   rowkey_ = src.rowkey_;
 }
 
-int ObBloomFilterLoadTaskQueue::ValuePair::alloc_rowkey(const ObCommonDatumRowkey &common_rowkey)
+int ObBloomFilterLoadTaskQueue::ValuePair::alloc_rowkey(const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == allocator_ || nullptr != rowkey_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to set rowkey, null allocator", K(ret), KPC(this), KP(allocator_), KP(rowkey_));
-  } else if (OB_UNLIKELY(!common_rowkey.is_valid())) {
+  } else if (OB_UNLIKELY(!rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to set rowkey, invalid input", K(ret), K(common_rowkey));
+    LOG_WARN("fail to set rowkey, invalid input", K(ret), K(rowkey));
   } else if (OB_ISNULL(rowkey_ = OB_NEWx(ObDatumRowkey, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate rowkey for value pair", K(ret), K(common_rowkey));
-  } else if (OB_FAIL(common_rowkey.deep_copy(*rowkey_, *allocator_))) {
-    LOG_WARN("fail to deep copy common rowket", K(ret), K(common_rowkey));
+    LOG_WARN("fail to allocate rowkey for value pair", K(ret), K(rowkey));
+  } else if (OB_FAIL(rowkey.deep_copy(*rowkey_, *allocator_))) {
+    LOG_WARN("fail to deep copy common rowket", K(ret), K(rowkey));
   }
   return ret;
 }
@@ -162,7 +162,7 @@ void ObBloomFilterLoadTaskQueue::reset()
 int ObBloomFilterLoadTaskQueue::push_task(const storage::ObITable::TableKey &sstable_key,
                                           const share::ObLSID &ls_id,
                                           const MacroBlockId &macro_id,
-                                          const ObCommonDatumRowkey &common_rowkey)
+                                          const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
   const ObBloomFilterLoadKey key(ls_id, sstable_key);
@@ -172,14 +172,14 @@ int ObBloomFilterLoadTaskQueue::push_task(const storage::ObITable::TableKey &sst
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to push task, not inited", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!key.is_valid() || !macro_id.is_valid() || !common_rowkey.is_valid())) {
+  } else if (OB_UNLIKELY(!key.is_valid() || !macro_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to push task, invalid argument", K(ret), K(key), K(macro_id), K(common_rowkey));
-  } else if (OB_FAIL(value.alloc_rowkey(common_rowkey))) {
-    LOG_WARN("fail to set value pair", K(ret), K(macro_id), K(common_rowkey));
-  }
-
-  if (OB_FAIL(ret)) {
+    LOG_WARN("fail to push task, invalid argument", K(ret), K(key), K(macro_id));
+  } else if (!rowkey.is_valid()) {
+    // do nothing.
+    LOG_INFO("cmdebug, invalid rowkey, skip this", K(key), K(macro_id), K(rowkey));
+  } else if (OB_FAIL(value.alloc_rowkey(rowkey))) {
+    LOG_WARN("fail to set value pair", K(ret), K(macro_id), K(rowkey));
   } else {
     // Try to append macro id.
     ObBucketHashWLockGuard guard(bucket_lock_, key.hash());
@@ -193,12 +193,12 @@ int ObBloomFilterLoadTaskQueue::push_task(const storage::ObITable::TableKey &sst
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory for macro id array", K(ret), K(sizeof(ObArray<MacroBlockId>)));
         } else if (OB_FAIL(array->push_back(value))) {
-          LOG_WARN("fail to push back macro id", K(ret), K(key), K(macro_id), K(common_rowkey));
+          LOG_WARN("fail to push back macro id", K(ret), K(key), K(macro_id), K(rowkey));
         } else if (OB_ISNULL(key_node = OB_NEWx(KeyLink, &allocator_, key))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory for sstable key node", K(ret), K(key), K(macro_id));
         } else if (OB_FAIL(fetch_queue_.push(key_node))) {
-          LOG_WARN("fail to push into fetch queue", K(ret), K(key), K(macro_id), K(common_rowkey));
+          LOG_WARN("fail to push into fetch queue", K(ret), K(key), K(macro_id), K(rowkey));
         }
         // Set pair to map.
         if (OB_FAIL(ret)) {
@@ -217,7 +217,7 @@ int ObBloomFilterLoadTaskQueue::push_task(const storage::ObITable::TableKey &sst
           }
         }
       } else {
-        LOG_WARN("fail to atomic append macro id to load map", K(ret), K(key), K(macro_id), K(common_rowkey));
+        LOG_WARN("fail to atomic append macro id to load map", K(ret), K(key), K(macro_id), K(rowkey));
       }
     } else if (OB_FAIL(array->push_back(value))) { // Append to existed kv pair.
       LOG_WARN("fail to push back to value array", K(ret), K(sstable_key), K(value));
@@ -330,8 +330,8 @@ int ObMacroBlockBloomFilterLoadTG::init()
     LOG_WARN("fail to init allocator", K(ret), K(MTL_ID()));
   } else {
     is_inited_ = true;
+    LOG_INFO("init macro block bloom filter load tg", K(ret), K(MTL_ID()), K(tg_id_));
   }
-  LOG_INFO("cmdebug, init macro block bloom filter load tg", K(ret), K(MTL_ID()), K(tg_id_));
   return ret;
 }
 
@@ -351,7 +351,7 @@ int ObMacroBlockBloomFilterLoadTG::start()
 void ObMacroBlockBloomFilterLoadTG::stop()
 {
   TG_STOP(tg_id_);
-  LOG_INFO("cmdebug, stop macro block bloom filter load tg", K(MTL_ID()));
+  LOG_INFO("stop macro block bloom filter load tg", K(MTL_ID()));
 }
 
 void ObMacroBlockBloomFilterLoadTG::wait()
@@ -364,14 +364,13 @@ void ObMacroBlockBloomFilterLoadTG::destroy()
 {
   if (tg_id_ != -1) {
     TG_DESTROY(tg_id_);
-    LOG_INFO("cmdebug, destroy macro block bloom filter load tg", K(tg_id_), K(MTL_ID()));
     tg_id_ = -1;
   }
   load_task_queue_.reset();
   idle_cond_.destroy();
   allocator_.reset();
   is_inited_ = false;
-  LOG_INFO("cmdebug, destroy macro block bloom filter load tg", K(MTL_ID()));
+  LOG_INFO("destroy macro block bloom filter load tg", K(MTL_ID()));
 }
 
 void ObMacroBlockBloomFilterLoadTG::run1()
@@ -419,7 +418,10 @@ int ObMacroBlockBloomFilterLoadTG::load_macro_block_bloom_filter(const ObDataMac
                                                 macro_meta.val_.macro_block_bf_size_,
                                                 pos))) {
     LOG_WARN("fail to deserialize macro block bloom filter", K(ret), K(macro_meta));
-  } else if (OB_FAIL(bf_cache_value.init(macro_block_bf.get_bloom_filter(), macro_meta.val_.rowkey_count_))) {
+  } else if (OB_FAIL(bf_cache_value.init(
+                 macro_block_bf.get_bloom_filter(),
+                 macro_meta.val_.rowkey_count_
+                     - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */))) {
     LOG_WARN("fail to init bloom filter cache value", K(ret), K(macro_meta));
   } else if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().put_bloom_filter(MTL_ID(),
                                                                                          macro_meta.get_macro_id(),
@@ -427,7 +429,7 @@ int ObMacroBlockBloomFilterLoadTG::load_macro_block_bloom_filter(const ObDataMac
                                                                                          true /* adaptive */))) {
     LOG_WARN("fail to load macro block bloom filter", K(ret), K(bf_cache_value), K(macro_meta));
   }
-  FLOG_INFO("cmdebug, load macro meta", K(ret), K(macro_meta), K(macro_block_bf));
+  FLOG_INFO("cmdebug, load macro meta", K(ret), K(macro_meta), K(macro_block_bf), K(bf_cache_value));
   return ret;
 }
 
@@ -500,7 +502,9 @@ int ObMacroBlockBloomFilterLoadTG::do_multi_load(const ObBloomFilterLoadKey &key
               cmp_ret = 0;
               macro_meta.reset();
               if (OB_FAIL(sec_meta_iter.get_next(macro_meta))) {
-                LOG_WARN("fail to get next", K(ret), K(key), K(curr_pair));
+                if (OB_UNLIKELY(OB_ITER_END != ret)) {
+                  LOG_WARN("fail to get next", K(ret), K(key), K(curr_pair));
+                }
               } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("fail to load macro block bloom filter, invalid macro meta",
@@ -542,22 +546,23 @@ int ObMacroBlockBloomFilterLoadTG::do_multi_load(const ObBloomFilterLoadKey &key
 int ObMacroBlockBloomFilterLoadTG::add_load_task(const storage::ObITable::TableKey &sstable_key,
                                                  const share::ObLSID &ls_id,
                                                  const MacroBlockId &macro_id,
-                                                 const ObCommonDatumRowkey &common_rowkey)
+                                                 const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  FLOG_INFO("cmdebug, add_load_task", K(sstable_key), K(ls_id), K(macro_id));
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to add bloom filter load tg task, not inited",
-             K(ret), K(sstable_key), K(ls_id), K(macro_id), K(common_rowkey));
+             K(ret), K(sstable_key), K(ls_id), K(macro_id), K(rowkey));
   } else if (OB_UNLIKELY(!sstable_key.is_valid() || !macro_id.is_valid()
                          || !storage::ObITable::is_sstable(sstable_key.table_type_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to add bloom filter load tg task, invalid argument",
-             K(ret), K(sstable_key), K(ls_id), K(macro_id), K(common_rowkey));
-  } else if (OB_FAIL(load_task_queue_.push_task(sstable_key, ls_id, macro_id, common_rowkey))) {
-    LOG_WARN("fail to push back macro id", K(ret), K(sstable_key), K(ls_id), K(macro_id), K(common_rowkey));
+             K(ret), K(sstable_key), K(ls_id), K(macro_id), K(rowkey));
+  } else if (OB_FAIL(load_task_queue_.push_task(sstable_key, ls_id, macro_id, rowkey))) {
+    LOG_WARN("fail to push back macro id", K(ret), K(sstable_key), K(ls_id), K(macro_id), K(rowkey));
   }
+
   return ret;
 }
 

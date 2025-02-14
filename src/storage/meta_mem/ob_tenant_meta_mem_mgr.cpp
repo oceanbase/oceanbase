@@ -2067,11 +2067,11 @@ int ObTenantMetaMemMgr::dec_external_tablet_cnt(const uint64_t tablet_id, const 
 int ObTenantMetaMemMgr::schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,
                                                   const share::ObLSID &ls_id,
                                                   const MacroBlockId &macro_id,
-                                                  const ObCommonDatumRowkey &common_rowkey)
+                                                  const ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(bf_load_tg_.add_load_task(sstable_key, ls_id, macro_id, common_rowkey))) {
-    LOG_WARN("fail to add bloom filter load task", K(ret), K(sstable_key), K(macro_id));
+  if (OB_FAIL(bf_load_tg_.add_load_task(sstable_key, ls_id, macro_id, rowkey))) {
+    LOG_WARN("fail to add bloom filter load task", K(ret), K(sstable_key), K(macro_id), K(rowkey));
   }
   return ret;
 }

@@ -35,14 +35,16 @@ class ObMacroBlockBloomFilter
 {
 public:
   static const int32_t MACRO_BLOCK_BLOOM_FILTER_V1 = 1;
+  // TODO(baichangmin): here
+  static const int64_t MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE = 32 * 1024;  // 64 KB
 
 public:
   ObMacroBlockBloomFilter();
   ~ObMacroBlockBloomFilter();
-  int alloc_bf(const ObDataStoreDesc &data_store_desc, const int64_t bf_size = 64 * 1024 /* 64KB */);
+  int alloc_bf(const ObDataStoreDesc &data_store_desc, const int64_t bf_size = MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE);
   bool is_valid() const;
   bool should_persist() const;
-  int64_t calc_max_row_count() const;
+  int64_t calc_max_row_count(const int64_t bf_size) const;
   int insert_row(const ObDatumRow &row);
   int insert_micro_block(const ObMicroBlock &micro_block);
   int insert_micro_block(const ObMicroBlockDesc &micro_block_desc, const ObMicroIndexInfo &micro_index_info);

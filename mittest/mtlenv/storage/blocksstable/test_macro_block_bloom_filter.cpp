@@ -398,10 +398,11 @@ TEST_F(TestMacroBlockBloomFilter, test_serialize_1)
   data_desc.desc_.static_desc_->enable_macro_block_bloom_filter_ = true;
 
   ObMacroBlockBloomFilter mb_bf;
-  int64_t max_row_count = mb_bf.calc_max_row_count();
+  int64_t max_row_count = mb_bf.calc_max_row_count(ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE);
   ASSERT_EQ(OB_SUCCESS, mb_bf.alloc_bf(data_desc.desc_));
   int64_t nbits = mb_bf.bf_.nbit_;
-  ASSERT_EQ(64 * 1024, mb_bf.bf_.calc_nbyte(nbits));
+  int64_t tmp_size = ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_MAX_SIZE;
+  ASSERT_EQ(tmp_size, mb_bf.bf_.calc_nbyte(nbits));
 
   char * buf = new char[2 * 1024 * 1024]; // 2MB buffer
   mb_bf.row_count_ = 1;

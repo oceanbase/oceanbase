@@ -42,7 +42,6 @@ ObMacroBlockBloomFilter::~ObMacroBlockBloomFilter()
 int ObMacroBlockBloomFilter::alloc_bf(const ObDataStoreDesc &data_store_desc, const int64_t bf_size)
 {
   int ret = OB_SUCCESS;
-  // TODO(baichangmin): 先写死 64KB，之后再改
   if (OB_UNLIKELY(bf_size <= 0 ||
                   !data_store_desc.is_valid() ||
                   !data_store_desc.enable_macro_block_bloom_filter() ||
@@ -53,7 +52,7 @@ int ObMacroBlockBloomFilter::alloc_bf(const ObDataStoreDesc &data_store_desc, co
   } else if (OB_UNLIKELY(bf_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to allocate new bloom filter", K(ret), K(bf_));
-  } else if (FALSE_IT(max_row_count_ = calc_max_row_count())) {
+  } else if (FALSE_IT(max_row_count_ = calc_max_row_count(bf_size))) {
   } else if (OB_FAIL(bf_.init_by_row_count(max_row_count_, ObBloomFilter::BLOOM_FILTER_FALSE_POSITIVE_PROB))) {
     LOG_WARN("fail to init new bloom filter", K(ret), K(bf_size));
   } else {
@@ -92,9 +91,9 @@ bool ObMacroBlockBloomFilter::should_persist() const
   return is_valid() && row_count_ > 0 && row_count_ <= max_row_count_;
 }
 
-int64_t ObMacroBlockBloomFilter::calc_max_row_count() const
+int64_t ObMacroBlockBloomFilter::calc_max_row_count(const int64_t bf_size) const
 {
-  int64_t bf_nbit = 64 * 1024 * 8;  // 64KB
+  int64_t bf_nbit = bf_size * 8;  // in bits, not byte
   double bf_nhash = -std::log(ObBloomFilter::BLOOM_FILTER_FALSE_POSITIVE_PROB) / std::log(2);
   return static_cast<int64_t>(bf_nbit * std::log(2) / bf_nhash);
 }
@@ -149,12 +148,12 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
     ObMicroBlockReaderHelper reader_helper;
     ObIMicroBlockReader *reader = nullptr;
     int64_t row_count = 0;
+    ObDatumRow row;
     if (OB_FAIL(decrypt_and_decompress_micro_data(header,
                                                   micro_data,
                                                   *micro_block.micro_index_info_,
                                                   decompressed_data))) {
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block));
-    } else if (FALSE_IT(reader->reset())) {
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
     } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
@@ -165,15 +164,18 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
     } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
       LOG_WARN("reader init failed", K(ret), K(micro_block));
     } else if (OB_FAIL(reader->get_row_count(row_count))) {
-        LOG_WARN("fail to get row count from micro block reader", K(ret));
+      LOG_WARN("fail to get row count from micro block reader", K(ret));
+    } else if (OB_FAIL(row.init(reader->get_column_count()))) {
+      LOG_WARN("fail to init datum row", K(ret), K(reader->get_column_count()), K(row_count));
     } else {
-      ObDatumRow row;
       for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
         row.reuse();
         if (OB_FAIL(reader->get_row(row_idx, row))) {
-          LOG_WARN("fail to get next row", K(ret), K(row.is_valid()));
+          LOG_WARN("fail to get next row",
+                   K(ret), K(row.is_valid()), K(reader->get_column_count()), K(row_idx), K(row_count));
         } else if (OB_FAIL(insert_row(row))) {
-          LOG_WARN("fail to insert row into macro block bloom filter", K(ret), K(row), KPC(this));
+          LOG_WARN("fail to insert row into macro block bloom filter",
+                   K(ret), K(row), K(reader->get_column_count()), K(row_idx), K(row_count), KPC(this));
         }
       }
     }
@@ -206,12 +208,12 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
     ObMicroBlockReaderHelper reader_helper;
     ObIMicroBlockReader *reader = nullptr;
     int64_t row_count = 0;
+    ObDatumRow row;
     if (OB_FAIL(decrypt_and_decompress_micro_data(*header,
                                                   micro_data,
                                                   micro_index_info,
                                                   decompressed_data))) {
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block_desc), K(micro_index_info));
-    } else if (FALSE_IT(reader->reset())) {
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
     } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
@@ -222,15 +224,18 @@ int ObMacroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
     } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
       LOG_WARN("reader init failed", K(ret), K(micro_block_desc), K(micro_index_info));
     } else if (OB_FAIL(reader->get_row_count(row_count))) {
-        LOG_WARN("fail to get row count from micro block reader", K(ret));
+      LOG_WARN("fail to get row count from micro block reader", K(ret));
+     } else if (OB_FAIL(row.init(reader->get_column_count()))) {
+      LOG_WARN("fail to init datum row", K(ret), K(reader->get_column_count()), K(row_count));
     } else {
-      ObDatumRow row;
       for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
         row.reuse();
         if (OB_FAIL(reader->get_row(row_idx, row))) {
-          LOG_WARN("fail to get next row", K(ret), K(row.is_valid()));
+          LOG_WARN("fail to get next row",
+                   K(ret), K(row.is_valid()), K(reader->get_column_count()), K(row_idx), K(row_count));
         } else if (OB_FAIL(insert_row(row))) {
-          LOG_WARN("fail to insert row into macro block bloom filter", K(ret), K(row), KPC(this));
+          LOG_WARN("fail to insert row into macro block bloom filter",
+                   K(ret), K(row), K(reader->get_column_count()), K(row_idx), K(row_count), KPC(this));
         }
       }
     }

@@ -93,7 +93,7 @@ public:
     {
       return nullptr != allocator_ && macro_id_.is_valid() && nullptr != rowkey_ && rowkey_->is_valid();
     }
-    int alloc_rowkey(const ObCommonDatumRowkey &common_rowkey);
+    int alloc_rowkey(const ObDatumRowkey &rowkey);
     int recycle_rowkey();
     TO_STRING_KV(K(macro_id_), KPC(rowkey_), KP(allocator_));
 
@@ -122,7 +122,7 @@ public:
   int push_task(const storage::ObITable::TableKey &sstable_key,
                 const share::ObLSID &ls_id,
                 const MacroBlockId &macro_id,
-                const ObCommonDatumRowkey &common_rowkey);
+                const ObDatumRowkey &rowkey);
   int pop_task(ObBloomFilterLoadKey &key, ObArray<ValuePair> *&array);
   int recycle_array(ObArray<ValuePair> *array);
 
@@ -157,7 +157,7 @@ public:
   int add_load_task(const storage::ObITable::TableKey &sstable_key,
                     const share::ObLSID &ls_id,
                     const MacroBlockId &macro_id,
-                    const ObCommonDatumRowkey &common_rowkey);
+                    const ObDatumRowkey &rowkey);
 
 private:
   int do_multi_load(const ObBloomFilterLoadKey &key, ObArray<ValuePair> *array);

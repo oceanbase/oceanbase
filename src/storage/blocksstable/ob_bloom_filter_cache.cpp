@@ -836,8 +836,26 @@ int ObBloomFilterCache::inc_empty_read(
       // do nothing
     } else if (cur_cnt > bf_cache_miss_count_threshold_) {
       if (ls_id.is_valid() && sstable_key.is_valid() && (nullptr != read_handle) && read_handle->has_macro_block_bf_) {
-        if (OB_FAIL(MTL(storage::ObTenantMetaMemMgr *)
-                        ->schedule_load_bloomfilter(sstable_key, ls_id, macro_id, read_handle->index_block_info_.endkey_))) {
+        bool need_load = false;
+        const ObDatumRowkey *rowkey = nullptr;
+        if (OB_UNLIKELY(!read_handle->is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("fail to inc empty read", K(ret), KPC(read_handle), K(common::lbt()));
+        } else if (!read_handle->is_get_) {
+          rowkey = &(read_handle->rows_info_->get_rowkey(read_handle->current_rows_info_idx_));
+        } else {
+          rowkey = &(read_handle->get_rowkey());
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(rowkey)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected rowkey", K(ret), KP(rowkey), KPC(read_handle));
+        } else if (OB_FAIL(check_need_load(bfc_key, need_load))) {
+          LOG_WARN("fail to check need load", K(bfc_key));
+        } else if (!need_load) {
+          // already loaded, do nothing.
+        } else if (OB_FAIL(MTL(storage::ObTenantMetaMemMgr *)
+                        ->schedule_load_bloomfilter(sstable_key, ls_id, macro_id, *rowkey))) {
           LOG_WARN("fail to schedule load bf", K(ret), K(sstable_key), K(macro_id));
         } else {
           cell->reset();
@@ -855,15 +873,14 @@ int ObBloomFilterCache::inc_empty_read(
   return ret;
 }
 
-int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key,
-    bool &need_build)
+int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key, bool &need_build)
 {
   int ret = OB_SUCCESS;
   const ObBloomFilterCacheValue *bf_value = NULL;
   ObKVCacheHandle handle;
   need_build = false;
   if (!bf_key.is_valid()) {
-    //do nothing;
+    // do nothing
   } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "Fail to get bloom filter cache, ", K(ret));
@@ -873,6 +890,25 @@ int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey &bf_key,
     }
   } else if (bf_value->get_prefix_len() != bf_key.get_prefix_rowkey_len()) {
     need_build = true;
+  }
+  return ret;
+}
+
+int ObBloomFilterCache::check_need_load(const ObBloomFilterCacheKey &bf_key, bool &need_load)
+{
+  int ret = OB_SUCCESS;
+  const ObBloomFilterCacheValue *bf_value = NULL;
+  ObKVCacheHandle handle;
+  need_load = false;
+  if (!bf_key.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("Fail to get bloom filter cache", K(ret), K(bf_key));
+    } else {
+      need_load = true;
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
