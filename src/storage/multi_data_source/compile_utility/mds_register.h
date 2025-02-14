@@ -288,6 +288,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
                     ::oceanbase::storage::ObTruncateInfo,\
                     false)
+  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  //                   ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
+  //                   false)
   // # 余留位置（此行之前占位）
 #endif
 
