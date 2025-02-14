@@ -237,7 +237,8 @@ public:
     question_mark_cnt_(0),
     next_user_defined_exception_id_(1),
     ob_sequence_ns_checker_(resolve_ctx_.params_),
-    item_type_(T_MAX) { expr_factory_.set_is_called_sql(false); }
+    item_type_(T_MAX),
+    fast_check_status_times_(0) { expr_factory_.set_is_called_sql(false); }
   virtual ~ObPLResolver() {}
 
   enum GotoRestrictionType {
@@ -1226,7 +1227,7 @@ private:
                               ObIArray<ObObjAccessIdx> &access_idxs,
                               const ObSQLSessionInfo *session_info,
                               const ObPLBlockNS &ns);
-
+  int fast_check_status(uint64_t n = 0xFF) const;
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;
@@ -1242,6 +1243,7 @@ private:
   ObArray<int64_t> current_subprogram_path_; // 当前解析到的subprogram的寻址路径
   ObArray<ObPLStmt *> goto_stmts_; // goto语句的索引，用来二次解析。
   ObItemType item_type_;
+  mutable uint64_t fast_check_status_times_;
 };
 
 class ObPLSwitchDatabaseGuard
