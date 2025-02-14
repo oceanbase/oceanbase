@@ -135,8 +135,7 @@ public:
       const char *row_buf,
       const int64_t row_len,
       const int64_t col_index,
-      ObStorageDatum &datum,
-      const share::schema::ObColumnParam *col_param = nullptr);
+      ObStorageDatum &datum);
   int compare_meta_rowkey(
       const ObDatumRowkey &rhs,
       const blocksstable::ObStorageDatumUtils &datum_utils,

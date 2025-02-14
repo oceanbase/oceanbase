@@ -748,8 +748,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
               data_begin_ + index_data_[row_idx],
               index_data_[row_idx + 1] - index_data_[row_idx],
               col_idx,
-              tmp_datum,
-              col_params.at(i)))) {
+              tmp_datum))) {
             LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx), KPC_(header));
           } else if (OB_UNLIKELY(header_->is_trans_version_column_idx(col_idx))) {
             datum.set_int(-tmp_datum.get_int());
@@ -1065,8 +1064,7 @@ int ObMicroBlockReader::get_row_count(
           data_begin_ + index_data_[row_idx],
           index_data_[row_idx + 1] - index_data_[row_idx],
           col_idx,
-          datum,
-          col_param))) {
+          datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
       } else if (datum.is_nop()) {
         if (OB_UNLIKELY(nullptr == col_param || col_param->get_orig_default_value().is_nop_value())) {
@@ -1123,8 +1121,7 @@ int ObMicroBlockReader::get_aggregate_result(
           data_begin_ + index_data_[row_idx],
           index_data_[row_idx + 1] - index_data_[row_idx],
           col_idx,
-          tmp_datum,
-          &col_param))) {
+          tmp_datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
       } else if (!tmp_datum.is_nop() && OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
         LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset), K(tmp_datum), K(obj_type), K(map_type));
@@ -1265,8 +1262,7 @@ int ObMicroBlockReader::get_column_datum(
               data_begin_ + index_data_[row_index],
               index_data_[row_index + 1] - index_data_[row_index],
               col_idx,
-              tmp_datum,
-              &col_param))) {
+              tmp_datum))) {
       LOG_WARN("fail to read column", K(ret), K(col_idx), K(row_index));
     } else if (tmp_datum.is_nop()) {
       datum.set_nop();
