@@ -4183,7 +4183,7 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), K(count_), KPC(data_));
   }
-  CK (get_count() == src.get_count());
+  OV (get_count() == src.get_count(), OB_ERR_WRONG_TYPE_FOR_VAR, K(get_count()), K(src.get_count()));
   CK (OB_NOT_NULL(get_allocator()));
   if (OB_SUCC(ret)) {
     if (get_id() == src.get_id()) {
