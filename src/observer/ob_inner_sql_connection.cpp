@@ -2279,6 +2279,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
     inner_session_ = NULL;
     LOG_WARN("create session failed", K(ret), K(sid));
   } else {
+    THIS_WORKER.set_session(inner_session_);
     free_session_ctx_.sessid_ = sid;
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
