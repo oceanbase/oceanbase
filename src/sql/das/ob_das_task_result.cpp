@@ -815,10 +815,16 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
     bool need_unset_interrupt = false;
     ObDASTCBMemProfileKey &mem_profile_key = tcb->mem_profile_key_;
     ObDASMemProfileInfo *mem_profile_info = NULL;
-    if ((tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0) &&
-         OB_FAIL(SET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_)) &&
-         FALSE_IT(need_unset_interrupt = true)) {
-      LOG_WARN("register interrupt failed", KR(ret));
+
+    if (tcb->interrupt_info_.interrupt_id_.first_ != 0 || tcb->interrupt_info_.interrupt_id_.last_ != 0) {
+      if (OB_FAIL(SET_INTERRUPTABLE(tcb->interrupt_info_.interrupt_id_))) {
+        LOG_WARN("register interrupt failed", KR(ret));
+      } else {
+        need_unset_interrupt = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tcb->register_reading())) {
       LOG_WARN("unregister reading tcb failed", KR(ret), K(task_id));
     } else if (OB_UNLIKELY(!mem_profile_key.is_valid())) {
