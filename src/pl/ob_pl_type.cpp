@@ -256,8 +256,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
       CK (OB_NOT_NULL(record_name));
       if (OB_SUCC(ret) && 0 == record_name->case_compare(type)) {
         CK (OB_NOT_NULL(member_type = record_type->get_record_member_type(i)));
-        CK (OB_NOT_NULL(member_type->get_data_type()));
-        OX (pl_type.set_data_type(*(member_type->get_data_type())));
+        OX (pl_type = *member_type);
         OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
         break;
       }
