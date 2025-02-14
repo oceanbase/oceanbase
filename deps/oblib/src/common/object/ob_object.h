@@ -449,7 +449,7 @@ public:
     cs_level_ = (cs_level_ & 0xF) | ((cs_type & 0xF00) >> 4);
   }
   OB_INLINE ObCollationType get_collation_type() {
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY:
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY:
               static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4));
   }
 
@@ -458,8 +458,9 @@ public:
     return static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
   OB_INLINE ObCollationType get_collation_type() const {
-    // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
-    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY :
+    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
+    // ObDecimalIntType reuse cs_level as precision, therefore always return CS_TYPE_BINARY.
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
                 static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
   }
   OB_INLINE ObCharsetType get_charset_type() const {

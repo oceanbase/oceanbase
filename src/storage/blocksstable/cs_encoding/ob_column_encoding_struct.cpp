@@ -162,7 +162,7 @@ int ObPreviousCSEncoding::update_stream_detect_info(
       }
       previous.force_no_redetect_ = force_no_redetect;
     } else {
-      // column_encoding_type_ has been update in check_and_set_identifier, so must be equal here
+      // column_encoding_type_ has been update in update_column_detect_info, so must be equal here
       OB_ASSERT(previous.identifier_.column_encoding_type_ == identifier.column_encoding_type_);
       previous.identifier_ = identifier;
       for (int32_t i = 0; i < identifier.int_stream_count_; i++) {
