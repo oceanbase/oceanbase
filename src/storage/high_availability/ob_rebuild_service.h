@@ -72,6 +72,7 @@ public:
   void destroy();
   void run1() final;
   void wakeup();
+  void fast_sleep();
   void stop();
   void wait();
   int start();
@@ -112,6 +113,7 @@ private:
   ObLSService *ls_service_;
   common::SpinRWLock map_lock_;
   LSRebuildCtxMap rebuild_ctx_map_;
+  int64_t fast_sleep_cnt_;
   DISALLOW_COPY_AND_ASSIGN(ObRebuildService);
 };
 
@@ -128,6 +130,7 @@ public:
 
 private:
   void wakeup_();
+  void fast_sleep_();
   int do_with_init_status_(const ObLSRebuildInfo &rebuild_info);
   int do_with_doing_status_(const ObLSRebuildInfo &rebuild_info);
   int do_with_cleanup_status_(const ObLSRebuildInfo &rebuild_info);
