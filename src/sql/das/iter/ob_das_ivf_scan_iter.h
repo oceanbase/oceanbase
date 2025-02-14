@@ -188,6 +188,7 @@ protected:
 
   static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
   static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
+  static const int64_t POST_ENLARGEMENT_FACTOR = 2;
 protected:
   common::ObArenaAllocator vec_op_alloc_;
   share::ObLSID ls_id_;
@@ -219,6 +220,7 @@ protected:
 
   ObString vec_index_param_;
   int64_t dim_;
+  double selectivity_;
   ObExpr *search_vec_;
   ObString real_search_vec_;
 

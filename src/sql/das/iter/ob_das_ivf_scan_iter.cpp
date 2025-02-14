@@ -248,6 +248,7 @@ int ObDASIvfBaseScanIter::inner_init(ObDASIterParam &param)
   }
 
     dim_ = vec_aux_ctdef_->dim_;
+    selectivity_ = vec_aux_ctdef_->selectivity_;
 
   return ret;
 }
@@ -782,8 +783,9 @@ int ObDASIvfScanIter::get_nearest_limit_rowkeys_in_cids(const ObIArray<ObString>
 {
   int ret = OB_SUCCESS;
 
+  int64_t enlargement_factor = (selectivity_ != 0 && selectivity_ != 1) ? POST_ENLARGEMENT_FACTOR : 1;
   share::ObVectorCentorClusterHelper<T, ObRowkey *> nearest_rowkey_heap(
-      vec_op_alloc_, serch_vec, dim_, get_nprobe(limit_param_));
+      vec_op_alloc_, serch_vec, dim_, get_nprobe(limit_param_, enlargement_factor));
   const ObDASScanCtDef *cid_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CID_VEC_SCAN);
   ObDASScanRtDef *cid_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx());
