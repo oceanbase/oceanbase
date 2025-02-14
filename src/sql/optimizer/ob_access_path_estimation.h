@@ -359,6 +359,10 @@ private:
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
                              common::ObIArray<AccessPath *> &normal_paths,
                              common::ObIArray<AccessPath *> &geo_paths);
+
+  static int get_index_dive_limit(ObOptimizerContext &ctx,
+                                  int64_t *range_index_dive_limit,
+                                  int64_t *partition_index_dive_limit);
 };
 
 class RangePartitionHelper

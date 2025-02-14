@@ -167,8 +167,10 @@ int OptTableMeta::assign(const OptTableMeta &other)
   ref_table_id_ = other.ref_table_id_;
   rows_ = other.rows_;
   stat_type_ = other.stat_type_;
-  ds_level_ = other.ds_level_;
+  last_analyzed_ = other.last_analyzed_;
   stat_locked_ = other.stat_locked_;
+  ds_level_ = other.ds_level_;
+  scale_ratio_ = other.scale_ratio_;
   distinct_rows_ = other.distinct_rows_;
   stale_stats_ = other.stale_stats_;
   table_partition_info_ = other.table_partition_info_;
@@ -195,7 +197,6 @@ int OptTableMeta::assign(const OptTableMeta &other)
 
 int OptTableMeta::init(const uint64_t table_id,
                        const uint64_t ref_table_id,
-                       const ObTableType table_type,
                        const int64_t rows,
                        const OptTableStatType stat_type,
                        ObSqlSchemaGuard &schema_guard,
@@ -431,7 +432,6 @@ int OptTableMetas::copy_table_meta_info(const OptTableMetas &table_metas, const 
 int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
                                             const uint64_t table_id,
                                             const uint64_t ref_table_id,
-                                            const ObTableType table_type,
                                             const int64_t rows,
                                             ObIArray<int64_t> &all_used_part_id,
                                             ObIArray<ObTabletID> &all_used_tablets,
@@ -455,7 +455,7 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
   } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate place holder for table meta", K(ret));
-  } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, table_type, rows, stat_type,
+  } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, rows, stat_type,
                                       *schema_guard, all_used_part_id, all_used_tablets,
                                       column_ids, stat_part_id, hist_part_id, scale_ratio, ctx,
                                       table_partition_info, base_meta_info))) {

@@ -1362,8 +1362,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
     LOG_WARN("get unexpected null", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
   } else if (OB_UNLIKELY(!log_plan->get_stmt()->is_select_stmt()) ||
              OB_UNLIKELY(ctx.use_default_stat()) ||
-             OB_UNLIKELY(is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id())) ||
-             OB_UNLIKELY(table_meta->get_table_type() == EXTERNAL_TABLE)) {
+             OB_UNLIKELY(is_virtual_table(table_meta->get_ref_table_id()) && !is_ds_virtual_table(table_meta->get_ref_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
   } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),

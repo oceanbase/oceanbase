@@ -434,16 +434,8 @@ int ObAccessPathEstimation::check_path_can_use_storage_estimation(const AccessPa
     LOG_WARN("fail to do check_path_can_use_storage_estimation ", K(ret), K(path));
   } else if (!can_use) {
     can_use = false;
-  } else if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::RANGE_INDEX_DIVE_LIMIT,
-                                                                   ctx.get_session_info(),
-                                                                   share::SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
-                                                                   range_limit))) {
-    LOG_WARN("failed to get hint system variable", K(ret));
-  } else if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::PARTITION_INDEX_DIVE_LIMIT,
-                                                                   ctx.get_session_info(),
-                                                                   share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
-                                                                   partition_limit))) {
-    LOG_WARN("failed to get hint system variable", K(ret));
+  } else if (OB_FAIL(get_index_dive_limit(ctx, &range_limit, &partition_limit))) {
+    LOG_WARN("failed to get index dive limit", K(ret));
   } else {
     const ObTablePartitionInfo *part_info = NULL;
     if (OB_ISNULL(part_info = path->table_partition_info_)) {
@@ -613,16 +605,8 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       OB_ISNULL(ctx.get_exec_ctx()->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param is invalid", K(ret), K(ctx.get_session_info()), K(ctx.get_exec_ctx()));
-  } else if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::PARTITION_INDEX_DIVE_LIMIT,
-                                                                   ctx.get_session_info(),
-                                                                   share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
-                                                                   partition_limit))) {
-    LOG_WARN("failed to get hint system variable", K(ret));
-  } else if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::RANGE_INDEX_DIVE_LIMIT,
-                                                                   ctx.get_session_info(),
-                                                                   share::SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
-                                                                   range_limit))) {
-    LOG_WARN("failed to get hint system variable", K(ret));
+  } else if (OB_FAIL(get_index_dive_limit(ctx, &range_limit, &partition_limit))) {
+    LOG_WARN("failed to get index dive limit", K(ret));
   } else {
     if (partition_limit < 0 && range_limit < 0) {
       partition_limit = 1;
@@ -1825,11 +1809,8 @@ int ObAccessPathEstimation::estimate_full_table_rowcount(ObOptimizerContext &ctx
   const ObCandiTabletLocIArray &part_loc_info_array =
               table_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
   int64_t partition_limit = 0;
-  if (OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::PARTITION_INDEX_DIVE_LIMIT,
-                                                            ctx.get_session_info(),
-                                                            share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
-                                                            partition_limit))) {
-    LOG_WARN("failed to get hint system variable", K(ret));
+  if (OB_FAIL(get_index_dive_limit(ctx, NULL, &partition_limit))) {
+    LOG_WARN("failed to get index dive limit", K(ret));
   } else if (is_virtual_table(meta.ref_table_id_) &&
       !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_)) {
     //do nothing
@@ -2728,6 +2709,38 @@ int ObAccessPathEstimation::classify_paths(ObIArray<AccessPath *> &paths,
     } else if (OB_FAIL(normal_paths.push_back(paths.at(i)))) {
       LOG_WARN("failed to push back normal path", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::get_index_dive_limit(ObOptimizerContext &ctx,
+                                                 int64_t *range_index_dive_limit,
+                                                 int64_t *partition_index_dive_limit)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_1_BP9, COMPAT_VERSION_4_2_2,
+                                                            COMPAT_VERSION_4_2_5)) {
+    if (NULL != range_index_dive_limit) {
+      *range_index_dive_limit = -1;
+    }
+    if (NULL != partition_index_dive_limit) {
+      *partition_index_dive_limit = -1;
+    }
+  } else if (NULL != partition_index_dive_limit &&
+             OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::PARTITION_INDEX_DIVE_LIMIT,
+                                                                   ctx.get_session_info(),
+                                                                   share::SYS_VAR_PARTITION_INDEX_DIVE_LIMIT,
+                                                                   *partition_index_dive_limit))) {
+    LOG_WARN("failed to get hint system variable", K(ret));
+  } else if (NULL != range_index_dive_limit &&
+             OB_FAIL(ctx.get_global_hint().opt_params_.get_sys_var(ObOptParamHint::RANGE_INDEX_DIVE_LIMIT,
+                                                                   ctx.get_session_info(),
+                                                                   share::SYS_VAR_RANGE_INDEX_DIVE_LIMIT,
+                                                                   *range_index_dive_limit))) {
+    LOG_WARN("failed to get hint system variable", K(ret));
   }
   return ret;
 }
