@@ -164,6 +164,7 @@ void ObTenantFreezeInfoMgr::stop()
 void ObTenantFreezeInfoMgr::destroy()
 {
   TG_DESTROY(tg_id_);
+  tg_id_ = -1;
 }
 
 int64_t ObTenantFreezeInfoMgr::get_latest_frozen_version()
