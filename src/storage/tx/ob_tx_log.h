@@ -1424,7 +1424,7 @@ private:
   {
     int ret = OB_ALLOCATE_MEMORY_FAILED;
     char *ptr = NULL;
-    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(NORMAL_LOG_BUF_SIZE, "NORMAL_CLOG_BUF")))) {
+    if (OB_ISNULL(ptr = static_cast<char *>(share::mtl_malloc(NORMAL_LOG_BUF_SIZE, "NORMAL_CLOG_BUF")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "alloc clog normal buffer failed", K(ret));
     }
@@ -1434,7 +1434,7 @@ private:
   {
     int ret = OB_ALLOCATE_MEMORY_FAILED;
     char *ptr = NULL;
-    if (OB_ISNULL(ptr = static_cast<char *>(ob_malloc(BIG_LOG_BUF_SIZE, "BIG_CLOG_BUF")))) {
+    if (OB_ISNULL(ptr = static_cast<char *>(share::mtl_malloc(BIG_LOG_BUF_SIZE, "BIG_CLOG_BUF")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "alloc clog big buffer failed", K(ret));
     }
@@ -1443,7 +1443,7 @@ private:
   void free_buf_(char *buf)
   {
     if (OB_NOT_NULL(buf)) {
-      ob_free(buf);
+      share::mtl_free(buf);
     }
   }
 public:
