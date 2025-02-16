@@ -46,6 +46,8 @@ int ObExprElementAt::calc_result_type2(ObExprResType &type,
   ObSQLSessionInfo *session = NULL;
   ObExecContext *exec_ctx = NULL;
   ObSubSchemaValue arr_meta;
+  // Set cast mode for %count parameter, truncate string to integer.
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
 
   if (OB_ISNULL(session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session()))) {
     ret = OB_ERR_UNEXPECTED;

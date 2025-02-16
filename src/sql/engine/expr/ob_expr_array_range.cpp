@@ -46,6 +46,8 @@ int ObExprArrayRange::calc_result_typeN(ObExprResType& type,
   ObString res_type_info = "ARRAY(BIGINT)";
   uint16_t subschema_id;
   bool is_null_res = false;
+  // Set cast mode for %count parameter, truncate string to integer.
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
 
   if (OB_ISNULL(session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session()))) {
     ret = OB_ERR_UNEXPECTED;
