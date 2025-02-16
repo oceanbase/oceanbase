@@ -489,9 +489,12 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObDASLocationRouter &loc_router = ctx.get_das_ctx().get_location_router();
   ObSQLSessionInfo *session = ctx.get_my_session();
+  int64_t route_policy = 0;
   if (OB_ISNULL(session) || OB_UNLIKELY(tablet_ids.count() != partition_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(session), K(tablet_ids.count()), K(partition_ids.count()));
+  } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
   } else {
     candi_tablet_locs.reset();
     if (OB_FAIL(candi_tablet_locs.prepare_allocate(tablet_ids.count()))) {
@@ -504,6 +507,7 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
       loc_meta.ref_table_id_ = ref_table_id;
       loc_meta.table_loc_id_ = ref_table_id;
       loc_meta.select_leader_ = 0;
+      loc_meta.route_policy_ = route_policy;
       if (OB_FAIL(loc_router.nonblock_get_candi_tablet_locations(loc_meta,
                                                                  tablet_ids,
                                                                  partition_ids,

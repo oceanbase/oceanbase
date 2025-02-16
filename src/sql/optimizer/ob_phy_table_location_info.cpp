@@ -59,7 +59,8 @@ int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
 int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partition_id,
                                                       const ObObjectID &first_level_part_id,
                                                       const common::ObTabletID &tablet_id,
-                                                      const ObLSLocation &ls_location)
+                                                      const ObLSLocation &ls_location,
+                                                      const ObRoutePolicyType route_policy)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -81,7 +82,12 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
       } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
         LOG_WARN("check in black list failed", K(ret));
       } else if (!in_black_list) {
-        if (OB_FAIL(replica_locations_.push_back(replica_loc))) {
+        if ((route_policy == COLUMN_STORE_ONLY && replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
+            (route_policy != COLUMN_STORE_ONLY && replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
+            (route_policy == FORCE_READONLY_ZONE && replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
+          // skip the tmp_replica_loc
+          LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(replica_loc));
+        } else if (OB_FAIL(replica_locations_.push_back(replica_loc))) {
           LOG_WARN("Failed to push back replica locations",
                    K(ret), K(i), K(replica_loc), K(replica_locations_));
         }
@@ -343,7 +349,8 @@ int ObCandiTabletLoc::get_selected_replica(ObRoutePolicy::CandidateReplica &repl
 int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &partition_id,
                                                               const ObObjectID &first_level_part_id,
                                                               const common::ObTabletID &tablet_id,
-                                                              const ObLSLocation &partition_location)
+                                                              const ObLSLocation &partition_location,
+                                                              const ObRoutePolicyType route_policy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(has_selected_replica())) {
@@ -353,7 +360,8 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
   } else if (OB_FAIL(opt_tablet_loc_.assign_with_only_readable_replica(partition_id,
                                                                        first_level_part_id,
                                                                        tablet_id,
-                                                                       partition_location))) {
+                                                                       partition_location,
+                                                                       route_policy))) {
     LOG_WARN("fail to assign partition location with only readable replica",
              K(ret), K(partition_location));
   }

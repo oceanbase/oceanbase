@@ -1017,7 +1017,8 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
         if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(partition_ids.at(i),
                                                                              first_level_part_id,
                                                                              tablet_ids.at(i),
-                                                                             location))) {
+                                                                             location,
+                                                                             static_cast<ObRoutePolicyType>(loc_meta.route_policy_)))) {
           LOG_WARN("fail to set partition location with only readable replica",
                    K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
         }
