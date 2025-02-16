@@ -2631,6 +2631,11 @@ int ObLSTabletService::create_empty_shell_tablet(
     if (OB_SUCC(ret)) {
       ls_->get_tablet_gc_handler()->set_tablet_gc_trigger();
       LOG_INFO("succeeded to create empty shell tablet", K(ret), K(key), K(param));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
+        LOG_ERROR("fail to rollback remove tablet", K(ret), K(ls_id), K(tablet_id));
+      }
     }
   }
 
