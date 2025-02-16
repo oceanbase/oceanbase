@@ -1777,6 +1777,9 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_property(
       } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+      } else if (col_schema->is_string_lob()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on string type column is");
       } else if (CS_TYPE_INVALID == collation_type) {
         collation_type = col_schema->get_collation_type();
       } else if (collation_type != col_schema->get_collation_type()) {
