@@ -2804,7 +2804,9 @@ bool ObSqlParameterization::is_vector_index_query(const ParseNode *tree)
           curr = curr->children_[0]; // sort key is sys func
           if (curr->type_ == T_IDENT && OB_NOT_NULL(curr->str_value_)) {
             ObString func_name(curr->str_len_, curr->str_value_);
-            bret = func_name.case_compare("l2_distance") == 0 || func_name.case_compare("negative_inner_product") == 0;
+            bret = func_name.case_compare("l2_distance") == 0
+                   || func_name.case_compare("negative_inner_product") == 0
+                   || func_name.case_compare("cosine_distance") == 0;
           }
         }
       }
