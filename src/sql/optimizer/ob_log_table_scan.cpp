@@ -4907,14 +4907,26 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
   const ObDMLStmt *stmt = nullptr;
   ObSqlSchemaGuard *schema_guard = nullptr;
   const ObTableSchema *table_schema = nullptr;
+  ObSQLSessionInfo *session = NULL;
+  int tenant_id = OB_INVALID_TENANT_ID;
   with_domain_types_.reset();
   domain_table_ids_.reset();
-  ObSEArray<uint64_t, 4> vec_id_cols; // only for get ivfflat index table id
   ObOptimizerContext *opt_ctx = nullptr;
 
   if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect error, plan or stmt is nullptr", K(ret), KP(plan), KP(stmt));
+  } else if (OB_ISNULL(session = plan->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret));
+  } else {
+    tenant_id = session->get_effective_tenant_id();
+  }
+  // only for get ivfflat index table id
+  ObSEArray<uint64_t, 8> vec_id_cols(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("vecIdCol", tenant_id));
+  with_domain_types_.set_attr(ObMemAttr(tenant_id, "VecDType"));
+  domain_table_ids_.set_attr(ObMemAttr(tenant_id, "VecDTID"));
+  if (OB_FAIL(ret)) {
   } else if (!(stmt->is_delete_stmt() || stmt->is_update_stmt() || stmt->is_select_stmt())) {
     // just skip, nothing to do
   } else if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
