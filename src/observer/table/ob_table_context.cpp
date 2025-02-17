@@ -667,7 +667,7 @@ int ObTableCtx::adjust_rowkey()
           LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
           LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret),
                     K(entity_rowkey_cnt), K(schema_rowkey_cnt), K(rowkey));
-        } else if (is_delete_or_get() && OB_FAIL(adjust_date_obj(*col_info, obj_ptr[idx]))) { // other op adjust in cg write_datum
+        } else if (is_need_ajust_date_op() && OB_FAIL(adjust_date_obj(*col_info, obj_ptr[idx]))) { // other op adjust in cg write_datum
           LOG_WARN("fail to adjust date object", K(ret), K(obj_ptr[idx]), KPC(col_info));
         } else if (OB_FAIL(adjust_column_type(*col_info, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
           LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj_ptr[idx]), KPC(col_info));
