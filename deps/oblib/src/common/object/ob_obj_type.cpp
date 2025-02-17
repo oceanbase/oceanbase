@@ -840,6 +840,13 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(databuff_printf(buff, buff_length, pos, "string"))) {
       LOG_WARN("fail to print string lob str", K(ret), K(buff_length), K(pos));
     }
+  } else if (ob_is_enumset_tc(type)) {
+     ObObjMeta obj_meta;
+     obj_meta.set_type(type);
+     obj_meta.set_collation_type(coll_type);
+    if (OB_FAIL(ob_enum_or_set_str(obj_meta, type_info, buff, buff_length, pos))) {
+      LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(obj_meta), K(buff_length), K(pos));
+    }
   } else {
     ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
   }

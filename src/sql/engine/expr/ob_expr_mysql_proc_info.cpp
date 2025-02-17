@@ -20,6 +20,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "share/schema/ob_schema_printer.h"
 #include "common/object/ob_obj_type.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
 
@@ -421,7 +422,8 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
   ObSEArray<common::ObString, 4> extended_type_info;
   uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX);
-  if (ob_is_geometry_tc(static_cast<ObObjType>(param_type))) {
+  if (ob_is_geometry_tc(static_cast<ObObjType>(param_type)) ||
+      ob_is_enumset_tc(static_cast<ObObjType>(param_type))) {
     sql::ObExecEnv exec_env;
     ParseNode *create_node = nullptr;
     if OB_FAIL(exec_env.init(exec_env_str)) {
@@ -435,7 +437,12 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
     if (OB_SUCC(ret)) {
       if(!OB_ISNULL(create_node) && !OB_ISNULL(create_node->children_[3])) {
         ParseNode *return_node = create_node->children_[3];
-        sub_type = return_node->int32_values_[1];
+        if (ob_is_geometry_tc(static_cast<ObObjType>(param_type))) {
+          sub_type = return_node->int32_values_[1];
+        } else {
+          CK(OB_NOT_NULL(return_node->children_[3]));
+          OZ (ObResolverUtils::resolve_extended_type_info(*(return_node->children_[3]), extended_type_info));
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unexpected parse node type of routine body", K(create_node->type_));

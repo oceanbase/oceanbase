@@ -17241,6 +17241,8 @@ def_table_schema(
                         )
                         WHEN rp.param_type IN (18, 20) THEN CONCAT(lower(v.data_type_str), '(', rp.param_scale, ')')
                         WHEN rp.param_type IN (22, 23) and rp.param_length > 0 THEN CONCAT(lower(v.data_type_str), '(', rp.param_length, ')')
+                        WHEN rp.param_type IN (32, 33)
+                        THEN get_mysql_routine_parameter_type_str(rp.routine_id, rp.param_position)
                         WHEN rp.param_type = 52 THEN lower('DATE')
                         WHEN rp.param_type = 53 THEN lower('DATETIME')
                         ELSE lower(v.data_type_str)
