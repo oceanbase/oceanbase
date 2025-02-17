@@ -4753,7 +4753,7 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
             CK (OB_NOT_NULL(table->get_allocator()));
             for (int64_t j = coll_cnt - n; OB_SUCC(ret) && j < coll_cnt; ++j) {
               if (ith_elem.is_pl_extend()) {
-                OZ (ObUserDefinedType::destruct_obj(data[j], ctx->exec_ctx_->get_my_session(), true));
+                OZ (ObUserDefinedType::reset_composite(data[j], ctx->exec_ctx_->get_my_session()));
                 OZ (ObUserDefinedType::deep_copy_obj(*(table->get_allocator()), ith_elem, data[j]));
               } else {
                 void *ptr = data[j].get_deep_copy_obj_ptr();

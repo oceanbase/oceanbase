@@ -153,6 +153,7 @@ public:
   static int deep_copy_obj(
     ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
   static int destruct_objparam(ObIAllocator &alloc, ObObj &src, sql::ObSQLSessionInfo *session = nullptr, bool direct_use_alloc = false);
+  static int reset_composite(ObObj &value, sql::ObSQLSessionInfo *session);
   static int reset_record(ObObj &src, sql::ObSQLSessionInfo *session);
   static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL, bool keep_composite_attr = false);
   static int alloc_sub_composite(ObObj &dest_element, ObIAllocator &allocator);

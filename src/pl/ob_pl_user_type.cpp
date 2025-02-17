@@ -325,6 +325,21 @@ int ObUserDefinedType::destruct_objparam(ObIAllocator &alloc, ObObj &src, ObSQLS
   return ret;
 }
 
+int ObUserDefinedType::reset_composite(ObObj &value, ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  CK (value.is_pl_extend());
+  if (OB_SUCC(ret)) {
+    if (PL_RECORD_TYPE == value.get_meta().get_extend_type()) {
+      OZ (ObUserDefinedType::reset_record(value, session));
+    } else {
+      OZ (ObUserDefinedType::destruct_obj(value, session, true));
+    }
+  }
+
+  return ret;
+}
+
 int ObUserDefinedType::reset_record(ObObj &src, ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
