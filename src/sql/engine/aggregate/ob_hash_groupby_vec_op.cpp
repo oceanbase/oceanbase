@@ -1829,9 +1829,13 @@ int ObHashGroupByVecOp::batch_process_duplicate_data(
           }
         }
         // need dump
-        if (1 != nth_dup_data) {
+        if (OB_FAIL(ret)) {
+        } else if (1 != nth_dup_data) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: dump is not expected", K(ret));
+        } else if (OB_ISNULL(part_idxes_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected part_idxes_: part_idxes_ is null", K(ret));
         } else {
           MEMSET(part_idxes_, -1, sizeof(int64_t) * child_brs.size_);
           for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
@@ -2121,9 +2125,13 @@ int ObHashGroupByVecOp::group_child_batch_rows(const ObCompactRow **store_rows,
           sql_mem_processor_.set_number_pass(part_id + 1);
         }
       }
-      if (process_check_dump) {
+      if (OB_FAIL(ret)) {
+      } else if (process_check_dump) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: check dump is processed", K(ret));
+      } else if (OB_ISNULL(part_idxes_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected part_idxes_: part_idxes_ is null", K(ret));
       } else {
         MEMSET(part_idxes_, -1, sizeof(int64_t) * child_brs.size_);
         for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
