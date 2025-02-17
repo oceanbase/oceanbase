@@ -543,7 +543,7 @@ public:
                                              ObBatchRows &brs);
     void fill_null_row_ptr(int64_t ptr_idx, int64_t cnt, int64_t *row_id_array);
     int fill_vec_with_stored_rows(int64_t size);
-    int get_next_batch_from_source();
+    int get_next_batch_from_source(int64_t batch_size);
     int update_store_mem_bound();
     inline int64_t get_stored_row_cnt() { return row_store_.get_row_cnt(); }
     void set_row_store_it_age(ObTempBlockStore::IterationAge *age) { row_store_reader_.set_iteration_age(age); }
@@ -611,9 +611,8 @@ public:
     ExprFixedArray equal_key_exprs_;
     ObCompactRow **store_rows_;
     ObCompactRow *mocked_null_row_;
-
-  private:
     int64_t max_batch_size_;
+  private:
     ObOperator *source_;
     ObEvalCtx &eval_ctx_;
     ObRATempRowStore row_store_;
