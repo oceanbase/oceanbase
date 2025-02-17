@@ -6631,7 +6631,8 @@ int ObDDLService::swap_orig_and_hidden_table_state(
           }
         }
         if (OB_SUCC(ret) && alter_table_arg.need_rebuild_trigger_) {
-          if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(orig_table_schema,
+          if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(alter_table_arg,
+                                                                       orig_table_schema,
                                                                        hidden_table_schema,
                                                                        schema_guard,
                                                                        schema_guard,
@@ -22772,7 +22773,8 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
         LOG_WARN("failed to check hidden table constraint existence", K(ret));
       } else {
         if (OB_SUCC(ret) && alter_table_arg.need_rebuild_trigger_) {
-          if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(*orig_table_schema,
+          if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(alter_table_arg,
+                                                                       *orig_table_schema,
                                                                        *hidden_table_schema,
                                                                        schema_guard,
                                                                        schema_guard,
@@ -22839,13 +22841,17 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
         if (OB_SUCC(ret)) {
           new_orig_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
           new_hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
-          new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str());
-          new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str());
+          if (OB_FAIL(new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str()))) {
+            LOG_WARN("set table name failed", K(ret));
+          } else if (OB_FAIL(new_hidden_table_schema.set_table_name(orig_table_schema->get_table_name_str()))) {
+            LOG_WARN("set table name failed", K(ret));
+          }
           // in prepare_hidden_table_schema, we clear the session id for hidden table of
           // CTAS tmp table. now, data loading stage is finished, we are ready to swap hidden table
           // with CTAS tmp table. we should exchange the session id(and create_host) property to
           // ensure the new CTAS tmp table has correct state.
-          if (orig_table_schema->is_ctas_tmp_table() &&
+          if (OB_FAIL(ret)) {
+          } else if (orig_table_schema->is_ctas_tmp_table() &&
               OB_FAIL(swap_ctas_hidden_table_session_id_(
                   *orig_table_schema, *hidden_table_schema, new_orig_table_schema,
                   new_hidden_table_schema, ddl_operator, trans))) {
@@ -23598,7 +23604,7 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           } else if (OB_FAIL(check_and_replace_dup_constraint_name_on_demand(is_oracle_mode,
               *dst_tenant_schema_guard, tmp_schema, allocator, ddl_operator, trans))) {
             LOG_WARN("check dup and replace cst name failed", K(ret));
-          } else if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(*orig_table_schema, *hidden_table_schema,
+          } else if (OB_FAIL(ObPLDDLService::rebuild_triggers_on_hidden_table(alter_table_arg, *orig_table_schema, *hidden_table_schema,
               *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, trans))) {
             LOG_WARN("rebuild triggers failed", K(ret));
           } else if (OB_FAIL(ddl_operator.update_table_attribute(tmp_schema, trans, OB_DDL_ALTER_TABLE/*operation_type*/, nullptr/*ddl_stmt_str*/))) {

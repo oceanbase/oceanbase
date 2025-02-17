@@ -2091,55 +2091,55 @@ int ObPLDDLService::get_object_info(ObSchemaGetterGuard &schema_guard,
   }
   return ret;
 }
-int ObPLDDLService::rebuild_triggers_on_hidden_table(const ObTableSchema &orig_table_schema,
-                                                     const ObTableSchema &hidden_table_schema,
-                                                     ObSchemaGetterGuard &src_tenant_schema_guard,
-                                                     ObSchemaGetterGuard &dst_tenant_schema_guard,
-                                                     ObDDLOperator &ddl_operator,
-                                                     ObMySQLTransaction &trans)
+
+int ObPLDDLService::rebuild_triggers_on_hidden_table(
+                  const obrpc::ObAlterTableArg &alter_table_arg,
+                  const ObTableSchema &orig_table_schema,
+                  const ObTableSchema &hidden_table_schema,
+                  ObSchemaGetterGuard &src_tenant_schema_guard,
+                  ObSchemaGetterGuard &dst_tenant_schema_guard,
+                  ObDDLOperator &ddl_operator,
+                  ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t src_tenant_id = orig_table_schema.get_tenant_id();
   const uint64_t dst_tenant_id = hidden_table_schema.get_tenant_id();
-  const bool is_across_tenant = src_tenant_id != dst_tenant_id;
+  const bool is_recover_restore_table = src_tenant_id != dst_tenant_id;
   const ObIArray<uint64_t> &trigger_list = orig_table_schema.get_trigger_list();
   const ObTriggerInfo *trigger_info = NULL;
   ObTriggerInfo new_trigger_info;
   ObErrorInfo error_info;
   ObPLDDLOperator pl_operator(ddl_operator.get_multi_schema_service(), ddl_operator.get_sql_proxy());
   for (int i = 0; OB_SUCC(ret) && i < trigger_list.count(); i++) {
-    const ObTriggerInfo *check_exist_trigger = nullptr;
+    bool need_rebuild = true;
     OZ (src_tenant_schema_guard.get_trigger_info(src_tenant_id, trigger_list.at(i), trigger_info));
     OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list.at(i));
-    OZ (dst_tenant_schema_guard.get_trigger_info(dst_tenant_id, hidden_table_schema.get_database_id(),
-        trigger_info->get_trigger_name(), check_exist_trigger));
-    if (nullptr != check_exist_trigger && is_across_tenant) {
-      LOG_INFO("duplicated trigger name, ignore to rebuild",
-               K(dst_tenant_id), "db_id", hidden_table_schema.get_database_id(), KPC(trigger_info));
-    } else {
-      OZ (new_trigger_info.assign(*trigger_info));
-      OX (new_trigger_info.set_base_object_id(hidden_table_schema.get_table_id()));
-      OX (new_trigger_info.set_trigger_id(OB_INVALID_ID));
-      OX (new_trigger_info.set_tenant_id(dst_tenant_id));
-      OX (new_trigger_info.set_database_id(hidden_table_schema.get_database_id()));
-      if (!is_across_tenant) {
-        // triiger under source tenant will be dropped when drop tenant.
-        OZ (pl_operator.drop_trigger(*trigger_info,
-                                     trans,
-                                     nullptr,
-                                     false/*is_update_table_schema_version*/));
+    OZ (new_trigger_info.assign(*trigger_info));
+    OX (new_trigger_info.set_base_object_id(hidden_table_schema.get_table_id()));
+    OX (new_trigger_info.set_trigger_id(OB_INVALID_ID));
+    OX (new_trigger_info.set_tenant_id(dst_tenant_id));
+    // ATTENTION!
+    // Oracle supports one table has multiple triggers based on different users/databases.
+    OX (new_trigger_info.set_database_id(trigger_info->get_database_id()));
+    if (OB_SUCC(ret)) {
+      if (is_recover_restore_table) {
+        if (OB_FAIL(check_and_construct_restore_trigger_info(
+            alter_table_arg, src_tenant_schema_guard, dst_tenant_schema_guard,
+            orig_table_schema, hidden_table_schema, *trigger_info,
+            new_trigger_info, need_rebuild))) {
+          LOG_WARN("check and construct restore trigger info failed", K(ret));
+        }
+      } else {
+        // Offline ddl should drop trigger before create the new one.
+        OZ (pl_operator.drop_trigger(*trigger_info, trans,
+          nullptr, false/*is_update_table_schema_version*/));
       }
-      if (OB_SUCC(ret)) {
-        ObSEArray<ObDependencyInfo, 1> dep_infos;
-        int64_t table_schema_version = OB_INVALID_VERSION;
-        OZ (pl_operator.create_trigger(new_trigger_info,
-                                       trans,
-                                       error_info,
-                                       dep_infos,
-                                       table_schema_version,
-                                       nullptr,
-                                       false/*is_update_table_schema_version*/));
-      }
+    }
+    if (OB_SUCC(ret) && need_rebuild) {
+      ObSEArray<ObDependencyInfo, 1> dep_infos;
+      int64_t table_schema_version = OB_INVALID_VERSION;
+      OZ (pl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
+        table_schema_version, nullptr, false/*is_update_table_schema_version*/));
     }
   }
   return ret;
@@ -2171,6 +2171,107 @@ int ObPLDDLService::drop_trigger_in_drop_user(ObMySQLTransaction &trans,
   return ret;
 }
 //----End of functions for managing trigger----
+
+//----Functions for restore table ddl ----
+//  Dont rebuild trigger if
+//  1. database name has changed.
+//  2. base_table name has changed.
+//  3. database of the trigger does no exist.
+//  4. same name trigger has existed.
+int ObPLDDLService::check_and_construct_restore_trigger_info(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    ObSchemaGetterGuard &src_tenant_schema_guard,
+    ObSchemaGetterGuard &dst_tenant_schema_guard,
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &hidden_table_schema,
+    const ObTriggerInfo &src_trigger_info,
+    ObTriggerInfo &new_trigger_info,
+    bool &need_rebuild)
+{
+  int ret = OB_SUCCESS;
+  need_rebuild = true;
+  bool is_oracle_mode = false;
+  const ObDatabaseSchema *src_db_schema = nullptr;
+  const ObDatabaseSchema *dst_db_schema = nullptr;
+  const uint64_t src_tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t dst_tenant_id = hidden_table_schema.get_tenant_id();
+  if (OB_UNLIKELY(src_tenant_id == dst_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant is same", K(ret), K(src_tenant_id), K(dst_tenant_id));
+  } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oralce compat mode", K(ret));
+  } else if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id,
+      orig_table_schema.get_database_id(), src_db_schema))) {
+    LOG_WARN("get db schema failed", K(ret), K(src_tenant_id), "db_id", orig_table_schema.get_database_id());
+  } else if (OB_ISNULL(src_db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null db", K(ret), K(src_tenant_id), "db_id", orig_table_schema.get_database_id());
+  } else if (OB_FAIL(dst_tenant_schema_guard.get_database_schema(dst_tenant_id,
+      hidden_table_schema.get_database_id(), dst_db_schema))) {
+    LOG_WARN("get db schema failed", K(ret), K(dst_tenant_id), "db_id", hidden_table_schema.get_database_id());
+  } else if (OB_ISNULL(dst_db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null db", K(ret), K(dst_tenant_id), "db_id", hidden_table_schema.get_database_id());
+  } else {
+    // To check if the database name, base_table name changed.
+    const ObString &target_table_name = alter_table_arg.alter_table_schema_.get_table_name_str();
+    ObCompareNameWithTenantID name_cmp(dst_tenant_id);
+    if (0 != name_cmp.compare(src_db_schema->get_database_name_str(), dst_db_schema->get_database_name_str())) {
+      need_rebuild = false;
+      FLOG_INFO("ignore to rebuild the trigger whose db name has changed",
+          "src_db_name", src_db_schema->get_database_name_str(), "dst_db_name", dst_db_schema->get_database_name_str(),
+          K(src_trigger_info));
+    } else if (0 != name_cmp.compare(orig_table_schema.get_table_name_str(), target_table_name)) {
+      need_rebuild = false;
+      FLOG_INFO("ignore to rebuild the trigger whose base_table name has changed",
+          "src_table_name", orig_table_schema.get_table_name_str(), K(target_table_name), K(src_trigger_info));
+    }
+  }
+
+  if (OB_SUCC(ret) && need_rebuild) {
+    // To prepare new trigger info.
+    if (src_db_schema->get_database_id() == src_trigger_info.get_database_id()) {
+      // Base table and trigger have the same database.
+      new_trigger_info.set_database_id(dst_db_schema->get_database_id());
+    } else {
+      // Base table and trigger have the different database.
+      // To find the target database by the database name.
+      const ObDatabaseSchema *src_trigger_db_schema = nullptr;
+      if (OB_FAIL(src_tenant_schema_guard.get_database_schema(src_tenant_id,
+          src_trigger_info.get_database_id(), src_trigger_db_schema))) {
+        LOG_WARN("get db schema failed", K(ret), K(src_tenant_id), "db_id", src_trigger_info.get_database_id());
+      } else if (OB_ISNULL(src_trigger_db_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null db", K(ret), K(src_tenant_id), "db_id", src_trigger_info.get_database_id());
+      } else {
+        const ObDatabaseSchema *dst_trigger_db_schema = nullptr;
+        const ObString &src_trigger_db_name = src_trigger_db_schema->get_database_name_str();
+        // 2. check if the trigger's db existed in the dst tenant space.
+        if (OB_FAIL(dst_tenant_schema_guard.get_database_schema(dst_tenant_id, src_trigger_db_name, dst_trigger_db_schema))) {
+          LOG_WARN("get db schema failed", K(ret), K(dst_tenant_id), K(src_trigger_db_name));
+        } else if (nullptr == dst_trigger_db_schema) {
+          need_rebuild = false;
+          FLOG_INFO("ignore to rebuild the trigger whose db does not exist", K(dst_tenant_id), K(src_trigger_db_name), K(src_trigger_info));
+        } else {
+          new_trigger_info.set_database_id(dst_trigger_db_schema->get_database_id());
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && need_rebuild) {
+    const ObTriggerInfo *check_dup_trigger_info = nullptr;
+    if (OB_FAIL(dst_tenant_schema_guard.get_trigger_info(dst_tenant_id, new_trigger_info.get_database_id(),
+        new_trigger_info.get_trigger_name(), check_dup_trigger_info))) {
+      LOG_WARN("check duplicated trigger failed", K(ret), K(dst_tenant_id), K(new_trigger_info));
+    } else if (OB_UNLIKELY(nullptr != check_dup_trigger_info)) {
+      need_rebuild = false;
+      FLOG_INFO("ignore to rebuild the trigger that has already exist", K(dst_tenant_id), K(src_trigger_info), K(new_trigger_info));
+    }
+  }
+  return ret;
+}
+//----End of functions for restore table ddl----
 
 template <typename ArgType>
 int ObPLDDLService::check_env_before_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
