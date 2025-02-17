@@ -2133,22 +2133,24 @@ int ObDbmsWorkloadRepository::print_ash_top_active_tenants(const AshReportParams
       //In this case, when calculating the load for that client session,
       //only the db time passing through that session will be recorded,
       //without taking into account any idle time within it.
-      //see it:SUM(CASE WHEN (DB_CNT < 0.1*DELTA_TIME) THEN DB_CNT ELSE DELTA_TIME END) as TOTAL_TIME
-      //min_active_ratio=0.1
+      //see it:SUM(CASE WHEN (DB_CNT < min_active_time) THEN DB_CNT ELSE DELTA_TIME END) as TOTAL_TIME
+      //We consider a session with an inactive time exceeding 2 minutes as a low-activity session
+      int64_t min_active_time = ash_report_params.get_elapsed_time() / 1000000 / 60 / 2;
       if (OB_FAIL(print_section_column_header(ash_report_params, buff, headers))) {
         LOG_WARN("failed to format row", K(ret));
       } else if (OB_FAIL(sql_string.append_fmt(
           "SELECT TENANT_ID, SESSION_TYPE, SUM(db_cnt) AS CNT, SUM(cpu_cnt) AS CPU_CNT, "
                   "SUM(wait_cnt) AS WAIT_CNT, "
-                  "SUM(CASE WHEN (db_cnt < 0.1 * delta_time) THEN db_cnt ELSE delta_time END) AS TOTAL_TIME "
+                  "SUM(CASE WHEN (db_cnt < %ld) THEN db_cnt ELSE delta_time END) AS TOTAL_TIME "
           "FROM ("
             "SELECT tenant_id, session_type, SUM(count_weight) AS db_cnt, "
                     "SUM(CASE WHEN event_no = 0 THEN count_weight ELSE 0 END) AS cpu_cnt, "
                     "SUM(CASE WHEN event_no = 0 THEN 0 ELSE count_weight END) AS wait_cnt, "
                     "%s AS delta_time "
             "FROM (",
+        min_active_time, //db_cnt < %ld
         lib::is_oracle_mode() ? "(ROUND((CAST(MAX(sample_time) AS DATE) - CAST(MIN(sample_time) AS DATE)) * 86400) + 1)"
-                              : "CAST((UNIX_TIMESTAMP(MAX(sample_time)) - UNIX_TIMESTAMP(MIN(sample_time)) + 1) AS SIGNED)"))) {
+                              : "CAST((UNIX_TIMESTAMP(MAX(sample_time)) - UNIX_TIMESTAMP(MIN(sample_time)) + 1) AS SIGNED)"))) { //%s AS delta_time
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_wr_view_sql(ash_report_params, sql_string))) {
         LOG_WARN("failed to append fmt ash view sql", K(ret));
@@ -2265,7 +2267,7 @@ int ObDbmsWorkloadRepository::print_ash_top_node_load(const AshReportParams &ash
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is nullptr", K(ret));
-  } else if (OB_FAIL(print_section_header_and_explaination(ash_report_params, buff, contents, ARRAYSIZEOF(contents)))){
+  } else if (OB_FAIL(print_section_header_and_explaination(ash_report_params, buff, contents, ARRAYSIZEOF(contents)))) {
     LOG_WARN("failed to push string into buff", K(ret));
   } else {
     ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(GCTX.sql_proxy_)));
@@ -2284,9 +2286,9 @@ int ObDbmsWorkloadRepository::print_ash_top_node_load(const AshReportParams &ash
       //In this case, when calculating the load for that client session,
       //only the db time passing through that session will be recorded,
       //without taking into account any idle time within it.
-      //see it:SUM(CASE WHEN (0.1 * TM_DELTA_TIME > 1000000) THEN 1000000 ELSE TM_DELTA_TIME END)
-      //min_active_ratio=0.1
-      common::sqlclient::ObMySQLResult *result = nullptr;
+      //see it:SUM(CASE WHEN (TM_DELTA_TIME > 1000000 * 60 * 2) THEN 1000000 ELSE TM_DELTA_TIME END)
+      //We consider a session with an inactive time exceeding 2 minutes as a low-activity session
+      ObMySQLResult *result = nullptr;
       AshColumnHeader headers(column_size, column_headers, column_widths);
       if (OB_FAIL(print_section_column_header(ash_report_params, buff, headers))) {
         LOG_WARN("failed to format row", K(ret));
@@ -2294,7 +2296,7 @@ int ObDbmsWorkloadRepository::print_ash_top_node_load(const AshReportParams &ash
           "SELECT SVR_IP, SVR_PORT, SESSION_TYPE, SUM(count_weight) AS CNT, "
             "SUM(CASE WHEN event_no = 0 THEN count_weight ELSE 0 END) AS CPU_CNT, "
             "SUM(CASE WHEN event_no = 0 THEN 0 ELSE count_weight END) AS WAIT_CNT, "
-            "SUM((CASE WHEN (0.1 * TM_DELTA_TIME > 1000000) THEN 1000000 ELSE TM_DELTA_TIME END) * count_weight) AS TOTAL_TIME "
+            "SUM((CASE WHEN (TM_DELTA_TIME > 120000000) THEN 1000000 ELSE TM_DELTA_TIME END) * count_weight) AS TOTAL_TIME "
           "FROM ("))) {
         LOG_WARN("append sql failed", K(ret));
       } else if (OB_FAIL(append_fmt_ash_wr_view_sql(ash_report_params, sql_string))) {
