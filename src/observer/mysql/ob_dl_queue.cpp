@@ -16,12 +16,48 @@
 
 namespace oceanbase {
 namespace common {
+int ObLeafQueue::init(const char *label, uint64_t size, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.label_ = label;
+  mem_attr.tenant_id_ = tenant_id;
+  if (OB_FAIL(ObRaQueue::init(label, size, tenant_id))) {
+    LOG_WARN("fail to init ObRaQueue", K(ret));
+  } else if (OB_ISNULL(ref_ = (int64_t *)ob_malloc(sizeof(int64_t) * size, mem_attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    memset(ref_, 0, sizeof(int64_t) * size);
+  }
+  return ret;
+}
+
+int ObRootQueue::init(const char *label, uint64_t size, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.label_ = label;
+  mem_attr.tenant_id_ = tenant_id;
+  if (OB_FAIL(ObRaQueue::init(label, size, tenant_id))) {
+    LOG_WARN("fail to init ObRaQueue", K(ret));
+  } else if (OB_ISNULL(SlotLock_ = (ObRWLock *)ob_malloc(sizeof(ObRWLock) * size, mem_attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    for (int64_t i = 0; i < size; i++) {
+      new (&SlotLock_[i]) ObRWLock(obsys::WRITE_PRIORITY);
+    }
+  }
+  return ret;
+}
 
 int ObDlQueue::init(const char *label, uint64_t tenant_id,
                     int64_t root_queue_size,
                     int64_t leaf_queue_size,
                     int64_t idle_leaf_queue_num) {
   int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.label_ = label;
+  mem_attr.tenant_id_ = tenant_id;
   root_queue_size_ = root_queue_size;
   leaf_queue_size_ = leaf_queue_size;
   idle_leaf_queue_num_ = idle_leaf_queue_num;

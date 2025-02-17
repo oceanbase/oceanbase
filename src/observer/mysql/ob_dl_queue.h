@@ -27,43 +27,63 @@ using Ref = ObRaQueue::Ref;
 class ObLeafQueue : public ObRaQueue
 {
 public:
-  enum { N_LEAF_REF = 128 * 1024 };
   ObLeafQueue() : ObRaQueue()
   {
-    memset(ref_, 0, sizeof(ref_));
   }
-  ~ObLeafQueue() { memset(ref_, 0, sizeof(ref_)); }
+  ~ObLeafQueue() {
+    destroy();
+  }
+
+  int init(const char *label, uint64_t size, uint64_t tenant_id);
+
+  void destroy() {
+    if (nullptr != ref_) {
+      memset(ref_, 0, sizeof(int64_t) * capacity_);
+      ob_free(ref_);
+      ref_ = nullptr;
+    }
+    ObRaQueue::destroy();
+  }
+
   int push(void* p, int64_t& leaf_idx, int64_t root_idx, int64_t& seq, int64_t leaf_queue_size);
 
 private:
   void wait_ref_clear(int64_t seq) {
-    while(0 != ATOMIC_LOAD(ref_ + seq % N_LEAF_REF)) {
+    while(0 != ATOMIC_LOAD(ref_ + seq % capacity_)) {
       ob_usleep(1000);
     }
   }
   int64_t xref(int64_t seq, int64_t x) {
-    return ATOMIC_AAF(ref_ + seq % N_LEAF_REF, x);
+    return ATOMIC_AAF(ref_ + seq % capacity_, x);
   }
-  int64_t ref_[N_LEAF_REF] CACHE_ALIGNED;
+  int64_t* ref_;
 };
 
 using ObRWLock = obsys::ObRWLock;
 class ObRootQueue : public ObRaQueue
 {
 public:
-  enum { N_ROOT_SIZE = 16 * 1024};
   ObRootQueue() : ObRaQueue()
   {
-    for (int64_t i=0; i<N_ROOT_SIZE; i++) {
-      new(&SlotLock_[i]) ObRWLock(obsys::WRITE_PRIORITY);
-    }
   }
   ~ObRootQueue()
   {
-    for (int64_t i=0; i<N_ROOT_SIZE; i++) {
-      SlotLock_[i].~ObRWLock();
-    }
+    destroy();
   }
+
+  int init(const char *label, uint64_t size, uint64_t tenant_id);
+
+  void destroy() {
+    if (nullptr != SlotLock_) {
+      for (int64_t i = 0; i < capacity_; i++) {
+        SlotLock_[i].~ObRWLock();
+      }
+      ob_free(SlotLock_);
+      SlotLock_ = nullptr;
+    }
+    ObRaQueue::destroy();
+  }
+
   ObLeafQueue** get_root_array() {
     return reinterpret_cast<ObLeafQueue**>(array_);
   }
@@ -72,10 +92,11 @@ public:
     void* ret = NULL;
     if (NULL != array_) {
       void** addr = get_addr(seq);
-      SlotLock_[seq % N_ROOT_SIZE].rlock()->lock();
+      SlotLock_[seq % capacity_].rlock()->lock();
       ATOMIC_STORE(&ret, *addr);
       if (NULL == ret) {
         ATOMIC_STORE(addr, NULL);
+        SlotLock_[seq % capacity_].rlock()->unlock();
       } else {
         ref->set(seq, ret);
       }
@@ -92,7 +113,7 @@ public:
       uint64_t idx = ref->idx_;
       ref->reset();
       if (NULL != array_) {
-        SlotLock_[idx % N_ROOT_SIZE].rlock()->unlock();
+        SlotLock_[idx % capacity_].rlock()->unlock();
       }
     }
   }
@@ -102,7 +123,7 @@ public:
       // ret = OB_NOT_INIT;
     } else {
       uint64_t pop_limit = 0;
-      bool lock_succ = !SlotLock_[pop_ % N_ROOT_SIZE].wlock()->trylock();
+      bool lock_succ = !SlotLock_[pop_ % capacity_].wlock()->trylock();
       if (lock_succ) {
         uint64_t pop_idx = faa_bounded(&pop_, &push_, pop_limit);
         if (pop_idx < pop_limit) {
@@ -111,7 +132,7 @@ public:
         } else {
           // ret = OB_SIZE_OVERFLOW;
         }
-        SlotLock_[pop_idx % N_ROOT_SIZE].wlock()->unlock();
+        SlotLock_[pop_idx % capacity_].wlock()->unlock();
       }
     }
     return p;
@@ -133,7 +154,7 @@ public:
   }
 
 private:
-  ObRWLock SlotLock_[N_ROOT_SIZE];
+  ObRWLock* SlotLock_{nullptr};
 };
 
 using Leaf_Ref = ObRaQueue::Ref;
@@ -199,7 +220,6 @@ public:
     int64_t count = 0;
     ObLeafQueue* leaf_rec = NULL;
     Root_Ref tmp_ref;
-
     if (OB_FAIL(get_leaf_queue(idx, leaf_rec, &tmp_ref))) {
       SERVER_LOG(WARN, "failed to get second level queue pointer", K(idx), K(ret));
     } else if (leaf_rec == NULL) {
@@ -239,6 +259,16 @@ public:
 
 private:
   int construct_leaf_queue();
+  /**
+   * Make sure only 2 output status in this function !!
+   * 1.leaf_queue != nullptr && corresponding rlock is locked.
+   * 2.leaf_queue == nullptr && corresponding rlock is unlocked.
+   * This is not a good interface design (maybe RAII is better), but it has already been implemented this way.
+   * So inside this class public function, if you call get_leaf_queue(), revert_leaf_queue() must appear in pairs to make sure rlock is unlocked.
+
+   * Due to historical reasons, so far there are still 1 situation where get_leaf_queue() and revert_leaf_queue() each appear:
+   * The iteration process of sql audit, which would use ObDlQueue::get() to lock leaf_queue while call ObDlQueue::revert() later when it get next row.
+   */
   int get_leaf_queue(const int64_t idx, ObLeafQueue *&leaf_queue, Root_Ref* ref);
   void revert_leaf_queue(Root_Ref* ref, ObLeafQueue *&leaf_queue);
 
