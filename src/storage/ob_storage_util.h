@@ -146,7 +146,8 @@ OB_INLINE int init_exprs_vector_header(
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null expr", K(ret), KPC(exprs));
-      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size, expr->get_default_res_format()))) {
+      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size,
+          expr->is_nested_expr() ? VEC_DISCRETE : expr->get_default_res_format()))) {
         STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(expr));
       }
     }
