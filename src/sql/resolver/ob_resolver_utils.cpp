@@ -7236,8 +7236,11 @@ int ObResolverUtils::foreign_key_column_match_index_column(const ObTableSchema &
   if (OB_FAIL(GET_MIN_DATA_VERSION(parent_table_schema.get_tenant_id(), tenant_version))) {
     LOG_WARN("get tenant data version failed", K(ret), K(parent_table_schema.get_tenant_id()));
   } else {
-    // 只在4.3.5版本且非Oracle模式下enable
-    allow_non_unique = !is_oracle_mode && tenant_version >= DATA_VERSION_4_3_5_1;
+    // 在[4253, 430) 和 [4351, )版本且非Oracle模式下enable
+    allow_non_unique = !is_oracle_mode &&
+                       (tenant_version >= DATA_VERSION_4_3_5_1 ||
+                        (tenant_version >= MOCK_DATA_VERSION_4_2_5_3 &&
+                         tenant_version < DATA_VERSION_4_3_0_0));
   }
 
   // 优先match pk, uk, 如果两者都没有再match non-unique index.

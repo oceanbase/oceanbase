@@ -1250,7 +1250,7 @@ int ObCreateTableHelper::generate_foreign_keys_()
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(data_table.get_tenant_id(), compat_version))) {
             LOG_WARN("fail to get data version", KR(ret), K(data_table.get_tenant_id()));
           } else if (!lib::is_oracle_mode() && FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_arg.fk_ref_type_) {
-            if (compat_version < DATA_VERSION_4_3_5_1) {
+            if (compat_version < MOCK_DATA_VERSION_4_2_5_3 || (compat_version >= DATA_VERSION_4_3_0_0 && compat_version < DATA_VERSION_4_3_5_1)) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("foreign key referencing non-unique index is not supported in this version", K(ret));
             } else if (OB_FAIL(ddl_service_->get_index_cst_id_for_self_ref(new_tables_, foreign_key_arg, foreign_key_info))) {
