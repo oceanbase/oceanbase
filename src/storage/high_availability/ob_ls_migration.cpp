@@ -4407,7 +4407,7 @@ bool ObTabletGroupMigrationDag::operator == (const ObIDag &other) const
 int64_t ObTabletGroupMigrationDag::hash() const
 {
   int64_t hash_value = 0;
-  ObMigrationCtx *ctx = nullptr;
+  ObMigrationCtx *ctx = get_migration_ctx();
   if (NULL != ctx) {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
