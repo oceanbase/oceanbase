@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h" //ObLSService
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "logservice/ob_log_service.h"//get_palf_role
+#include "rootserver/ob_tenant_thread_helper.h"
 
 namespace oceanbase
 {
@@ -113,16 +114,22 @@ void ObLSRecoveryReportor::run2()
   } else {
     ObThreadCondGuard guard(get_cond());
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+    bool meta_tenant_schema_normal = false;
     while (!stop_) {
       DEBUG_SYNC(STOP_LS_RECOVERY_THREAD);
       ObCurTraceId::init(GCONF.self_addr_);
-      if (OB_ISNULL(GCTX.schema_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema service is empty", KR(ret));
-      } else if (!GCTX.schema_service_->is_tenant_full_schema(meta_tenant_id)) {
-        //need wait
-        LOG_INFO("tenant schema not ready", KR(ret), K(meta_tenant_id));
-      } else {
+      if (!meta_tenant_schema_normal) {
+        ObTenantSchema tenant_schema;
+        if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(meta_tenant_id, tenant_schema))) {
+          LOG_WARN("meta tenant is not ready", KR(ret), K(meta_tenant_id));
+        } else if (tenant_schema.is_normal()) {
+          meta_tenant_schema_normal = true;
+          LOG_INFO("meta tenant schema is normal", K(tenant_schema));
+        } else {
+          LOG_WARN("meta tenant schema is not normal, need wait", K(tenant_schema));
+        }
+      }
+      if (meta_tenant_schema_normal) {
         if (OB_SUCCESS != (tmp_ret = update_ls_recovery_stat_())) {
           ret = OB_SUCC(ret) ? tmp_ret : ret;
           LOG_WARN("failed to update ls recovery stat", KR(ret), KR(tmp_ret));
