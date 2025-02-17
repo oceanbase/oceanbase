@@ -7378,7 +7378,10 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
         // do nothing ...
       } else if (actually_type.is_composite_type() && expected_type.is_composite_type()) {
         if (is_anonymous_array_type && expected_type.is_collection_type()) { // check anonymous array compatible
-          OZ (check_anonymous_array_compatible(actually_type.get_user_type_id(), expected_type.get_user_type_id(), is_legal));
+          OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                               actually_type.get_user_type_id(),
+                                               expected_type.get_user_type_id(),
+                                               is_legal));
         } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
           OZ (check_composite_compatible(current_block_->get_namespace(),
                                          actually_type.get_user_type_id(),
@@ -8549,10 +8552,17 @@ int ObPLResolver::convert_cursor_actual_params(
   } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
     bool is_compatible = false;
     CK (OB_NOT_NULL(current_block_));
-    OZ (check_composite_compatible(current_block_->get_namespace(),
+    if (is_mocked_anonymous_array_id(convert_expr->get_result_type().get_udt_id())) {
+      OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                           convert_expr->get_result_type().get_udt_id(),
+                                           pl_data_type.get_user_type_id(),
+                                           is_compatible));
+    } else {
+      OZ (check_composite_compatible(current_block_->get_namespace(),
                                     convert_expr->get_result_type().get_udt_id(),
                                     pl_data_type.get_user_type_id(),
                                     is_compatible));
+    }
     if (OB_SUCC(ret) && !is_compatible) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
@@ -10255,7 +10265,10 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
                && expr->get_expr_type() != T_FUN_SYS_PDB_GET_RUNTIME_INFO) {
       bool is_compatible = false;
       if (is_mocked_anonymous_array_id(expr->get_result_type().get_udt_id())) {
-        OZ (check_anonymous_array_compatible(expr->get_result_type().get_udt_id(), expected_type->get_user_type_id(), is_compatible));
+        OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                             expr->get_result_type().get_udt_id(),
+                                             expected_type->get_user_type_id(),
+                                             is_compatible));
       } else {
         OZ (check_composite_compatible(current_block_->get_namespace(),
                                       expr->get_result_type().get_udt_id(),
@@ -10466,7 +10479,8 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   return ret;
 }
 
-int ObPLResolver::check_anonymous_array_compatible (uint64_t actual_param_type_id,
+int ObPLResolver::check_anonymous_array_compatible (const ObPLINS &ns,
+                                                    uint64_t actual_param_type_id,
                                                     uint64_t formal_param_type_id,
                                                     bool &is_compatible)
 {
@@ -10475,8 +10489,9 @@ int ObPLResolver::check_anonymous_array_compatible (uint64_t actual_param_type_i
   const ObUserDefinedType *right_type = NULL;
   const ObCollectionType *left_coll_type = NULL;
   const ObCollectionType *right_coll_type = NULL;
-  OZ (current_block_->get_namespace().get_pl_data_type_by_id(actual_param_type_id, left_type));
-  OZ (current_block_->get_namespace().get_pl_data_type_by_id(formal_param_type_id, right_type));
+  // You must ensure that get_user_type interface could find correct anonymous_array type
+  OZ (ns.get_user_type(actual_param_type_id, left_type));
+  OZ (ns.get_user_type(formal_param_type_id, right_type));
   CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
   CK (OB_NOT_NULL(right_coll_type = static_cast<const ObCollectionType *>(right_type)));
 
@@ -10498,7 +10513,7 @@ int ObPLResolver::check_anonymous_array_compatible (uint64_t actual_param_type_i
       is_compatible = true;// compatible with anonymous array type
     }
   } else if (left_coll_type->get_element_type().get_user_type_id() != right_coll_type->get_element_type().get_user_type_id()) {
-    OZ (check_composite_compatible(current_block_->get_namespace(),
+    OZ (check_composite_compatible( ns,
                                     left_coll_type->get_element_type().get_user_type_id(),
                                     right_coll_type->get_element_type().get_user_type_id(),
                                     is_compatible));
@@ -12220,10 +12235,18 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
           actual_udt_id = child->get_result_type().get_udt_id();
         }
         if (actual_udt_id != coll_type->get_element_type().get_user_type_id()) {
-          OZ (check_composite_compatible(current_block_->get_namespace(),
-                                          actual_udt_id,
-                                          coll_type->get_element_type().get_user_type_id(),
-                                          is_legal));
+          CK (OB_NOT_NULL(current_block_));
+          if (is_mocked_anonymous_array_id(actual_udt_id)) {
+            OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                                 actual_udt_id,
+                                                 coll_type->get_element_type().get_user_type_id(),
+                                                 is_legal));
+          } else {
+            OZ (check_composite_compatible(current_block_->get_namespace(),
+                                            actual_udt_id,
+                                            coll_type->get_element_type().get_user_type_id(),
+                                            is_legal));
+          }
         }
       } else {
         is_legal = false;
