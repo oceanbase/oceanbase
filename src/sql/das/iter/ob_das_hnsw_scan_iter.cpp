@@ -96,7 +96,7 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
       }
     }
 
-    if (OB_NOT_NULL(sort_ctdef_) && OB_NOT_NULL(sort_rtdef_)) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(sort_ctdef_) && OB_NOT_NULL(sort_rtdef_)) {
       if (OB_FAIL(ObDasVecScanUtils::init_limit(vec_aux_ctdef_, vec_aux_rtdef_, sort_ctdef_, sort_rtdef_, limit_param_))) {
         LOG_WARN("failed to init limit", K(ret), KPC(vec_aux_ctdef_), KPC(vec_aux_rtdef_));
       } else if (limit_param_.offset_ + limit_param_.limit_ > MAX_VSAG_QUERY_RES_SIZE) {
