@@ -48,7 +48,12 @@ public:
   const static char* get_domain_str_by_id(ObDomainIDType type) { return ObDomainIDStrArray[type]; }
   static bool is_domain_id_index_table(const void *table_schema);
   static int check_table_need_domain_id_merge(ObDomainIDType type, const void *table_schema, bool &res);
-  static int check_column_need_domain_id_merge(ObDomainIDType type, const void *col_expr, ObIndexType index_type, bool &res);
+  static int check_column_need_domain_id_merge(
+      const share::schema::ObTableSchema &table_schema,
+      const ObDomainIDType type,
+      const void *col_expr,
+      const ObIndexType index_type,
+      bool &res);
   static int get_domain_tid_table_by_type(ObDomainIDType type, const void *data_table_schema, uint64_t &domain_id_table_id);
   static int get_domain_tid_table_by_cid(
       ObDomainIDType type,

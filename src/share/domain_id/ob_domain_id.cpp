@@ -126,7 +126,12 @@ int ObDomainIdUtils::check_table_need_domain_id_merge(ObDomainIDType type, const
   return ret;
 }
 
-int ObDomainIdUtils::check_column_need_domain_id_merge(ObDomainIDType type, const void *col_expr, ObIndexType index_type, bool &res)
+int ObDomainIdUtils::check_column_need_domain_id_merge(
+    const share::schema::ObTableSchema &table_schema,
+    const ObDomainIDType type,
+    const void *col_expr,
+    const ObIndexType index_type,
+    bool &res)
 {
   int ret = OB_SUCCESS;
   res = false;
@@ -137,7 +142,19 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(ObDomainIDType type, cons
   } else {
     switch (type) {
       case ObDomainIDType::DOC_ID: {
-        res = expr->is_doc_id_column();
+        if (expr->is_doc_id_column()) {
+          ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+          if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+            LOG_WARN("fail to get simple index infos", K(ret), K(table_schema));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && !res; ++i) {
+              const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+              if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
+                res = true;
+              }
+            }
+          }
+        }
         break;
       }
       case ObDomainIDType::VID: {
@@ -406,7 +423,12 @@ int ObDomainIdUtils::check_has_domain_index(const void *table_schema, ObIArray<i
       int64_t domain_type = ObDomainIDType::MAX;
       uint64_t domain_tid = simple_index_infos.at(i).table_id_;
       if (is_rowkey_doc_aux(simple_index_infos.at(i).index_type_)) {
-        domain_type = ObDomainIDType::DOC_ID; // only one
+        for (int64_t i = 0; OB_SUCC(ret) && ObDomainIDType::MAX == domain_type; ++i) {
+          const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+          if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
+            domain_type = ObDomainIDType::DOC_ID; // only one
+          }
+        }
       } else if (is_vec_rowkey_vid_type(simple_index_infos.at(i).index_type_)) {
         domain_type = ObDomainIDType::VID; // only one
       } else if (is_vec_ivfflat_rowkey_cid_index(simple_index_infos.at(i).index_type_)) {
