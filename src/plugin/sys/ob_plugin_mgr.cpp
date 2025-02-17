@@ -528,6 +528,7 @@ int ObPluginMgr::load_dynamic_plugins(const ObString &plugins_load)
       }
     }
   }
+  LOG_INFO("load shared library plugins done", K(ret), K(plugins_load));
   return ret;
 }
 
