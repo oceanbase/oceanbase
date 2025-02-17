@@ -3065,7 +3065,10 @@ void LogConfigMgr::check_children_health()
   LogLearnerList dead_children;
   LogLearnerList diff_region_children;
   LogLearnerList dup_region_children;
+  LogLearnerList parent_disable_sync_retire_children;
   const bool is_leader = state_mgr_->is_leader_active();
+  const bool enable_vote = state_mgr_->is_allow_vote();
+  const bool enable_sync = state_mgr_->is_sync_enabled();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
@@ -3082,6 +3085,11 @@ void LogConfigMgr::check_children_health()
       // 3. remove duplicate region children in leader
       if (is_leader && OB_FAIL(remove_duplicate_region_child_(dup_region_children))) {
         PALF_LOG(WARN, "remove_duplicate_region_child failed", KR(ret), K_(palf_id), K_(self));
+      }
+      // 4. parent is disable_sync or disable_vote, retire all children.
+      if (!enable_sync || !enable_vote) {
+        parent_disable_sync_retire_children = children_;
+        children_.reset();
       }
     }
     // 4. send keepalive msg to children
@@ -3102,6 +3110,8 @@ void LogConfigMgr::check_children_health()
     }
     // 5. retire removed children
     if (OB_FAIL(submit_retire_children_req_(dead_children, RetireChildReason::CHILD_NOT_ALIVE))) {
+      // overwrite ret
+    } else if (OB_FAIL(submit_retire_children_req_(parent_disable_sync_retire_children, RetireChildReason::PARENT_DISABLE_SYNC))) {
       // overwrite ret
       PALF_LOG(WARN, "submit_retire_children_req failed", KR(ret), K_(palf_id), K_(self), K(dead_children));
     } else if (!is_leader && OB_FAIL(submit_retire_children_req_(diff_region_children,
