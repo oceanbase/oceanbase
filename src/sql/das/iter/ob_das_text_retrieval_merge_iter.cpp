@@ -122,10 +122,6 @@ int ObDASTextRetrievalMergeIter::rescan()
 {
   int ret = OB_SUCCESS;
   if (0 == query_tokens_.count()) {
-  } else if (nullptr != whole_doc_cnt_iter_ &&
-            (!force_return_docid_ || whole_doc_agg_param_.need_switch_param_) &&
-            OB_FAIL(whole_doc_cnt_iter_->rescan())) { // for force_return_docid_ mdoe, we just read the cnt once.
-    LOG_WARN("failed to rescan doc count iter", K(ret));
   } else {
     next_written_idx_ = 0;
     limit_param_ = ir_rtdef_->get_inv_idx_scan_rtdef()->limit_param_;
@@ -405,21 +401,14 @@ int ObDASTextRetrievalMergeIter::inner_reuse()
     }
   }
   next_written_idx_ = 0;
-  if (!force_return_docid_) {
-    doc_cnt_calculated_ = false;
-  }
   input_row_cnt_ = 0;
   output_row_cnt_ = 0;
-  const ObTabletID &old_doc_id_tablet_id = whole_doc_agg_param_.tablet_id_;
-  whole_doc_agg_param_.need_switch_param_ = whole_doc_agg_param_.need_switch_param_ ||
-    ((old_doc_id_tablet_id.is_valid() && old_doc_id_tablet_id != doc_id_idx_tablet_id_) ? true : false);
+  const ObTabletID &old_tablet_id = whole_doc_agg_param_.tablet_id_;
+  whole_doc_agg_param_.need_switch_param_ = whole_doc_agg_param_.need_switch_param_
+      || ((old_tablet_id.is_valid() && old_tablet_id != doc_id_idx_tablet_id_ ) ? true : false);
+  whole_doc_agg_param_.tablet_id_ = doc_id_idx_tablet_id_;
+  whole_doc_agg_param_.ls_id_ = ls_id_;
   if (!force_return_docid_ || whole_doc_agg_param_.need_switch_param_) {
-    if (nullptr != whole_doc_cnt_iter_) {
-      whole_doc_cnt_iter_->set_scan_param(whole_doc_agg_param_);
-      if (OB_FAIL(whole_doc_cnt_iter_->reuse())) {
-        LOG_WARN("failed to reuse whole doc cnt iter", K(ret));
-      }
-    }
     doc_cnt_calculated_ = false;
   }
 
