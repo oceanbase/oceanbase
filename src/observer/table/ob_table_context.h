@@ -460,10 +460,14 @@ public:
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
   }
-  OB_INLINE bool is_delete_or_get() const
+  OB_INLINE bool is_need_ajust_date_op() const
   {
     return ObTableOperationType::Type::DEL == operation_type_
-      || ObTableOperationType::Type::GET == operation_type_;
+      || ObTableOperationType::Type::GET == operation_type_
+      || ObTableOperationType::Type::UPDATE == operation_type_
+      || ObTableOperationType::Type::INCREMENT == operation_type_
+      || ObTableOperationType::Type::APPEND == operation_type_
+      || ObTableOperationType::Type::SCAN == operation_type_;
   }
   OB_INLINE bool is_inc() const
   {
