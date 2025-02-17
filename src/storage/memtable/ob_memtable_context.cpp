@@ -446,7 +446,7 @@ int ObMemtableCtx::replay_end(const bool is_replay_succ,
                               const SCN scn)
 {
   int ret = OB_SUCCESS;
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
 
   if (!is_replay_succ) {
     ret = trans_mgr_.replay_fail(callback_list_idx, scn);
@@ -460,7 +460,7 @@ int ObMemtableCtx::replay_end(const bool is_replay_succ,
 int ObMemtableCtx::rollback_redo_callbacks(const int16_t callback_list_idx, const SCN scn)
 {
   int ret = OB_SUCCESS;
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
 
   ret = trans_mgr_.replay_fail(callback_list_idx, scn);
 
@@ -628,7 +628,7 @@ int ObMemtableCtx::replay_to_commit(const bool is_resume)
 {
   int ret = OB_SUCCESS;
   ATOMIC_STORE(&is_master_, true);
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   trans_mgr_.set_for_replay(false);
   if (!is_resume) {
     trans_mgr_.clear_pending_log_size();
@@ -707,7 +707,7 @@ void ObMemtableCtx::sync_log_fail(const ObCallbackScopeArray &callbacks)
 
 int ObMemtableCtx::calc_checksum_all(ObSEArray<uint64_t, 1> &checksum)
 {
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   return trans_mgr_.calc_checksum_all(checksum);
 }
 
@@ -727,7 +727,7 @@ int ObMemtableCtx::fetch_conflict_info_array(common::ObIArray<ObRowConflictInfo>
   int ret = OB_SUCCESS;
   array.reset();
   {
-    ObByteLockGuard guard(lock_);
+    ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
     for (int64_t idx = 0; idx < row_conflict_info_array_.count() && OB_SUCC(ret); ++idx) {
       if (OB_FAIL(array.push_back(ObRowConflictInfo()))) {
         DETECT_LOG(WARN, "fail to push back", KR(ret), K(idx), KPC(this));
@@ -753,7 +753,7 @@ bool ObMemtableCtx::check_if_contains_conflict_info_(meta::ObMover<ObRowConflict
 
 int ObMemtableCtx::add_conflict_info(meta::ObMover<ObRowConflictInfo> conflict_info)// just receive rvalue, cause don't want do extra memory allocation
 {
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   int ret = OB_SUCCESS;
   if (conflict_info.get_object().conflict_hash_ <= 0) {
     // do nothing
@@ -817,7 +817,7 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
   int ret = OB_SUCCESS;
   const int64_t start_ts = common::ObClockGenerator::getClock();
 
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   int64_t remove_cnt = 0;
   if (!to_seq_no.is_valid() || !from_seq_no.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -842,7 +842,7 @@ int ObMemtableCtx::remove_callbacks_for_fast_commit(const int16_t callback_list_
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("remove callbacks for fast commit", 10 * 1000);
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
   if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(callback_list_idx, stop_scn))) {
     TRANS_LOG(WARN, "fail to remove callback for fast commit", K(ret), KPC(this));
   }
@@ -865,7 +865,7 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(const memtable::ObMemtable
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("remove callbacks for uncommitted txn", 10 * 1000);
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
 
   if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
@@ -883,7 +883,7 @@ int ObMemtableCtx::clean_unlog_callbacks()
   int ret = OB_SUCCESS;
   int64_t removed_cnt = 0;
   {
-    ObByteLockGuard guard(lock_);
+    ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
     if (OB_FAIL(trans_mgr_.clean_unlog_callbacks(removed_cnt))) {
       TRANS_LOG(WARN, "clean unlog callbacks failed", KR(ret));
     } else {
@@ -912,7 +912,7 @@ int ObMemtableCtx::calc_checksum_before_scn(const SCN scn,
                                             ObIArray<SCN> &checksum_scn)
 {
   int ret = OB_SUCCESS;
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
 
   if (OB_FAIL(trans_mgr_.calc_checksum_before_scn(scn, checksum, checksum_scn))) {
     TRANS_LOG(ERROR, "calc checksum before log ts should not report error", K(ret), K(scn));
@@ -924,7 +924,7 @@ int ObMemtableCtx::calc_checksum_before_scn(const SCN scn,
 int ObMemtableCtx::update_checksum(const ObIArray<uint64_t> &checksum,
                                    const ObIArray<SCN> &checksum_scn)
 {
-  ObByteLockGuard guard(lock_);
+  ObByteLockGuard guard(lock_, ObWaitEventIds::MEMTABLE_CTX_ACCESS_LOCK);
 
   return trans_mgr_.update_checksum(checksum, checksum_scn);
 }

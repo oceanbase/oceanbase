@@ -680,7 +680,7 @@ int ObTxTable::insert(ObTxData *&tx_data)
 int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
 {
   int ret = OB_SUCCESS;
-
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_check_tx_status);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));

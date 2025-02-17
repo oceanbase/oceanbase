@@ -100,6 +100,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
         TRANS_LOG(WARN, "append callback failed", K(ret));
       } else {
         if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+          ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
           MTL(ObLockWaitMgr*)->insert_or_replace_hash_holder(
             LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
             node->tx_id_,
@@ -199,6 +200,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
     tail = nullptr;
   } else {
     if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled()) && !is_non_unique_local_index) {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_deadlock_row_register);
       for (int64_t i = 0; i < mvcc_results.count(); ++i) {
         ObMvccWriteResult &res = mvcc_results[i];
         if (res.has_insert()) {

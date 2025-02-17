@@ -1233,8 +1233,6 @@ int ObMemtable::check_row_locked_on_frozen_stores_(
     const ObMemtableKey *memtable_key,
     ObMvccWriteResult &res)
 {
-  // For performance, does not set this diagnostic information
-  //ACTIVE_SESSION_FLAG_SETTER_GUARD(in_check_row_confliction);
   int ret = OB_SUCCESS;
   ObStoreRowLockState &lock_state = res.lock_state_;
   ObStoreCtx &ctx = *(context.store_ctx_);
@@ -1289,6 +1287,7 @@ int ObMemtable::check_row_locked_on_frozen_stores_(
           TRANS_LOG(DEBUG, "check_row_locked meet memtable", K(ret),
                     KPC(memtable_key), K(ctx), KPC(memtable), K(lock_state));
         } else if (stores->at(i)->is_sstable()) {
+          ACTIVE_SESSION_FLAG_SETTER_GUARD(in_check_row_confliction);
           blocksstable::ObDatumRowkeyHelper rowkey_converter;
           blocksstable::ObDatumRowkey datum_rowkey;
           ObSSTable *sstable = static_cast<ObSSTable *>(stores->at(i));

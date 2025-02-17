@@ -1695,7 +1695,7 @@ void ObFreezer::set_ls_freeze_begin_()
 int ObFreezer::pend_ls_replay()
 {
   int ret = OB_SUCCESS;
-  common::ObByteLockGuard guard(byte_lock_);
+  common::ObByteLockGuard guard(byte_lock_, ObWaitEventIds::LS_REPLAY_CTRL_LOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", KR(ret), K(get_ls_id()), KP(this));
@@ -1714,7 +1714,7 @@ int ObFreezer::pend_ls_replay()
 int ObFreezer::restore_ls_replay()
 {
   int ret = OB_SUCCESS;
-  common::ObByteLockGuard guard(byte_lock_);
+  common::ObByteLockGuard guard(byte_lock_, ObWaitEventIds::LS_REPLAY_CTRL_LOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", KR(ret), K(get_ls_id()), KP(this));

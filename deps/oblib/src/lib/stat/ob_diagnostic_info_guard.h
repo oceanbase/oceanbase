@@ -288,6 +288,8 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_encode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rpc_decode)
 DEF_ASH_FLAGS_SETTER_GUARD(in_connection_mgr)
 DEF_ASH_FLAGS_SETTER_GUARD(in_check_row_confliction)
+DEF_ASH_FLAGS_SETTER_GUARD(in_deadlock_row_register)
+DEF_ASH_FLAGS_SETTER_GUARD(in_check_tx_status)
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD
 

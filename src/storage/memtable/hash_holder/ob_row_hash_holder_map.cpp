@@ -71,7 +71,7 @@ int64_t RowHolderBucketHead::to_string(char *buf, const int64_t buf_len) const {
 
 int64_t RowHolderBucketHead::size() const {
   int64_t size = 0;
-  ObByteLockGuard lg(lock_);
+  ObByteLockGuard lg(lock_, ObWaitEventIds::DEADLOCK_MGR_BUCKET_LOCK);
   if (OB_NOT_NULL(list_)) {
     const RowHolderList *iter = list_;
     while (OB_NOT_NULL(iter)) {
@@ -261,7 +261,7 @@ void RowHolderMapper::insert_or_replace_hash_holder(const uint64_t hash,
   bool empty_before = false;
   bool empty_after = false;
   {
-    ObByteLockGuard lg(bucket.lock_);
+    ObByteLockGuard lg(bucket.lock_, ObWaitEventIds::DEADLOCK_MGR_BUCKET_LOCK);
 #ifdef __HASH_HOLDER_ENABLE_MONITOR__
     empty_before = bucket.is_empty();
 #endif
@@ -285,7 +285,7 @@ void RowHolderMapper::erase_hash_holder_record(const uint64_t hash,
   bool empty_before = false;
   bool empty_after = false;
   {
-    ObByteLockGuard lg(bucket.lock_);
+    ObByteLockGuard lg(bucket.lock_, ObWaitEventIds::DEADLOCK_MGR_BUCKET_LOCK);
 #ifdef __HASH_HOLDER_ENABLE_MONITOR__
     empty_before = bucket.is_empty();
 #endif
@@ -304,7 +304,7 @@ void RowHolderMapper::erase_hash_holder_record(const uint64_t hash,
 int RowHolderMapper::get_hash_holder(uint64_t hash, RowHolderInfo &holder_info) const {
   int64_t bucket_mask = bucket_cnt_ - 1;
   RowHolderBucketHead &bucket = bucket_head_[hash & bucket_mask];
-  ObByteLockGuard lg(bucket.lock_);
+  ObByteLockGuard lg(bucket.lock_, ObWaitEventIds::DEADLOCK_MGR_BUCKET_LOCK);
   return bucket_head_[hash & bucket_mask].get(hash, holder_info, const_cast<HashHolderGlocalMonitor&>(monitor_));
 }
 
@@ -389,7 +389,7 @@ void RowHolderMapper::periodic_tasks() {
 void RowHolderMapper::clear()
 {
   for (int64_t idx = 0; idx < bucket_cnt_; ++idx) {
-    ObByteLockGuard lg(bucket_head_[idx].lock_);
+    ObByteLockGuard lg(bucket_head_[idx].lock_, ObWaitEventIds::DEADLOCK_MGR_BUCKET_LOCK);
     bucket_head_[idx].clear();
   }
 }

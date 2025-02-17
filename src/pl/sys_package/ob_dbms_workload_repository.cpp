@@ -2554,8 +2554,10 @@ int ObDbmsWorkloadRepository::print_ash_top_execution_phase(
                                 "IN_RPC_ENCODE",
                                 "IN_RPC_DECODE",
                                 "IN_CONNECTION_MGR",
-                                "IN_CHECK_ROW_CONFLICTION"};
-    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+                                "IN_CHECK_ROW_CONFLICTION",
+                                "IN_DEADLOCK_ROW_REGISTER",
+                                "IN_CHECK_TX_STATUS"};
+    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
     ObArrayWrap<const char*> tm_cols_wrap(tm_columns, ARRAYSIZEOF(tm_columns));
     ObArrayWrap<int32_t> tm_flags_wrap(tm_flags, ARRAYSIZEOF(tm_columns));
     HEAP_VARS_3((ObISQLClient::ReadResult, res), (ObSqlString, sql_string), (ObSqlString, tm_view))
@@ -3995,8 +3997,10 @@ int ObDbmsWorkloadRepository::print_top_sql_with_top_wait_events(
                                 "IN_RPC_ENCODE",
                                 "IN_RPC_DECODE",
                                 "IN_CONNECTION_MGR",
-                                "IN_CHECK_ROW_CONFLICTION"};
-    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+                                "IN_CHECK_ROW_CONFLICTION",
+                                "IN_DEADLOCK_ROW_REGISTER",
+                                "IN_CHECK_TX_STATUS"};
+    int32_t tm_flags[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
     ObArrayWrap<const char*> tm_cols_wrap(tm_columns, ARRAYSIZEOF(tm_columns));
     ObArrayWrap<int32_t> tm_flags_wrap(tm_flags, ARRAYSIZEOF(tm_columns));
     const uint64_t request_tenant_id = MTL_ID();
