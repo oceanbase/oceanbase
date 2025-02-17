@@ -301,6 +301,18 @@ int ObRawExpr::deep_copy(ObIRawExprCopier &copier,
       LOG_WARN("failed to assign other expr", K(ret));
     } else if (OB_FAIL(inner_deep_copy(copier))) {
       LOG_WARN("failed to deep copy new allocator", K(ret));
+    } else if (OB_UNLIKELY(other.get_attr_count() > 0) && get_attr_count() == 0) {
+      for (int64_t i = 0; i < other.get_attr_count() && OB_SUCC(ret); i++) {
+        ObRawExpr *attr_expr = NULL;
+        if (OB_FAIL(copier.copy(other.get_attr_expr(i), attr_expr))) {
+          LOG_WARN("failed to copy attr expr", K(ret));
+        } else if (OB_ISNULL(attr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null expr", K(ret));
+        } else if (OB_FAIL(add_attr_expr(attr_expr))) {
+          LOG_WARN("fail to add attr expr", K(ret));
+        }
+      }
     }
   }
   return ret;
