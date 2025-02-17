@@ -3989,7 +3989,6 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
   const TableItem *table_item = NULL;
   ObSEArray<ObRawExpr*, 4> all_match_exprs;
   ObSEArray<ObRawExpr*, 4> rowkey_exprs;
-  ObOrderDirection direction = default_asc_direction();
   if (OB_ISNULL(root_node)|| OB_ISNULL(allocator_)
       || OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())
       || OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
@@ -4006,10 +4005,9 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     LOG_WARN("failed to assign filters", K(ret));
   } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id, ref_table_id, rowkey_exprs))) {
     LOG_WARN("failed to get rowkey exprs", K(ret));
-  } else if (FALSE_IT(index_merge_path->ordering_.reuse())) {
-  } else if (OB_FAIL(get_index_scan_direction(rowkey_exprs, stmt, get_plan()->get_equal_sets(), direction))) {
+  } else if (OB_FAIL(get_index_scan_direction(rowkey_exprs, stmt, get_plan()->get_equal_sets(), index_merge_path->order_direction_))) {
     LOG_WARN("failed to get index scan direction", K(ret));
-  } else if (OB_FAIL(root_node->set_scan_direction(direction))) {
+  } else if (OB_FAIL(root_node->set_scan_direction(index_merge_path->order_direction_))) {
     LOG_WARN("failed to set scan direction for index merge path", K(ret), KPC(index_merge_path));
   } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(rowkey_exprs,
                                                      index_merge_path->order_direction_,
@@ -4031,7 +4029,6 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     index_merge_path->is_ordered_by_pk_ = true;
     index_merge_path->can_batch_rescan_ = false;
     index_merge_path->parent_ = this;
-    index_merge_path->order_direction_ = direction;
     index_merge_path->est_cost_info_.index_meta_info_.is_index_back_ = true;
     index_merge_path->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_table_id);
     index_merge_path->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
@@ -7888,6 +7885,8 @@ int IndexMergePath::re_estimate_cost(EstimateCostInfo &param, double &card, doub
   cost = get_cost();
   if (param.need_row_count_ > 0) {
     card = std::min(param.need_row_count_, get_path_output_rows());
+  } else {
+    card = get_path_output_rows();
   }
   return ret;
 }
