@@ -3215,7 +3215,7 @@ int ObPLExecState::final(int ret)
                                         func_.get_routine_id(),
                                         i, cursor, param, loc);
       if (OB_SUCCESS == tmp_ret && NULL != cursor) {
-        if (0 == cursor->get_ref_count() && (cursor->is_session_cursor() || cursor->is_ref_by_refcursor())) {
+        if (0 >= cursor->get_ref_count() && (cursor->is_session_cursor() || cursor->is_ref_by_refcursor())) {
           // when refcount is 0. should use session close cursor
           ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
           tmp_ret = session->close_cursor(cursor->get_id());
