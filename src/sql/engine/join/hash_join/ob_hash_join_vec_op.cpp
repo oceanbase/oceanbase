@@ -1271,6 +1271,11 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
   part_shift += min(__builtin_ctz(part_count_), 8);
   // if is create left partition and is top level, no need to create real partition store,
   // only create the ObHJPartition(an wrapper)
+  uint32_t build_extra_size = sizeof(ObHJStoredRow::ExtraInfo);
+  if (is_left && MY_SPEC.use_realistic_runtime_bloom_filter_size()) {
+    build_extra_size =
+        MY_SPEC.jf_material_control_info_.extra_hash_count_ * sizeof(ObHJStoredRow::ExtraInfo);
+  }
   bool need_create_left_partition_store = !(is_left && is_top_level_process_with_join_filter());
   if (OB_FAIL(part_mgr_->get_or_create_part(part_level_, part_shift,
                                             (tmp_batch_round << 32) + part_id, is_left, part, false,
@@ -1281,7 +1286,7 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
     // this top level data is from join filter
     // the row store in part is already inited
   } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
-                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
+                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_, build_extra_size))) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
   } else {
     part->get_row_store().set_dir_id(sql_mem_processor_.get_dir_id());

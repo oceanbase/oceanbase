@@ -79,9 +79,9 @@ public:
   }
 
   inline int init(const ObExprPtrIArray &exprs, const int64_t max_batch_size,
-                  const common::ObCompressorType compressor_type)
+                  const common::ObCompressorType compressor_type, uint32_t extra_size)
   {
-    return partition_store_->init(exprs, max_batch_size, compressor_type, STORE_EXTRA_SIZE);
+    return partition_store_->init(exprs, max_batch_size, compressor_type, extra_size);
   }
 
   inline int open() {
@@ -161,7 +161,6 @@ public:
   }
 
 private:
-  static constexpr uint32_t STORE_EXTRA_SIZE = 8;
   ObPartitionStore *partition_store_{nullptr};
   int32_t part_level_;
   int64_t part_shift_;
