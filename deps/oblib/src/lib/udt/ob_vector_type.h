@@ -420,6 +420,8 @@ int ObVectorData<T>::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
   ObIArrayType *arr_ptr = NULL;
   if (OB_FAIL(clone_empty(alloc, arr_ptr, false))) {
     OB_LOG(WARN, "clone empty failed", K(ret));
+  } else if (this->length_ == 0) {
+    output = arr_ptr;
   } else {
     hash::ObHashSet<ObString> elem_set;
     ObVectorData *vec_ptr = dynamic_cast<ObVectorData *>(arr_ptr);

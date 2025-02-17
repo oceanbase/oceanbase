@@ -535,6 +535,8 @@ int ObArrayNested::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
     OB_LOG(WARN, "clone empty failed", K(ret));
   } else if (contain_null() && OB_FAIL(arr_obj->push_null())) {
     OB_LOG(WARN, "push null failed", K(ret));
+  } else if (this->length_ == 0) {
+    output = arr_obj;
   } else {
     hash::ObHashMap<uint64_t, uint32_t> elem_set;
     ObIArrayType *inner_arr = get_child_array();

@@ -543,6 +543,8 @@ int ObArrayBinary::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
     OB_LOG(WARN, "clone empty failed", K(ret));
   } else if (this->contain_null() && OB_FAIL(arr_ptr->push_null())) {
     OB_LOG(WARN, "push null failed", K(ret));
+  } else if (this->length_ == 0) {
+    output = arr_ptr;
   } else {
     hash::ObHashSet<ObString> elem_set;
     ObArrayBinary *arr_bin_ptr = dynamic_cast<ObArrayBinary *>(arr_ptr);

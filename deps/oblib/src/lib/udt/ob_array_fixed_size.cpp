@@ -565,6 +565,8 @@ int ObArrayFixedSize<T>::distinct(ObIAllocator &alloc, ObIArrayType *&output) co
     OB_LOG(WARN, "clone empty failed", K(ret));
   } else if (this->contain_null() && OB_FAIL(arr_ptr->push_null())) {
     OB_LOG(WARN, "push null failed", K(ret));
+  } else if (this->length_ == 0) {
+    output = arr_ptr;
   } else {
     hash::ObHashSet<ObString> elem_set;
     ObArrayFixedSize<T> *arr_data = dynamic_cast<ObArrayFixedSize<T> *>(arr_ptr);
