@@ -617,6 +617,24 @@ int ObGranuleUtil::convert_new_range_to_store_range(ObIAllocator &allocator,
   return ret;
 }
 
+ObGranuleSplitterType ObGranuleUtil::calc_split_type(uint64_t gi_attr_flag)
+{
+  ObGranuleSplitterType res = GIT_UNINITIALIZED;
+  if (access_all(gi_attr_flag)) {
+    res = GIT_ACCESS_ALL;
+  } else if (pwj_gi(gi_attr_flag) &&
+             affinitize(gi_attr_flag)) {
+    res = GIT_PARTITION_WISE_WITH_AFFINITY;
+  } else if (affinitize(gi_attr_flag)) {
+    res = GIT_AFFINITY;
+  } else if (pwj_gi(gi_attr_flag)) {
+    res = GIT_FULL_PARTITION_WISE;
+  } else {
+    res = GIT_RANDOM;
+  }
+  return res;
+}
+
 }
 }
 

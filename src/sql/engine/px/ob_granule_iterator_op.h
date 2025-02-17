@@ -292,6 +292,7 @@ private:
   bool is_parallel_rf_qr_extracted_; // parallel runtime filter query range extracted
   ObSEArray<ObP2PDhKey, 2> query_range_rf_keys_;
   ObSEArray<ObP2PDatahubMsgBase *, 2> query_range_rf_msgs_;
+  ObGranuleSplitterType splitter_type_;
 };
 
 } // end namespace sql

@@ -266,27 +266,28 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
 ///////////////////////////////////////////////////////////////////////////////////////
 int ObGranulePump::try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
                                        const ObIArray<int64_t> &op_ids,
-                                       int64_t worker_id)
+                                       int64_t worker_id,
+                                       ObGranuleSplitterType splitter_type)
 {
   int ret = OB_SUCCESS;
   /*try get gi task*/
-  if (GIT_UNINITIALIZED == splitter_type_) {
+  if (GIT_UNINITIALIZED == splitter_type) {
     ret = OB_NOT_INIT;
     LOG_WARN("granule pump is not init", K(ret));
   } else if (worker_id < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("thread_id out of range", K(ret), K(worker_id));
   } else {
-    switch(splitter_type_) {
+    switch(splitter_type) {
     case GIT_FULL_PARTITION_WISE :
-      if (OB_FAIL(fetch_pw_granule_from_shared_pool(infos, op_ids))) {
+      if (OB_FAIL(fetch_pw_granule_from_shared_pool(infos, op_ids, splitter_type))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fetch granule from shared pool failed", K(ret));
         }
       }
       break;
     case GIT_PARTITION_WISE_WITH_AFFINITY:
-      if (OB_FAIL(fetch_pw_granule_by_worker_id(infos, op_ids, worker_id))) {
+      if (OB_FAIL(fetch_pw_granule_by_worker_id(infos, op_ids, worker_id, splitter_type))) {
         if (ret != OB_ITER_END) {
           LOG_WARN("fetch pw granule by worker id failed", K(ret), K(worker_id));
         }
@@ -294,7 +295,7 @@ int ObGranulePump::try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo> &infos,
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected type", K(ret), K(splitter_type_));
+      LOG_WARN("unexpected type", K(ret), K(splitter_type));
     }
   }
   return ret;
@@ -304,19 +305,20 @@ int ObGranulePump::fetch_granule_task(const ObGITaskSet *&res_task_set,
                                       int64_t &pos,
                                       int64_t worker_id,
                                       uint64_t tsc_op_id,
-                                      uint64_t fetched_task_cnt)
+                                      uint64_t fetched_task_cnt,
+                                       ObGranuleSplitterType splitter_type)
 {
   int ret = OB_SUCCESS;
   /*try get gi task*/
   LOG_DEBUG("fetch granule task from granule pump");
-  if (GIT_UNINITIALIZED == splitter_type_) {
+  if (GIT_UNINITIALIZED == splitter_type) {
     ret = OB_NOT_INIT;
     LOG_WARN("granule pump is not init", K(ret));
   } else if (worker_id < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("thread_id out of range", K(ret), K(worker_id));
   } else {
-    switch(splitter_type_) {
+    switch(splitter_type) {
     case GIT_AFFINITY:
     case GIT_ACCESS_ALL:
     case GIT_FULL_PARTITION_WISE:
@@ -336,7 +338,7 @@ int ObGranulePump::fetch_granule_task(const ObGITaskSet *&res_task_set,
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected type", K(ret), K(splitter_type_));
+      LOG_WARN("unexpected type", K(ret), K(splitter_type));
     }
   }
   return ret;
@@ -426,13 +428,14 @@ int ObGranulePump::fetch_granule_from_shared_pool(const ObGITaskSet *&res_task_s
 
 int ObGranulePump::fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &infos,
                                                  const ObIArray<int64_t> &op_ids,
-                                                 int64_t thread_id)
+                                                 int64_t thread_id,
+                                                 ObGranuleSplitterType splitter_type)
 {
   int ret = OB_SUCCESS;
   int64_t end_tsc_count = 0;
-  if (GIT_PARTITION_WISE_WITH_AFFINITY != splitter_type_) {
+  if (GIT_PARTITION_WISE_WITH_AFFINITY != splitter_type) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only partition wise join granule pump offer this service", K(splitter_type_), K(ret));
+    LOG_WARN("only partition wise join granule pump offer this service", K(splitter_type), K(ret));
   }
   ARRAY_FOREACH_X(op_ids, idx, cnt, OB_SUCC(ret)) {
     ObGITaskArray *taskset_array = nullptr;
@@ -470,7 +473,8 @@ int ObGranulePump::fetch_pw_granule_by_worker_id(ObIArray<ObGranuleTaskInfo> &in
 }
 
 int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo> &infos,
-                                                     const ObIArray<int64_t> &op_ids)
+                                                     const ObIArray<int64_t> &op_ids,
+                                                     ObGranuleSplitterType splitter_type)
 {
 
   int ret = OB_SUCCESS;
@@ -485,9 +489,9 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
       LOG_WARN("fetch task concurrently already failed", K(ret));
     } else if (no_more_task_from_shared_pool_) {
       ret = OB_ITER_END;
-    } else if (GIT_FULL_PARTITION_WISE != splitter_type_) {
+    } else if (GIT_FULL_PARTITION_WISE != splitter_type) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("only partition wise join granule pump offer this service", K(splitter_type_), K(ret));
+      LOG_WARN("only partition wise join granule pump offer this service", K(splitter_type), K(ret));
     }
     ARRAY_FOREACH_X(op_ids, idx, cnt, OB_SUCC(ret)) {
       ObGITaskArray *taskset_array = nullptr;
@@ -573,15 +577,21 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
   LOG_DEBUG("init granule", K(args));
   // GI目前不仅仅支持TSC的任务划分，还支持INSERT的任务划分，需要同时考虑INSERT与TSC
   int map_size = 0;
+  int64_t prev_cnt = gi_task_array_map_.count();
   if (OB_NOT_NULL(modify_op)) {
     map_size++;
   }
   map_size += scan_ops.count();
-  if (gi_task_array_map_.empty()) {
+
+  if (ObGranuleUtil::pwj_gi(args.gi_attri_flag_) &&
+      !ObGranuleUtil::affinitize(args.gi_attri_flag_) &&
+      gi_task_array_map_.empty()) {
     if (OB_FAIL(gi_task_array_map_.prepare_allocate(map_size))) {
       LOG_WARN("failed to prepare allocate", K(ret));
     }
   }
+  LOG_DEBUG("gi pump add_new_gi_task", K(map_size), K(this), K(scan_ops), K(gi_task_array_map_),
+           K(prev_cnt), K(gi_task_array_map_.count()), K(args.tablet_arrays_));
 
   ObGITaskSet::ObGIRandomType random_type = ObGITaskSet::GI_RANDOM_NONE;
   if (OB_SUCC(ret)) {
@@ -597,7 +607,6 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
 
   if (OB_FAIL(ret)) {
   } else if (ObGranuleUtil::access_all(args.gi_attri_flag_)) {
-    splitter_type_ = GIT_ACCESS_ALL;
     ObAccessAllGranuleSplitter splitter;
     if (OB_FAIL(splitter.split_granule(args,
                                        scan_ops,
@@ -607,7 +616,6 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
     }
   } else if (ObGranuleUtil::pwj_gi(args.gi_attri_flag_) &&
              ObGranuleUtil::affinitize(args.gi_attri_flag_)) {
-    splitter_type_ = GIT_PARTITION_WISE_WITH_AFFINITY;
     ObPWAffinitizeGranuleSplitter splitter;
     if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
       LOG_WARN("Failed to assign partitions info", K(ret));
@@ -618,7 +626,6 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
       LOG_WARN("failed to prepare affinity gi task", K(ret));
     }
   } else if (ObGranuleUtil::affinitize(args.gi_attri_flag_)) {
-    splitter_type_ = GIT_AFFINITY;
     ObNormalAffinitizeGranuleSplitter splitter;
     if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
       LOG_WARN("Failed to assign partitions info", K(ret));
@@ -629,7 +636,6 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
       LOG_WARN("failed to prepare affinity gi task", K(ret));
     }
   } else if (ObGranuleUtil::pwj_gi(args.gi_attri_flag_)) {
-    splitter_type_ = GIT_FULL_PARTITION_WISE;
     ObPartitionWiseGranuleSplitter splitter;
     if (OB_FAIL(splitter.split_granule(args,
                                        scan_ops,
@@ -639,7 +645,6 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
       LOG_WARN("failed to prepare pw gi task", K(ret));
     }
   } else {
-    splitter_type_ = GIT_RANDOM;
     ObRandomGranuleSplitter splitter;
     bool partition_granule = args.need_partition_granule();
     // TODO: randomize GI
@@ -1033,10 +1038,14 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                            bool partition_granule /* = true */)
 {
   int ret = OB_SUCCESS;
-  if (scan_ops.count() != gi_task_array_result.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()),
-        K(gi_task_array_result.count()));
+  int64_t task_idx = gi_task_array_result.count();
+  ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
+    GITaskArrayItem empty_task_array_item;
+    if (OB_FAIL(gi_task_array_result.push_back(empty_task_array_item))) {
+      LOG_WARN("push back new task array failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (ObGITaskSet::GI_RANDOM_NONE != random_type &&
              (ObGranuleUtil::asc_order(args.gi_attri_flag_) ||
              (ObGranuleUtil::desc_order(args.gi_attri_flag_)))) {
@@ -1054,7 +1063,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       uint64_t scan_key_id = tsc->get_scan_key_id();
       uint64_t op_id = tsc->get_id();
       ObGITaskSet total_task_set;
-      ObGITaskArray &taskset_array = gi_task_array_result.at(idx).taskset_array_;
+      ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
       partition_granule = is_virtual_table(scan_key_id) || partition_granule;
       if (OB_FAIL(split_gi_task(args,
                                 tsc,
@@ -1071,7 +1080,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       } else if (OB_FAIL(taskset_array.push_back(total_task_set))) {
         LOG_WARN("failed to push back task set", K(ret));
       } else {
-        gi_task_array_result.at(idx).tsc_op_id_ = op_id;
+        gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
       }
     }
   }
@@ -1100,10 +1109,12 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                               bool partition_granule /* = true */)
 {
   int ret = OB_SUCCESS;
-  if (scan_ops.count() != gi_task_array_result.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()),
-        K(gi_task_array_result.count()));
+  int64_t task_idx = gi_task_array_result.count();
+  ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
+    GITaskArrayItem empty_task_array_item;
+    if (OB_FAIL(gi_task_array_result.push_back(empty_task_array_item))) {
+      LOG_WARN("push back new task array failed", K(ret));
+    }
   }
   const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
@@ -1111,7 +1122,7 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     ObGITaskSet total_task_set;
     uint64_t op_id = OB_INVALID_ID;
     uint64_t scan_key_id = OB_INVALID_ID;
-    ObGITaskArray &taskset_array = gi_task_array_result.at(idx).taskset_array_;
+    ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
     if (OB_ISNULL(tsc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get a null tsc ptr", K(ret));
@@ -1131,10 +1142,11 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     } else if (OB_FAIL(split_tasks_access_all(total_task_set, args.parallelism_, taskset_array))) {
       LOG_WARN("failed to split ");
     } else {
-      gi_task_array_result.at(idx).tsc_op_id_ = op_id;
+      gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
     }
     LOG_TRACE("access all granule split a task_array",
-      K(op_id), K(tsc->get_loc_ref_table_id()), K(taskset_array), K(ret), K(scan_ops.count()));
+      K(op_id), K(tsc->get_loc_ref_table_id()), K(tsc->get_ref_table_id()),
+      K(taskset_array), K(ret), K(scan_ops.count()));
   }
   return ret;
 }
@@ -1247,10 +1259,12 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                                      bool partition_granule /* = true */)
 {
   int ret = OB_SUCCESS;
-  if (scan_ops.count() != gi_task_array_result.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()),
-        K(gi_task_array_result.count()));
+  int64_t task_idx = gi_task_array_result.count();
+  ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
+    GITaskArrayItem empty_task_array_item;
+    if (OB_FAIL(gi_task_array_result.push_back(empty_task_array_item))) {
+      LOG_WARN("push back new task array failed", K(ret));
+    }
   }
   const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
@@ -1258,13 +1272,13 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     ObGITaskSet total_task_set;
     uint64_t op_id = OB_INVALID_ID;
     uint64_t scan_key_id = OB_INVALID_ID;
-    ObGITaskArray &taskset_array = gi_task_array_result.at(idx).taskset_array_;
+    ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
     if (OB_ISNULL(tsc) || OB_ISNULL(args.ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get a null tsc ptr", K(ret));
     } else if (FALSE_IT(op_id = tsc->get_id())) {
     } else if (FALSE_IT(scan_key_id = tsc->get_scan_key_id())) {
-    } else if (OB_FAIL(gi_task_array_result.at(idx).taskset_array_.prepare_allocate(args.parallelism_))) {
+    } else if (OB_FAIL(gi_task_array_result.at(idx + task_idx).taskset_array_.prepare_allocate(args.parallelism_))) {
       LOG_WARN("failed to prepare allocate", K(ret));
     } else if (OB_FAIL(split_gi_task(args,
                                      tsc,
@@ -1279,11 +1293,13 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
         taskset_array))) {
       LOG_WARN("failed to split task affinity", K(ret));
     } else {
-      gi_task_array_result.at(idx).tsc_op_id_ = op_id;
+      gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
     }
     LOG_TRACE("normal affinitize granule split a task_array",
-      K(op_id), K(tsc->get_loc_ref_table_id()), K(taskset_array), K(ret), K(scan_ops.count()));
+      K(op_id), K(tsc->get_loc_ref_table_id()), K(taskset_array), K(ret), K(scan_ops.count()),
+      K(idx), K(task_idx), K(total_task_set));
   }
+  LOG_TRACE("normal affinitize gi split_granule", K(ret), K(tablet_arrays), K(random_type));
   return ret;
 }
 
@@ -1604,7 +1620,7 @@ int ObGranulePump::find_taskset_by_tsc_id(uint64_t op_id, ObGITaskArray *&taskse
   }
   if (OB_SUCC(ret) && OB_ISNULL(taskset_array)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("task don't exist", K(ret), K(op_id));
+    LOG_WARN("task don't exist", K(ret), K(op_id), K(gi_task_array_map_));
   }
   return ret;
 }
@@ -1626,22 +1642,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     LOG_WARN("ctx or partition service is null", K(ret));
   } else {
     ObGranulePumpArgs new_arg;
-    if (!(ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_PARTITION_WISE) &&
-        ObGranuleUtil::gi_has_attri(gi_attri_flag, GI_AFFINITIZE)) &&
-        pump_args_.count() > 0) {
-      if (pump_args_.count() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("args is unexpected", K(ret));
-      } else {
-        if (OB_FAIL(init_arg(pump_args_.at(0), ctx, scan_ops, tablet_arrays, partitions_info,
-          external_table_files, modify_op, parallelism, tablet_size, gi_attri_flag,
-          locations_order))) {
-          LOG_WARN("fail to init arg", K(ret));
-        } else if (OB_FAIL(add_new_gi_task(pump_args_.at(0)))) {
-          LOG_WARN("fail to add new gi task", K(ret));
-        }
-      }
-    } else if (OB_FAIL(pump_args_.push_back(new_arg))) {
+    if (OB_FAIL(pump_args_.push_back(new_arg))) {
       LOG_WARN("fail to push back new arg", K(ret));
     } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, scan_ops,
           tablet_arrays, partitions_info, external_table_files, modify_op, parallelism,
@@ -1696,6 +1697,7 @@ int ObGranulePump::init_arg(
   for (int i = 0; OB_SUCC(ret) && i < partitions_info.count(); ++i) {
     OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
   }
+  LOG_TRACE("gi pump init arg", K(scan_ops), K(tablet_arrays), K(arg.tablet_arrays_));
   OZ(arg.external_table_files_.assign(external_table_files));
   OZ(arg.locations_order_.assign(locations_order));
   if (OB_SUCC(ret)) {
