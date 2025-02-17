@@ -279,6 +279,12 @@ int ObHdfsCacheUtils::check_kerberized_(const char *krb5conf_path, const char *p
   return ret;
 }
 
+bool ObHdfsCacheUtils::check_file_exists_(const char *path)
+{
+  struct stat buf;
+  return 0 == ::stat(path, &buf) && S_ISREG(buf.st_mode);
+}
+
 int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
                                  const ObString &namenode,
                                  ObObjectStorageInfo *storage_info)
@@ -338,6 +344,9 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
         if (OB_ISNULL(krb5conf)) {
           ret = OB_HDFS_INVALID_ARGUMENT;
           OB_LOG(WARN, "failed to get krb5conf", K(ret), K(krb5conf_path));
+        } else if (OB_UNLIKELY(!check_file_exists_(krb5conf))) {
+          ret = OB_FILE_NOT_EXIST;
+          OB_LOG(WARN, "krb5conf path not exists", K(ret), K(krb5conf));
         } else {
           // Setup kerberos conf
           obHdfsBuilderSetKerb5Conf(hdfs_builder, krb5conf);
@@ -356,6 +365,9 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
           } else if (OB_ISNULL(keytab)) {
             ret = OB_HDFS_INVALID_ARGUMENT;
             OB_LOG(WARN, "failed to get keytab", K(ret), K(keytab_path));
+          } else if (OB_UNLIKELY(!check_file_exists_(keytab))) {
+            ret = OB_FILE_NOT_EXIST;
+            OB_LOG(WARN, "keytab path not exists", K(ret), K(keytab));
           } else {
             OB_LOG(TRACE, "get keytab and principal", K(ret), K(tmp_principal),
                    K(keytab));

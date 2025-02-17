@@ -87,7 +87,7 @@ private:
                                const char *configs, bool &is_kerberized,
                                bool &using_ticket_cache, bool &using_keytab,
                                bool &using_principal);
-
+  static bool check_file_exists_(const char *path);
   static int create_fs_(ObHdfsFsClient *hdfs_client,
                         const ObString &namenode,
                         ObObjectStorageInfo *storage_info);
