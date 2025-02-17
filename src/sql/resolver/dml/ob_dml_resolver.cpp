@@ -2672,15 +2672,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
   bool is_external = false;
-  ObExecContext *exec_ctx = NULL;
-  if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null session_info or exec context", K(ret), K(session_info_));
-  } else {
-    exec_ctx = session_info_->get_cur_exec_ctx();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(get_basic_stmt()) || OB_ISNULL(get_basic_stmt()->get_query_ctx())) {
+  if (OB_ISNULL(get_basic_stmt()) || OB_ISNULL(get_basic_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
   } else if (q_name.is_sys_func()) {
@@ -2857,9 +2849,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   //因为obj access的参数拉平处理，a(b,c)在columns会被存储为b,c,a，所以解释完一个ObQualifiedName，
   //都要把他前面的ObQualifiedName拿过来尝试替换一遍参数
   for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
-    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
-      LOG_WARN("check status failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
+    if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
       LOG_WARN("replace column ref expr failed", K(ret));
     }
   }
@@ -2877,11 +2867,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-    if ((0 == i % 1000) && NULL != exec_ctx && OB_FAIL(exec_ctx->check_status())) {
-      LOG_WARN("check status failed", K(ret));
-    } else {
-      OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
-    }
+    OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
   }
 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {

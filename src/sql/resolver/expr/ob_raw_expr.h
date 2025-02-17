@@ -1894,6 +1894,7 @@ public:
                        K_(is_deterministic),
                        K_(partition_id_calc_type),
                        K_(may_add_interval_part));
+  int fast_check_status(uint64_t n = 0xFFFF) const;
 
 private:
   const ObRawExpr *get_same_identify(const ObRawExpr *e,
@@ -4655,12 +4656,14 @@ public:
     : allocator_(alloc),
       expr_store_(alloc),
       is_called_sql_(true),
-      proxy_(nullptr)
+      proxy_(nullptr),
+      worker_check_status_times_(0)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
                                                      expr_store_(allocator_),
-                                                     proxy_(&expr_factory)
+                                                     proxy_(&expr_factory),
+                                                     worker_check_status_times_(0)
   {
   }
   ~ObRawExprFactory() {
@@ -4745,6 +4748,7 @@ public:
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> &get_expr_store() { return expr_store_; }
   void set_is_called_sql(const bool is_called_sql) { is_called_sql_ = is_called_sql; }
+  inline uint64_t inc_worker_check_status_times() { return ++worker_check_status_times_; }
   TO_STRING_KV("", "");
 private:
   common::ObIAllocator &allocator_;
@@ -4752,6 +4756,7 @@ private:
   bool is_called_sql_;
   //if not null, raw_expr is create by pl resolver
   ObRawExprFactory *proxy_;
+  mutable uint64_t worker_check_status_times_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };

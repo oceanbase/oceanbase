@@ -555,10 +555,10 @@ struct DistinctObjMeta
 
   int remove_shared_expr(ObDMLStmt *stmt,
                          JoinedTable *joined_table,
-                         hash::ObHashSet<uint64_t> &expr_set,
+                         hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                          bool is_nullside);
 
-  int do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr_set,
+  int do_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                             ObIArray<ObRawExpr *> &padnull_exprs,
                             bool is_nullside,
                             ObRawExpr *&expr,

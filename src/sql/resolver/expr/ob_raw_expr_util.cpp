@@ -3216,6 +3216,8 @@ int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr, ObRawExpr *from,
   if (OB_ISNULL(raw_expr) || OB_ISNULL(from) || OB_ISNULL(to)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(raw_expr), K(from), K(to));
+  } else if (OB_FAIL(raw_expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (raw_expr == to) {
     // do nothing
     // in case:    parent(child) = to (from)
@@ -3257,6 +3259,8 @@ int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr,
   if (OB_ISNULL(raw_expr) || OB_UNLIKELY(from.count() != to.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(raw_expr), K(from), K(to));
+  } else if (OB_FAIL(raw_expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (from.count() == 0) {
     //do nothing
   } else if (NULL != except_exprs && is_contain(*except_exprs, raw_expr)) {

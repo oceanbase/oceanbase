@@ -468,7 +468,9 @@ int ObRawExpr::set_expr_name(const common::ObString &expr_name)
 int ObRawExpr::preorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_visit(visitor))) {
+  if (OB_FAIL(fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
+  } else if (OB_FAIL(do_visit(visitor))) {
     LOG_WARN("visit failed", K(ret),
         "type", get_expr_type(), "name", get_type_name(get_expr_type()));
   } else {
@@ -491,7 +493,9 @@ int ObRawExpr::preorder_accept(ObRawExprVisitor &visitor)
 int ObRawExpr::postorder_accept(ObRawExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (!skip_visit_child() && !visitor.skip_child(*this)) {
+  if (OB_FAIL(fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
+  } else if (!skip_visit_child() && !visitor.skip_child(*this)) {
     const int64_t cnt = get_param_count();
     for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
       ObRawExpr *e = get_param_expr(i);
@@ -884,6 +888,16 @@ bool ObRawExpr::is_specified_pseudocolumn_expr() const
   return false;
 }
 
+
+int ObRawExpr::fast_check_status(uint64_t n) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == expr_factory_)) {
+  } else if (OB_UNLIKELY((expr_factory_->inc_worker_check_status_times() & n) == n)) {
+    ret = THIS_WORKER.check_status();
+  }
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////////
 int ObConstRawExpr::assign(const ObRawExpr &other)
