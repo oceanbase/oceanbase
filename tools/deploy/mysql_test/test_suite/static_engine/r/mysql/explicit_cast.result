@@ -378,5 +378,168 @@ select c1, cast(c1 as binary(30)), hex(cast(c1 as binary(30))) from t1;
 +----------------------+--------------------------------+--------------------------------------------------------------+
 | 18446744073709551615 | 18446744073709551615           | 313834343637343430373337303935353136313500000000000000000000 |
 +----------------------+--------------------------------+--------------------------------------------------------------+
-
 drop table t1;
+
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t1_signed;
+drop table if exists t1_unsigned;
+drop table if exists t2_signed;
+drop table if exists t2_unsigned;
+
+drop view if exists v1_signed;
+drop view if exists v1_unsigned;
+drop view if exists v2_signed;
+drop view if exists v2_unsigned;
+create table t1 (c1 tinyint, c2 smallint, c3 mediumint, c4 int, c5 bigint);
+create table t2 (c1 tinyint unsigned, c2 smallint unsigned, c3 mediumint unsigned, c4 int unsigned, c5 bigint unsigned);
+explain select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t1.c1, BIGINT(0, 0))], [cast(t1.c2, BIGINT(0, 0))], [cast(t1.c3, BIGINT(0, 0))], [cast(t1.c4, BIGINT(0, 0))], [cast(t1.c5, BIGINT(0, 
+      0))]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+create table t1_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+desc t1_signed;
++--------------------+--------------+------+-----+---------+-------+
+| Field              | Type         | Null | Key | Default | Extra |
++--------------------+--------------+------+-----+---------+-------+
+| cast(c1 as signed) | tinyint(4)   | YES  |     | NULL    |       |
+| cast(c2 as signed) | smallint(6)  | YES  |     | NULL    |       |
+| cast(c3 as signed) | mediumint(9) | YES  |     | NULL    |       |
+| cast(c4 as signed) | int(11)      | YES  |     | NULL    |       |
+| cast(c5 as signed) | bigint(20)   | YES  |     | NULL    |       |
++--------------------+--------------+------+-----+---------+-------+
+explain select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t1.c1, BIGINT UNSIGNED(0, 0))], [cast(t1.c2, BIGINT UNSIGNED(0, 0))], [cast(t1.c3, BIGINT UNSIGNED(0, 0))], [cast(t1.c4, BIGINT UNSIGNED(0,
+       0))], [cast(t1.c5, BIGINT UNSIGNED(0, 0))]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+create table t1_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+desc t1_unsigned;
++----------------------+-----------------------+------+-----+---------+-------+
+| Field                | Type                  | Null | Key | Default | Extra |
++----------------------+-----------------------+------+-----+---------+-------+
+| cast(c1 as unsigned) | tinyint(4) unsigned   | YES  |     | NULL    |       |
+| cast(c2 as unsigned) | smallint(6) unsigned  | YES  |     | NULL    |       |
+| cast(c3 as unsigned) | mediumint(9) unsigned | YES  |     | NULL    |       |
+| cast(c4 as unsigned) | int(11) unsigned      | YES  |     | NULL    |       |
+| cast(c5 as unsigned) | bigint(20) unsigned   | YES  |     | NULL    |       |
++----------------------+-----------------------+------+-----+---------+-------+
+
+explain select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t2  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t2.c1, BIGINT(0, 0))], [cast(t2.c2, BIGINT(0, 0))], [cast(t2.c3, BIGINT(0, 0))], [cast(t2.c4, BIGINT(0, 0))], [cast(t2.c5, BIGINT(0, 
+      0))]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+create table t2_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+desc t2_signed;
++--------------------+--------------+------+-----+---------+-------+
+| Field              | Type         | Null | Key | Default | Extra |
++--------------------+--------------+------+-----+---------+-------+
+| cast(c1 as signed) | tinyint(3)   | YES  |     | NULL    |       |
+| cast(c2 as signed) | smallint(5)  | YES  |     | NULL    |       |
+| cast(c3 as signed) | mediumint(8) | YES  |     | NULL    |       |
+| cast(c4 as signed) | int(10)      | YES  |     | NULL    |       |
+| cast(c5 as signed) | bigint(20)   | YES  |     | NULL    |       |
++--------------------+--------------+------+-----+---------+-------+
+explain select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t2  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t2.c1, BIGINT UNSIGNED(0, 0))], [cast(t2.c2, BIGINT UNSIGNED(0, 0))], [cast(t2.c3, BIGINT UNSIGNED(0, 0))], [cast(t2.c4, BIGINT UNSIGNED(0,
+       0))], [cast(t2.c5, BIGINT UNSIGNED(0, 0))]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+create table t2_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+desc t2_unsigned;
++----------------------+-----------------------+------+-----+---------+-------+
+| Field                | Type                  | Null | Key | Default | Extra |
++----------------------+-----------------------+------+-----+---------+-------+
+| cast(c1 as unsigned) | tinyint(3) unsigned   | YES  |     | NULL    |       |
+| cast(c2 as unsigned) | smallint(5) unsigned  | YES  |     | NULL    |       |
+| cast(c3 as unsigned) | mediumint(8) unsigned | YES  |     | NULL    |       |
+| cast(c4 as unsigned) | int(10) unsigned      | YES  |     | NULL    |       |
+| cast(c5 as unsigned) | bigint(20) unsigned   | YES  |     | NULL    |       |
++----------------------+-----------------------+------+-----+---------+-------+
+
+create view v1_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t1;
+desc v1_signed;
++--------------------+------------+------+-----+---------+-------+
+| Field              | Type       | Null | Key | Default | Extra |
++--------------------+------------+------+-----+---------+-------+
+| cast(c1 as signed) | bigint(4)  | YES  |     | NULL    |       |
+| cast(c2 as signed) | bigint(6)  | YES  |     | NULL    |       |
+| cast(c3 as signed) | bigint(9)  | YES  |     | NULL    |       |
+| cast(c4 as signed) | bigint(11) | YES  |     | NULL    |       |
+| cast(c5 as signed) | bigint(20) | YES  |     | NULL    |       |
++--------------------+------------+------+-----+---------+-------+
+create view v1_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t1;
+desc v1_unsigned;
++----------------------+---------------------+------+-----+---------+-------+
+| Field                | Type                | Null | Key | Default | Extra |
++----------------------+---------------------+------+-----+---------+-------+
+| cast(c1 as unsigned) | bigint(4) unsigned  | YES  |     | NULL    |       |
+| cast(c2 as unsigned) | bigint(6) unsigned  | YES  |     | NULL    |       |
+| cast(c3 as unsigned) | bigint(9) unsigned  | YES  |     | NULL    |       |
+| cast(c4 as unsigned) | bigint(11) unsigned | YES  |     | NULL    |       |
+| cast(c5 as unsigned) | bigint(20) unsigned | YES  |     | NULL    |       |
++----------------------+---------------------+------+-----+---------+-------+
+
+create view v2_signed as select cast(c1 as signed), cast(c2 as signed), cast(c3 as signed), cast(c4 as signed), cast(c5 as signed) from t2;
+desc v2_signed;
++--------------------+------------+------+-----+---------+-------+
+| Field              | Type       | Null | Key | Default | Extra |
++--------------------+------------+------+-----+---------+-------+
+| cast(c1 as signed) | bigint(3)  | YES  |     | NULL    |       |
+| cast(c2 as signed) | bigint(5)  | YES  |     | NULL    |       |
+| cast(c3 as signed) | bigint(8)  | YES  |     | NULL    |       |
+| cast(c4 as signed) | bigint(10) | YES  |     | NULL    |       |
+| cast(c5 as signed) | bigint(20) | YES  |     | NULL    |       |
++--------------------+------------+------+-----+---------+-------+
+create view v2_unsigned as select cast(c1 as unsigned), cast(c2 as unsigned), cast(c3 as unsigned), cast(c4 as unsigned), cast(c5 as unsigned) from t2;
+desc v2_unsigned;
++----------------------+---------------------+------+-----+---------+-------+
+| Field                | Type                | Null | Key | Default | Extra |
++----------------------+---------------------+------+-----+---------+-------+
+| cast(c1 as unsigned) | bigint(3) unsigned  | YES  |     | NULL    |       |
+| cast(c2 as unsigned) | bigint(5) unsigned  | YES  |     | NULL    |       |
+| cast(c3 as unsigned) | bigint(8) unsigned  | YES  |     | NULL    |       |
+| cast(c4 as unsigned) | bigint(10) unsigned | YES  |     | NULL    |       |
+| cast(c5 as unsigned) | bigint(20) unsigned | YES  |     | NULL    |       |
++----------------------+---------------------+------+-----+---------+-------+
+
+drop table t1, t2, t1_signed, t1_unsigned, t2_signed, t2_unsigned;
+drop view v1_signed, v1_unsigned, v2_signed, v2_unsigned;

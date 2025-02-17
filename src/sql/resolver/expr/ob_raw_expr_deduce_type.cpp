@@ -2273,12 +2273,21 @@ int ObRawExprDeduceType::adjust_cast_as_signed_unsigned(ObSysFunRawExpr &expr)
   int ret = OB_SUCCESS;
   ObRawExpr *param_expr1 = NULL;
   ObRawExpr *param_expr2 = NULL;
+  const bool is_ddl_stmt =
+    (my_session_ != NULL && ObStmt::is_ddl_stmt(my_session_->get_stmt_type(), false));
   if (OB_UNLIKELY(T_FUN_SYS_CAST != expr.get_expr_type())
       || OB_UNLIKELY(2 != expr.get_param_count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected cast expr", K(ret));
   } else if (expr.has_flag(IS_INNER_ADDED_EXPR)) {
     /*do nothing*/
+  } else if (lib::is_mysql_mode() && !is_ddl_stmt) {
+    // For non-DDL scenarios in mysql, such as select or DML statement, there is no need to adjust
+    // the signed/unsigned type. Otherwise, such as CTAS statement, need to make the type
+    // adjustments. For example:
+    // select cast(tinyint_column as signed) from tbl;  -- cast result type is bigint
+    // create table t1 as select cast(tinyint_column as signed) col from tbl;
+    // desc t1;  -- the col type is `tinyint`, and mysql is `int`.
   } else if (OB_ISNULL(param_expr1 = expr.get_param_expr(0)) ||
              OB_ISNULL(param_expr2 = expr.get_param_expr(1)) ||
              OB_UNLIKELY(!param_expr2->is_const_raw_expr())) {
