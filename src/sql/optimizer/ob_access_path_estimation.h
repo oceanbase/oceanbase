@@ -363,6 +363,10 @@ private:
                             common::ObIArray<AccessPath *> &normal_paths,
                             common::ObIArray<AccessPath *> &geo_paths,
                             common::ObIArray<IndexMergePath *> &index_merge_paths);
+
+  static int get_index_dive_limit(ObOptimizerContext &ctx,
+                                  int64_t *range_index_dive_limit,
+                                  int64_t *partition_index_dive_limit);
 };
 
 class RangePartitionHelper
