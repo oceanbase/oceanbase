@@ -67,6 +67,8 @@ enum class DetectCallBackType
   TEMP_TABLE_DETECT_CB = 4,
   P2P_DATAHUB_DETECT_CB = 5,
   DAS_REMOTE_TASK_DETECT_CB = 6,
+  REMOTE_SQL_EXECUTION_DETECT_CB = 7,
+  PX_BATCH_RESCAN_DETECT_CB = 8,
 };
 
 // detectable id with activate time, used for delay detect
