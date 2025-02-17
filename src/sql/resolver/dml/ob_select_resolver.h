@@ -158,12 +158,21 @@ protected:
                                 bool &has_explicit_dir,
                                 bool is_groupby_expr);
   int check_rollup_clause(const ParseNode *node, bool &has_rollup);
-
+  int check_oracle_compat_groupby(const ParseNode *node, bool &is_oracle_compat_groupby);
+  int resolve_group_by_element(const ParseNode *node,
+                               common::ObIArray<ObRawExpr*> &groupby_exprs,
+                               common::ObIArray<ObRawExpr*> &rollup_exprs,
+                               common::ObIArray<OrderItem> &order_items,
+                               bool &has_explicit_dir);
   int resolve_group_by_list(const ParseNode *node,
                             common::ObIArray<ObRawExpr*> &groupby_exprs,
                             common::ObIArray<ObRawExpr*> &rollup_exprs,
                             common::ObIArray<OrderItem> &order_items,
                             bool &has_explicit_dir);
+  int resolve_groupby_node_for_rollup_cube(const ParseNode *group_key_node,
+                                           ObIArray<ObRawExpr*> &dummy_groupby_exprs,
+                                           ObIArray<OrderItem> &dummy_order_items,
+                                           ObIArray<ObGroupbyExpr> &expr_list);
   int resolve_rollup_list(const ParseNode *node, ObRollupItem &rollup_item);
   int resolve_cube_list(const ParseNode *node, ObCubeItem &cube_item);
   int resolve_grouping_sets_list(const ParseNode *node,
@@ -401,6 +410,7 @@ protected:
   bool is_top_stmt_;
   //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
   bool has_resolved_field_list_;
+  bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);

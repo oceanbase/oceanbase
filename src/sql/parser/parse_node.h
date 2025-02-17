@@ -327,6 +327,7 @@ typedef struct
     uint32_t is_external_table_                : 1;
     uint32_t is_returning_                     : 1;
     uint32_t is_into_cluster_                  : 1;
+    uint32_t is_oracle_compat_groupby_         : 1; // true if has rollup/cube/grouping sets in mysql mode
   };
 
   ParseNode *result_tree_;

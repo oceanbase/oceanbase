@@ -707,6 +707,8 @@ public:
   inline void set_implicit_distinct(bool v) { is_implicit_distinct_ = v; }
   inline void reset_implicit_distinct() { is_implicit_distinct_ = false; }
   int is_query_deterministic(bool &is_deterministic) const;
+  inline bool is_oracle_compat_groupby() const {return is_oracle_compat_groupby_; }
+  inline void set_is_oracle_compat_groupby(bool v) { is_oracle_compat_groupby_ = v; }
 
 private:
   SetOperator set_op_;
@@ -774,6 +776,7 @@ private:
   // denote if the duplicate value of this stmt will not change the query result
   // optimizer can assign or remove DISTINCT for this stmt
   bool is_implicit_distinct_;
+  bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
 };
 }
 }

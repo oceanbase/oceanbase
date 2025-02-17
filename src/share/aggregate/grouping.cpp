@@ -40,8 +40,8 @@ int init_grouping_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
     }
   } else if (agg_func == T_FUN_GROUPING_ID) {
     if (lib::is_mysql_mode()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected function", K(ret));
+      ret = init_agg_func<GroupingAggregate<T_FUN_GROUPING_ID, VEC_TC_INTEGER>>(
+        agg_ctx, agg_col_id, has_distinct, allocator, agg);
     } else {
       ret = init_agg_func<GroupingAggregate<T_FUN_GROUPING_ID, VEC_TC_NUMBER>>(
         agg_ctx, agg_col_id, has_distinct, allocator, agg);
@@ -111,6 +111,38 @@ int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t seq,
       grouping_id->desc_ = tmp_nmb.d_;
       MEMCPY(grouping_id->digits_, tmp_nmb.get_digits(), tmp_nmb.d_.len_ * sizeof(uint32_t));
     }
+  }
+  return ret;
+}
+
+int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t seq,
+                    int64_t *grouping_id)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObExpr *> &param_exprs = aggr_info.param_exprs_;
+  int64_t res = 0;
+  int64_t base = 1;
+  if (OB_UNLIKELY(param_exprs.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "unexpected empty param exprs", K(ret));
+  } else if (OB_ISNULL(grouping_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "unexpected null", K(ret));
+  }
+  for (int i = param_exprs.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    ObExpr *grouping_expr = param_exprs.at(i);
+    if (OB_ISNULL(grouping_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid null expr", K(ret));
+    } else if (is_rollup_expr(aggr_info, grouping_expr, seq)) {
+      res += base;
+    }
+    if (OB_SUCC(ret)) {
+      base = base << 1;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    *grouping_id = res;
   }
   return ret;
 }

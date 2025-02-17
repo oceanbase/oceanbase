@@ -297,7 +297,7 @@ END_P SET_VAR DELIMITER
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
-        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
+        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
         HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOUR HIDDEN HYBRID HYBRID_HIST
@@ -351,7 +351,7 @@ END_P SET_VAR DELIMITER
         RANK READ_ONLY RECOVERY REJECT ROLE
 
         SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEQUENCES SERIAL SERIALIZABLE SERVER
-        SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
+        SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SETS SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
         SET_TP SHARE SHARED_STORAGE_DEST SHARED_STORAGE_INFO SHUTDOWN SIGNED SIMPLE SINGLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
@@ -427,7 +427,7 @@ END_P SET_VAR DELIMITER
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause order_by_opt_null
 %type <node> opt_limit_clause limit_expr opt_lock_type opt_for_update opt_for_update_wait opt_lock_in_share_mode
-%type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id sort_list_opt_null sort_key_opt_null opt_asc_desc_null
+%type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id sort_list_opt_null sort_key_opt_null opt_asc_desc_null grouping_sets_clause grouping_sets_list grouping_sets rollup_clause cube_clause gs_group_by_expr gs_group_by_expr_list
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
@@ -2756,6 +2756,11 @@ MOD '(' expr ',' expr ')'
 | GROUPING '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUPING, 1, $3);
+}
+| GROUPING_ID '(' expr_list ')'
+{
+  ParseNode *expr_list = $3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUPING_ID, 1, expr_list);
 }
 | GROUP_CONCAT '(' opt_distinct expr_list opt_order_by opt_separator ')'
 {
@@ -13000,6 +13005,20 @@ sort_list_for_group_by opt_rollup
 {
   ParseNode *group_exprs = NULL;
   merge_nodes(group_exprs, result, T_SORT_LIST, $1);
+  if ($2 != NULL) {
+    for (int i = 0; i < group_exprs->num_child_; ++i) {
+      if (T_GROUPING_SETS_LIST == group_exprs->children_[i]->type_) {
+        yyerror(&@2, result, "WITH ROLLUP cannot be used along with GROUPING SETS");
+        YYERROR;
+      } else if (T_CUBE_LIST == group_exprs->children_[i]->type_) {
+        yyerror(&@2, result, "WITH ROLLUP cannot be used along with CUBE");
+        YYERROR;
+      } else if (T_ROLLUP_LIST == group_exprs->children_[i]->type_) {
+        yyerror(&@2, result, "WITH ROLLUP cannot be used along with ROLLUP");
+        YYERROR;
+      }
+    }
+  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_ROLLUP_CLAUSE, 2, $2, group_exprs);
 }
 ;
@@ -13014,6 +13033,18 @@ sort_key_for_group_by
 sort_key_for_group_by:
 expr opt_asc_desc_for_group_by
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_KEY, 2, $1, $2); }
+| rollup_clause
+{ $$ = $1; /* T_ROLLUP_LIST */ }
+| cube_clause
+{ $$ = $1; /* T_CUBE_LIST */ }
+| grouping_sets_clause
+{ $$ = $1; /* T_GROUPING_SET_LIST */ }
+| '(' ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NULL);
+  $$->is_hidden_const_ = 1;
+  $$->sql_str_off_ = @1.first_column;
+}
 ;
 
 opt_asc_desc_for_group_by:
@@ -13029,9 +13060,69 @@ opt_rollup:
 /* EMPTY */ %prec LOWER_COMMA
 { $$ = NULL;}
 | WITH ROLLUP
-{ malloc_terminal_node($$, result->malloc_pool_, T_ROLLUP); }
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ROLLUP);
+}
 ;
 
+grouping_sets_clause:
+GROUPING SETS '(' grouping_sets_list ')'
+{ merge_nodes($$, result, T_GROUPING_SETS_LIST, $4); }
+;
+
+grouping_sets_list:
+grouping_sets
+{
+  $$ = $1;
+}
+| grouping_sets_list ',' grouping_sets
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3); }
+;
+
+grouping_sets:
+gs_group_by_expr
+{ $$ = $1 }
+| rollup_clause
+{ $$ = $1 }
+| cube_clause
+{ $$ = $1 }
+;
+
+cube_clause:
+CUBE '(' gs_group_by_expr_list ')'
+{
+  merge_nodes($$, result, T_CUBE_LIST, $3);
+}
+;
+
+rollup_clause:
+ROLLUP '(' gs_group_by_expr_list ')'
+{
+  merge_nodes($$, result, T_ROLLUP_LIST, $3);
+}
+;
+
+// only for rollup/cube/grouping sets. "gs" means grouping sets
+gs_group_by_expr_list:
+gs_group_by_expr
+{ $$ = $1; }
+| gs_group_by_expr_list ',' gs_group_by_expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+// only for rollup/cube/grouping sets. "gs" means grouping sets
+gs_group_by_expr:
+bit_expr
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_GROUPBY_KEY, 1, $1); }
+| '(' ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NULL);
+  $$->is_hidden_const_ = 1;
+  $$->sql_str_off_ = @1.first_column;
+}
+;
 
 opt_order_by:
 order_by	              { $$ = $1;}
@@ -24994,6 +25085,7 @@ ACCESS_INFO
 |       GLOBAL_NAME
 |       GRANTS
 |       GROUPING
+|       GROUPING_ID
 |       GROUP_CONCAT
 |       GTS
 |       HANDLER
@@ -25343,6 +25435,7 @@ ACCESS_INFO
 |       SERVICE
 |       SESSION %prec LOWER_PARENS
 |       SESSION_USER
+|       SETS
 |       SET_MASTER_CLUSTER
 |       SET_SLAVE_CLUSTER
 |       SET_TP

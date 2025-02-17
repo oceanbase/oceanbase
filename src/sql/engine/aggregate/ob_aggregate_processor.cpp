@@ -36,6 +36,7 @@ namespace aggregate
 {
 extern bool is_grouping(const ObAggrInfo &aggr_info, const int64_t val);
 extern int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, number::ObCompactNumber *grouping_id);
+extern int get_grouping_id(const ObAggrInfo &aggr_info, const int64_t val, int64_t *grouping_id);
 } // end aggregate
 } // end share
 using namespace common;
@@ -3478,15 +3479,24 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         if (aggr_info.hash_rollup_info_ != nullptr) {
           ObDatum grouping_val =
             aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
-          char num_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
-          ObDatum tmp_datum;
-          if (OB_FAIL(share::aggregate::get_grouping_id(
-                aggr_info, grouping_val.get_int(), reinterpret_cast<number::ObCompactNumber *>(num_buf)))) {
-            LOG_WARN("get grouping id failed", K(ret));
+          if (lib::is_oracle_mode()) {
+            char num_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
+            ObDatum tmp_datum;
+            if (OB_FAIL(share::aggregate::get_grouping_id(
+                  aggr_info, grouping_val.get_int(), reinterpret_cast<number::ObCompactNumber *>(num_buf)))) {
+              LOG_WARN("get grouping id failed", K(ret));
+            } else {
+              tmp_datum.ptr_ = num_buf;
+              tmp_datum.len_ = (reinterpret_cast<number::ObCompactNumber *>(num_buf)->desc_.len_ + 1)* sizeof(uint32_t);
+              ret = clone_aggr_cell(aggr_cell, tmp_datum, true);
+            }
           } else {
-            tmp_datum.ptr_ = num_buf;
-            tmp_datum.len_ = (reinterpret_cast<number::ObCompactNumber *>(num_buf)->desc_.len_ + 1)* sizeof(uint32_t);
-            ret = clone_aggr_cell(aggr_cell, tmp_datum, true);
+            int64_t res_int = -1;
+            if (OB_FAIL(share::aggregate::get_grouping_id(aggr_info, grouping_val.get_int(), &res_int))) {
+              LOG_WARN("get grouping id failed", K(ret));
+            } else {
+              aggr_cell.set_tiny_num_int(res_int);
+            }
           }
         } else {
           aggr_cell.set_tiny_num_uint(0);
@@ -4400,8 +4410,7 @@ int ObAggregateProcessor::collect_aggr_result(
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
           result.set_null();
         } else if (lib::is_mysql_mode()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected function", K(ret));
+          result.set_int(aggr_cell.get_tiny_num_int());
         } else {
           result.set_number(aggr_cell.get_iter_result().get_number());
         }
@@ -6607,24 +6616,40 @@ int ObAggregateProcessor::grouping_id_calc_batch(const ObAggrInfo &aggr_info, Ag
   int ret = OB_SUCCESS;
   ObExpr *rollup_grouping_id = aggr_info.hash_rollup_info_->rollup_grouping_id_;
   ObDatumVector src = rollup_grouping_id->locate_expr_datumvector(eval_ctx_);
-  char nmb_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
-  number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(nmb_buf);
-  ObDatum tmp_datum;
-  for (decltype(selector.begin()) it = selector.begin();
-       OB_SUCC(ret) && !aggr_cell.get_is_evaluated() && it < selector.end();
-       selector.next(it)) {
-    uint16_t idx = selector.get_batch_index(it);
-    if (OB_FAIL(share::aggregate::get_grouping_id(aggr_info, src.at(idx)->get_int(), res_cnum))) {
-      LOG_WARN("get grouping id failed", K(ret));
-    } else {
-      tmp_datum.set_number_shallow(*res_cnum);
-      if (OB_FAIL(clone_aggr_cell(aggr_cell, tmp_datum, true))) {
-        LOG_WARN("clone aggr cell failed", K(ret));
+  if (lib::is_oracle_mode()) {
+    char nmb_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
+    number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(nmb_buf);
+    ObDatum tmp_datum;
+    for (decltype(selector.begin()) it = selector.begin();
+        OB_SUCC(ret) && !aggr_cell.get_is_evaluated() && it < selector.end();
+        selector.next(it)) {
+      uint16_t idx = selector.get_batch_index(it);
+      if (OB_FAIL(share::aggregate::get_grouping_id(aggr_info, src.at(idx)->get_int(), res_cnum))) {
+        LOG_WARN("get grouping id failed", K(ret));
       } else {
+        tmp_datum.set_number_shallow(*res_cnum);
+        if (OB_FAIL(clone_aggr_cell(aggr_cell, tmp_datum, true))) {
+          LOG_WARN("clone aggr cell failed", K(ret));
+        } else {
+          aggr_cell.set_is_evaluated(true);
+        }
+      }
+    }
+  } else {
+    int64_t res_int = -1;
+    for (decltype(selector.begin()) it = selector.begin();
+        OB_SUCC(ret) && !aggr_cell.get_is_evaluated() && it < selector.end();
+        selector.next(it)) {
+      uint16_t idx = selector.get_batch_index(it);
+      if (OB_FAIL(share::aggregate::get_grouping_id(aggr_info, src.at(idx)->get_int(), &res_int))) {
+        LOG_WARN("get grouping id failed", K(ret));
+      } else {
+        aggr_cell.set_tiny_num_int(res_int);
         aggr_cell.set_is_evaluated(true);
       }
     }
   }
+
   return ret;
 }
 
