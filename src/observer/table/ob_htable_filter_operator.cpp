@@ -1198,6 +1198,7 @@ ObHTableReversedRowIterator::ObHTableReversedRowIterator(const ObTableQuery &que
     : ObHTableRowIterator(query),
       iter_allocator_("HtbRevIterAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       reversed_range_alloc_("HtbRevRanAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      forward_child_op_(nullptr),
       spec_(nullptr),
       forward_tb_ctx_(iter_allocator_),
       expr_frame_info_(iter_allocator_)
