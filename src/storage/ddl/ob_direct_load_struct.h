@@ -349,6 +349,7 @@ public:
       const bool is_slice_empty,
       const bool is_index_table,
       const int64_t rowkey_cnt,
+      const int64_t lob_inrow_threshold,
       const int64_t snapshot_version,
       const ObTabletSliceParam &ddl_slice_param,
       const bool need_idempotent_autoinc_val,
@@ -358,7 +359,7 @@ public:
   virtual ~ObDDLSliceRowIterator();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
   TO_STRING_KV(K_(tablet_id), K_(current_row), K_(is_slice_empty), K_(rowkey_col_cnt), K_(snapshot_version),
-    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table), K_(index_has_lob));
+    K_(is_next_row_cached), K_(ddl_slice_param), K_(is_index_table), K_(index_has_lob), K_(lob_inrow_threshold));
 private:
   sql::ObPxMultiPartSSTableInsertOp *op_;
   common::ObTabletID tablet_id_; // data_tablet_id rather than lob_meta_tablet_id.
@@ -370,6 +371,7 @@ private:
   int64_t table_level_slice_idx_;
   int64_t cur_row_idx_;
   int64_t autoinc_range_interval_;
+  int64_t lob_inrow_threshold_;
   bool is_slice_empty_; // without data.
   bool is_next_row_cached_;
   bool need_idempotent_autoinc_val_;

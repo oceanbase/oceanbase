@@ -831,7 +831,7 @@ int ObLobManager::check_need_out_row(
       }
     }
   }
-  LOG_DEBUG("wenye check lob outrow", K(need_out_row), K(add_len), K(param));
+  LOG_DEBUG("check lob outrow", K(need_out_row), K(add_len), K(param));
   // in_row : 0 | need_out_row : 0  --> invalid
   // in_row : 0 | need_out_row : 1  --> do nothing, keep out_row
   // in_row : 1 | need_out_row : 0  --> do nothing, keep in_row
@@ -839,9 +839,9 @@ int ObLobManager::check_need_out_row(
   if (need_out_row && param.is_index_table_) {
     // The inrow datum may read from a table with different lob_inrow_threshold, which need out row in current table.
     // If the column is outrow in main table, the index table can not be written data.
-    // TODO (wenye): need a different error code
-    ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow lob in index table");
+    LOG_WARN("outrow lob in index table is not supported", K(ret));
   } else if (!param.lob_common_->in_row_ && !need_out_row) {
     if (!param.lob_common_->is_init_) {
       ret = OB_ERR_UNEXPECTED;

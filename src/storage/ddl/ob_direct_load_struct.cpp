@@ -52,6 +52,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     const bool is_slice_empty,
     const bool is_index_table,
     const int64_t rowkey_cnt,
+    const int64_t lob_inrow_threshold,
     const int64_t snapshot_version,
     const ObTabletSliceParam &ddl_slice_param,
     const bool need_idempotent_autoinc_val,
@@ -68,6 +69,7 @@ ObDDLSliceRowIterator::ObDDLSliceRowIterator(
     table_level_slice_idx_(table_level_slice_idx),
     cur_row_idx_(0),
     autoinc_range_interval_(autoinc_range_interval),
+    lob_inrow_threshold_(lob_inrow_threshold),
     is_slice_empty_(is_slice_empty),
     is_next_row_cached_(true),
     need_idempotent_autoinc_val_(need_idempotent_autoinc_val),
@@ -151,8 +153,8 @@ int ObDDLSliceRowIterator::get_next_row(
                   ObLobLocatorV2 locator(data, has_lob_header);
                   if (!locator.is_inrow_disk_lob_locator()) {
                     ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-                    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
-                    STORAGE_LOG(WARN, "invalid lob", K(ret), K(locator), KPC(datum), K(has_lob_header), K(data));
+                    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH,  lob_inrow_threshold_);
+                    STORAGE_LOG(WARN, "outrow lob is not supported in index table", K(ret), K(locator), KPC(datum), K(has_lob_header), K(data));
                   }
                 }
               }
