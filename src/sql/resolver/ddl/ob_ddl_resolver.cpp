@@ -1447,7 +1447,8 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_STORAGE_FILE != storage_info.device_type_) {
+        if (OB_STORAGE_FILE != storage_info.device_type_  &&
+            OB_STORAGE_HDFS != storage_info.device_type_ /* hdfs with simple auth*/) {
           if (OB_FAIL(ObSQLUtils::split_remote_object_storage_url(url, storage_info))) {
             LOG_WARN("failed to split remote object storage url", K(ret));
           }
@@ -1461,8 +1462,6 @@ int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
           LOG_WARN("failed to get storage info str", K(ret));
         } else if (OB_FAIL(table_schema.set_external_file_location(tmp_location.string()))) {
           LOG_WARN("failed to set external file location", K(ret));
-        } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
-          LOG_WARN("failed to set external file location access info", K(ret));
         } else if (OB_FAIL(table_schema.set_external_file_location_access_info(storage_info_buf))) {
           LOG_WARN("failed to set external file location access info", K(ret));
         }
