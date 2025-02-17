@@ -1131,6 +1131,9 @@ DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,10
 DEF_INT(major_compact_trigger, OB_TENANT_PARAMETER, "0", "[0,65535]",
         "specifies how many minor freeze should be triggered between two major freeze, Range: [0,65535] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_minor_merge_write_amplification_threshold, OB_TENANT_PARAMETER, "2000000", "[0,)",
+         "The write amplification threshold about minor compaction. The larger the value, the smaller the write amplicification",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(ob_compaction_schedule_interval, OB_TENANT_PARAMETER, "120s", "[3s,5m]",
          "the time interval to schedule compaction, Range: [3s,5m]"
          "Range: [3s, 5m]",

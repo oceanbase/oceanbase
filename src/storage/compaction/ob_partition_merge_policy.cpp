@@ -996,6 +996,19 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
     int64_t large_sstable_cnt = 0;
     int64_t large_sstable_row_cnt = 0;
     int64_t mini_sstable_row_cnt = 0;
+
+    int64_t write_amplification_threshold = OB_LARGE_MINOR_SSTABLE_ROW_COUNT;
+    int64_t size_amplification_factor = OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR;
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        write_amplification_threshold = tenant_config->_minor_merge_write_amplification_threshold;
+        if (int64_t(tenant_config->_minor_compaction_amplification_factor) > 0) {
+          size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
+        }
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < result.handle_.get_count(); ++i) {
       ObTableHandleV2 tmp_table_handle;
       if (OB_FAIL(result.handle_.get_table(i, tmp_table_handle))) {
@@ -1005,7 +1018,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
         LOG_ERROR("get unexpected table", KP(table), K(ret));
       } else if (FALSE_IT(sstable = reinterpret_cast<ObSSTable*>(table))) {
       } else {
-        if (sstable->get_row_count() > OB_LARGE_MINOR_SSTABLE_ROW_COUNT) { // large sstable
+        if (sstable->get_row_count() > write_amplification_threshold) { // large sstable
           ++large_sstable_cnt;
           large_sstable_row_cnt += sstable->get_row_count();
           if (mini_tables.get_count() > minor_compact_trigger) {
@@ -1023,13 +1036,6 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
       }
     } // end of for
 
-    int64_t size_amplification_factor = OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR;
-    {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid() && int64_t(tenant_config->_minor_compaction_amplification_factor) > 0) {
-        size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
-      }
-    }
     if (OB_FAIL(ret)) {
     } else if (large_sstable_cnt > 1
         || mini_sstable_row_cnt > (large_sstable_row_cnt * size_amplification_factor / 100)) {
