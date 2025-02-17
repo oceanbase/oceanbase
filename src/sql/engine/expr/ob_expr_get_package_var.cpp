@@ -138,7 +138,10 @@ int ObExprGetPackageVar::eval_get_package_var(const ObExpr &expr,
             ctx.exec_ctx_.get_my_session()),
             KPC(package_id), KPC(spec_version), KPC(body_version), KPC(var_idx));
     if (OB_SUCC(ret)) {
-      if (ob_is_string_tc(res_obj.get_type())) {
+      if (!res_obj.is_null() && res_obj.get_type() != expr.obj_meta_.get_type()) { // todo: need collect pkg basic type var dependency info
+        ret = OB_ERR_WRONG_TYPE_FOR_VAR;
+        LOG_WARN("result type no match with result type", K(ret), K(res_obj), K(expr.obj_meta_));
+      } else if (ob_is_string_tc(res_obj.get_type())) {
         ObString res_str;
         ObExprStrResAlloc res_alloc(expr, ctx);
         OZ(res_obj.get_string(res_str));
