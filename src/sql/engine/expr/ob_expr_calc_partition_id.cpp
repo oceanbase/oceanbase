@@ -1221,6 +1221,10 @@ int ObExprCalcPartitionBase::calc_partition_id(const ObExpr &part_expr,
                                      part_expr.obj_meta_,
                                      part_expr.obj_datum_map_))) {
       LOG_WARN("convert datum to obj failed", K(ret));
+    } else if (func_value.is_outrow_lob()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "outrow lob as partition key");
+      LOG_WARN("outrow lob as partition key is not supported", K(ret));
     } else {
       result = func_value;
       if (PARTITION_FUNC_TYPE_HASH == part_type) {

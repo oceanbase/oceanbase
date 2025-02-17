@@ -3565,11 +3565,15 @@ bool ObResolverUtils::is_partition_range_column_type(const ObObjType type)
 }
 
 bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
-    const ObPartitionFuncType part_type, const bool is_check_value)
+                                                     const ObPartitionFuncType part_type,
+                                                     const bool is_check_value,
+                                                     const bool is_string_lob)
 {
   int bret = false;
   if (is_key_part(part_type)) {
     if (!ob_is_text_tc(type) && !ob_is_json_tc(type) && !ob_is_collection_sql_type(type)) {
+      bret = true;
+    } else if (is_string_lob) {
       bret = true;
     }
   } else if (PARTITION_FUNC_TYPE_HASH == part_type ||
@@ -3597,16 +3601,18 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
        * Other numeric data types (such as DECIMAL or FLOAT) are not supported as partitioning columns.
        * DATE and DATETIME.
        * timestamp is not supported as partitioning columns.
-       * The following Text types: TEXT, BLOB and LONGTEXT columns are not supported as partitioning columns.
+       * The following Text types: TEXT, BLOB and LONGTEXT columns are not supported as partitioning columns, except STRING.
        */
       //https://dev.mysql.com/doc/refman/5.7/en/partitioning-columns.html
       ObObjTypeClass type_class = ob_obj_type_class(type);
-      if (ObIntTC == type_class || ObUIntTC == type_class ||
+      if (is_string_lob) {
+        bret = true;
+      } else if (ObIntTC == type_class || ObUIntTC == type_class ||
         (ObDateTimeTC == type_class && ObTimestampType != type) || ObDateTC == type_class ||
         ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class ||
         ObMySQLDateTimeTC == type_class || ObMySQLDateTC == type_class) {
         bret = true;
-      }else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type &&
+      } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type &&
                  GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_1 &&
                  is_partition_range_column_type(type)) {
         /*
@@ -3932,6 +3938,16 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
         break;
       }
     }
+    case ObMediumTextType: {
+      if (is_oracle_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "lob column as partition key");
+        LOG_WARN("Partition key is lob", K(ret));
+      } else {
+        expect_value_tc = ObStringTC;
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
       LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
@@ -3960,8 +3976,7 @@ int ObResolverUtils::check_column_valid_for_partition(const ObRawExpr &part_expr
     if (OB_ISNULL(col_schema = tbl_schema.get_column_schema(column_ref.get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column", K(tbl_schema), K(column_ref.get_column_id()), K(ret));
-    } else if ((lib::is_oracle_mode() || !col_schema->is_string_lob() || !is_key_part(part_func_type))
-                && !is_valid_partition_column_type(column_ref.get_data_type(), part_func_type, false)) {
+    } else if (!is_valid_partition_column_type(column_ref.get_data_type(), part_func_type, false, col_schema->is_string_lob())) {
       ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
       LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
                      column_ref.get_column_name().length(),

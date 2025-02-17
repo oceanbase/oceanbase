@@ -578,7 +578,8 @@ public:
                                                   const bool &in_tablegroup = false);
   static bool is_valid_partition_column_type(const common::ObObjType type,
                                              const share::schema::ObPartitionFuncType part_type,
-                                             const bool is_check_value);
+                                             const bool is_check_value,
+                                             const bool is_string_lob = false);
   static bool is_partition_range_column_type(const common::ObObjType type);
   static bool is_valid_oracle_partition_data_type(const common::ObObjType type, const bool check_value);
   static bool is_valid_oracle_interval_data_type(
