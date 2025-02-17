@@ -676,6 +676,7 @@ enum class RetireChildReason
   CHILD_NOT_ALIVE = 3,
   DIFFERENT_REGION_WITH_PARENT = 4,
   DUPLICATE_REGION_IN_LEADER = 5,
+  PARENT_DISABLE_SYNC = 6,
 };
 
 inline const char *retire_child_reason_2_str_(const RetireChildReason reason) const
@@ -688,6 +689,7 @@ inline const char *retire_child_reason_2_str_(const RetireChildReason reason) co
     CHECK_REASON_STR(CHILD_NOT_ALIVE);
     CHECK_REASON_STR(DIFFERENT_REGION_WITH_PARENT);
     CHECK_REASON_STR(DUPLICATE_REGION_IN_LEADER);
+    CHECK_REASON_STR(PARENT_DISABLE_SYNC);
     default:
       return "Invalid";
   }
