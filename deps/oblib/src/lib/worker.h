@@ -197,8 +197,6 @@ inline Worker &this_worker()
 
 #define GET_GROUP_ID() (THIS_WORKER.get_group_id())
 #define GET_FUNC_TYPE() (THIS_WORKER.get_func_type())
-#define SET_FUNCTION_TYPE(func_type) (THIS_WORKER.set_func_type_(func_type))
-#define GET_GROUP_ID() (THIS_WORKER.get_group_id())
 
 int SET_GROUP_ID(uint64_t group_id, bool is_background = false);
 
@@ -211,7 +209,9 @@ public:
     : thread_group_id_(GET_GROUP_ID()), group_changed_(false), ret_(OB_SUCCESS)
   {
     group_changed_ = group_id != thread_group_id_;
-    if (group_changed_) {
+    if (is_resource_manager_group(thread_group_id_)) {
+      // has set group id. do nothing.
+    } else if (group_changed_) {
       ret_ = SET_GROUP_ID(group_id);
     }
   }

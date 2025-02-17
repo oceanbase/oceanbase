@@ -521,13 +521,15 @@ int ObCgroupCtrl::add_thread_to_cgroup_(
   }
   return ret;
 }
+
 // find group name by group id
 int ObCgroupCtrl::get_group_info_by_group_id(
     const uint64_t tenant_id, uint64_t group_id, share::ObGroupName &group_name)
 {
   int ret = OB_SUCCESS;
   ObResourceMappingRuleManager &rule_mgr = G_RES_MGR.get_mapping_rule_mgr();
-  if (OB_FAIL(rule_mgr.get_group_name_by_id(tenant_id, group_id, group_name))) {
+  if (OB_FAIL(rule_mgr.get_group_name_by_id(
+          is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id, group_id, group_name))) {
     if (REACH_TIME_INTERVAL(3600 * 1000 * 1000L)) { // 1 hour
       LOG_WARN("fail get group name", K(tenant_id), K(group_id), K(group_name));
     }
