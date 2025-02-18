@@ -2056,32 +2056,22 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_SUCC(ret)) {
-        tablet_restore_ctx_.tablet_handle_.reset();
-        tablet_restore_ctx_.extra_info_.reset();
-        tablet_restore_ctx_.macro_block_reuse_mgr_.reset();
-        if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ls should not be NULL", K(ret), K(tablet_restore_ctx_));
-        } else if (OB_FAIL(ls->ha_get_tablet(tablet_restore_ctx_.tablet_id_, tablet_restore_ctx_.tablet_handle_))) {
-          if (OB_TABLET_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-            const ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::TABLET_NOT_EXIST;
-            if (OB_FAIL(tablet_restore_ctx_.set_copy_tablet_status(status))) {
-              LOG_WARN("failed to set copy tablet status", K(ret), K(status));
-            } else {
-              FLOG_INFO("tablet in dest is deleted, set copy status not exist", K(tablet_restore_ctx_));
-            }
-          } else {
-            LOG_WARN("failed to get tablet", K(ret), K(tablet_restore_ctx_));
-          }
+      tablet_restore_ctx_.tablet_handle_.reset();
+      tablet_restore_ctx_.extra_info_.reset();
+      tablet_restore_ctx_.macro_block_reuse_mgr_.reset();
+      if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls should not be NULL", K(ret), K(tablet_restore_ctx_));
+      } else if (OB_FAIL(ls->ha_get_tablet(tablet_restore_ctx_.tablet_id_, tablet_restore_ctx_.tablet_handle_))) {
+        if (OB_TABLET_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          FLOG_INFO("tablet has been deleted", K(tablet_restore_ctx_));
+        } else {
+          LOG_WARN("failed to get tablet", K(ret), K(tablet_restore_ctx_));
         }
+      } else if (OB_FAIL(create_first_task())) {
+        LOG_WARN("failed to create first task", K(ret), KPC(this));
       }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret), KPC(this));
     }
   }
   return ret;
@@ -2172,6 +2162,16 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
     if (need_set_failed_result && OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->set_result(ret, need_retry, get_type()))) {
      LOG_WARN("failed to set result", K(ret), KPC(ha_dag_net_ctx_));
     }
+  }
+  return ret;
+}
+
+int ObTabletRestoreDag::decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_strategy)
+{
+  int ret = OB_SUCCESS;
+  retry_strategy = ObDagRetryStrategy::DAG_CAN_RETRY;
+  if (OB_TABLET_NOT_EXIST == error_code) {
+    retry_strategy = ObDagRetryStrategy::DAG_SKIP_RETRY;
   }
   return ret;
 }
