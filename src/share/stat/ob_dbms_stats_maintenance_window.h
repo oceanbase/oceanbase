@@ -103,8 +103,6 @@ private:
                                    const ObString &exec_env,
                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info);
 
-  static bool is_work_day(int64_t now_wday) { return now_wday >= 1 && now_wday <= MAX_OF_WORK_DAY; }
-
   static int check_date_validate(const ObString &job_name,
                                  const int64_t specify_time,
                                  const int64_t current_time,
