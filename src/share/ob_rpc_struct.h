@@ -11263,7 +11263,8 @@ public:
   ~ObBatchBroadcastSchemaArg();
   int init(const uint64_t tenant_id,
            const int64_t sys_schema_version,
-           const common::ObIArray<share::schema::ObTableSchema> &tables);
+           const common::ObIArray<share::schema::ObTableSchema> &tables,
+           bool generate_schema);
   int assign(const ObBatchBroadcastSchemaArg &other);
   int deep_copy_tables(const common::ObIArray<share::schema::ObTableSchema> &tables);
   void reset();
@@ -11272,12 +11273,17 @@ public:
   uint64_t get_tenant_id() const;
   int64_t get_sys_schema_version() const;
   const common::ObIArray<share::schema::ObTableSchema> &get_tables() const;
-  TO_STRING_KV(K_(tenant_id), K_(sys_schema_version), K_(tables));
+  uint64_t get_cluster_current_version() const;
+  bool need_generate_schema() const;
+  TO_STRING_KV(K_(tenant_id), K_(sys_schema_version), K_(tables), K_(generate_schema),
+      KCV_(cluster_current_version));
 private:
   uint64_t tenant_id_;
   int64_t sys_schema_version_;
   common::ObArenaAllocator allocator_;
   common::ObSArray<share::schema::ObTableSchema> tables_;
+  bool generate_schema_;
+  uint64_t cluster_current_version_;
 };
 
 struct ObBatchBroadcastSchemaResult

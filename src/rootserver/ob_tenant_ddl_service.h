@@ -471,7 +471,7 @@ private:
       ObSchemaGetterGuard &schema_guard,
       bool is_restore);
 
-  int broadcast_sys_table_schemas(const uint64_t tenant_id, common::ObIArray<ObTableSchema> &tables);
+  int broadcast_sys_table_schemas(const uint64_t tenant_id);
 
   int create_tenant_sys_tablets(const uint64_t tenant_id, common::ObIArray<ObTableSchema> &tables);
 

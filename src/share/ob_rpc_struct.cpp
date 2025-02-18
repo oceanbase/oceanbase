@@ -11128,7 +11128,7 @@ ObBatchBroadcastSchemaArg::ObBatchBroadcastSchemaArg()
   : tenant_id_(common::OB_INVALID_TENANT_ID),
     sys_schema_version_(common::OB_INVALID_VERSION),
     allocator_("BroadcastSchema", OB_MALLOC_MIDDLE_BLOCK_SIZE),
-    tables_()
+    tables_(), generate_schema_(false), cluster_current_version_(OB_INVALID_VERSION)
 {}
 
 ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
@@ -11137,14 +11137,17 @@ ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
 int ObBatchBroadcastSchemaArg::init(
   const uint64_t tenant_id,
   const int64_t sys_schema_version,
-  const common::ObIArray<share::schema::ObTableSchema> &tables)
+  const common::ObIArray<share::schema::ObTableSchema> &tables,
+  bool generate_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(deep_copy_tables(tables))) {
+  if (!generate_schema && OB_FAIL(deep_copy_tables(tables))) {
     LOG_WARN("fail to assign tables", KR(ret), K(tables));
   } else {
     tenant_id_ = tenant_id;
     sys_schema_version_ = sys_schema_version;
+    generate_schema_ = generate_schema;
+    cluster_current_version_ = CLUSTER_CURRENT_VERSION;
   }
   return ret;
 }
@@ -11156,8 +11159,10 @@ int ObBatchBroadcastSchemaArg::assign(const ObBatchBroadcastSchemaArg &other)
   } else if (OB_FAIL(deep_copy_tables(other.tables_))) {
     LOG_WARN("fail to assign tables", KR(ret), K(other));
   } else {
+    generate_schema_ = other.generate_schema_;
     tenant_id_ = other.tenant_id_;
     sys_schema_version_ = other.sys_schema_version_;
+    cluster_current_version_ = other.cluster_current_version_;
   }
   return ret;
 }
@@ -11182,13 +11187,16 @@ void ObBatchBroadcastSchemaArg::reset()
   tenant_id_ = common::OB_INVALID_TENANT_ID;
   sys_schema_version_ = common::OB_INVALID_VERSION;
   tables_.reset();
+  allocator_.reset();
+  generate_schema_ = false;
+  cluster_current_version_ = OB_INVALID_VERSION;
 }
 
 bool ObBatchBroadcastSchemaArg::is_valid() const
 {
   return common::OB_INVALID_TENANT_ID != tenant_id_
          && sys_schema_version_ > 0
-         && tables_.count() > 0;
+         && (generate_schema_ || tables_.count() > 0);
 }
 
 uint64_t ObBatchBroadcastSchemaArg::get_tenant_id() const
@@ -11205,7 +11213,20 @@ const common::ObIArray<share::schema::ObTableSchema> &ObBatchBroadcastSchemaArg:
 {
   return tables_;
 }
-OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaArg, tenant_id_, sys_schema_version_, tables_);
+
+bool ObBatchBroadcastSchemaArg::need_generate_schema() const
+{
+  return generate_schema_;
+}
+
+uint64_t ObBatchBroadcastSchemaArg::get_cluster_current_version() const
+{
+  return cluster_current_version_;
+}
+
+
+OB_SERIALIZE_MEMBER(ObBatchBroadcastSchemaArg, tenant_id_, sys_schema_version_, tables_,
+    generate_schema_, cluster_current_version_);
 
 ObBatchBroadcastSchemaResult::ObBatchBroadcastSchemaResult()
   : ret_(common::OB_ERROR)

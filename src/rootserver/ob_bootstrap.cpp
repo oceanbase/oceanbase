@@ -632,6 +632,7 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   int ret = OB_SUCCESS;
   bool already_bootstrap = true;
   ObSArray<ObTableSchema> table_schemas;
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   begin_ts_ = ObTimeUtility::current_time();
 
   BOOTSTRAP_LOG(INFO, "start do execute_bootstrap");
@@ -651,10 +652,10 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     LOG_WARN("failed to set in bootstrap", K(ret));
   } else if (OB_FAIL(init_global_stat())) {
     LOG_WARN("failed to init_global_stat", K(ret));
-  } else if (OB_FAIL(construct_all_schema(table_schemas))) {
-    LOG_WARN("construct all schema fail", K(ret));
-  } else if (OB_FAIL(broadcast_sys_schema(table_schemas))) {
+  } else if (OB_FAIL(broadcast_sys_schema())) {
     LOG_WARN("broadcast_sys_schemas failed", K(table_schemas), K(ret));
+  } else if (OB_FAIL(construct_all_schema(table_schemas, arena_allocator))) {
+    LOG_WARN("construct all schema fail", K(ret));
   } else if (OB_FAIL(create_all_partitions())) {
     LOG_WARN("create all partitions fail", K(ret));
   } else if (OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
@@ -936,78 +937,31 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   return ret;
 }
 
-int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
+int ObBootstrap::construct_all_schema(ObSArray<ObTableSchema> &table_schemas, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const schema_create_func *creator_ptr_arrays[] = {
-    core_table_schema_creators,
-    sys_table_schema_creators,
-    virtual_table_schema_creators,
-    sys_view_schema_creators
-  };
-
-  ObTableSchema table_schema;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
-  } else if (OB_FAIL(table_schemas.reserve(OB_SYS_TABLE_COUNT))) {
-    LOG_WARN("reserve failed", "capacity", OB_SYS_TABLE_COUNT, KR(ret));
-  } else {
-    HEAP_VAR(ObTableSchema, data_schema) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-        for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-             OB_SUCCESS == ret && NULL != *creator_ptr; ++creator_ptr) {
-          table_schema.reset();
-          bool exist = false;
-          if (OB_FAIL(construct_schema(*creator_ptr, table_schema))) {
-            LOG_WARN("construct_schema failed", K(table_schema), KR(ret));
-          } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
-                     OB_SYS_TENANT_ID, table_schema, exist))) {
-            LOG_WARN("fail to check inner table exist",
-                     KR(ret), K(table_schema));
-          } else if (!exist) {
-            // skip
-          } else if (ObSysTableChecker::is_sys_table_has_index(table_schema.get_table_id())) {
-            const int64_t data_table_id = table_schema.get_table_id();
-            if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table_schema))) {
-              LOG_WARN("fail to fill sys index infos", KR(ret), K(data_table_id));
-            } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                       OB_SYS_TENANT_ID, data_table_id, table_schemas))) {
-              LOG_WARN("fail to append sys table index schemas", KR(ret), K(data_table_id));
-            }
-          }
-
-          const int64_t data_table_id = table_schema.get_table_id();
-          if (OB_SUCC(ret) && exist) {
-            // process lob aux table
-            if (OB_FAIL(add_sys_table_lob_aux_table(data_table_id, table_schemas))) {
-              LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
-            }
-            // push sys table
-            if (OB_SUCC(ret) && OB_FAIL(table_schemas.push_back(table_schema))) {
-              LOG_WARN("push_back failed", KR(ret), K(table_schema));
-            }
-          }
-        }
-      }
-    }
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_SYS_TENANT_ID,
+          table_schemas, allocator))) {
+    LOG_WARN("failed to construct inner table schemas", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
 
-int ObBootstrap::broadcast_sys_schema(const ObSArray<ObTableSchema> &table_schemas)
+int ObBootstrap::broadcast_sys_schema()
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchBroadcastSchemaArg arg;
   obrpc::ObBatchBroadcastSchemaResult result;
+  ObArray<ObTableSchema> table_schemas;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
-  } else if (table_schemas.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_schemas is empty", KR(ret), K(table_schemas));
   } else if (OB_FAIL(arg.init(OB_SYS_TENANT_ID,
                               OB_CORE_SCHEMA_VERSION,
-                              table_schemas))) {
+                              table_schemas,
+                              true/*generate_schema*/))) {
     LOG_WARN("fail to init arg", KR(ret));
   } else {
     ObBatchBroadcastSchemaProxy proxy(rpc_proxy_,

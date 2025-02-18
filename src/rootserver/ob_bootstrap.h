@@ -151,7 +151,8 @@ private:
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
   int construct_all_schema(
-      common::ObIArray<share::schema::ObTableSchema> &table_schemas);
+      common::ObSArray<share::schema::ObTableSchema> &table_schemas,
+      ObIAllocator &allocator);
   int sort_schema(const common::ObIArray<share::schema::ObTableSchema> &table_schemas,
                   common::ObIArray<share::schema::ObTableSchema> &sort_table_schemas);
 private:
@@ -168,8 +169,7 @@ private:
   virtual int construct_schema(
       const share::schema_create_func func,
       share::schema::ObTableSchema &tschema);
-  virtual int broadcast_sys_schema(
-      const common::ObSArray<share::schema::ObTableSchema> &table_schemas);
+  virtual int broadcast_sys_schema();
   static int batch_create_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas,

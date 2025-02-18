@@ -1687,7 +1687,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
     LOG_WARN("fail to get inner table schemas in tenant space", KR(ret), K(tenant_id));
   } else if (CLICK_FAIL(create_tenant_sys_tablets(tenant_id, tables))) {
     LOG_WARN("fail to create tenant partitions", KR(ret), K(tenant_id));
-  } else if (CLICK_FAIL(broadcast_sys_table_schemas(tenant_id, tables))) {
+  } else if (CLICK_FAIL(broadcast_sys_table_schemas(tenant_id))) {
     LOG_WARN("fail to broadcast sys table schemas", KR(ret), K(tenant_id));
   }
   if (is_meta_tenant(tenant_id)) {
@@ -1721,9 +1721,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   return ret;
 }
 
-int ObTenantDDLService::broadcast_sys_table_schemas(
-    const uint64_t tenant_id,
-    common::ObIArray<ObTableSchema> &tables)
+int ObTenantDDLService::broadcast_sys_table_schemas(const uint64_t tenant_id)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
   FLOG_INFO("[CREATE_TENANT] STEP 2.3. start broadcast sys table schemas", K(tenant_id));
@@ -1753,6 +1751,7 @@ int ObTenantDDLService::broadcast_sys_table_schemas(
                                         &ObSrvRpcProxy::batch_broadcast_schema);
       obrpc::ObBatchBroadcastSchemaArg arg;
       int64_t sys_schema_version = OB_INVALID_VERSION;
+      ObArray<ObTableSchema> tables;
       addrs.reset();
       FOREACH_X(unit, units, OB_SUCC(ret)) {
         if (!unit->is_valid() || !unit->is_active_status()) {
@@ -1769,7 +1768,7 @@ int ObTenantDDLService::broadcast_sys_table_schemas(
         LOG_WARN("fail to set timeout ctx", KR(ret));
       } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
                  OB_SYS_TENANT_ID, sys_schema_version))) {
-      } else if (OB_FAIL(arg.init(tenant_id, sys_schema_version, tables))) {
+      } else if (OB_FAIL(arg.init(tenant_id, sys_schema_version, tables, true/*generate_schema*/))) {
         LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(sys_schema_version));
       }
       const int64_t timeout_ts = ctx.get_timeout(0);
