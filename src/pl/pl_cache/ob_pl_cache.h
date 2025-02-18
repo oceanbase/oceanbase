@@ -284,6 +284,11 @@ public:
   int need_check_schema_version(ObPLCacheCtx &pc_ctx,
                                 int64_t &new_schema_version,
                                 bool &need_check);
+  int resolve_and_check_synonym(ObSchemaChecker &schema_checker,
+                                uint64_t tenant_id,
+                                uint64_t db_id,
+                                ObSQLSessionInfo &session_info,
+                                const ObSimpleSynonymSchema &synonym_info);
   int get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
                                   uint64_t tenant_id,
                                   const PCVPlSchemaObj &pcv_schema,
