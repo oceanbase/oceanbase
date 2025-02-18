@@ -541,11 +541,15 @@ int ObExprToCharCommon::cg_expr(ObExprCGCtx &expr_cg_ctx,
       rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
     }
   } else {
-    CK(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 2);
-    rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
-    if (1 == rt_expr.arg_cnt_ ||
-        ( 2 == rt_expr.arg_cnt_ && rt_expr.args_[1]->is_const_expr())) {
-      rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
+    if (!(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 2)) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_WARN("mysql to_char only support 1 or 2 args", K(ret));
+    } else {
+      rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
+      if (1 == rt_expr.arg_cnt_ ||
+          ( 2 == rt_expr.arg_cnt_ && rt_expr.args_[1]->is_const_expr())) {
+        rt_expr.eval_vector_func_ = &ObExprToCharCommon::eval_to_char_vector;
+      }
     }
   }
 

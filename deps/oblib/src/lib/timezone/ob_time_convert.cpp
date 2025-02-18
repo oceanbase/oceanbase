@@ -4963,13 +4963,16 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             break;
           }
           case ObDFMFlag::FF: {
-            if (OB_UNLIKELY(!HAS_TYPE_ORACLE(ob_time.mode_))) {
-              ret = OB_INVALID_DATE_FORMAT;
-            } else if (0 == scale) {
-              //print nothing
+            if (0 == scale) {
+              // print nothing
             } else {
+              //  scn_to_str will use ob_time with TYPE_ORACLE in mysql mode
+              int adjusted_scale_factor = ((lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
+                       ? MAX_SCALE_FOR_ORACLE_TEMPORAL : MAX_SCALE_FOR_TEMPORAL) - scale;
               ret = data_fmt_nd(buf, buf_len, pos, scale,
-                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale], fm_flag);
+                                ob_time.parts_[DT_USEC] /
+                                    power_of_10[adjusted_scale_factor],
+                                fm_flag);
             }
             break;
           }
@@ -4983,12 +4986,12 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           case ObDFMFlag::FF8:
           case ObDFMFlag::FF9: {
             int64_t scale = elem.elem_flag_ - ObDFMFlag::FF1 + 1;
-            if (OB_UNLIKELY(!HAS_TYPE_ORACLE(ob_time.mode_))) {
-              ret = OB_INVALID_DATE_FORMAT;
-            } else {
-              ret = data_fmt_nd(buf, buf_len, pos, scale,
-                                ob_time.parts_[DT_USEC] / power_of_10[MAX_SCALE_FOR_ORACLE_TEMPORAL - scale]);
-            }
+            int adjust_max_scale = (lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
+                    ? MAX_SCALE_FOR_ORACLE_TEMPORAL
+                    : MAX_SCALE_FOR_TEMPORAL;
+            ret = data_fmt_nd(buf, buf_len, pos, scale,
+                                ob_time.parts_[DT_USEC] /
+                                    power_of_10[adjust_max_scale - scale]);
             break;
           }
           case ObDFMFlag::HH:
