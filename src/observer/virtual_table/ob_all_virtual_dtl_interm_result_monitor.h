@@ -37,14 +37,18 @@ public:
                                      common::ObNewRow &cur_row,
                                      common::ObAddr &addr,
                                      common::ObString &addr_ip,
-                                     uint64_t effective_tenant_id)
+                                     uint64_t effective_tenant_id,
+                                     int64_t row_cnt_limit)
     : scanner_(scanner),
       allocator_(allocator),
       output_column_ids_(output_column_ids),
       cur_row_(cur_row),
       addr_(addr),
       addr_ip_(addr_ip),
-      effective_tenant_id_(effective_tenant_id)
+      effective_tenant_id_(effective_tenant_id),
+      row_cnt_limit_(row_cnt_limit),
+      ret_(OB_SUCCESS),
+      check_count_(0)
   {}
   virtual ~ObDTLIntermResultMonitorInfoGetter() = default;
   int operator() (common::hash::HashMapPair<sql::dtl::ObDTLIntermResultKey, sql::dtl::ObDTLIntermResultInfo *> &entry);
@@ -52,6 +56,7 @@ public:
   uint64_t get_effective_tenant_id() const { return effective_tenant_id_; }
   DISALLOW_COPY_AND_ASSIGN(ObDTLIntermResultMonitorInfoGetter);
 private:
+  static const int64_t CHECK_STATUS_INTERVAL = 1024;
   common::ObScanner &scanner_;
   common::ObIAllocator &allocator_;
   common::ObIArray<uint64_t> &output_column_ids_;
@@ -59,6 +64,11 @@ private:
   common::ObAddr &addr_;
   common::ObString &addr_ip_;
   uint64_t effective_tenant_id_;
+  // row_cnt_limit_ < 0: no limit
+  // row_cnt_limit_ == 0: reach limit, stop adding rows.
+  int64_t row_cnt_limit_;
+  int ret_;
+  int64_t check_count_;
 };
 
 class ObAllDtlIntermResultMonitor : public common::ObVirtualTableScannerIterator

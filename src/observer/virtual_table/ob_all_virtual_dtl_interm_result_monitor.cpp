@@ -47,13 +47,22 @@ void ObAllDtlIntermResultMonitor::reset()
   owner_len = strlen(store->get_label());   \
   owner = store->get_label();
 
+ERRSIM_POINT_DEF(EN_DTL_INTERM_RESULT_MONITOR_LIMIT);
 int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
 {
   int ret = OB_SUCCESS;
   const ObDTLIntermResultInfo &info = *entry.second;
   const ObDTLIntermResultKey &key = entry.first;
   int64_t tenant_id = info.is_store_valid() ? info.datum_store_->get_tenant_id() : OB_INVALID_ID;
-  if (OB_SYS_TENANT_ID == effective_tenant_id_ || tenant_id == effective_tenant_id_) {
+  if (OB_FAIL(ret_)) {
+    // do nothing.
+  } else if ((0 == (check_count_++ % CHECK_STATUS_INTERVAL)) && OB_FAIL(THIS_WORKER.check_status())) {
+    ret_ = ret;
+    SERVER_LOG(WARN, "check status failed", K(ret));
+  } else if (0 == row_cnt_limit_) {
+    // reach row count limit
+  } else if (OB_SYS_TENANT_ID == effective_tenant_id_ || tenant_id == effective_tenant_id_) {
+    row_cnt_limit_--;
     int64_t hold_mem = 0;
     int64_t max_hold_mem = 0;
     int64_t dump_size = 0;
@@ -230,6 +239,10 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
   } else if (OB_FAIL(ObServerUtils::get_server_ip(allocator_, ipstr))) {
     SERVER_LOG(ERROR, "get server ip failed", K(ret));
   } else {
+    int64_t row_cnt_limit = -1;
+    if (EN_DTL_INTERM_RESULT_MONITOR_LIMIT) {
+      row_cnt_limit = abs(EN_DTL_INTERM_RESULT_MONITOR_LIMIT);
+    }
     uint64_t cur_tenant_id = MTL_ID();
     if(is_sys_tenant(cur_tenant_id)) {
       omt::TenantIdList all_tenants;
@@ -238,7 +251,7 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
         uint64_t tmp_tenant_id = all_tenants[i];
         if(!is_virtual_tenant_id(tmp_tenant_id)) {
           ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
-                                  cur_row_, *addr_, ipstr, tmp_tenant_id);
+                                  cur_row_, *addr_, ipstr, tmp_tenant_id, row_cnt_limit);
           MTL_SWITCH(tmp_tenant_id) {
             if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
               SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
@@ -252,7 +265,7 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
       }
     } else {
       ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
-                                  cur_row_, *addr_, ipstr, cur_tenant_id);
+                                  cur_row_, *addr_, ipstr, cur_tenant_id, row_cnt_limit);
       MTL_SWITCH(cur_tenant_id) {
         if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
           SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
