@@ -1818,6 +1818,7 @@ int ObMultiTenant::mark_del_tenant(const uint64_t tenant_id)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REMOVE_TENANT_LOCK_ERROR);
 // 确保remove_tenant函数可以重复调用, 因为在删除租户时失败会不断重试,
 // 这里只是删除内存结构，持久化的数据还在。
 int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_succ)
@@ -1881,6 +1882,8 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     ObLDHandle handle;
     if (OB_FAIL(removed_tenant->try_wait())) {
       LOG_WARN("remove tenant try_wait failed", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ERRSIM_REMOVE_TENANT_LOCK_ERROR)) {
+      LOG_WARN("errsim lock tenant error", KR(ret), K(tenant_id));
     } else if (OB_FAIL(removed_tenant->try_wrlock(handle))) {
       LOG_WARN("can't get tenant wlock to remove tenant", K(ret), K(tenant_id),
           KP(removed_tenant), K(removed_tenant->lock_));

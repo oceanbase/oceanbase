@@ -333,7 +333,8 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
         break;
       }
     }
-    if (!tenant_exists) {
+    if (!tenant_exists ||
+        ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER == local_unit.unit_status_) {
       LOG_INFO("[DELETE_TENANT] begin to delete tenant", K(local_unit));
       if (OB_SYS_TENANT_ID == local_unit.tenant_id_) {
         LOG_INFO("[DELETE_TENANT] need convert_real_to_hidden_sys_tenant");
@@ -399,13 +400,21 @@ int ObTenantNodeBalancer::check_new_tenant(
       } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
         LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
       }
+      if (FAILEDx(omt_->get_tenant(tenant_id, tenant))) {
+        LOG_WARN("fail to get tenant after create tenant", KR(ret), K(tenant_id));
+      }
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(tenant)) {
-      ret = omt_->get_tenant(tenant_id, tenant);
-    }
+  if (OB_FAIL(ret)) {
+    // failed
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant should not be null here", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER
+             || tenant->has_stopped()) {
+    LOG_INFO("tenant has been stopped, no need to update", KR(ret), K(tenant_id));
+  } else {
     int64_t extra_memory = 0;
     if (is_sys_tenant(tenant_id)) {
       if (OB_SUCC(ret) && tenant->is_hidden() && OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
@@ -421,13 +430,13 @@ int ObTenantNodeBalancer::check_new_tenant(
     if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit, extra_memory))) {
       LOG_ERROR("fail to update tenant memory", K(ret), K(tenant_id));
     }
-  }
-
-  if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
-    if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
-      LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+    if (OB_SUCC(ret) && !is_virtual_tenant_id(tenant_id)) {
+      if (OB_FAIL(omt_->modify_tenant_io(tenant_id, unit.config_))) {
+        LOG_WARN("modify tenant io config failed", K(ret), K(tenant_id), K(unit.config_));
+      }
     }
   }
+
   return ret;
 }
 
