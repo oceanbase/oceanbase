@@ -482,7 +482,7 @@ public:
 
   static int resolve_external_file_location(ObResolverParams &params,
                                             ObTableSchema &table_schema,
-                                            const ParseNode *string_node);
+                                            common::ObString table_location);
 
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             ObString &ddl_sql,

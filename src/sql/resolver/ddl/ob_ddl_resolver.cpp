@@ -1412,14 +1412,14 @@ int ObDDLResolver::resolve_external_file_pattern(const ParseNode *option_node,
 
 int ObDDLResolver::resolve_external_file_location(ObResolverParams &params,
                                                  ObTableSchema &table_schema,
-                                                 const ParseNode *string_node)
+                                                 common::ObString table_location)
 {
   int ret = OB_SUCCESS;
   if (!table_schema.is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "location option");
   } else {
-    ObString url = ObString(string_node->str_len_, string_node->str_value_).trim_space_only();
+    ObString url = table_location;
     uint64_t data_version = 0;
     if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
       LOG_WARN("failed to get data version", K(ret));
@@ -2806,8 +2806,12 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           if (option_node->num_child_ != 1 || OB_ISNULL(string_node = option_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected child num", K(option_node->num_child_));
-          } else if (OB_FAIL(resolve_external_file_location(params_, arg.schema_, string_node))) {
-            LOG_WARN("failed to resolve external file location", K(ret));
+          } else {
+            ObString table_location = ObString(option_node->children_[0]->str_len_,
+                                              option_node->children_[0]->str_value_).trim_space_only();
+            if (OB_FAIL(resolve_external_file_location(params_, arg.schema_, table_location))) {
+              LOG_WARN("failed to resolve external file location", K(ret));
+            }
           }
 
           if (OB_SUCC(ret)) {

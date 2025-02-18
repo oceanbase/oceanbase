@@ -118,7 +118,7 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       if (OB_ISNULL(url_spec_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid from spec node", K(ret));
-      } else if (T_VARCHAR == url_spec_node->type_ || T_CHAR == url_spec_node->type_) {
+      } else if (T_RELATION_FACTOR == url_spec_node->type_) {
         load_stmt->get_load_arguments().file_name_ = ObString(url_spec_node->str_len_,
                                                               url_spec_node->str_value_);
       } else if (T_SELECT == url_spec_node->type_) {
@@ -387,40 +387,6 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     if (OB_NOT_NULL(child_node)) {
       if (OB_FAIL(resolve_partitions(*child_node, *load_stmt))) {
         LOG_WARN("fail to resolve partition");
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    /*14. format_or_properties*/
-    const ParseNode *child_node = node->children_[ENUM_FORMAT_OR_PROPERTIES];
-    if (OB_NOT_NULL(child_node)) {
-      if (T_EXTERNAL_FILE_FORMAT == child_node->type_) {
-        ObString format_str(static_cast<int32_t>(child_node->str_len_),
-                              child_node->str_value_);
-        load_stmt->set_format_str(format_str);
-      } else if (T_EXTERNAL_PROPERTIES == child_node->type_) {
-        ObString properties_str(static_cast<int32_t>(child_node->str_len_),
-                              child_node->str_value_);
-        load_stmt->set_properties_str(properties_str);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child node", K(ret), K(child_node));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    /*15. opt_pattern*/
-    const ParseNode *child_node = node->children_[ENUM_OPT_PATTERN];
-    if (OB_NOT_NULL(child_node)) {
-      if (T_EXTERNAL_FILE_PATTERN != child_node->type_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child node", K(ret), K(child_node));
-      } else {
-        ObString pattern_str(static_cast<int32_t>(child_node->str_len_),
-                              child_node->str_value_);
-        load_stmt->set_pattern_str(pattern_str);
       }
     }
   }

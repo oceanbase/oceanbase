@@ -1075,10 +1075,10 @@ private:
   int build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema);
   int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema, ObTableSchema& table_schema);
   int build_column_schemas_for_csv(const ObExternalFileFormat &format,
-                                 const char *table_location,
-                                 ObTableSchema &table_schema,
-                                 common::ObIAllocator &allocator,
-                                 uint64_t new_table_id);
+                                  common::ObString table_location,
+                                  ObTableSchema &table_schema,
+                                  common::ObIAllocator &allocator,
+                                  uint64_t new_table_id);
 #ifdef OB_BUILD_CPP_ODPS
   int build_column_schemas_for_odps(const ObSEArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn, 8> &column_list,
                                 const common::ObIArray<ObString> &part_col_names,
@@ -1089,16 +1089,15 @@ private:
   int build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,
-                                      const char* table_location,
+                                      common::ObString table_location,
                                       const common::ObString &tmp_location,
                                       common::ObIAllocator &allocator);
   int set_basic_info_for_mocked_table(ObTableSchema &table_schema,
-                                      const ParseNode *location_node,
+                                      common::ObString table_location,
                                       const ObExternalFileFormat &format);
-  int sample_external_file_name(const char *table_location,
-                                 common::ObIAllocator &allocator,
-                                 ObTableSchema &table_schema,
-                                 common::ObString &sampled_file_name);
+  int sample_external_file_name(common::ObIAllocator &allocator,
+                                ObTableSchema &table_schema,
+                                common::ObString &sampled_file_name);
   int build_mocked_external_table_schema(const ParseNode *location_node,
                                           const ParseNode *format_node,
                                           const ParseNode *pattern_node,

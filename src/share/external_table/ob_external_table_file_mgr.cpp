@@ -275,10 +275,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
             }
           }
 
-          if (!found) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition not found", K(ret), K(part_id));
-          } else {
+          if (found) {
             file.file_id_ = 0;
             file.file_addr_ = GCTX.self_addr();
             OZ (external_files.push_back(file));

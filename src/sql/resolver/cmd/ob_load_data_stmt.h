@@ -282,12 +282,6 @@ public:
   common::ObIArray<ObString> &get_part_names() { return part_names_; }
   bool is_load_data_url() const { return is_load_data_url_; }
   void set_is_load_data_url(bool is_load_data_url) { is_load_data_url_ = is_load_data_url; }
-  void set_format_str(const ObString &format_str) { format_str_ = format_str; }
-  ObString get_format_str() const { return format_str_; }
-  void set_properties_str(const ObString &properties_str) { properties_str_ = properties_str; }
-  ObString get_properties_str() const { return properties_str_; }
-  void set_pattern_str(const ObString &pattern_str) { pattern_str_ = pattern_str; }
-  ObString get_pattern_str() const { return pattern_str_; }
   void set_optimizer_ctx(ObDirectLoadOptimizerCtx *optimizer_ctx) { optimizer_ctx_ = optimizer_ctx; }
   ObDirectLoadOptimizerCtx *get_optimizer_ctx() { return optimizer_ctx_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
@@ -312,9 +306,6 @@ private:
   common::ObArray<ObObjectID> part_ids_;
   common::ObArray<ObString> part_names_;
   bool is_load_data_url_;
-  ObString format_str_;
-  ObString properties_str_;
-  ObString pattern_str_;
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataStmt);
 };
 

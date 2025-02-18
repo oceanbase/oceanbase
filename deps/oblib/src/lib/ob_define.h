@@ -1029,8 +1029,7 @@ OB_INLINE bool is_inner_object_id(const uint64_t object_id)
  * (49500, 50000)   : CTE Table
  * (50000, 60000)   : Lob meta table
  * (60000, 70000)   : Lob piece table
- * (70000, 71000)   : External object
- * (71000, 100000)  : Reserved
+ * (70000, 100000)  : Reserved
  * (100000, 200000) : System table Index
  *
  * ATTENTION!!! If reserved range is used, the following files should be checked.
@@ -1064,10 +1063,7 @@ const uint64_t OB_MAX_CORE_LOB_META_TABLE_ID  = 50100;
 const uint64_t OB_MIN_SYS_LOB_PIECE_TABLE_ID  = 60000;
 const uint64_t OB_MAX_CORE_LOB_PIECE_TABLE_ID = 60100;
 const uint64_t OB_MAX_SYS_LOB_PIECE_TABLE_ID  = 70000;
-// (70000, 71000) for external object(e.g., mocked external table)
-const uint64_t OB_MIN_EXTERNAL_OBJECT_ID      = 70000;
-const uint64_t OB_MAX_EXTERNAL_OBJECT_ID      = 71000;
-// (71000, 100000) is reserved
+// (70000, 100000) is reserved
 // (100000, 200000) for sys table index
 const uint64_t OB_MIN_SYS_TABLE_INDEX_ID      = 100000;
 const uint64_t OB_MAX_CORE_TABLE_INDEX_ID     = 101000;
@@ -1182,11 +1178,6 @@ OB_INLINE bool is_reserved_table_id(const uint64_t tid)
 {
   return (tid > OB_MAX_SYS_VIEW_ID && tid <= OB_MIN_LS_INNER_TABLE_ID)
          || (tid > OB_MAX_SYS_LOB_PIECE_TABLE_ID && OB_MIN_SYS_TABLE_INDEX_ID);
-}
-
-OB_INLINE bool is_external_object_id(const uint64_t tid)
-{
-  return (tid > OB_MIN_EXTERNAL_OBJECT_ID) && (tid < OB_MAX_EXTERNAL_OBJECT_ID);
 }
 
 OB_INLINE bool is_inner_table(const uint64_t tid)
@@ -1408,7 +1399,20 @@ OB_INLINE bool is_inner_profile_id(const uint64_t profile_id)
 
 /*
  * ################################################################################
- * OBJECT_ID RESERVED FOR OTHER SCHEMA OBJECTS (202300, 300000)
+ * OBJECT_ID FOR EXTERNAL OBJECT (202300, 203300)
+ * ################################################################################
+ */
+const uint64_t OB_MIN_EXTERNAL_OBJECT_ID      = 202300;
+const uint64_t OB_MAX_EXTERNAL_OBJECT_ID      = 203300;
+
+OB_INLINE bool is_external_object_id(const uint64_t tid)
+{
+  return (tid > OB_MIN_EXTERNAL_OBJECT_ID) && (tid < OB_MAX_EXTERNAL_OBJECT_ID);
+}
+
+/*
+ * ################################################################################
+ * OBJECT_ID RESERVED FOR OTHER SCHEMA OBJECTS (203300, 300000)
  * ################################################################################
  */
 

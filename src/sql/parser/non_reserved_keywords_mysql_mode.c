@@ -322,6 +322,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"file_block_size", FILE_BLOCK_SIZE},
   {"file_extension", FILE_EXTENSION},
   {"file_id", FILE_ID},
+  {"files", FILES},
   {"final_count", FINAL_COUNT},
   {"first", FIRST},
   {"first_value", FIRST_VALUE},

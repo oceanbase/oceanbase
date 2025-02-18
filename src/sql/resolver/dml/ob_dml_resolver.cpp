@@ -4324,7 +4324,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
 }
 
 int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &format,
-                                                const char *table_location,
+                                                common::ObString table_location,
                                                 ObTableSchema &table_schema,
                                                 common::ObIAllocator &allocator,
                                                 uint64_t new_table_id)
@@ -4333,7 +4333,7 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
 
   ObString sampled_file_name;
   ObCSVGeneralParser parser;
-  if (OB_FAIL(sample_external_file_name(table_location, allocator, table_schema, sampled_file_name))) {
+  if (OB_FAIL(sample_external_file_name(allocator, table_schema, sampled_file_name))) {
     LOG_WARN("failed to sample external file name", K(ret));
   }
 
@@ -4400,14 +4400,14 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
   if (OB_SUCC(ret)) {
     ObString file_name = sampled_file_name.after('%');
     ObSqlString full_file_name;
-    const char *loc_ptr = table_location;
-    const bool has_trailing_slash = (loc_ptr[strlen(table_location) - 1] == '/');
+    const char *loc_ptr = table_location.ptr();
+    const bool has_trailing_slash = (loc_ptr[strlen(loc_ptr) - 1] == '/');
 
     if (OB_FAIL(full_file_name.append_fmt("%s%s%.*s",
-                                        table_location,
+                                        loc_ptr,
                                         has_trailing_slash ? "" : "/",
                                         file_name.length(), file_name.ptr()))) {
-      LOG_WARN("failed to append file path", K(ret), K(table_location), K(file_name));
+      LOG_WARN("failed to append file path", K(ret), K(loc_ptr), K(file_name));
     } else if (OB_FAIL(reader_.open(full_file_name.string(), false))) {
       LOG_WARN("failed to open file", K(ret), K(full_file_name));
     }
@@ -4825,20 +4825,11 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
 }
 #endif
 
-int ObDMLResolver::sample_external_file_name(const char *table_location,
-                                            common::ObIAllocator &allocator,
+int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
                                             ObTableSchema &table_schema,
                                             common::ObString &sampled_file_name)
 {
   int ret = OB_SUCCESS;
-
-  bool is_dir = false;
-  if (OB_FAIL(FileDirectoryUtils::is_directory(table_location, is_dir))) {
-    LOG_WARN("is_directory failed", KR(ret), K(table_location));
-  } else if (false == is_dir) {
-    ret = OB_FILE_NOT_EXIST;
-    LOG_WARN("file path is not a directory.", KR(ret), K(table_location));
-  }
 
   ObArray<ObString> file_urls;
   ObArray<int64_t> file_sizes;
@@ -4892,7 +4883,7 @@ int ObDMLResolver::sample_external_file_name(const char *table_location,
 int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,
-                                      const char* table_location,
+                                      common::ObString table_location,
                                       const common::ObString &tmp_location,
                                       common::ObIAllocator &allocator)
 {
@@ -4945,7 +4936,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
       ObString sampled_file_name;
       ObExternalDataAccessDriver data_access_driver_;
 
-      if (OB_FAIL(sample_external_file_name(table_location, allocator, table_schema, sampled_file_name))) {
+      if (OB_FAIL(sample_external_file_name(allocator, table_schema, sampled_file_name))) {
         LOG_WARN("failed to sample external file name", K(ret));
       }
 
@@ -5022,7 +5013,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
       ObString sampled_file_name;
       int64_t file_size = 0;
 
-      if (OB_FAIL(sample_external_file_name(table_location, allocator, table_schema, sampled_file_name))) {
+      if (OB_FAIL(sample_external_file_name(allocator, table_schema, sampled_file_name))) {
         LOG_WARN("failed to sample external file name", K(ret));
       }
 
@@ -5122,7 +5113,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
 }
 
 int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
-                                                  const ParseNode *location_node,
+                                                  common::ObString table_location,
                                                   const ObExternalFileFormat &format)
 {
   int ret = OB_SUCCESS;
@@ -5131,15 +5122,14 @@ int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
   table_schema.set_tenant_id(session_info_->get_effective_tenant_id());
   uint64_t new_table_id = params_.schema_checker_->get_sql_schema_guard()->get_next_mocked_schema_id();
   table_schema.set_table_id(new_table_id);
-  table_schema.set_database_id(session_info_->get_database_id());
   table_schema.set_collation_type(ObCharset::get_default_collation(format.csv_format_.cs_type_));
   table_schema.set_charset_type(format.csv_format_.cs_type_);
   ObSqlString temp_str;
   int64_t schema_version = 0;
 
-  if (OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, location_node))) {
+  if (OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
     LOG_WARN("failed to resolve external file location", K(ret));
-  } else if (OB_FAIL(temp_str.assign_fmt("@mocked_ext_%lu", new_table_id))) {
+  } else if (OB_FAIL(temp_str.assign_fmt("temp_external_%lu", new_table_id))) {
     LOG_WARN("failed to assign table name", K(ret));
   } else if (OB_FAIL(params_.schema_checker_->get_sql_schema_guard()
                               ->get_schema_guard()
@@ -5147,7 +5137,11 @@ int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
     LOG_WARN("failed to get schema version", K(ret));
   } else if (OB_FAIL(table_schema.set_table_name(temp_str.string()))) {
     LOG_WARN("failed to set table name", K(ret));
+  } else if (session_info_->get_database_id() == OB_INVALID_ID) {
+    ret = OB_ERR_NO_DB_SELECTED;
+    LOG_WARN("No database selected");
   } else {
+    table_schema.set_database_id(session_info_->get_database_id());
     table_schema.set_schema_version(schema_version);
   }
 
@@ -5221,8 +5215,23 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
     }
   }
 
+  ObString table_location;
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(set_basic_info_for_mocked_table(table_schema, location_node, format))) {
+    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+      table_location = ObString("mock_path");
+    } else {
+      if (OB_ISNULL(location_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("location node is null", K(ret));
+      } else {
+        table_location = ObString(location_node->children_[0]->str_len_,
+                                  location_node->children_[0]->str_value_).trim_space_only();
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_basic_info_for_mocked_table(table_schema, table_location, format))) {
       LOG_WARN("failed to set basic info for mocked table", K(ret));
     }
   }
@@ -5247,7 +5256,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
     if (OB_FAIL(build_column_schemas(table_schema,
                           format,
                           table_schema.get_table_id(),
-                          location_node->str_value_,
+                          table_location,
                           table_schema.get_external_file_location(),
                           allocator))) {
         LOG_WARN("failed to build column schemas", K(ret));
@@ -5304,7 +5313,10 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
       switch (table_node->type_) {
       case T_RELATION_FACTOR: {
         if (parse_tree.value_ == T_EXTERNAL_FILE_LOCATION) {
-          if (OB_FAIL(resolve_mocked_table(table_node, table_item, alias_node))) {
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("url external table is not supported", K(ret));
+          } else if (OB_FAIL(resolve_mocked_table(table_node, table_item, alias_node))) {
             LOG_WARN("failed to resolve mocked table", K(ret));
           }
         } else if (OB_FAIL(resolve_basic_table(parse_tree, table_item))) {

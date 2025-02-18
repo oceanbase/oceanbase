@@ -3319,25 +3319,6 @@ int ObLoadDataURLImpl::construct_sql(ObLoadDataStmt &load_stmt, ObSqlString &sql
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (!load_stmt.get_format_str().empty() && !load_stmt.get_properties_str().empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("format and properties cannot be both set", KR(ret));
-    } else {
-      if (!load_stmt.get_format_str().empty()) {
-        OZ (sql.append(load_stmt.get_format_str().ptr()));
-      }
-
-      if (!load_stmt.get_properties_str().empty()) {
-        OZ (sql.append(load_stmt.get_properties_str().ptr()));
-      }
-
-      if (!load_stmt.get_pattern_str().empty()) {
-        OZ (sql.append(load_stmt.get_pattern_str().ptr()));
-      }
-    }
-  }
-
   return ret;
 }
 
