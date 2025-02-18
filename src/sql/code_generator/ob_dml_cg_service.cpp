@@ -513,7 +513,8 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
     }
   }
 
-  if (OB_SUCC(ret) && (index_dml_info.is_update_part_key_ || gen_expand_ctdef)) {
+  if (OB_SUCC(ret) && (index_dml_info.is_update_primary_key_ || index_dml_info.is_update_part_key_ || gen_expand_ctdef)) {
+    // For tables without a primary key, the partition key will not be included in the primary key
     //the updated row may be moved across partitions, need to generate das delete and das insert
     ObDMLCtDefAllocator<ObDASDelCtDef> ddel_allocator(cg_.phy_plan_->get_allocator());
     ObDMLCtDefAllocator<ObDASInsCtDef> dins_allocator(cg_.phy_plan_->get_allocator());
@@ -2173,7 +2174,9 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   } else {
     das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
     das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
+    das_dml_ctdef.is_update_partition_key_ = index_dml_info.is_update_part_key_;
     das_dml_ctdef.is_update_pk_with_dop_ = is_update_uk_parallel;
+    das_dml_ctdef.is_update_pk_ = index_dml_info.is_update_primary_key_;
   }
 #ifdef OB_BUILD_TDE_SECURITY
   // generate encrypt_meta for table

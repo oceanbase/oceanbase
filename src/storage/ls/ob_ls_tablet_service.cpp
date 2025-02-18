@@ -5294,6 +5294,7 @@ int ObLSTabletService::process_data_table_row(
     } else {
       const bool check_exist = !relative_table.is_storage_index_table() ||
         relative_table.is_unique_index() ||
+        ctx.mvcc_acc_ctx_.write_flag_.is_immediate_row_check() ||
         ctx.mvcc_acc_ctx_.write_flag_.is_update_pk_dop();
       if (OB_FAIL(insert_row_without_rowkey_check_wrap(data_tablet,
                                                        run_ctx.dml_param_.data_row_for_lob_,

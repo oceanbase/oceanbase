@@ -1317,8 +1317,37 @@ Outputs & filters:
   1 - output([__values.colC], [__values.colA], [__values.colD], [__values.colE], [__values.colF]), filter(nil)
       values({3, 4433, 10005, 492, 500})
 INSERT INTO t2 VALUES (3,4433,10005,492,500);
+EXPLAIN BASIC UPDATE t2,t1 set t2.colE = t2.colE + 1,colF=0 WHERE t1.colA = t2.colA AND (t1.colB & 4096) > 0 AND (colE + 1) < colF;
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |UPDATE               |    |
+|1 |└─MERGE JOIN         |    |
+|2 |  ├─TABLE FULL SCAN  |t1  |
+|3 |  └─SORT             |    |
+|4 |    └─TABLE FULL SCAN|t2  |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{t2: ({t2: (t2.colC, t2.colA, t2.colD, t2.colE, t2.colF)})}]),
+      update([t2.colE=column_conv(INT UNSIGNED,PS:(10,0),NOT NULL,cast(t2.colE + 1, INT UNSIGNED(-1, 0)))], [t2.colF=column_conv(INT UNSIGNED,PS:(10,0),
+      NOT NULL,0)])
+  1 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF], [t2.colE + 1]), filter(nil), rowset=16
+      equal_conds([t1.colA = t2.colA]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([t1.colA]), filter([(T_OP_BIT_AND, cast(t1.colB, BIGINT(-1, 0)), 4096) > 0]), rowset=16
+      access([t1.colA], [t1.colB]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.colA]), range(MIN ; MAX)always true
+  3 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF], [t2.colE + 1]), filter(nil), rowset=16
+      sort_keys([t2.colA, ASC])
+  4 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF], [t2.colE + 1]), filter([t2.colE + 1 < t2.colF]), rowset=16
+      access([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.colC], [t2.colA], [t2.colD], [t2.colE]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 UPDATE t2,t1 set t2.colE = t2.colE + 1,colF=0 WHERE t1.colA = t2.colA AND (t1.colB & 4096) > 0 AND (colE + 1) < colF;
-ERROR 23000: Duplicate entry '3-4433-10005-493' for key 'PRIMARY'
 
 EXPLAIN BASIC SELECT * FROM t2;
 Query Plan
@@ -1337,15 +1366,15 @@ SELECT * FROM t2;
 +------+------+-------+------+------+
 | colC | colA | colD  | colE | colF |
 +------+------+-------+------+------+
-|    3 | 4433 | 10005 |  492 |  500 |
-|    3 | 4433 | 10005 |  493 |  500 |
-|    3 | 4433 | 10005 |  494 |  500 |
-|    3 | 4433 | 10005 |  495 |  500 |
-|    3 | 4433 | 10005 |  496 |  500 |
-|    3 | 4433 | 10005 |  497 |  500 |
-|    3 | 4433 | 10009 |  494 |  500 |
-|    3 | 4433 | 10011 |  494 |  500 |
-|    3 | 4433 | 10013 |  489 |  500 |
+|    3 | 4433 | 10005 |  493 |    0 |
+|    3 | 4433 | 10005 |  494 |    0 |
+|    3 | 4433 | 10005 |  495 |    0 |
+|    3 | 4433 | 10005 |  496 |    0 |
+|    3 | 4433 | 10005 |  497 |    0 |
+|    3 | 4433 | 10005 |  498 |    0 |
+|    3 | 4433 | 10009 |  495 |    0 |
+|    3 | 4433 | 10011 |  495 |    0 |
+|    3 | 4433 | 10013 |  490 |    0 |
 +------+------+-------+------+------+
 DROP TABLE t1;
 DROP TABLE t2;

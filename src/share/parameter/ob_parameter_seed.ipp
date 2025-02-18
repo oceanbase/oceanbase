@@ -1715,6 +1715,11 @@ ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE)
 DEF_BOOL(_enable_parallel_das_dml, OB_TENANT_PARAMETER, "False",
          "By default, the das service is allowed to use multiple threads to submit das tasks",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_immediate_row_conflict_check, OB_TENANT_PARAMETER, "True",
+         "By default, OB's MySQL mode will check unique conflicts row by row after the update."
+         "When the switch is turned off, "
+         "it will only check whether the final state of a batch of data after the update satisfies the unique constraint.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_insertup_replace_gts_opt, OB_TENANT_PARAMETER, "True",
          "By default, insert/replace ... values statement can use gts optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

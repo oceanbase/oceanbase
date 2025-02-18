@@ -2148,6 +2148,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObSqlString config_value;
   ObString config_name_mysql_compatible_dates("_enable_mysql_compatible_dates");
   ObString config_value_mysql_compatible_dates("true");
+  ObString config_name_immediate_check_unique("_ob_immediate_row_conflict_check");
+  ObString config_value_immediate_check("False");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -2159,6 +2161,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
       } else if (OB_FAIL(parallel_table_config.add_config(config_name_mysql_compatible_dates, config_value_mysql_compatible_dates))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mysql_compatible_dates), K(config_value_mysql_compatible_dates));
+      } else if (OB_FAIL(parallel_table_config.add_config(config_name_immediate_check_unique, config_value_immediate_check))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_immediate_check_unique), K(config_value_immediate_check));
       }
     }
   }
