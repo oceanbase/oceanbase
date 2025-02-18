@@ -2088,9 +2088,10 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
             column_name.ptr());
-      } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column())) {
+      } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column()
+                             || col_schema->is_stored_generated_column())) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on virtual generated column is");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on generated column is");
       } else if (CS_TYPE_INVALID == collation_type) {
         collation_type = col_schema->get_collation_type();
       } else if (collation_type != col_schema->get_collation_type()) {
