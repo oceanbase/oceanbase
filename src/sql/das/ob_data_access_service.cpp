@@ -510,16 +510,16 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
       das_async_cb->set_invalid(true);
       das_ref.remove_async_das_cb(das_async_cb);
     }
-    for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
+    for (int i = 0; i < task_ops.count(); i++) {
+      int tmp_ret = OB_SUCCESS;
       if (OB_ISNULL(task_op = task_ops.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task op is null", K(ret));
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task op is null", K(i), K(tmp_ret));
       } else {
         task_op->errcode_ = ret;
         task_op->set_task_status(ObDasTaskStatus::FAILED);
-        int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(task_op->state_advance())) {
-          LOG_WARN("failed to advance das task state", K(tmp_ret));
+          LOG_WARN("failed to advance das task state", K(i), K(tmp_ret));
         }
       }
     }
@@ -639,16 +639,16 @@ int ObDataAccessService::do_sync_remote_das_task(
       }
     }
     if (OB_FAIL(ret)) {
-      for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
+      for (int i = 0; i < task_ops.count(); i++) {
+        int tmp_ret = OB_SUCCESS;
         if (OB_ISNULL(task_op = task_ops.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("task op is null", KR(ret));
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("task op is null", K(i), K(tmp_ret));
         } else {
           task_op->errcode_ = ret;
           task_op->set_task_status(ObDasTaskStatus::FAILED);
-          int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(task_op->state_advance())) {
-            LOG_WARN("failed to advance das task state", K(tmp_ret));
+            LOG_WARN("failed to advance das task state", K(i), K(tmp_ret));
           }
         }
       }
