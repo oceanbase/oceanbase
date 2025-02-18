@@ -3155,9 +3155,18 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             // do nothing
           }
         }
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && is_organization_set_to_heap()) {
           ParseNode *attrs_node = node->children_[2];
-          if (attrs_node != NULL) {
+          bool has_pk = false;
+          HEAP_VAR(ObCreateIndexStmt, create_index_stmt) {
+            ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
+            for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
+              ObCreateIndexArg &create_index_arg = index_arg_list.at(i);
+              has_pk |= INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == create_index_arg.index_type_;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (attrs_node != NULL && !has_pk) {
             for (int64_t i = 0; OB_SUCC(ret) && i < attrs_node->num_child_; ++i) {
               ParseNode *attr_node = attrs_node->children_[i];
               if (T_CONSTR_PRIMARY_KEY == attr_node->type_) {
