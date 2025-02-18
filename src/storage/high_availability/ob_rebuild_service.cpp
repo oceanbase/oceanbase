@@ -1020,6 +1020,7 @@ int ObLSRebuildMgr::do_with_cleanup_status_(
     } else if (OB_FAIL(switch_next_status_(rebuild_info, tmp_result))) {
       LOG_WARN("failed to switch next status", K(ret), K(rebuild_info), KPC(ls));
     } else {
+      rebuild_ctx_.result_ = OB_SUCCESS == rebuild_ctx_.result_ ? tmp_result : rebuild_ctx_.result_;
       if (rebuild_info.type_.is_rebuild_ls_type()) {
         ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_rebuild_ls_replica",
                               "tenant_id", tenant_id,
