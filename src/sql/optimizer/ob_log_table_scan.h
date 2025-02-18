@@ -1143,8 +1143,8 @@ protected: // memeber variables
   // end for table scan with vid
 
   // begin for table scan with domain id
-  common::ObArray<int64_t> with_domain_types_;
-  common::ObArray<uint64_t> domain_table_ids_;
+  common::ObArray<int64_t, common::ModulePageAllocator, true> with_domain_types_;
+  common::ObArray<uint64_t, common::ModulePageAllocator, true> domain_table_ids_;
   // end for table scan with domain id
 
   int64_t index_prefix_;
