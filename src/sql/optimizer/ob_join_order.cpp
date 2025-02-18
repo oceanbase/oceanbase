@@ -4731,8 +4731,7 @@ int ObJoinOrder::add_path(ObLogPlan &plan, Path* path)
   } else if (OB_UNLIKELY(plan.get_optimizer_context().generate_random_plan())) {
     ObQueryCtx* query_ctx = plan.get_optimizer_context().get_query_ctx();
     bool random_flag = !OB_ISNULL(query_ctx) && (query_ctx->rand_gen_.get(0, 1) == 1);
-    should_add = interesting_paths_.empty() || random_flag ||
-                 (!path->contain_match_all_fake_cte() && path->contain_fake_cte());
+    should_add = interesting_paths_.empty() || random_flag;
   } else {
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
     OPT_TRACE_TITLE("new candidate path:", path);
@@ -8361,12 +8360,15 @@ int ObJoinOrder::generate_cte_table_paths()
     LOG_WARN("get unexpected null", K(ret), K(table_id_));
   } else if (OB_FAIL(estimate_size_and_width_for_fake_cte(table_id_, get_plan()->get_nonrecursive_plan_for_fake_cte()))) {
     LOG_WARN("failed to calc filter selectivities", K(get_restrict_infos()), K(ret));
-  } else if (OB_FAIL(create_one_cte_table_path(table_item,
-                                               get_plan()->get_optimizer_context().get_match_all_sharding()))) {
-    LOG_WARN("failed to create one cte table path", K(ret));
   } else if (table_item->is_recursive_union_fake_table_ &&
              OB_FAIL(create_one_cte_table_path(table_item,
                                                get_plan()->get_optimizer_context().get_local_sharding()))) {
+    LOG_WARN("failed to create one cte table path", K(ret));
+  } else if (OB_UNLIKELY(get_plan()->get_optimizer_context().generate_random_plan()
+                         && table_item->is_recursive_union_fake_table_)) {
+    /* only generate local path when enable random plan for recursive union all */
+  } else if (OB_FAIL(create_one_cte_table_path(table_item,
+                                               get_plan()->get_optimizer_context().get_match_all_sharding()))) {
     LOG_WARN("failed to create one cte table path", K(ret));
   }
   return ret;

@@ -5803,9 +5803,10 @@ int ObLogPlan::init_candidate_plans(ObIArray<CandidatePlan> &candi_plans)
   } else if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
     candidates_.is_final_sort_ = false;
     int64_t idx = ObRandom::rand(0, candi_plans.count() - 1);
-    if (OB_ISNULL(candi_plans.at(idx).plan_tree_)) {
+    if (OB_UNLIKELY(0 > idx || candi_plans.count() <= idx )
+        || OB_ISNULL(candi_plans.at(idx).plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
+      LOG_WARN("get unexpected candi_plans", K(ret), K(idx), K(candi_plans.count()));
     } else {
       candidates_.plain_plan_.second = idx;
       candidates_.plain_plan_.first = candi_plans.at(idx).plan_tree_->get_cost();
