@@ -282,6 +282,8 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     int64_t batch_count = arg_.get_sqc_handler()->
       get_sqc_init_arg().sqc_.get_rescan_batch_params().get_count();
     bool need_fill_batch_info = false;
+    LOG_TRACE("trace run op spec root", K(&ctx), K(ctx.get_frames()),
+              K(batch_count), K(root_spec.get_id()), K(&(root->get_exec_ctx())));
     //  这里统一处理了 batch rescan 和非 batch rescan 的场景
     //  一般场景下，传入的参数是 batch_count = 0
     //  为了复用下面的循环代码,将batch_count 改为1, 但无需初始化rescan 参数
@@ -290,8 +292,6 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     } else {
       need_fill_batch_info = true;
     }
-    LOG_TRACE("trace run op spec root", K(&ctx), K(ctx.get_frames()),
-              K(batch_count), K(need_fill_batch_info), K(root_spec.get_id()), K(&(root->get_exec_ctx())));
     CK(IS_PX_TRANSMIT(root_spec.get_type()));
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {

@@ -885,8 +885,7 @@ int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
         const ObDMLStmt *cur_stmt = NULL;
         const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(
             get_plan()->get_optimizer_context().get_session_info());
-        int64_t ref_table_id = table_scan->get_is_index_global() ? table_scan->get_index_table_id() :
-            table_scan->get_ref_table_id();
+        int64_t ref_table_id = table_scan->get_index_table_id();
         if (cur_idx >= stmts.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("stmts idx is unexpected", K(cur_idx), K(stmts.count()));

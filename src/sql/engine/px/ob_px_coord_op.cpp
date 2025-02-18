@@ -564,7 +564,7 @@ int ObPxCoordOp::inner_close()
   }
   ctx_.del_extra_check(server_alive_checker_);
   clean_dfos_dtl_interm_result();
-  LOG_TRACE("byebye. exit QC Coord");
+  LOG_TRACE("byebye. exit QC Coord", K(spec_.id_), K(enable_px_batch_rescan()));
   return ret;
 }
 

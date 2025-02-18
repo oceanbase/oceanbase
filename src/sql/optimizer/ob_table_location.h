@@ -859,9 +859,9 @@ public:
   void set_has_dynamic_exec_param(bool flag) {  has_dynamic_exec_param_ = flag; }
   bool get_has_dynamic_exec_param() const {  return has_dynamic_exec_param_; }
 
-  int pruning_single_partition(int64_t partition_id,
+  int pruning_single_partition(int64_t tablet_id,
       ObExecContext &exec_ctx, bool &pruning,
-      common::ObIArray<int64_t> &partition_ids);
+      common::ObIArray<ObTabletID> &tablet_ids);
 
   int init_table_location_with_column_ids(ObSqlSchemaGuard &schema_guard,
                                           uint64_t table_id,

@@ -1911,7 +1911,7 @@ private:
   int refine_dop_by_hint();
   int check_has_temp_table_access(ObLogicalOperator *cur, bool &has_temp_table_access);
 
-  int find_px_for_batch_rescan(const log_op_def::ObLogOpType, int64_t op_id, bool &find);
+  int find_px_for_batch_rescan(ObLogicalOperator *batch_rescan_op, bool &find);
   int find_nested_dis_rescan(bool &find, bool nested);
   int add_op_exprs(ObRawExpr* expr);
   // alloc mat for sync in output

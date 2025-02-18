@@ -79,7 +79,10 @@ int ObPxSubCoord::pre_process()
       LOG_WARN("fail to setup receive/transmit op input", K(ret));
     }
   }
-  if (OB_SUCC(ret) && !sqc_arg_.sqc_.get_pruning_table_locations().empty()) {
+  if (OB_SUCC(ret) && !sqc_arg_.sqc_.get_pruning_table_locations().empty()
+      && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_1 ||
+          (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_2 &&
+           GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0))) {
     sqc_ctx_.gi_pump_.set_need_partition_pruning(true);
     OZ(sqc_ctx_.gi_pump_.set_pruning_table_location(sqc_arg_.sqc_.get_pruning_table_locations()));
   }

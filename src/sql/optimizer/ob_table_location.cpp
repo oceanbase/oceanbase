@@ -5836,49 +5836,41 @@ int ObTableLocation::calc_range_by_part_expr(ObExecContext &exec_ctx,
   return ret;
 }
 
-int ObTableLocation::pruning_single_partition(int64_t partition_id,
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_DYNAMIC_GI_PARTITION_PRUNING, "Disable dynamic partition pruning when use px batch rescan");
+int ObTableLocation::pruning_single_partition(int64_t tablet_id,
                                               ObExecContext &exec_ctx,
                                               bool &pruning,
-                                              common::ObIArray<int64_t> &partition_ids)
+                                              common::ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  UNUSED(partition_id);
-  UNUSED(exec_ctx);
-  UNUSED(partition_ids);
-  pruning = false;
- // ObTaskExecutorCtx &task_exec_ctx = exec_ctx.get_task_exec_ctx();
- // ObMultiVersionSchemaService *schema_service = NULL;
- // ObPhysicalPlanCtx *plan_ctx = NULL;
- // ObSchemaGetterGuard schema_guard;
- // partition_ids.reset();
- // if (OB_ISNULL(exec_ctx.get_my_session())) {
- //   ret = OB_ERR_UNEXPECTED;
- //   LOG_WARN("session is null", K(ret));
- // } else if (OB_ISNULL(schema_service = task_exec_ctx.schema_service_)) {
- //   ret = OB_ERR_UNEXPECTED;
- //   LOG_WARN("schema_service is null", K(ret));
- // } else if (OB_FAIL(schema_service->get_tenant_schema_guard(
- //             exec_ctx.get_my_session()->get_effective_tenant_id(),
- //             schema_guard))) {
- //   LOG_WARN("failed to get schema guard", K(ret));
- // } else if (OB_ISNULL(plan_ctx = exec_ctx.get_physical_plan_ctx())) {
- //   ret = OB_ERR_UNEXPECTED;
- //   LOG_WARN("plan_ctx is null", K(ret));
- // } else {
- //   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(exec_ctx.get_my_session());
- //   if (OB_FAIL(calculate_partition_ids(exec_ctx, &schema_guard, plan_ctx->get_param_store(),
- //                                       partition_ids, dtc_params))) {
- //     LOG_WARN("fail to calculate_partition_ids", K(ret));
- //   } else {
- //     pruning = true;
- //     for (int i = 0; i < partition_ids.count() && OB_SUCC(ret); ++i) {
- //       if (partition_ids.at(i) == partition_id) {
- //         pruning = false;
- //         break;
- //       }
- //     }
- //   }
- // }
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  tablet_ids.reset();
+  if (ERRSIM_DISABLE_DYNAMIC_GI_PARTITION_PRUNING) {
+    pruning = false;
+  } else if (OB_ISNULL(exec_ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(plan_ctx = exec_ctx.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan_ctx is null", K(ret));
+  } else {
+    ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(exec_ctx.get_my_session());
+    ObSEArray<ObObjectID, 8> partition_ids;
+    ObSEArray<ObObjectID, 8> first_level_part_ids;
+    if (OB_FAIL(calculate_tablet_ids(exec_ctx, plan_ctx->get_param_store(), tablet_ids,
+                                        partition_ids, first_level_part_ids, dtc_params))) {
+      LOG_WARN("fail to calculate_partition_ids", K(ret));
+    } else {
+      pruning = true;
+      for (int i = 0; i < tablet_ids.count(); ++i) {
+        if (tablet_ids.at(i).id() == tablet_id) {
+          pruning = false;
+          break;
+        }
+      }
+    }
+    LOG_TRACE("pruning_single_partition", K(tablet_id), K(tablet_ids), K(pruning), KPC(this));
+  }
   return ret;
 }
 

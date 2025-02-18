@@ -3164,6 +3164,21 @@ int ObLogicalOperator::numbering_operator_pre(NumberingCtx &ctx)
       ObSysFunRawExpr *sys_rownum_expr = static_cast<ObSysFunRawExpr *>(rownum_expr);
       sys_rownum_expr->set_op_id(op_id_);
     }
+  } else if (LOG_EXCHANGE == get_type()) {
+    ObLogExchange *exchange = static_cast<ObLogExchange *>(this);
+    ObLogicalOperator *px_batch_op = NULL;
+    if (NULL != (px_batch_op = exchange->get_px_batch_op())) {
+      if (LOG_SUBPLAN_FILTER == px_batch_op->get_type()) {
+        exchange->set_px_batch_op_id(px_batch_op->get_op_id());
+        exchange->set_px_batch_op_type(log_op_def::LOG_SUBPLAN_FILTER);
+      } else if (LOG_JOIN == px_batch_op->get_type()) {
+        exchange->set_px_batch_op_id(px_batch_op->get_op_id());
+        exchange->set_px_batch_op_type(log_op_def::LOG_JOIN);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected type", K(px_batch_op->get_type()));
+      }
+    }
   }
   if (ctx.going_up_) {
     ctx.branch_id_++;
@@ -3505,8 +3520,7 @@ int ObLogicalOperator::px_rescan_pre()
           LOG_WARN("fail to find nested rescan", K(ret));
         } else if (nested_rescan) {
           /*do nothing*/
-        } else if (OB_FAIL(get_child(i)->find_px_for_batch_rescan(log_op_def::LOG_SUBPLAN_FILTER,
-              get_op_id(), find_px))) {
+        } else if (OB_FAIL(get_child(i)->find_px_for_batch_rescan(this, find_px))) {
           LOG_WARN("fail to find px for batch rescan", K(ret));
         }
         if (OB_SUCC(ret) && 0 != i) {
@@ -3538,8 +3552,7 @@ int ObLogicalOperator::px_rescan_pre()
        LOG_WARN("fail to find nested rescan", K(ret));
       } else if (nested_rescan) {
         /*do nothing*/
-      } else if (OB_FAIL(get_child(second_child)->find_px_for_batch_rescan(log_op_def::LOG_JOIN,
-            get_op_id(), find_px))) {
+      } else if (OB_FAIL(get_child(second_child)->find_px_for_batch_rescan(this, find_px))) {
           LOG_WARN("fail to find px for batch rescan", K(ret));
       } else if (find_px) {
         static_cast<ObLogJoin*>(this)->set_px_batch_rescan(true);
@@ -6005,8 +6018,7 @@ int ObLogicalOperator::get_part_column_exprs(const uint64_t table_id,
   return ret;
 }
 
-int ObLogicalOperator::find_px_for_batch_rescan(const log_op_def::ObLogOpType op_type,
-    const int64_t op_id, bool &find)
+int ObLogicalOperator::find_px_for_batch_rescan(ObLogicalOperator *px_batch_op, bool &find)
 {
   int ret = OB_SUCCESS;
   if (LOG_SUBPLAN_FILTER == get_type() ||
@@ -6016,8 +6028,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(const log_op_def::ObLogOpType op
   } else if (LOG_EXCHANGE == get_type()) {
     ObLogExchange *op = static_cast<ObLogExchange *>(this);
     if (op->is_rescanable() && !op->is_task_order()) {
-      op->set_px_batch_op_id(op_id);
-      op->set_px_batch_op_type(op_type);
+      op->set_px_batch_op(px_batch_op);
       find = true;
     }
   } else {
@@ -6026,7 +6037,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(const log_op_def::ObLogOpType op
       if (OB_ISNULL(child = get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(get_child(i)), K(ret));
-      } else if (OB_FAIL(SMART_CALL(child->find_px_for_batch_rescan(op_type, op_id, find)))) {
+      } else if (OB_FAIL(SMART_CALL(child->find_px_for_batch_rescan(px_batch_op, find)))) {
         LOG_WARN("fail to find px for batch rescan", K(ret));
       }
     }

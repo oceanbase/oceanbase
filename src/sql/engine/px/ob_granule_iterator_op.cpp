@@ -192,7 +192,7 @@ void ObGranuleIteratorOp::destroy()
   rescan_tasks_info_.destroy();
   pwj_rescan_task_infos_.reset();
   table_location_keys_.reset();
-  pruning_partition_ids_.reset();
+  pruning_tablet_ids_.reset();
   tablet2part_id_map_.destroy();
 }
 
@@ -401,7 +401,7 @@ int ObGranuleIteratorOp::rescan()
     rescan_tasks_info_.reset();
     all_task_fetched_ = false;
     pwj_rescan_task_infos_.reset();
-    pruning_partition_ids_.reset();
+    pruning_tablet_ids_.reset();
     while (OB_SUCC(get_next_granule_task(false /* prepare */, true /* round_robin */))) {}
     if (ret != OB_ITER_END) {
       LOG_WARN("failed to get all granule task", K(ret));
@@ -432,7 +432,7 @@ int ObGranuleIteratorOp::rescan()
       }
     }
     if (OB_SUCC(ret)) {
-      pruning_partition_ids_.reset();
+      pruning_tablet_ids_.reset();
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
       is_rescan_ = true;
@@ -1050,8 +1050,8 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const ObGranuleTaskInfo &g
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is null", K(ret));
   } else if (pump_->need_partition_pruning()) {
-    int64_t partition_id =  gi_task_info.tablet_loc_->tablet_id_.id();
-    if (pruning_partition_ids_.empty()) {
+    int64_t tablet_id =  gi_task_info.tablet_loc_->tablet_id_.id();
+    if (pruning_tablet_ids_.empty()) {
       uint64_t table_location_key = OB_INVALID_ID;
       if (pump_->get_pruning_table_location()->empty()) {
         ret = OB_ERR_UNEXPECTED;
@@ -1062,16 +1062,16 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const ObGranuleTaskInfo &g
           table_location_key = table_location_keys_.at(i);
           for (int j = 0; j < locations->count() && OB_SUCC(ret) && !partition_pruning; ++j) {
             if (table_location_key == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(partition_id, ctx_,
-                  partition_pruning, pruning_partition_ids_));
+              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+                  partition_pruning, pruning_tablet_ids_));
             }
           }
         }
       }
     } else {
       partition_pruning = true;
-      for (int i = 0; i < pruning_partition_ids_.count() && OB_SUCC(ret); ++i) {
-        if (pruning_partition_ids_.at(i) == partition_id) {
+      for (int i = 0; i < pruning_tablet_ids_.count() && OB_SUCC(ret); ++i) {
+        if (pruning_tablet_ids_.at(i).id() == tablet_id) {
           partition_pruning = false;
           break;
         }
@@ -1090,7 +1090,7 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pump is null", K(ret));
   } else if (pump_->need_partition_pruning()) {
-    int64_t partition_id = OB_INVALID_ID;
+    int64_t tablet_id = OB_INVALID_ID;
     uint64_t table_location_key = OB_INVALID_ID;
     if (table_location_keys_.count() != gi_task_infos.count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1109,7 +1109,7 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
        * */
       bool single_table_partition_pruning = false;
       for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {
-        partition_id =  gi_task_infos.at(i).tablet_loc_->tablet_id_.id();
+        tablet_id =  gi_task_infos.at(i).tablet_loc_->tablet_id_.id();
         single_table_partition_pruning = false;
         if (pump_->get_pruning_table_location()->empty()) {
           ret = OB_ERR_UNEXPECTED;
@@ -1119,8 +1119,8 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
           common::ObIArray<ObTableLocation> *locations = pump_->get_pruning_table_location();
           for (int j = 0; j < locations->count()  && OB_SUCC(ret); ++j) {
             if (table_location_key == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(partition_id, ctx_,
-                  single_table_partition_pruning, pruning_partition_ids_));
+              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+                  single_table_partition_pruning, pruning_tablet_ids_));
             }
           }
           if (OB_SUCC(ret)) {

@@ -277,7 +277,7 @@ private:
   common::ObSEArray<ObGranuleTaskInfo, 2> pwj_rescan_task_infos_;
   // for px batch rescan and dynamic partition pruning
   common::ObSEArray<uint64_t, 2> table_location_keys_;
-  common::ObSEArray<int64_t, 16> pruning_partition_ids_;
+  common::ObSEArray<ObTabletID, 16> pruning_tablet_ids_;
    //for partition pruning
   int64_t filter_count_; // filtered part count when part pruning activated
   int64_t total_count_; // total partition count or block count processed, rescan included
