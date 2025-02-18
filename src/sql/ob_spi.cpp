@@ -8025,7 +8025,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             OZ (ObUserDefinedType::deep_copy_obj(*tmp_alloc, calc_array->at(0), result, true));
             if (OB_SUCC(ret) && PL_CURSOR_TYPE == calc_array->at(0).get_meta().get_extend_type()) {
                 ObPLCursorInfo *cursor_info = reinterpret_cast<ObPLCursorInfo*>(result.get_ext());
-                if (cursor_info->isopen()) {
+                if (cursor_info->isopen() && !cursor_info->is_server_cursor()) {
                   OZ (ctx->exec_ctx_->get_my_session()->add_non_session_cursor(cursor_info));
                 }
               }
