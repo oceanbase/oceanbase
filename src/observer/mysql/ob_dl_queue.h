@@ -31,7 +31,7 @@ using Ref = ObRaQueue::Ref;
 class ObLeafQueue : public ObRaQueue
 {
 public:
-  enum { N_LEAF_REF = 128 * 1024 };
+  enum { N_LEAF_REF = 64 * 1024 };
   ObLeafQueue() : ObRaQueue()
   {
     memset(ref_, 0, sizeof(ref_));
@@ -80,6 +80,7 @@ public:
       ATOMIC_STORE(&ret, *addr);
       if (NULL == ret) {
         ATOMIC_STORE(addr, NULL);
+        SlotLock_[seq % N_ROOT_SIZE].rlock()->unlock();
       } else {
         ref->set(seq, ret);
       }
