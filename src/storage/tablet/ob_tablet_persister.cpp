@@ -285,6 +285,14 @@ int ObTabletPersister::persist_and_fill_tablet(
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));
   } else if (CLICK_FAIL(new_handle.get_obj()->calc_tablet_data_usage())) {
     LOG_WARN("fail to calc tablet data size", K(ret), K(new_handle), K(type));
+  } else {
+    int64_t &shared_meta_size = new_handle.get_obj()->tablet_meta_.space_usage_.shared_meta_size_;
+    for (int64_t i = 0; i < tablet_meta_write_ctxs.count(); i++) {
+      shared_meta_size += tablet_meta_write_ctxs.at(i).addr_.size();
+    }
+    for (int64_t i = 0; i < sstable_meta_write_ctxs.count(); i++) {
+      shared_meta_size += sstable_meta_write_ctxs.at(i).addr_.size();
+    }
   }
 
   return ret;
@@ -393,6 +401,8 @@ int ObTabletPersister::persist_4k_tablet(common::ObArenaAllocator &allocator, Ob
   } else if (FALSE_IT(new_tablet->set_tablet_addr(write_ctx.addr_))) {
   } else if (CLICK_FAIL(new_tablet->inc_macro_ref_cnt())) {
     LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), KPC(new_tablet));
+  } else {
+    new_tablet->tablet_meta_.space_usage_.shared_meta_size_ += write_ctx.addr_.size();
   }
   return ret;
 }

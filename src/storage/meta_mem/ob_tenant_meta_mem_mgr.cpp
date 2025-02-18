@@ -1786,6 +1786,36 @@ int ObTenantMetaMemMgr::get_tablet_pointer_initial_state(const ObTabletMapKey &k
   return ret;
 }
 
+int ObTenantMetaMemMgr::get_tablet_migration_size(
+    const ObTabletMapKey &key,
+    int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  size = -1;
+  ObTabletPointerHandle ptr_handle(tablet_map_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
+    LOG_WARN("failed to get ptr handle", K(ret), K(key));
+  } else if (!ptr_handle.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ptr_handle", K(ret), K(ptr_handle));
+  } else {
+    const ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
+    if (OB_ISNULL(tablet_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
+    } else {
+      size = tablet_ptr->get_simple_tablet_space_usage().required_bytes_ + tablet_ptr->get_simple_tablet_space_usage().shared_meta_bytes_;
+    }
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::get_tablet_ddl_kv_mgr(
     const ObTabletMapKey &key,
     ObDDLKvMgrHandle &ddl_kv_mgr_handle)

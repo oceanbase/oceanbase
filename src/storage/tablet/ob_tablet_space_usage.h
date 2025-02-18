@@ -44,7 +44,7 @@ public:
 public:
   int64_t shared_data_size_; // compat from master, unused in branch 4_2_x_release 8B
   int64_t data_size_; // required_size_ 8B
-  int64_t shared_meta_size_; // shared (meta block) size; compat from master, unused in branch 4_2_x_release 8B
+  int64_t shared_meta_size_; // sstable_meta + tablet_sub_meta + tablet_meta
   int64_t meta_size_; // compat from master, unused in branch 4_2_x_release 8B
   int64_t occupy_bytes_; // real data size 8B
 }; // 5*8=40;
@@ -52,17 +52,19 @@ public:
 struct ObTabletSimpleSpaceUsage final
 {
 public:
-  ObTabletSimpleSpaceUsage(): occupy_bytes_(0), required_bytes_(0) {}
+  ObTabletSimpleSpaceUsage(): occupy_bytes_(0), shared_meta_bytes_(0), required_bytes_(0) {}
   ~ObTabletSimpleSpaceUsage() = default;
   void init(const ObTabletSpaceUsage &space_usage) {
     occupy_bytes_ = space_usage.occupy_bytes_;
     required_bytes_ = space_usage.data_size_;
+    shared_meta_bytes_ = space_usage.shared_meta_size_;
   }
 
   TO_STRING_KV(K_(occupy_bytes), K_(required_bytes));
 
 public:
   int64_t occupy_bytes_;
+  int64_t shared_meta_bytes_;
   int64_t required_bytes_;
 };
 

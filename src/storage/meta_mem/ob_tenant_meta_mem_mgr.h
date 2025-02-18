@@ -272,6 +272,7 @@ public:
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;
 
   int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
+  int get_tablet_migration_size(const ObTabletMapKey &key, int64_t &size);
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   ObFullTabletCreator &get_mstx_tablet_creator() { return full_tablet_creator_; }
   common::ObIAllocator &get_meta_cache_io_allocator() { return meta_cache_io_allocator_; }

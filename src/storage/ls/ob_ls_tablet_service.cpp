@@ -1843,6 +1843,51 @@ int ObLSTabletService::get_tablet_with_timeout(
   return ret;
 }
 
+int ObLSTabletService::get_ls_migration_required_size(int64_t &required_size)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_size = 0;
+  required_size = 0;
+  const ObLSID &ls_id = ls_->get_ls_id();
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObTabletMapKey key;
+  ObSArray<ObTabletID> tablet_ids;
+  GetAllTabletIDOperator op(tablet_ids);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("t3m should not be nullptr", K(ret), KP(t3m));
+  } else if (OB_FAIL(tablet_id_set_.foreach(op))) {
+    LOG_WARN("fail to get all tablet ids from set", K(ret));
+  } else {
+    key.ls_id_ = ls_id;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      key.tablet_id_ = tablet_ids.at(i);
+      if (OB_FAIL(t3m->get_tablet_migration_size(key, tmp_size))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // do nothing (expected: add no lock when fetching tablets from tablet_id_set_)
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get tablet required_size", K(ret), K(key), K(tmp_size));
+        }
+      } else if (-1 == tmp_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("in_valid tablet_size", K(ret), K(key), K(tmp_size));
+      } else {
+        required_size += tmp_size;
+      }
+    } // end for
+  }
+
+  if (OB_FAIL(ret)) {
+    required_size = 0;
+  }
+  return ret;
+}
+
 int ObLSTabletService::direct_get_tablet(const common::ObTabletID &tablet_id, ObTabletHandle &handle)
 {
 #ifdef ENABLE_DEBUG_LOG

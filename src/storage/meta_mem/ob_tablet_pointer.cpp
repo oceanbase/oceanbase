@@ -49,7 +49,7 @@ ObTabletPointer::ObTabletPointer()
     space_usage_()
 {
 #if defined(__x86_64__)
-    static_assert(sizeof(ObTabletPointer) == 288, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+    static_assert(sizeof(ObTabletPointer) == 296, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 

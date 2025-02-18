@@ -178,6 +178,7 @@ public:
       const ObMDSGetTabletMode mode = ObMDSGetTabletMode::READ_READABLE_COMMITED,
       const share::SCN &snapshot = share::SCN::max_scn());
 
+  int get_ls_migration_required_size(int64_t &required_size);
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
   // Exactly deletion compared with input tablets
   int remove_tablet(const ObTabletHandle& tablet_handle);
