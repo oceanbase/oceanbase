@@ -1145,7 +1145,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       set_parallel(parallel);
       set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
     }
-    if (is_dml_operator()) {
+    if (is_dml_operator() && static_cast<ObDelUpdLogPlan*>(get_plan())->use_pdml()) {
       static_cast<ObDelUpdLogPlan*>(get_plan())->set_max_dml_parallel(parallel);
     }
   }

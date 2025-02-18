@@ -11774,7 +11774,8 @@ int ObLogPlan::update_re_est_cost(ObLogicalOperator *op)
   double card = 0.0;
   LOG_TRACE("Begin final update re est cost");
   ObDelUpdLogPlan *del_upd_plan = NULL;
-  if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(this))) {
+  if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(this))
+      && del_upd_plan->use_pdml()) {
     del_upd_plan->reset_max_dml_parallel();
   }
   if (OB_ISNULL(op)) {
