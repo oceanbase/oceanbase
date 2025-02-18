@@ -453,7 +453,7 @@ class ObTxExecResult
   friend class ObTxDesc;
   OB_UNIS_VERSION(1);
   TransModulePageAllocator allocator_;
-  bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
+  bool incomplete_;
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
   ObSArray<ObTransIDAndAddr> conflict_txs_;
