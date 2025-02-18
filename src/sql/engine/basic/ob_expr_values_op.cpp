@@ -582,7 +582,10 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
             if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, str_values,
                                               real_src_expr, cm_, datum))) {
               LOG_WARN("fail to do to_type", K(ret), K(*dst_expr), K(real_src_expr));
-              ObString column_name = MY_SPEC.column_names_.at(col_idx);
+              ObString column_name = "";
+              if (col_idx >= 0 && col_idx < MY_SPEC.column_names_.count()) {
+                column_name = MY_SPEC.column_names_.at(col_idx);
+              }
               ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
             }
           }
@@ -595,7 +598,10 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
               ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
               LOG_USER_WARN(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             }
-            ObString column_name = MY_SPEC.column_names_.at(col_idx);
+            ObString column_name = "";
+            if (col_idx >= 0 && col_idx < MY_SPEC.column_names_.count()) {
+              column_name = MY_SPEC.column_names_.at(col_idx);
+            }
             ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
           }
         } else { // dst type is lob
