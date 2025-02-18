@@ -83,6 +83,8 @@ HINTS_ALL_WORKED	tinyint(4)	NO		NULL
 PL_SCHEMA_ID	bigint(20) unsigned	NO		NULL	
 IS_BATCHED_MULTI_STMT	tinyint(4)	NO		NULL	
 RULE_NAME	varchar(256)	NO		NULL	
+PLAN_STATUS	varchar(8)	NO		NULL	
+ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT limit 1);
 cnt
 1
@@ -895,6 +897,8 @@ HINTS_ALL_WORKED	tinyint(4)	NO
 PL_SCHEMA_ID	bigint(20) unsigned	NO			
 IS_BATCHED_MULTI_STMT	tinyint(4)	NO			
 RULE_NAME	varchar(256)	NO			
+PLAN_STATUS	varchar(8)	NO			
+ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT limit 1);
 cnt
 1
