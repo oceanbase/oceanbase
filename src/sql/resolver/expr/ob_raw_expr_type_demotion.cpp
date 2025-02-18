@@ -169,6 +169,18 @@ bool ObRawExprTypeDemotion::need_constraint(const ObObjType from_type, const ObO
   return need_constraint;
 }
 
+ObRawExprTypeDemotion::DisableTypeDemotionGuard::DisableTypeDemotionGuard(
+    ObSQLSessionInfo &session_info) : query_ctx_(NULL), ori_type_demotion_flag_(0)
+{
+  if (OB_NOT_NULL(session_info.get_cur_exec_ctx()) &&
+      OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_query_ctx())) {
+    query_ctx_ = session_info.get_cur_exec_ctx()->get_query_ctx();
+    ori_type_demotion_flag_ = query_ctx_->type_demotion_flag_;
+    query_ctx_->type_demotion_flag_ = 0;
+    query_ctx_->type_demotion_flag_inited_ = 1;
+  }
+}
+
 int ObRawExprTypeDemotion::init_query_ctx_flags(bool &disabled)
 {
   int ret = OB_SUCCESS;
@@ -540,6 +552,8 @@ int ObRawExprTypeDemotion::add_range_placement_constraint(
     cons.ignore_const_check_ = false;
     if (OB_FAIL(add_var_to_array_no_dup(query_ctx_->all_expr_constraints_, cons))) {
       LOG_WARN("failed to push back pre calc constraints", K(ret));
+    } else {
+      LOG_TRACE("add constraints", K(rp), K(const_expr), K(query_ctx_->all_expr_constraints_));
     }
   }
   return ret;

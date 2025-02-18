@@ -14,6 +14,7 @@
 #define _OB_RAW_EXPR_TYPE_DEMOTION_H 1
 
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/ob_sql_context.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,23 @@ public:
   {
     RP_OUTSIDE = 0,
     RP_INSIDE
+  };
+
+public:
+  class DisableTypeDemotionGuard
+  {
+  public:
+    explicit DisableTypeDemotionGuard(sql::ObSQLSessionInfo &session_info);
+    ~DisableTypeDemotionGuard()
+    {
+      if (OB_NOT_NULL(query_ctx_)) {
+        query_ctx_->type_demotion_flag_ = ori_type_demotion_flag_;
+        query_ctx_ = NULL;
+      }
+    }
+  private:
+    ObQueryCtx *query_ctx_;
+    int8_t ori_type_demotion_flag_;
   };
 
 public:
