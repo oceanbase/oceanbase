@@ -149,7 +149,7 @@ public:
           loop_cnt++;
         }
       }
-      if (loop_cnt >= LOOP_LIMIT) {
+      if (loop_cnt > LOOP_LIMIT) {
         do_wakeup();
       }
     }
