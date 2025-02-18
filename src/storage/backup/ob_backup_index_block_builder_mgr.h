@@ -92,7 +92,7 @@ public:
 
 private:
   int check_sstable_index_builder_mgr_exist_without_lock_(
-      const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key, bool &exist);
+      const common::ObTabletID &tablet_id, bool &exist);
   int prepare_sstable_index_builders_without_lock_(const common::ObTabletID &tablet_id,
       const common::ObIArray<storage::ObITable::TableKey> &table_keys,
       const bool is_major_compaction_mview_dep_tablet);

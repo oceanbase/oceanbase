@@ -480,7 +480,7 @@ int ObBackupTabletIndexBlockBuilderMgr::check_and_prepare_sstable_index_builders
     LOG_WARN("backup tablet index block builder mgr do not init", K(ret));
   } else if (table_keys.empty()) {
     // do nothing
-  } else if (OB_FAIL(check_sstable_index_builder_mgr_exist_without_lock_(tablet_id, table_keys.at(0), is_exist))) {
+  } else if (OB_FAIL(check_sstable_index_builder_mgr_exist_without_lock_(tablet_id, is_exist))) {
     LOG_WARN("failed to check sstable index builder mgr exist without lock", K(ret), K(tablet_id));
   } else if (is_exist) {
     // do nothing
@@ -493,7 +493,7 @@ int ObBackupTabletIndexBlockBuilderMgr::check_and_prepare_sstable_index_builders
 }
 
 int ObBackupTabletIndexBlockBuilderMgr::check_sstable_index_builder_mgr_exist_without_lock_(
-    const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key, bool &exist)
+    const common::ObTabletID &tablet_id, bool &exist)
 {
   int ret = OB_SUCCESS;
   exist = false;
@@ -501,11 +501,10 @@ int ObBackupTabletIndexBlockBuilderMgr::check_sstable_index_builder_mgr_exist_wi
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha table info mgr do not init", K(ret));
-  } else if (!tablet_id.is_valid() || !table_key.is_valid()) {
+  } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key));
+    LOG_WARN("get invalid argument", K(ret), K(tablet_id));
   } else {
-    blocksstable::ObSSTableIndexBuilder *index_builder = NULL;
     if (OB_FAIL(sstable_builder_map_.get_refactored(tablet_id, builder_mgr))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
@@ -513,10 +512,6 @@ int ObBackupTabletIndexBlockBuilderMgr::check_sstable_index_builder_mgr_exist_wi
       } else {
         LOG_WARN("failed to get tablet table key mgr", K(ret), K(tablet_id));
       }
-    } else if (OB_FAIL(builder_mgr->get_sstable_index_builder(table_key, index_builder))) {
-      LOG_WARN("failed to get sstable index builder", K(ret), K(table_key));
-    } else if (OB_ISNULL(index_builder)) {
-      exist = false;
     } else {
       exist = true;
     }
