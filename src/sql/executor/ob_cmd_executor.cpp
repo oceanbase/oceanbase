@@ -1103,6 +1103,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_OLAP_ASYNC_JOB_CANCEL: {
         DEFINE_EXECUTE_CMD(ObOLAPAsyncCancelJobStmt, ObOLAPAsyncCancelJobExecutor);
+        break;
       }
       case stmt::T_REBUILD_TABLET: {
         DEFINE_EXECUTE_CMD(ObRebuildTabletStmt, ObRebuildTabletExecutor);
