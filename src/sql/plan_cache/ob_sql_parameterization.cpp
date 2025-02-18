@@ -551,8 +551,10 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           }
           // int constants in div/mul/add/sub
           bool fmt_int_or_ch_decint =
-            ((lib::is_mysql_mode() && node->type_ == T_INT)
-             || (lib::is_oracle_mode() && (node->type_ == T_NUMBER || node->type_ == T_INT)))
+            (ctx.value_father_level_ < VALUE_VECTOR_LEVEL
+             && ctx.assign_father_level_ < ASSIGN_ITEM_LEVEL)
+            && ((lib::is_mysql_mode() && node->type_ == T_INT)
+                || (lib::is_oracle_mode() && (node->type_ == T_NUMBER || node->type_ == T_INT)))
             && (ctx.parent_type_ == T_OP_DIV
                 || ctx.parent_type_ == T_OP_MUL
                 || ctx.parent_type_ == T_OP_ADD
