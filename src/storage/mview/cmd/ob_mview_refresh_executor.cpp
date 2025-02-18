@@ -167,11 +167,20 @@ int ObMViewRefreshExecutor::do_refresh()
       refresh_param.refresh_method_ = refresh_method;
       refresh_param.parallelism_ = arg_->refresh_parallel_;
       while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
+        const ObDatabaseSchema *database_schema = nullptr;
         ObMViewTransaction trans;
         ObMViewRefresher refresher;
         const int64_t subtask_start_time = ObTimeUtil::current_time();
-        if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
-          LOG_WARN("fail to start trans", KR(ret));
+        if (OB_FAIL(get_and_check_mview_database_schema(ctx_->get_sql_ctx()->schema_guard_,
+                                                        mview_id,
+                                                        database_schema))) {
+          LOG_WARN("failed to get and check mview database schema", KR(ret));
+        } else if (OB_FAIL(trans.start(ctx_->get_my_session(),
+                                       ctx_->get_sql_proxy(),
+                                       database_schema->get_database_id(),
+                                       database_schema->get_database_name_str()))) {
+          LOG_WARN("fail to start trans", KR(ret), K(database_schema->get_database_id()),
+              K(database_schema->get_database_name_str()));
         } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
         } else if (OB_FAIL(
                      refresher.init(*ctx_, refresh_ctx, refresh_param, refresh_stats_collection))) {
@@ -261,6 +270,31 @@ int ObMViewRefreshExecutor::do_refresh()
     if (OB_FAIL(stats_collector.commit())) {
       LOG_WARN("fail to commit stats", KR(ret));
     }
+  }
+  return ret;
+}
+
+int ObMViewRefreshExecutor::get_and_check_mview_database_schema(
+    ObSchemaGetterGuard *schema_guard,
+    const uint64_t mview_id,
+    const ObDatabaseSchema *&database_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard cannot be null", KR(ret), KP(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, mview_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(mview_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is nullptr", KR(ret), K(tenant_id_), K(mview_id));
+  } else if (OB_FAIL(schema_guard->get_database_schema(
+      tenant_id_, table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("fail to get database schema", KR(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is nullptr", KR(ret));
   }
   return ret;
 }

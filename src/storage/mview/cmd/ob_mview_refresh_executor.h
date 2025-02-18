@@ -23,6 +23,14 @@ namespace sql
 {
 class ObExecContext;
 } // namespace sql
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObDatabaseSchema;
+}
+}
 namespace storage
 {
 struct ObMViewRefreshArg
@@ -72,6 +80,9 @@ public:
 private:
   int resolve_arg(const ObMViewRefreshArg &arg);
   int do_refresh();
+  int get_and_check_mview_database_schema(share::schema::ObSchemaGetterGuard *schema_guard,
+                                          const uint64_t mview_id,
+                                          const share::schema::ObDatabaseSchema *&database_schema);
 
 private:
   sql::ObExecContext *ctx_;

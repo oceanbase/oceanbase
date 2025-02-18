@@ -29,7 +29,12 @@ using namespace common::sqlclient;
  */
 
 ObMViewTransaction::ObSessionParamSaved::ObSessionParamSaved()
-  : session_info_(nullptr), is_inner_(false), autocommit_(false)
+  : allocator_("MVSessionSaved"),
+    session_info_(nullptr),
+    is_inner_(false),
+    autocommit_(false),
+    database_id_(OB_INVALID_ID),
+    database_name_(nullptr)
 {
 }
 
@@ -57,12 +62,26 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
     if (OB_FAIL(session_info->get_autocommit(autocommit))) {
       LOG_WARN("fail to get autocommit", KR(ret));
     } else {
-      session_info_ = session_info;
-      is_inner_ = session_info->is_inner();
-      autocommit_ = autocommit;
-      session_info->set_inner_session();
-      session_info->set_autocommit(false);
-      session_info_->get_ddl_info().set_refreshing_mview(true);
+      const int64_t max_database_name_len = OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN;
+      const ObString database_name = session_info->get_database_name();
+      char *database_name_buf = nullptr;
+      allocator_.reuse();
+      if (OB_ISNULL(database_name_buf =
+                            static_cast<char *>(allocator_.alloc(max_database_name_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", KR(ret));
+      } else {
+        MEMCPY(database_name_buf, database_name.ptr(), database_name.length());
+        database_name_buf[database_name.length()] = '\0';
+        database_name_ = database_name_buf;
+        session_info_ = session_info;
+        is_inner_ = session_info->is_inner();
+        autocommit_ = autocommit;
+        database_id_ = session_info->get_database_id();
+        session_info->set_inner_session();
+        session_info->set_autocommit(false);
+        session_info_->get_ddl_info().set_refreshing_mview(true);
+      }
     }
   }
   return ret;
@@ -71,13 +90,25 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
 int ObMViewTransaction::ObSessionParamSaved::restore()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(session_info_)) {
     if (is_inner_) {
       session_info_->set_inner_session();
     } else {
       session_info_->set_user_session();
     }
+    if (OB_NOT_NULL(database_name_)) {
+      if (OB_TMP_FAIL(session_info_->set_default_database(database_name_))) {
+        LOG_WARN("fail to set default database", KR(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      } else {
+        allocator_.free(database_name_);
+        database_name_ = nullptr;
+      }
+    }
     session_info_->set_autocommit(autocommit_);
+    session_info_->set_database_id(database_id_);
+    database_id_ = OB_INVALID_ID;
     session_info_->get_ddl_info().set_refreshing_mview(false);
     session_info_ = nullptr;
   }
@@ -326,7 +357,11 @@ int ObMViewTransaction::end_transaction(const bool commit)
   return ret;
 }
 
-int ObMViewTransaction::start(ObSQLSessionInfo *session_info, ObISQLClient *sql_client)
+int ObMViewTransaction::start(
+    ObSQLSessionInfo *session_info,
+    ObISQLClient *sql_client,
+    const uint64_t database_id,
+    const ObString &database_name)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(in_trans_)) {
@@ -340,6 +375,8 @@ int ObMViewTransaction::start(ObSQLSessionInfo *session_info, ObISQLClient *sql_
     LOG_WARN("unexpected session is in trans", KR(ret));
   } else if (OB_FAIL(session_param_saved_.save(session_info))) {
     LOG_WARN("fail to save session param", KR(ret));
+  } else if (OB_FALSE_IT(session_info->set_database_id(database_id))) {
+  } else if (OB_FALSE_IT(session_info->set_default_database(database_name))) {
   } else if (OB_FAIL(connect(session_info, sql_client))) {
     LOG_WARN("fail to connect", KR(ret));
   } else {

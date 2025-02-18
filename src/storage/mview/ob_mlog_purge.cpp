@@ -62,8 +62,15 @@ int ObMLogPurger::purge()
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ctx can not be NULL", KR(ret));
   } else {
-    if (OB_FAIL(trans_.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
-      LOG_WARN("fail to start trans", KR(ret));
+    const ObDatabaseSchema *database_schema = nullptr;
+    if (OB_FAIL(get_and_check_mlog_database_schema(database_schema))) {
+      LOG_WARN("failed to get and check mlog database schema", KR(ret));
+    } else if (OB_FAIL(trans_.start(ctx_->get_my_session(),
+                                    ctx_->get_sql_proxy(),
+                                    database_schema->get_database_id(),
+                                    database_schema->get_database_name_str()))) {
+      LOG_WARN("fail to start trans", KR(ret), K(database_schema->get_database_id()),
+          K(database_schema->get_database_name_str()));
     } else if (OB_FAIL(prepare_for_purge())) {
       LOG_WARN("fail to prepare for purge", KR(ret));
     } else if (need_purge_) {
@@ -245,5 +252,35 @@ int ObMLogPurger::do_purge()
   return ret;
 }
 
+int ObMLogPurger::get_and_check_mlog_database_schema(
+    const ObDatabaseSchema *&database_schema)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *master_table_schema = nullptr;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const uint64_t tenant_id = purge_param_.tenant_id_;
+  const uint64_t master_table_id = purge_param_.master_table_id_;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObMLogPurger not init", KR(ret), KP(this));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, master_table_id, master_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(master_table_id));
+  } else if (OB_ISNULL(master_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(master_table_id));
+  } else if (OB_FAIL(schema_guard.get_database_schema(
+      tenant_id, master_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("fail to get database schema", KR(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is nullptr", KR(ret));
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

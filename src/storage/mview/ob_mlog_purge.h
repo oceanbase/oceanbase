@@ -24,6 +24,13 @@ namespace sql
 {
 class ObExecContext;
 } // namespace sql
+namespace share
+{
+namespace schema
+{
+class ObDatabaseSchema;
+}
+}
 namespace storage
 {
 struct ObMLogPurgeParam
@@ -60,6 +67,7 @@ public:
 private:
   int prepare_for_purge();
   int do_purge();
+  int get_and_check_mlog_database_schema(const share::schema::ObDatabaseSchema *&database_schema);
 
 private:
   sql::ObExecContext *ctx_;
