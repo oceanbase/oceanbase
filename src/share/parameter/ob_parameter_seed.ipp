@@ -2528,3 +2528,7 @@ DEF_INT(utl_file_open_max, OB_CLUSTER_PARAMETER, "50", "[50, 600]",
 DEF_BOOL(_enable_topn_runtime_filter, OB_TENANT_PARAMETER, "True",
          "Enable topn runtime filter.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_parallel_tenant_creation, OB_CLUSTER_PARAMETER, "True",
+         "Enable or disable parallel create meta and user tenants.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

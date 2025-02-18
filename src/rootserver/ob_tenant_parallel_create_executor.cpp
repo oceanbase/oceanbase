@@ -266,34 +266,38 @@ int ObParallelCreateTenantExecutor::create_tenant_user_ls_(ObParallelCreateNorma
 }
 
 int ObParallelCreateTenantExecutor::call_create_normal_tenant_(
+    const ObTenantSchema &tenant_schema,
+    const bool async_call,
     ObParallelCreateNormalTenantProxy &proxy)
 {
   int ret = OB_SUCCESS;
-  const int64_t ASYNC_CALL_MEMORY_LIMIT = 1ll << 29; // 512MB
-  int64_t remain_memory_in_500 = get_tenant_memory_remain(OB_SERVER_TENANT_ID);
-  const bool async_call = (remain_memory_in_500 > ASYNC_CALL_MEMORY_LIMIT);
-  const uint64_t user_tenant_id = user_tenant_schema_.get_tenant_id();
-  if (OB_FAIL(async_call_create_normal_tenant_(meta_tenant_schema_, proxy))) {
-    LOG_WARN("failed to call create normal tenant for meta tenant", KR(ret), K(meta_tenant_schema_));
+  const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  if (OB_FAIL(async_call_create_normal_tenant_(tenant_schema, proxy))) {
+    LOG_WARN("failed to call create normal tenant", KR(ret), K(tenant_schema));
   } else if (!async_call) {
-    // broadcast tenant schema will use 500 tenant memory
-    // when creating tenants in async mode, the cost memory will double
-    // so if memory in 500 is not enough, tenants should be created in sync mode
-    FLOG_INFO("[CREATE_TENANT] memory in 500 is not enough, tenants will be created in sync mode",
-        K(remain_memory_in_500), K(user_tenant_id));
+    FLOG_INFO("[CREATE_TENANT] tenants will be created in sync mode", K(tenant_id), K(async_call));
     if (OB_FAIL(proxy.wait())) {
-      LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_schema_));
+      LOG_WARN("failed to create tenant", KR(ret), K(tenant_schema));
     } else {
       proxy.reuse();
     }
   } else {
-    FLOG_INFO("[CREATE_TENANT] tenants will be created in async mode",
-        K(remain_memory_in_500), K(user_tenant_id));
+    FLOG_INFO("[CREATE_TENANT] tenants will be created in async mode", K(tenant_id), K(async_call));
   }
-  if (FAILEDx(async_call_create_normal_tenant_(user_tenant_schema_, proxy))) {
-    LOG_WARN("failed to call create normal tenant for user tenant", KR(ret), K(user_tenant_schema_));
-  } else {
-    LOG_INFO("call create normal tenant successfully", K(ret));
+  return ret;
+}
+
+int ObParallelCreateTenantExecutor::call_create_normal_tenant_(
+    ObParallelCreateNormalTenantProxy &proxy)
+{
+  int ret = OB_SUCCESS;
+  const bool async_call = GCONF._enable_parallel_tenant_creation;
+  if (OB_FAIL(call_create_normal_tenant_(meta_tenant_schema_, async_call, proxy))) {
+    LOG_WARN("failed to call create normal tenant for meta tenant", KR(ret), K(meta_tenant_schema_),
+        K(async_call));
+  } else if (OB_FAIL(call_create_normal_tenant_(user_tenant_schema_, async_call, proxy))) {
+    LOG_WARN("failed to call create normal tenant for user tenant", KR(ret), K(user_tenant_schema_),
+        K(async_call));
   }
   return ret;
 }

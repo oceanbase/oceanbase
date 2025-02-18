@@ -50,6 +50,11 @@ private:
       const ObTenantSchema &tenant_schema,
       ObParallelCreateNormalTenantProxy &proxy);
 
+  int call_create_normal_tenant_(
+      const ObTenantSchema &tenant_schema,
+      const bool async_call,
+      ObParallelCreateNormalTenantProxy &proxy);
+
   int call_create_normal_tenant_(ObParallelCreateNormalTenantProxy &proxy);
 
   int wait_ls_leader_(const uint64_t tenant_id, const bool force_renew = false);
