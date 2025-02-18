@@ -179,12 +179,11 @@ int ObITabletMdsInterface::set(T &&data, mds::MdsCtx &ctx, const int64_t lock_ti
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (MDS_FAIL(get_mds_table_handle_(handle, true))) {
       MDS_LOG_SET(WARN, "failed to get_mds_table");
     } else if (!handle.is_valid()) {
@@ -206,12 +205,11 @@ int ObITabletMdsInterface::replay(T &&data, mds::MdsCtx &ctx, const share::SCN &
   #define PRINT_WRAPPER KR(ret), K(*this), K(data), K(ctx), K(scn)
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (scn < get_tablet_meta_().mds_checkpoint_scn_) {
       MDS_LOG_SET(TRACE, "no need do replay");
     } else {
@@ -239,12 +237,11 @@ int ObITabletMdsInterface::set(const Key &key, Value &&data, mds::MdsCtx &ctx, c
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
       MDS_LOG_SET(WARN, "failed to get_mds_table");
     } else if (!handle.is_valid()) {
@@ -270,12 +267,11 @@ int ObITabletMdsInterface::replay(const Key &key,
   #define PRINT_WRAPPER KR(ret), K(*this), K(key), K(mds), K(ctx), K(scn)
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (scn < get_tablet_meta_().mds_checkpoint_scn_) {
       MDS_LOG_SET(TRACE, "no need do replay");
     } else {
@@ -304,12 +300,11 @@ int ObITabletMdsInterface::remove(const Key &key, mds::MdsCtx &ctx, const int64_
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
       MDS_LOG_SET(WARN, "failed to get_mds_table");
     } else if (!handle.is_valid()) {
@@ -333,12 +328,11 @@ int ObITabletMdsInterface::replay_remove(const Key &key, mds::MdsCtx &ctx, const
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
       MDS_LOG_SET(WARN, "failed to get_mds_table");
     } else if (!handle.is_valid()) {
@@ -362,12 +356,11 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   bool is_online = false;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     do {
       mds::MdsTableHandle handle;
       ObLSSwitchChecker ls_switch_checker;
@@ -421,7 +414,6 @@ int ObITabletMdsInterface::get_latest(OP &&read_op,
   int ret = OB_SUCCESS;
   bool is_online = false;
   bool is_data_complete = false;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_FAIL(check_mds_data_complete_<T>(is_data_complete))) {
     MDS_LOG(WARN, "failed to check data completion");
   } else if (!is_data_complete) {
@@ -431,7 +423,7 @@ int ObITabletMdsInterface::get_latest(OP &&read_op,
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     do {
       mds::MdsTableHandle handle;
       ObLSSwitchChecker ls_switch_checker;
@@ -501,7 +493,6 @@ int ObITabletMdsInterface::get_latest_committed(OP &&read_op) const
   ObLSSwitchChecker ls_switch_checker;
   bool is_online = false;
   bool is_data_complete = false;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_FAIL(check_mds_data_complete_<T>(is_data_complete))) {
     MDS_LOG(WARN, "failed to check data completion");
   } else if (!is_data_complete) {
@@ -511,7 +502,7 @@ int ObITabletMdsInterface::get_latest_committed(OP &&read_op) const
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     do {
       if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -584,7 +575,6 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   bool is_online = false;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   bool is_data_complete = false;
   if (OB_FAIL(check_mds_data_complete_<Value>(is_data_complete))) {
     MDS_LOG(WARN, "failed to check data completion");
@@ -595,7 +585,7 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     do {
       mds::MdsTableHandle handle;
       ObLSSwitchChecker ls_switch_checker;
@@ -916,12 +906,11 @@ inline int ObITabletMdsInterface::check_transfer_in_redo_written(bool &written)
   bool is_online = false;
   ObTabletCreateDeleteMdsUserData tablet_status;
   share::SCN redo_scn;
-  TabletMdsLockGuard<LockMode::SHARE> guard;
   if (OB_ISNULL(get_tablet_pointer_())) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(ERROR, "pointer on tablet should not be null");
   } else {
-    get_tablet_pointer_()->get_mds_truncate_lock_guard(guard);
+    ObTabletMdsSharedLockGuard guard(get_tablet_pointer_()->get_mds_truncate_lock());
     do {
       mds::MdsTableHandle handle;
       ObLSSwitchChecker ls_switch_checker;

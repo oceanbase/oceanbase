@@ -65,6 +65,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
   ObTablet *tablet = nullptr;
   ObLSHandle ls_handle;
   ObLSService *ls_service = nullptr;
+  ObTabletMdsExclusiveLockGuard mds_lock_guard;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay executor not init", KR(ret), K_(is_inited));
@@ -97,7 +98,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
     } else {
       CLOG_LOG(WARN, "failed to check restore status", K(ret), K(ls_id), K(scn));
     }
-  } else if (CLICK_FAIL(check_can_skip_replay_to_mds_(scn, tablet_handle, can_skip_replay))) {
+  } else if (CLICK_FAIL(check_can_skip_replay_to_mds_(scn, tablet_handle, can_skip_replay, mds_lock_guard))) {
     CLOG_LOG(WARN, "failed to check can skip reply to mds", K(ret), K(ls_id), K(scn), K(tablet_handle));
   } else if (can_skip_replay) {
     //do nothing
@@ -186,7 +187,8 @@ int ObTabletReplayExecutor::replay_check_restore_status_(storage::ObTabletHandle
 int ObTabletReplayExecutor::check_can_skip_replay_to_mds_(
     const share::SCN &scn,
     storage::ObTabletHandle &tablet_handle,
-    bool &can_skip)
+    bool &can_skip,
+    ObTabletMdsExclusiveLockGuard &mds_lock_guard)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
@@ -200,11 +202,17 @@ int ObTabletReplayExecutor::check_can_skip_replay_to_mds_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "tablet should not be NULL", K(ret), KP(tablet));
-  } else if (tablet->get_tablet_meta().mds_checkpoint_scn_ >= scn) {
-    can_skip = true;
-    CLOG_LOG(INFO, "skip replay to mds", KPC(tablet), K(scn));
+  } else if (OB_ISNULL(tablet->get_tablet_pointer_())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet pointer should not be NULL", K(ret), KP(tablet));
   } else {
-    can_skip = false;
+    mds_lock_guard.set(tablet->get_tablet_pointer_()->get_mds_truncate_lock());
+    if (tablet->get_tablet_meta().mds_checkpoint_scn_ >= scn) {
+      can_skip = true;
+      CLOG_LOG(INFO, "skip replay to mds", KPC(tablet), K(scn));
+    } else {
+      can_skip = false;
+    }
   }
   return ret;
 }

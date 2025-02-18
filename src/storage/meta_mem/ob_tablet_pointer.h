@@ -21,6 +21,7 @@
 #include "storage/multi_data_source/mds_table_handler.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/ob_protected_memtable_mgr_handle.h"
+#include "ob_tablet_mds_truncate_lock.h"
 
 namespace oceanbase
 {
@@ -87,30 +88,6 @@ public:
   int64_t backup_bytes_;
 };
 
-enum class LockMode { SHARE, EXCLUSIVE };
-template <LockMode mode>
-struct TabletMdsLockGuard
-{
-  TabletMdsLockGuard() : lock_(nullptr) {}
-  TabletMdsLockGuard(mds::MdsLock &lock) : lock_(&lock) {
-    if (mode == LockMode::SHARE) {
-      lock_->rdlock();
-    } else if (mode == LockMode::EXCLUSIVE) {
-      lock_->wrlock();
-    }
-  }
-  ~TabletMdsLockGuard() {
-    if (lock_) {
-      if (mode == LockMode::SHARE) {
-        lock_->rdunlock();
-      } else if (mode == LockMode::EXCLUSIVE) {
-        lock_->wrunlock();
-      }
-    }
-  }
-  mds::MdsLock *lock_;
-};
-
 class ObTabletPointer final
 {
   friend class ObTablet;
@@ -119,15 +96,6 @@ class ObTabletPointer final
   friend class ObTabletResidentInfo;
   friend class ObTabletPointerMap;
   friend class ObFlyingTabletPointerMap;
-public:
-  template <LockMode MODE>
-  void get_mds_truncate_lock_guard(TabletMdsLockGuard<MODE> &lock_guard) const {
-    if (OB_ISNULL(lock_guard.lock_)) {
-      new (&lock_guard) TabletMdsLockGuard<MODE>(mds_lock_);
-    } else {
-      ob_abort();// just for defence
-    }
-  }
 public:
   ObTabletPointer();
   ObTabletPointer(const ObLSHandle &ls_handle,
@@ -173,6 +141,7 @@ public:
 public:
   bool get_initial_state() const;
   ObTabletResidentInfo get_tablet_resident_info(const ObTabletMapKey &key) const;
+  ObTabletMDSTruncateLock &get_mds_truncate_lock() const { return mds_lock_; }
   void set_initial_state(const bool initial_state);
   int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
@@ -190,8 +159,8 @@ public:
   // NOTICE1: input arg mds_ckpt_scn must be very carefully picked,
   // this scn should be calculated by mds table when flush,
   // and dumped to mds sstable, recorded on tablet
-  // ohterwise mds data will lost
-  // NOTICE2: this call must be protected by TabletMdsLockGuard<LockMode::EXCLUSIVE>
+  // otherwise mds data will lost
+  // NOTICE2: this call must be protected by ObTabletMdsSharedLockGuard EXCLUSIVE mode
   int release_mds_nodes_redo_scn_below(const ObTabletID &tablet_id, const share::SCN &mds_ckpt_scn);
   ObLS *get_ls() const;
   // the RW operations of tablet_attr are protected by lock guard of tablet_map_
@@ -219,12 +188,12 @@ private:
   bool initial_state_; // 1B
   bool flying_; // 1B
   ObByteLock ddl_kv_mgr_lock_; // 1B
-  mutable mds::MdsLock mds_lock_;// 12B
+  mutable ObTabletMDSTruncateLock mds_lock_;// 24B
   mds::ObMdsTableHandler mds_table_handler_;// 48B
   ObTablet *old_version_chain_; // 8B
   ObTabletAttr attr_; // 32B // protected by rw lock of tablet_map_
   int64_t auto_part_size_; // 8B
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 360B
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 376B
 };
 
 struct ObTabletResidentInfo final

@@ -139,7 +139,8 @@ private:
   int check_can_skip_replay_to_mds_(
       const share::SCN &scn,
       storage::ObTabletHandle &tablet_handle,
-      bool &can_skip);
+      bool &can_skip,
+      ObTabletMdsExclusiveLockGuard &mds_lock_guard);
   //  The replay of multi-source log modified by ObTabletCreateDeleteMdsUserData needs to be filtered by tablet_change_checkpoint_scn
   int check_can_skip_replay_(
       const storage::ObLSHandle &ls_handle,

@@ -3938,13 +3938,13 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       if (param.release_mds_scn_.is_min()) {
         //do nothing
       } else {
-        TabletMdsLockGuard<storage::LockMode::EXCLUSIVE> guard;
-        pointer->get_mds_truncate_lock_guard(guard);
+        pointer->get_mds_truncate_lock().exclusive_lock(); // need use try lock, and expand critical area
         if (OB_FAIL(pointer->release_mds_nodes_redo_scn_below(tablet_id, param.release_mds_scn_))) {
           //overwrite ret
           LOG_WARN("failed to relase mds node redo scn below", K(ret), K(tablet_id), "release mds scn", param.release_mds_scn_);
           ret = OB_RELEASE_MDS_NODE_ERROR;
         }
+        pointer->get_mds_truncate_lock().exclusive_unlock();
       }
 
       time_guard.click("ReleaseMDS");
