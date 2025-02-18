@@ -404,6 +404,9 @@ int ObResolverUtils::add_dependency_synonym_object(share::schema::ObSchemaGetter
                                             K(obj_id), K(ret));
     } else {
       ObSchemaObjVersion ver(obj_id, schema_version, DEPENDENCY_SYNONYM);
+      if (0 == i) {
+        ver.is_db_explicit_ = true;
+      }
       if (OB_FAIL(ObPLCompileUnitAST::add_dependency_object_impl(dep_table, ver))) {
         LOG_WARN("add dependency object failed", K(obj_id), K(ret));
       }

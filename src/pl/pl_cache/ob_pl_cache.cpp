@@ -16,6 +16,8 @@
 #include "lib/oblog/ob_log_module.h"
 #include "share/rc/ob_tenant_base.h"     //MTL
 #include "pl/ob_pl_stmt.h"
+#include "sql/resolver/ob_stmt_resolver.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 namespace oceanbase
 {
 namespace pl
@@ -565,6 +567,47 @@ int ObPLObjectValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
+int ObPLObjectValue::resolve_and_check_synonym(ObSchemaChecker &schema_checker,
+                                                uint64_t tenant_id,
+                                                uint64_t db_id,
+                                                ObSQLSessionInfo &session_info,
+                                                const ObSimpleSynonymSchema &synonym_info)
+{
+  int ret = OB_SUCCESS;
+
+  ObSynonymChecker synonym_checker;
+  uint64_t object_db_id = OB_INVALID_ID;
+  ObString object_name;
+  bool exist = false;
+  OZ (ObResolverUtils::resolve_synonym_object_recursively(schema_checker, synonym_checker,
+                                                        tenant_id, db_id,
+                                                        synonym_info.get_synonym_name(),
+                                                        object_db_id, object_name, exist,
+                                                        true));
+  if (OB_FAIL(ret)) {
+  } else if (!exist || OB_INVALID_ID == object_db_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected result", K(ret), K(object_db_id), K(synonym_info));
+  } else {
+    uint64_t object_id = OB_INVALID_ID;
+    OZ (schema_checker.get_object_id_by_name(tenant_id, object_db_id, object_name, object_id));
+    if (OB_SUCC(ret)) {
+      bool exist = false;
+      for (int64_t i = 0; !exist && i < stored_schema_objs_.count(); i++) {
+        if (stored_schema_objs_.at(i)->schema_id_ == object_id) {
+          exist = true;
+        }
+      }
+      if (!exist) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        LOG_WARN("exist object which name as current synonym", K(ret), K(object_id), K(synonym_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
                                                 uint64_t tenant_id,
                                                 const PCVPlSchemaObj &pcv_schema,
@@ -578,35 +621,38 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
     const ObSimpleSynonymSchema *synonym_info = NULL;
     ObSchemaGetterGuard &schema_guard = *pc_ctx.schema_guard_;
     ObSQLSessionInfo *session_info = pc_ctx.session_info_;
+    ObSchemaChecker schema_checker;
     CK (SYNONYM_SCHEMA == pcv_schema.schema_type_);
     OZ (schema_guard.get_simple_synonym_info(tenant_id, pcv_schema.schema_id_, synonym_info));
+    OZ (schema_checker.init(schema_guard));
     if (OB_SUCC(ret) && OB_NOT_NULL(synonym_info)) {
       if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
         // in same db, no need check for objects with the same name if synonym name is same as linked object name
         if (pc_ctx.session_info_->get_database_id() == synonym_info->get_object_database_id() &&
             synonym_info->get_synonym_name() == synonym_info->get_object_name()) {
           new_version = synonym_info->get_schema_version();
+        } else if (!pcv_schema.is_explicit_db_name_) { // not top synonym, only collect schema version
+          new_version = synonym_info->get_schema_version();
         } else {
           bool exist = false;
           bool is_private_syn = false;
-          ObSchemaChecker schema_checker;
-          int tmp = schema_checker.init(schema_guard);
-          if (OB_SUCCESS == tmp) {
-            tmp = schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
-                                                                           session_info->get_database_id(),
-                                                                           synonym_info->get_synonym_name(),
-                                                                           exist,
-                                                                           is_private_syn);
-            if (exist) {
-              ret = OB_OLD_SCHEMA_VERSION;
-              LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
-            } else {
-              new_version = synonym_info->get_schema_version();
-            }
+          OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
+                                                                        session_info->get_database_id(),
+                                                                        synonym_info->get_synonym_name(),
+                                                                        exist,
+                                                                        is_private_syn));
+          if (OB_FAIL(ret)) {
+          } else if (exist) {
+            ret = OB_OLD_SCHEMA_VERSION;
+            LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
+          } else {
+            OZ (resolve_and_check_synonym(schema_checker, tenant_id, session_info->get_database_id(), *session_info, *synonym_info));
+            OX (new_version = synonym_info->get_schema_version());
           }
         }
       } else {
-        new_version = synonym_info->get_schema_version();
+        OZ (resolve_and_check_synonym(schema_checker, tenant_id, synonym_info->get_database_id(), *session_info, *synonym_info));
+        OX (new_version = synonym_info->get_schema_version());
       }
     } else if (OB_ISNULL(synonym_info)) {
       ret = OB_OLD_SCHEMA_VERSION;
@@ -813,6 +859,8 @@ int ObPLObjectValue::set_stored_schema_objs(const DependenyTableStore &dep_table
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else if (FALSE_IT(pcv_schema_obj = new(obj_buf)PCVPlSchemaObj(pc_alloc_))) {
+          // do nothing
+        } else if (FALSE_IT(pcv_schema_obj->is_explicit_db_name_ = table_version.is_db_explicit_)) {
           // do nothing
         } else if (OB_FAIL(pcv_schema_obj->init_with_version_obj(table_version))) {
           LOG_WARN("failed to init pcv schema obj", K(ret), K(table_version));

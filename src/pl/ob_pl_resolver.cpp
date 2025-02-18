@@ -9970,6 +9970,7 @@ int ObPLResolver::check_composite_compatible(const ObUserDefinedType *actual_par
                                              bool &is_compatible)
 {
   int ret = OB_SUCCESS;
+  is_compatible = false;
   // Assigning One Record Variable to Another
   // You can assign the value of one record variable to another record variable only in these cases:
   // 1. The two variables have the same RECORD type.
