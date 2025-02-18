@@ -129,6 +129,8 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
   } else {
     ObServer &server = ObServer::get_instance();
     uint64_t cell_idx = 0;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    bool display_non_session_cursor = tenant_config.is_valid() ? tenant_config->_display_non_session_cursor : false;
     char ip_buf[common::OB_IP_STR_BUFF];
     char peer_buf[common::OB_IP_PORT_STR_BUFF];
     char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
@@ -159,7 +161,7 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
       }
 
       for (sql::ObSQLSessionInfo::CursorCache::CursorMap::iterator iter = sess_info->get_cursor_cache().pl_non_session_cursor_map_.begin();
-          OB_SUCC(ret) && iter != sess_info->get_cursor_cache().pl_non_session_cursor_map_.end(); ++iter) {
+          OB_SUCC(ret) && display_non_session_cursor && iter != sess_info->get_cursor_cache().pl_non_session_cursor_map_.end(); ++iter) {
         pl::ObPLCursorInfo* cursor_info = iter->second;
         if (OB_ISNULL(cursor_info)) {
           // do not report error
