@@ -4225,7 +4225,7 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
       gi_op->set_parallel(get_parallel());
       gi_op->set_partition_count(ctx.partition_count_);
       gi_op->set_hash_part(ctx.hash_part_);
-      gi_op->set_tablet_size(ctx.tablet_size_);
+      gi_op->set_tablet_size(ctx.tablet_size_ > 0 ? ctx.tablet_size_ : OB_DEFAULT_TABLET_SIZE);
 
       if (ctx.is_in_pw_affinity_state()) {
         gi_op->add_flag(GI_AFFINITIZE);
