@@ -8853,7 +8853,10 @@ int ObPLResolver::resolve_fetch(
               // 依次比较cursor member和所有into变量
               const ObPLDataType *left = NULL;
               const ObPLDataType *right = NULL;
-              CK (return_type->get_record_member_count() == into_data_type_count);
+              if (OB_SUCC(ret) && return_type->get_record_member_count() != into_data_type_count) {
+                ret = OB_ERR_WRONG_FETCH_INTO_NUM;
+                LOG_WARN("wrong number of values in the INTO list of a FETCH statement", K(ret));
+              }
               for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < into_data_type_count; ++i) {
                 left = return_type->get_record_member_type(i);
                 if (has_type_record_type) {
