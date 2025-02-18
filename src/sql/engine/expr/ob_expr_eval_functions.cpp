@@ -1768,6 +1768,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayUnion::eval_array_union_vector,                    /* 204 */
   NULL, // ObExprArrayReplace::eval_array_replace_vector,                /* 205 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_vector,              /* 206 */
+  NULL, // ObExprColumnConv::column_convert_vector,                      /* 207 */
+  NULL, // ObExprColumnConv::column_convert_vector_fast,                 /* 208 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
