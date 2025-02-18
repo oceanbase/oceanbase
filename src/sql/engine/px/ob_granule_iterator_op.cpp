@@ -94,9 +94,14 @@ OB_DEF_SERIALIZE(ObGIOpInput)
   BASE_SER(ObGIOpInput);
   LST_DO_CODE(OB_UNIS_ENCODE, parallelism_, worker_id_);
   if (OB_SUCC(ret)) {
-    MEMCPY(buf + pos, &pump_, sizeof(pump_));
-    pos += sizeof(pump_);
-    //LOG_TRACE("muhang(pump)SE", K(pump_));
+    if (OB_UNLIKELY(pos + sizeof(pump_) > buf_len)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("size overflow", K(pos), K(buf_len));
+    } else {
+      MEMCPY(buf + pos, &pump_, sizeof(pump_));
+      pos += sizeof(pump_);
+      //LOG_TRACE("muhang(pump)SE", K(pump_));
+    }
   }
   OB_UNIS_ENCODE(table_location_keys_);
   return ret;
@@ -109,7 +114,6 @@ OB_DEF_DESERIALIZE(ObGIOpInput)
   BASE_DESER(ObGIOpInput);
   LST_DO_CODE(OB_UNIS_DECODE, parallelism_, worker_id_);
   if (OB_SUCC(ret)) {
-    int64_t count = 0;
     const char *str = buf + pos;;
     MEMCPY(&pump_, str, sizeof(pump_));
     pos = pos + sizeof(pump_);
