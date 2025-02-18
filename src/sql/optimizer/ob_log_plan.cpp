@@ -6842,7 +6842,10 @@ int ObLogPlan::get_minimal_cost_candidate(const ObIArray<CandidatePlan> &candida
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
     ObQueryCtx* query_ctx;
-    if (OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+    if (OB_UNLIKELY(candidates.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected candi_plans", K(ret), K(candidates.count()));
+    } else if (OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
       // ignore ret
       LOG_WARN("unexpected null value", K(query_ctx));
       candidate = candidates.at(0);
