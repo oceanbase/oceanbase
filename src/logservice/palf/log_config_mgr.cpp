@@ -2053,17 +2053,18 @@ int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConf
   } else if (false == meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K_(self), K(meta));
-  } else if (OB_FAIL(update_election_meta_(meta.curr_))) {
-    PALF_LOG(ERROR, "update_election_meta_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
   } else {
     FlushMetaCbCtx cb_ctx;
     cb_ctx.type_ = MetaType::CHANGE_CONFIG_META;
     cb_ctx.proposal_id_ = meta.proposal_id_;
     cb_ctx.config_version_ = meta.curr_.config_.config_version_;
+    // Note: order is vital, submit flush task may fail
     if (OB_FAIL(log_engine_->submit_flush_change_config_meta_task(cb_ctx, meta))) {
       PALF_LOG(WARN, "LogEngine submit_flush_change_config_meta_task failed", KR(ret), K_(palf_id), K_(self), K(meta));
+    } else if (OB_FAIL(update_election_meta_(meta.curr_))) {
+      PALF_LOG(ERROR, "update_election_meta_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
     } else if (OB_FAIL(append_config_info_(meta.curr_))) {
-      PALF_LOG(WARN, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
+      PALF_LOG(ERROR, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(meta));
     } else {
       log_ms_meta_ = meta;
     }

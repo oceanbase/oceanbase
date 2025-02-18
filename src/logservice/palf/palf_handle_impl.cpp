@@ -4784,7 +4784,7 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
     do {
       RLockGuard guard(lock_);
       if (OB_FAIL(log_engine_.submit_flashback_task(flashback_cb_ctx))) {
-        PALF_LOG(ERROR, "submit_flashback_task failed", K(ret), KPC(this), K(flashback_scn));
+        PALF_LOG(WARN, "submit_flashback_task failed", K(ret), KPC(this), K(flashback_scn));
       }
     } while (0);
     TimeoutChecker not_timeout(timeout_us);

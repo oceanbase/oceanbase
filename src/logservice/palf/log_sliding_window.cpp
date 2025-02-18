@@ -3090,10 +3090,13 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "truncate begin lsn is less than committed_end_lsn, unexpected", K(ret), K_(palf_id), K_(self),
             K(truncate_log_info), K(committed_end_lsn));
-      } else if (OB_FAIL(sw_.truncate(truncate_log_id))) {
-        PALF_LOG(WARN, "sw_ truncate failed", K(ret), K_(palf_id), K_(self), K(truncate_log_info));
+      // Note: order is vital. If the sliding window has already been truncated,
+      // but it fails to submit truncate task. LogEngine will encounter an error
+      // when appending logs, because the logs in disk have not been truncated.
       } else if (OB_FAIL(log_engine_->submit_truncate_log_task(truncate_log_cb_ctx))) {
         PALF_LOG(WARN, "log_engine_ truncate failed", K(ret), K_(palf_id), K_(self), K(truncate_log_info));
+      } else if (OB_FAIL(sw_.truncate(truncate_log_id))) {
+        PALF_LOG(WARN, "sw_ truncate failed", K(ret), K_(palf_id), K_(self), K(truncate_log_info));
       } else {
         // update truncating state
         is_truncating_ = true;
