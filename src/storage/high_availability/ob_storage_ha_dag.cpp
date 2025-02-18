@@ -255,7 +255,7 @@ int ObIHADagNetCtx::get_retry_count(int32_t &retry_count)
 ObStorageHADag::ObStorageHADag(
     const share::ObDagType::ObDagTypeEnum &dag_type)
   : ObIDag(dag_type),
-    ha_dag_net_ctx_(),
+    ha_dag_net_ctx_(nullptr),
     result_mgr_(),
     compat_mode_(lib::Worker::CompatMode::MYSQL)
 {
