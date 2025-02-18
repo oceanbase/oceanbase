@@ -3586,17 +3586,7 @@ int ObAssocArrayType::init_session_var(const ObPLResolveCtx &resolve_ctx,
                                                 default_expr,
                                                 default_construct,
                                                 obj))) {
-  LOG_WARN("generate copy failed", K(ret));
-  } else {
-    ObPLAssocArray *assoc_ptr = NULL;
-    int64_t data = 0;
-    if (OB_FAIL(obj.get_ext(data))) {
-      LOG_WARN("init associate array session var failed.", K(ret));
-    } else {
-      assoc_ptr = reinterpret_cast<ObPLAssocArray *>(data);
-      assoc_ptr->set_key(NULL);
-      assoc_ptr->set_sort(NULL);
-    }
+    LOG_WARN("failed to init associative variable", K(ret));
   }
   return ret;
 }
