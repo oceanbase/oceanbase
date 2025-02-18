@@ -1372,6 +1372,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprInnerInfoColsExtraPrinter::eval_column_extra,        /* 834 */
   NULL, // ObExprInnerInfoColsDataTypePrinter::eval_column_data_type, /* 835 */
   NULL, // ObExprInnerInfoColsColumnTypePrinter::eval_column_column_type, /* 836 */
+  NULL, // ObExprRbOrCardinalityAggregate::eval_rb_or_cardinality_aggregate, /* 837 */
+  NULL, // ObExprRbAndCardinalityAggregate::eval_rb_and_cardinality_aggregate, /* 838 */
+  NULL, // ObExprRbToArray::eval_rb_to_array, /* 839 */
+  NULL, // ObExprRbContains::eval_rb_contains, /* 840 */
 
 };
 
