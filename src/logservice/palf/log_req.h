@@ -32,6 +32,7 @@ enum PushLogType
 {
   PUSH_LOG = 0,
   FETCH_LOG_RESP = 1,
+  PUSH_LOG_WO_ACK = 2,
 };
 
 inline const char *push_log_type_2_str(const PushLogType type)
@@ -41,6 +42,7 @@ inline const char *push_log_type_2_str(const PushLogType type)
   {
     EXTRACT_PUSH_LOG_TYPE(PUSH_LOG);
     EXTRACT_PUSH_LOG_TYPE(FETCH_LOG_RESP);
+    EXTRACT_PUSH_LOG_TYPE(PUSH_LOG_WO_ACK);
 
     default:
       return "Invalid Type";
