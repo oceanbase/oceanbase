@@ -15,6 +15,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "rootserver/ob_ddl_service.h"           // ObDDLTransController
 #include "share/schema/ob_latest_schema_guard.h" // ObLatestSchemaGuard
+#include "share/schema/ob_schema_guard_wrapper.h"// ObSchemaGuardWrapper
 
 namespace oceanbase
 {
@@ -30,6 +31,7 @@ namespace schema
 class ObMultiVersionSchemaService;
 class ObDDLTransController;
 class ObLatestSchemaGuard;
+class ObSchemaGuardWrapper;
 }
 }
 namespace rootserver
@@ -63,7 +65,8 @@ public:
   ObDDLHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
-    const char* parallel_ddl_type);
+    const char* parallel_ddl_type,
+    bool enable_ddl_parallel  = true);
   virtual ~ObDDLHelper();
 
   int init(rootserver::ObDDLService &ddl_service);
@@ -139,6 +142,7 @@ protected:
   int add_lock_table_udt_id_(const ObTableSchema &table_schema);
   int check_table_udt_exist_(const ObTableSchema &table_schema);
   ObSchemaType transfer_obj_type_to_schema_type_for_dep_(const ObObjectType obj_type);
+  int get_current_version_(int64_t &version);
 private:
   int add_lock_object_to_map_(
       const uint64_t lock_obj_id,
@@ -173,10 +177,11 @@ protected:
   ObjectLockMap lock_object_name_map_;
   // used to lock objects by id
   ObjectLockMap lock_object_id_map_;
-  // should use this guard after related objects are locked
-  share::schema::ObLatestSchemaGuard latest_schema_guard_;
   common::ObArenaAllocator allocator_;
   const char* parallel_ddl_type_;
+  // should use this guard after related objects are locked
+  share::schema::ObSchemaGuardWrapper schema_guard_wrapper_;
+  bool enable_ddl_parallel_;
 private:
   static const int64_t OBJECT_BUCKET_NUM = 1024;
   DISALLOW_COPY_AND_ASSIGN(ObDDLHelper);

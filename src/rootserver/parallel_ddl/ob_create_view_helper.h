@@ -37,7 +37,8 @@ public:
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res);
+    obrpc::ObCreateTableRes &res,
+    bool enable_ddl_parallel);
   virtual ~ObCreateViewHelper();
 
 private:

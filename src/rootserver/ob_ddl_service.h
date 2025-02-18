@@ -200,19 +200,7 @@ public:
   int do_check_mixed_locality_primary_zone_condition(
       const ObIArray<common::ObZone> &first_primary_zone_array,
       const ObIArray<share::ObZoneReplicaAttrSet> &zone_locality);
-  // batch mode in trx
-  virtual int create_user_tables(
-      const bool if_not_exist,
-      const common::ObString &ddl_stmt_str,
-      const share::schema::ObErrorInfo &error_info,
-      common::ObIArray<share::schema::ObTableSchema> &table_schemas,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
-      const uint64_t last_replay_log_id,
-      const common::ObIArray<share::schema::ObDependencyInfo> *dependency_infos,
-      ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
 
-  virtual int create_table_like(const obrpc::ObCreateTableLikeArg &arg);
 
   virtual int alter_table(obrpc::ObAlterTableArg &alter_table_arg,
                           obrpc::ObAlterTableRes &res);
@@ -1049,9 +1037,16 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----End of functions for managing row level security----
 
   // refresh local schema busy wait
-  virtual int refresh_schema(const uint64_t tenant_id, int64_t *schema_version = NULL);
+  virtual int refresh_schema(const uint64_t tenant_id, const bool inc_sequence_id = true, int64_t *refreshed_schema_version = nullptr);
   // notify other servers to refresh schema (call switch_schema  rpc)
-  virtual int notify_refresh_schema(const common::ObAddrIArray &addrs);
+  // for optimize wait schema refresh & sync time after a ddl finish,
+  // notify refresh schema would broadcast the last generate schema version in serial ddl
+  // or broadcast the latest finished ddl's end_schema_version in parallel ddl
+  // and then refresh local schema again to make sure the local schema is refresh successfully
+  virtual int notify_refresh_schema(const uint64_t tenant_id,
+                                    const common::ObAddrIArray &addrs,
+                                    int64_t &refreshed_schema_version);
+  int construct_tenant_broadcast_info(const uint64_t tenant_id, ObRefreshSchemaInfo &schema_info);
 
   //TODO(jingqian): only used by random_choose_unit
   inline int set_sys_units(const common::ObIArray<share::ObUnit> &sys_units);
@@ -1144,7 +1139,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
 
   virtual int publish_schema_and_get_schema_version(const uint64_t tenant_id,
                                                     const common::ObAddrIArray &addrs,
-                                                    int64_t *schema_version = NULL);
+                                                    int64_t &schema_version);
 
   int force_set_locality(
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1427,15 +1422,6 @@ private:
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard,
       bool &need_update_index_table);
-  virtual int create_tables_in_trans(
-              const bool if_not_exist,
-              const common::ObString &ddl_stmt_str,
-              const share::schema::ObErrorInfo &error_info,
-              common::ObIArray<share::schema::ObTableSchema> &table_schemas,
-              const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
-              const uint64_t last_replay_log_id,
-              const common::ObIArray<share::schema::ObDependencyInfo> *dep_infos,
-              ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
   int print_view_expanded_definition(
       const share::schema::ObTableSchema &table_schema,
       ObString &ddl_stmt_str,
@@ -1545,25 +1531,6 @@ private:
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator);
-
-  // delete unused columns from inner table or memory.
-  // @param [in] orig_table_schema.
-  // @param [in] need_remove_orig_table_unused_column, to decide whether to remove origin table's unused columns.
-  //             = true for new_truncate whose table id will not be changed.
-  //             = false for old truncate table, offline ddl.
-  // @param [in] need_redistribute_column_id, to decide whether to redistribute column ids.
-  //             = true for offline_ddl.
-  //             = false for old truncate table, new truncate table.
-  // @param [in] ddl_operator, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
-  // @param [in] trans, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
-  // @param [out] new_table_schema, exclude unused columns compared to the orig_table_schema.
-  int delete_unused_columns_and_redistribute_schema(
-      const share::schema::ObTableSchema &orig_table_schema,
-      const bool need_remove_orig_table_unused_column,
-      const bool need_redistribute_column_id,
-      ObDDLOperator *ddl_operator,
-      common::ObMySQLTransaction *trans,
-      share::schema::ObTableSchema &new_table_schema);
   int prepare_hidden_table_schema(
       const share::schema::ObTableSchema &orig_table_schema,
       common::ObIAllocator &allocator,
@@ -2201,6 +2168,24 @@ private:
       share::schema::ObSysVarSchema &sysvar,
       bool &execute);
 public:
+  // delete unused columns from inner table or memory.
+  // @param [in] orig_table_schema.
+  // @param [in] need_remove_orig_table_unused_column, to decide whether to remove origin table's unused columns.
+  //             = true for new_truncate whose table id will not be changed.
+  //             = false for old truncate table, offline ddl.
+  // @param [in] need_redistribute_column_id, to decide whether to redistribute column ids.
+  //             = true for offline_ddl.
+  //             = false for old truncate table, new truncate table.
+  // @param [in] ddl_operator, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
+  // @param [in] trans, the operator to remove unused columns from inner table, valid when need_remove_orig_table_unused_column = true.
+  // @param [out] new_table_schema, exclude unused columns compared to the orig_table_schema.
+  int delete_unused_columns_and_redistribute_schema(
+      const share::schema::ObTableSchema &orig_table_schema,
+      const bool need_remove_orig_table_unused_column,
+      const bool need_redistribute_column_id,
+      ObDDLOperator *ddl_operator,
+      common::ObMySQLTransaction *trans,
+      share::schema::ObTableSchema &new_table_schema);
   int refresh_unit_replica_counter(const uint64 tenant_id);
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
   // used only by create normal tenant
@@ -2922,6 +2907,7 @@ public:
   void disable_serialize_inc_schemas() { trans_start_schema_version_ = 0; }
   // serialize inc schemas from (start_schema_version, ]
   int serialize_inc_schemas(const int64_t start_schema_version);
+  bool is_enable_parallel() {return enable_ddl_parallel_;}
 private:
   // generate inc schema_metas and regist multi_data_source data
   // all schemas should contains basic info(id/name/schema_version/charset_type/collation_type)

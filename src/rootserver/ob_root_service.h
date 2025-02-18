@@ -514,6 +514,7 @@ public:
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);
   int purge_index(const obrpc::ObPurgeIndexArg &arg);
   int create_table_like(const obrpc::ObCreateTableLikeArg &arg);
+  int parallel_create_table_like(const obrpc::ObCreateTableLikeArg &arg, obrpc::ObCreateTableRes &res);
   int refresh_config();
   int root_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg);
   int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);

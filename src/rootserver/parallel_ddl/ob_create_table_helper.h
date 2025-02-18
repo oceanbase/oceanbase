@@ -12,7 +12,7 @@
 #ifndef OCEANBASE_ROOTSERVER_OB_CREATE_TABLE_HELPER_H_
 #define OCEANBASE_ROOTSERVER_OB_CREATE_TABLE_HELPER_H_
 
-#include "rootserver/parallel_ddl/ob_ddl_helper.h"
+#include "rootserver/parallel_ddl/ob_table_helper.h"
 #include "lib/hash/ob_hashmap.h"
 
 namespace oceanbase
@@ -32,7 +32,7 @@ class ObCreateTableRes;
 }
 namespace rootserver
 {
-class ObCreateTableHelper : public ObDDLHelper
+class ObCreateTableHelper : public ObTableHelper
 {
 public:
 
@@ -61,12 +61,12 @@ public:
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res);
+    obrpc::ObCreateTableRes &res,
+    bool enable_ddl_parallel);
   virtual ~ObCreateTableHelper();
 
 private:
   virtual int init_() override;
-
   virtual int lock_objects_() override;
   virtual int generate_schemas_() override;
   virtual int operate_schemas_() override;
@@ -75,8 +75,6 @@ private:
   virtual int clean_on_fail_commit_() override;
   virtual int construct_and_adjust_result_(int &return_ret) override;
 
-  int create_schemas_();
-  int create_tablets_();
   int add_index_name_to_cache_();
 
   int lock_database_by_obj_name_();
@@ -91,25 +89,14 @@ private:
   int set_tablegroup_id_();
   int check_and_set_parent_table_id_();
 
-  int generate_table_schema_();
-  int generate_aux_table_schemas_();
-  int generate_foreign_keys_();
-  int generate_sequence_object_();
-  int generate_audit_schema_();
+  virtual int generate_table_schema_() override;
+  virtual int generate_aux_table_schemas_() override;
+  virtual int generate_foreign_keys_() override;
+  virtual int generate_sequence_object_() override;
   int get_mock_fk_parent_table_info_(
       const obrpc::ObCreateForeignKeyArg &foreign_key_arg,
       share::schema::ObForeignKeyInfo &foreign_key_info,
       share::schema::ObMockFKParentTableSchema *&new_mock_fk_parent_table_schema);
-  int try_replace_mock_fk_parent_table_(
-      share::schema::ObMockFKParentTableSchema *&new_mock_fk_parent_table);
-  int check_fk_columns_type_for_replacing_mock_fk_parent_table_(
-      const share::schema::ObTableSchema &parent_table_schema,
-      const share::schema::ObMockFKParentTableSchema &mock_parent_table_schema);
-
-  int create_sequence_();
-  int create_tables_();
-  int create_audits_();
-  int deal_with_mock_fk_parent_tables_();
 private:
   const obrpc::ObCreateTableArg &arg_;
   obrpc::ObCreateTableRes &res_;

@@ -1254,7 +1254,6 @@ private:
       int64_t &timeout,
       int64_t &row_cnt);
 
-  bool in_parallel_ddl_thread_();
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;

@@ -30,8 +30,9 @@ ObCreateViewHelper::ObCreateViewHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res)
-  : ObDDLHelper(schema_service, tenant_id, "[parallel create view]"),
+    obrpc::ObCreateTableRes &res,
+    bool enable_ddl_parallel)
+  : ObDDLHelper(schema_service, tenant_id, "[parallel create view]", enable_ddl_parallel),
     arg_(arg),
     res_(res),
     new_table_schema_(nullptr),
@@ -180,7 +181,7 @@ int ObCreateViewHelper::lock_and_check_view_name_()
     if (arg_.is_alter_view_) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support alter view in oracle mode", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(latest_schema_guard_.check_oracle_object_exist(
+    } else if (OB_FAIL(schema_guard_wrapper_.check_oracle_object_exist(
                database_id, session_id, table_name, TABLE_SCHEMA,
                INVALID_ROUTINE_TYPE, arg_.if_not_exist_))) {
       LOG_WARN("fail to check oracle object exist", KR(ret), K(database_id), K(session_id), K(table_name), K_(arg_.if_not_exist));
@@ -188,7 +189,7 @@ int ObCreateViewHelper::lock_and_check_view_name_()
       // create or replace view
       // could be no object exist
       // or exist in table space, should check table type
-      if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, session_id, table_name,
+      if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id, session_id, table_name,
                                                     orig_table_id_, table_type, schema_version))) {
         LOG_WARN("fail to get table id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));
       } else if (OB_INVALID_ID != orig_table_id_) {
@@ -210,7 +211,7 @@ int ObCreateViewHelper::lock_and_check_view_name_()
     }
   } else {
     uint64_t mock_table_id = OB_INVALID_ID;
-    if (OB_FAIL(latest_schema_guard_.get_mock_fk_parent_table_id(database_id,
+    if (OB_FAIL(schema_guard_wrapper_.get_mock_fk_parent_table_id(database_id,
                        table_name, mock_table_id))) {
       LOG_WARN("fail to get mock table id", KR(ret), K_(tenant_id), K(database_id), K(table_name));
     } else if (OB_UNLIKELY(OB_INVALID_ID != mock_table_id)) {
@@ -228,7 +229,7 @@ int ObCreateViewHelper::lock_and_check_view_name_()
         LOG_WARN("mock table exist", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name),
                                 K(mock_table_id), K(schema_version), K(arg_.if_not_exist_));
       }
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id(database_id, session_id, table_name,
+    } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(database_id, session_id, table_name,
                                                   orig_table_id_, table_type, schema_version))) {
       LOG_WARN("fail to get table id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));
     } else if (OB_INVALID_ID == orig_table_id_) {
@@ -284,7 +285,7 @@ int ObCreateViewHelper::lock_object_id_()
   } else if (OB_FAIL(lock_existed_objects_by_id_())) {
     LOG_WARN("fail to lock existed objects by id", KR(ret));
   } else if (OB_INVALID_ID != orig_table_id_) {
-    if (OB_FAIL(latest_schema_guard_.get_table_schema(orig_table_id_, orig_table_schema_))) {
+    if (OB_FAIL(schema_guard_wrapper_.get_table_schema(orig_table_id_, orig_table_schema_))) {
       LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K_(orig_table_id));
     } else if (OB_ISNULL(orig_table_schema_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -462,7 +463,7 @@ int ObCreateViewHelper::check_parallel_ddl_conflict_()
     ObArray<ObSchemaIdVersion> SCHEMA_TYPE##_schema_versions; \
     if (OB_FAIL(ret)) { \
     } else if (0 == SCHEMA_TYPE##_ids.count()) { \
-    } else if (OB_FAIL(latest_schema_guard_.get_##SCHEMA_TYPE##_schema_versions(SCHEMA_TYPE##_ids, SCHEMA_TYPE##_schema_versions))) { \
+    } else if (OB_FAIL(schema_guard_wrapper_.get_##SCHEMA_TYPE##_schema_versions(SCHEMA_TYPE##_ids, SCHEMA_TYPE##_schema_versions))) { \
       LOG_WARN("failed to get " #SCHEMA_TYPE " schema versions", KR(ret), K_(tenant_id), K(SCHEMA_TYPE##_ids)); \
     } else if (OB_FAIL(check_max_dependency_version_(SCHEMA_TYPE##_ids, SCHEMA_TYPE##_schema_versions))) { \
       LOG_WARN("fail to check max dependency version", KR(ret), K(SCHEMA_TYPE##_ids), K(SCHEMA_TYPE##_schema_versions)); \
@@ -524,7 +525,7 @@ int ObCreateViewHelper::generate_schemas_()
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(orig_table_schema_)) {
     const uint64_t orig_table_id = orig_table_schema_->get_table_id();
-    if (OB_FAIL(latest_schema_guard_.get_obj_privs(orig_table_id, ObObjectType::TABLE, obj_privs_))) {
+    if (OB_FAIL(schema_guard_wrapper_.get_obj_privs(orig_table_id, ObObjectType::TABLE, obj_privs_))) {
       LOG_WARN("fail to get obj privs", KR(ret), K_(tenant_id), K(orig_table_id));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < obj_privs_.count(); ++i) {
@@ -542,7 +543,7 @@ int ObCreateViewHelper::generate_schemas_()
     const ObIArray<uint64_t> &trigger_list = orig_table_schema_->get_trigger_list();
     for (int64_t i = 0; OB_SUCC(ret) && i < trigger_list.count(); ++i) {
       const ObTriggerInfo* trigger_info = nullptr;
-      if (OB_FAIL(latest_schema_guard_.get_trigger_info(trigger_list.at(i), trigger_info))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_trigger_info(trigger_list.at(i), trigger_info))) {
         LOG_WARN("fail to get trigger info", KR(ret), K_(tenant_id), K(trigger_list.at(i)));
       } else if (OB_ISNULL(trigger_info)) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -557,7 +558,7 @@ int ObCreateViewHelper::generate_schemas_()
     const ObIArray<uint64_t> &rls_policy_list = orig_table_schema_->get_rls_policy_ids();
     for (int64_t i = 0; OB_SUCC(ret) && i < rls_policy_list.count(); ++i) {
       const ObRlsPolicySchema* rls_policy = nullptr;
-      if (OB_FAIL(latest_schema_guard_.get_rls_policys(rls_policy_list.at(i), rls_policy))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_policys(rls_policy_list.at(i), rls_policy))) {
         LOG_WARN("fail to get rls policy", KR(ret), K_(tenant_id), K(rls_policy_list.at(i)));
       } else if (OB_ISNULL(rls_policy)) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -569,7 +570,7 @@ int ObCreateViewHelper::generate_schemas_()
     const ObIArray<uint64_t> &rls_group_list = orig_table_schema_->get_rls_group_ids();
     for (int64_t i = 0; OB_SUCC(ret) && i < rls_group_list.count(); ++i) {
       const ObRlsGroupSchema* rls_group = nullptr;
-      if (OB_FAIL(latest_schema_guard_.get_rls_groups(rls_policy_list.at(i), rls_group))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_groups(rls_policy_list.at(i), rls_group))) {
         LOG_WARN("fail to get rls group", KR(ret), K_(tenant_id), K(rls_group_list.at(i)));
       } else if (OB_ISNULL(rls_group)) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -581,7 +582,7 @@ int ObCreateViewHelper::generate_schemas_()
     const ObIArray<uint64_t> &rls_context_list = orig_table_schema_->get_rls_context_ids();
     for (int64_t i = 0; OB_SUCC(ret) && i < rls_context_list.count(); ++i) {
       const ObRlsContextSchema* rls_context = nullptr;
-      if (OB_FAIL(latest_schema_guard_.get_rls_contexts(rls_context_list.at(i), rls_context))) {
+      if (OB_FAIL(schema_guard_wrapper_.get_rls_contexts(rls_context_list.at(i), rls_context))) {
         LOG_WARN("fail to get rls context", KR(ret), K_(tenant_id), K(rls_policy_list.at(i)));
       } else if (OB_ISNULL(rls_context)) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -593,7 +594,7 @@ int ObCreateViewHelper::generate_schemas_()
     for (int64_t i = 0; OB_SUCC(ret) && i < dep_objs_.count(); ++i) {
       if (ObObjectType::VIEW == dep_objs_.at(i).second) {
         const ObTableSchema* view_schema = nullptr;
-        if (OB_FAIL(latest_schema_guard_.get_table_schema(dep_objs_.at(i).first, view_schema))) {
+        if (OB_FAIL(schema_guard_wrapper_.get_table_schema(dep_objs_.at(i).first, view_schema))) {
           LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(dep_objs_.at(i).first));
         } else if (OB_ISNULL(view_schema)) {
           ret = OB_ERR_PARALLEL_DDL_CONFLICT;
@@ -622,7 +623,7 @@ int ObCreateViewHelper::print_view_expanded_definition_()
   } else if (OB_ISNULL(new_table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_table_schema_ is null", KR(ret));
-  } else if (OB_FAIL(latest_schema_guard_.get_database_schema(arg_.schema_.get_database_id(), database_schema_))) {
+  } else if (OB_FAIL(schema_guard_wrapper_.get_database_schema(arg_.schema_.get_database_id(), database_schema_))) {
     LOG_WARN("fail to get database schema", KR(ret));
   } else if (OB_ISNULL(database_schema_)) {
     ret = OB_ERR_UNEXPECTED;

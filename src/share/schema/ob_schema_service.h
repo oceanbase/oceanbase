@@ -1347,7 +1347,10 @@ public:
               const uint64_t obj_type,
               ObIArray<ObObjPriv> &obj_privs) = 0;
   /*----------- interfaces for latest schema end -------------*/
-
+  static bool in_parallel_ddl_thread()
+  {
+    return 0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name());
+  }
 };
 }//namespace schema
 }//namespace share

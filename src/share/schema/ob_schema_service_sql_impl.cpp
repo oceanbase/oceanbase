@@ -441,10 +441,6 @@ int ObSchemaServiceSQLImpl::get_new_schema_version(uint64_t tenant_id, int64_t &
   return ret;
 }
 
-bool ObSchemaServiceSQLImpl::in_parallel_ddl_thread_()
-{
-  return 0 == STRCASECMP(PARALLEL_DDL_THREAD_NAME, ob_get_origin_thread_name());
-}
 
 int ObSchemaServiceSQLImpl::gen_new_schema_version(
     const uint64_t tenant_id,
@@ -457,7 +453,7 @@ int ObSchemaServiceSQLImpl::gen_new_schema_version(
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (in_parallel_ddl_thread_()) {
+  } else if (ob_batch_generate_schema_version()) {
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     if (OB_ISNULL(tsi_generator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -488,10 +484,11 @@ int ObSchemaServiceSQLImpl::gen_batch_new_schema_versions(
       || version_cnt < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(version_cnt));
-  } else if (OB_UNLIKELY(!in_parallel_ddl_thread_())) {
+  } else if (OB_UNLIKELY(!ob_batch_generate_schema_version())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("this interface only works in parallel ddl thread",
-             KR(ret), "thread_name", ob_get_origin_thread_name());
+    LOG_WARN("this interface only works for parallel-enable ddl",
+             KR(ret), "thread_name", ob_get_origin_thread_name(),
+             K(ob_batch_generate_schema_version()));
   } else {
     auto *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
     int64_t end_schema_version = OB_INVALID_VERSION;
