@@ -3657,6 +3657,7 @@ int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   if (elem_type_info->is_base_type()) {
+    ObArray<ObString> extend_info;
     int64_t type_pos = 0;
     char type_str[OB_MAX_SYS_PARAM_NAME_LENGTH];
     bzero(type_str, OB_MAX_SYS_PARAM_NAME_LENGTH);
@@ -3667,7 +3668,8 @@ int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
                         elem_type_info->get_length(),
                         elem_type_info->get_precision(),
                         elem_type_info->get_scale(),
-                        static_cast<ObCollationType>(elem_type_info->get_coll_type())),
+                        static_cast<ObCollationType>(elem_type_info->get_coll_type()),
+                        extend_info),
                         elem_type_info, element_type_id);
     OZ (databuff_printf(buf, buf_len, pos, "%s", type_str));
   } else {
@@ -4026,6 +4028,7 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
                           param->get_param_type().get_precision(),
                           param->get_param_type().get_scale(),
                           param->get_param_type().get_collation_type(),
+                          param->get_extended_type_info(),
                           sub_type));
       OZ (databuff_printf(buf, buf_len, pos, " %s", type_str));
     } else {

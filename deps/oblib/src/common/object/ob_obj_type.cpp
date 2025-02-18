@@ -669,10 +669,11 @@ int ob_sql_type_str_with_coll(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, sub_type))) {
+  if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos, type, length, precision, scale, coll_type, type_info, sub_type))) {
     LOG_WARN("fail to get data type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
   } else if (lib::is_mysql_mode() && ob_is_string_type(type) && CS_TYPE_BINARY != coll_type) {
       if (ObCharset::is_default_collation(coll_type)) {
@@ -696,6 +697,7 @@ int ob_sql_type_str(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
+    const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
@@ -774,6 +776,13 @@ int ob_sql_type_str(char *buff,
     ObSEArray<ObString, 1> dummy_arr;
     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, dummy_arr, sub_type, true))) {
       LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
+    }
+  } else if (ob_is_enumset_tc(type)) {
+     ObObjMeta obj_meta;
+     obj_meta.set_type(type);
+     obj_meta.set_collation_type(coll_type);
+    if (OB_FAIL(ob_enum_or_set_str(obj_meta, type_info, buff, buff_length, pos))) {
+      LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(obj_meta), K(buff_length), K(pos));
     }
   } else {
     ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
@@ -913,7 +922,7 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos,
                                 datatype, length,
                                 precision_or_length_semantics,
-                                accuracy.get_scale(), coll_type, sub_type))) {
+                                accuracy.get_scale(), coll_type, type_info, sub_type))) {
       LOG_WARN("fail to print sql type", K(ret), K(obj_meta), K(accuracy));
     }
   }

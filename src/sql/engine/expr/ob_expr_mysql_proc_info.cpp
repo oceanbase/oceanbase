@@ -20,6 +20,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "share/schema/ob_schema_printer.h"
 #include "common/object/ob_obj_type.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
 
@@ -376,6 +377,7 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
     SERVER_LOG(WARN, "fail to alloc returns_buf", K(ret));
   } else {
     if (routine_info->is_function()) {
+      CK (OB_NOT_NULL(routine_info->get_ret_type_info()));
       if (OB_FAIL(ob_sql_type_str_with_coll(returns_buf,
                                             OB_MAX_VARCHAR_LENGTH,
                                             pos,
@@ -383,7 +385,8 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
                                             routine_info->get_ret_type()->get_length(),
                                             routine_info->get_ret_type()->get_precision(),
                                             routine_info->get_ret_type()->get_scale(),
-                                            routine_info->get_ret_type()->get_collation_type()))) {
+                                            routine_info->get_ret_type()->get_collation_type(),
+                                            *routine_info->get_ret_type_info()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to get data type str with coll", KPC(routine_info->get_ret_type()));
       }
     } else {
@@ -417,9 +420,10 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
 
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-
+  ObSEArray<common::ObString, 4> extended_type_info;
   uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX);
-  if (ob_is_geometry_tc(static_cast<ObObjType>(param_type))) {
+  if (ob_is_geometry_tc(static_cast<ObObjType>(param_type)) ||
+      ob_is_enumset_tc(static_cast<ObObjType>(param_type))) {
     sql::ObExecEnv exec_env;
     ParseNode *create_node = nullptr;
     if OB_FAIL(exec_env.init(exec_env_str)) {
@@ -433,7 +437,12 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
     if (OB_SUCC(ret)) {
       if(!OB_ISNULL(create_node) && !OB_ISNULL(create_node->children_[3])) {
         ParseNode *return_node = create_node->children_[3];
-        sub_type = return_node->int32_values_[1];
+        if (ob_is_geometry_tc(static_cast<ObObjType>(param_type))) {
+          sub_type = return_node->int32_values_[1];
+        } else {
+          CK(OB_NOT_NULL(return_node->children_[3]));
+          OZ (ObResolverUtils::resolve_extended_type_info(*(return_node->children_[3]), extended_type_info));
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unexpected parse node type of routine body", K(create_node->type_));
@@ -454,6 +463,7 @@ int ObExprMysqlProcInfo::get_returns_info(const ObExpr &expr,
                                           param_precision,
                                           param_scale,
                                           static_cast<ObCollationType>(param_coll_type),
+                                          extended_type_info,
                                           sub_type))) {
       SHARE_SCHEMA_LOG(WARN, "fail to get data type str with coll", K(ret), K(param_type), K(param_length), K(param_precision), K(param_scale), K(param_coll_type));
     }

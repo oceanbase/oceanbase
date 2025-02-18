@@ -884,6 +884,7 @@ int ObTableColumns::deduce_column_attributes(
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
     uint64_t sub_type = static_cast<uint64_t>(ObGeoType::GEOTYPEMAX);
+    ObArray<ObString> extend_type_info;
 
     if (is_oracle_mode
         && ((result_type.is_varchar_or_char()
@@ -924,6 +925,7 @@ int ObTableColumns::deduce_column_attributes(
                                   precision_or_length_semantics,
                                   result_type.get_scale(),
                                   result_type.get_collation_type(),
+                                  extend_type_info,
                                   sub_type))) {
         LOG_WARN("fail to get data type str", K(ret));
       } else {
