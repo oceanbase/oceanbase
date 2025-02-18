@@ -1268,13 +1268,14 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       // do nothing :maybe null data
     } else {
       ObVectorIndexAlgorithmType build_type = VIAT_HNSW;
+      int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param->m_) : param->m_;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              build_type,
                                              DATATYPE_FLOAT32,
                                              VEC_INDEX_ALGTH[param->dist_algorithm_],
                                              param->dim_,
-                                             param->m_,
+                                             build_metric,
                                              param->ef_construction_,
                                              param->ef_search_,
                                              snap_data_->mem_ctx_))) {
