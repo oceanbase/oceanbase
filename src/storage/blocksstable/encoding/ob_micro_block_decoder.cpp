@@ -1814,11 +1814,10 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
     LOG_WARN("Invalid argument", K(ret), K(filter.get_col_count()),
              K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_), K(datum_buf));
   } else if (FALSE_IT(col_offset = col_offsets.at(0))) {
-  } else if (OB_UNLIKELY(0 > col_offset || header_->column_count_ <= col_offset)) {
+  } else if (OB_UNLIKELY(0 > col_offset)) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("Filter column offset out of range", K(ret), K(header_->column_count_), K(col_offset));
   } else {
-    col_offset = col_offsets.at(0);
     ObColumnDecoder* column_decoder = decoders_ + col_offset;
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     column_decoder->ctx_->set_col_param(col_params.at(0));
@@ -1885,7 +1884,7 @@ int ObMicroBlockDecoder::filter_pushdown_retro(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Micro Block decoder not inited", K(ret));
-  } else if (OB_UNLIKELY(0 > col_offset || header_->column_count_ <= col_offset)) {
+  } else if (OB_UNLIKELY(0 > col_offset)) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("Filter column id out of range", K(ret), K(col_offset), K(header_->column_count_));
   } else if (OB_UNLIKELY(sql::WHITE_OP_MAX <= filter.get_op_type()

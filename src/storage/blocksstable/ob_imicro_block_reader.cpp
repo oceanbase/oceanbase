@@ -98,8 +98,6 @@ int ObIMicroBlockReader::validate_filter_info(
 {
   int ret = OB_SUCCESS;
   int64_t col_count = filter.get_col_count();
-  const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
-  const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -113,14 +111,6 @@ int ObIMicroBlockReader::validate_filter_info(
   } else if (OB_ISNULL(col_buf) && 0 < col_capacity) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null col buf", K(ret), K(col_capacity));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
-      if (OB_UNLIKELY(col_offsets.at(i) >= header->column_count_)) {
-        ret = OB_INDEX_OUT_OF_RANGE;
-        LOG_WARN("Filter col offset greater than store cnt",
-                 K(ret), K(header->column_count_), K(col_offsets.at(i)));
-      }
-    }
   }
   return ret;
 }

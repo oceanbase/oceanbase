@@ -1435,7 +1435,7 @@ int ObMicroBlockCSDecoder::filter_pushdown_filter(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null datum buf", KR(ret), K(datum_buf), K(col_capacity));
   } else if (FALSE_IT(col_offset = col_offsets.at(0))) {
-  } else if (OB_UNLIKELY((col_offset < 0) || (col_offset >= column_count_))) {
+  } else if (OB_UNLIKELY((col_offset < 0))) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("Filter column offset out of range", KR(ret), K_(column_count), K(col_offset));
   } else if (OB_ISNULL(col_cs_decoder = decoders_ + col_offset)) {
@@ -1496,7 +1496,7 @@ int ObMicroBlockCSDecoder::filter_pushdown_retro(const sql::ObPushdownFilterExec
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Micro Block decoder not inited", K(ret));
-  } else if (OB_UNLIKELY(0 > col_offset || column_count_ <= col_offset)) {
+  } else if (OB_UNLIKELY(0 > col_offset)) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("Filter column id out of range", K(ret), K(col_offset), K(column_count_));
   } else if (OB_UNLIKELY(sql::WHITE_OP_MAX <= filter.get_op_type() || !result_bitmap.is_inited())) {
