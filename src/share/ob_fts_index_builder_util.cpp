@@ -1911,7 +1911,8 @@ int ObFtsIndexBuilderUtil::try_load_dictionary_for_all_tenants()
   } else {
     for (int64_t i = 0; i < all_tenants.size(); ++i) { // ignore ret to delete other tenant's dic loader
       const uint64_t tenant_id = all_tenants.at(i);
-      if (is_valid_tenant_id(tenant_id) && is_user_tenant(tenant_id)) {
+      if (is_valid_tenant_id(tenant_id)
+          && (is_user_tenant(tenant_id) || is_sys_tenant(tenant_id))) {
         lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
         // overwrite ret
         if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {

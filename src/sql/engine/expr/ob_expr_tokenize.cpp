@@ -25,6 +25,9 @@
 #include "share/ob_json_access_utils.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
+#include "storage/fts/dict/ob_gen_dic_loader.h"
+#include "lib/charset/ob_charset.h"
+#include "share/ob_fts_index_builder_util.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // file not self-contained, there're logs inside.
@@ -224,6 +227,8 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
     LOG_WARN("Fail to parse parser params.", K(ret));
   } else if (OB_FAIL(param.reform_parser_properties(param.properties_))) {
     LOG_WARN("Fail to reform parser params.", K(ret));
+  } else if (OB_FAIL(param.try_load_dictionary_for_ik(tenant_id))) {
+    LOG_WARN("fail to try load dictionary for ik", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -419,5 +424,32 @@ int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &prop
 
   return ret;
 }
+
+int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool need_to_load_dic = false;
+  ObTenantDicLoaderHandle dic_loader_handle;
+  if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(tenant_id,
+                                                            parser_name_,
+                                                            need_to_load_dic))) {
+    LOG_WARN("fail to check need to load dic",
+        K(ret), K(tenant_id), K(parser_name_), K(need_to_load_dic));
+  } else if (need_to_load_dic) {
+    if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id,
+                                                              parser_name_,
+                                                              ObCharset::charset_type_by_coll(cs_type_),
+                                                              dic_loader_handle))) {
+      LOG_WARN("fail to get dic loader", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dic loader handle is not valid", K(ret), K(tenant_id), K(dic_loader_handle));
+    } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id))) {
+      LOG_WARN("fail to try load dictionary", K(ret), K(tenant_id), K(dic_loader_handle));
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase
