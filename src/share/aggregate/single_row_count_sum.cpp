@@ -11,8 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL
 
-#include "single_row.h"
-#include "single_row_init.h"
+#include "single_row_count_sum.h"
 
 namespace oceanbase
 {
@@ -22,27 +21,19 @@ namespace aggregate
 {
 namespace helper
 {
-int init_single_row_min_max_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
-                                      IAggregate *&agg)
+int init_single_row_count_sum_aggregate(RuntimeContext &agg_ctx, const int col_id,
+                                        ObIAllocator &allocator, IAggregate *&agg)
 {
   int ret = OB_SUCCESS;
   agg = nullptr;
   ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
   VecValueTypeClass param_vec = aggr_info.param_exprs_.at(0)->get_vec_value_tc();
-  if (aggr_info.get_expr_type() == T_FUN_MIN) {
+  if (aggr_info.get_expr_type() == T_FUN_COUNT_SUM) {
     switch (param_vec) {
-      LST_DO_CODE(INIT_GENERAL_MIN_CASE, AGG_VEC_TC_LIST);
+      LST_DO_CODE(INIT_GENERAL_COUNT_SUM_CASE, AGG_VEC_TC_LIST);
       default: {
         ret = OB_ERR_UNEXPECTED;
-        break;
-      }
-    }
-  } else if (aggr_info.get_expr_type() == T_FUN_MAX) {
-    switch (param_vec) {
-      LST_DO_CODE(INIT_GENERAL_MAX_CASE, AGG_VEC_TC_LIST);
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        break;
+        SQL_LOG(WARN, "unexpected vector type class", K(param_vec), K(*aggr_info.expr_));
       }
     }
   }

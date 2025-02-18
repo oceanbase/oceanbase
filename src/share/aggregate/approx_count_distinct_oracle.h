@@ -9,9 +9,11 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#define USING_LOG_PREFIX SQL
 
-#include "single_row_count.h"
+#ifndef OB_SHARE_AGG_APX_CNT_DISTINCT_ORACLE_H_
+#define OB_SHARE_AGG_APX_CNT_DISTINCT_ORACLE_H_
+
+#include "approx_count_distinct.h"
 
 namespace oceanbase
 {
@@ -21,26 +23,10 @@ namespace aggregate
 {
 namespace helper
 {
-int init_single_row_count_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
-                                    IAggregate *&agg)
-{
-  int ret = OB_SUCCESS;
-  agg = nullptr;
-  ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
-  VecValueTypeClass param_vec = aggr_info.param_exprs_.at(0)->get_vec_value_tc();
-  switch (param_vec) {
-    LST_DO_CODE(INIT_COUNT_CASE, AGG_VEC_TC_LIST);
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      break;
-    }
-  }
-  if (OB_FAIL(ret)) {
-    SQL_LOG(WARN, "init count aggregate failed", K(ret));
-  }
-  return ret;
-}
+int init_approx_count_distinct_oracle_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                                ObIAllocator &allocator, IAggregate *&agg);
 } // end helper
 } // end aggregate
 } // end share
 } // end oceanbase
+#endif // OB_SHARE_AGG_APX_CNT_DISTINCT_ORACLE_H_

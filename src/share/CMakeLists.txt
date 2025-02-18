@@ -9,6 +9,30 @@ ob_set_subtarget(ob_share_extra ALONE
   vector/ob_fixed_length_base.cpp
   vector/ob_discrete_base.cpp
   vector/ob_continuous_base.cpp
+  vector/ob_uniform_const_vector.cpp
+
+  aggregate/approx_count_distinct.cpp
+  aggregate/count.cpp
+  aggregate/iaggregate.cpp
+  aggregate/processor.cpp
+  aggregate/single_row.cpp
+  aggregate/single_row_sum.cpp
+  aggregate/single_row_count.cpp
+  aggregate/sum.cpp
+  aggregate/sys_bit.cpp
+  aggregate/aggr_extra.cpp
+  aggregate/rb_build_agg.cpp
+  aggregate/single_row_max.cpp
+  aggregate/single_row_min.cpp
+  aggregate/single_row_count_sum.cpp
+  aggregate/min.cpp
+  aggregate/max.cpp
+  aggregate/approx_count_distinct_mysql.cpp
+  aggregate/approx_count_distinct_oracle.cpp
+  aggregate/sum_opnsize.cpp
+  aggregate/group_concat.cpp
+  aggregate/approx_count_distinct_synopsis.cpp
+
   vector/expr_cmp_func.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_0.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_1.cpp
@@ -18,6 +42,7 @@ ob_set_subtarget(ob_share_extra ALONE
   vector/expr_cmp_func_parts/expr_cmp_func_part_5.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_6.cpp
   vector/expr_cmp_func_parts/expr_cmp_func_part_7.cpp
+
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_0.cpp
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_1.cpp
   datum/ob_datum_funcs_compilation/ob_datum_funcs_compilation_2.cpp
@@ -37,22 +62,6 @@ ob_set_subtarget(ob_share_extra ALONE
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_compilation_7.cpp
   datum/ob_str_datum_funcs_compilation/ob_str_datum_funcs_all.cpp
   datum/ob_datum_funcs.cpp
-  aggregate/approx_count_distinct.cpp
-  aggregate/count.cpp
-  aggregate/iaggregate.cpp
-  aggregate/min_max.cpp
-  aggregate/processor.cpp
-  aggregate/single_row.cpp
-  aggregate/single_row_sum.cpp
-  aggregate/single_row_min_max.cpp
-  aggregate/single_row_count.cpp
-  aggregate/sum.cpp
-  aggregate/sys_bit.cpp
-  aggregate/aggr_extra.cpp
-  aggregate/rb_build_agg.cpp
-  aggregate/approx_count_distinct_synopsis.cpp
-  aggregate/sum_opnsize.cpp
-  aggregate/group_concat.cpp
 )
 
 ob_set_subtarget(ob_share ALONE

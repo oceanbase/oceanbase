@@ -11,7 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "approx_count_distinct_synopsis.h"
+#include "approx_count_distinct_oracle.h"
 
 namespace oceanbase
 {
@@ -21,28 +21,27 @@ namespace aggregate
 {
 namespace helper
 {
-int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
-                                                  ObIAllocator &allocator, IAggregate *&agg)
+int init_approx_count_distinct_oracle_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                         ObIAllocator &allocator, IAggregate *&agg)
 {
-#define INIT_APP_CNT_DIST_SYN_CASE(vec_tc)                                                         \
+#define INIT_CASE(vec_tc)                                                                          \
   case (vec_tc): {                                                                                 \
-    ret = init_agg_func<                                                                           \
-      ApproxCountDistinct<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, vec_tc, VEC_TC_STRING>>(           \
+    ret = init_agg_func<ApproxCountDistinct<T_FUN_APPROX_COUNT_DISTINCT, vec_tc, VEC_TC_NUMBER>>(  \
       agg_ctx, agg_col_id, has_distinct, allocator, agg);                                          \
   } break
 
   int ret = OB_SUCCESS;
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
   bool has_distinct = aggr_info.has_distinct_;
-  if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_info.get_expr_type()) {
-    VecValueTypeClass vec_tc =
-      get_vec_value_tc(aggr_info.get_first_child_type(), aggr_info.get_first_child_datum_scale(),
-                       aggr_info.get_first_child_datum_precision());
-    switch (vec_tc) {
-      LST_DO_CODE(INIT_APP_CNT_DIST_SYN_CASE, AGG_VEC_TC_LIST);
+  if (T_FUN_APPROX_COUNT_DISTINCT == aggr_info.get_expr_type()) {
+    ObDatumMeta &param_meta = aggr_info.param_exprs_.at(0)->datum_meta_;
+    VecValueTypeClass in_tc =
+      get_vec_value_tc(param_meta.type_, param_meta.scale_, param_meta.precision_);
+    switch (in_tc) {
+      LST_DO_CODE(INIT_CASE, AGG_VEC_TC_LIST);
       default: {
         ret = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid param format", K(ret), K(vec_tc));
+        SQL_LOG(WARN, "invalid param format", K(ret), K(in_tc));
       }
     }
   } else {
@@ -51,7 +50,7 @@ int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx, const
   }
   return ret;
 }
-} // end helper
-} // end aggregate
-} // end share
-} // end oceanbase
+} // helper
+} // aggregate
+} // share
+} // oceanbase

@@ -41,6 +41,10 @@ extern int init_approx_count_distinct_aggregate(RuntimeContext &agg_ctx, const i
 extern int init_approx_count_distinct_synopsis_aggregate(RuntimeContext &agg_ctx,
                                                          const int64_t agg_col_id,
                                                          ObIAllocator &allocator, IAggregate *&agg);
+extern int init_approx_count_distinct_synopsis_merge_aggregate(RuntimeContext &agg_ctx,
+                                                               const int64_t agg_col_id,
+                                                               ObIAllocator &allocator,
+                                                               IAggregate *&agg);
 extern int init_sysbit_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                  ObIAllocator &allocator, IAggregate *&agg);
 
@@ -87,7 +91,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_COUNT_SUM, count_sum, i);
         INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT, approx_count_distinct, i);
         INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, approx_count_distinct_synopsis, i);
-        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, approx_count_distinct, i);
+        INIT_AGGREGATE_CASE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE, approx_count_distinct_synopsis_merge, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_OR, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_AND, sysbit, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_BIT_XOR, sysbit, i);

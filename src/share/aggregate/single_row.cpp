@@ -23,12 +23,17 @@ namespace aggregate
   // TODO: add sysbit_ops
 namespace helper
 {
+extern int init_single_row_sum_aggregate(RuntimeContext &agg_ctx, const int col_id,
+                                         ObIAllocator &allocator, IAggregate *&agg);
 
-extern int init_single_row_sum_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
-                                          IAggregate *&agg);
-extern int init_single_row_count_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
-                                            IAggregate *&agg);
-extern int init_single_row_min_max_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
+extern int init_single_row_count_sum_aggregate(RuntimeContext &agg_ctx, const int col_id,
+                                         ObIAllocator &allocator, IAggregate *&agg);
+extern int init_single_row_count_aggregate(RuntimeContext &agg_ctx, const int col_id,
+                                                         ObIAllocator &allocator, IAggregate *&agg);
+extern int init_single_row_max_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
+                                              IAggregate *&agg);
+
+extern int init_single_row_min_aggregate(RuntimeContext &agg_ctx, const int col_id, ObIAllocator &allocator,
                                               IAggregate *&agg);
 
 int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
@@ -66,14 +71,20 @@ int init_single_row_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         ret = init_single_row_count_aggregate(agg_ctx, i, allocator, agg);
         break;
       }
-      case T_FUN_SUM:
-      case T_FUN_COUNT_SUM: {
+      case T_FUN_SUM: {
         ret = init_single_row_sum_aggregate(agg_ctx, i, allocator, agg);
         break;
       }
-      case T_FUN_MIN:
+      case T_FUN_COUNT_SUM: {
+        ret = init_single_row_count_sum_aggregate(agg_ctx, i, allocator, agg);
+        break;
+      }
+      case T_FUN_MIN: {
+        ret = init_single_row_min_aggregate(agg_ctx, i, allocator, agg);
+        break;
+      }
       case T_FUN_MAX: {
-        ret = init_single_row_min_max_aggregate(agg_ctx, i, allocator, agg);
+        ret = init_single_row_max_aggregate(agg_ctx, i, allocator, agg);
         break;
       }
       default: {
