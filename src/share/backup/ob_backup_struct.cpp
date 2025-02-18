@@ -3047,6 +3047,7 @@ const char* ObBackupStatus::get_str() const
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "BACKUP_LOG",
+    "PREPARE_BACKUP_LOG",
   };
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
@@ -3076,6 +3077,7 @@ int ObBackupStatus::set_status(const char *str)
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "BACKUP_LOG",
+    "PREPARE_BACKUP_LOG",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {

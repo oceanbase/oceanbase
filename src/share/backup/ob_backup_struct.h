@@ -1282,6 +1282,7 @@ public:
     BACKUP_DATA_MINOR = 10,
     BACKUP_DATA_MAJOR = 11,
     BACKUP_LOG = 12,
+    PREPARE_BACKUP_LOG = 13,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}

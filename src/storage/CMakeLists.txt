@@ -184,6 +184,7 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_operator.cpp
   backup/ob_backup_extern_info_mgr.cpp
   backup/ob_backup_restore_util.cpp
+  backup/ob_backup_complement_log.cpp
   backup/ob_ls_backup_clean_mgr.cpp
   backup/ob_backup_meta_cache.cpp
 )

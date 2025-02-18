@@ -115,7 +115,9 @@ static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
     {"tenant_id", "backup_set_id", "backup_data_type", "ls_id", "turn_id", "retry_id", "task_id"}},
   {6, false, "DAG_BACKUP_INDEX_REBUILD",
     {"tenant_id", "backup_set_id", "backup_data_type", "ls_id", "turn_id", "retry_id"}},
-  {3, false, "DAG_BACKUP_COMPLEMENT_LOG", {"tenant_id", "backup_set_id", "ls_id"}},
+  {3, false, "DAG_TYPE_BACKUP_LS_LOG_GROUP", {"tenant_id", "backup_set_id", "ls_id"}},
+  {3, false, "DAG_TYPE_BACKUP_LS_LOG_GROUP_FINISH", {"tenant_id", "backup_set_id", "ls_id"}},
+  {3, false, "DAG_TYPE_BACKUP_LS_LOG", {"tenant_id", "backup_set_id", "ls_id"}},
 
   {0, false, "DAG_BACKUP_BACKUPSET", {}},
   {0, false, "DAG_BACKUP_ARCHIVELOG", {}},
