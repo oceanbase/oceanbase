@@ -3579,38 +3579,42 @@ int ObSql::prepare_outline_for_phy_plan(ObLogPlan *logical_plan,
   int ret = OB_SUCCESS;
   void *tmp_ptr = NULL;
   char *buf = NULL;
+  PlanText plan_text;
 
   if (OB_ISNULL(logical_plan) || OB_ISNULL(phy_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get log plan", K(ret), K(logical_plan));
-  } else if (OB_UNLIKELY(NULL == (tmp_ptr = phy_plan->get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
+  } else if (OB_UNLIKELY(NULL == (tmp_ptr = logical_plan->get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc memory", K(ret));
   } else if (FALSE_IT(buf = static_cast<char *>(tmp_ptr))) {
   } else {
-    PlanText plan_text;
+    //print outline data
     plan_text.buf_ = buf;
     plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
     if (OB_FAIL(ObSqlPlan::get_plan_outline_info_one_line(plan_text, logical_plan))) {
       LOG_WARN("failed to get plan outline info", K(ret));
-    } else {
-      phy_plan->stat_.outline_data_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+    } else if (OB_FAIL(ob_write_string(phy_plan->get_allocator(),
+                                       ObString(plan_text.pos_, plan_text.buf_),
+                                       phy_plan->stat_.outline_data_))) {
+      LOG_WARN("failed to assign outline info", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(NULL == (tmp_ptr = phy_plan->get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("fail to alloc memory", K(ret));
-  } else if (FALSE_IT(buf = static_cast<char *>(tmp_ptr))) {
   } else {
-    PlanText plan_text;
-    plan_text.buf_ = buf;
-    plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+    //print used hint
+    plan_text.pos_ = 0;
     if (OB_FAIL(ObSqlPlan::get_plan_used_hint_info_one_line(plan_text, logical_plan))) {
       LOG_WARN("failed to get plan used hint info", K(ret));
-    } else {
-      phy_plan->stat_.hints_info_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+    } else if (OB_FAIL(ob_write_string(phy_plan->get_allocator(),
+                                       ObString(plan_text.pos_, plan_text.buf_),
+                                       phy_plan->stat_.hints_info_))) {
+      LOG_WARN("failed to assign outline info", K(ret));
     }
+  }
+  //free temp buffer
+  if (NULL != tmp_ptr && NULL != logical_plan) {
+    logical_plan->get_allocator().free(tmp_ptr);
   }
   return ret;
 }
