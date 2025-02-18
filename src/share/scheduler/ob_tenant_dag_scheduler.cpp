@@ -3116,7 +3116,7 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
     }
   }
   if (OB_SUCC(ret)) {
-    COMMON_LOG(INFO, "cancel dag when check ls compaction dag exist", KR(ret), K(cancel_dag_cnt), K(exist));
+    COMMON_LOG(INFO, "cancel dag when check ls compaction dag exist", KR(ret), K(ls_id), K(cancel_dag_cnt), K(exist));
   }
   return OB_SUCCESS;
 }
@@ -4632,12 +4632,20 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID
   int ret = OB_SUCCESS;
   exist = false;
   bool tmp_exist = false;
+  /*
+   * ATTENTION!!! Here must cancel BOTH dag net and dag.
+   * The desctruction of waiting dag net is executed when loop blocking dag net list.
+   * The desctruction of running dag net depends on the desctruction of its last dag, no matter ready or running dag.
+   * So for canceling dag net:
+   * - Need cancel dag for the final desctruction of dag net.
+   * - Need cancel the dag net to avoid scheduling more dags.
+   */
   if (OB_FAIL(dag_net_sche_.check_ls_compaction_dag_exist_with_cancel(ls_id, tmp_exist))) {
     LOG_WARN("failed to check ls compaction dag exist", K(ret), K(ls_id));
   } else if (tmp_exist) {
     exist = true;
   }
-  if (OB_FAIL(ret) || exist) {
+  if (OB_FAIL(ret)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ObIDag::MergeDagPrioCnt; ++i) {
       tmp_exist = false;
