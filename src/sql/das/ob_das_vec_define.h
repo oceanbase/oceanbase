@@ -31,11 +31,13 @@ public:
       inv_scan_vec_id_col_(nullptr),
       vec_index_param_(),
       dim_(0),
-      access_pk_(false) {}
+      access_pk_(false),
+      can_use_vec_pri_opt_(false) {}
 
-  bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_; }
-  bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST == vec_type_; }
-  bool is_brute_force_filter() const { return is_pre_filter() && false && row_count_ * selectivity_ < 100000; }
+  inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_; }
+  inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST == vec_type_; }
+  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
+  inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
 
   int64_t get_inv_scan_idx() const { return ObVecAuxTableIdx::VALID_VID_SCAN_IDX; }
   int64_t get_delta_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
@@ -86,6 +88,7 @@ public:
   double selectivity_;
   double row_count_;
   bool access_pk_;
+  bool can_use_vec_pri_opt_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef

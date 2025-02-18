@@ -2966,7 +2966,6 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
     vid_rowkey_rtdef->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
     const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef->get_vec_aux_tbl_ctdef(vec_aux_ctdef->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
     ObDASScanRtDef *rowkey_vid_rtdef = vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_rowkey_vid_tbl_idx());
-    rowkey_vid_rtdef->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
     const ObDASScanCtDef *index_id_tbl_ctdef = vec_aux_ctdef->get_vec_aux_tbl_ctdef(vec_aux_ctdef->get_index_id_tbl_idx(), ObTSCIRScanType::OB_VEC_IDX_ID_SCAN);
     ObDASScanRtDef *index_id_tbl_rtdef = vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_index_id_tbl_idx());
     index_id_tbl_rtdef->scan_flag_.scan_order_ = ObQueryFlag::Reverse;

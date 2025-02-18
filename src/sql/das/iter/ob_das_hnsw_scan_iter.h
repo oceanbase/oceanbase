@@ -140,7 +140,8 @@ public:
       vec_index_param_(),
       dim_(0),
       search_vec_(nullptr),
-      distance_calc_(nullptr) {
+      distance_calc_(nullptr),
+      is_primary_pre_with_rowkey_with_filter_(false) {
         saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
       }
 
@@ -176,6 +177,7 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 private:
+  int build_rowkey_vid_range();
   bool need_save_distance_result() {
     return distance_calc_ != nullptr;
   }
@@ -183,6 +185,8 @@ private:
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_hnsw(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int process_adaptor_state_pre_filter_with_idx_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int process_adaptor_state_pre_filter_with_rowkey(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_next_single_row(bool is_vectorized);
 
@@ -195,14 +199,18 @@ private:
   int set_vector_query_condition(ObVectorQueryConditions &query_cond);
   int prepare_complete_vector_data(ObVectorQueryAdaptorResultContext& ada_ctx);
 
+  int get_vid_from_rowkey_vid_table(int64_t &vid);
   int get_vid_from_rowkey_vid_table(ObRowkey& rowkey, int64_t &vid);
-  int get_rowkey_from_vid_rowkey_table(ObIAllocator &allocator, ObRowkey& vid, ObRowkey& rowkey);
-  int get_vector_from_com_aux_vec_table(ObIAllocator &allocator, ObRowkey& rowkey, ObString &vector);
+  int get_rowkey_from_vid_rowkey_table(ObIAllocator &allocator, ObRowkey& vid, ObRowkey *&rowkey);
+  int get_vector_from_com_aux_vec_table(ObIAllocator &allocator, ObRowkey *rowkey, ObString &vector);
+  int get_vector_from_com_aux_vec_table(ObIAllocator &allocator, ObString &vector);
 
   int do_delta_buf_table_scan();
   int do_index_id_table_scan();
   int do_snapshot_table_scan();
   int do_com_aux_vec_table_scan();
+  int do_vid_rowkey_table_scan();
+  int do_rowkey_vid_table_scan();
 
   int do_aux_table_scan_need_reuse(bool &first_scan,
                                    ObTableScanParam &scan_param,
@@ -213,18 +221,21 @@ private:
                                    bool is_get = false);
   int do_aux_table_scan(bool &first_scan, ObTableScanParam &scan_param, const ObDASScanCtDef *ctdef, ObDASScanRtDef *rtdef, ObDASScanIter *iter, ObTabletID &tablet_id);
 
-  int reuse_vid_rowkey_iter() { return reuse_iter(vid_rowkey_scan_param_, vid_rowkey_tablet_id_, vid_rowkey_iter_); };
-  int reuse_rowkey_vid_iter() { return reuse_iter(rowkey_vid_scan_param_, rowkey_vid_tablet_id_, rowkey_vid_iter_); };
-  int reuse_com_aux_vec_iter() { return reuse_iter(com_aux_vec_scan_param_, com_aux_vec_tablet_id_, com_aux_vec_iter_); };
-  int reuse_iter(ObTableScanParam &scan_param, ObTabletID &tablet_id, ObDASScanIter *iter);
+  int reuse_vid_rowkey_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, vid_rowkey_iter_, vid_rowkey_scan_param_, vid_rowkey_tablet_id_); };
+  int reuse_rowkey_vid_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, rowkey_vid_iter_, rowkey_vid_scan_param_, rowkey_vid_tablet_id_); };
+  int reuse_com_aux_vec_iter() { return ObDasVecScanUtils::reuse_iter(ls_id_, com_aux_vec_iter_, com_aux_vec_scan_param_, com_aux_vec_tablet_id_); };
 
-  int get_rowkey(ObIAllocator &allocator, ObRowkey &rowkey);
+  int get_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey) {
+    const ObDASScanCtDef * ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+    ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx());
+    return ObDasVecScanUtils::get_rowkey(allocator, ctdef, rtdef, rowkey);
+  }
+  int get_rowkey_pre_filter(bool is_vectorized);
 
   int init_sort(const ObDASVecAuxScanCtDef *ir_ctdef, ObDASVecAuxScanRtDef *ir_rtdef);
   int set_vec_index_param(ObString vec_index_param) { return ob_write_string(vec_op_alloc_, vec_index_param, vec_index_param_); }
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
-  static const uint64_t MAX_BRUTE_FORCE_SIZE = 10000;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
 
 private:
@@ -279,8 +290,9 @@ private:
 
   ObExpr* search_vec_;
 
-  common::ObSEArray<common::ObRowkey, 16> saved_rowkeys_;
+  common::ObSEArray<common::ObRowkey *, 16> saved_rowkeys_;
   ObExpr* distance_calc_;
+  bool is_primary_pre_with_rowkey_with_filter_;
 };
 
 

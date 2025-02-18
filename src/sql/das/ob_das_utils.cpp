@@ -14,6 +14,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "pl/ob_pl.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "sql/das/ob_das_vec_define.h"
 namespace oceanbase
 {
 using namespace common;
@@ -879,5 +880,6 @@ int ObDASUtils::generate_mlog_row(const ObLSID &ls_id,
   }
   return ret;
 }
+
 }  // namespace sql
 }  // namespace oceanbase

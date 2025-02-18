@@ -1768,11 +1768,26 @@ void ObVecIdxExtraInfo::set_vec_algorithm_by_index_type(ObIndexType index_type)
   }
 }
 
+int ObJoinOrder::check_can_use_vec_primary_opt(const uint64_t ref_table_id,
+                                              PathHelper &helper,
+                                              const QueryRangeInfo &range_info,
+                                              bool& is_filter_all_rowkey_col)
+{
+  int ret = OB_SUCCESS;
+  is_filter_all_rowkey_col = false;
+  if (OB_NOT_NULL(range_info.get_query_range_provider())) {
+    is_filter_all_rowkey_col = range_info.get_query_range_provider()->get_range_exprs().count() == helper.filters_.count();
+  }
+  return ret;
+}
+
 int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
                                         const uint64_t table_id,
                                         const uint64_t ref_table_id,
                                         const uint64_t index_id,
-                                        AccessPath &access_path)
+                                        PathHelper &helper,
+                                        AccessPath &access_path,
+                                        const QueryRangeInfo &range_info)
 {
   int ret = OB_SUCCESS;
 
@@ -1823,6 +1838,15 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, full-text index is");
       }
+      if (OB_FAIL(ret)) {
+      } else if (index_id == ref_table_id) { // is primary idx
+        bool is_filter_all_rowkey_col = true;
+        if (OB_FAIL(check_can_use_vec_primary_opt(ref_table_id, helper, range_info, is_filter_all_rowkey_col))) {
+          LOG_WARN("fail to check_can_use_vec_primary_opt", K(ret));
+        } else {
+          access_path.domain_idx_info_.vec_extra_info_.set_can_use_vec_pri_opt(is_filter_all_rowkey_col);
+        }
+      } // check filter all rowkey col
     }
   } else {
     vec_index_schema = index_schema;
@@ -1967,7 +1991,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         : range_info.get_equal_prefix_count() >= range_info.get_index_column_count();
     //set strong_sharding_ ignore dop, update sharding by dop in set_sharding_info_for_base_path()
     ap->strong_sharding_ = index_info_entry->get_sharding_info();
-    if (get_plan()->get_stmt()->has_vec_approx() && OB_FAIL(process_vec_index_info(get_plan()->get_stmt(), table_id, ref_id, index_id, *ap))) {
+    if (get_plan()->get_stmt()->has_vec_approx() && OB_FAIL(process_vec_index_info(get_plan()->get_stmt(), table_id, ref_id, index_id, helper, *ap, range_info))) {
       LOG_WARN("failed to init vec_index_info", K(ret));
     } else if (OB_FAIL(process_index_for_match_expr(table_id, ref_id, index_id, helper, *ap))) {
       LOG_WARN("failed to process index for match expr", K(ret));
@@ -19633,23 +19657,17 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
       LOG_WARN("unexpected nullptr to index hint table schema", K(ret), K(tid));
     } else if (index_hint_table_schema->is_global_index_table() && has_match_expr_on_table) {
       // scan with both global index and fulltext index is not supported yet
-    } else if (stmt.has_vec_approx()) {
-      if (invalid_index_for_vec_pre_filter(index_hint_table_schema)) {
-         // skip
-      } else {
-        if (index_hint_table_schema->is_vec_index()) {
-          bool is_valid = false;
-          if (OB_FAIL(check_vec_hint_index_id(stmt, schema_guard, table_id, ref_table_id,
-                                              index_hint_table_schema->get_table_id(),
-                                              has_aggr, is_valid))) {
-            LOG_WARN("failed to check vec hint index", K(table_id), K(ref_table_id), K(index_hint_table_schema));
-          } else if (!is_valid) {
-          } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
-            LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
-          }
-        } else {
-          // if hint is not vector index but has vec approx, skip
-        }
+    } else if (stmt.has_vec_approx() && invalid_index_for_vec_pre_filter(index_hint_table_schema)) {
+      // skip
+    } else if (index_hint_table_schema->is_vec_index()) {
+      bool is_valid = false;
+      if (OB_FAIL(check_vec_hint_index_id(stmt, schema_guard, table_id, ref_table_id,
+                                          index_hint_table_schema->get_table_id(),
+                                          has_aggr, is_valid))) {
+        LOG_WARN("failed to check vec hint index", K(table_id), K(ref_table_id), K(index_hint_table_schema));
+      } else if (!is_valid) {
+      } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
+        LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
       }
     } else if (index_hint_table_schema->is_fts_index()) {
       bool is_valid = true;

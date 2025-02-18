@@ -1822,7 +1822,9 @@ int ObTscCgService::generate_gis_ir_ctdef(const ObLogTableScan &op,
 int ObTscCgService::generate_vec_aux_table_ctdef(const ObLogTableScan &op,
                                                   ObTSCIRScanType ir_scan_type,
                                                   uint64_t table_id,
-                                                  ObDASScanCtDef *&aux_ctdef)
+                                                  ObDASScanCtDef *&aux_ctdef,
+                                                  ObStoragePushdownFlag& pushdown_flag,
+                                                  bool need_set_flag)
 {
   int ret = OB_SUCCESS;
   ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
@@ -1836,6 +1838,9 @@ int ObTscCgService::generate_vec_aux_table_ctdef(const ObLogTableScan &op,
   } else {
     aux_ctdef->ref_table_id_ = table_id;
     aux_ctdef->ir_scan_type_ = ir_scan_type;
+    if (need_set_flag) {
+      aux_ctdef->pd_expr_spec_.pd_storage_flag_ = pushdown_flag;
+    }
     if (OB_FAIL(generate_das_scan_ctdef(op, cg_ctx, *aux_ctdef, has_rowscn))) {
       LOG_WARN("failed to generate das scan ctdef", K(ret));
     }
@@ -1847,7 +1852,8 @@ int ObTscCgService::generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
                                                   ObDASScanCtDef *&first_aux_ctdef,
                                                   ObDASScanCtDef *&second_aux_ctdef,
                                                   ObDASScanCtDef *&third_aux_ctdef,
-                                                  ObDASScanCtDef *&forth_aux_ctdef)
+                                                  ObDASScanCtDef *&forth_aux_ctdef,
+                                                  ObStoragePushdownFlag& pushdown_flag)
 {
   int ret = OB_SUCCESS;
   const ObVecIndexInfo &vc_info = op.get_vector_index_info();
@@ -1856,13 +1862,17 @@ int ObTscCgService::generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
   ObTSCIRScanType second_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_IDX_ID_SCAN : OB_VEC_IVF_CID_VEC_SCAN;
   ObTSCIRScanType third_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_SNAPSHOT_SCAN : OB_VEC_IVF_ROWKEY_CID_SCAN;
   ObTSCIRScanType forth_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_ROWKEY_VID_SCAN : OB_VEC_IVF_SPECIAL_AUX_SCAN;
-  if (OB_FAIL(generate_vec_aux_table_ctdef(op, first_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), first_aux_ctdef))) {
+  if (OB_FAIL(generate_vec_aux_table_ctdef(op, first_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), first_aux_ctdef,
+                                          pushdown_flag, true))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(first_ir_scan_type));
-  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, second_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), second_aux_ctdef))) {
+  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, second_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), second_aux_ctdef,
+                                                  pushdown_flag, true))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(second_ir_scan_type));
-  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, third_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), third_aux_ctdef))) {
+  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, third_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), third_aux_ctdef,
+                                                  pushdown_flag, true))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(third_ir_scan_type));
-  } else if (!vc_info.is_ivf_flat_scan() && OB_FAIL(generate_vec_aux_table_ctdef(op, forth_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), forth_aux_ctdef))) {
+  } else if (!vc_info.is_ivf_flat_scan() && OB_FAIL(generate_vec_aux_table_ctdef(op, forth_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), forth_aux_ctdef,
+                                                                                 pushdown_flag, vc_info.is_hnsw_vec_scan()))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(forth_ir_scan_type));
   }
   if (OB_FAIL(ret)) {
@@ -1938,10 +1948,12 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
     ObDASScanCtDef *third_aux_ctdef = nullptr;  // HNSW_SNAPSHOT_DATA_TABLE | IVF_ROWKEY_CID_TABLE or IVF_PQ_ROWKEY_CID_TABLE
     ObDASScanCtDef *fourth_aux_ctdef = nullptr; // HNSW_ROWKEY_VID_TABLE    | null or IVF_SQ_META_TABLE or IVF_PQ_ID_TABLE
     ObDASScanCtDef *com_aux_ctdef = nullptr;    // main table
+    ObStoragePushdownFlag pushdown_flag = tsc_ctdef.scan_ctdef_.pd_expr_spec_.pd_storage_flag_;
 
-    if (OB_FAIL(generate_vec_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, fourth_aux_ctdef))) {
+    if (OB_FAIL(generate_vec_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, fourth_aux_ctdef, pushdown_flag))) {
       LOG_WARN("fail to generate_vec_aux_idx_tbl_ctdef", K(ret));
-    } else if (OB_FAIL(vc_info.is_hnsw_vec_scan() && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef))) {
+    } else if (OB_FAIL(vc_info.is_hnsw_vec_scan()
+    && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef, pushdown_flag, vc_info.is_hnsw_vec_scan()))) {
       LOG_WARN("fail to generate_vec_aux_table_ctdef", K(ret));
     } else {
       int64_t vec_child_task_cnt = 6;
@@ -1974,6 +1986,7 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->selectivity_ = op.get_vector_index_info().selectivity_;
         vec_scan_ctdef->row_count_ = op.get_vector_index_info().row_count_;
         vec_scan_ctdef->algorithm_type_ = op.get_vector_index_info().algorithm_type_;
+        vec_scan_ctdef->set_can_use_vec_pri_opt(op.get_vector_index_info().can_use_vec_pri_opt());
       }
     }
 

@@ -306,15 +306,18 @@ static constexpr double DEFAULT_SELECTIVITY_RATE = 0.7;
       vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
       force_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
       selectivity_(0),
-      row_count_(0) {}
-  void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
+      row_count_(0),
+      can_use_vec_pri_opt_(false) {}
+  inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
   ObVecIndexType get_vec_idx_type() { return vec_idx_type_; }
-  void set_selectivity(double selectivity) { selectivity_ = selectivity;}
-  double get_selectivity() { return selectivity_; }
-  void set_row_count(int64_t row_count) { row_count_ = row_count;}
-  void set_vec_algorithm_by_index_type(ObIndexType index_type);
+  inline double get_selectivity() { return selectivity_; }
+  inline void set_selectivity(double selectivity) { selectivity_ = selectivity;}
+  inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
+  inline void set_vec_algorithm_by_index_type(ObIndexType index_type);
+  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
+  bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
   ObVectorIndexAlgorithmType get_algorithm_type() { return algorithm_type_; }
-  inline bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
+  bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST; }
@@ -329,6 +332,7 @@ static constexpr double DEFAULT_SELECTIVITY_RATE = 0.7;
   ObVecIndexType force_index_type_;
   double selectivity_;
   int64_t row_count_;
+  bool can_use_vec_pri_opt_;                   // when pre-filter is primary key and can filter by query range, search rowkey_vid table directly
 };
 
 
@@ -1819,11 +1823,17 @@ struct NullAwareAntiJoinInfo {
     inline bool get_is_at_most_one_row() const { return is_at_most_one_row_; }
 
     int alloc_join_path(JoinPath *&join_path);
+    int check_can_use_vec_primary_opt(const uint64_t ref_table_id,
+                                        PathHelper &helper,
+                                        const QueryRangeInfo &range_info,
+                                        bool& is_filter_all_rowkey_col);
     int process_vec_index_info(const ObDMLStmt *stmt,
                               const uint64_t table_id,
                               const uint64_t ref_table_id,
                               const uint64_t index_id,
-                              AccessPath &access_path);
+                              PathHelper &helper,
+                              AccessPath &access_path,
+                              const QueryRangeInfo &range_info);
     int create_access_paths(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             PathHelper &helper,

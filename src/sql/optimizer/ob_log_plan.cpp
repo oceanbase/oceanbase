@@ -15274,6 +15274,7 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
       vc_info.selectivity_ = ap->domain_idx_info_.vec_extra_info_.get_selectivity();
       vc_info.row_count_ = ap->domain_idx_info_.vec_extra_info_.get_row_count();
       vc_info.set_vec_algorithm_type(ap->domain_idx_info_.vec_extra_info_.get_algorithm_type());
+      vc_info.set_can_use_vec_pri_opt(ap->domain_idx_info_.vec_extra_info_.can_use_vec_pri_opt());
       if (vc_info.is_hnsw_vec_scan()) {
         if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
           LOG_WARN("fail to init hnsw aux index table info",

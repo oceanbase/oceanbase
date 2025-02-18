@@ -183,9 +183,6 @@ protected:
   static const int64_t CID_VEC_COM_KEY_CNT = 1;        // Only the vec column is a common column
   static const int64_t CID_VEC_FIXED_PRI_KEY_CNT = 1;  // center_id is FIXED PRI KEY
   static const int64_t ROWKEY_CID_PRI_KEY_CNT = 1;
-
-  static const int64_t MAX_BRUTE_FORCE_SIZE = 2;
-
   static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
   static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
   static const int64_t POST_ENLARGEMENT_FACTOR = 2;
@@ -267,11 +264,16 @@ protected:
   virtual int process_ivf_scan(bool is_vectorized);
   template <typename T>
   int get_nearest_limit_rowkeys_in_cids(const ObIArray<ObString> &nearest_cids, T *serch_vec);
-  int get_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey);
+  int get_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey) {
+    const ObDASScanCtDef *ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_ivf_rowkey_cid_tbl_idx(),
+                                                                        ObTSCIRScanType::OB_VEC_IVF_ROWKEY_CID_SCAN);
+    ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_rowkey_cid_tbl_idx());
+    return ObDasVecScanUtils::get_rowkey(allocator, ctdef, rtdef, rowkey);
+  }
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);
   bool check_cid_exist(const ObIArray<ObString> &dst_cids, const ObString &src_cid);
   int get_cid_from_rowkey_cid_table(ObString &cid);
-  int get_rowkey_pre_filter(bool is_vectorized, uint64_t &rowkey_count);
+  int get_rowkey_pre_filter(bool is_vectorized);
   int filter_pre_rowkey_batch(const ObIArray<ObString> &nearest_cids, bool is_vectorized, int64_t batch_row_count);
   int filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cids,
                                   bool is_vectorized,

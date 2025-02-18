@@ -139,11 +139,14 @@ private:
                                     ObDASScanCtDef *&first_aux_ctdef,
                                     ObDASScanCtDef *&second_aux_ctdef,
                                     ObDASScanCtDef *&third_aux_ctdef,
-                                    ObDASScanCtDef *&forth_aux_ctdef);
+                                    ObDASScanCtDef *&forth_aux_ctdef,
+                                    ObStoragePushdownFlag& pushdown_flag);
   int generate_vec_aux_table_ctdef(const ObLogTableScan &op,
                                   ObTSCIRScanType ir_scan_type,
                                   uint64_t table_id,
-                                  ObDASScanCtDef *&aux_ctdef);
+                                  ObDASScanCtDef *&aux_ctdef,
+                                  ObStoragePushdownFlag& pushdown_flag,
+                                  bool need_set_flag = false);
   int extract_text_ir_access_columns(const ObLogTableScan &op,
                                      const ObTextRetrievalInfo &tr_info,
                                      const ObDASScanCtDef &scan_ctdef,

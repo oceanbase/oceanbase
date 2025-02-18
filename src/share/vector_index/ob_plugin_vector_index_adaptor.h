@@ -420,6 +420,7 @@ public:
                   const int64_t vector_idx,
                   const int64_t row_count);
   int add_extra_valid_vid(ObVectorQueryAdaptorResultContext *ctx, int64_t vid);
+  int add_extra_valid_vid_without_malloc_guard(ObVectorQueryAdaptorResultContext *ctx, int64_t vid);
   int add_snap_index(float *vectors, int64_t *vids, int num);
 
   // Query Processor first

@@ -889,7 +889,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
       } else if (flags.empty() || i >= flags.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter before index flag is invalid", K(ret), K(i), K(flags), K(filters));
-      } else if (flags.at(i)) {
+      } else if (flags.at(i) || is_primary_vec_idx_scan()) {
         if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
           if (OB_FAIL(lookup_pushdown_filters.push_back(filters.at(i)))) {
             LOG_WARN("store lookup pushdown filter failed", K(ret), K(i));
@@ -4285,7 +4285,7 @@ int ObLogTableScan::prepare_hnsw_vector_access_exprs()
           KP(index_id_vid_column), KP(index_id_type_column),
           KP(index_id_scn_column), KP(index_id_vector_column),
           KP(snapshot_key_column), KP(snapshot_data_column));
-    } else if (OB_FAIL(prepare_rowkey_vid_dep_exprs())) {
+    } else if (!is_tsc_with_domain_id() && OB_FAIL(prepare_rowkey_vid_dep_exprs())) {
       LOG_WARN("fail to prepare rowkey vid dep exprs", K(ret));
     /* column must add in order, same as ObVectorHNSWColumnIdx*/
     } else if (OB_FAIL(vc_info.aux_table_column_.push_back(delta_vid_column))) {

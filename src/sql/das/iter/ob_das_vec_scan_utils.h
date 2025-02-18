@@ -26,6 +26,7 @@ namespace sql
 class ObDasVecScanUtils
 {
 public:
+  static const uint64_t MAX_BRUTE_FORCE_SIZE = 1;
   static int set_lookup_key(ObRowkey &rowkey, ObTableScanParam &scan_param, uint64_t table_id);
   static int set_lookup_range(const ObNewRange &look_range, ObTableScanParam &scan_param, uint64_t table_id);
   static void release_scan_param(ObTableScanParam &scan_param);
@@ -67,6 +68,14 @@ public:
                                       transaction::ObTxReadSnapshot *snapshot,
                                       ObTableScanParam &scan_param,
                                       bool is_get = false);
+  static int get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef * ctdef, ObDASScanRtDef *rtdef, ObRowkey *&rowkey);
+
+  static int get_rowkey_pre_filter(ObIAllocator &allocator,
+                                   bool is_vectorized,
+                                   ObDASIter *iter,
+                                   const ObDASScanCtDef *ctdef,
+                                   ObDASScanRtDef *rtdef,
+                                   ObIArray<ObRowkey *> &rowkeys);
 };
 
 }  // namespace sql

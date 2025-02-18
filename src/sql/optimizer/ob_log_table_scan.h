@@ -211,7 +211,8 @@ struct ObVecIndexInfo
     vec_type_(ObVecIndexType::VEC_INDEX_INVALID),
     selectivity_(0),
     row_count_(0),
-    algorithm_type_(ObVectorIndexAlgorithmType::VIAT_MAX)
+    algorithm_type_(ObVectorIndexAlgorithmType::VIAT_MAX),
+    can_use_vec_pri_opt_(false)
   { }
   ~ObVecIndexInfo() {}
 
@@ -219,7 +220,9 @@ struct ObVecIndexInfo
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
               K_(vec_type), K_(algorithm_type));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
-  void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
+  inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
+  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
+  bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
   ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return algorithm_type_; }
   bool is_vec_aux_table_id(uint64_t tid) const;
   inline bool is_hnsw_vec_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ; }
@@ -232,6 +235,8 @@ struct ObVecIndexInfo
   inline bool is_ivf_flat_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT; }
   inline bool is_ivf_sq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
   inline bool is_ivf_pq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
+  inline bool is_pre_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
+  inline bool is_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST; }
   inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan();}
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
@@ -253,6 +258,7 @@ struct ObVecIndexInfo
   double selectivity_;
   int64_t row_count_;
   ObVectorIndexAlgorithmType algorithm_type_;
+  bool can_use_vec_pri_opt_;
 };
 
 class ObLogTableScan : public ObLogicalOperator
@@ -891,6 +897,7 @@ public:
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
   inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
   inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
+  inline bool is_primary_vec_idx_scan() const { return is_pre_vec_idx_scan() && is_hnsw_vec_scan() && ref_table_id_ == index_table_id_; }
   inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }
   inline bool is_pre_vec_idx_scan() const { return vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   inline bool is_post_vec_idx_scan() const { return is_index_scan() && vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST; }

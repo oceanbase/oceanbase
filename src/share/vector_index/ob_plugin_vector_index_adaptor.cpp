@@ -1091,6 +1091,22 @@ int ObPluginVectorIndexAdaptor::add_extra_valid_vid(
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::add_extra_valid_vid_without_malloc_guard(
+    ObVectorQueryAdaptorResultContext *ctx,
+    int64_t vid)
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get ctx invalid.", K(ret));
+  } else {
+    ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->extra_bitmaps_->insert_bitmap_, vid));
+  }
+
+  return ret;
+}
+
 /**************************************************************************
 * Note:
 *  The number of vids must be equal to num;

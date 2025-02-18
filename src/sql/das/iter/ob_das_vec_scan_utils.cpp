@@ -355,5 +355,113 @@ int ObDasVecScanUtils::init_vec_aux_scan_param(const share::ObLSID &ls_id,
   return ret;
 }
 
+int ObDasVecScanUtils::get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef * ctdef, ObDASScanRtDef *rtdef, ObRowkey *&rowkey)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t rowkey_cnt = 0;
+  ObObj *obj_ptr = nullptr;
+  void *buf = nullptr;
+
+  if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctdef or rtdef is null", K(ret), KP(ctdef), KP(rtdef));
+  } else if (OB_FALSE_IT(rowkey_cnt = ctdef->rowkey_exprs_.count())) {
+  } else if (OB_UNLIKELY(rowkey_cnt <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rowkey cnt", K(ret));
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret), K(rowkey_cnt));
+  } else if (OB_FALSE_IT(obj_ptr = new (buf) ObObj[rowkey_cnt])) {
+  } else if (OB_ISNULL(rowkey = static_cast<ObRowkey *>(allocator.alloc(sizeof(ObRowkey))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory for ObObj", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+      ObObj tmp_obj;
+      ObExpr *expr = ctdef->rowkey_exprs_.at(i);
+      ObDatum &datum = expr->locate_expr_datum(*rtdef->eval_ctx_);
+      if (OB_ISNULL(datum.ptr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get col datum null", K(ret));
+      } else if (OB_FAIL(datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
+        LOG_WARN("convert datum to obj failed", K(ret));
+      } else if (OB_FAIL(ob_write_obj(allocator, tmp_obj, obj_ptr[i]))) {
+        LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      rowkey->assign(obj_ptr, rowkey_cnt);
+    }
+  }
+
+  return ret;
+}
+
+int ObDasVecScanUtils::get_rowkey_pre_filter(
+    ObIAllocator &allocator,
+    bool is_vectorized,
+    ObDASIter *iter,
+    const ObDASScanCtDef *ctdef,
+    ObDASScanRtDef *rtdef,
+    ObIArray<ObRowkey *> &rowkeys)
+{
+  int ret = OB_SUCCESS;
+
+  uint64_t rowkey_count = 0;
+  while (OB_SUCC(ret) && rowkey_count < MAX_BRUTE_FORCE_SIZE) {
+    iter->clear_evaluated_flag();
+    if (!is_vectorized) {
+      ObRowkey *rowkey;
+      if (OB_FAIL(iter->get_next_row())) {
+      } else if (OB_FALSE_IT(rowkey_count++)) {
+      } else if (OB_FAIL(get_rowkey(allocator, ctdef, rtdef, rowkey))) {
+        LOG_WARN("failed to get rowkey", K(ret));
+      } else if (OB_FAIL(rowkeys.push_back(rowkey))) {
+        LOG_WARN("failed to push rowkey", K(ret));
+      }
+    } else {
+      int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
+
+      int64_t scan_row_cnt = 0;
+      if (OB_FAIL(iter->get_next_rows(scan_row_cnt, batch_row_count))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next rowkey", K(ret));
+        }
+      }
+
+      rowkey_count += scan_row_cnt;
+      if (OB_FAIL(ret) && OB_ITER_END != ret) {
+        LOG_WARN("fail to get next row from inv_idx_scan_iter_", K(ret));
+      } else if (scan_row_cnt > 0) {
+        ret = OB_SUCCESS;
+      }
+
+      if (OB_SUCC(ret)) {
+        ObEvalCtx::BatchInfoScopeGuard guard(*rtdef->eval_ctx_);
+        guard.set_batch_size(scan_row_cnt);
+        for (int i = 0; OB_SUCC(ret) && i < scan_row_cnt; i++) {
+          guard.set_batch_idx(i);
+          ObRowkey *rowkey;
+          if (OB_FAIL(get_rowkey(allocator, ctdef, rtdef, rowkey))) {
+            LOG_WARN("failed to add rowkey", K(ret), K(i));
+          } else if (OB_FAIL(rowkeys.push_back(rowkey))) {
+            LOG_WARN("store push rowkey", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) && OB_ITER_END != ret) {
+  } else if (OB_ITER_END == ret && rowkey_count > 0) {
+    ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
