@@ -165,6 +165,8 @@ public :
     if (OB_ISNULL(data_container_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "try to modify read-only array", K(ret));
+    } else if (length == 0) {
+      // do nothing
     } else {
       int64_t curr_pos = data_container_->null_bitmaps_.size();
       int64_t capacity = curr_pos + length;
@@ -183,6 +185,8 @@ public :
     if (OB_ISNULL(data_container_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "try to modify read-only array", K(ret));
+    } else if (length == 0) {
+      // do nothing
     } else {
       int64_t curr_pos = data_container_->offsets_.size();
       int64_t capacity = curr_pos + length;

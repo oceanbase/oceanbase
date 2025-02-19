@@ -67,6 +67,9 @@ int ObArrayBinary::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
   } else if (OB_ISNULL(data_container_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "try to modify read-only array", K(ret));
+  } else if (OB_UNLIKELY(begin + len > src.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected begin or len", K(ret), K(begin), K(len), K(src.size()));
   } else if (len > 0) {
     // insert data
     const uint32_t src_offset = offset_at(begin, src.get_offsets());
@@ -105,8 +108,14 @@ int ObArrayBinary::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
 
 int ObArrayBinary::elem_at(uint32_t idx, ObObj &elem_obj) const
 {
-  elem_obj.set_varchar(operator[](idx));
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx >= this->length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected idx", K(ret), K(idx), K(this->length_));
+  } else {
+    elem_obj.set_varchar(operator[](idx));
+  }
+  return ret;
 }
 
 ObString ObArrayBinary::operator[](const int64_t i) const
@@ -124,9 +133,14 @@ int ObArrayBinary::get_data_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (get_data_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_data_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
+  } else if (this->length_ == 0) {
+    // do nothing
   } else if (data_container_ == NULL) {
     if (length_ > 0) {
       uint32_t last_idx = length_ - 1;
@@ -149,7 +163,10 @@ int ObArrayBinary::get_data_binary(char *res_buf, int64_t buf_len)
 int ObArrayBinary::get_raw_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  if (get_raw_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_raw_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
   } else {
@@ -195,6 +212,12 @@ int ObArrayBinary::init()
     null_bitmaps_ = data_container_->null_bitmaps_.get_data();
     data_ = data_container_->raw_data_.get_data();
   }
+  if (OB_SUCC(ret) &&
+      length_ != 0 &&
+      (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_) || (offsets_[length_ - 1] != 0 && OB_ISNULL(data_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -233,7 +256,17 @@ int ObArrayBinary::init(ObString &raw_data)
           }
         }
       }
+    } else {
+      null_bitmaps_ = NULL;
+      offsets_ = NULL;
+      data_ = NULL;
     }
+  }
+  if (OB_SUCC(ret) &&
+      length_ != 0 &&
+      (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_) || (offsets_[length_ - 1] != 0 && OB_ISNULL(data_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
   }
   return ret;
 }
@@ -242,7 +275,10 @@ int ObArrayBinary::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
 {
   int ret = OB_SUCCESS;
   const uint32_t count = with_length ? 4 : 3;
-  if (attr_count != count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (attr_count != count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attrs", K(ret), K(attr_count), K(count));
   } else {
@@ -260,6 +296,12 @@ int ObArrayBinary::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(length_));
     }
+  }
+  if (OB_SUCC(ret) &&
+      length_ != 0 &&
+      (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_) || (offsets_[length_ - 1] != 0 && OB_ISNULL(data_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
   }
   return ret;
 }
@@ -320,6 +362,10 @@ int ObArrayBinary::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
       // print whole array
       print_size = length_;
     }
+    if (OB_UNLIKELY(begin + print_size > length_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
+    }
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
       if (i > begin && OB_FAIL(format_str.append(","))) {
         OB_LOG(WARN, "fail to append \",\" to buffer", K(ret));
@@ -350,6 +396,10 @@ int ObArrayBinary::print_element(ObStringBuffer &format_str, uint32_t begin, uin
   if (print_whole) {
     // print whole array
     print_size = length_;
+  }
+  if (OB_UNLIKELY(begin + print_size > length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
   }
   bool is_first_elem = true;
   for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
@@ -388,7 +438,10 @@ int ObArrayBinary::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &at
 {
   int ret = OB_SUCCESS;
   const uint32_t len = 3;
-  if (len  >= attr_count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (len  >= attr_count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attr count", K(ret), K(attr_count), K(attr_idx), K(len));
   } else {
@@ -412,6 +465,13 @@ int ObArrayBinary::compare_at(uint32_t left_begin, uint32_t left_len,
   int ret = OB_SUCCESS;
   uint32_t cmp_len = std::min(left_len, right_len);
   cmp_ret = 0;
+  if (OB_UNLIKELY(left_begin + left_len > this->length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "left_begin + left_len > this->length_", K(ret), K(left_begin), K(left_len), K(this->length_));
+  } else if (OB_UNLIKELY(right_begin + right_len > right.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "right_begin + right_len > right.size()", K(ret), K(right_begin), K(right_len), K(right.size()));
+  }
   for (uint32_t i = 0; i < cmp_len && !cmp_ret && OB_SUCC(ret); ++i) {
     if (this->is_null(left_begin + i) && !right.is_null(right_begin + i)) {
       cmp_ret = 1;

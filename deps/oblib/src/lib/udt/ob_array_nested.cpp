@@ -22,9 +22,14 @@ int ObArrayNested::get_data_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (get_data_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_data_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
+  } else if (this->length_ == 0) {
+    // do nothing
   } else if (data_container_ == NULL) {
     MEMCPY(res_buf + pos, reinterpret_cast<char *>(null_bitmaps_), sizeof(uint8_t) * length_);
     pos += sizeof(uint8_t) * length_;
@@ -46,7 +51,10 @@ int ObArrayNested::get_data_binary(char *res_buf, int64_t buf_len)
 int ObArrayNested::get_raw_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  if (get_raw_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_raw_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
   } else {
@@ -88,6 +96,9 @@ int ObArrayNested::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
   } else if (OB_ISNULL(data_container_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "try to modify read-only array", K(ret));
+  } else if (OB_UNLIKELY(begin + len > src.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected begin or len", K(ret), K(begin), K(len), K(src.size()));
   } else {
     // insert offsets
     uint32_t last_offset = offset_at(begin, src.get_offsets());
@@ -135,6 +146,15 @@ int ObArrayNested::init()
       data_->init();
     }
   }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (length_ != 0 && (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  } else if (OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -176,7 +196,19 @@ int ObArrayNested::init(ObString &raw_data)
           }
         }
       }
+    } else {
+      null_bitmaps_ = NULL;
+      offsets_ = NULL;
     }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (length_ != 0 && (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  } else if (OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
   }
   return ret;
 }
@@ -185,7 +217,10 @@ int ObArrayNested::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
 {
   int ret = OB_SUCCESS;
   const uint32_t count = with_length ? 4 : 3;
-  if (attr_count < count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (attr_count < count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attrs", K(ret), K(attr_count), K(count));
   } else {
@@ -206,6 +241,15 @@ int ObArrayNested::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
       OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(length_));
     }
   }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (length_ != 0 && (OB_ISNULL(null_bitmaps_) || OB_ISNULL(offsets_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  } else if (OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -222,6 +266,10 @@ int ObArrayNested::print(ObStringBuffer &format_str, uint32_t begin, uint32_t pr
     if (print_whole) {
       // print whole array
       print_size = length_;
+    }
+    if (OB_UNLIKELY(begin + print_size > length_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
     }
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
       if (i > begin && OB_FAIL(format_str.append(","))) {
@@ -259,10 +307,16 @@ int ObArrayNested::print_element(ObStringBuffer &format_str, uint32_t begin, uin
       // print whole array
       print_size = length_;
     }
+    if (OB_UNLIKELY(begin + print_size > length_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
+    }
     uint64_t last_length = format_str.length();
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
-      if (this->null_bitmaps_[i]) {
-        // do nothing
+      uint32_t start = offset_at(i, offsets_);
+      uint32_t elem_cnt = offsets_[i] - start;
+      if (this->null_bitmaps_[i] || elem_cnt == 0) {
+          // do nothing
       } else if (format_str.length() > last_length && OB_FAIL(format_str.append(delimiter))) {
         OB_LOG(WARN, "fail to append delimiter to buffer", K(ret), K(delimiter));
       } else {
@@ -357,13 +411,18 @@ void ObArrayNested::clear()
 int ObArrayNested::at(uint32_t idx, ObIArrayType &dest) const
 {
   int ret = OB_SUCCESS;
-  uint32_t start = offset_at(idx, get_offsets());
-  uint32_t child_len = get_offsets()[idx] - start;
-  const ObIArrayType *child_arr = get_child_array();
-  if (OB_FAIL(dest.insert_from(*child_arr, start, child_len))) {
-    OB_LOG(WARN, "failed to insert child array", K(ret), K(idx), K(start), K(child_len));
-  } else if (OB_FAIL(dest.init())) {
-    OB_LOG(WARN, "failed to init array element", K(ret), K(idx), K(start), K(child_len));
+  if (OB_UNLIKELY(idx >= length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "index out of range", K(ret), K(idx), K(length_));
+  } else {
+    uint32_t start = offset_at(idx, get_offsets());
+    uint32_t child_len = get_offsets()[idx] - start;
+    const ObIArrayType *child_arr = get_child_array();
+    if (OB_FAIL(dest.insert_from(*child_arr, start, child_len))) {
+      OB_LOG(WARN, "failed to insert child array", K(ret), K(idx), K(start), K(child_len));
+    } else if (OB_FAIL(dest.init())) {
+      OB_LOG(WARN, "failed to init array element", K(ret), K(idx), K(start), K(child_len));
+    }
   }
   return ret;
 }
@@ -372,7 +431,10 @@ int ObArrayNested::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &at
 {
   int ret = OB_SUCCESS;
   const uint32_t len = 2;
-  if (len  >= attr_count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (len  >= attr_count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attr count", K(ret), K(attr_count), K(attr_idx), K(len));
   } else {
@@ -396,6 +458,13 @@ int ObArrayNested::compare_at(uint32_t left_begin, uint32_t left_len,
   int ret = OB_SUCCESS;
   uint32_t cmp_len = std::min(left_len, right_len);
   cmp_ret = 0;
+  if (OB_UNLIKELY(left_begin + left_len > this->length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "left_begin + left_len > this->length_", K(ret), K(left_begin), K(left_len), K(this->length_));
+  } else if (OB_UNLIKELY(right_begin + right_len > right.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "right_begin + right_len > right.size()", K(ret), K(right_begin), K(right_len), K(right.size()));
+  }
   for (uint32_t i = 0; i < cmp_len && !cmp_ret && OB_SUCC(ret); ++i) {
     if (this->is_null(left_begin + i) && !right.is_null(right_begin + i)) {
       cmp_ret = 1;

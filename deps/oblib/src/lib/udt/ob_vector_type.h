@@ -100,6 +100,9 @@ public:
     int ret = OB_SUCCESS;
     if (OB_FAIL(clone_empty(alloc, output, false))) {
       OB_LOG(WARN, "clone empty failed", K(ret));
+    } else if (OB_UNLIKELY(OB_ISNULL(elem_except))) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "elem except is null", K(ret));
     } else {
       ObVectorData *arr_data = dynamic_cast<ObVectorData *>(output);
       if (OB_ISNULL(arr_data)) {
@@ -193,7 +196,10 @@ template <typename T>
 int ObVectorData<T>::get_raw_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  if (get_raw_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_raw_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len));
   } else if (this->data_container_ == NULL) {
@@ -229,6 +235,10 @@ int ObVectorData<T>::init()
     this->length_ = this->data_container_->raw_data_.size();
     data_ = this->data_container_->raw_data_.get_data();
   }
+  if (OB_SUCC(ret) && this->length_ != 0 && OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -245,6 +255,10 @@ int ObVectorData<T>::init(ObString &raw_data)
     this->length_ = raw_data.length() / sizeof(T);
     data_ = reinterpret_cast<T *>(raw_str);
   }
+  if (OB_SUCC(ret) && this->length_ != 0 && OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -254,12 +268,19 @@ int ObVectorData<T>::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
   int ret = OB_SUCCESS;
   // attrs of vector are same as array now, maybe optimize later
   const uint32_t count = with_length ? 3 : 2;
-  if (attr_count != count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (attr_count != count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attrs", K(ret), K(attr_count), K(count));
   } else {
     data_ = const_cast<T *>(reinterpret_cast<const T *>(attrs[count - 1].get_string().ptr()));
     this->length_ = attrs[count - 1].get_int_bytes() / sizeof(T);
+  }
+  if (OB_SUCC(ret) && this->length_ != 0 && OB_ISNULL(data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
   }
   return ret;
 }
@@ -287,6 +308,9 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(this->data_container_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "try to modify read-only array", K(ret));
+  } else if (OB_UNLIKELY(begin + len > src.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected begin or len", K(ret), K(begin), K(len), K(src.size()));
   } else {
     const uint32_t src_data_offset = begin * sizeof(T);
     int64_t curr_pos = this->data_container_->raw_data_.size();
@@ -317,7 +341,10 @@ int ObVectorData<T>::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32_t &
 {
   int ret = OB_SUCCESS;
   const uint32_t len = 2;
-  if (len + attr_idx >= attr_count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (len + attr_idx >= attr_count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attr count", K(ret), K(attr_count), K(attr_idx), K(len));
   } else {
@@ -340,6 +367,12 @@ int ObVectorData<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint32_t
   if (OB_ISNULL(right_data)) {
     ret = OB_ERR_ARRAY_TYPE_MISMATCH;
     OB_LOG(WARN, "invalid array type", K(ret), K(right.get_format()), K(this->get_format()));
+  } else if (OB_UNLIKELY(left_begin + left_len > this->length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "left_begin + left_len > this->length_", K(ret), K(left_begin), K(left_len), K(this->length_));
+  } else if (OB_UNLIKELY(right_begin + right_len > right.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "right_begin + right_len > right.size()", K(ret), K(right_begin), K(right_len), K(right.size()));
   } else {
     uint32_t cmp_len = std::min(left_len, right_len);
     uint32_t left_max = left_begin + cmp_len;

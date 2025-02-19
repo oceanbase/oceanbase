@@ -166,7 +166,9 @@ int ObExprArraySortby::index_sort(common::ObArenaAllocator &allocator, ObIArrayT
   arrSortCmp cmp(src_arr);
   uint32_t arr_size = src_arr->size();
 
-  if (OB_ISNULL(sort_idx = static_cast<uint32_t *>(allocator.alloc(sizeof(uint32_t) * arr_size)))) {
+  if (arr_size == 0) {
+    // do nothing
+  } else if (OB_ISNULL(sort_idx = static_cast<uint32_t *>(allocator.alloc(sizeof(uint32_t) * arr_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else {

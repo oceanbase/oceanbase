@@ -101,6 +101,10 @@ int ObArrayFixedSize<T>::print_element(ObStringBuffer &format_str, uint32_t begi
       // print whole element
       print_size = this->length_;
     }
+    if (OB_UNLIKELY(begin + print_size > this->length_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(this->length_));
+    }
     ObObjType obj_type = basic_type->basic_meta_.get_obj_type();
     bool is_first_elem = true;
     for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
@@ -193,9 +197,14 @@ int ObArrayFixedSize<T>::get_data_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (get_data_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_data_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len), K(pos));
+  } else if (this->length_ == 0) {
+    // do nothing
   } else if (this->data_container_ == NULL) {
     MEMCPY(res_buf + pos, this->null_bitmaps_, sizeof(uint8_t) * this->length_);
     pos += sizeof(uint8_t) * this->length_;
@@ -213,7 +222,10 @@ int ObArrayFixedSize<T>::get_raw_binary(char *res_buf, int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  if (get_raw_binary_len() > buf_len) {
+  if (OB_UNLIKELY(OB_ISNULL(res_buf))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "res_buf is null", K(ret));
+  } else if (get_raw_binary_len() > buf_len) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "buf len isn't enough", K(ret), K(buf_len), K(pos));
   } else {
@@ -255,6 +267,10 @@ int ObArrayFixedSize<T>::init()
     data_ = this->data_container_->raw_data_.get_data();
     this->null_bitmaps_ = this->data_container_->null_bitmaps_.get_data();
   }
+  if (OB_SUCC(ret) && this->length_ != 0 && (OB_ISNULL(data_) || OB_ISNULL(this->null_bitmaps_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -269,19 +285,28 @@ int ObArrayFixedSize<T>::init(ObString &raw_data)
     OB_LOG(WARN, "raw data len is invalid", K(ret), K(raw_data.length()));
   } else {
     this->length_ = *reinterpret_cast<uint32_t *>(raw_str);
-    pos += sizeof(this->length_);
-    this->null_bitmaps_ = reinterpret_cast<uint8_t *>(raw_str + pos);
-    if (pos + sizeof(uint8_t) * this->length_ > raw_data.length()) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "raw data len is invalid", K(ret), K(pos), K(this->length_), K(raw_data.length()));
-    } else {
-      pos += sizeof(uint8_t) * this->length_;
-      data_ = reinterpret_cast<T *>(raw_str + pos);
-      if (pos + sizeof(T) * this->length_ > raw_data.length()) {
+    if (this->length_ > 0) {
+      pos += sizeof(this->length_);
+      this->null_bitmaps_ = reinterpret_cast<uint8_t *>(raw_str + pos);
+      if (pos + sizeof(uint8_t) * this->length_ > raw_data.length()) {
         ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "raw data len is invalid", K(ret), K(pos), K(this->length_), K(raw_data.length()));
+      } else {
+        pos += sizeof(uint8_t) * this->length_;
+        data_ = reinterpret_cast<T *>(raw_str + pos);
+        if (pos + sizeof(T) * this->length_ > raw_data.length()) {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "raw data len is invalid", K(ret), K(pos), K(this->length_), K(raw_data.length()));
+        }
       }
+    } else {
+      data_ = nullptr;
+      this->null_bitmaps_ = nullptr;
     }
+  }
+  if (OB_SUCC(ret) && this->length_ != 0 && (OB_ISNULL(data_) || OB_ISNULL(this->null_bitmaps_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
   }
   return ret;
 }
@@ -291,7 +316,10 @@ int ObArrayFixedSize<T>::init(ObDatum *attrs, uint32_t attr_count, bool with_len
 {
   int ret = OB_SUCCESS;
   const uint32_t count = with_length ? 3 : 2;
-  if (attr_count != count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (attr_count != count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attrs", K(ret), K(attr_count), K(count));
   } else {
@@ -309,6 +337,10 @@ int ObArrayFixedSize<T>::init(ObDatum *attrs, uint32_t attr_count, bool with_len
       OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(this->length_));
     }
   }
+  if (OB_SUCC(ret) && this->length_ != 0 && (OB_ISNULL(data_) || OB_ISNULL(this->null_bitmaps_))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "init failed", K(ret));
+  }
   return ret;
 }
 
@@ -324,6 +356,9 @@ int ObArrayFixedSize<T>::insert_from(const ObIArrayType &src, uint32_t begin, ui
   } else if (OB_ISNULL(this->data_container_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "try to modify read-only array", K(ret));
+  } else if (OB_UNLIKELY(begin + len > src.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "unexpected begin or len", K(ret), K(begin), K(len), K(src.size()));
   } else {
     const uint32_t src_data_offset = begin * sizeof(T);
     const uint32_t src_null_offset = begin * sizeof(uint8_t);
@@ -354,53 +389,58 @@ int ObArrayFixedSize<T>::elem_at(uint32_t idx, ObObj &elem_obj) const
 {
   int ret = OB_SUCCESS;
   ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(this->get_array_type()->element_type_);
-  switch (elem_type->basic_meta_.get_obj_type()) {
-  case ObTinyIntType: {
-    elem_obj.set_tinyint(data_[idx]);
-    break;
-  }
-  case ObSmallIntType: {
-    elem_obj.set_smallint(data_[idx]);
-    break;
-  }
-  case ObInt32Type: {
-    elem_obj.set_int32(data_[idx]);
-    break;
-  }    case ObIntType: {
-    elem_obj.set_int(data_[idx]);
-    break;
-  }
-  case ObUTinyIntType: {
-    elem_obj.set_utinyint(data_[idx]);
-    break;
-  }
-  case ObUSmallIntType: {
-    elem_obj.set_usmallint(data_[idx]);
-    break;
-  }
-  case ObUInt64Type: {
-    elem_obj.set_uint64(data_[idx]);
-    break;
-  }
-  case ObUInt32Type: {
-    elem_obj.set_uint32(data_[idx]);
-    break;
-  }
-  case ObUDoubleType:
-  case ObDoubleType: {
-    elem_obj.set_double(data_[idx]);
-    break;
-  }
-  case ObUFloatType:
-  case ObFloatType: {
-    elem_obj.set_float(data_[idx]);
-    break;
-  }
-  default: {
+  if (OB_UNLIKELY(idx >= this->length_)) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "unexpected element type", K(ret), K(elem_type->basic_meta_.get_obj_type()));
+    OB_LOG(WARN, "idx >= this->length_", K(ret), K(idx), K(this->length_));
+  } else {
+    switch (elem_type->basic_meta_.get_obj_type()) {
+    case ObTinyIntType: {
+      elem_obj.set_tinyint(data_[idx]);
+      break;
+    }
+    case ObSmallIntType: {
+      elem_obj.set_smallint(data_[idx]);
+      break;
+    }
+    case ObInt32Type: {
+      elem_obj.set_int32(data_[idx]);
+      break;
+    }    case ObIntType: {
+      elem_obj.set_int(data_[idx]);
+      break;
+    }
+    case ObUTinyIntType: {
+      elem_obj.set_utinyint(data_[idx]);
+      break;
+    }
+    case ObUSmallIntType: {
+      elem_obj.set_usmallint(data_[idx]);
+      break;
+    }
+    case ObUInt64Type: {
+      elem_obj.set_uint64(data_[idx]);
+      break;
+    }
+    case ObUInt32Type: {
+      elem_obj.set_uint32(data_[idx]);
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      elem_obj.set_double(data_[idx]);
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      elem_obj.set_float(data_[idx]);
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "unexpected element type", K(ret), K(elem_type->basic_meta_.get_obj_type()));
+    }
+    } // end switch
   }
-  } // end switch
   return ret;
 }
 
@@ -420,7 +460,10 @@ int ObArrayFixedSize<T>::flatten(ObArrayAttr *attrs, uint32_t attr_count, uint32
 {
   int ret = OB_SUCCESS;
   const uint32_t len = 2;
-  if (len + attr_idx >= attr_count) {
+  if (OB_UNLIKELY(OB_ISNULL(attrs))) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "attrs is null", K(ret));
+  } else if (len + attr_idx >= attr_count) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected attr count", K(ret), K(attr_count), K(attr_idx), K(len));
   } else {
@@ -443,6 +486,12 @@ int ObArrayFixedSize<T>::compare_at(uint32_t left_begin, uint32_t left_len, uint
   if (OB_ISNULL(right_data)) {
     ret = OB_ERR_ARRAY_TYPE_MISMATCH;
     OB_LOG(WARN, "invalid array type", K(ret), K(right.get_format()), K(this->get_format()));
+  } else if (OB_UNLIKELY(left_begin + left_len > this->length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "left_begin + left_len > this->length_", K(ret), K(left_begin), K(left_len), K(this->length_));
+  } else if (OB_UNLIKELY(right_begin + right_len > right.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "right_begin + right_len > right.size()", K(ret), K(right_begin), K(right_len), K(right.size()));
   } else {
     uint32_t cmp_len = std::min(left_len, right_len);
     cmp_ret = 0;

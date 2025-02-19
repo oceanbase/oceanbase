@@ -42,6 +42,10 @@ int ObVectorF32Data::print_element(ObStringBuffer &format_str,
     // print whole array
     print_size = length_;
   }
+  if (OB_UNLIKELY(begin + print_size > length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
+  }
   bool is_first_elem = true;
   for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
     if (!is_first_elem && OB_FAIL(format_str.append(delimiter))) {
@@ -90,8 +94,14 @@ int ObVectorF32Data::clone_empty(ObIAllocator &alloc, ObIArrayType *&output, boo
 
 int ObVectorF32Data::elem_at(uint32_t idx, ObObj &elem_obj) const
 {
-  elem_obj.set_float(data_[idx]);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx >= length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "idx is out of range", K(ret), K(idx), K(length_));
+  } else {
+    elem_obj.set_float(data_[idx]);
+  }
+  return ret;
 }
 
 /////////////////////////////////
@@ -119,6 +129,10 @@ int ObVectorU8Data::print_element(ObStringBuffer &format_str,
   if (print_whole) {
     // print whole array
     print_size = length_;
+  }
+  if (OB_UNLIKELY(begin + print_size > length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "begin + print_size > length_", K(ret), K(begin), K(print_size), K(length_));
   }
   bool is_first_elem = true;
   for (int i = begin; i < begin + print_size && OB_SUCC(ret); i++) {
@@ -162,8 +176,14 @@ int ObVectorU8Data::clone_empty(ObIAllocator &alloc, ObIArrayType *&output, bool
 
 int ObVectorU8Data::elem_at(uint32_t idx, ObObj &elem_obj) const
 {
-  elem_obj.set_utinyint(data_[idx]);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(idx >= length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "idx is out of range", K(ret), K(idx), K(length_));
+  } else {
+    elem_obj.set_utinyint(data_[idx]);
+  }
+  return ret;
 }
 
 } // namespace common
