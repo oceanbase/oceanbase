@@ -27,23 +27,19 @@ namespace common
 
 /*--------------------------------ObStorageHdfsBase--------------------------------*/
 ObStorageHdfsBase::ObStorageHdfsBase()
-    : is_inited_(false),
-      is_opened_readable_file_(false), is_opened_writable_file_(false),
-      hdfs_read_file_(nullptr), hdfs_client_(nullptr), namenode_buf_(nullptr),
+    : is_inited_(false), is_opened_readable_file_(false),
+      is_opened_writable_file_(false), hdfs_read_file_(nullptr),
+      hdfs_client_(nullptr), allocator_(OB_STORAGE_HDFS_ALLOCATOR), namenode_buf_(nullptr),
       path_buf_(nullptr)
 {
 }
 
 void ObStorageHdfsBase::reset()
 {
-  if (OB_NOT_NULL(namenode_buf_)) {
-    ob_free(namenode_buf_);
-    namenode_buf_ = nullptr;
-  }
-  if (OB_NOT_NULL(path_buf_)) {
-    ob_free(path_buf_);
-    path_buf_ = nullptr;
-  }
+  allocator_.reset();
+  namenode_buf_ = nullptr;
+  path_buf_ = nullptr;
+
   is_inited_ = false;
   if (is_opened_readable_file_ && OB_NOT_NULL(hdfs_read_file_) &&
       OB_NOT_NULL(hdfs_client_) && OB_LIKELY(hdfs_client_->is_valid_client()) &&
@@ -77,12 +73,10 @@ int ObStorageHdfsBase::parse_namenode_and_path(const ObString &uri_str)
   } else {
     // Length of namenode and path must be less than total uri.
     const int64_t uri_len = uri_str.length();
-    if (OB_ISNULL(namenode_buf_ =
-                      static_cast<char *>(ob_malloc(uri_len, "HdfsNamenode")))) {
+    if (OB_ISNULL(namenode_buf_ = static_cast<char *>(allocator_.alloc(uri_len + 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to allocate memory for namenode", K(ret), K(uri_len), K(uri_str));
-    } else if (OB_ISNULL(path_buf_ = static_cast<char *>(
-                            ob_malloc(uri_len, "HdfsFilePath")))) {
+    } else if (OB_ISNULL(path_buf_ = static_cast<char *>(allocator_.alloc(uri_len + 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to allocate memory for file path", K(ret), K(uri_len), K(uri_str));
     } else if (OB_FAIL(ObHdfsCacheUtils::get_namenode_and_path_from_uri(
@@ -92,12 +86,9 @@ int ObStorageHdfsBase::parse_namenode_and_path(const ObString &uri_str)
     }
   }
   // Free if failed and it is not null
-  if (OB_FAIL(ret) && OB_NOT_NULL(namenode_buf_)) {
-    ob_free(namenode_buf_);
+  if (OB_FAIL(ret)) {
+    allocator_.reset();
     namenode_buf_ = nullptr;
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(path_buf_)) {
-    ob_free(path_buf_);
     path_buf_ = nullptr;
   }
   return ret;
@@ -171,17 +162,18 @@ int ObStorageHdfsBase::get_hdfs_file_meta(const ObString &uri, ObStorageObjectMe
     OB_LOG(WARN, "hdfs base with null file system inited", K(ret));
   } else {
     hdfsFS hdfs_fs = hdfs_client_->get_hdfs_fs();
-    hdfsFileInfo* file_info = obHdfsGetPathInfo(hdfs_fs, path_buf_);
+    hdfsFileInfo *file_info = obHdfsGetPathInfo(hdfs_fs, path_buf_);
     if (OB_ISNULL(file_info)) {
       ret = OB_HDFS_PATH_NOT_FOUND;
       OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K_(path_buf));
     } else {
-      meta.length_ = file_info->mSize;
       meta.is_exist_ = true;
       if (file_info->mKind == kObjectKindDirectory) {
         meta.type_ = ObStorageObjectMetaType::OB_FS_DIR;
+        meta.length_ = 0;
       } else if (file_info->mKind == kObjectKindFile) {
         meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
+        meta.length_ = file_info->mSize;
       }
       OB_LOG(TRACE, "get file info", K(ret), K(uri), K_(path_buf),
              K(meta.length_), K(meta.is_exist_), K(meta.type_));
@@ -310,7 +302,7 @@ int ObStorageHdfsJniUtil::del_file(const common::ObString &uri)
   ObExternalIOCounterGuard io_guard;
   ObStorageHdfsBase hdfs_base;
   hdfsFS hdfs_fs = nullptr;
-  char *file_path = nullptr;
+  const char *file_path = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_HDFS_ERROR;
     OB_LOG(WARN, "hdfs util not opened", K(ret));
@@ -365,7 +357,7 @@ int ObStorageHdfsJniUtil::mkdir(const common::ObString &uri)
   ObExternalIOCounterGuard io_guard;
   ObStorageHdfsBase hdfs_base;
   hdfsFS hdfs_fs = nullptr;
-  char *dir_path = nullptr;
+  const char *dir_path = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_HDFS_ERROR;
     OB_LOG(WARN, "hdfs util not opened", K(ret));
@@ -396,7 +388,7 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
   int ret = OB_SUCCESS;
   ObStorageHdfsBase hdfs_base;
   ObExternalIOCounterGuard io_guard;
-  char *full_dir_path = nullptr;
+  const char *full_dir_path = nullptr;
   hdfsFS hdfs_fs = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_HDFS_ERROR;
@@ -416,57 +408,77 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to get hdfs file system", K(ret), K(uri));
   } else {
-    int num_entries = 0;
-    hdfsFileInfo* file_infos = obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
-    if (OB_ISNULL(file_infos)) {
-      ret = OB_HDFS_ERROR;
+    OB_LOG(TRACE, "get file info by path", K(ret), K(uri), K(full_dir_path));
+    hdfsFileInfo *file_info = obHdfsGetPathInfo(hdfs_fs, full_dir_path);
+    if (OB_ISNULL(file_info)) {
+      ret = OB_HDFS_PATH_NOT_FOUND;
       OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
-    }
+    } else if (file_info->mKind == kObjectKindFile) {
+      // If the path is regular file then do not execute listing.
+      /* do nothing */
+    } else {
+      // Diretory
+      int num_entries = 0;
+      hdfsFileInfo *file_infos =
+          obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
+      if (OB_ISNULL(file_infos)) {
+        ret = OB_HDFS_ERROR;
+        OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
+      }
 
-    if (OB_SUCC(ret)) {
-      dirent entry;
-      entry.d_type = DT_REG;
+      if (OB_SUCC(ret)) {
+        dirent entry;
+        entry.d_type = DT_REG;
 
-      for (int idx = 0; OB_SUCC(ret) && idx < num_entries; ++idx) {
-        hdfsFileInfo file_info = file_infos[idx];
-        if (file_info.mKind == kObjectKindDirectory) {
-          // do nothing
-        } else if (op.need_get_file_size()) {
-          if (OB_UNLIKELY(file_info.mSize < 0)) {
-            ret = OB_INVALID_ARGUMENT;
-            OB_LOG(WARN, "invalid hdfs file size", K(file_info.mSize), K(file_info.mName));
-          } else {
-            op.set_size(file_info.mSize);
-          }
-
-          if (OB_SUCC(ret)) {
-            // Note: mName is full with prefix "hdfs://namenode:port/path",
-            // And the prefix "hdfs://namenode:port/path" is same as `uri`.
-            char *obj_name = file_info.mName;
-            if (OB_ISNULL(obj_name)) {
-              ret = OB_HDFS_INVALID_ARGUMENT;
-              OB_LOG(WARN, "fail to get obj name", K(ret));
+        for (int idx = 0; OB_SUCC(ret) && idx < num_entries; ++idx) {
+          hdfsFileInfo file_info = file_infos[idx];
+          if (file_info.mKind == kObjectKindDirectory) {
+            // do nothing
+          } else if (op.need_get_file_size()) {
+            if (OB_UNLIKELY(file_info.mSize < 0)) {
+              ret = OB_INVALID_ARGUMENT;
+              OB_LOG(WARN, "invalid hdfs file size", K(file_info.mSize),
+                     K(file_info.mName));
             } else {
-              const int64_t obj_name_len = strlen(obj_name);
-              ObString file_name;
-              char *file_name_start = obj_name + uri.length();
-              file_name.assign_ptr(
-                  file_name_start,
-                  static_cast<int64_t>(obj_name_len - uri.length()));
-              if (file_name.length() > sizeof(entry.d_name)) {
-                ret = OB_SIZE_OVERFLOW;
-                OB_LOG(WARN, "file name length is overflow d_name", K(ret), K(file_name), K(file_name.length()));
+              op.set_size(file_info.mSize);
+            }
+
+            if (OB_SUCC(ret)) {
+              // Note: mName is full with prefix "hdfs://namenode:port/path",
+              // And the prefix "hdfs://namenode:port/path" is same as `uri`.
+              char *obj_name = file_info.mName;
+              if (OB_ISNULL(obj_name)) {
+                ret = OB_HDFS_INVALID_ARGUMENT;
+                OB_LOG(WARN, "fail to get obj name", K(ret));
               } else {
-                MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
-                entry.d_name[file_name.length()] = '\0'; // set str end
-                if (OB_FAIL(op.func(&entry))) {
-                  OB_LOG(WARN, "fail to list hdfs files.", K(ret), K(file_name));
+                const int64_t obj_name_len = strlen(obj_name);
+                ObString file_name;
+                char *file_name_start = obj_name + uri.length();
+                file_name.assign_ptr(
+                    file_name_start,
+                    static_cast<int64_t>(obj_name_len - uri.length()));
+                if (file_name.length() > sizeof(entry.d_name)) {
+                  ret = OB_SIZE_OVERFLOW;
+                  OB_LOG(WARN, "file name length is overflow d_name", K(ret),
+                         K(file_name), K(file_name.length()));
+                } else {
+                  MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
+                  entry.d_name[file_name.length()] = '\0'; // set str end
+                  if (OB_FAIL(op.func(&entry))) {
+                    OB_LOG(WARN, "fail to list hdfs files", K(ret), K(file_name));
+                  }
                 }
               }
             }
           }
         }
       }
+      if (OB_NOT_NULL(file_infos)) {
+        obHdfsFreeFileInfo(file_infos, num_entries);
+      }
+    }
+    if (OB_NOT_NULL(file_info)) {
+      obHdfsFreeFileInfo(file_info, 1);
     }
   }
   return ret;
@@ -486,7 +498,7 @@ int ObStorageHdfsJniUtil::del_dir(const common::ObString &uri)
   ObExternalIOCounterGuard io_guard;
   ObStorageHdfsBase hdfs_base;
   hdfsFS hdfs_fs = nullptr;
-  char *dir_path = nullptr;
+  const char *dir_path = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_HDFS_ERROR;
     OB_LOG(WARN, "hdfs util not opened", K(ret));
@@ -523,7 +535,7 @@ int ObStorageHdfsJniUtil::list_directories(
   int ret = OB_SUCCESS;
   ObStorageHdfsBase hdfs_base;
   ObExternalIOCounterGuard io_guard;
-  char *full_dir_path = nullptr;
+  const char *full_dir_path = nullptr;
   hdfsFS hdfs_fs = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_HDFS_ERROR;
@@ -543,42 +555,55 @@ int ObStorageHdfsJniUtil::list_directories(
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to get hdfs file system", K(ret), K(uri));
   } else {
-    int num_entries = 0;
-    hdfsFileInfo* file_infos = obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
-    if (OB_ISNULL(file_infos)) {
-      ret = OB_HDFS_ERROR;
+    OB_LOG(TRACE, "get file info by path", K(ret), K(uri), K(full_dir_path));
+    hdfsFileInfo *file_info = obHdfsGetPathInfo(hdfs_fs, full_dir_path);
+    if (OB_ISNULL(file_info)) {
+      ret = OB_HDFS_PATH_NOT_FOUND;
       OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
-    }
+    } else if (file_info->mKind == kObjectKindFile) {
+      // If the path is regular file then do not execute listing.
+      /* do nothing */
+    } else {
+      int num_entries = 0;
+      hdfsFileInfo *file_infos = obHdfsListDirectory(hdfs_fs, full_dir_path, &num_entries);
+      if (OB_ISNULL(file_infos)) {
+        ret = OB_HDFS_ERROR;
+        OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K(full_dir_path));
+      }
 
-    if (OB_SUCC(ret)) {
-      dirent entry;
-      entry.d_type = DT_DIR;
+      if (OB_SUCC(ret)) {
+        dirent entry;
+        entry.d_type = DT_DIR;
 
-      for (int idx = 0; OB_SUCC(ret) && idx < num_entries; ++idx) {
-        hdfsFileInfo file_info = file_infos[idx];
-        if (file_info.mKind != kObjectKindDirectory) {
-          continue;
-        }
+        for (int idx = 0; OB_SUCC(ret) && idx < num_entries; ++idx) {
+          hdfsFileInfo file_info = file_infos[idx];
+          if (file_info.mKind != kObjectKindDirectory) {
+            /* do nothing */
+          } else {
+            // Note: mName is full with prefix "hdfs://namenode:port/path",
+            // And the prefix "hdfs://namenode:port/path" is same as `uri`.
+            char *obj_name = file_info.mName;
+            int64_t obj_name_len = strlen(obj_name);
+            ObString file_name;
+            char *file_name_start = obj_name + uri.length();
+            file_name.assign_ptr(
+                file_name_start,
+                static_cast<int64_t>(obj_name_len - uri.length()));
 
-        // Note: mName is full with prefix "hdfs://namenode:port/path",
-        // And the prefix "hdfs://namenode:port/path" is same as `uri`.
-        char *obj_name = file_info.mName;
-        int64_t obj_name_len = strlen(obj_name);
-        ObString file_name;
-        char *file_name_start = obj_name + uri.length();
-        file_name.assign_ptr(
-            file_name_start,
-            static_cast<int64_t>(obj_name_len - uri.length()));
-
-        MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
-        entry.d_name[file_name.length()] = '\0'; // set str end
-        if (OB_FAIL(op.func(&entry))) {
-          OB_LOG(WARN, "fail to list hdfs files.", K(ret));
+            MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
+            entry.d_name[file_name.length()] = '\0'; // set str end
+            if (OB_FAIL(op.func(&entry))) {
+              OB_LOG(WARN, "fail to list hdfs files", K(ret));
+            }
+          }
         }
       }
+      if (OB_NOT_NULL(file_infos)) {
+        obHdfsFreeFileInfo(file_infos, num_entries);
+      }
     }
-    if (OB_NOT_NULL(file_infos)) {
-      obHdfsFreeFileInfo(file_infos, num_entries);
+    if (OB_NOT_NULL(file_info)) {
+      obHdfsFreeFileInfo(file_info, 1);
     }
   }
   return ret;

@@ -12,6 +12,8 @@
 
 #include "ob_storage_hdfs_cache.h"
 #include "sql/engine/connector/ob_java_env.h"
+#include "sql/engine/connector/ob_java_helper.h"
+
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_iterator.h"
@@ -106,6 +108,38 @@ ObHdfsFsClient::~ObHdfsFsClient()
 }
 
 // --------------------- ObHdfsCacheUtils ---------------------
+bool ObHdfsCacheUtils::KerberosConfig::is_kerberized() const
+{
+  return OB_NOT_NULL(krb5conf_path) && 0 != STRLEN(krb5conf_path);
+}
+
+bool ObHdfsCacheUtils::KerberosConfig::is_using_ticket_cache() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  if (OB_ISNULL(ticiket_path) || 0 == STRLEN(ticiket_path)) {
+    bret = false;
+  }
+  OB_LOG(TRACE, "use ticket cache path", K(ret), K(bret), K(ticiket_path));
+  return bret;
+}
+
+bool ObHdfsCacheUtils::KerberosConfig::is_using_keytab_and_principal() const
+{
+  int ret = OB_SUCCESS;
+  bool using_keytab = true;
+  bool using_principal = true;
+  if (OB_ISNULL(keytab_path) || 0 == STRLEN(keytab_path)) {
+    using_keytab = false;
+  }
+  OB_LOG(TRACE, "use keytab", K(ret), K(using_keytab), K(keytab_path));
+  if (OB_ISNULL(principal) || 0 == STRLEN(principal)) {
+    using_principal = false;
+  }
+  OB_LOG(TRACE, "use principal", K(ret), K(using_principal), K(principal));
+  return using_keytab && using_principal;
+}
+
 int ObHdfsCacheUtils::get_namenode_and_path_from_uri(char *namenode,
                                                      const int64_t namenode_len,
                                                      char *path,
@@ -162,11 +196,7 @@ int ObHdfsCacheUtils::get_namenode_and_path_from_uri(char *namenode,
 }
 
 int ObHdfsCacheUtils::parse_hdfs_auth_info_(ObObjectStorageInfo *storage_info,
-                                            char *krb5conf_path, const int64_t kconf_len,
-                                            char *principal, const int64_t principal_len,
-                                            char *keytab_path, const int64_t keytab_len,
-                                            char *ticiket_path, const int64_t ticket_len,
-                                            char *configs, const int64_t configs_len)
+                                            KerberosConfig &kerberos_config)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
@@ -193,87 +223,45 @@ int ObHdfsCacheUtils::parse_hdfs_auth_info_(ObObjectStorageInfo *storage_info,
       }
       info_len = strlen(token);
       if (0 == strncmp(KRB5CONF, token, strlen(KRB5CONF))) {
-        if (OB_FAIL(ob_set_field(token + strlen(KRB5CONF), krb5conf_path,
-                                 kconf_len))) {
+        if (OB_FAIL(ob_set_field(token + strlen(KRB5CONF),
+                                 kerberos_config.krb5conf_path,
+                                 kerberos_config.kconf_len))) {
           OB_LOG(WARN, "failed to setup krb5conf path", K(ret), K(token),
-                 K(krb5conf_path), K(kconf_len));
+                 K(kerberos_config.krb5conf_path),
+                 K(kerberos_config.kconf_len));
         }
       } else if (0 == strncmp(PRINCIPAL, token, strlen(PRINCIPAL))) {
-        if (OB_FAIL(ob_set_field(token + strlen(PRINCIPAL), principal,
-                                 principal_len))) {
+        if (OB_FAIL(ob_set_field(token + strlen(PRINCIPAL),
+                                 kerberos_config.principal,
+                                 kerberos_config.principal_len))) {
           OB_LOG(WARN, "failed to setup principal", K(ret), K(token),
-                 K(principal), K(principal_len));
+                 K(kerberos_config.principal),
+                 K(kerberos_config.principal_len));
         }
       } else if (0 == strncmp(KEYTAB, token, strlen(KEYTAB))) {
-        if (OB_FAIL(ob_set_field(token + strlen(KEYTAB), keytab_path,
-                                 keytab_len))) {
+        if (OB_FAIL(ob_set_field(token + strlen(KEYTAB),
+                                 kerberos_config.keytab_path,
+                                 kerberos_config.keytab_len))) {
           OB_LOG(WARN, "failed to setup keytab path", K(ret), K(token),
-                 K(keytab_path), K(keytab_len));
+                 K(kerberos_config.keytab_path), K(kerberos_config.keytab_len));
         }
       } else if (0 ==
                  strncmp(TICKET_CACHE_PATH, token, strlen(TICKET_CACHE_PATH))) {
         if (OB_FAIL(ob_set_field(token + strlen(TICKET_CACHE_PATH),
-                                 ticiket_path, ticket_len))) {
+                                 kerberos_config.ticiket_path,
+                                 kerberos_config.ticket_len))) {
           OB_LOG(WARN, "failed to setup ticket cache path", K(ret), K(token),
-                 K(ticiket_path), K(ticket_len));
+                 K(kerberos_config.ticiket_path),
+                 K(kerberos_config.ticket_len));
         }
       } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
-        if (OB_FAIL(ob_set_field(token + strlen(HDFS_CONFIGS), configs,
-                                 configs_len))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HDFS_CONFIGS),
+                                 kerberos_config.hdfs_configs,
+                                 kerberos_config.configs_len))) {
           OB_LOG(WARN, "failed to setup hdfs configs", K(ret), K(token),
-                 K(configs), K(configs_len));
+                 K(kerberos_config.hdfs_configs), K(kerberos_config.configs_len));
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObHdfsCacheUtils::check_kerberized_(const char *krb5conf_path, const char *principal,
-                                        const char *keytab_path, const char *ticiket_path,
-                                        const char *configs, bool &is_kerberized,
-                                        bool &using_ticket_cache,
-                                        bool &using_keytab,
-                                        bool &using_principal)
-{
-  int ret = OB_SUCCESS;
-  // Init bool values
-  is_kerberized = false;
-  using_ticket_cache = true;
-  using_keytab = true;
-  using_principal = true;
-
-  if (OB_NOT_NULL(krb5conf_path) && 0 != STRLEN(krb5conf_path)) {
-    is_kerberized = true;
-  }
-
-  // Kerberos auth should check by ticket cache or the combination of
-  // keytab and principal.
-  bool is_valid_auth = false;
-
-  if (is_kerberized) {
-    if (OB_ISNULL(ticiket_path) || 0 == STRLEN(ticiket_path)) {
-      using_ticket_cache = false;
-      OB_LOG(TRACE, "use ticket cache path", K(ret), K(ticiket_path));
-    }
-
-    if (OB_ISNULL(keytab_path) || 0 == STRLEN(keytab_path)) {
-      using_keytab = false;
-      OB_LOG(TRACE, "use keytab", K(ret), K(keytab_path));
-    }
-
-    if (OB_ISNULL(principal) || 0 == STRLEN(principal)) {
-      using_principal = false;
-      OB_LOG(TRACE, "use principal", K(ret), K(principal));
-    }
-
-    is_valid_auth = using_ticket_cache || (using_keytab && using_principal);
-
-    if (!is_valid_auth) {
-      ret = OB_HDFS_PERMISSION_DENIED;
-      OB_LOG(WARN, "insufficent permission to access kerberized hdfs", K(ret),
-             K(is_kerberized), K(is_valid_auth), K(using_ticket_cache), K(using_keytab),
-             K(using_principal), K(ticiket_path), K(keytab_path), K(principal));
     }
   }
   return ret;
@@ -305,6 +293,13 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
   bool using_principal = true;
 
   hdfsBuilder *hdfs_builder = obHdfsNewBuilder();
+  KerberosConfig kerberos_config = {
+      krb5conf_path, sizeof(krb5conf_path),
+      principal,     sizeof(principal),
+      keytab_path,   sizeof(keytab_path),
+      ticiket_path,  sizeof(ticiket_path),
+      hdfs_configs,  sizeof(hdfs_configs)};
+
   if (OB_ISNULL(hdfs_client)) {
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "failed to get hdfs client", K(ret));
@@ -314,20 +309,12 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
   } else if (OB_ISNULL(hdfs_builder)) {
     ret = OB_HDFS_INVALID_ARGUMENT;
     OB_LOG(WARN, "failed to init hdfs_builder", K(ret));
-  } else if (OB_FAIL(parse_hdfs_auth_info_(
-          storage_info, krb5conf_path, sizeof(krb5conf_path), principal,
-          sizeof(principal), keytab_path, sizeof(keytab_path), ticiket_path,
-          sizeof(ticiket_path), hdfs_configs, sizeof(hdfs_configs)))) {
+  } else if (OB_FAIL(parse_hdfs_auth_info_(storage_info, kerberos_config))) {
     OB_LOG(WARN, "failed to parse hdfs auth info", K(ret),
            K(storage_info->hdfs_extension_));
-  } else if (OB_FAIL(check_kerberized_(krb5conf_path, principal, keytab_path,
-                                       ticiket_path, hdfs_configs,
-                                       is_kerberized, using_ticket_cache,
-                                       using_keytab, using_principal))) {
-    OB_LOG(WARN, "failed to check kerberized status", K(ret));
   } else {
     obHdfsBuilderSetNameNode(hdfs_builder, namenode.ptr());
-    if (is_kerberized) {
+    if (OB_LIKELY(kerberos_config.is_kerberized())) {
       // Setup kerberized client can fallback to access with simple auth
       const int rv = obHdfsBuilderConfSetStr(
           hdfs_builder, "ipc.client.fallback-to-simple-auth-allowed", "true");
@@ -339,8 +326,8 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
       if (OB_FAIL(ret)) {
         // do nothing
       } else {
-        OB_LOG(TRACE, "storage info krb 5conf", K(ret), K(krb5conf_path));
-        const char *krb5conf = krb5conf_path;
+        OB_LOG(TRACE, "storage info krb 5conf", K(ret), K(kerberos_config.krb5conf_path));
+        const char *krb5conf = kerberos_config.krb5conf_path;
         if (OB_ISNULL(krb5conf)) {
           ret = OB_HDFS_INVALID_ARGUMENT;
           OB_LOG(WARN, "failed to get krb5conf", K(ret), K(krb5conf_path));
@@ -356,9 +343,9 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
       if (OB_FAIL(ret)) {
         // do nothing
       } else {
-        if (using_keytab && using_principal) {
-          const char *tmp_principal = principal;
-          const char *keytab = keytab_path;
+        if (OB_LIKELY(kerberos_config.is_using_keytab_and_principal())) {
+          const char *tmp_principal = kerberos_config.principal;
+          const char *keytab = kerberos_config.keytab_path;
           if (OB_ISNULL(tmp_principal)) {
             ret = OB_HDFS_INVALID_ARGUMENT;
             OB_LOG(WARN, "failed to get principal", K(ret), K(tmp_principal));
@@ -382,27 +369,27 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
             ret = OB_HDFS_INVALID_ARGUMENT;
             OB_LOG(WARN, "failed to set conf for auto renewal", K(ret), K(rv));
           }
-        } else if (using_ticket_cache) {
-          const char *ticket_cache_path = ticiket_path;
+        } else if (OB_LIKELY(kerberos_config.is_using_ticket_cache())) {
+          const char *ticket_cache_path = kerberos_config.ticiket_path;
           if (OB_ISNULL(ticket_cache_path)) {
             ret = OB_HDFS_INVALID_ARGUMENT;
             OB_LOG(WARN, "failed to get ticket cache path", K(ret),
-                   K(ticiket_path));
+                   K(kerberos_config.ticiket_path));
           } else {
             OB_LOG(TRACE, "get ticket cache path", K(ret), K(ticket_cache_path));
             obHdfsBuilderSetKerbTicketCachePath(hdfs_builder, ticket_cache_path);
           }
         } else {
           ret = OB_HDFS_INVALID_ARGUMENT;
-          OB_LOG(WARN, "failed to setup hdfs builder", K(ret), K(using_keytab),
-                 K(using_principal), K(using_ticket_cache));
+          OB_LOG(WARN, "failed to setup hdfs builder", K(ret));
         }
       }
     }
   }
 
   // Handle other hadoop configs
-  if (OB_ISNULL(hdfs_configs) || 0 == STRLEN(hdfs_configs)) {
+  if (OB_ISNULL(kerberos_config.hdfs_configs) ||
+      0 == STRLEN(kerberos_config.hdfs_configs)) {
     // do nothing
   } else {
     char tmp[1024] = {0};
@@ -411,12 +398,12 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
     char *inner_save_ptr = nullptr;
 
     char *key_value_token = nullptr;
-    OB_LOG(TRACE, "storage info configs", K(ret), K(hdfs_configs));
+    OB_LOG(TRACE, "storage info configs", K(ret), K(kerberos_config.hdfs_configs));
 
-    const char *configs = hdfs_configs;
+    const char *configs = kerberos_config.hdfs_configs;
     if (OB_ISNULL(configs)) {
       ret = OB_HDFS_INVALID_ARGUMENT;
-      OB_LOG(WARN, "failed to get configs", K(ret), K(hdfs_configs));
+      OB_LOG(WARN, "failed to get configs", K(ret), K(kerberos_config.hdfs_configs));
     } else {
       const int64_t configs_len = strlen(configs);
       MEMCPY(tmp, configs, configs_len);

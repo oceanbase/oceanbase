@@ -16,6 +16,7 @@
 
 #include "ob_storage_hdfs_cache.h"
 #include "lib/restore/ob_i_storage.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {
@@ -72,8 +73,8 @@ public:
   int get_or_create_fs(const ObString &uri, ObObjectStorageInfo *storage_info);
   int get_or_create_read_file(const ObString &uri);
 
-  char *get_namenode() { return namenode_buf_; }
-  char *get_path() { return path_buf_; }
+  const char *get_namenode() const { return namenode_buf_; }
+  const char *get_path() const { return path_buf_; }
 
   hdfsFS get_fs()
   {
@@ -95,6 +96,7 @@ private:
   bool is_opened_writable_file_;
   hdfsFile hdfs_read_file_;
   ObHdfsFsClient *hdfs_client_;
+  common::ObArenaAllocator allocator_;
   char *namenode_buf_;
   char *path_buf_;
 

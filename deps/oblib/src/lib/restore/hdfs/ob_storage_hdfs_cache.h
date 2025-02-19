@@ -15,8 +15,6 @@
 #include <hdfs/hdfs.h>
 #include <memory>
 
-#include "sql/engine/connector/ob_java_helper.h"
-
 #include "lib/string/ob_string.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/restore/ob_i_storage.h"
@@ -73,20 +71,27 @@ public:
                                             const int64_t namenode_len,
                                             char *path, const int64_t path_len,
                                             const ObString &uri);
+private:
+  struct KerberosConfig {
+    char *krb5conf_path;
+    int64_t kconf_len;
+    char *principal;
+    const int64_t principal_len;
+    char *keytab_path;
+    const int64_t keytab_len;
+    char *ticiket_path;
+    const int64_t ticket_len;
+    char *hdfs_configs;
+    const int64_t configs_len;
+
+    bool is_kerberized() const;
+    bool is_using_ticket_cache() const;
+    bool is_using_keytab_and_principal() const;
+  };
 
 private:
   static int parse_hdfs_auth_info_(ObObjectStorageInfo *storage_info,
-                                   char *krb5conf_path, const int64_t conf_len,
-                                   char *principal, const int64_t principal_len,
-                                   char *keytab_path, const int64_t keytab_len,
-                                   char *ticiket_path, const int64_t ticket_len,
-                                   char *configs, const int64_t configs_len);
-
-  static int check_kerberized_(const char *krb5conf_path, const char *principal,
-                               const char *keytab_path, const char *ticiket_path,
-                               const char *configs, bool &is_kerberized,
-                               bool &using_ticket_cache, bool &using_keytab,
-                               bool &using_principal);
+                                   KerberosConfig &kerberos_config);
   static bool check_file_exists_(const char *path);
   static int create_fs_(ObHdfsFsClient *hdfs_client,
                         const ObString &namenode,

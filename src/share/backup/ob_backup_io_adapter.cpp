@@ -1271,7 +1271,9 @@ int ObBackupIoAdapter::is_directory(
     OB_LOG(WARN, "fail to get file stat info!", KR(ret), K(uri),
            KPC(storage_info), K(device_guard));
   } else {
-    is_directory = S_ISDIR(statbuf.mode_);
+    // Empty file will be recongnized as `directory`, it will check before
+    // list directory.
+    is_directory = statbuf.size_ == 0;
     OB_LOG(TRACE, "support to check directory", KR(ret), K(uri),
            KPC(storage_info), K(device_guard), K(is_directory));
   }
