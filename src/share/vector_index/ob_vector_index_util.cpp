@@ -328,6 +328,69 @@ int ObVectorIndexUtil::get_index_name_prefix(
   return ret;
 }
 
+int ObVectorIndexUtil::check_ivf_lob_inrow_threshold(
+    const int64_t tenant_id,
+    const ObString &database_name,
+    const ObString &table_name,
+    ObSchemaGetterGuard &schema_guard,
+    const int64_t lob_inrow_threshold)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16>simple_index_infos;
+  int64_t max_vec_len_with_ivf = 0;
+  const ObTableSchema *data_table_schema = NULL;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                            database_name,
+                                            table_name,
+                                            false/*is_index*/,
+                                            data_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_name), K(table_name));
+  } else if (NULL == data_table_schema) {
+    ret = OB_ERR_TABLE_EXIST;
+    LOG_WARN("table not exist", K(ret));
+  } else if (OB_FAIL(data_table_schema->get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    const ObTableSchema *index_table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+      LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+    } else if (OB_ISNULL(index_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+    } else if (!index_table_schema->is_vec_ivf_centroid_index()) {
+      // skip none ivf centroid vector index
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(j), KPC(index_table_schema));
+        } else if (!col_schema->is_vec_ivf_center_vector_column()) {
+          // skip none ivf centroid vector column
+        } else {
+          int64_t vector_dim = 0;
+          if (OB_FAIL(ObVectorIndexUtil::get_vector_dim_from_extend_type_info(col_schema->get_extended_type_info(), vector_dim))) {
+            LOG_WARN("fail to get vector dim", K(ret), K(col_schema));
+          } else {
+            int cur_len = sizeof(float) * vector_dim;
+            max_vec_len_with_ivf = max_vec_len_with_ivf > cur_len ? max_vec_len_with_ivf : cur_len;
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && lob_inrow_threshold < max_vec_len_with_ivf) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(ERROR, "invalid inrow threshold", K(ret), K(lob_inrow_threshold));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+      "lob inrow threshold, should be greater than the vector length of the vector column with IVF index");
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::check_table_has_vector_of_fts_index(
     const ObTableSchema &data_table_schema, ObSchemaGetterGuard &schema_guard, bool &has_fts_index, bool &has_vec_index)
 {
@@ -778,6 +841,13 @@ int ObVectorIndexUtil::check_vec_index_param(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support vector index when ob_vector_memory_limit_percentage is 0", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memstore_limit >= 85, vector index is");
+        }
+      } else if (share::schema::is_vec_ivf_index(vec_index_type)) {
+        int64_t lob_inrow_threshold = tbl_schema.get_lob_inrow_threshold();
+        if (lob_inrow_threshold < 4 * vector_dim) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("create ivf index on column with outrow lob data not supported", K(ret), K(vector_dim), K(lob_inrow_threshold));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column with outrow lob data is");
         }
       }
     }

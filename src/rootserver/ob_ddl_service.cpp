@@ -3356,6 +3356,13 @@ int ObDDLService::set_raw_table_options(
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("lob inrow threshold less than 4.2.1.2 not support", K(ret), K(compat_version));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "lob inrow threshold less than 4.2.1.2");
+          } else if (OB_FAIL(ObVectorIndexUtil::check_ivf_lob_inrow_threshold(
+              tenant_id,
+              alter_table_schema.get_origin_database_name(),
+              alter_table_schema.get_origin_table_name(),
+              schema_guard,
+              alter_table_schema.get_lob_inrow_threshold()))) {
+            LOG_WARN("fail to check table has vector ivf index", K(ret), K(tenant_id));
           } else {
             new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
             need_update_index_table = true;

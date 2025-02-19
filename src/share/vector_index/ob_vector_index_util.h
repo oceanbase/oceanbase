@@ -189,6 +189,12 @@ public:
   static int get_index_name_prefix(
       const schema::ObTableSchema &index_schema,
       ObString &prefix);
+  static int check_ivf_lob_inrow_threshold(
+    const int64_t tenant_id,
+    const ObString &database_name,
+    const ObString &table_name,
+    ObSchemaGetterGuard &schema_guard,
+    const int64_t lob_inrow_threshold);
   static int check_table_has_vector_of_fts_index(
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
