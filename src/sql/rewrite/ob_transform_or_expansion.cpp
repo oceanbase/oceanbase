@@ -3022,7 +3022,9 @@ int ObTransformOrExpansion::pre_classify_or_expr(const ObRawExpr *expr, int &cou
       if (OB_ISNULL(branch = expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (branch->has_flag(CNT_SUB_QUERY) || branch->get_relation_ids().is_empty()) {
+      } else if (branch->has_flag(CNT_SUB_QUERY) ||
+                 branch->get_relation_ids().is_empty() ||
+                 !branch->has_flag(CNT_COLUMN)) {
         // conditions with subqueries will be classfied separately
         // irrelevant conditions will be classfied separately
         ++count;

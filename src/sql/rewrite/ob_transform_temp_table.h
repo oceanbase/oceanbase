@@ -339,6 +339,9 @@ public:
   int check_evaluate_after_transform(ObDMLStmt *root_stmt,
                                      ObIArray<ObSelectStmt *> &stmts,
                                      bool &can_eval);
+  int update_table_id_for_pseudo_columns(ObSelectStmt *view,
+                                         ObSelectStmt *temp_table_query,
+                                         const ObStmtMapInfo& map_info);
 private:
   ObArenaAllocator allocator_;
   TempTableTransParam *trans_param_;
