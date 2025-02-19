@@ -45,7 +45,8 @@ struct ObArrayAttr {
 
 OB_INLINE bool ob_is_array_supported_type(ObObjType type)
 {
-  return ObUNumberType >= type  || ObVarcharType == type || ObDecimalIntType == type;
+  return (ObUNumberType >= type && ObMediumIntType != type && ObUMediumIntType != type)
+         || ObVarcharType == type || ObDecimalIntType == type;
 }
 
 template<typename T>

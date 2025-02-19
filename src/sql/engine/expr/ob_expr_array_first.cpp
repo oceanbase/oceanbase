@@ -123,7 +123,7 @@ int ObExprArrayFirst::eval_array_first(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   uint32_t arr_dim = 0;
 
   if (ob_is_null(expr.obj_meta_.get_type())) {
-    is_null_res = true;
+    res.set_null();
   } else if (OB_UNLIKELY(OB_ISNULL(info))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr extra info is null", K(ret));
