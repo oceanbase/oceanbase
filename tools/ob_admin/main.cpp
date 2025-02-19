@@ -35,6 +35,7 @@ void print_usage()
          "       ob_admin slog_tool\n"
          "       ob_admin dumpsst\n"
          "       ob_admin dump_enum_value\n"
+         "       ob_admin dump_backup\n"
 #ifdef OB_BUILD_TDE_SECURITY
          "       ob_admin dump_key\n"
 #endif

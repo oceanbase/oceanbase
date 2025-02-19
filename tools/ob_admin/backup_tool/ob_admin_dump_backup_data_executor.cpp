@@ -980,7 +980,7 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
 
   printf("options:\n");
   printf(HELP_FMT, "-d,--backup-file-path", "absolute backup file path with file prefix");
-  printf(HELP_FMT, "-s,--storage-info", "oss/cos should provide storage info");
+  printf(HELP_FMT, "-s,--storage-info", "oss/s3 should provide storage info");
   printf(HELP_FMT, "-f,--file-path", "relative data file path");
   printf(HELP_FMT, "-o,--offset", "data offset");
   printf(HELP_FMT, "-l,--length", "data length");
@@ -997,15 +997,15 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("  dump data with -s: \n");
   printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
          "-s'host=xxx.com&access_id=111&access_key=222'\n");
-  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&region=333'\t"
-         "-e'compliantRfc3986Encoding'");
-  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&role_arn=xxx&appid=333'\n"
-         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
-  printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&role_arn=xxx&external_id=xxx&appid=333'\n"
-         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'");
+  printf("\tob_admin dump_backup -d's3://home/admin/backup_info' "
+         "-s'host=xxx.com&access_id=111&access_key=222&s3_region=333' "
+         "-e'compliantRfc3986Encoding'\n");
+  printf("\tob_admin dump_backup -d's3://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx' "
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'\n");
+  printf("\tob_admin dump_backup -d's3://home/admin/backup_info' "
+         "-s'host=xxx.com&role_arn=xxx&external_id=xxx' "
+         "-i'sts_url=xxx&sts_ak=aaa&sts_sk=bbb'\n");
   return ret;
 }
 
