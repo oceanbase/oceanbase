@@ -3644,9 +3644,6 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.3.5.1, string type");
             } else {
               column.set_is_string_lob();
-              column.set_charset_type(CHARSET_UTF8MB4);
-              column.set_collation_type(CS_TYPE_UTF8MB4_0900_BIN);
-              column.set_binary_collation(false);
             }
           }
         } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode(), params_.is_prepare_stage_))) {
