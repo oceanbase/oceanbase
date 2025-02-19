@@ -24,6 +24,35 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+#define IVF_GET_NEXT_ROWS_BEGIN(iter)                                    \
+  bool index_end = false;                                                \
+  iter->clear_evaluated_flag();                                          \
+  int64_t scan_row_cnt = 0;                                              \
+  int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE; \
+  while (!index_end && OB_SUCC(ret)) {                                   \
+    if (OB_FAIL(iter->get_next_rows(scan_row_cnt, batch_row_count))) {   \
+      if (OB_ITER_END != ret) {                                          \
+        LOG_WARN("failed to get next row.", K(ret));                     \
+      } else {                                                           \
+        index_end = true;                                                \
+      }                                                                  \
+    }                                                                    \
+    if (OB_FAIL(ret) && OB_ITER_END != ret) {                            \
+    } else if (scan_row_cnt > 0) {                                       \
+      ret = OB_SUCCESS;                                                  \
+    }
+
+#define IVF_GET_NEXT_ROWS_END(iter, scan_param, tablet_id)                             \
+  }                                                                                    \
+  if (index_end) {                                                                     \
+    int tmp_ret = (ret == OB_ITER_END) ? OB_SUCCESS : ret;                             \
+    if (OB_FAIL(ObDasVecScanUtils::reuse_iter(ls_id_, iter, scan_param, tablet_id))) { \
+      LOG_WARN("failed to reuse rowkey cid iter.", K(ret));                            \
+    } else {                                                                           \
+      ret = tmp_ret;                                                                   \
+    }                                                                                  \
+  }
+
 struct ObDASIvfScanIterParam : public ObDASIterParam {
 public:
   explicit ObDASIvfScanIterParam(const ObVectorIndexAlgorithmType index_type)
@@ -153,13 +182,14 @@ protected:
   }
 
 protected:
-  int do_table_full_scan(bool &first_scan,
-                         ObTableScanParam &scan_param,
-                         const ObDASScanCtDef *ctdef,
-                         ObDASScanRtDef *rtdef,
-                         ObDASScanIter *iter,
-                         int64_t pri_key_cnt,
-                         ObTabletID &tablet_id);
+  int do_table_full_scan(bool is_vectorized,
+                        const ObDASScanCtDef *ctdef,
+                        ObDASScanRtDef *rtdef,
+                        ObDASScanIter *iter,
+                        int64_t pri_key_cnt,
+                        ObTabletID &tablet_id,
+                        bool &first_scan,
+                        ObTableScanParam &scan_param);
   int do_aux_table_scan(bool &first_scan,
                         ObTableScanParam &scan_param,
                         const ObDASScanCtDef *ctdef,
@@ -186,6 +216,9 @@ protected:
   static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
   static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
   static const int64_t POST_ENLARGEMENT_FACTOR = 2;
+  // in centroid table
+  static const int64_t CID_IDX = 0;
+  static const int64_t CID_VECTOR_IDX = 1;
 protected:
   common::ObArenaAllocator vec_op_alloc_;
   share::ObLSID ls_id_;
@@ -257,13 +290,13 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 protected:
-  int get_nearest_probe_center_ids(ObIArray<ObString> &nearest_cids);
+  int get_nearest_probe_center_ids(bool is_vectorized, ObIArray<ObString> &nearest_cids);
   int get_main_rowkey_from_cid_vec_datum(const ObDASScanCtDef *cid_vec_ctdef,
                                          const int64_t rowkey_cnt,
                                          ObRowkey *&main_rowkey);
   virtual int process_ivf_scan(bool is_vectorized);
   template <typename T>
-  int get_nearest_limit_rowkeys_in_cids(const ObIArray<ObString> &nearest_cids, T *serch_vec);
+  int get_nearest_limit_rowkeys_in_cids(bool is_vectorized, const ObIArray<ObString> &nearest_cids, T *serch_vec);
   int get_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey) {
     const ObDASScanCtDef *ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_ivf_rowkey_cid_tbl_idx(),
                                                                         ObTSCIRScanType::OB_VEC_IVF_ROWKEY_CID_SCAN);
@@ -283,9 +316,10 @@ protected:
                                   bool is_vectorized,
                                   int64_t batch_row_count,
                                   bool &index_end);
-  virtual int process_ivf_scan_post();
+  virtual int process_ivf_scan_post(bool is_vectorized);
   int process_ivf_scan_brute();
   int generate_nearear_cid_heap(
+    bool is_vectorized,
     share::ObVectorCentorClusterHelper<float, ObString> &nearest_cid_heap,
     bool save_center_vec = false);
   int prepare_cid_range(
@@ -309,6 +343,7 @@ protected:
     const ObDASScanCtDef *cid_vec_ctdef,
     ObIAllocator& allocator,
     blocksstable::ObDatumRow *datum_row,
+    bool save_center_vec,
     ObString &cid,
     ObString &cid_vec);
 };
@@ -347,8 +382,7 @@ protected:
   }
   int inner_release() override;
 
-  int process_ivf_scan(bool is_vectorized) override;
-  int process_ivf_scan_post() override;
+  int process_ivf_scan_post(bool is_vectorized) override;
   int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized) override;
   int filter_pre_rowkey_batch(const ObIArray<std::pair<ObString, float *>> &nearest_cids,
                               bool is_vectorized,
@@ -367,10 +401,11 @@ protected:
     ObRowkey *&main_rowkey,
     ObArrayBinary *&com_key);
   int calc_nearest_limit_rowkeys_in_cids(
+    bool is_vectorized,
     const ObIArray<std::pair<ObString, float *>> &nearest_centers,
     float *search_vec);
   int get_pq_cid_vec_by_pq_cid(const ObString &pq_cid, float *&pq_cid_vec);
-  int get_nearest_probe_centers(ObIArray<std::pair<ObString, float *>> &nearest_centers);
+  int get_nearest_probe_centers(bool is_vectorized, ObIArray<std::pair<ObString, float *>> &nearest_centers);
   int get_cid_from_pq_rowkey_cid_table(ObIAllocator &allocator, ObString &cid, ObArrayBinary *&pq_cids);
   int check_cid_exist(
     const ObIArray<std::pair<ObString, float *>> &dst_cids,
@@ -416,6 +451,7 @@ private:
 class ObDASIvfSQ8ScanIter : public ObDASIvfScanIter
 {
 public:
+  static const int64_t META_VECTOR_IDX = 1;
   ObDASIvfSQ8ScanIter()
       : ObDASIvfScanIter(),
         sq_meta_iter_(nullptr),
@@ -442,9 +478,9 @@ protected:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
-  int get_real_search_vec_u8(ObString &real_search_vec_u8);
+  int get_real_search_vec_u8(bool is_vectorized, ObString &real_search_vec_u8);
   int process_ivf_scan_sq(bool is_vectorized);
-  int process_ivf_scan_post_sq();
+  int process_ivf_scan_post_sq(bool is_vectorized);
 
 private:
   ObDASScanIter *sq_meta_iter_;
