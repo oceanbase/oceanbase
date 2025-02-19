@@ -63,7 +63,9 @@ public:
   void reset();
   void destroy(ObIAllocator &allocator);
   bool is_valid() const;
-  int construct_column_param(share::schema::ObColumnParam &column_param) const;
+  int construct_column_param(
+      const uint64_t data_version,
+      share::schema::ObColumnParam &column_param) const;
   inline common::ColumnType get_data_type() const { return meta_type_.get_type(); }
   inline bool is_generated_column() const { return is_generated_column_; }
   inline bool is_column_stored_in_sstable() const { return is_column_stored_in_sstable_;}

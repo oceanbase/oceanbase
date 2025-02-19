@@ -915,8 +915,8 @@ int ObCOTabletMergeCtx::construct_column_param(
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid argument", K(ret), K(column_id));
     }
-  } else if (OB_FAIL(column_schema->construct_column_param(column_param))) {
-    STORAGE_LOG(WARN, "fail to construct column param from column schema", K(ret), K(column_id));
+  } else if (OB_FAIL(column_schema->construct_column_param(static_param_.data_version_, column_param))) {
+    STORAGE_LOG(WARN, "fail to construct column param from column schema", K(ret), K(column_id), K_(static_param));
   }
   return ret;
 }

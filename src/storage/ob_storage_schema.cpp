@@ -93,11 +93,13 @@ bool ObStorageColumnSchema::is_valid() const
   return common::ob_is_valid_obj_type(static_cast<ObObjType>(meta_type_.get_type()));
 }
 
-int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &column_param) const
+int ObStorageColumnSchema::construct_column_param(
+    const uint64_t data_version,
+    share::schema::ObColumnParam &column_param) const
 {
   int ret = OB_SUCCESS;
   column_param.set_meta_type(meta_type_);
-  if (meta_type_.is_decimal_int()) {
+  if (data_version >= DATA_VERSION_4_3_5_1 && meta_type_.is_decimal_int()) {
     ObAccuracy accuracy;
     accuracy.set_precision(meta_type_.get_stored_precision());
     accuracy.set_scale(meta_type_.get_scale());
