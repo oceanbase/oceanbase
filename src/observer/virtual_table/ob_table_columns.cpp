@@ -914,6 +914,8 @@ int ObTableColumns::deduce_column_attributes(
       sub_type = result_type.get_subschema_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
       sub_type = result_type.get_udt_id();
+    } else if (result_type.is_enum_or_set() && OB_FAIL(extend_type_info.assign(select_item.expr_->get_enum_set_values()))) {
+      LOG_WARN("failed to assign enum/set values", K(ret));
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;

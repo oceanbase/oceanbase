@@ -6394,7 +6394,7 @@ Another_very_long_enum_element_identifier
 
 SHOW CREATE FUNCTION f1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-f1		CREATE DEFINER = `admin`@`%` FUNCTION `f1`(p INT) RETURNS enum
+f1		CREATE DEFINER = `admin`@`%` FUNCTION `f1`(p INT) RETURNS enum('Very_long_enum_element_identifier','Another_very_long_enum_element_identifier')
 BEGIN
 CASE p
 WHEN 1 THEN
