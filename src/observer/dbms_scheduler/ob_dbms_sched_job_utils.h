@@ -271,6 +271,7 @@ public:
   bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
   bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare(MYSQL_EVENT_JOB_CLASS)); }
   bool is_olap_async_job_class() const { return (0 == job_class_.case_compare(OLAP_ASYNC_JOB_CLASS)); }
+  bool is_once_job() const { return (interval_ts_ == 0 && (repeat_interval_.empty() || 0 == repeat_interval_.case_compare("null"))); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
