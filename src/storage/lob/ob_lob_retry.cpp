@@ -26,7 +26,7 @@ namespace storage
 int ObLobRetryUtil::check_need_retry(ObLobAccessParam &param, const int error_code, const int retry_cnt, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  if (param.from_rpc_) {
+  if (param.from_rpc_ && ! param.enable_remote_retry_) {
     need_retry = false;
     LOG_WARN("can not retry because from rpc", K(ret), KR(ret), K(error_code), KR(error_code), K(retry_cnt), K(need_retry), K(param));
   } else if (! is_remote_ret_can_retry(error_code)) {

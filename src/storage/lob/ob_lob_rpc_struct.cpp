@@ -54,7 +54,8 @@ OB_DEF_SERIALIZE_SIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return len;
 }
 
@@ -68,7 +69,8 @@ OB_DEF_SERIALIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return ret;
 }
 
@@ -82,7 +84,8 @@ OB_DEF_DESERIALIZE(ObLobQueryArg)
               cs_type_,
               scan_backward_,
               qtype_,
-              lob_locator_);
+              lob_locator_,
+              enable_remote_retry_);
   return ret;
 }
 
@@ -93,7 +96,8 @@ ObLobQueryArg::ObLobQueryArg()
     cs_type_(common::ObCollationType::CS_TYPE_INVALID),
     scan_backward_(false),
     qtype_(QueryType::READ),
-    lob_locator_()
+    lob_locator_(),
+    enable_remote_retry_(false)
 {}
 
 ObLobQueryArg::~ObLobQueryArg()

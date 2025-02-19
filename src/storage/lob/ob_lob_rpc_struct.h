@@ -51,7 +51,8 @@ public:
   };
   ObLobQueryArg();
   ~ObLobQueryArg();
-  TO_STRING_KV(K_(tenant_id), K_(offset), K_(len), K_(cs_type), K_(qtype), K_(scan_backward), K_(lob_locator));
+  TO_STRING_KV(K_(tenant_id), K_(offset), K_(len), K_(cs_type), K_(qtype), K_(scan_backward), K_(lob_locator),
+      K_(enable_remote_retry));
 public:
   static const int64_t OB_LOB_QUERY_BUFFER_LEN = 256*1024L;
   static const int64_t OB_LOB_QUERY_OLD_LEN = 2*1024L*1024L;
@@ -62,6 +63,7 @@ public:
   bool scan_backward_;
   QueryType qtype_;
   ObLobLocatorV2 lob_locator_;
+  bool enable_remote_retry_;
   DISALLOW_COPY_AND_ASSIGN(ObLobQueryArg);
 };
 
