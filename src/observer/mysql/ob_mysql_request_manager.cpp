@@ -16,6 +16,7 @@
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "ob_dl_queue.h"
 
 namespace oceanbase
 {

@@ -212,8 +212,7 @@ public:
           int64_t idle_leaf_queue_num = ObDlQueue::DEFAULT_IDLE_LEAF_QUEUE_NUM);
   int prepare_alloc_queue();
 
-  int clear_leaf_queue(int64_t idx, int64_t size,
-                      const std::function<void(void*)> &freeCallback)
+  int clear_leaf_queue(int64_t idx, int64_t size, const std::function<void(void *)> &freeCallback)
   {
     int ret = OB_SUCCESS;
     void* req = NULL;

@@ -21,7 +21,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "sql/engine/ob_phy_operator_type.h"
 #include "share/diagnosis/ob_sql_monitor_statname.h"
-#include "observer/mysql/ob_dl_queue.h"
+#include "observer/mysql/ob_ra_queue.h"
 #include "lib/task/ob_timer.h"
 
 namespace oceanbase
@@ -194,10 +194,9 @@ public:
   ObSqlPlanMonitorRecycleTask() : node_list_(nullptr) {};
   virtual ~ObSqlPlanMonitorRecycleTask() = default;
   void runTimerTask();
-  int init(ObPlanMonitorNodeList *node_list, int64_t tenant_id);
+  int init(ObPlanMonitorNodeList *node_list);
 private:
   ObPlanMonitorNodeList *node_list_;
-  int64_t tenant_id_;
 };
 
 class ObPlanMonitorNodeList
@@ -238,22 +237,18 @@ public:
   static const int64_t MONITOR_NODE_PAGE_SIZE = (128LL << 10); // 128K
   static const int64_t EVICT_INTERVAL = 1000000; //1s
   static const char *MOD_LABEL;
-  static const int64_t ROOT_QUEUE_SIZE = 4 * 1024;
-  static const int64_t LEAF_QUEUE_SIZE = 8 * 1024;
-  static const int64_t IDLE_LEAF_QUEUE_NUM = 2;
-  static const int64_t DEFAULT_MAX_QUEUE_SIZE;
-  static constexpr double RECYCLE_THRESHOLD_SCALE = 0.9;
-  static constexpr double RECYCLE_CNT_SCALE = 0.05;
+  typedef common::ObRaQueue::Ref Ref;
 public:
   ObPlanMonitorNodeList();
   ~ObPlanMonitorNodeList();
   static int mtl_init(ObPlanMonitorNodeList* &node_list);
   static void mtl_destroy(ObPlanMonitorNodeList* &node_list);
   int submit_node(ObMonitorNode &node);
-  int64_t get_start_idx() const { return (int64_t)queue_.get_start_idx(); }
-  int64_t get_end_idx() { return (int64_t)queue_.get_end_idx(); }
-  int64_t get_size_used() { return (int64_t)(queue_.get_end_idx() - queue_.get_start_idx()); }
-  int get(const int64_t idx, void *&record, common::ObDlQueue::DlRef* ref)
+  int64_t get_start_idx() const { return (int64_t)queue_.get_pop_idx(); }
+  int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }
+  int64_t get_size_used() { return (int64_t)(queue_.get_push_idx() - queue_.get_pop_idx()); }
+  int64_t get_size() { return (int64_t)queue_.get_size(); }
+  int get(const int64_t idx, void *&record, Ref* ref)
   {
     int ret = common::OB_SUCCESS;
     if (NULL == (record = queue_.get(idx, ref))) {
@@ -261,14 +256,32 @@ public:
     }
     return ret;
   }
-  int revert(common::ObDlQueue::DlRef* ref)
+  int revert(Ref* ref)
   {
     queue_.revert(ref);
     return common::OB_SUCCESS;
   }
-  int recycle_old(int64_t limit);
-  int64_t get_recycle_count();
-  void clear_queue();
+  int recycle_old(int64_t limit)
+  {
+    void* req = NULL;
+    int64_t count = 0;
+    while(count++ < limit && NULL != (req = queue_.pop())) {
+      free_mem(req);
+    }
+    return common::OB_SUCCESS;
+  }
+  int64_t get_recycle_count()
+  {
+    int64_t cnt = 0;
+    if (get_size_used() > recycle_threshold_) {
+      cnt = batch_release_;
+    }
+    return cnt;
+  }
+  void clear_queue()
+  {
+    (void)recycle_old(INT64_MAX);
+  }
   void* alloc_mem(const int64_t size)
   {
     void * ret = allocator_.alloc(size);
@@ -276,34 +289,29 @@ public:
   }
   void free_mem(void *ptr)
   {
-    if (OB_NOT_NULL(ptr)) {
-      allocator_.free(ptr);
-      ptr = NULL;
-    }
+    allocator_.free(ptr);
+    ptr = NULL;
   }
   int register_monitor_node(ObMonitorNode &node);
   int revert_monitor_node(ObMonitorNode &node);
   int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array);
-  int64_t get_queue_size() { return queue_size_; }
-  void set_queue_size(int64_t queue_size) { queue_size_ = queue_size; }
-  void freeCallback(void* ptr) { free_mem(ptr); }
-  int prepare_new() { return queue_.prepare_alloc_queue(); }
 private:
   int init(uint64_t tenant_id, const int64_t tenant_mem_size);
   void destroy();
   int release_record(int64_t release_cnt, bool is_destroyed = false);
 private:
   common::ObConcurrentFIFOAllocator allocator_;//alloc mem for string buf
-  common::ObDlQueue queue_;
+  common::ObRaQueue queue_;
   MonitorNodeMap node_map_; // for real time sql plan monitor
   ObSqlPlanMonitorRecycleTask task_; // 定期回收 sql plan mon 内存
   bool inited_;
   bool destroyed_;
   uint64_t request_id_;
+  int64_t recycle_threshold_; // begin to recycle node when reach threshold
+  int64_t batch_release_; // release node in batch
   uint64_t tenant_id_;
   int tg_id_;
   int64_t rt_node_id_;
-  int64_t queue_size_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanMonitorNodeList);
 };

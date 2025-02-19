@@ -2435,9 +2435,6 @@ DEF_INT(query_memory_limit_percentage, OB_TENANT_PARAMETER, "50", "[0,100]",
 DEF_INT(package_state_sync_max_size, OB_TENANT_PARAMETER, "8192", "[0, 16777216]",
         "the max sync size of single package state that can sync package var value. If over it, package state will not sync package var value. Range: [0, 16777216] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_DBL(_sqlmon_memory_scale, OB_TENANT_PARAMETER, "1", "[0.1, 30]",
-        "The scale factor of available memory for the SQL plan monitor.",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ndv_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "True",
          "whether to use NDV to build a bloom filter in runtime filter."
          "Value:  True:turned on  False: turned off",

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_dl_queue.h"
+#include "ob_mysql_request_manager.h"
 
 namespace oceanbase {
 namespace common {
@@ -55,9 +56,6 @@ int ObDlQueue::init(const char *label, uint64_t tenant_id,
                     int64_t leaf_queue_size,
                     int64_t idle_leaf_queue_num) {
   int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  mem_attr.label_ = label;
-  mem_attr.tenant_id_ = tenant_id;
   root_queue_size_ = root_queue_size;
   leaf_queue_size_ = leaf_queue_size;
   idle_leaf_queue_num_ = idle_leaf_queue_num;

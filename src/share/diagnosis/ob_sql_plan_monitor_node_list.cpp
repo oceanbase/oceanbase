@@ -20,12 +20,11 @@ using namespace oceanbase::sql;
 using namespace oceanbase::lib;
 
 const char *ObPlanMonitorNodeList::MOD_LABEL = "SqlPlanMon";
-const int64_t ObPlanMonitorNodeList::DEFAULT_MAX_QUEUE_SIZE = 100000;
-
 ObPlanMonitorNodeList::ObPlanMonitorNodeList() :
   inited_(false),
   destroyed_(false),
-  queue_size_(0)
+  recycle_threshold_(0),
+  batch_release_(0)
 {
 }
 
@@ -40,25 +39,16 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id, const int64_t tenant_mem_siz
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(tenant_id, "SqlPlanMonMap");
-  double memory_scale = 1.0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    memory_scale = tenant_config->_sqlmon_memory_scale;
-  }
-  // Available memory for the SQL plan monitor:
-  // min(100K record memory usage, tenant memory total  * 0.01) * scale
-  queue_size_ = std::min(ObPlanMonitorNodeList::DEFAULT_MAX_QUEUE_SIZE,
-    (int64_t)((tenant_mem_size * 0.01) / sizeof(ObMonitorNode))) * memory_scale;
+  // at most use 1% percent of tenant memory to store SQL PLAN MONITOR nodes
+  const int64_t MAX_QUEUE_SIZE = 100000; //10w
+  int64_t queue_size = std::min(MAX_QUEUE_SIZE, (int64_t)((tenant_mem_size * 0.01) / sizeof(ObMonitorNode)));
   if (inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(queue_.init(MOD_LABEL, tenant_id,
-                                 ObPlanMonitorNodeList::ROOT_QUEUE_SIZE,
-                                 ObPlanMonitorNodeList::LEAF_QUEUE_SIZE,
-                                 ObPlanMonitorNodeList::IDLE_LEAF_QUEUE_NUM))) {
+  } else if (OB_FAIL(queue_.init(MOD_LABEL, queue_size, tenant_id))) {
     SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReqMemEvict, tg_id_))) {
     SERVER_LOG(WARN, "create failed", K(ret));
-  } else if (OB_FAIL(node_map_.create(queue_size_, attr, attr))) {
+  } else if (OB_FAIL(node_map_.create(queue_size, attr, attr))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
     SERVER_LOG(WARN, "init timer fail", K(ret));
@@ -69,12 +59,14 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id, const int64_t tenant_mem_siz
     SERVER_LOG(WARN, "failed to init allocator", K(ret));
   } else {
     //check FIFO mem used and sql audit records every 1 seconds
-    if (OB_FAIL(task_.init(this, tenant_id))) {
+    if (OB_FAIL(task_.init(this))) {
       SERVER_LOG(WARN, "fail to init sql audit time tast", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
       SERVER_LOG(WARN, "start eliminate task failed", K(ret));
     } else {
       rt_node_id_ = -1;
+      recycle_threshold_ = queue_size * 0.9; // when reach 90% usage, begin to recycle
+      batch_release_ = queue_size * 0.05; // recycle 5% nodes per round
       tenant_id_ = tenant_id;
       inited_ = true;
       destroyed_ = false;
@@ -132,7 +124,7 @@ int ObPlanMonitorNodeList::submit_node(ObMonitorNode &node)
     if (OB_FAIL(queue_.push(deep_cp_node, req_id))) {
       //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
       if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-        SERVER_LOG(WARN, "push into queue failed", K(get_size_used()), K(ret));
+        SERVER_LOG(WARN, "push into queue failed", K(get_size_used()), K(get_size()), K(ret));
       }
       free_mem(deep_cp_node);
       deep_cp_node = NULL;
@@ -271,73 +263,20 @@ void ObMonitorNode::covert_to_static_node()
 
 void ObSqlPlanMonitorRecycleTask::runTimerTask()
 {
-  int ret = OB_SUCCESS;
   if (node_list_) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-    if (tenant_config.is_valid()) {
-      double config_memory_scale = tenant_config->_sqlmon_memory_scale;
-      int64_t tenant_mem_limit = get_tenant_memory_limit(tenant_id_);
-      int64_t queue_size = std::min(ObPlanMonitorNodeList::DEFAULT_MAX_QUEUE_SIZE,
-          (int64_t)((tenant_mem_limit * 0.01) / sizeof(ObMonitorNode))) * config_memory_scale;
-      if (queue_size != node_list_->get_queue_size()) {
-        LOG_INFO("sql plan monitor queue_size update", K(tenant_id_),
-                    K(config_memory_scale), K(tenant_mem_limit),
-                    K(node_list_->get_queue_size()), K(queue_size));
-        node_list_->set_queue_size(queue_size);
-      }
-    }
-    if (OB_FAIL(node_list_->recycle_old(node_list_->get_recycle_count()))) {
-      LOG_WARN("Fail to recycle old", K(ret));
-    } else if (OB_FAIL(node_list_->prepare_new())) {
-      LOG_WARN("Fail to prepare new queue", K(ret));
-    }
+    node_list_->recycle_old(node_list_->get_recycle_count());
   }
 }
 
-int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList *node_list, int64_t tenant_id)
+int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList *node_list)
 {
   int ret = OB_SUCCESS;
-  tenant_id_ = tenant_id;
   if (OB_ISNULL(node_list)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
     node_list_ = node_list;
   }
   return ret;
-}
-
-int64_t ObPlanMonitorNodeList::get_recycle_count()
-{
-  int64_t recycle_cnt = 0;
-  int64_t used_cnt = get_size_used();
-  if (used_cnt > queue_size_ * RECYCLE_THRESHOLD_SCALE) {
-    // When the queue size is significantly reduced,
-    // it is necessary to recycle according to the used cnt.
-    // Using the new queue size may result in a slower recycle process.
-    recycle_cnt = std::max(queue_size_, used_cnt) * RECYCLE_CNT_SCALE;
-  }
-  return recycle_cnt;
-}
-
-int ObPlanMonitorNodeList::recycle_old(int64_t recycle_count)
-{
-  int ret = OB_SUCCESS;
-  if (recycle_count == 0) {
-    // do nothing
-  } else if (OB_FAIL(release_record(recycle_count, false))) {
-    LOG_WARN("fail to release record", K(recycle_count), K(ret));
-  }
-  return ret;
-}
-
-void ObPlanMonitorNodeList::clear_queue()
-{
-  int64_t release_boundary = queue_.get_push_idx();
-  while (queue_.get_pop_idx() < release_boundary) {
-    (void)release_record(INT64_MAX, true);
-  }
-  (void)release_record(INT64_MAX, true);
-  allocator_.purge();
 }
 
 int ObMonitorNode::set_sql_id(const ObString &sql_id)
@@ -351,16 +290,6 @@ int ObMonitorNode::set_sql_id(const ObString &sql_id)
   } else {
     MEMCPY(sql_id_, sql_id.ptr(), sql_id.length());
     sql_id_[sql_id.length()] = '\0';
-  }
-  return ret;
-}
-
-int ObPlanMonitorNodeList::release_record(int64_t release_cnt, bool is_destroyed) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(queue_.release_record(release_cnt,
-          std::bind(&ObPlanMonitorNodeList::freeCallback,
-                    this, std::placeholders::_1), is_destroyed))) {
-    LOG_WARN("fail to release record", K(release_cnt), K(is_destroyed), K(ret));
   }
   return ret;
 }
