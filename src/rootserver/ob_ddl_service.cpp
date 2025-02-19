@@ -16194,6 +16194,11 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           new_table_schema.set_in_offline_ddl_white_list(true);
           new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
         } else {
+          // For ddl type relying on dag to complement data, we need redefine it as table redifition to support column store.
+          // Column store replica need take the same strategy to fill column group.
+          // However, if there is no cs replica (or ls no leader) when check_alter_table_column, but cs replica arises when create hidden table,
+          // cs replica should be ignored to prevent using complement dag to fill column group data.
+          const bool ignore_cs_replica = is_complement_data_relying_on_dag(ddl_type);
           if (share::ObDDLTaskType::DELETE_COLUMN_FROM_SCHEMA == alter_table_arg.ddl_task_type_) {
             if (OB_FAIL(check_enable_sys_table_ddl(*orig_table_schema, OB_DDL_DROP_COLUMN))) {
               LOG_WARN("fail to check enable sys table ddl", KR(ret), K(orig_table_schema));
@@ -16222,7 +16227,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                       ddl_operator,
                                                       trans,
                                                       alter_table_arg.allocator_,
-                                                      tenant_data_version))) {
+                                                      tenant_data_version,
+                                                      ObString("") /*index_name*/,
+                                                      ignore_cs_replica))) {
             LOG_WARN("fail to create user hidden table", KR(ret));
           }
         }
@@ -20707,7 +20714,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
               orig_table_schema,
               hidden_table_schema,
               ls_id_array,
-              tenant_data_version))) {
+              tenant_data_version,
+              ignore_cs_replica))) {
         LOG_WARN("failed to add arg", K(ret), K(hidden_table_schema));
       } else if (bind_tablets && schemas.count() > 0 &&
               OB_FAIL(table_creator.add_create_tablets_of_local_aux_tables_arg(

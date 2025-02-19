@@ -71,7 +71,8 @@ public:
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const common::ObIArray<share::ObLSID> &ls_id_array,
-      const uint64_t tenant_data_version);
+      const uint64_t tenant_data_version,
+      const bool ignore_cs_replica);
 
   // create tablets in a table
   //

@@ -20,6 +20,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA);
+ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG);
 
 int ObCSReplicaUtil::check_is_cs_replica(
     const ObTableSchema &table_schema,
@@ -220,6 +221,12 @@ int ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(
     LOG_WARN("fail to check schema is column group store", K(ret));
   } else if (is_column_group_store) {
     // originally column store
+#ifdef ERRSIM
+  } else if (OB_UNLIKELY(EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG)) {
+    int tmp_ret = EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG;
+    need_process = false;
+    LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA_FOR_COMPLEMENT_DAG, not see cs replica when set ddl type", K(tmp_ret), K(need_process));
+#endif
   } else {
     ObSEArray<ObLSInfo, 8> ls_infos;
     if (OB_ISNULL(GCTX.lst_operator_)) {
@@ -236,6 +243,7 @@ int ObCSReplicaUtil::check_need_process_cs_replica_for_offline_ddl(
           LOG_WARN("failed to check need process cs replica", K(ret), K(ls_info));
         } else if (is_global_visible) {
           need_process = true;
+          LOG_INFO("[CS-Replica] Finish checking for complement data rely on dag", K(ret), K(ls_infos));
           break;
         }
       }

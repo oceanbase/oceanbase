@@ -100,7 +100,8 @@ int ObTableCreator::add_create_bind_tablets_of_hidden_table_arg(
                     const share::schema::ObTableSchema &orig_table_schema,
                     const share::schema::ObTableSchema &hidden_table_schema,
                     const common::ObIArray<share::ObLSID> &ls_id_array,
-                    const uint64_t tenant_data_version)
+                    const uint64_t tenant_data_version,
+                    const bool ignore_cs_replica)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObTableSchema *, 1> schemas;
@@ -116,8 +117,8 @@ int ObTableCreator::add_create_bind_tablets_of_hidden_table_arg(
   } else if (OB_FAIL(schemas.push_back(&hidden_table_schema)) || OB_FAIL(need_create_empty_majors.push_back(false))) {
     LOG_WARN("failed to push back hidden table schema", K(ret));
   } else if (OB_FAIL(add_create_tablets_of_tables_arg_(
-          schemas, &orig_table_schema, ls_id_array, tenant_data_version, need_create_empty_majors))) {
-    LOG_WARN("failed to add arg", K(ret), K(schemas));
+          schemas, &orig_table_schema, ls_id_array, tenant_data_version, need_create_empty_majors, ignore_cs_replica))) {
+    LOG_WARN("failed to add arg", K(ret), K(schemas), K(ignore_cs_replica));
   }
   return ret;
 }
