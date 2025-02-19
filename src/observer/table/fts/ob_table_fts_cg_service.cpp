@@ -481,6 +481,60 @@ int ObTableFtsDmlCgService::generate_scan_with_doc_id_ctdef_if_need(ObTableCtx &
   return ret;
 }
 
+int ObTableFtsDmlCgService::check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
+                                                          ObTableIndexInfo &index_info,
+                                                          const uint64_t table_id,
+                                                          ObDASDMLBaseCtDef &das_dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(schema_guard = ctx.get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_schema));
+  } else if (!table_schema->is_user_table()) {
+    das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
+    LOG_TRACE("not user table, nothing to do", K(ret), K(table_id));
+  } else {
+    bool is_main_table_in_fts_ddl = false;
+    int64_t fts_index_aux_count = 0;
+    int64_t fts_doc_word_aux_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_main_table_in_fts_ddl && i < index_info.related_index_ids_.count(); ++i) {
+      const ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_info.related_index_ids_.at(i), index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(i), K(index_info.related_index_ids_));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, index schema is nullptr", K(ret), K(i), K(index_info.related_index_ids_));
+      } else if (index_schema->is_fts_index()) {
+        if (index_schema->is_fts_index_aux()) {
+          ++fts_index_aux_count;
+        } else if (index_schema->is_fts_doc_word_aux()) {
+          ++fts_doc_word_aux_count;
+        }
+        if (!index_schema->can_read_index()) {
+          is_main_table_in_fts_ddl = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_main_table_in_fts_ddl || fts_index_aux_count != fts_doc_word_aux_count) {
+        das_dml_ctdef.is_main_table_in_fts_ddl_ = true;
+      } else {
+        das_dml_ctdef.is_main_table_in_fts_ddl_ = false;
+      }
+    }
+    LOG_TRACE("check is main table in fts ddl", K(ret), K(is_main_table_in_fts_ddl), K(fts_index_aux_count),
+        K(fts_doc_word_aux_count), K(das_dml_ctdef));
+  }
+  return ret;
+}
+
 int ObTableFtsTscCgService::extract_text_ir_access_columns(const ObTableCtx &ctx,
                                                            ObDASScanCtDef &scan_ctdef,
                                                            ObIArray<ObRawExpr *> &access_exprs) {

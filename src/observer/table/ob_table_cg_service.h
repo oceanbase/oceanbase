@@ -240,6 +240,7 @@ private:
                                  ObIArray<ObRawExpr*> &full_row,
                                  ObIArray<ObRawExpr*> &delta_row);
   static int generate_das_base_ctdef(uint64_t index_tid,
+                                     ObTableIndexInfo &index_info,
                                      ObTableCtx &ctx,
                                      ObDASDMLBaseCtDef &base_ctdef);
   static int generate_column_info(ObTableID index_tid,

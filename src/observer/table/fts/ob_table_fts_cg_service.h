@@ -41,6 +41,10 @@ public:
                                                      ObIAllocator &allocator,
                                                      ObDASScanCtDef &scan_ctdef,
                                                      ObDASAttachSpec &attach_spec);
+  static int check_is_main_table_in_fts_ddl(ObTableCtx &ctx,
+                                            ObTableIndexInfo &index_info,
+                                            const uint64_t table_id,
+                                            ObDASDMLBaseCtDef &das_dml_ctdef);
 private:
   static int generate_rowkey_doc_ctdef(ObTableCtx &ctx,
                                        ObIAllocator &allocator,

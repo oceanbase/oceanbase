@@ -1164,6 +1164,8 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx,
       SMART_VAR(ObTableCtx, tb_ctx, ctx.allocator_) {
         if (OB_FAIL(init_table_ctx(tb_ctx, op, ctx, tablet_id))) {
           LOG_WARN("fail to init table ctx for single operation", K(ret), K(tablet_id));
+        } else if (tb_ctx.has_fts_index() && OB_FAIL(ObTableTransUtils::setup_tx_snapshot(*ctx.trans_param_))) {
+          LOG_WARN("fail to refresh read snapshot for fts dml");
         } else if (OB_FAIL(tb_ctx.init_trans(ctx.trans_param_->trans_desc_,
                                             ctx.trans_param_->tx_snapshot_))) {
           LOG_WARN("fail to init trans", K(ret), K(tb_ctx));

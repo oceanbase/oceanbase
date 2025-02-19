@@ -105,8 +105,8 @@ public:
   static int start_trans(ObTableTransParam &trans_param);
   static int end_trans(ObTableTransParam &trans_param);
   static int sync_end_trans(ObTableTransParam &trans_param);
-private:
   static int setup_tx_snapshot(ObTableTransParam &trans_param);
+private:
   static int async_commit_trans(ObTableTransParam &trans_param);
 };
 
