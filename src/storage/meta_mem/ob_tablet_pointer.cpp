@@ -43,7 +43,7 @@ ObTabletPointer::ObTabletPointer()
     auto_part_size_(OB_INVALID_SIZE)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 376, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 360, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "storage/multi_data_source/runtime_utility/common_define.h"
-#include <ratio>
 #define UNITTEST_DEBUG
 #include <gtest/gtest.h>
 #define private public
@@ -18,7 +17,6 @@
 #include "storage/multi_data_source/mds_table_handler.h"
 #include "src/storage/multi_data_source/mds_table_iterator.ipp"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 namespace oceanbase {
 namespace storage {
 namespace mds {
@@ -733,43 +731,6 @@ TEST_F(TestMdsTable, test_rvalue_set) {
     MDS_ASSERT(str.ptr() == read_data.data_.ptr());
     return OB_SUCCESS;
   }, writer, trans_stat, trans_version));
-}
-
-TEST_F(TestMdsTable, test_tablet_mds_lock) {
-  ObTabletMDSTruncateLock lock;
-  {
-    {
-      // 同线程可以多次加互斥锁
-      ObTabletMdsExclusiveLockGuard lg1(lock);
-      ObTabletMdsExclusiveLockGuard lg2(lock);
-      // 持有互斥锁的同时也可以加共享锁
-      ObTabletMdsSharedLockGuard lg3(lock);
-      ObTabletMdsSharedLockGuard lg4(lock);
-      ASSERT_EQ(true, lock.try_exclusive_lock());
-      lock.exclusive_unlock();
-    }
-  }
-  {
-    ObTabletMdsSharedLockGuard lg1(lock);
-    // 持有共享锁时无法加互斥锁
-    ASSERT_EQ(false, lock.try_exclusive_lock());
-  }
-  // 跨线程exclusive锁互斥
-  std::thread t1([&lock]() {
-    ObTabletMdsExclusiveLockGuard lg(lock);
-    ob_usleep(1_s);
-  });
-  std::thread t2([&lock]() {
-    std::chrono::system_clock::time_point start = std::chrono::high_resolution_clock::now();
-    ob_usleep(0.5_s);
-    ObTabletMdsExclusiveLockGuard lg(lock);
-    std::chrono::system_clock::time_point end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> duration = end - start;
-    MDS_LOG(INFO, "add lock use time", K(duration.count()));
-    ASSERT_EQ(true, duration.count() > 1_s);
-  });
-  t1.join();
-  t2.join();
 }
 
 }
