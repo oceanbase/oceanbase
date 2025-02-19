@@ -10304,20 +10304,16 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       }
     }
     if (HASH_JOIN == join_algo) {
-      if (use_shared_hash_join && right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL) {
-        if (is_force_dist_method && (DIST_BROADCAST_NONE == distributed_methods
-                                     || DIST_ALL_NONE == distributed_methods)) {
-          /* do nothing */
-        } else {
-          distributed_methods &= ~DIST_BROADCAST_NONE;
-          distributed_methods &= ~DIST_ALL_NONE;
-          OPT_TRACE("shared hash join will not use BROADCAST");
-        }
+      use_shared_hash_join &= right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL;
+      use_shared_hash_join &= (distributed_methods & DIST_BC2HOST_NONE) != 0;
+      if (use_shared_hash_join) {
+        distributed_methods &= ~DIST_BROADCAST_NONE;
+        OPT_TRACE("shared hash join will not use BROADCAST");
         if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
           distributed_methods &= ~DIST_BC2HOST_NONE;
+          OPT_TRACE("left style hash join will not use BC2HOST");
         }
       } else {
-        use_shared_hash_join = false;
         distributed_methods &= ~DIST_BC2HOST_NONE;
         OPT_TRACE("hash join will not use BC2HOST");
       }
@@ -10592,10 +10588,8 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("plan will use partition none method and prune broadcast/bc2host/hash none method");
       distributed_methods &= ~DIST_BROADCAST_NONE;
       distributed_methods &= ~DIST_HASH_NONE;
-      if (use_shared_hash_join && HASH_JOIN == join_algo) {
-        distributed_methods &= ~DIST_BC2HOST_NONE;
-      }
       need_pull_to_local = right_path.exchange_allocated_;
+      distributed_methods &= ~DIST_BC2HOST_NONE;
     }
   }
   // check if match hash none
