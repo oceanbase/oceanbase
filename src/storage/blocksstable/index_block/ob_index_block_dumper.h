@@ -170,6 +170,7 @@ protected:
   ObNextLevelRowsArray *next_level_rows_list_; // for disk
   ObMacroMetasArray *macro_metas_; // for ObMacroMetaOptimizationMode::DISABLE
   ObDatumRowkey last_rowkey_;
+  ObCompressorType compressor_type_; // Checkpoint for container_store_desc_.compressor_type, set in init and verify in close and new_macro_writer
   int64_t micro_block_cnt_;
   int64_t row_count_;
   bool is_meta_;

@@ -1661,7 +1661,7 @@ int ObSSTableIndexBuilder::close_with_macro_seq(
   }
 
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(INFO, "succeed to close sstable index builder", K(res));
+    LOG_INFO("succeed to close sstable index builder", K(res), KP(this));
   } else {
     int64_t data_blocks_cnt = 0;
     for (int64_t i = 0; i < roots_.count(); ++i) {
@@ -3658,6 +3658,7 @@ ObIndexBlockRebuilder::ObIndexBlockRebuilder()
     sstable_builder_(nullptr),
     device_handle_(nullptr),
     clustered_index_writer_(nullptr),
+    compressor_type_(INVALID_COMPRESSOR),
     is_inited_(false)
 {
 }
@@ -3690,6 +3691,7 @@ void ObIndexBlockRebuilder::reset()
   task_allocator_.reset();
   macro_block_io_allocator_.reset();
   row_allocator_.reset();
+  compressor_type_ = INVALID_COMPRESSOR;
 }
 
 void ObIndexBlockRebuilder::set_task_type(
@@ -3877,6 +3879,7 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder,
       }
     }
     if (OB_SUCC(ret)) {
+      compressor_type_ = index_store_desc_->get_compressor_type();
       LOG_INFO("succeed to init ObIndexBlockRebuilder",
                "task_idx", index_tree_root_ctx_->task_idx_,
                "task_type", index_tree_root_ctx_->task_type_,
@@ -4214,7 +4217,8 @@ bool ObIndexBlockRebuilder::micro_index_clustered() const
   return index_store_desc_->micro_index_clustered();
 }
 
-int ObIndexBlockRebuilder::close() {
+int ObIndexBlockRebuilder::close()
+{
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -4229,6 +4233,9 @@ int ObIndexBlockRebuilder::close() {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected row offset count not same with macro metas",
         K(ret), KPC(meta_tree_dumper_), KPC(index_tree_root_ctx_->absolute_offsets_));
+  } else if (OB_UNLIKELY(compressor_type_ != index_store_desc_->get_compressor_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected compressor type", K(ret), K(compressor_type_), KPC(index_store_desc_));
   } else if (meta_tree_dumper_->get_row_count() == 0) {
     // do not append root to sstable builder since it's empty
   } else if (OB_FAIL(data_write_ctx_.deep_copy(
@@ -4256,8 +4263,8 @@ int ObIndexBlockRebuilder::close() {
     LOG_WARN("fail to close clustered index block writer", K(ret));
   }
 
-  STORAGE_LOG(DEBUG, "close index block rebuilder",
-              K(ret), KPC_(index_tree_root_ctx), KPC_(index_tree_dumper), KPC_(meta_tree_dumper));
+  LOG_INFO("close index block rebuilder",
+           K(ret), K(compressor_type_), KPC_(index_tree_root_ctx), KPC_(index_tree_dumper), KPC_(meta_tree_dumper));
 
   return ret;
 }

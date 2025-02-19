@@ -75,13 +75,25 @@ void ObIndexBlockInfo::reset()
 
 ////////////////////////////////////// Index Block Dumper //////////////////////////////////////////
 ObBaseIndexBlockDumper::ObBaseIndexBlockDumper()
-  : index_store_desc_(nullptr), container_store_desc_(nullptr), sstable_index_builder_(nullptr),
+  : index_store_desc_(nullptr),
+    container_store_desc_(nullptr),
+    sstable_index_builder_(nullptr),
     device_handle_(nullptr),
-    sstable_allocator_(nullptr), task_allocator_(nullptr), row_allocator_(),
-    meta_micro_writer_(nullptr), meta_macro_writer_(nullptr),
-    micro_block_adaptive_splitter_(), next_level_rows_list_(nullptr),
-    last_rowkey_(), micro_block_cnt_(0), row_count_(0), is_meta_(true),
-    need_build_next_row_(false), need_check_order_(true), is_inited_(false)
+    sstable_allocator_(nullptr),
+    task_allocator_(nullptr),
+    row_allocator_(),
+    meta_micro_writer_(nullptr),
+    meta_macro_writer_(nullptr),
+    micro_block_adaptive_splitter_(),
+    next_level_rows_list_(nullptr),
+    last_rowkey_(),
+    compressor_type_(INVALID_COMPRESSOR),
+    micro_block_cnt_(0),
+    row_count_(0),
+    is_meta_(true),
+    need_build_next_row_(false),
+    need_check_order_(true),
+    is_inited_(false)
 {
 }
 
@@ -116,6 +128,7 @@ void ObBaseIndexBlockDumper::reset()
   row_count_ = 0;
   enable_dump_disk_ = false;
   is_inited_ = false;
+  compressor_type_ = INVALID_COMPRESSOR;
 }
 
 int ObBaseIndexBlockDumper::init(const ObDataStoreDesc &index_store_desc,
@@ -162,6 +175,7 @@ int ObBaseIndexBlockDumper::init(const ObDataStoreDesc &index_store_desc,
     need_check_order_ = need_check_order;
     enable_dump_disk_ = enable_dump_disk;
     is_inited_ = true;
+    compressor_type_ = container_store_desc_->get_compressor_type();
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(meta_micro_writer_)) {
@@ -263,7 +277,11 @@ int ObBaseIndexBlockDumper::new_macro_writer()
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   macro_seq_param.start_ = 0;
   share::ObPreWarmerParam pre_warm_param(share::MEM_PRE_WARM);
-  if (OB_ISNULL(meta_macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
+  if (OB_UNLIKELY(compressor_type_ != container_store_desc_->get_compressor_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to new macro block writer, unexpected compressor type",
+             K(ret), K(compressor_type_), KPC(container_store_desc_));
+  } else if (OB_ISNULL(meta_macro_writer_ = OB_NEWx(ObMacroBlockWriter, task_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro writer", K(ret));
   // callback only can be ddl callback.
@@ -363,6 +381,9 @@ int ObBaseIndexBlockDumper::close(ObIndexBlockInfo& index_block_info)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "Not inited", K(ret));
+  } else if (OB_UNLIKELY(compressor_type_ != container_store_desc_->get_compressor_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected compressor type", K(ret), K(compressor_type_), KPC(container_store_desc_));
   } else if (FALSE_IT(index_block_info.is_meta_ = is_meta_)) {
   } else if (micro_block_cnt_ == 0 && row_count_ == 0) {
     STORAGE_LOG(DEBUG, "build empty index block info", K(ret));

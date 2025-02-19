@@ -549,6 +549,7 @@ private:
   ObSSTableIndexBuilder *sstable_builder_;
   ObIODevice *device_handle_;
   ObClusteredIndexBlockWriter *clustered_index_writer_;
+  ObCompressorType compressor_type_; // Checkpoint for index_store_desc_.compressor_type, set in init and verify in close
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockRebuilder);
 };

@@ -787,6 +787,7 @@ int TestIndexTree::mock_init_backup_rebuilder(ObIndexBlockRebuilder &rebuilder, 
           "task_type", rebuilder.index_tree_root_ctx_->task_type_,
           KP(rebuilder.device_handle_), KPC(rebuilder.index_store_desc_), KPC(container_store_desc));
     rebuilder.is_inited_ = true;
+    rebuilder.compressor_type_ = rebuilder.index_store_desc_->get_compressor_type();
     rebuilder.device_handle_ = nullptr;
   }
   return ret;
