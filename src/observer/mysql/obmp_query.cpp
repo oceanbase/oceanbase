@@ -447,6 +447,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT)
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
@@ -478,7 +479,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
     bool is_trans_ctrl_cmd = false;
     bool do_trans_ctrl_opt = false;
     stmt::StmtType stmt_type = stmt::T_NONE;
-    if (!multi_stmt_item.is_part_of_multi_stmt()) {
+    if (ERRSIM_BEGIN_COMMIT_OPT && !multi_stmt_item.is_part_of_multi_stmt()) {
       check_is_trans_ctrl_cmd(multi_stmt_item.get_sql(), is_trans_ctrl_cmd, stmt_type);
       if (is_trans_ctrl_cmd && !session.associated_xa()) {
         do_trans_ctrl_opt = true;
