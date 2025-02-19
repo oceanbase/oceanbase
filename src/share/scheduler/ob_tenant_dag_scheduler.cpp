@@ -2195,10 +2195,19 @@ int ObDagPrioScheduler::schedule_one_()
     add_schedule_info_(worker->get_task()->get_dag()->get_type(), worker->get_task()->get_dag()->get_data_size());
     running_workers_.add_last(worker);
     if (task != NULL) {
-      COMMON_LOG(INFO, "schedule one task", KPC(task), "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+      if (is_compaction_dag_prio()) {
+        COMMON_LOG(INFO, "schedule one task", KPC(task),
+          "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
           "total_running_task_cnt", scheduler_->get_total_running_task_cnt(),
           "running_task_cnts_", running_task_cnts_, "limits_", limits_,
           "adaptive_task_limit", adaptive_task_limit_, KP(task->get_dag()->get_dag_net()));
+      } else {
+        COMMON_LOG(INFO, "schedule one task", KP(task),
+          "priority", OB_DAG_PRIOS[priority_].dag_prio_str_,
+          "total_running_task_cnt", scheduler_->get_total_running_task_cnt(),
+          "running_task_cnts_", running_task_cnts_, "limits_", limits_,
+          "adaptive_task_limit", adaptive_task_limit_, KP(task->get_dag()->get_dag_net()));
+      }
     }
     worker->resume();
   }
