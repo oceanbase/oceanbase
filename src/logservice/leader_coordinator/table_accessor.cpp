@@ -771,8 +771,8 @@ int TableAccessor::get_removed_status_and_reason(ObStringHolder &blacklist, bool
   if (!blacklist.empty() && CLICK_FAIL(ObTableAccessHelper::split_string_by_char(blacklist, ';', arr))) {
     COORDINATOR_LOG_(WARN, "split_string_by_char(;) failed");
   } else {
-    char ip_port_string[64] = {0};
-    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, 64))) {
+    char ip_port_string[MAX_IP_PORT_LENGTH] = {0};
+    if (CLICK_FAIL(GCTX.self_addr().ip_port_to_string(ip_port_string, MAX_IP_PORT_LENGTH))) {
       COORDINATOR_LOG_(WARN, "self addr to string failed");
     } else {
       int64_t len = strlen(ip_port_string);
