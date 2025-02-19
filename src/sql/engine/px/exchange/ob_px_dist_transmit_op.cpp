@@ -34,7 +34,7 @@ int ObPxDistTransmitOp::inner_open()
     LOG_WARN("PX transmit open failed", K(ret));
   } else if (!MY_SPEC.sampling_saving_row_.empty()) {
     if (MY_SPEC.is_vectorized()) {
-      if (get_spec().use_rich_format_) {
+      if (!get_spec().use_rich_format_) {
         OZ(brs_holder_.init(MY_SPEC.sampling_saving_row_, eval_ctx_));
       } else {
         OZ(vec_holder_.init(MY_SPEC.sampling_saving_row_, eval_ctx_));
