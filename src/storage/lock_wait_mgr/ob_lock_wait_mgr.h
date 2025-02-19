@@ -17,6 +17,7 @@
 #include "lib/allocator/ob_qsync.h"
 #include "lib/hash/ob_linear_hash_map.h"
 #include "lib/hash/ob_link_hashmap.h"
+#include "lib/lock/ob_small_spin_lock.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/rowid/ob_urowid.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -439,6 +440,7 @@ private:
   Hash *hash_;
   int64_t sequence_[LOCK_BUCKET_COUNT];
   char hash_buf_[sizeof(SpHashNode) * LOCK_BUCKET_COUNT];
+  ObByteLock locks_[LOCK_BUCKET_COUNT];
   int64_t last_check_session_idle_ts_;
   int64_t tenant_id_;
   ObAddr addr_;

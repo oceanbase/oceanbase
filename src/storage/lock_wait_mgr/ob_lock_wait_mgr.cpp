@@ -397,6 +397,7 @@ int ObLockWaitMgr::handle_inform_dst_enqueue_req(const ObLockWaitMgrDstEnqueueMs
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "ob_malloc remote execution side node fail", K(ret), K(msg));
   } else {
+    ObByteLockGuard lock_guard(locks_[(LockHashHelper::hash_trans(msg.get_tx_id()) >> 1) % LOCK_BUCKET_COUNT]);
     remote_exec_side_node = new(ptr) Node();
     remote_exec_side_node->node_type_ =  rpc::ObLockWaitNode::REMOTE_EXEC_SIDE;
     remote_exec_side_node->lock_ts_ =  msg.get_lock_ts();
