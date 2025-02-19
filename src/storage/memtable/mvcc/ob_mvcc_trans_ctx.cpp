@@ -2021,7 +2021,10 @@ int ObMvccRowCallback::log_sync_fail(const share::SCN max_committed_scn)
 {
   int ret = OB_SUCCESS;
   ObRowLatchGuard guard(value_.latch_);
-  unlink_trans_node();
+  if (nullptr != tnode_) {
+    tnode_->set_aborted();
+    unlink_trans_node();
+  }
   memtable_->set_max_end_scn(max_committed_scn, true);
   return ret;
 }
@@ -2034,7 +2037,10 @@ int ObMvccRowCallback::clean_unlog_cb()
   // or fail). So we add defensive code here for safety.
 
   if (need_submit_log_) {
-    unlink_trans_node();
+    if (nullptr != tnode_) {
+      tnode_->set_aborted();
+      unlink_trans_node();
+    }
     need_submit_log_ = false;
     dec_unsubmitted_cnt_();
   }
