@@ -118,7 +118,7 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
     r_idx = r_idx < 0 ? centers.count() : r_idx;
     for (int64_t i = l_idx; OB_SUCC(ret) && i < r_idx; ++i) {
       // cosine/inner_product use l2_normalize + l2_distance to replace
-      if (OB_FAIL(ObVectorL2Distance::l2_distance_func(data, centers.at(i), dim, distance))) {
+      if (OB_FAIL(ObVectorL2Distance<float>::l2_distance_func(data, centers.at(i), dim, distance))) {
         LOG_WARN("failed to calc l2 distance", K(ret));
       } else if (max_heap_.count() < nprobe) {
         if (OB_FAIL(max_heap_.push(HeapCenterItem(distance, i)))) {
@@ -387,7 +387,7 @@ int ObCentersBuffer<float>::get_nearest_center(const int64_t dim, float *vector,
     double min_distance = DBL_MAX;
     double distance = DBL_MAX;
     for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt_; ++i) {
-      if (OB_FAIL(ObVectorL2Distance::l2_square_func(vector, this->at(i), dim, distance))) {
+      if (OB_FAIL(ObVectorL2Distance<float>::l2_square_func(vector, this->at(i), dim, distance))) {
         SHARE_LOG(WARN, "failed to calc l2 square", K(ret));
       } else if (distance < min_distance) {
         min_distance = distance;
@@ -407,6 +407,63 @@ int ObCentersBuffer<float>::add(const int64_t idx, const int64_t dim, float *vec
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), KP(vector), K(idx), K_(total_cnt));
   } else if (OB_FAIL(ObVectorAdd::calc(vectors_.at(idx), vector, dim))) {
     LOG_WARN("fail to calc vectors add", K(ret), K(dim), K(idx), K(total_cnt_));
+  }
+  return ret;
+}
+
+template <>
+int ObCenterWithBuf<ObRowkey>::new_from_src(const ObRowkey &src_rowkey)
+{
+  int ret = OB_SUCCESS;
+  int64_t need_size = src_rowkey.get_deep_copy_size();
+  if (buf_size_ >= need_size && OB_NOT_NULL(buf_)) {
+    reset();
+  } else {
+    if (OB_ISNULL(alloc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "alloc_ is null", K(ret));
+    } else {
+      free_buf();
+      if (OB_ISNULL(buf_ = (char *)alloc_->alloc(need_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_LOG(WARN, "allocate mem for buf failed.", K(need_size), K(ret));
+      } else {
+        buf_size_ = need_size;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ret = src_rowkey.deep_copy(center_, buf_, buf_size_);
+  }
+  return ret;
+}
+
+template <>
+int ObCenterWithBuf<ObString>::new_from_src(const ObString &src_cid)
+{
+  int ret = OB_SUCCESS;
+  int need_size = src_cid.length();
+  if (buf_size_ >= need_size && OB_NOT_NULL(buf_)) {
+    reset();
+  } else {
+    if (alloc_ == nullptr) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "alloc_ is null", K(ret));
+    } else {
+      free_buf();
+      if (NULL == (buf_ = static_cast<char *>(alloc_->alloc(need_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_LOG(WARN, "allocate mem for buf failed.", K(need_size), K(ret));
+      } else {
+        buf_size_ = need_size;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    MEMCPY(buf_, src_cid.ptr(), need_size);
+    center_.assign_ptr(buf_, need_size);
   }
   return ret;
 }

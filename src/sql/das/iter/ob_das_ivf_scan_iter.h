@@ -115,7 +115,9 @@ class ObDASIvfBaseScanIter : public ObDASIter
 public:
   ObDASIvfBaseScanIter()
       : ObDASIter(ObDASIterType::DAS_ITER_IVF_SCAN),
+        mem_context_(nullptr),
         vec_op_alloc_("IvfIdxLookupOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        persist_alloc_(ObMemAttr(MTL_ID(), "IvfScan")),
         ls_id_(),
         tx_desc_(nullptr),
         snapshot_(nullptr),
@@ -213,14 +215,21 @@ protected:
   static const int64_t CID_VEC_COM_KEY_CNT = 1;        // Only the vec column is a common column
   static const int64_t CID_VEC_FIXED_PRI_KEY_CNT = 1;  // center_id is FIXED PRI KEY
   static const int64_t ROWKEY_CID_PRI_KEY_CNT = 1;
+
   static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
   static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
   static const int64_t POST_ENLARGEMENT_FACTOR = 2;
+  static const int64_t PRE_ENLARGEMENT_FACTOR = 2;
   // in centroid table
   static const int64_t CID_IDX = 0;
   static const int64_t CID_VECTOR_IDX = 1;
+
 protected:
-  common::ObArenaAllocator vec_op_alloc_;
+  lib::MemoryContext mem_context_;
+  ObArenaAllocator vec_op_alloc_;
+  // unlike vec_op_alloc_ do reset() in inner_resuse()
+  // persist_alloc_ do reset() in inner_release()
+  ObArenaAllocator persist_alloc_;
   share::ObLSID ls_id_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
@@ -261,8 +270,8 @@ protected:
   int64_t nprobes_ = 8;
   ObExprVectorDistance::ObVecDisType dis_type_;  // default metric;
   ObVectorQueryRowkeyIterator *saved_rowkeys_itr_;
-  common::ObSEArray<common::ObRowkey *, 16> saved_rowkeys_;
-  common::ObSEArray<common::ObRowkey *, 16> pre_fileter_rowkeys_;
+  common::ObSEArray<common::ObRowkey, 16> saved_rowkeys_;
+  common::ObSEArray<common::ObRowkey, 16> pre_fileter_rowkeys_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter
@@ -291,9 +300,10 @@ protected:
 
 protected:
   int get_nearest_probe_center_ids(bool is_vectorized, ObIArray<ObString> &nearest_cids);
-  int get_main_rowkey_from_cid_vec_datum(const ObDASScanCtDef *cid_vec_ctdef,
+  int get_main_rowkey_from_cid_vec_datum(ObIAllocator& allocator,
+                                         const ObDASScanCtDef *cid_vec_ctdef,
                                          const int64_t rowkey_cnt,
-                                         ObRowkey *&main_rowkey);
+                                         ObRowkey &main_rowkey);
   virtual int process_ivf_scan(bool is_vectorized);
   template <typename T>
   int get_nearest_limit_rowkeys_in_cids(bool is_vectorized, const ObIArray<ObString> &nearest_cids, T *serch_vec);
@@ -306,7 +316,8 @@ protected:
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);
   bool check_cid_exist(const ObIArray<ObString> &dst_cids, const ObString &src_cid);
   int get_cid_from_rowkey_cid_table(ObString &cid);
-  int get_rowkey_pre_filter(bool is_vectorized);
+  int get_rowkey_pre_filter(bool is_vectorized,
+                            int64_t max_rowkey_count = ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE);
   int filter_pre_rowkey_batch(const ObIArray<ObString> &nearest_cids, bool is_vectorized, int64_t batch_row_count);
   int filter_rowkey_by_cid(const ObIArray<ObString> &nearest_cids,
                                   bool is_vectorized,
@@ -334,16 +345,16 @@ protected:
     ObDASScanRtDef *cid_vec_rtdef,
     storage::ObTableScanIterator *&cid_vec_scan_iter);
   int parse_cid_vec_datum(
+    ObIAllocator& allocator,
     int64_t cid_vec_column_count,
     const ObDASScanCtDef *cid_vec_ctdef,
     const int64_t rowkey_cnt,
-    ObRowkey *&main_rowkey,
+    ObRowkey &main_rowkey,
     ObString &com_key);
-  int parse_centroid_datum_with_deep_copy(
+  int parse_centroid_datum(
     const ObDASScanCtDef *cid_vec_ctdef,
     ObIAllocator& allocator,
     blocksstable::ObDatumRow *datum_row,
-    bool save_center_vec,
     ObString &cid,
     ObString &cid_vec);
 };
@@ -353,7 +364,7 @@ class ObDASIvfPQScanIter : public ObDASIvfScanIter
 public:
   // <center id, center vector>
   using IvfCidVecPair = std::pair<ObString, float *>;
-  using IvfRowkeyHeap = share::ObVectorCentorClusterHelper<float, ObRowkey *>;
+  using IvfRowkeyHeap = share::ObVectorCentorClusterHelper<float, ObRowkey>;
 
   ObDASIvfPQScanIter()
       : ObDASIvfScanIter(),
@@ -361,8 +372,7 @@ public:
         pq_centroid_scan_param_(),
         pq_centroid_first_scan_(true),
         m_(0),
-        pq_ids_type_(nullptr),
-        persist_alloc_(ObMemAttr(MTL_ID(), "IvfPQScan"))
+        pq_ids_type_(nullptr)
   {}
   virtual ~ObDASIvfPQScanIter()
   {}
@@ -398,7 +408,7 @@ protected:
     int64_t cid_vec_column_count,
     const ObDASScanCtDef *cid_vec_ctdef,
     const int64_t rowkey_cnt,
-    ObRowkey *&main_rowkey,
+    ObRowkey &main_rowkey,
     ObArrayBinary *&com_key);
   int calc_nearest_limit_rowkeys_in_cids(
     bool is_vectorized,
@@ -443,9 +453,6 @@ private:
   bool pq_centroid_first_scan_;
   int64_t m_;
   ObCollectionArrayType *pq_ids_type_;
-  // unlike vec_op_alloc_ do reset() in inner_resuse()
-  // persist_alloc_ do reset() in inner_release()
-  ObArenaAllocator persist_alloc_;
 };
 
 class ObDASIvfSQ8ScanIter : public ObDASIvfScanIter

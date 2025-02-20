@@ -50,7 +50,7 @@ TEST_F(TestSimdVectorOp, l2_distance)
   double square_normal = 0;
   double square_simd = 0;
   ASSERT_EQ(OB_SUCCESS, l2_square_normal(vec1, vec2, 3, square_normal));
-  ASSERT_EQ(OB_SUCCESS, ObVectorL2Distance::l2_square_func(vec1, vec2, 3, square_simd));
+  ASSERT_EQ(OB_SUCCESS, ObVectorL2Distance<float>::l2_square_func(vec1, vec2, 3, square_simd));
   ASSERT_EQ(square_normal, square_simd);
 
   const int VEC_SIZE = 1000;
@@ -71,7 +71,7 @@ TEST_F(TestSimdVectorOp, l2_distance)
     dur_normal += duration_cast<nanoseconds>(high_resolution_clock::now() - start_normal).count();
 
     system_clock::time_point start_simd = high_resolution_clock::now();
-    ASSERT_EQ(OB_SUCCESS, ObVectorL2Distance::l2_square_func(vec3, vec4, VEC_SIZE, square_simd));
+    ASSERT_EQ(OB_SUCCESS, ObVectorL2Distance<float>::l2_square_func(vec3, vec4, VEC_SIZE, square_simd));
     dur_simd += duration_cast<nanoseconds>(high_resolution_clock::now() - start_simd).count();
   }
 

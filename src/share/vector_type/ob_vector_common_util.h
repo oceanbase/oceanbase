@@ -22,6 +22,7 @@
 #include "lib/container/ob_heap.h"
 #include "common/object/ob_object.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 
 namespace oceanbase {
 namespace share {
@@ -159,32 +160,127 @@ private:
   CenterMaxHeap max_heap_;
 };
 
+template<typename T>
+class ObCenterWithBuf
+{
+public:
+  ObCenterWithBuf() : alloc_(nullptr), buf_(nullptr), buf_size_(0)
+  {}
+  explicit ObCenterWithBuf(ObIAllocator *alloc) : alloc_(alloc), buf_(nullptr), buf_size_(0)
+  {}
+  TO_STRING_KV(K_(buf_size), KP_(buf));
+
+  void reset()
+  {
+    memset(buf_, 0, buf_size_);
+    center_.reset();
+  }
+
+  void free_buf()
+  {
+    if (OB_NOT_NULL(alloc_) && OB_NOT_NULL(buf_)) {
+      alloc_->free(buf_);
+    }
+    buf_ = nullptr;
+    buf_size_ = 0;
+    center_.reset();
+  }
+  inline int64_t get_buf_size()
+  {
+    return buf_size_;
+  }
+
+  int new_from_src(const T &src_center);
+
+  const inline T &get_center() const
+  {
+    return center_;
+  }
+private:
+  ObIAllocator *alloc_;
+  char *buf_;
+  int64_t buf_size_;
+  T center_;
+};
+
+template <typename T>
+int ObCenterWithBuf<T>::new_from_src(const T &src_center) {
+  int ret = common::OB_NOT_SUPPORTED;
+  SHARE_LOG(WARN, "not define", K(ret), K(src_center));
+  return ret;
+}
+template <>
+int ObCenterWithBuf<ObRowkey>::new_from_src(const ObRowkey &src_rowkey);
+template <>
+int ObCenterWithBuf<ObString>::new_from_src(const ObString &src_cid);
+
+template<typename T>
+struct ObVecWithDim
+{
+  int new_from_src(ObIAllocator& allocator,T *src_vec, int64_t dim) {
+    int ret = OB_SUCCESS;
+    vec_ = nullptr;
+    if (OB_ISNULL(src_vec) || dim < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_LOG(WARN, "invalid argument", K(ret), KP(src_vec), K(dim));
+    } else {
+      vec_ = (T *)allocator.alloc(dim * sizeof(T));
+      if (OB_ISNULL(vec_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(dim));
+      } else {
+        MEMCPY(vec_, src_vec, dim * sizeof(T));
+        dim_ = dim;
+      }
+    }
+    return ret;
+  }
+
+  int reuse_from_src(T *src_vec, int64_t dim) {
+    int ret = OB_SUCCESS;
+
+    if (OB_ISNULL(src_vec) || dim < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_LOG(WARN, "invalid argument", K(ret), KP(src_vec), K(dim));
+    } else if (OB_ISNULL(vec_) || dim != dim_) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "unexpected error", K(ret), K(dim), K(dim_), KP(vec_));
+    } else {
+      MEMCPY(vec_, src_vec, dim * sizeof(T));
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(dim), KP_(vec));
+
+  int64_t dim_;
+  T *vec_;
+};
+
 template <typename VEC_T, typename CENTER_T>
 class ObVectorCentorClusterHelper
 {
 public:
-  ObVectorCentorClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, int64_t dim, int64_t nprobe)
-      : const_vec_(const_vec), dim_(dim), nprobe_(nprobe), max_heap_(max_compare_, &allocator), center_vec_idx_(0)
+  ObVectorCentorClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe)
+      : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), max_heap_(max_compare_)
   {
-    center_vecs_.set_attr(ObMemAttr(MTL_ID(), "CentVecs"));
   }
 
   int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, bool save_center_vec = false);
-  int push_center(const CENTER_T &center, double distance);
+  int push_center(const CENTER_T &center, double distance, bool save_center_vec = false, VEC_T *center_vec = nullptr);
   int get_nearest_probe_center_ids(ObIArray<CENTER_T> &center_ids);
   int get_nearest_probe_centers(ObIArray<std::pair<CENTER_T, VEC_T *>> &center_ids);
 
  public:
   struct HeapCenterItemTemp
   {
-    HeapCenterItemTemp() : distance_(DBL_MAX), center_() {}
-    HeapCenterItemTemp(const double distance, const CENTER_T center, int64_t center_idx) :
-      distance_(distance), center_(center), center_idx_(center_idx) {}
+    HeapCenterItemTemp() : distance_(DBL_MAX), center_with_buf_(nullptr) {}
+    HeapCenterItemTemp(const double distance, ObCenterWithBuf<CENTER_T>* center_with_buf) :
+      distance_(distance), center_with_buf_(center_with_buf) {}
     double distance_;
-    CENTER_T center_;
+    ObCenterWithBuf<CENTER_T>* center_with_buf_;
     // for pq, need center idx to get center vector
-    int64_t center_idx_;
-    TO_STRING_KV(K_(distance), K_(center), K_(center_idx));
+    ObVecWithDim<VEC_T> vec_dim_;
+    TO_STRING_KV(K_(distance), KP_(center_with_buf), K_(vec_dim));
   };
   struct MaxHeapCompare {
     bool operator()(const HeapCenterItemTemp &lhs, const HeapCenterItemTemp &rhs)
@@ -201,14 +297,13 @@ public:
   typedef common::ObBinaryHeap<HeapCenterItemTemp, MaxHeapCompare, 64> CenterMaxHeap;
 
 private:
+  ObIAllocator &alloc_;
   const VEC_T *const_vec_;
+  oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type_;
   int64_t dim_;
   int64_t nprobe_;
   MaxHeapCompare max_compare_;
   CenterMaxHeap max_heap_;
-  // for pq
-  ObArray<VEC_T *> center_vecs_;
-  int center_vec_idx_;
 };
 
 // ------------------ ObCentersBuffer implement ------------------
@@ -344,16 +439,10 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
     SHARE_LOG(WARN, "invalid argument", K(ret), K(center), KP(center_vec), K(dim));
   } else {
     double distance = DBL_MAX;
-    if (OB_FAIL(ObVectorL2Distance::l2_distance_func(const_vec_, center_vec, dim, distance))) {
-      SHARE_LOG(WARN, "failed to calc l2 distance", K(ret));
-    } else if (OB_FAIL(push_center(center, distance))) {
+    if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<VEC_T>::distance_funcs[dis_type_](const_vec_, center_vec, dim_, distance))) {
+      SHARE_LOG(WARN, "failed to get distance type", K(ret));
+    } else if (OB_FAIL(push_center(center, distance, save_center_vec, center_vec))) {
       SHARE_LOG(WARN, "fail to push back center with distance", K(ret), K(distance));
-    } else if (save_center_vec) {
-      if (OB_FAIL(center_vecs_.push_back(center_vec))) {
-        SHARE_LOG(WARN, "fail to push back center vector", K(ret), K(center_vec_idx_));
-      } else {
-        ++center_vec_idx_;
-      }
     }
   }
 
@@ -362,20 +451,55 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
 
 template <typename VEC_T, typename CENTER_T>
 int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
-    const CENTER_T &center,
-    double distance)
+  const CENTER_T &center,
+  double distance,
+  bool save_center_vec /*= false*/,
+  VEC_T *center_vec /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (max_heap_.count() < nprobe_) {
-    if (OB_FAIL(max_heap_.push(HeapCenterItemTemp(distance, center, center_vec_idx_)))) {
-      SHARE_LOG(WARN, "failed to push center heap", K(ret), K(center), K(distance));
+    void *ptr = alloc_.alloc(sizeof(ObCenterWithBuf<CENTER_T>));
+    if (NULL == ptr) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      SHARE_LOG(WARN, "no memory for table entity", K(ret));
+    } else {
+      ObCenterWithBuf<CENTER_T> *center_with_buf = new (ptr) ObCenterWithBuf<CENTER_T>(&alloc_);
+      if (OB_ISNULL(center_with_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_entity is null", K(ret));
+      } else if (OB_FAIL(center_with_buf->new_from_src(center))) {
+        SHARE_LOG(WARN, "center_entity fail init", K(ret));
+      } else {
+        HeapCenterItemTemp item(distance, center_with_buf);
+        if (save_center_vec && OB_FAIL(item.vec_dim_.new_from_src(alloc_, center_vec, dim_))) {
+          SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(max_heap_.push(item))) {
+          SHARE_LOG(WARN, "failed to push center heap", K(ret), K(center), K(distance));
+        }
+      }
     }
   } else {
     const HeapCenterItemTemp &top = max_heap_.top();
-    HeapCenterItemTemp tmp(distance, center, center_vec_idx_);
+    ObCenterWithBuf<CENTER_T> tmp_center_with_buf;
+    HeapCenterItemTemp tmp(distance, &tmp_center_with_buf);
     if (max_compare_(tmp, top)) {
-      if (OB_FAIL(max_heap_.replace_top(tmp))) {
-        SHARE_LOG(WARN, "failed to replace top", K(ret), K(tmp));
+      ObCenterWithBuf<CENTER_T> *old_center_with_buf = top.center_with_buf_;
+      if (OB_ISNULL(old_center_with_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_with_buf is null", K(ret));
+      } else if (OB_FAIL(old_center_with_buf->new_from_src(center))) {
+        SHARE_LOG(WARN, "failed to new from src", K(ret), K(center));
+      } else {
+        HeapCenterItemTemp new_top(distance, old_center_with_buf);
+        if (save_center_vec && OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
+          SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(max_heap_.replace_top(new_top))) {
+          SHARE_LOG(WARN, "failed to replace top", K(ret), K(new_top));
+        }
       }
     }
   }
@@ -391,9 +515,13 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_center_ids(O
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(max_heap_.count()), K(nprobe_));
   }
   while(OB_SUCC(ret) && !max_heap_.empty()) {
-    if (OB_FAIL(center_ids.push_back(max_heap_.top().center_))) {
+    const HeapCenterItemTemp &cur_top = max_heap_.top();
+    if (OB_ISNULL(cur_top.center_with_buf_)) {
       ret = OB_ERR_UNEXPECTED;
-      SHARE_LOG(WARN, "failed to push center id", K(ret), K(max_heap_.top().center_));
+      SHARE_LOG(WARN, "center_with_buf is null", K(ret));
+    } else if (OB_FAIL(center_ids.push_back(cur_top.center_with_buf_->get_center()))) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top.center_with_buf_->get_center()));
     } else if (OB_FAIL(max_heap_.pop())) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to pop max heap", K(ret));
@@ -416,10 +544,10 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::get_nearest_probe_centers(ObIA
   }
   while(OB_SUCC(ret) && !max_heap_.empty()) {
     const HeapCenterItemTemp &cur_top = max_heap_.top();
-    if (cur_top.center_idx_ >= center_vecs_.count() || cur_top.center_idx_ < 0) {
-      ret = OB_INVALID_ARGUMENT;
-      SHARE_LOG(WARN, "invalid index", K(ret), K(cur_top), K(center_vecs_.count()));
-    } else if (OB_FAIL(center_ids.push_back(std::make_pair(cur_top.center_, center_vecs_[cur_top.center_idx_])))) {
+    if (OB_ISNULL(cur_top.center_with_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
+    } else if (OB_FAIL(center_ids.push_back(std::make_pair(cur_top.center_with_buf_->get_center(), cur_top.vec_dim_.vec_)))) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_LOG(WARN, "failed to push center id", K(ret), K(cur_top));
     } else if (OB_FAIL(max_heap_.pop())) {

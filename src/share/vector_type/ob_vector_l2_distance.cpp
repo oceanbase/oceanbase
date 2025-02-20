@@ -15,7 +15,8 @@ namespace oceanbase
 {
 namespace common
 {
-int ObVectorL2Distance::l2_square_func(const float *a, const float *b, const int64_t len, double &square)
+template<>
+int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, const int64_t len, double &square)
 {
   int ret = OB_SUCCESS;
 #if OB_USE_MULTITARGET_CODE
@@ -35,41 +36,8 @@ int ObVectorL2Distance::l2_square_func(const float *a, const float *b, const int
 #endif
   return ret;
 }
-
-int ObVectorL2Distance::l2_distance_func(const float *a, const float *b, const int64_t len, double &distance)
-{
-  int ret = OB_SUCCESS;
-  double square = 0;
-  distance = 0;
-  if (OB_ISNULL(a) || OB_ISNULL(b)) {
-    ret = OB_ERR_NULL_VALUE;
-    LIB_LOG(WARN, "invalid null pointer", K(ret), KP(a), KP(b));
-  } else if (OB_FAIL(l2_square_func(a, b, len, square))) {
-    LIB_LOG(WARN, "failed to cal l2 square", K(ret));
-  } else {
-    distance = sqrt(square);
-  }
-  return ret;
-}
-
-
-int ObVectorL2Distance::l2_distance_func(const uint8_t *a, const uint8_t *b, const int64_t len, double &distance)
-{
-  int ret = OB_SUCCESS;
-  double square = 0;
-  distance = 0;
-  if (OB_FAIL(l2_square_normal(a, b, len, square))) {
-    LIB_LOG(WARN, "failed to cal l2 square", K(ret));
-  } else {
-    distance = sqrt(square);
-  }
-  return ret;
-}
-
-OB_INLINE int ObVectorL2Distance::l2_square_normal(const uint8_t *a,
-                                                          const uint8_t *b,
-                                                          const int64_t len,
-                                                          double &square)
+template <>
+int ObVectorL2Distance<uint8_t>::l2_square_func(const uint8_t *a, const uint8_t *b, const int64_t len, double &square)
 {
   int ret = OB_SUCCESS;
   double sum = 0;
@@ -87,6 +55,5 @@ OB_INLINE int ObVectorL2Distance::l2_square_normal(const uint8_t *a,
   }
   return ret;
 }
-
 }
 }

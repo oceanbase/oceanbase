@@ -76,7 +76,7 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
       break;
   }
 
-  if (OB_SUCC(ret) && ObExprVectorDistance::distance_funcs[dis_type] == nullptr) {
+  if (OB_SUCC(ret) && ObExprVectorDistance::DisFunc<float>::distance_funcs[dis_type] == nullptr) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support dis_type", K(ret), K(dis_type));
   }
@@ -84,7 +84,7 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
   return ret;
 }
 
-int ObDasVecScanUtils::get_real_search_vec(common::ObArenaAllocator &allocator,
+int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
                                            ObDASSortRtDef *sort_rtdef,
                                            ObExpr *origin_vec,
                                            ObString &real_search_vec)

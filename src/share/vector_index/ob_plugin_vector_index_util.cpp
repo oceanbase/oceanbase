@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace share
 {
-int ObVectorQueryRowkeyIterator::init(int64_t total, ObIArray<common::ObRowkey *> *rowkeys)
+int ObVectorQueryRowkeyIterator::init(int64_t total, ObIArray<common::ObRowkey> *rowkeys)
 {
   INIT_SUCC(ret);
 
@@ -105,7 +105,7 @@ int ObVectorQueryRowkeyIterator::get_next_rows(int64_t &count)
   return ret;
 }
 
-int ObVectorQueryRowkeyIterator::get_next_row(ObRowkey *&rowkey)
+int ObVectorQueryRowkeyIterator::get_next_row(ObRowkey &rowkey)
 {
   INIT_SUCC(ret);
   if (!is_init_) {
@@ -113,17 +113,13 @@ int ObVectorQueryRowkeyIterator::get_next_row(ObRowkey *&rowkey)
     LOG_WARN("iter is not initialized.", K(ret));
   } else if (cur_pos_ < total_) {
     rowkey = rowkeys_->at(cur_pos_++);
-    if (OB_ISNULL(rowkey)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rowkey is null", K(ret), K(cur_pos_), K(total_));
-    }
   } else {
     ret = OB_ITER_END;
   }
   return ret;
 }
 
-int ObVectorQueryRowkeyIterator::get_next_rows(ObIArray<common::ObRowkey *>& rowkeys, int64_t &row_count)
+int ObVectorQueryRowkeyIterator::get_next_rows(ObIArray<common::ObRowkey>& rowkeys, int64_t &row_count)
 {
   INIT_SUCC(ret);
   row_count = 0;

@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
-#include "share/vector_type/ob_vector_l2_distance.h"
-#include "share/vector_type/ob_vector_cosine_distance.h"
-#include "share/vector_type/ob_vector_ip_distance.h"
 #include "share/vector_type/ob_vector_norm.h"
-#include "share/vector_type/ob_vector_l1_distance.h"
 
 namespace oceanbase
 {
@@ -76,16 +72,6 @@ ObExprVectorDistance::ObExprVectorDistance(
     int32_t dimension)
       : ObExprVector(alloc, type, name, param_num, dimension)
 {}
-
-ObExprVectorDistance::FuncPtrType ObExprVectorDistance::distance_funcs[] =
-{
-  ObVectorCosineDistance::cosine_distance_func,
-  ObVectorIpDistance::ip_distance_func,
-  ObVectorL2Distance::l2_distance_func,
-  ObVectorL1Distance::l1_distance_func,
-  ObVectorL2Distance::l2_square_func,
-  nullptr,
-};
 
 int ObExprVectorDistance::calc_result_typeN(
     ObExprResType &type,
@@ -164,10 +150,10 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
     const float *data_l = reinterpret_cast<const float*>(arr_l->get_data());
     const float *data_r = reinterpret_cast<const float*>(arr_r->get_data());
     const uint32_t size = arr_l->size();
-    if (distance_funcs[dis_type] == nullptr) {
+    if (DisFunc<float>::distance_funcs[dis_type] == nullptr) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support", K(ret), K(dis_type));
-    } else if (OB_FAIL(distance_funcs[dis_type](data_l, data_r, size, distance))) {
+    } else if (OB_FAIL(DisFunc<float>::distance_funcs[dis_type](data_l, data_r, size, distance))) {
       if (OB_ERR_NULL_VALUE == ret) {
         res_datum.set_null();
         ret = OB_SUCCESS; // ignore

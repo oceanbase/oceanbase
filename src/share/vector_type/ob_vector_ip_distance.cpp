@@ -15,22 +15,5 @@ namespace oceanbase
 {
 namespace common
 {
-int ObVectorIpDistance::ip_distance_func(const float *a, const float *b, const int64_t len, double &distance)
-{
-return ip_distance_normal(a, b, len, distance);
-}
-
-OB_INLINE int ObVectorIpDistance::ip_distance_normal(const float *a, const float *b, const int64_t len, double &distance)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
-    distance += a[i] * b[i];
-    if (OB_UNLIKELY(0 != ::isinf(distance))) {
-      ret = OB_NUMERIC_OVERFLOW;
-      LIB_LOG(WARN, "value is overflow", K(ret), K(distance));
-    }
-  }
-  return ret;
-}
 }
 }

@@ -23,13 +23,34 @@ namespace oceanbase
 {
 namespace common
 {
+template<typename T>
 struct ObVectorL2Distance
 {
-  static int l2_square_func(const float *a, const float *b, const int64_t len, double &square);
-  static int l2_distance_func(const float *a, const float *b, const int64_t len, double &distance);
-  static int l2_distance_func(const uint8_t *a, const uint8_t *b, const int64_t len, double &distance);
-  static int l2_square_normal(const uint8_t *a, const uint8_t *b, const int64_t len, double &square);
+  static int l2_square_func(const T *a, const T *b, const int64_t len, double &square);
+  static int l2_distance_func(const T *a, const T *b, const int64_t len, double &distance);
 };
+
+template<>
+int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, const int64_t len, double &square);
+template <>
+int ObVectorL2Distance<uint8_t>::l2_square_func(const uint8_t *a, const uint8_t *b, const int64_t len, double &square);
+
+template<typename T>
+int ObVectorL2Distance<T>::l2_distance_func(const T *a, const T *b, const int64_t len, double &distance)
+{
+  int ret = OB_SUCCESS;
+  double square = 0;
+  distance = 0;
+  if (OB_ISNULL(a) || OB_ISNULL(b)) {
+    ret = OB_ERR_NULL_VALUE;
+    LIB_LOG(WARN, "invalid null pointer", K(ret), KP(a), KP(b));
+  } else if (OB_FAIL(l2_square_func(a, b, len, square))) {
+    LIB_LOG(WARN, "failed to cal l2 square", K(ret));
+  } else {
+    distance = sqrt(square);
+  }
+  return ret;
+}
 
 #define VEC_SUM(type, load_func, diff_func, calc_func, acc_func, vsum) \
   type diff = diff_func(load_func(a + i), load_func(b + i));           \

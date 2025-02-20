@@ -101,8 +101,8 @@ struct KmeansDataSet
 
 KmeansDataSet::FuncPtrType KmeansDataSet::distance_funcs[TYPE_MAX] =
 {
-  ObVectorL2Distance::l2_distance_func,
-  ObVectorCosineDistance::cosine_distance_func,
+  ObVectorL2Distance<float>::l2_distance_func,
+  ObVectorCosineDistance<float>::cosine_distance_func,
 };
 
 const int64_t KmeansDataSet::DIM[TYPE_MAX] =
@@ -440,7 +440,7 @@ int ObTestAnnSearchHelper::inner_ann_search(const int64_t idx, float *vector, co
   } else {
     share::ObCentersBuffer<float> &centers = algo->get_cur_centers();
     for (int64_t i = 0; OB_SUCC(ret) && i < centers.count(); ++i) {
-      if (OB_FAIL(ObVectorL2Distance::l2_distance_func(data, centers.at(i), dim, distance))) {
+      if (OB_FAIL(ObVectorL2Distance<float>::l2_distance_func(data, centers.at(i), dim, distance))) {
         LOG_WARN("failed to calc l2 distance", K(ret));
       } else if (center_heap.count() < nprobe) {
         if (OB_FAIL(center_heap.push(HeapCenterItem(distance, i)))) {

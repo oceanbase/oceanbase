@@ -32,7 +32,7 @@ public:
   static void release_scan_param(ObTableScanParam &scan_param);
   static void set_whole_range(ObNewRange &scan_range, common::ObTableID table_id);
   static int get_distance_expr_type(ObExpr &expr, ObEvalCtx &ctx, ObExprVectorDistance::ObVecDisType &dis_type);
-  static int get_real_search_vec(common::ObArenaAllocator &allocator,
+  static int get_real_search_vec(common::ObIAllocator &allocator,
                                  ObDASSortRtDef *sort_rtdef,
                                  ObExpr *origin_vec,
                                  ObString &real_search_vec);

@@ -31,7 +31,7 @@ namespace share
 class ObVectorQueryRowkeyIterator
 {
 public:
-  ObVectorQueryRowkeyIterator(int64_t total, ObIArray<common::ObRowkey *> *rowkeys)
+  ObVectorQueryRowkeyIterator(int64_t total, ObIArray<common::ObRowkey> *rowkeys)
       : is_init_(false), total_(total), cur_pos_(0), batch_size_(0), scan_iter_(nullptr), rowkeys_(rowkeys) {};
   ObVectorQueryRowkeyIterator()
       : is_init_(false), total_(0), cur_pos_(0), batch_size_(0), scan_iter_(nullptr), rowkeys_(nullptr) {};
@@ -48,15 +48,15 @@ public:
   {
     return OB_NOT_NULL(scan_iter_);
   }
-  int init(int64_t total, ObIArray<common::ObRowkey *> *rowkeys);
+  int init(int64_t total, ObIArray<common::ObRowkey> *rowkeys);
   int init(sql::ObDASIter *rowkey_scan_iter);
   void set_batch_size(int64_t batch_size)
   {
     batch_size_ = batch_size;
   }
-  int get_next_row(common::ObRowkey *&rowkey);
+  int get_next_row(common::ObRowkey &rowkey);
   int get_next_row();
-  int get_next_rows(ObIArray<common::ObRowkey *> &rowkeys, int64_t &row_count);
+  int get_next_rows(ObIArray<common::ObRowkey> &rowkeys, int64_t &row_count);
   int get_next_rows(int64_t &count);
   void reset();
 
@@ -66,7 +66,7 @@ private:
   int64_t cur_pos_;
   int64_t batch_size_;
   sql::ObDASIter *scan_iter_;
-  ObIArray<common::ObRowkey *> *rowkeys_;
+  ObIArray<common::ObRowkey> *rowkeys_;
 };
 
 class ObVectorQueryVidIterator : public common::ObNewRowIterator

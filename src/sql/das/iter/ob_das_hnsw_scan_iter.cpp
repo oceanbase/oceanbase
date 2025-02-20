@@ -17,6 +17,7 @@
 #include "src/storage/access/ob_table_scan_iterator.h"
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 
 namespace oceanbase
 {
@@ -536,7 +537,7 @@ int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator
             double distance = 0.0;
             const float *data_l = reinterpret_cast<const float*>(search_vec.ptr());
             const float *data_r = reinterpret_cast<const float*>(vector.ptr());
-            if (OB_FAIL(ObExprVectorDistance::distance_funcs[dis_type](data_l, data_r, dim_, distance))) {
+            if (OB_FAIL(ObExprVectorDistance::DisFunc<float>::distance_funcs[dis_type](data_l, data_r, dim_, distance))) {
               LOG_WARN("failed to calc distance", K(ret));
             } else {
               distance = sort_ctdef_->sort_exprs_[0]->type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ? -1 * distance : distance;
