@@ -146,6 +146,7 @@ struct ObMicroDataPreAggParam
   void reset() { memset(this, 0, sizeof(*this)); }
   bool use_encoding_ht() const { return is_pax_encoding_ && nullptr != encoding_ht_; }
   bool use_cs_encoding_ht() const { return is_cs_encoding_ && nullptr != cs_encoding_ht_; }
+  bool is_all_null_column() const { OB_ASSERT(nullptr != col_datums_); return null_cnt_ == col_datums_->count(); }
   TO_STRING_KV(KP_(col_datums), KP_(encoding_ht), K_(null_cnt), K_(min_integer), K_(max_integer),
       K_(is_integer_aggregated), K_(is_cs_encoding), K_(is_pax_encoding));
 

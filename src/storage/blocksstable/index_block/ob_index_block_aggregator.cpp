@@ -1034,7 +1034,12 @@ int ObSkipIndexDataAggregator::eval(const ObIMicroBlockWriter &data_micro_writer
           }
         } else if (can_agg_with_dict(static_cast<ObSkipIndexColType>(idx_col_meta.col_type_))) {
           // try aggregate with dict
-          if (pre_agg_param.use_cs_encoding_ht()) {
+          if (pre_agg_param.is_all_null_column()) {
+            tmp_result.set_null();
+            if (OB_FAIL(col_aggs_.at(i)->eval(tmp_result, false))) {
+              LOG_WARN("failed to evaluate all null column", K(ret), K(pre_agg_param));
+            }
+          } else if (pre_agg_param.use_cs_encoding_ht()) {
             if (OB_FAIL(do_col_agg(i, *pre_agg_param.cs_encoding_ht_))) {
               LOG_WARN("failed to do column aggregation with cs encoding hashtable", K(ret));
             }
@@ -1091,6 +1096,8 @@ int ObSkipIndexDataAggregator::do_col_agg_with_pre_agg_integer(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (agg_param.is_all_null_column()) {
+    tmp_result.set_null();
   } else if (type_class == ObIntTC) {
     switch (datum_type) {
       case OBJ_DATUM_8BYTE_DATA: {
