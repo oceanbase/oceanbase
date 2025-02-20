@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ddl_single_replica_executor.h"
-#include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_sim_point.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 
 using namespace oceanbase::share;

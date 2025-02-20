@@ -11,10 +11,6 @@
  */
 
 #include "ob_all_virtual_arbitration_service_status.h"
-#include "common/row/ob_row.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
 #include "observer/ob_server_struct.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "storage/ob_locality_manager.h"

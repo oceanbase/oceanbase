@@ -13,14 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_json_path.h"
-#include "ob_json_tree.h"
-#include "ob_json_bin.h"
 #include "ob_json_parse.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/ob_errno.h"
-#include "lib/charset/ob_dtoa.h"
-#include <rapidjson/encodings.h>
-#include <rapidjson/memorystream.h>
 
 namespace oceanbase {
 namespace common {

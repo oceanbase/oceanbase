@@ -11,25 +11,13 @@
  */
 #define USING_LOG_PREFIX SHARE
 #define private public
-#include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_oss_base.cpp"
 #undef private
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_struct.h"
 #define private public
 #include "share/backup/ob_archive_checkpoint_mgr.h"
 #undef private
 #include "test_ob_backup_dest_config.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_force_print_log.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/ob_thread_pool.h"
-#include "apr_allocator.h"
 
 
 using namespace oceanbase::common;

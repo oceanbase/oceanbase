@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/ob_pl_package.h"
 #include "ob_pl_package_guard.h"
+#include "src/pl/ob_pl_package_state.h"
 
 namespace oceanbase
 {

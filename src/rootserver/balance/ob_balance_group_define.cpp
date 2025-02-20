@@ -11,11 +11,7 @@
  */
 #define USING_LOG_PREFIX BALANCE
 
-#include "lib/string/ob_string.h"             // ObString
-#include "lib/string/ob_sql_string.h"         // ObSqlString
 #include "share/schema/ob_schema_mgr.h"       // ObSimpleTableSchemaV2
-#include "share/schema/ob_table_schema.h"     // ObTableSchema
-#include "share/schema/ob_schema_struct.h"    // ObPartition
 
 #include "ob_balance_group_define.h"
 

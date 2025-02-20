@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_tablet_drop.h"
-#include "ob_root_service.h"
-#include "share/ob_share_util.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "observer/ob_inner_sql_connection.h"

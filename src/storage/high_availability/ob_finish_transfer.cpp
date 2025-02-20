@@ -10,20 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX STORAGE
-#include "share/ob_rs_mgr.h"
-#include "share/ob_rpc_struct.h"
 #include "ob_storage_ha_utils.h"
-#include "logservice/ob_log_service.h"
-#include "storage/tx/ob_multi_data_source.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tablet/ob_tablet.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "storage/high_availability/ob_finish_transfer.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
-#include "storage/tablet/ob_tablet.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "share/ob_storage_ha_diagnose_struct.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 
 using namespace oceanbase::common;

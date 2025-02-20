@@ -13,20 +13,9 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_ls_location_service.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "share/ls/ob_ls_info.h" // ObLSInfo
 #include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "share/ls/ob_ls_status_operator.h" // ObLSStatusOperator
-#include "share/cache/ob_cache_name_define.h" // OB_LS_LOCATION_CACHE_NAME
-#include "common/ob_timeout_ctx.h" // ObTimeoutCtx
-#include "lib/stat/ob_diagnose_info.h" // EVENT_INC
-#include "lib/ob_running_mode.h" // lib::is_mini_mode()
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "share/ob_task_define.h" // ObTaskController
-#include "observer/ob_server_struct.h"
-#include "lib/hash/ob_hashset.h" // ObHashSet
 #include "rootserver/ob_rs_async_rpc_proxy.h" // ObGetLeaderLocationsProxy
-#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {

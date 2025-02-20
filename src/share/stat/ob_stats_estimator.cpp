@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_stats_estimator.h"
-#include "share/stat/ob_dbms_stats_utils.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 

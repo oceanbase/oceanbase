@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "observer/ob_server_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/hash/ob_hashmap.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 
 namespace oceanbase

@@ -15,9 +15,6 @@
 #include "ob_log_all_svr_cache.h"
 #include "logservice/common_util/ob_log_time_utils.h"
 
-#include "lib/allocator/ob_mod_define.h"      // ObModIds
-#include "lib/utility/ob_macro_utils.h"       // OB_ISNULL, ...
-#include "lib/oblog/ob_log_module.h"          // LOG_*
 #include "logservice/common_util/ob_log_time_utils.h"
 
 using namespace oceanbase::common;

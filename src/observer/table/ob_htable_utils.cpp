@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_utils.h"
-#include <endian.h>  // be64toh
-#include "ob_htable_filters.h"
-#include "ob_htable_filter_operator.h"
-#include "share/table/ob_table.h"
+#include "src/observer/table/ob_table_filter.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share::schema;

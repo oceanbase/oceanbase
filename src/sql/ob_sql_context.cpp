@@ -11,15 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/ob_sql_context.h"
-#include <algorithm>
-#include "lib/container/ob_se_array_iterator.h"
-#include "sql/resolver/dml/ob_sql_hint.h"
-#include "sql/ob_sql_define.h"
+#include "ob_sql_context.h"
 #include "sql/optimizer/ob_log_plan.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "src/storage/tx/ob_trans_define_v4.h"
 
 using namespace ::oceanbase::common;
 namespace oceanbase

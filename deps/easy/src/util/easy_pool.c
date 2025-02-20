@@ -1,8 +1,6 @@
-#include "util/easy_pool.h"
+#include "easy_pool.h"
 #include "io/easy_log.h"
 #include "util/easy_mod_stat.h"
-#include <assert.h>
-#include <stdio.h>
 
 /**
  * 简单的内存池

@@ -14,26 +14,16 @@
 
 #include "ob_empty_server_checker.h"
 
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
 
-#include "share/ob_srv_rpc_proxy.h"
 
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_rpc_struct.h"//GetLSReportCnt
 #include "share/ls/ob_ls_table_iterator.h"//ObAllLSTableIterator
-#include "share/ls/ob_ls_info.h"//ObLSInfo
 #include "share/ob_all_server_tracer.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 
-#include "observer/ob_server_struct.h"
 
 #include "ob_server_manager.h"
 #include "ob_unit_manager.h"//ObUnitManager
 #include "ob_server_zone_op_service.h"
-#include "rootserver/ob_rs_async_rpc_proxy.h"//ObGetLSReportCntProxy
 #include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase

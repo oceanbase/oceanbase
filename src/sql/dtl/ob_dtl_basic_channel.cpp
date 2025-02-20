@@ -12,27 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_basic_channel.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/lock/ob_thread_cond.h"
-#include "lib/random/ob_random.h"
-#include "common/row/ob_row.h"
-#include "share/ob_cluster_version.h"
-#include "share/rc/ob_context.h"
-#include "share/rc/ob_tenant_base.h"
-#include "sql/dtl/ob_dtl_rpc_proxy.h"
-#include "sql/dtl/ob_dtl.h"
-#include "sql/dtl/ob_dtl_flow_control.h"
-#include "sql/engine/px/ob_px_row_store.h"
-#include "sql/engine/px/ob_px_bloom_filter.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/dtl/ob_dtl_channel_watcher.h"
-#include "observer/omt/ob_th_worker.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

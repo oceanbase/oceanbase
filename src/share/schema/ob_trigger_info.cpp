@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_trigger_info.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/parser/ob_parser.h"
-#include "sql/ob_sql_utils.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 

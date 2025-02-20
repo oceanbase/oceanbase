@@ -11,13 +11,6 @@
  */
 
 #include "ob_leader_coordinator.h"
-#include <utility>
-#include "lib/ob_errno.h"
-#include "lib/string/ob_sql_string.h"
-#include "observer/ob_srv_network_frame.h"
-#include "share/ob_occam_time_guard.h"
-#include "share/ob_ls_id.h"
-#include "share/rc/ob_tenant_base.h"
 #include "table_accessor.h"
 
 namespace oceanbase

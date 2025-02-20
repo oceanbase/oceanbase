@@ -14,8 +14,6 @@
 #include "sql/resolver/dcl/ob_create_user_resolver.h"
 #include "sql/resolver/ddl/ob_database_resolver.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "objit/common/ob_item_type.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

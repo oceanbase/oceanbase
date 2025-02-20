@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_agent_table_base.h"
-#include "share/ob_i_tablet_scan.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_inner_sql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_utils.h"
-#include "common/object/ob_object.h"
+#include "src/share/interrupt/ob_interrupt_rpc_proxy.h"
 
 namespace oceanbase
 {

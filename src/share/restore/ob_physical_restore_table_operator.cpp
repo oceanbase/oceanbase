@@ -13,17 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "ob_physical_restore_table_operator.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/ob_kv_parser.h"
-#include "share/ob_cluster_version.h"
-#include "rootserver/ob_rs_job_table_operator.h"
-#include "share/backup/ob_backup_path.h"
-#include "share/ls/ob_ls_info.h"
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

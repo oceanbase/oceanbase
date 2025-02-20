@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX TABLELOCK
 
-#include "storage/memtable/ob_memtable_context.h"
-#include "storage/tx/ob_trans_ctx.h"
-#include "storage/tablelock/ob_table_lock_callback.h"
+#include "ob_table_lock_callback.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase

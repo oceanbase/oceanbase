@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "storage/tx/ob_trans_service.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
-#include "share/external_table/ob_external_table_file_task.h"
 namespace oceanbase
 {
 namespace share

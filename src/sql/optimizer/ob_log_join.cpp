@@ -11,21 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "share/system_variable/ob_sys_var_class_type.h"
-#include "sql/optimizer/ob_log_join.h"
-#include "sql/optimizer/ob_log_subplan_scan.h"
-#include "sql/optimizer/ob_log_plan.h"
-#include "sql/optimizer/ob_log_operator_factory.h"
-#include "sql/optimizer/ob_log_sort.h"
+#include "ob_log_join.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join_filter.h"
-#include "sql/optimizer/ob_log_set.h"
-#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "common/ob_smart_call.h"
-#include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase;
 using namespace sql;

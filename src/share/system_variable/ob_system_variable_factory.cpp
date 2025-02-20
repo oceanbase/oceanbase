@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_SESSION
-#include "share/ob_define.h"
 #include "share/system_variable/ob_system_variable_factory.h"
-#include "share/ob_errno.h"
-#include <algorithm>
 using namespace oceanbase::common;
 
 namespace oceanbase

@@ -23,7 +23,6 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "table_lock_common_env.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "table_lock_tx_common_env.h"
 
 namespace oceanbase

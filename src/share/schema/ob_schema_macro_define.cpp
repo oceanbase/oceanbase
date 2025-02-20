@@ -10,8 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "ob_schema_macro_define.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_schema_macro_define.h"
+#include "src/share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {

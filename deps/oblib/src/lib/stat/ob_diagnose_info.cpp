@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 
-#include "lib/stat/ob_diagnose_info.h"
+#include "ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "share/ash/ob_active_sess_hist_list.h"

@@ -12,12 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_disaster_recovery_info.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
 #include "ob_unit_manager.h"
-#include "ob_zone_manager.h"
 #include "share/ob_all_server_tracer.h"
 
 using namespace oceanbase::common;

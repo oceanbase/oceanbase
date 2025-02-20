@@ -11,9 +11,7 @@
  */
 
 #include "ob_block_sample_iterator.h"
-#include "storage/tablet/ob_table_store_util.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {

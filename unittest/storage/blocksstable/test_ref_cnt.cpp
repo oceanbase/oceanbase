@@ -15,12 +15,7 @@
 #define private public
 #define protected public
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "share/ob_thread_pool.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/ob_super_block_struct.h"
 
 namespace oceanbase
 {

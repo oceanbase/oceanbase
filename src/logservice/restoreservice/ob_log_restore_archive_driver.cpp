@@ -12,21 +12,7 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_log_restore_archive_driver.h"
-#include "ob_remote_fetch_log.h"
-#include "lib/allocator/ob_allocator.h"       // ObMemAttr
-#include "share/ob_ls_id.h"                   // ObLSID
-#include "share/ls/ob_ls_recovery_stat_operator.h"
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
-#include "storage/tx_storage/ob_ls_service.h" // ObLSService
-#include "logservice/palf/lsn.h"              // LSN
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "logservice/palf_handle_guard.h"     // PalfHandleGuard
-#include "ob_log_restore_handler.h"           // ObTenantRole
-#include "ob_remote_fetch_log_worker.h"       // ObRemoteFetchWorker
-#include "ob_fetch_log_task.h"                // ObFetchLogTask
-#include "ob_log_restore_define.h"            // MAX_LS_FETCH_LOG_TASK_CONCURRENCY
-#include "observer/omt/ob_tenant_config_mgr.h"  // tenant_config
-#include "logservice/archiveservice/ob_archive_define.h"
 namespace oceanbase
 {
 namespace logservice

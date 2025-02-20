@@ -23,7 +23,6 @@
 #include "ob_log_sys_ls_task_handler.h"  // IObLogSysLsTaskHandler
 #include "ob_log_task_pool.h"         // ObLogTransTaskPool
 #include "ob_log_instance.h"          // IObLogErrHandler
-#include "logservice/restoreservice/ob_log_restore_net_driver.h"   // logfetcher::LogErrHandler
 
 using namespace oceanbase::common;
 

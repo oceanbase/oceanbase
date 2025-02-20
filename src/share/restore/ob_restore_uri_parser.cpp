@@ -11,13 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include <stdlib.h>
 #include "ob_restore_uri_parser.h"
-#include "common/ob_zone.h"
-#include "lib/utility/utility.h"
-#include "lib/restore/ob_storage_path.h"
-#include "lib/restore/ob_storage.h"
-#include "share/backup/ob_backup_io_adapter.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

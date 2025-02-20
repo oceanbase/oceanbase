@@ -13,17 +13,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_transfer_lock_utils.h"
-#include "ob_transfer_lock_info_operator.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "share/ob_max_id_fetcher.h"
 #include "storage/ob_common_id_utils.h"
-#include "share/ob_common_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#include "storage/ob_storage_rpc.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/ob_tenant_info_proxy.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

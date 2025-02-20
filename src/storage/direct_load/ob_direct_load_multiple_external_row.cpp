@@ -13,7 +13,6 @@
 
 #include "storage/direct_load/ob_direct_load_multiple_external_row.h"
 #include "observer/table_load/ob_table_load_stat.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

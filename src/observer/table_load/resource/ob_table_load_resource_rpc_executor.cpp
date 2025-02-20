@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_table_load_resource_rpc_executor.h"
-#include "observer/table_load/ob_table_load_service.h"
-#include "observer/table_load/resource/ob_table_load_resource_service.h"
-#include "observer/table_load/resource/ob_table_load_resource_manager.h"
 
 namespace oceanbase
 {

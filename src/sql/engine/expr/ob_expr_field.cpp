@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_field.h"
 
-#include "sql/engine/expr/ob_expr_equal.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

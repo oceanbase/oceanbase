@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "ob_modify_autoinc_task.h"
 #include "rootserver/ob_root_service.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
-#include "storage/tablelock/ob_table_lock_service.h"
-#include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "storage/ddl/ob_ddl_lock.h"
 
 using namespace oceanbase::common;

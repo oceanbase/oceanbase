@@ -17,9 +17,7 @@
 
 #include "ob_data_dict_struct.h"
 
-#include "common/rowkey/ob_rowkey_info.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_table_param.h"
 
 #define DEFINE_DESERIALIZE_DATA_DICT(TypeName) \

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX TABLELOCK
 
 #include "storage/tablelock/ob_table_lock_common.h"
-#include "storage/tx/ob_trans_define.h"
-#include "common/ob_tablet_id.h"
 
 namespace oceanbase
 {

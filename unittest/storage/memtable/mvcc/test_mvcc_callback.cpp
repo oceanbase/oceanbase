@@ -16,9 +16,7 @@
 #define protected public
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
-#include "lib/random/ob_random.h"
+#include "src/storage/tx/ob_trans_ctx.h"
 
 namespace oceanbase
 {

@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_backfill_tx.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 

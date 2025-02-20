@@ -19,15 +19,10 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/init_basic_struct.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "rootserver/ob_tenant_balance_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "share/balance/ob_balance_job_table_operator.h"
-#include "storage/tablelock/ob_table_lock_service.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
-#include "storage/tablet/ob_tablet.h"
 #include "logservice/ob_log_service.h"
 #include "mittest/env/ob_simple_server_helper.h"
 

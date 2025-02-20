@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_merge.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/optimizer/ob_merge_log_plan.h"
 
 using namespace oceanbase;

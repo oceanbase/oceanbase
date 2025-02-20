@@ -9,10 +9,6 @@
 // See the Mulan PubL v2 for more details.
 
 #include "sql/dblink/ob_tm_service.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
-#include "pl/sys_package/ob_dbms_xa.h"
 #include "storage/tx/ob_xa_service.h"
 
 #define USING_LOG_PREFIX SQL

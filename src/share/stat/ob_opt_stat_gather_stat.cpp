@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "share/stat/ob_opt_stat_gather_stat.h"
-#include "lib/string/ob_sql_string.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
 using namespace oceanbase::common;

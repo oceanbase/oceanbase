@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_translate.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "objit/common/ob_item_type.h"
-#include "lib/oblog/ob_log.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_oracle_to_char.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
 namespace oceanbase

@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/optimizer/ob_table_partition_info.h"
-#include "sql/session/ob_sql_session_info.h"
+#include "ob_table_partition_info.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase

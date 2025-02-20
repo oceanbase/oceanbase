@@ -1,8 +1,6 @@
 #include "io/easy_negotiation.h"
-#include "io/easy_log.h"
 #include "io/easy_socket.h"
 #include <sys/socket.h>
-#include <sys/ioctl.h>
 
 const uint64_t g_support_eio_maigc[] = {
     0x12567348667799aa,

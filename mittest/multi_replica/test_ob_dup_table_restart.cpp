@@ -20,9 +20,6 @@
 
 #include "env/ob_fast_bootstrap.h"
 #include "env/ob_multi_replica_util.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "storage/tx/ob_dup_table_tablets.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_replay_executor.h"
 
 using namespace oceanbase::transaction;

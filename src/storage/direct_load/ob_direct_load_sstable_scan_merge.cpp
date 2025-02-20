@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge.h"
-#include "storage/blocksstable/ob_datum_range.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
 

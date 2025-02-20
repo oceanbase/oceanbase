@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_running_mode.h"
-#include "lib/ob_running_mode.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
 
 namespace oceanbase {
 namespace common {

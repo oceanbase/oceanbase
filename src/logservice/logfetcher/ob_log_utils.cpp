@@ -20,23 +20,15 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <linux/sockios.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-#include <stdlib.h>                                     // strtoll
-#include <openssl/md5.h>                                // MD5
 
 #include "lib/string/ob_string.h"                       // ObString
 #include "lib/utility/serialization.h"                  // serialization
 #include "lib/charset/ob_charset.h"                     // ObCharset
 #include "lib/time/ob_time_utility.h"                   // ObTimeUtility
-#include "lib/file/file_directory_utils.h"              // FileDirectoryUtils
-#include "share/schema/ob_table_schema.h"               // ObTableSchema
-#include "share/schema/ob_column_schema.h"              // ObColumnSchemaV2
 #include "share/schema/ob_schema_struct.h"
-#include "share/ob_get_compat_mode.h"
 #include "rpc/obmysql/ob_mysql_global.h"                // MYSQL_TYPE_*
-#include "ob_log_config.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

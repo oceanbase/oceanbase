@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_resource_weight_parser.h"
-#include "lib/utility/utility.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -11,7 +11,6 @@
  */
 
 #include "sql/engine/expr/ob_expr_mysql_port.h"
-#include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;

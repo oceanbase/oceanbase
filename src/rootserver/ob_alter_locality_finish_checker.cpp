@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_alter_locality_finish_checker.h"
-#include "share/ob_errno.h"                          // for KR(ret)
-#include "share/ob_ls_id.h"                          // for ls_id
-#include "share/ls/ob_ls_table_operator.h"           // for ObLSTableOperator
-#include "rootserver/ob_disaster_recovery_worker.h"  // for ObDRWorker LocalityMap
-#include "rootserver/ob_disaster_recovery_info.h"    // for DRLSInfo
-#include "share/schema/ob_schema_mgr.h"              // for SimpleTenantSchema
 #include "rootserver/ob_root_service.h"
 
 namespace oceanbase

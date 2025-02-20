@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_datum.h"
-#include "ob_datum_util.h"
 
 namespace oceanbase
 {

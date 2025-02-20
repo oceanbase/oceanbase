@@ -14,8 +14,6 @@
 #include "sql/resolver/ddl/ob_use_database_resolver.h"
 
 #include "sql/resolver/ddl/ob_use_database_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 
 namespace oceanbase

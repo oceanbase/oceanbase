@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_dml_param.h"
-#include "lib/container/ob_iarray.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_param.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/ob_exec_context.h"
-#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {

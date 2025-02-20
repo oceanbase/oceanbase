@@ -10,10 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 
 #include "ob_resource_pool.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {

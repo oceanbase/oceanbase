@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
 #include <sys/time.h>
-#include "lib/ob_errno.h"
 #include "lib/time/ob_tsc_timestamp.h"
 
 namespace oceanbase

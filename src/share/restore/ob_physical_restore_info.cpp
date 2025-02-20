@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/restore/ob_physical_restore_info.h"
-#include "share/backup/ob_backup_struct.h"
-#include <algorithm>
+#include "ob_physical_restore_info.h"
 #include "share/ob_rpc_struct.h"
 using namespace oceanbase;
 using namespace common;

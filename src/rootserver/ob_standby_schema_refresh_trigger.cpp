@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_standby_schema_refresh_trigger.h"
-#include "observer/ob_server_struct.h" // GCTX
 #include "observer/ob_service.h" // ObService
-#include "share/rc/ob_tenant_base.h" // MTL
 #include "share/ob_schema_status_proxy.h" // ObSchemaStatusProxy
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 

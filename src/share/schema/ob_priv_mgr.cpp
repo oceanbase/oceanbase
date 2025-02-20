@@ -13,16 +13,6 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_priv_mgr.h"
 
-#include <string.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <algorithm>
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/encrypt/ob_encrypted_helper.h"
-#include "common/object/ob_obj_type.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_schema_utils.h"
 
 namespace oceanbase

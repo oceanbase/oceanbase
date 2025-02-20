@@ -11,8 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
-#include "observer/ob_server.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

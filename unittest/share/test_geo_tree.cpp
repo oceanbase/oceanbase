@@ -14,25 +14,13 @@
 #include <boost/geometry.hpp>
 #include <boost/foreach.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_tree.h"
 #include "lib/geo/ob_geo_tree_traits.h"
 #include "lib/geo/ob_geo_bin_traits.h"
-#include "lib/json_type/ob_json_common.h"
-#include "lib/random/ob_random.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_box_clip_visitor.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_to_wkt_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "lib/geo/ob_wkt_parser.h"
-#include "lib/geo/ob_geo_common.h"
 #undef private
 
-#include <sys/time.h>
-#include <stdexcept>
-#include <exception>
-#include <typeinfo>
 
 namespace bg = boost::geometry;
 

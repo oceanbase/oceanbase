@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/string/ob_string.h"
-#include "share/config/ob_server_config.h"
 #include "observer/virtual_table/ob_show_processlist.h"
 #include "observer/ob_server.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

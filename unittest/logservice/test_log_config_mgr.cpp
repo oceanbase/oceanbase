@@ -11,14 +11,9 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_tenant_module_init_ctx.h"
 #define private public
 #include "logservice/palf/log_config_mgr.h"
-#include "logservice/palf/palf_callback_wrapper.h"
 #include "mock_logservice_container/mock_election.h"
-#include "mock_logservice_container/mock_log_state_mgr.h"
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_mode_mgr.h"

@@ -12,13 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_pcv_set.h"
-#include "sql/ob_sql_context.h"
-#include "sql/plan_cache/ob_pc_ref_handle.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/ob_cluster_version.h"
-#include "share/config/ob_server_config.h"
-#include "lib/container/ob_bit_set.h"
-#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

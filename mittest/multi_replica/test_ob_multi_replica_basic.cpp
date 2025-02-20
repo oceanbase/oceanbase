@@ -18,10 +18,7 @@
 #define protected public
 #define private public
 
-#include "env/ob_multi_replica_test_base.h"
 #include "env/ob_multi_replica_util.h"
-#include "env/ob_fast_bootstrap.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 
 #define CUR_TEST_CASE_NAME ObSimpleMultiReplicaExampleTest
 

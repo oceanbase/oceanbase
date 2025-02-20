@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_rle_encoder.h"
-#include "ob_bit_stream.h"
-#include "storage/blocksstable/ob_data_buffer.h"
 #include "ob_integer_array.h"
-#include "ob_encoding_hash_util.h"
 
 namespace oceanbase
 {

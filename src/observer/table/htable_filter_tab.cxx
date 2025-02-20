@@ -100,8 +100,6 @@
 #line 36 "../../../src/observer/table/htable_filter_tab.yxx"
 
 #define USING_LOG_PREFIX SERVER
-#include <stdint.h>
-#include "observer/table/ob_htable_filters.h"
 #include "observer/table/ob_table_filter.h"
 #include "observer/table/ob_htable_filter_parser.h"
 #include "observer/table/htable_filter_lex.hxx"

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
 #include "test_backup.h"
-#include "storage/backup/ob_backup_data_struct.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
 #define private public
 #define protected public
 

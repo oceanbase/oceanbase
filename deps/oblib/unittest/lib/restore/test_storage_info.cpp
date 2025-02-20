@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage_info.h"
 
 using namespace oceanbase::common;

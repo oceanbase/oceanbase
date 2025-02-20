@@ -11,8 +11,6 @@
  */
 
 #include "sql/engine/cmd/ob_empty_query_executor.h"
-#include "sql/resolver/cmd/ob_empty_query_stmt.h"
-#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {

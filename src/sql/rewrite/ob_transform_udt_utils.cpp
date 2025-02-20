@@ -11,33 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SQL_REWRITE
-#include "lib/allocator/ob_allocator.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_common_utility.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_unit_getter.h"
-#include "share/schema/ob_column_schema.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/expr/ob_expr_xmlparse.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/config/ob_server_config.h"
-#include "sql/rewrite/ob_transform_utils.h"
+#include "src/sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/rewrite/ob_transform_udt_utils.h"
-#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
-#include "pl/ob_pl_stmt.h"
 
 
 using namespace oceanbase::common;

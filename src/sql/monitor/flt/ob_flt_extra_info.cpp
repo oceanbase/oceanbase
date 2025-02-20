@@ -11,8 +11,6 @@
  */
 
 #define USING_LOG_PREFIX LIB_UTIL
-#include "lib/oblog/ob_log_module.h"
-#include "share/ob_errno.h"
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 
 using namespace oceanbase;

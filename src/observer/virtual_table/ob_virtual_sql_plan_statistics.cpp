@@ -11,12 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_virtual_sql_plan_statistics.h"
-#include "common/object/ob_object.h"
-#include "sql/plan_cache/ob_plan_cache.h"
 #include "observer/ob_server_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_req_time_service.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 
 using namespace oceanbase;

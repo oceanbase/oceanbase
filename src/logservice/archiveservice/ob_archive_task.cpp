@@ -11,12 +11,6 @@
  */
 
 #include "ob_archive_task.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "ob_archive_define.h"
-#include <cstdint>
 
 namespace oceanbase
 {

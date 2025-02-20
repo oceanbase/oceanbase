@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_print_utils.h"
 #include "ob_cos_wrapper_handle.h"
 #include "lib/restore/ob_i_storage.h"
 

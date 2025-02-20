@@ -13,12 +13,9 @@
 
 #include "ob_ls_all_part_builder.h"
 
-#include "lib/container/ob_se_array.h"                        // ObSEArray
-#include "share/ob_ls_id.h"                                   // ObLSID
 #include "share/schema/ob_schema_getter_guard.h"              // ObSchemaGetterGuard
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
 #include "share/tablet/ob_tablet_to_ls_iterator.h"            // ObTenantTabletToLSIterator
-#include "share/ob_balance_define.h"                          // need_balance_table()
 
 namespace oceanbase
 {

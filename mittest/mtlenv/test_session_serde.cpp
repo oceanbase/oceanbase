@@ -18,10 +18,6 @@
 #define private public
 #define protected public
 #include "observer/ob_server.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_server_schema_service.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "storage/tx/ob_trans_define.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "mock_tenant_module_env.h"
 

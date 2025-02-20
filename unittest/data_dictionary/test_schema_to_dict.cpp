@@ -12,10 +12,8 @@
  * This file defines test_ob_cdc_part_trans_resolver.cpp
  */
 
-#include "gtest/gtest.h"
 
 #define private public
-#include "logservice/data_dictionary/ob_data_dict_struct.h"
 #undef private
 #include "data_dict_test_utils.h"
 

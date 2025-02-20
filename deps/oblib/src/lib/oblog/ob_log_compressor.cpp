@@ -14,7 +14,6 @@
 #include <dirent.h>
 #include <regex.h>
 #include <utime.h>
-#include <sys/statfs.h>
 
 #include "lib/oblog/ob_log_compressor.h"
 #include "lib/thread/thread_mgr.h"

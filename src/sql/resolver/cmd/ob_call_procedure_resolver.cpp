@@ -14,13 +14,8 @@
 
 #include "ob_call_procedure_resolver.h"
 #include "ob_call_procedure_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/dml/ob_select_resolver.h"
-#include "pl/ob_pl_stmt.h"
+#include "src/sql/resolver/dml/ob_dml_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "observer/ob_req_time_service.h"
-#include "pl/ob_pl_compile.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase

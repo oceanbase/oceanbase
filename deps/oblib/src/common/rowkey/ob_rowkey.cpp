@@ -10,14 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_malloc.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/utility/serialization.h"
-#include "common/rowkey/ob_rowkey.h"
+#include "ob_rowkey.h"
 #include "common/rowkey/ob_store_rowkey.h"
-#include "common/rowkey/ob_rowkey_info.h"
-#include "common/object/ob_object.h"
-#include "common/object/ob_obj_type.h"
 #include "common/object/ob_obj_compare.h"
 
 namespace oceanbase

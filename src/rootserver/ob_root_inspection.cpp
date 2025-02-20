@@ -12,32 +12,10 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_root_inspection.h"
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/ob_zone_info.h"
-#include "share/system_variable/ob_system_variable_factory.h"
-#include "share/system_variable/ob_system_variable_init.h"
-#include "rootserver/ob_root_utils.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_ddl_operator.h"
+#include "ob_root_inspection.h"
 #include "rootserver/ob_root_service.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/ob_upgrade_utils.h"
-#include "share/rc/ob_context.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
-#include "share/ob_tenant_info_proxy.h" // ObAllTenantInfoProxy
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {

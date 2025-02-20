@@ -14,22 +14,10 @@
 
 #include "rootserver/ob_ls_recovery_reportor.h"
 #include "rootserver/ob_tenant_info_loader.h"
-#include "rootserver/standby/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
-#include "rootserver/ob_rs_async_rpc_proxy.h" //ObGetLSReplayedScnProxy
-#include "rootserver/ob_ls_recovery_stat_handler.h" //ObLSRecoveryStatHandler
 #include "rootserver/ob_ls_service_helper.h"//update_ls_stat_in_trans
 #include "storage/tx_storage/ob_ls_service.h" //ObLSService
-#include "storage/tx_storage/ob_ls_map.h"//ObLSIterator
-#include "storage/ls/ob_ls.h"//ObLSGetMod
-#include "observer/ob_server_struct.h"//GCTX
-#include "lib/profile/ob_trace_id.h"
-#include "lib/thread/threads.h"//set_run_wrapper
-#include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
-#include "share/schema/ob_multi_version_schema_service.h"//is_tenant_full_schema
 #include "logservice/ob_log_service.h"//get_palf_role
-#include "share/scn.h"//SCN
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 
 namespace oceanbase
 {

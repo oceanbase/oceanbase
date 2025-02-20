@@ -11,14 +11,8 @@
  */
 
 #include "ob_archive_timer.h"
-#include "lib/ob_define.h"
-#include "lib/thread/ob_thread_name.h"        // lib::set_thread_name
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/utility.h"
 #include "share/config/ob_server_config.h"    // GCONF
-#include "ob_archive_define.h"
 #include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
-#include "share/rc/ob_tenant_base.h"          // MTL
 #include "ob_ls_meta_recorder.h"              // ObLSMetaRecorder
 
 namespace oceanbase

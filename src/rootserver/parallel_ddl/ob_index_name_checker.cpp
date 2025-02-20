@@ -14,7 +14,6 @@
 
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;

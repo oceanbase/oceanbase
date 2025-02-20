@@ -8,15 +8,8 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
-#include "lib/utility/ob_tracepoint.h"
-#include "storage/tx/ob_trans_service.h"
-#include "ob_dup_table_base.h"
 #include "ob_dup_table_tablets.h"
-#include "ob_dup_table_util.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_struct.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {

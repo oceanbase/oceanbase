@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/recursive_cte/ob_fake_cte_table_op.h"
-#include "lib/rc/context.h"
 
 namespace oceanbase
 {

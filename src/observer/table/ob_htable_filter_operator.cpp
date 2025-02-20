@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_filter_operator.h"
-#include "ob_htable_utils.h"
-#include "ob_htable_filters.h"
-#include "lib/json/ob_json.h"
-#include "share/ob_errno.h"
-#include "share/table/ob_ttl_util.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;

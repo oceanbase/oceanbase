@@ -13,30 +13,8 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_root_utils.h"
-#include "ob_balance_info.h"
-#include "ob_unit_manager.h"
-#include "lib/json/ob_json.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/hash/ob_hashset.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_share_util.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "share/schema/ob_schema_getter_guard.h" // ObSchemaGetterGuard
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "storage/tx/ob_ts_mgr.h"
-#include "rootserver/ob_unit_manager.h"
-#include "rootserver/ob_root_service.h"
-#include "rootserver/ob_ddl_service.h"
-#include "observer/ob_server_struct.h"
-#include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
-#include "share/system_variable/ob_system_variable_alias.h"
 #include "share/ob_primary_zone_util.h"           // ObPrimaryZoneUtil
-#include "share/ob_server_table_operator.h"
 #include "share/ob_zone_table_operation.h"
 #include "rootserver/ob_tenant_balance_service.h"    // for ObTenantBalanceService
 

@@ -11,13 +11,8 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/parser/ob_pl_parser.h"
-#include "pl/parser/parse_stmt_node.h"
+#include "ob_pl_parser.h"
 #include "pl/ob_pl_resolver.h"
-#include "share/ob_define.h"
-#include "lib/string/ob_string.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/ash/ob_active_session_guard.h"
 #include "sql/parser/parse_malloc.h"
 
 #ifdef __cplusplus

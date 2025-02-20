@@ -12,7 +12,7 @@
  */
 
 #define USING_LOG_PREFIX LIB
-#include "lib/geo/ob_geo_ibin.h"
+#include "ob_geo_ibin.h"
 #include "lib/geo/ob_geo_visitor.h"
 
 namespace oceanbase

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "sql/monitor/flt/ob_flt_utils.h"
-#include "share/ob_define.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "lib/trace/ob_trace.h"
-#include "lib/trace/ob_trace_def.h"
-#include "sql/monitor/flt/ob_flt_extra_info.h"
+#include "ob_flt_utils.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_base.h"
 
 namespace oceanbase
 {

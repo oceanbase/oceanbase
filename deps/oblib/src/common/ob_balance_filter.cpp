@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/hash/ob_hashutils.h"
 #include "common/ob_balance_filter.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

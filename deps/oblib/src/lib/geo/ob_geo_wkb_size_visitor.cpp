@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_wkb_size_visitor.h"
-#include "ob_geo_bin.h"
 
 
 namespace oceanbase {

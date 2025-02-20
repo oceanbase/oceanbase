@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/ob_pl_router.h"
-#include "share/schema/ob_routine_info.h"
-#include "parser/ob_pl_parser.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "share/ob_errno.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 
 namespace oceanbase {

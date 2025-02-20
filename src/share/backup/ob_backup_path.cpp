@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_backup_path.h"
-#include "share/backup/ob_backup_io_adapter.h"
-#include "lib/ob_define.h"
 
 using namespace oceanbase;
 using namespace common;

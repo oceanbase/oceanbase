@@ -11,10 +11,6 @@
  */
 
 #include "fake_archive_piece_mgr.h"
-#include "lib/ob_errno.h"
-#include "logservice/palf/log_define.h"
-#include "share/scn.h"
-#include <cstdint>
 
 namespace oceanbase
 {

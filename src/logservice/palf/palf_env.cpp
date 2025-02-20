@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX PALF
 #include "palf_env.h"
-#include "lib/ob_errno.h"
-#include "lib/file/file_directory_utils.h"
-#include "palf_env_impl.h"
-#include "palf_handle_impl.h"
-#include "rpc/frame/ob_req_transport.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "palf_handle.h"
-#include "palf_options.h"
-#include "election/interface/election.h"
 #include "log_io_adapter.h"
 #include "share/ob_local_device.h"                            // ObLocalDevice
 #include "share/io/ob_io_manager.h"                           // ObIOManager

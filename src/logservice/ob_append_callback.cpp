@@ -11,7 +11,6 @@
  */
 
 #include "ob_append_callback.h"
-#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {

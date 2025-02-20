@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_define.h"
 #include "ob_gts_msg.h"
 #include "ob_gts_rpc.h"
 

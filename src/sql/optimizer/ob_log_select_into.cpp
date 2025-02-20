@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_select_into.h"
 #include "ob_log_table_scan.h"
-#include "ob_optimizer_util.h"
-#include "ob_opt_est_cost.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

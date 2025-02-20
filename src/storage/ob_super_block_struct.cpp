@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ob_super_block_struct.h"
+#include "ob_super_block_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase

@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <time.h>
 #include "share/backup/ob_tenant_archive_round.h"
-#include "share/backup/ob_archive_checkpoint.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 
 using namespace oceanbase;

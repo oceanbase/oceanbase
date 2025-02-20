@@ -11,10 +11,7 @@
  */
 
 #include "object_mgr.h"
-#include "lib/allocator/ob_ctx_define.h"
 #include "lib/alloc/ob_malloc_allocator.h"
-#include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/ob_tenant_ctx_allocator.h"
 
 using namespace oceanbase;
 using namespace lib;

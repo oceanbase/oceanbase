@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_sys_stat.h"
-#include "lib/ob_running_mode.h"
-#include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "share/cache/ob_kv_storecache.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/ash/ob_di_util.h"
 

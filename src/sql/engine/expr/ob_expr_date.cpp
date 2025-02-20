@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_expr_date.h"
-#include "lib/timezone/ob_time_convert.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

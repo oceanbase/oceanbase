@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "lib/signal/ob_signal_processor.h"
-#include <unistd.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/prctl.h>
-#include <sys/syscall.h>
-#include "lib/utility/ob_macro_utils.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_libunwind.h"
 

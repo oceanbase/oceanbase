@@ -13,15 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_ms_receive_op.h"
-#include "lib/container/ob_fixed_array.h"
-#include "sql/engine/px/exchange/ob_row_heap.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_dtl_msg.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/ob_px_data_ch_provider.h"
-#include "sql/engine/px/ob_px_dtl_proc.h"
-#include "sql/dtl/ob_dtl_channel_loop.h"
-#include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/engine/px/ob_px_scheduler.h"
 
 namespace oceanbase

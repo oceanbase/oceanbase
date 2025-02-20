@@ -11,25 +11,12 @@
  */
 
 #include <gtest/gtest.h>
-#include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
 #include <boost/foreach.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin.h"
-#include "lib/geo/ob_geo_tree.h"
-#include "lib/geo/ob_geo_tree_traits.h"
-#include "lib/geo/ob_geo_bin_traits.h"
 #include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_difference.h"
 #include "lib/json_type/ob_json_common.h"
-#include "lib/random/ob_random.h"
 #undef private
 
-#include <sys/time.h>
-#include <stdexcept>
-#include <exception>
-#include <typeinfo>
 
 namespace bg = boost::geometry;
 using namespace oceanbase::common;

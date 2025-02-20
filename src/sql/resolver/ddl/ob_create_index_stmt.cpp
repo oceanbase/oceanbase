@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
-#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {

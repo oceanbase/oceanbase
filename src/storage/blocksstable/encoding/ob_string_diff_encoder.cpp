@@ -14,10 +14,7 @@
 
 #include "ob_string_diff_encoder.h"
 
-#include <limits>
 
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "ob_bit_stream.h"
 
 namespace oceanbase
 {

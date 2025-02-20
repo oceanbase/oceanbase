@@ -12,7 +12,6 @@
 
 #include "log_loop_thread.h"
 #include "palf_env_impl.h"
-#include "lib/thread/ob_thread_name.h"
 
 namespace oceanbase
 {

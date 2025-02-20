@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/system_variable/ob_system_variable_init.h"
+#include "ob_system_variable_init.h"
 #include "share/system_variable/ob_system_variable_factory.h"
 #include "share/object/ob_obj_cast.h"
-#include "common/expression/ob_expr_string_buf.h"
-#include "common/expression/ob_expr_string_buf.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

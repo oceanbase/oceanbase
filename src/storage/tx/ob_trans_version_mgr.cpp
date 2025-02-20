@@ -11,9 +11,6 @@
  */
 
 #include "ob_trans_version_mgr.h"
-#include "common/ob_clock_generator.h"
-#include "lib/objectpool/ob_resource_pool.h"
-#include "lib/profile/ob_perf_event.h"
 
 namespace oceanbase
 {

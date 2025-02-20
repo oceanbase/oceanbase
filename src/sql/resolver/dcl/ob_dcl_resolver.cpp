@@ -11,12 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "observer/ob_server_struct.h"
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

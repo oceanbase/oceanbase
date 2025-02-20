@@ -12,11 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_virtual_sql_monitor.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 #include "observer/ob_server.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/thread_local/ob_tsi_utils.h"
+#include "ob_tsi_utils.h"
 #include "lib/utility/utility.h"
 
 namespace oceanbase

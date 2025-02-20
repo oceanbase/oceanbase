@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_datum_rowkey.h"
-#include "observer/table_load/ob_table_load_stat.h"
 
 namespace oceanbase
 {

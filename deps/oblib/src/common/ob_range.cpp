@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "common/ob_range.h"
+#include "ob_range.h"
 #include "common/ob_store_range.h"
-#include "lib/utility/utility.h"
 
 
 namespace oceanbase

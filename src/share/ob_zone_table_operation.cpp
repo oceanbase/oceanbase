@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_zone_table_operation.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_zone_info.h"
-#include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"
 
 namespace oceanbase

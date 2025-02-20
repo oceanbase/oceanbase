@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/alloc/abit_set.h"
-#include "lib/oblog/ob_log.h"
+#include "abit_set.h"
 #include "lib/utility/utility.h"
 
 using namespace oceanbase;

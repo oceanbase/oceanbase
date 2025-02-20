@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_not.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "share/object/ob_obj_cast.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

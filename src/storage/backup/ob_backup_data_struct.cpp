@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/backup/ob_backup_data_struct.h"
-#include "common/ob_record_header.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
+#include "ob_backup_data_struct.h"
 #include "storage/backup/ob_backup_task.h"
-#include "storage/blocksstable/ob_logic_macro_id.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/backup/ob_backup_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

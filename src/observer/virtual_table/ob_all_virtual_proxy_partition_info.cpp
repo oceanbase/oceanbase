@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_partition_info.h"
-#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/json/ob_json_print_utils.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

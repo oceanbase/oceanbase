@@ -10,9 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_tx_log_adapter.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
+#include "ob_tx_log_adapter.h"
+#include "src/storage/ls/ob_ls.h"
 
 namespace oceanbase
 {

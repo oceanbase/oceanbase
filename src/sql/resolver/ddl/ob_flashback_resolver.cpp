@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "share/ob_define.h"
 #include "sql/resolver/ddl/ob_flashback_resolver.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "rootserver/ob_ddl_service.h"
 
 namespace oceanbase
 {

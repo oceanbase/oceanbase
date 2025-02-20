@@ -10,20 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <gtest/gtest.h>
-#include "lib/file/ob_file.h"
-#include "lib/ob_define.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/slog/simple_ob_storage_redo_module.h"
-#include "lib/container/ob_se_array.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include <thread>
 
 #define private public
-#include "share/rc/ob_tenant_base.h"
-#include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/slog/ob_storage_log_reader.h"
-#include "storage/slog/ob_storage_logger_manager.h"
 #undef private
 
 namespace oceanbase

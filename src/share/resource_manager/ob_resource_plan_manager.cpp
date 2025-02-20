@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_resource_plan_manager.h"
-#include "lib/string/ob_string.h"
 #include "share/io/ob_io_manager.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "share/resource_manager/ob_resource_manager.h"

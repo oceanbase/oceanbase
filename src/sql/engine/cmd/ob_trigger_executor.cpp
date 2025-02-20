@@ -12,13 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_trigger_executor.h"
-#include "sql/resolver/ddl/ob_trigger_stmt.h"
-#include "sql/engine/ob_exec_context.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "pl/ob_pl_package.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 
 namespace oceanbase

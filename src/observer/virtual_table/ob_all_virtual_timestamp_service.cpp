@@ -11,9 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
-#include "lib/time/ob_time_utility.h"
-#include "observer/ob_server.h"
-#include "observer/ob_server_utils.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::common;

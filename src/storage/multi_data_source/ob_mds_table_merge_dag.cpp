@@ -11,8 +11,6 @@
  */
 
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
 #include "storage/multi_data_source/ob_mds_table_merge_task.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"

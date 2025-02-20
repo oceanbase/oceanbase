@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_table_update_op.h"
-#include "share/system_variable/ob_system_variable.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {

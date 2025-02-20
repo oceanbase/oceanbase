@@ -10,21 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/utility/ob_macro_utils.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_errno.h"
-#include "share/ob_occam_time_guard.h"
-#include "election_priority_impl.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "logservice/leader_coordinator/ob_leader_coordinator.h"
 #include "logservice/leader_coordinator/common_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/ob_table_access_helper.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "logservice/palf/lsn.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

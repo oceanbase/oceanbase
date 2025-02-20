@@ -11,17 +11,9 @@
  */
 
 #define USING_LOG_PREFIX CLOG
-#include "share/restore/ob_log_restore_source.h"    //TODO delete
 
 #include "ob_log_restore_service.h"
-#include "lib/ob_errno.h"
-#include "lib/ob_define.h"                    // is_user_tenant
-#include "lib/utility/ob_macro_utils.h"       // K*
-#include "share/ob_ls_id.h"                   // ObLSID
-#include "storage/tx_storage/ob_ls_service.h" // ObLSService
 #include "logservice/ob_log_service.h"        // ObLogService
-#include "ob_log_restore_handler.h"           // ObTenantRole
-#include "observer/ob_server_struct.h"        // GCTX
 #include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase

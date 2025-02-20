@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_vertical_partition_builder.h"
-#include "share/schema/ob_table_schema.h"
 #include "share/ob_index_builder_util.h"
 
 namespace oceanbase

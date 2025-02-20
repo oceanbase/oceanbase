@@ -12,8 +12,6 @@
 
 #include "ob_information_session_variables_table.h"
 
-#include "share/schema/ob_schema_struct.h"
-//#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase

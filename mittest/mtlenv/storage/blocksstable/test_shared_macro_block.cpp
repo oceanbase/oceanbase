@@ -13,13 +13,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <errno.h>
 #include <gtest/gtest.h>
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 #define protected public
 #define private public
 #include "ob_index_block_data_prepare.h"
-#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {

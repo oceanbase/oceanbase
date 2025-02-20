@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_remote_log_writer.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "share/rc/ob_tenant_base.h"                    // mtl_alloc
-#include "storage/tx_storage/ob_ls_map.h"               // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h"           // ObLSService
-#include "ob_fetch_log_task.h"                          // ObFetchLogTask
-#include "ob_remote_fetch_log_worker.h"                 // ObRemoteFetchWorker
 #include "ob_log_restore_service.h"                     // ObLogRestoreService
 
 namespace oceanbase

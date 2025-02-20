@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_server_locality_cache.h"
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

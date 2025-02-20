@@ -13,13 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_admission.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_sql.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
-#include "sql/optimizer/ob_storage_estimator.h"
-#include "sql/ob_sql_trans_control.h"
-#include "storage/tx/ob_trans_service.h"
 #include "share/detect/ob_detect_manager_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

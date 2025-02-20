@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <iostream>
 
 #include "lib/alloc/ob_malloc_callback.h"
 #include "lib/allocator/ob_malloc.h"

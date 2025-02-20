@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_tenant_archive_mgr.h"
-#include "share/backup/ob_tenant_archive_round.h"
-#include "lib/oblog/ob_log_module.h"
+#include "src/share/backup/ob_archive_persist_helper.h"
 #include "observer/ob_server_struct.h"                   // GCTX
 
 using namespace oceanbase;

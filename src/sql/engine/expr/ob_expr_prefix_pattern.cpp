@@ -13,10 +13,8 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_expr_prefix_pattern.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
+#include "src/share/interrupt/ob_interrupt_rpc_proxy.h"
 #include "sql/engine/expr/ob_expr_substr.h"
-//#include "lib/charset/ob_charset.h"
 
 namespace oceanbase
 {

@@ -11,7 +11,6 @@
  */
 
 #include "observer/net/ob_rpc_reverse_keepalive.h"
-#include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 #define USING_LOG_PREFIX RPC_FRAME
 namespace oceanbase
 {

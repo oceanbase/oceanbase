@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX PL_STORAGEROUTINE
 #include "ob_pl_persistent.h"
-#include "lib/oblog/ob_log_module.h"
-#include "observer/ob_inner_sql_connection_pool.h"
-#include "observer/ob_inner_sql_connection.h"
-#include "observer/ob_inner_sql_result.h"
 #include "ob_pl_code_generator.h"
 #include "ob_pl_compile.h"
 #include "share/ob_version.h"

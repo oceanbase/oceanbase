@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "observer/net/ob_ingress_bw_alloc_service.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/ob_server_struct.h"
+#include "ob_ingress_bw_alloc_service.h"
 #include "observer/ob_srv_network_frame.h"
 #define USING_LOG_PREFIX RS
 

@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/backup/ob_backup_store.h"
-#include "lib/alloc/alloc_assist.h"
+#include "ob_backup_store.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_path.h"

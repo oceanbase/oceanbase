@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_array.h"
 using namespace oceanbase::common;
 

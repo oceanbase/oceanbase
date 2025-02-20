@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include "storage/lob/ob_lob_access_param.h"
-#include "storage/lob/ob_lob_util.h"
-#include "storage/lob/ob_lob_meta.h"
+#include "ob_lob_access_param.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "observer/ob_server.h"
 

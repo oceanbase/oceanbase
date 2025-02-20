@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <math.h>
 #include "sql/session/ob_sess_info_verify.h"
-#include "share/ob_define.h"
-#include "share/system_variable/ob_system_variable_factory.h"
-#include "lib/trace/ob_trace_event.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "sql/session/ob_sql_session_mgr.h"

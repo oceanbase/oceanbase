@@ -13,11 +13,8 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_count_to_exists.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/resolver/dml/ob_merge_stmt.h"
 namespace oceanbase
 {
 using namespace common;

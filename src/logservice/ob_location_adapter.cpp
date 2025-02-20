@@ -13,7 +13,6 @@
 #include "ob_location_adapter.h"
 #include "share/location_cache/ob_location_service.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

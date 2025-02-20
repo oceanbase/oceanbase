@@ -14,8 +14,6 @@
 
 #include "ob_table_direct_load_rpc_executor.h"
 #include "observer/ob_server.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/table_load/ob_table_load_client_service.h"
 #include "observer/table_load/ob_table_load_client_task.h"
 #include "observer/table_load/ob_table_load_service.h"
 

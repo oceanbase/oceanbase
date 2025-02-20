@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_balance_task_table_operator.h"
-#include "lib/mysqlclient/ob_isql_client.h"//ObISQLClient
-#include "lib/mysqlclient/ob_mysql_result.h"//MySQLResult
-#include "lib/mysqlclient/ob_mysql_proxy.h"//MySQLResult
-#include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
-#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
-#include "share/inner_table/ob_inner_table_schema.h"//ALL_BALANCE_TASK_TNAME
-#include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
 #include "share/balance/ob_balance_job_table_operator.h"//job_status
 #include "share/balance/ob_balance_task_helper_operator.h"//ObBalanceTaskHelper
-#include "storage/tx/ob_multi_data_source.h"
 #include "observer/ob_inner_sql_connection.h"//register
 
 using namespace oceanbase;

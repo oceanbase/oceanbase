@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/px/ob_px_interruption.h"
+#include "ob_px_interruption.h"
 #include "sql/engine/px/ob_dfo.h"
-#include "lib/time/ob_time_utility.h"
 
 
 using namespace oceanbase::common;

@@ -11,9 +11,7 @@
  */
 
 #include "lib/lock/ob_thread_cond.h"
-#include <limits>
 #include "lib/stat/ob_diagnose_info.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX LOGMNR
 
 #include <sys/ioctl.h>
-#include <unistd.h>
 #include "ob_log_miner_logger.h"
 #include "ob_log_miner_timezone_getter.h"
 #include "lib/string/ob_string.h"

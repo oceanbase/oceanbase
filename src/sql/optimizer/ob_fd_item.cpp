@@ -11,9 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_JO
-#include "sql/optimizer/ob_fd_item.h"
+#include "ob_fd_item.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/optimizer/ob_fd_item.h"
 
 
 using namespace oceanbase;

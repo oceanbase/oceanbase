@@ -13,12 +13,6 @@
 #define USING_LOG_PREFIX WR
 
 #include "share/wr/ob_wr_service.h"
-#include "share/wr/ob_wr_task.h"
-#include "share/scn.h"
-#include "lib/oblog/ob_log.h"
-#include "share/ob_errno.h"
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

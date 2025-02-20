@@ -12,7 +12,6 @@
 
 #include "rpc/obmysql/ob_poc_sql_request_operator.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
-#include "rpc/obrpc/ob_rpc_opts.h"
 #include "rpc/obmysql/ob_sql_sock_processor.h"
 
 namespace oceanbase

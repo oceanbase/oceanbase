@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/cmd/ob_load_data_utils.h"
-#include "sql/resolver/cmd/ob_load_data_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase {
 using namespace common;

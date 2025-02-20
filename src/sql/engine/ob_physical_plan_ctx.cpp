@@ -11,18 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "share/ob_autoincrement_service.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
-#include "sql/engine/expr/ob_expr_operator.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "lib/utility/ob_print_utils.h"
-#include "deps/oblib/src/lib/udt/ob_udt_type.h"
+#include "ob_physical_plan_ctx.h"
+#include "src/sql/engine/ob_des_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 
 namespace oceanbase

@@ -11,11 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
 #define private public
 #include "common/storage/ob_sequence.h"
-#include "lib/time/ob_time_utility.h"
 
 namespace oceanbase
 {

@@ -11,9 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "lib/utility/ob_defer.h"
-#include "share/backup/ob_backup_config.h"
 #include "ob_log_restore_struct.h"
+#include "share/backup/ob_backup_config.h"
 
 
 using namespace oceanbase;

@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_QRR
 #include "sql/ob_sql.h"
-#include "share/config/ob_server_config.h"
 #include "sql/resolver/ob_resolver_utils.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/udr/ob_udr_analyzer.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/udr/ob_udr_utils.h"

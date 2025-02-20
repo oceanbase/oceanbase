@@ -12,36 +12,14 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
-#include "share/schema/ob_schema_getter_guard.h"
 
-#include "share/ob_define.h"
-#include "lib/oblog/ob_log.h"
+#include "ob_schema_getter_guard.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/container/ob_se_array_iterator.h"
 #include "lib/net/ob_net_util.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_priv_type.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_part_mgr_util.h"
-#include "lib/worker.h"
 #include "share/ob_schema_status_proxy.h"
-#include "share/ob_get_compat_mode.h"
-#include "share/system_variable/ob_system_variable_alias.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_synonym_mgr.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/resolver/ob_schema_checker.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/ob_priv_common.h"
-#include "sql/dblink/ob_dblink_utils.h"
 namespace oceanbase
 {
 using namespace common;

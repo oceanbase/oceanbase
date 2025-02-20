@@ -13,14 +13,7 @@
 #define USING_LOG_PREFIX  SQL_ENG
 
 #include "ob_expr_char.h"
-#include "lib/charset/ob_charset.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

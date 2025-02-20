@@ -15,10 +15,7 @@
 
 #include "lib/geo/ob_geo_dispatcher.h"
 #include "lib/geo/ob_geo_func_transform.h"
-#include "lib/oblog/ob_log_module.h"
-#include "boost/geometry/srs/projections/proj4.hpp"
 #include "boost/geometry/srs/transformation.hpp"
-#include "lib/geo/ob_geo_tree.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

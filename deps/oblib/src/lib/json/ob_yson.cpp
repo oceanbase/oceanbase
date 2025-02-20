@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/json/ob_yson.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/ob_name_id_def.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

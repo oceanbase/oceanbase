@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "ob_tablet_location_broadcast.h"
 
-#include "lib/oblog/ob_log.h"                              // LOG_*
+#include "ob_tablet_location_broadcast.h"
 #include "share/ob_all_server_tracer.h"                    // SVR_TRACER
 #include "share/location_cache/ob_tablet_ls_service.h"     // ObTabletLSService
-#include "share/ob_cluster_version.h"                      // GET_MIN_CLUSTER_VERSION
-#include "observer/omt/ob_multi_tenant.h"                  // omt
 
 namespace oceanbase
 {

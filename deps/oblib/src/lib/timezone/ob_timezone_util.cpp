@@ -10,11 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <fcntl.h>
-#include <stdint.h>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/timezone/ob_timezone_util.h"
-#include "lib/oblog/ob_log.h"
 
 #define O_BINARY  0 /* Flag to my_open for binary files */
 #define FILE_BINARY O_BINARY

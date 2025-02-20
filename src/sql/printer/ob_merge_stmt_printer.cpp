@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_merge_stmt_printer.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

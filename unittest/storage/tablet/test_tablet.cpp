@@ -17,16 +17,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "share/scn.h"
-#include "share/ob_tablet_autoincrement_param.h"
-#include "storage/ob_storage_struct.h"
-#include "storage/tablet/ob_tablet_meta.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/high_availability/ob_tablet_ha_status.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
-#include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase

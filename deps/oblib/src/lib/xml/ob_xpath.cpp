@@ -12,16 +12,10 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "lib/xml/ob_xpath.h"
+#include "ob_xpath.h"
 #include "lib/xml/ob_path_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/ob_errno.h"
-#include "lib/string/ob_string.h"
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
-#include "common/data_buffer.h"
-#include <rapidjson/encodings.h>
-#include <rapidjson/memorystream.h>
 
 namespace oceanbase {
 namespace common {

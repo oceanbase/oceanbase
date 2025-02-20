@@ -17,8 +17,7 @@
 #define private public
 #define protected public
 
-#include "share/schema/ob_table_param.h"
-#include "storage/access/ob_index_sstable_estimator.h"
+#include "src/share/io/io_schedule/ob_io_mclock.h"
 #include "mtlenv/storage/blocksstable/ob_index_block_data_prepare.h"
 
 namespace oceanbase

@@ -14,9 +14,7 @@
 
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "storage/checkpoint/ob_data_checkpoint.h"
-#include "share/ob_thread_mgr.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/cpu/ob_cpu_topology.h"
+#include "deps/oblib/src/lib/thread/thread_mgr.h"
 
 namespace oceanbase
 {

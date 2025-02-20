@@ -12,18 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_lob_meta.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/objectpool/ob_server_object_pool.h"
-#include "share/interrupt/ob_global_interrupt_call.h"
-#include "storage/lob/ob_lob_seq.h"
-#include "storage/lob/ob_lob_manager.h"
 #include "storage/lob/ob_lob_write_buffer.h"
-#include "storage/lob/ob_lob_location.h"
-#include "storage/lob/ob_lob_persistent_iterator.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/access/ob_table_scan_iterator.h"
-#include "sql/das/ob_das_utils.h"
 namespace oceanbase
 {
 namespace storage

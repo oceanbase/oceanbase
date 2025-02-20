@@ -13,22 +13,13 @@
 #include "ob_lua_api.h"
 #include "ob_lua_handler.h"
 
-#include <algorithm>
-#include <functional>
 #include <thread>
 
 #include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
 
-#include "lib/oblog/ob_log.h"
-#include "lib/atomic/ob_atomic.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/thread/protected_stack_allocator.h"
 #include "lib/utility/utility.h"
-#include "lib/thread/thread.h"
 
 extern "C" {
   #include <lua.h>

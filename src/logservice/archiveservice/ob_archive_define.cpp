@@ -11,13 +11,6 @@
  */
 
 #include "ob_archive_define.h"
-#include "lib/checksum/ob_crc64.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/serialization.h"
-#include <cstdint>
 
 namespace oceanbase
 {

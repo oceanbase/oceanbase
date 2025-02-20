@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/time/ob_time_utility.h"
-#include "common/object/ob_object.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "common/ob_zerofill_info.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "lib/string/ob_hex_utils_base.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 

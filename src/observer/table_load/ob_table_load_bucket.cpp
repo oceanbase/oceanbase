@@ -14,7 +14,6 @@
 
 #include "observer/table_load/ob_table_load_bucket.h"
 #include "observer/table_load/ob_table_load_stat.h"
-#include "observer/table_load/ob_table_load_utils.h"
 
 namespace oceanbase
 {

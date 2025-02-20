@@ -13,7 +13,6 @@
 #include "ob_gti_source.h"
 #include "ob_trans_service.h"
 #include "ob_gti_rpc.h"
-#include "ob_trans_factory.h"
 
 namespace oceanbase
 {

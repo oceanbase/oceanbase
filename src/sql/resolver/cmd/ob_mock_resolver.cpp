@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_mock_resolver.h"
 #include "sql/resolver/cmd/ob_mock_stmt.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

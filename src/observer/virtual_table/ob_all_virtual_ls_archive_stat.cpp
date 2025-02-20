@@ -11,11 +11,7 @@
  */
 
 #include "ob_all_virtual_ls_archive_stat.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "logservice/archiveservice/ob_archive_service.h"
-#include "logservice/archiveservice/ob_ls_task.h"
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase

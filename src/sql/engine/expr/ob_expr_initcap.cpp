@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "lib/oblog/ob_log.h"
 #include "sql/engine/expr/ob_expr_initcap.h"
-#include "objit/common/ob_item_type.h"
-#include "common/data_buffer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 

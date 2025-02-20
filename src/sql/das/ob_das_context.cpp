@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
-#include "sql/das/ob_das_context.h"
-#include "sql/das/ob_das_location_router.h"
+#include "ob_das_context.h"
 #include "sql/das/ob_das_utils.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/engine/ob_exec_context.h"
 #include "observer/ob_server.h"
 namespace oceanbase
 {

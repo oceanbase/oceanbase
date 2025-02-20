@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_week_of_func.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "share/object/ob_obj_cast.h"
-#include "ob_expr_extract.h"
-#include "share/ob_time_utility2.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::sql;

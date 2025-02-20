@@ -12,23 +12,9 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-#include "sql/engine/cmd/ob_load_data_rpc.h"
 
-#include "observer/ob_server_struct.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/utility/serialization.h"
-#include "share/ob_tenant_mgr.h"
-#include "storage/access/ob_dml_param.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/resolver/ob_resolver.h"
-#include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/code_generator/ob_expr_generator_impl.h"
-#include "sql/code_generator/ob_code_generator.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_load_data_rpc.h"
 #include "sql/engine/cmd/ob_load_data_impl.h"
-#include "lib/string/ob_string.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 using namespace oceanbase::sql;

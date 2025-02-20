@@ -11,9 +11,6 @@
  */
 
 #include "sql/resolver/ddl/ob_drop_table_resolver.h"
-#include "lib/hash/ob_placement_hashset.h"
-#include "sql/resolver/ddl/ob_drop_table_stmt.h"
-#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 using namespace common;

@@ -13,7 +13,6 @@
  */
 
 #include "gtest/gtest.h"
-#include "lib/oblog/ob_log.h"
 #include "logservice/palf/log_define.h"
 #include "share/ob_errno.h"
 

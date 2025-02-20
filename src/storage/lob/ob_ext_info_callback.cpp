@@ -12,8 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ext_info_callback.h"
-#include "share/ob_lob_access_utils.h"
-#include "lib/utility/ob_fast_convert.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/blocksstable/ob_row_writer.h"
 #include "storage/lob/ob_lob_manager.h"

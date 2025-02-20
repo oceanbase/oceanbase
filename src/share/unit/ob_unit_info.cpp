@@ -10,10 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SHARE
-#include <cmath>
 
 #include "ob_unit_info.h"
-#include "share/ob_errno.h"
 
 namespace oceanbase
 {

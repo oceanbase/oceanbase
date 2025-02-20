@@ -9,8 +9,7 @@
 // See the Mulan PubL v2 for more details.
 
 #include <gtest/gtest.h>
-// #include "ob_mock_dup_table_ls_mgr.h"
-#include "storage/tx/ob_dup_table_lease.h"
+#include "deps/oblib/src/lib/hash/ob_hashmap.h"
 
 namespace oceanbase
 {

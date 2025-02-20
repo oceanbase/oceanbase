@@ -11,18 +11,9 @@
  */
 
 #include "ob_id_service.h"
-#include "ob_trans_service.h"
 #include "ob_timestamp_service.h"
 #include "ob_trans_id_service.h"
-#include "ob_tx_ls_log_writer.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_log.h"
-#include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/ob_log_base_header.h"
-#include "share/scn.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "sql/das/ob_das_id_service.h"
 
 namespace oceanbase

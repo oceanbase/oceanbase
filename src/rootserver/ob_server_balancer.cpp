@@ -12,20 +12,7 @@
 
 #define USING_LOG_PREFIX RS_LB
 #include "ob_server_balancer.h"
-#include "ob_balance_info.h"
-#include "lib/container/ob_array_iterator.h"
-#include "observer/ob_server_struct.h"
-#include "storage/ob_file_system_router.h"
-#include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_unit_stat_manager.h"
-#include "rootserver/ob_root_utils.h"
 #include "rootserver/ob_root_service.h"
-#include "storage/ob_file_system_router.h"
-#include "share/ob_all_server_tracer.h"
-#include "share/ob_server_table_operator.h"
-#include "rootserver/ob_heartbeat_service.h"
-#include "share/ob_share_util.h" // ObShareUtil
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;

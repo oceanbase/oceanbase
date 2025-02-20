@@ -11,46 +11,8 @@
  */
 
 #include "ob_log_restore_handler.h"
-#include "common/ob_member_list.h"
-#include "common/ob_role.h"                  // ObRole
-#include "lib/lock/ob_tc_rwlock.h"
-#include "lib/net/ob_addr.h"                 // ObAddr
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"         // K*
-#include "lib/stat/ob_session_stat.h"
-#include "lib/string/ob_string.h"            // ObString
-#include "lib/time/ob_time_utility.h"        // ObTimeUtility
-#include "lib/utility/ob_macro_utils.h"
-#include "logservice/ob_garbage_collector.h" // ObGCLSLog
-#include "logservice/ob_log_base_type.h"     // ObLogBaseHeader
 #include "logservice/ob_log_service.h"       // ObLogService
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/lsn.h"
-#include "logservice/palf/palf_env.h"        // PalfEnv
-#include "logservice/palf/palf_iterator.h"
-#include "logservice/palf/palf_options.h"
-#include "logservice/palf_handle_guard.h"
-#include "logservice/replayservice/ob_log_replay_service.h"
-#include "ob_log_archive_piece_mgr.h"        // ObLogArchivePieceContext
-#include "ob_fetch_log_task.h"               // ObFetchLogTask
-#include "ob_log_restore_rpc_define.h"       // RPC Request
-#include "ob_remote_log_source.h"            // ObRemoteLogParent
 #include "ob_remote_log_source_allocator.h"  // ObResSrcAlloctor
-#include "ob_log_restore_define.h"           // ObRemoteFetchContext
-#include "ob_smart_var.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "share/ob_log_restore_proxy.h"
-#include "share/ob_ls_id.h"
-#include "share/restore/ob_log_restore_source.h"
-#include "storage/ls/ob_ls_get_mod.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
-#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
-#include "logservice/archiveservice/ob_archive_file_utils.h"     // ObArchiveFileUtils
-#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
 
 namespace oceanbase
 {

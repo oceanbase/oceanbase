@@ -14,7 +14,6 @@
 
 #include "ob_lob_data_reader.h"
 #include "ob_lob_manager.h"
-#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {

@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "lib/oblog/ob_log.h"
 #include "ob_lob_piece.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
+#include "src/storage/ls/ob_ls_tablet_service.h"
 
 
 namespace oceanbase

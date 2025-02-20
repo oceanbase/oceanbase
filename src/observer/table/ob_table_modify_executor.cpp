@@ -14,7 +14,6 @@
 #include "ob_table_modify_executor.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_insert_op.h"
-#include "ob_htable_utils.h"
 #include "ob_table_cg_service.h"
 
 using namespace oceanbase::sql;

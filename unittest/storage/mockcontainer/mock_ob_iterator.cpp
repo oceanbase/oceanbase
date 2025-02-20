@@ -14,7 +14,6 @@
 #define private public
 #define protected public
 #include "mock_ob_iterator.h"
-#include "lib/allocator/ob_mod_define.h"
 
 namespace oceanbase
 {

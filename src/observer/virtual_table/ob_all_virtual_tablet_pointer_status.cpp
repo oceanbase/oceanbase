@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_tablet_pointer_status.h"
-#include "share/ob_ls_id.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

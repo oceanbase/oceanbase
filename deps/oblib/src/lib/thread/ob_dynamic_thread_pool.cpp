@@ -11,7 +11,6 @@
  */
 
 #include "ob_dynamic_thread_pool.h"
-#include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread_mgr.h"
 
 extern "C" {

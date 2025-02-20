@@ -11,4 +11,4 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include "rpc/obmysql/ob_mysql_translator.h"
+#include "ob_mysql_translator.h"

@@ -14,9 +14,7 @@
 
 #include "observer/table_load/resource/ob_table_load_resource_manager.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
-#include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant.h"
-#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {

@@ -12,26 +12,8 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_remote_fetch_log_worker.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/ob_define.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/restore/ob_storage.h"                     // is_io_error
-#include "lib/utility/ob_tracepoint.h"                  // EventTable
-#include "share/ob_errno.h"
-#include "share/rc/ob_tenant_base.h"                    // mtl_alloc
 #include "storage/tx_storage/ob_ls_service.h"           // ObLSService
-#include "storage/ls/ob_ls.h"                           // ObLS
-#include "logservice/palf/log_group_entry.h"            // LogGroupEntry
-#include "logservice/palf/lsn.h"                        // LSN
 #include "ob_log_restore_service.h"                     // ObLogRestoreService
-#include "share/scn.h"                        // SCN
-#include "ob_fetch_log_task.h"                          // ObFetchLogTask
-#include "ob_log_restore_handler.h"                     // ObLogRestoreHandler
-#include "ob_log_restore_allocator.h"                       // ObLogRestoreAllocator
-#include "storage/tx_storage/ob_ls_handle.h"            // ObLSHandle
-#include "logservice/archiveservice/ob_archive_define.h"   // archive
-#include "storage/tx_storage/ob_ls_map.h"               // ObLSIterator
-#include "logservice/archiveservice/large_buffer_pool.h"
 
 namespace oceanbase
 {

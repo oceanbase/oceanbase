@@ -11,13 +11,11 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 
-// DO NOT DELETE `#include <iostream>` !!!
 // fix: ob_error.cpp file requires at least 20g memory for release(-O2) compilation
 // and will jam when asan turned on
 // it can be solved by introducing <iostream> header file currently
 // TODO: it is clang bug and the specific reason to be further located
 // issue:
-#include <iostream>
 
 #include "ob_errno.h"
 #ifndef __ERROR_CODE_PARSER_

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_multi_exister.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase {
 using namespace blocksstable;

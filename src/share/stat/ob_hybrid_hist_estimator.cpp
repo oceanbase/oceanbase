@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_hybrid_hist_estimator.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "sql/engine/basic/ob_chunk_row_store.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase

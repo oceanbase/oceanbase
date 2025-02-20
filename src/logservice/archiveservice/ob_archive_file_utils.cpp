@@ -11,19 +11,10 @@
  */
 
 #include "ob_archive_file_utils.h"
-#include "common/storage/ob_device_common.h"
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "ob_archive_define.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_backup_io_adapter.h"
-#include "share/backup/ob_backup_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include <algorithm>
-#include <cstdint>
 
 namespace oceanbase
 {

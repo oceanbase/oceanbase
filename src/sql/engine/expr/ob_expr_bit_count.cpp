@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_bit_count.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::common;
 

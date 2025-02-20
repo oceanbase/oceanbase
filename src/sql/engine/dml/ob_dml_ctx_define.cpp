@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/dml/ob_dml_ctx_define.h"
+#include "ob_dml_ctx_define.h"
 #include "sql/engine/dml/ob_fk_checker.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_trigger_handler.h"

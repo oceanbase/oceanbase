@@ -10,15 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_ls_fetch_mgr.h"
 
-#include "share/ob_errno.h"                     // OB_SUCCESS, ..
 #include "lib/oblog/ob_log_module.h"            // LOG_*
 #include "lib/container/ob_array_iterator.h"
-#include "lib/allocator/ob_mod_define.h"        // ObModIds
 
 #include "ob_log_part_progress_controller.h"    // PartProgressController
 #include "ob_log_fetcher_ls_ctx_factory.h"      // ObILogFetcherLSCtxFactory

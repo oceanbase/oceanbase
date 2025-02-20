@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/thread/ob_thread_name.h"
 #include "ob_time_wheel.h"
-#include "lib/oblog/ob_trace_log.h"
-#include "common/ob_clock_generator.h"
 #include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase

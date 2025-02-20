@@ -13,9 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "share/ob_tenant_mem_limit_getter.h"
-
 #include "observer/omt/ob_multi_tenant.h"
-#include "share/ob_tenant_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase

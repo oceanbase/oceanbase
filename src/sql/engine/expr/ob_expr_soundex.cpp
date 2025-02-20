@@ -14,7 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_soundex.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase

@@ -14,8 +14,7 @@
 
 #include "share/redolog/ob_log_file_reader.h"
 #include "share/redolog/ob_log_file_handler.h"
-#include "share/redolog/ob_log_definition.h"
-#include "storage/ob_file_system_router.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

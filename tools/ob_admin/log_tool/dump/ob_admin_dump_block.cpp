@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX CLOG
 #include "ob_admin_dump_block.h"
-#include <cstdio>
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "logservice/palf/log_define.h"
-#include "logservice/palf/log_group_entry.h"
 #include "logservice/palf/log_meta.h"
 #define private public
 #include "logservice/archiveservice/ob_archive_define.h"

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_dag_warning_history_mgr.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {

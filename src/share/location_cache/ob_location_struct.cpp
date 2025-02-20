@@ -14,10 +14,6 @@
 
 #include "share/location_cache/ob_location_struct.h"
 #include "share/config/ob_server_config.h" // GCONF
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/net/ob_addr.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase

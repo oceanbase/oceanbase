@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_sql_generator.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/ob_rpc_struct.h"
-#include "share/ob_priv_common.h"
 
 namespace oceanbase
 {

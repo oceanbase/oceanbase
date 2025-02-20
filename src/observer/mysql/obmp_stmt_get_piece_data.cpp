@@ -14,19 +14,9 @@
 
 #include "obmp_stmt_get_piece_data.h"
 
-#include "lib/worker.h"
-#include "lib/oblog/ob_log.h"
-#include "sql/ob_sql_context.h"
-#include "lib/stat/ob_session_stat.h"
-#include "rpc/ob_request.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
-#include "observer/ob_req_time_service.h"
-#include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
-#include "rpc/obmysql/packet/ompk_piece.h"
+#include "deps/oblib/src/rpc/obmysql/packet/ompk_piece.h"
 #include "observer/omt/ob_tenant.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 

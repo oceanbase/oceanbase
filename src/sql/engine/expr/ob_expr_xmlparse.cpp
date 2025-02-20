@@ -14,8 +14,6 @@
 #include "ob_expr_xmlparse.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_util.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_alter_package_resolver.h"
 #include "ob_alter_package_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "pl/parser/parse_stmt_item_type.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"

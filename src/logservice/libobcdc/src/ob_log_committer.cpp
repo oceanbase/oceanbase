@@ -19,7 +19,6 @@
 #include "lib/string/ob_string.h"            // ObString
 #include "storage/tx/ob_trans_define.h"      // ObTransID
 
-#include "ob_log_binlog_record_queue.h" // BRQueue
 #include "ob_log_instance.h"            // IObLogErrHandler
 #include "ob_log_binlog_record.h"       // ObLogBR
 #include "ob_log_part_mgr.h"            // IObLogPartMgr

@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX TABLELOCK
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "storage/tablelock/ob_mem_ctx_table_lock.h"
+#include "ob_mem_ctx_table_lock.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/memtable/ob_memtable_context.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
 
 namespace oceanbase

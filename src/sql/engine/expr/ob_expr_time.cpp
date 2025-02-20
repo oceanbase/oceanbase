@@ -11,12 +11,10 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
-#include "sql/engine/expr/ob_expr_time.h"
-#include "lib/timezone/ob_time_convert.h"
+#include "ob_expr_time.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
-#include "sql/engine/expr/ob_expr_util.h"
 #include "lib/locale/ob_locale_type.h"
 
 using namespace oceanbase::common;

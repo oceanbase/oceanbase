@@ -12,14 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/geo/ob_geo_func_common.h"
 #include "sql/engine/expr/ob_expr_st_x.h"
-#include "lib/geo/ob_geo.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;

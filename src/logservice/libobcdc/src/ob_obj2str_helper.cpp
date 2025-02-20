@@ -12,7 +12,6 @@
  * obj2str helper
  */
 
-#include <cstdlib>                                  // std::abs
 
 #include "ob_obj2str_helper.h"
 #include "ob_log_timezone_info_getter.h"

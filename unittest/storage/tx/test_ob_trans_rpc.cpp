@@ -10,13 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/tx/ob_trans_rpc.h"
 #include <gtest/gtest.h>
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "common/ob_clock_generator.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "lib/container/ob_array_iterator.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase

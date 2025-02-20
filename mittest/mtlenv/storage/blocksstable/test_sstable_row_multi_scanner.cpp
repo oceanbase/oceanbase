@@ -14,7 +14,6 @@
 #define private public
 #define protected public
 
-#include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/access/ob_sstable_row_multi_scanner.h"
 #include "ob_index_block_data_prepare.h"
 

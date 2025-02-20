@@ -13,15 +13,10 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_code_generator.h"
-#include "ob_pl_type.h"
 #include "ob_pl_compile.h"
 #include "ob_pl_package.h"
-#include "lib/string/ob_sql_string.h"
-#include "common/ob_smart_call.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
-#include "lib/hash/ob_hashmap.h"
 #include "parser/parse_stmt_item_type.h"
 
 namespace oceanbase

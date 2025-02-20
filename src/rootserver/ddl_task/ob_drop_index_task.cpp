@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_drop_index_task.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
 

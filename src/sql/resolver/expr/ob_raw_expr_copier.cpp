@@ -11,8 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "common/ob_smart_call.h"
-#include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "ob_raw_expr_copier.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;

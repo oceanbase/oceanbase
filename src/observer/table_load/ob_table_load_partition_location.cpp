@@ -14,9 +14,7 @@
 
 #include "observer/table_load/ob_table_load_partition_location.h"
 #include "observer/ob_server.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_utils.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 

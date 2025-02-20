@@ -11,20 +11,6 @@
  */
 
 #include "ob_role_change_service.h"
-#include "common/ob_role.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/thread/thread_mgr.h"
-#include "logservice/palf/log_define.h"
-#include "share/ob_errno.h"
-#include "share/ob_ls_id.h"
-#include "share/ob_thread_define.h"
-#include "share/rc/ob_tenant_base.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "share/ob_occam_time_guard.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase

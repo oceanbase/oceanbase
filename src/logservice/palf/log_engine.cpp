@@ -12,24 +12,9 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_engine.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"                 // For UNUSED
-#include "lib/oblog/ob_log_module.h"                    // PALF_LOG
-#include "share/ob_errno.h"                             // ERRNO
-#include "share/rc/ob_tenant_base.h"                    // mtl_malloc
 #include "share/allocator/ob_tenant_mutil_allocator.h"  // ObILogAllocator
-#include "log_io_task_cb_utils.h"                       // LogFlushCbCtx...
-#include "log_io_task.h"                                // LogIOTask
 #include "log_io_worker.h"                              // LogIOWorker
-#include "log_reader_utils.h"                           // ReadBuf
 #include "log_shared_task.h"                            // LogSharedTask
-#include "log_writer_utils.h"                           // LogWriteBuf
-#include "lsn.h"                                        // LSN
-#include "log_meta_entry.h"                             // LogMetaEntry
-#include "log_group_entry_header.h"                     // LogGroupEntryHeader
-#include "log_define.h"
 
 namespace oceanbase
 {

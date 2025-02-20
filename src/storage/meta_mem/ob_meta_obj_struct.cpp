@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "common/log/ob_log_constants.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
+#include "ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase

@@ -11,16 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/mysql/obmp_packet_sender.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/packet/ompk_change_user.h"
+#include "obmp_packet_sender.h"
 #include "rpc/obmysql/packet/ompk_error.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "rpc/obmysql/ob_poc_sql_request_operator.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_mysql_result_set.h"
 #include "sql/session/ob_sess_info_verify.h"

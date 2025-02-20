@@ -11,12 +11,9 @@
  */
 
 #include "ob_all_latch.h"
-#include "lib/stat/ob_session_stat.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ash/ob_di_util.h"
-
 
 namespace oceanbase
 {

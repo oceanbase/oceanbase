@@ -12,36 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE_REDO
 
-#include <gtest/gtest.h>
-#include "lib/list/ob_list.h"
-#include "lib/file/file_directory_utils.h"
-#include "lib/file/ob_file.h"
-#include "lib/ob_define.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/slog/simple_ob_storage_log.h"
-#include "storage/slog/ob_storage_log_batch_header.h"
-#include "lib/container/ob_se_array.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
-#include <thread>
-#include "lib/oblog/ob_log.h"
-#include "share/ob_force_print_log.h"
 
-#include "share/rc/ob_tenant_base.h"
-#include "logservice/palf/palf_options.h"
-#include "share/ob_alive_server_tracer.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/blocksstable/ob_log_file_spec.h"
-#include "lib/file/file_directory_utils.h"
-#include "storage/mock_ob_meta_report.h"
-#include "share/ob_simple_mem_limit_getter.h"
 
 #define private public
-#include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_log_writer.h"
 #include "storage/slog/ob_storage_log_reader.h"
-#include "storage/slog/ob_storage_log_replayer.h"
 #undef private
 
 namespace oceanbase

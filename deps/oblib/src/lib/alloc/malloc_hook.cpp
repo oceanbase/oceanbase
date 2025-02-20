@@ -11,9 +11,7 @@
  */
 
 #include "malloc_hook.h"
-#include "lib/utility/ob_defer.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/allocator/ob_malloc.h"
+#include "deps/oblib/src/lib/hash/ob_hashmap.h"
 
 #define OBMALLOC_ATTR(s) __attribute__((s))
 #define OBMALLOC_EXPORT __attribute__((visibility("default")))

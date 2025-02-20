@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_sstable_scan_merge_loser_tree.h"
-#include "storage/direct_load/ob_direct_load_external_row.h"
 
 namespace oceanbase
 {

@@ -11,7 +11,6 @@
  */
 
 #include "storage/concurrency_control/ob_trans_stat_row.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
 {

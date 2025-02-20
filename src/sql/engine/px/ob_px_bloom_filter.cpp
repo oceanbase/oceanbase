@@ -11,11 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-//#include <immintrin.h>
 #include "ob_px_bloom_filter.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/container/ob_se_array.h"
-#include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 

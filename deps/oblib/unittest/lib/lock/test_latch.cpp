@@ -10,17 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include "lib/lock/ob_latch.h"
-#include "lib/lock/ob_mutex.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/lock/ob_spin_rwlock.h"
-#include "lib/random/ob_random.h"
-#include "lib/utility/ob_template_utils.h"
-#include "lib/thread/thread_pool.h"
 #include "gtest/gtest.h"
 #define private public
-#include "lib/worker.h"
+#include "deps/oblib/src/lib/rc/context.h"
 
 namespace oceanbase
 {

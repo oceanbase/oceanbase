@@ -12,7 +12,6 @@
 
 #include "lib/lock/ob_bucket_lock.h"
 #include "lib/utility/ob_sort.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/hash/ob_hashset.h"
 
 namespace oceanbase

@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/ob_thread_mgr.h"
 #include "ob_rl_mgr.h"
 #include "lib/ash/ob_active_session_guard.h"
 

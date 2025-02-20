@@ -14,16 +14,7 @@
 
 #include "ob_expr_sql_udt_construct.h"
 #include "ob_expr_sql_udt_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_lob_access_utils.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "lib/number/ob_number_v2.h"
-#include "common/object/ob_object.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/geo/ob_sdo_geo_object.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"

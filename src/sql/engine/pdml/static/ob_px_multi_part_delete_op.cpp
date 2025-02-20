@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_multi_part_delete_op.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/tx_storage/ob_access_service.h"
-#include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/dml/ob_dml_service.h"
 

@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX LIB_TIME
 #include "share/ob_time_utility2.h"
-#include <stdlib.h>
-#include <stdint.h>
-#include <limits.h>
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/utility.h"
 
 #define IS_MINUS(str, is_minus) \
   if (OB_SUCC(ret)) \

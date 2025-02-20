@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
-#include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_external_table_builder.h"
 #include "storage/direct_load/ob_direct_load_external_table_compactor.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"

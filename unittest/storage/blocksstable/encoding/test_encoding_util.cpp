@@ -16,7 +16,6 @@
 #define protected public
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
-#include "lib/timezone/ob_timezone_info.h"
 
 namespace oceanbase
 {

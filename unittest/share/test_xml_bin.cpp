@@ -16,19 +16,10 @@
 #define private public
 #define protected public
 
-#include "lib/xml/ob_multi_mode_bin.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/xml/ob_tree_base.h"
-#include "lib/xml/ob_mul_mode_reader.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/timezone/ob_timezone_info.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xpath.h"
-#include "lib/xml/ob_path_parser.h"
 #undef private
 
-#include <sys/time.h>
 using namespace std;
 
 namespace oceanbase {

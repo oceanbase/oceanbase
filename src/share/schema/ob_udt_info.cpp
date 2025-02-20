@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_udt_info.h"
-#include "pl/ob_pl_type.h"
 #include "pl/ob_pl_stmt.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_package_info.h"
 
 namespace oceanbase
 {

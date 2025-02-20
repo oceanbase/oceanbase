@@ -14,9 +14,8 @@
 
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "share/ob_dml_sql_splicer.h" // ObDMLSqlSplicer
-#include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
 #include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
-#include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TRANSFER_TASK_TNAME
+#include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSCache
 #include "share/schema/ob_schema_utils.h" // ObSchemaUtils
 #include "observer/ob_server_struct.h" // GCTX

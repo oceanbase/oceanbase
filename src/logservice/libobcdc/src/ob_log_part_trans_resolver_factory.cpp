@@ -16,7 +16,6 @@
 
 #include "ob_log_part_trans_resolver_factory.h"
 
-#include "lib/allocator/ob_mod_define.h"            // ObNewModIds
 #include "storage/tx/ob_trans_define.h"    // MAX_ELR_TRANS_INTERVAL
 
 

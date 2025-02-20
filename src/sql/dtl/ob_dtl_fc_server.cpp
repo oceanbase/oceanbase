@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_fc_server.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/ob_errno.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_context.h"
-#include "share/schema/ob_schema_utils.h"
-#include "sql/dtl/ob_dtl.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -11,29 +11,16 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include "rpc/obmysql/ob_sql_nio.h"
+#include "ob_sql_nio.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obmysql/ob_i_sql_sock_handler.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "lib/ob_running_mode.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_malloc.h"
 #include "lib/queue/ob_link_queue.h"
-#include "lib/utility/ob_print_utils.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/profile/ob_trace_id.h"
 #include "lib/net/ob_net_util.h"
-#include "common/ob_clock_generator.h"
 #include <sys/epoll.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/eventfd.h>
-#include <arpa/inet.h>
-#include <linux/futex.h>
-#include <netinet/tcp.h>
-#include "rpc/obrpc/ob_listener.h"
-#include "common/ob_clock_generator.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 

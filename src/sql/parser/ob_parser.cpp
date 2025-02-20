@@ -13,14 +13,10 @@
 #define USING_LOG_PREFIX SQL_PARSER
 #include "ob_parser.h"
 #include "lib/oblog/ob_log.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "parse_malloc.h"
 #include "parse_node.h"
 #include "ob_sql_parser.h"
 #include "pl/parser/ob_pl_parser.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/json/ob_json_print_utils.h"
-
 using namespace oceanbase::pl;
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

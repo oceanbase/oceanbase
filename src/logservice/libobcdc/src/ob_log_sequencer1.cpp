@@ -14,7 +14,6 @@
 
 #include "ob_log_sequencer1.h"
 
-#include <math.h>
 #include "lib/string/ob_string.h"       // ObString
 #include "lib/atomic/ob_atomic.h"
 #include "lib/thread/ob_thread_name.h"

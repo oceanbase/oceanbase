@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_operator.h"
-#include "common/ob_smart_var.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "observer/ob_sql_client_decorator.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/ob_dml_sql_splicer.h"
 
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

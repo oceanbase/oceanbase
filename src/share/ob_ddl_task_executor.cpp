@@ -10,8 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <sys/prctl.h>
-#include "lib/thread/ob_async_task_queue.h"
 #include "ob_ddl_task_executor.h"
 #include "share/ob_thread_mgr.h"
 

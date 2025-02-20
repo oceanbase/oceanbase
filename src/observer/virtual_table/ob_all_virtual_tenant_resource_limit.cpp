@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
-#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

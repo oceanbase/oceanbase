@@ -12,8 +12,6 @@
 
 #include "gtest/gtest.h"
 #include "lib/hash/ob_concurrent_hash_map.h"
-#include "lib/random/ob_random.h"
-#include "lib/thread/thread_pool.h"
 
 using namespace oceanbase;
 using namespace common;

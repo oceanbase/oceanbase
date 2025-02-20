@@ -11,9 +11,7 @@
  */
 
 #include "ob_xa_ctx.h"
-#include "ob_xa_rpc.h"
 #include "ob_xa_service.h"
-#include "ob_xa_ctx_mgr.h"
 #include "ob_trans_service.h"
 
 namespace oceanbase

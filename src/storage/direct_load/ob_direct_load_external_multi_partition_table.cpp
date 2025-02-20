@@ -12,9 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
-#include "observer/table_load/ob_table_load_stat.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
-#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {

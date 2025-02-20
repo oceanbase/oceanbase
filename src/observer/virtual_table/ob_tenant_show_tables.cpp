@@ -11,8 +11,6 @@
  */
 
 #include "observer/virtual_table/ob_tenant_show_tables.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_schema_getter_guard.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;

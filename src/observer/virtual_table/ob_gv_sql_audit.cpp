@@ -11,19 +11,9 @@
  */
 
 #include "observer/virtual_table/ob_gv_sql_audit.h"
-#include <stdint.h>
-#include "common/rowkey/ob_rowkey.h"
-#include "common/ob_smart_call.h"
-#include "share/ob_define.h"
 #include "observer/ob_server.h"
-#include "observer/mysql/ob_mysql_request_manager.h"
-#include "lib/utility/utility.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "observer/ob_server_struct.h"
-#include "share/rc/ob_tenant_base.h"
 #include "sql/resolver/ob_resolver_utils.h"
 
-#include <algorithm> // std::sort
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;

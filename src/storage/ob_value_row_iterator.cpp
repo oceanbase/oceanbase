@@ -14,7 +14,6 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/ob_relative_table.h"
 #include "storage/access/ob_single_merge.h"
-#include "storage/ob_storage_table_guard.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/ob_value_row_iterator.h"
 #include "storage/memtable/ob_memtable_context.h"

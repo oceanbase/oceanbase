@@ -11,16 +11,8 @@
  */
 
 #define USING_LOG_PREFIX PL
-#include "pl/sys_package/ob_dbms_session.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/oblog/ob_log_module.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
+#include "ob_dbms_session.h"
 #include "pl/ob_pl.h"
-#include "share/ob_dml_sql_splicer.h"
 #include "share/ob_global_context_operator.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 

@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_web_service_root_addr.h"
-#include <curl/curl.h>
-#include "lib/json/ob_json.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/config/ob_server_config.h"
+#include "ob_web_service_root_addr.h"
 #include "observer/ob_server_struct.h"
-#include "share/ob_cluster_version.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_inner_config_root_addr.h"
 
 namespace oceanbase
 {

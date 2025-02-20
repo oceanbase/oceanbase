@@ -14,7 +14,6 @@
 
 #include "ob_log_fetch_stat_info.h"
 
-#include "lib/utility/ob_print_utils.h"   // databuff_printf
 #include "ob_log_utils.h"                 // SIZE_TO_STR
 
 using namespace oceanbase::common;

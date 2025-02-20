@@ -12,7 +12,6 @@
 
 #include "lib/compress/snappy/ob_snappy_compressor.h"
 #include "lib/compress/snappy/snappy_src/snappy.h"
-#include "lib/ob_errno.h"
 
 namespace oceanbase
 {

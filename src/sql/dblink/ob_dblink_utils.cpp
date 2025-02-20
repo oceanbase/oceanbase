@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 
-#include "sql/dblink/ob_dblink_utils.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "ob_dblink_utils.h"
 #include "lib/string/ob_hex_utils_base.h"
-#include "share/ob_errno.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "common/ob_smart_call.h"
-#include "common/object/ob_object.h"
-#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #ifdef OB_BUILD_DBLINK
 #include "observer/omt/ob_multi_tenant.h"
 #include "share/rc/ob_tenant_base.h"

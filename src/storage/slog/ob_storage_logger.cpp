@@ -12,22 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE_REDO
 #include "ob_storage_logger.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/ob_running_mode.h"
-#include "lib/file/ob_file.h"
 #include "lib/file/file_directory_utils.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_force_print_log.h"
-#include "common/log/ob_log_dir_scanner.h"
-#include "storage/blocksstable/ob_data_buffer.h"
-#include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/slog/ob_storage_logger_manager.h"
-#include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_log_batch_header.h"
-#include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "share/rc/ob_tenant_base.h"
-#include <inttypes.h>
 
 namespace oceanbase
 {

@@ -14,8 +14,6 @@
 #include "sql/optimizer/ob_log_granule_iterator.h"
 
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "ob_opt_est_cost.h"
-#include "ob_select_log_plan.h"
 
 using namespace oceanbase;
 using namespace sql;

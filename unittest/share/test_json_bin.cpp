@@ -12,15 +12,11 @@
 #define USING_LOG_PREFIX SHARE
 #include <gtest/gtest.h>
 #define private public
-#include "lib/lob/ob_lob_base.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_diff.h"
-#include "lib/timezone/ob_timezone_info.h"
 #undef private
 
-#include <sys/time.h>    
  
 namespace oceanbase {
 namespace common {

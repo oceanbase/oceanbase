@@ -11,10 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <string.h>
 #include "sql/engine/expr/ob_expr_inet.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::common;
 

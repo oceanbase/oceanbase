@@ -13,15 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_part_mgr_util.h"
 
-#include "lib/container/ob_iarray.h"
-#include "lib/container/ob_array_iterator.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/ob_cluster_version.h"
 
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

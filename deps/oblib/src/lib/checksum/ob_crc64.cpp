@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <stdlib.h>
 #include "lib/checksum/ob_crc64.h"
-#include "lib/ob_define.h"
 #include "isa-l/crc64.h"
 #include "isa-l/crc.h"
 #if defined(__powerpc64__)  /* add crc32c_ppc.h only used by powerpc, needn't add #else branch for other platform here*/ 

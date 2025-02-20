@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_del_upd_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 using namespace oceanbase;
 using namespace sql;

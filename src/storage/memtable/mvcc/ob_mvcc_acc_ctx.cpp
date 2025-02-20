@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/memtable/mvcc/ob_mvcc_acc_ctx.h"
+#include "ob_mvcc_acc_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
 namespace oceanbase
 {

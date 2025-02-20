@@ -15,7 +15,6 @@
 #define USING_LOG_PREFIX DATA_DICT
 
 #include "ob_data_dict_iterator.h"
-#include "logservice/ob_log_base_header.h"
 
 namespace oceanbase
 {

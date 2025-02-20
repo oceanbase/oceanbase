@@ -30,11 +30,7 @@
 #include "snappy-internal.h"
 #include "snappy-sinksource.h"
 
-#include <stdio.h>
 
-#include <algorithm>
-#include <string>
-#include <vector>
 
 
 namespace snappy {

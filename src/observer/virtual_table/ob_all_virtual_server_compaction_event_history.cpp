@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_server_compaction_event_history.h"
-#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {

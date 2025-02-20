@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_apply_stat.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase

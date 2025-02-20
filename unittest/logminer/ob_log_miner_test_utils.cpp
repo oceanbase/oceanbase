@@ -11,9 +11,7 @@
  */
 
 #include "ob_log_binlog_record.h"
-#include "ob_log_miner_br.h"
 #include "ob_log_miner_test_utils.h"
-#include "gtest/gtest.h"
 
 namespace oceanbase
 {

@@ -11,27 +11,12 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_schema_checker.h"
-#include "lib/string/ob_string.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_column_schema.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_udf.h"
-#include "share/schema/ob_synonym_mgr.h"
+#include "ob_schema_checker.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/ob_resolver_define.h"
 #include "observer/virtual_table/ob_table_columns.h"
-#include "common/ob_smart_call.h"
-#include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/privilege_check/ob_privilege_check.h"
-#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

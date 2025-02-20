@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_alive_server_tracer.h"
-#include "lib/container/ob_array_iterator.h"
+#include "ob_alive_server_tracer.h"
 #include "ob_common_rpc_proxy.h"
-#include "config/ob_server_config.h"
-#include "share/ob_web_service_root_addr.h"
-#include "share/ob_thread_mgr.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
 namespace oceanbase
 {

@@ -11,16 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RS
-#include "share/ob_schema_status_proxy.h"
-#include "share/schema/ob_schema_mgr.h"
 #include "rootserver/ob_schema_history_recycler.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "share/ob_schema_status_proxy.h"
-#include "share/schema/ob_schema_utils.h"
-#include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_freeze_info_proxy.h"
+#include "src/share/ob_freeze_info_proxy.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_all_server_tracer.h"

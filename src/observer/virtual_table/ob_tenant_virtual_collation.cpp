@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_tenant_virtual_collation.h"
-#include "lib/charset/ob_charset.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

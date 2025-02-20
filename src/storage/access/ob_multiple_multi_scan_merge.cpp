@@ -11,10 +11,6 @@
  */
 
 #include "ob_multiple_multi_scan_merge.h"
-#include <math.h>
-#include "storage/ob_row_fuse.h"
-#include "storage/blocksstable/ob_datum_row.h"
-#include "storage/ob_storage_schema.h"
 
 #if !USE_NEW_MULTIPLE_MULTI_SCAN_MERGE
 namespace oceanbase

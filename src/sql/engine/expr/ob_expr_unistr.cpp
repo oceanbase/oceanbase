@@ -14,7 +14,6 @@
 #include "sql/engine/expr/ob_expr_unistr.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

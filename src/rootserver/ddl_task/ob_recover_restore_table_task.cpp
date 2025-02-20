@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_recover_restore_table_task.h"
-#include "lib/rc/context.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_root_service.h"
-#include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

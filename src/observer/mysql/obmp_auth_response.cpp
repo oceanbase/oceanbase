@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/mysql/obmp_auth_response.h"
-#include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "rpc/ob_request.h"
+#include "src/sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 namespace oceanbase
 {

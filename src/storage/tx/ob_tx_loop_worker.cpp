@@ -10,12 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "logservice/ob_log_base_header.h"
-#include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_tx_loop_worker.h"
-#include "storage/tx/ob_tx_retain_ctx_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_leak_checker.h"
 

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_row_writer.h"
-#include "ob_block_sstable_struct.h"
-#include "storage/ob_i_store.h"
 
 using namespace oceanbase;
 using namespace common;

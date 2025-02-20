@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_SESSION
-#include "share/schema/ob_schema_getter_guard.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "share/schema/ob_sys_priv_type.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/engine/expr/ob_expr_user_can_access_obj.h"
 

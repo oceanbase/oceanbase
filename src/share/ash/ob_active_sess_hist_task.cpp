@@ -12,17 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/oblog/ob_log.h"
-#include "lib/thread/thread_mgr.h"
 #include "observer/ob_srv_network_frame.h"
-#include "share/ob_thread_mgr.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/ash/ob_ash_refresh_task.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "lib/time/ob_time_utility.h"
 #include "share/wr/ob_wr_stat_guard.h"
 #include "observer/omt/ob_th_worker.h"
 #include "deps/oblib/src/rpc/obmysql/ob_mysql_packet.h"

@@ -11,7 +11,6 @@
  */
 
 #include "ob_zstd_wrapper.h"
-#include <stdio.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd_src/zstd.h"

@@ -12,17 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_optimizer_stats_gathering_op.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/px/ob_px_sqc_proxy.h"
-#include "sql/engine/px/ob_px_sqc_handler.h"
-#include "share/stat/ob_opt_stat_sql_service.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "sql/engine/aggregate/ob_aggregate_processor.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_dbms_stats_executor.h"
-#include "pl/sys_package/ob_dbms_stats.h"
 
 namespace oceanbase
 {

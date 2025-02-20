@@ -14,8 +14,6 @@
 
 #include "sql/engine/expr/ob_expr_benchmark.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 
 namespace oceanbase

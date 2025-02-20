@@ -12,11 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "share/stat/ob_dbms_stats_history_manager.h"
-#include "share/stat/ob_incremental_stat_estimator.h"
-#include "share/stat/ob_opt_table_stat_cache.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase {

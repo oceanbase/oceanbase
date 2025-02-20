@@ -12,14 +12,8 @@
 
 #define USING_LOG_PREFIX LIB_MYSQLC
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
-#include <mysql.h>
-#include "lib/string/ob_string.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_prepared_param.h"
-#include "lib/mysqlclient/ob_mysql_prepared_result.h"
 #include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 #include "share/schema/ob_routine_info.h"
-#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #include "pl/ob_pl_user_type.h"
 
 namespace oceanbase

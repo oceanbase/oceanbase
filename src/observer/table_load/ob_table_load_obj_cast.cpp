@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_obj_cast.h"
-#include "observer/table_load/ob_table_load_time_convert.h"
-#include "sql/engine/cmd/ob_load_data_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/object/ob_obj_cast_util.h"
 

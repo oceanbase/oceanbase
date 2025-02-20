@@ -14,13 +14,11 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_tenant.h"
 
+#include "ob_log_tenant.h"
 #include "lib/allocator/ob_malloc.h"                                // OB_NEW OB_DELETE
 #include "share/inner_table/ob_inner_table_schema_constants.h"      // OB_ALL_DDL_OPERATION_TID
 
-#include "ob_log_tenant_mgr.h"                                      // ObLogTenantMgr
-#include "ob_log_instance.h"                                        // TCTX
 #include "ob_log_config.h"                                          // TCONF
 #include "ob_log_timezone_info_getter.h"                            // ObCDCTimeZoneInfoGetter
 

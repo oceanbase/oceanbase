@@ -14,11 +14,7 @@
 
 #include "sql/resolver/dcl/ob_alter_user_proxy_resolver.h"
 
-#include "share/schema/ob_schema_struct.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/dcl/ob_grant_resolver.h"
-#include "share/ob_rpc_struct.h"
-#include "lib/encrypt/ob_encrypted_helper.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using oceanbase::share::schema::ObUserInfo;

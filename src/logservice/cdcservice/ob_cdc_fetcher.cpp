@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX EXTLOG
-#include "logservice/ob_log_service.h"          // ObLogService
-#include "ob_cdc_service_monitor.h"
 #include "ob_cdc_fetcher.h"
-#include "ob_cdc_define.h"
-#include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/ob_log_service.h"          // ObLogService
 #include "logservice/restoreservice/ob_remote_log_raw_reader.h"
-#include "logservice/restoreservice/ob_remote_log_source_allocator.h"
 #include "logservice/restoreservice/ob_remote_log_raw_reader.h"
 
 namespace oceanbase

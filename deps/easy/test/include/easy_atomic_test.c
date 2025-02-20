@@ -1,4 +1,3 @@
-#include "easy_atomic.h"
 #include <pthread.h>
 #include <easy_test.h>
 

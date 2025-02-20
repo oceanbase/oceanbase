@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_inner_sql_connection_pool.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/ob_sql.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "lib/objectpool/ob_resource_pool.h"
 
 namespace oceanbase
 {

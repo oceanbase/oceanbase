@@ -12,13 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "ob_tx_data_allocator.h"
 
+#include "ob_tx_data_allocator.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx/ob_tx_data_define.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase {
 

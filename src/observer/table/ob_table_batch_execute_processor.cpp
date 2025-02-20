@@ -12,15 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_batch_execute_processor.h"
-#include "ob_table_rpc_processor_util.h"
-#include "observer/ob_service.h"
-#include "ob_table_end_trans_cb.h"
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/stat/ob_session_stat.h"
-#include "ob_htable_utils.h"
-#include "ob_table_cg_service.h"
-#include "observer/ob_req_time_service.h"
 #include "ob_table_move_response.h"
 
 using namespace oceanbase::observer;

@@ -10,11 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "mds_table_base.h"
-#include "lib/lock/ob_small_spin_lock.h"
-#include "lib/ob_errno.h"
-#include "lib/profile/ob_trace_id.h"
-#include "ob_clock_generator.h"
-#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"

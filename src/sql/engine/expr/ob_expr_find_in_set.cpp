@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_find_in_set.h"
-#include "lib/charset/ob_charset.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;

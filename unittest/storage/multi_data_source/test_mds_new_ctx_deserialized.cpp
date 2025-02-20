@@ -9,29 +9,12 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "storage/multi_data_source/compile_utility/compile_mapper.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/multi_data_source/mds_writer.h"
-#include "storage/multi_data_source/ob_tablet_create_mds_ctx.h"
-#include "storage/tx/ob_trans_define.h"
 #define UNITTEST_DEBUG
-#include "lib/utility/utility.h"
-#include <atomic>
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
 
-#include <thread>
-#include <iostream>
-#include <vector>
-#include <chrono>
-#include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "common/ob_clock_generator.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "common/meta_programming/ob_type_traits.h"
-#include "storage/multi_data_source/mds_row.h"
+#include "src/storage/multi_data_source/adapter_define/mds_dump_node.h"
 namespace oceanbase {
 namespace storage
 {

@@ -12,7 +12,6 @@
 
 #include "ob_slice_alloc.h"
 
-#include "lib/container/ob_se_array.h"
 
 namespace oceanbase {
 namespace common {

@@ -11,10 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/string/ob_sql_string.h"
 #define private public
-#include "lib/json_type/ob_json_path.h"
-#include "lib/json_type/ob_json_bin.h"
+#include "deps/oblib/src/lib/json_type/ob_json_base.h"
 #undef private
 
 using namespace oceanbase::common;

@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_stmt.h"
-#include "ob_pl_resolver.h"
-#include "lib/charset/ob_charset.h"
-#include "common/ob_smart_call.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/ob_stmt_resolver.h"
-#include "pl/ob_pl_package.h"
-#include "pl/ob_pl_user_type.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif

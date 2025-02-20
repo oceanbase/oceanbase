@@ -11,19 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "common/ob_smart_call.h"
 #include "sql/engine/dml/ob_table_replace_op.h"
-#include "share/ob_autoincrement_service.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "sql/engine/ob_exec_context.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/engine/dml/ob_dml_service.h"
-#include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/das/ob_das_insert_op.h"
-#include "sql/das/ob_data_access_service.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
-#include "sql/engine/dml/ob_fk_checker.h"
 #include "share/ob_ls_id.h"
 
 namespace oceanbase

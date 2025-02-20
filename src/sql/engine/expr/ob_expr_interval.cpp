@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 
-//#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "lib/utility/utility.h"
 #include "sql/engine/expr/ob_expr_interval.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/code_generator/ob_static_engine_expr_cg.h"
 
 using namespace oceanbase::common;
 

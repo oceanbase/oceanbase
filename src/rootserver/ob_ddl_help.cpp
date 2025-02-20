@@ -10,18 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_help.h"
-#include "rootserver/ob_ddl_operator.h"
 #include "rootserver/ob_ddl_service.h"
-#include "rootserver/ob_zone_manager.h"
-#include "share/ob_primary_zone_util.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "share/ob_rpc_struct.h"
-#include "lib/string/ob_sql_string.h"
-#include "sql/resolver/ob_resolver_utils.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 namespace oceanbase
 {

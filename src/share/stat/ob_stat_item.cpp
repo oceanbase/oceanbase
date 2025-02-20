@@ -11,12 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_OPT
-#include "share/stat/ob_stat_item.h"
-#include "lib/utility/ob_print_utils.h"
-#include "pl/sys_package/ob_dbms_stats.h"
-#include "share/stat/ob_opt_table_stat.h"
+#include "ob_stat_item.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_topk_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 namespace oceanbase
 {

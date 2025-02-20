@@ -10,14 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_urowid.h"
 
+#include "ob_urowid.h"
 #include "common/ob_smart_call.h"
-#include "common/ob_tablet_id.h"
 #include "common/object/ob_object.h"
-#include "lib/encode/ob_base64_encode.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/container/ob_iarray.h"
 
 namespace oceanbase
 {

@@ -11,19 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/file/file_directory_utils.h"
-#include "lib/list/ob_dlist.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_utility.h"
-#include "logservice/palf/log_block_pool_interface.h"
-#include "logservice/palf/log_define.h"
-#include "share/ob_errno.h"
 #include <thread>
-#include <functional>
 
 #define private public
 #include "logservice/ob_server_log_block_mgr.h"
@@ -33,7 +21,6 @@
 #include "src/share/ob_device_manager.h"
 #include "share/io/ob_io_manager.h"
 #include <gtest/gtest.h>
-#include <regex>
 
 namespace oceanbase
 {

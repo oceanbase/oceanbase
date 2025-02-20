@@ -9,8 +9,6 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX RS
 #include "ob_backup_base_service.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "share/backup/ob_backup_data_table_operator.h"
 #include "logservice/ob_log_service.h"
 
 using namespace oceanbase;

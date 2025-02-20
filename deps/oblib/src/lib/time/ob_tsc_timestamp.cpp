@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/time/ob_tsc_timestamp.h"
+#include "ob_tsc_timestamp.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase;

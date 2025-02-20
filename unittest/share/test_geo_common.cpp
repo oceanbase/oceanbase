@@ -11,12 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/geo/ob_geo_common.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "lib/json_type/ob_json_common.h"
-#include "rpc/obmysql/ob_mysql_global.h"
-#include "src/pl/ob_pl_user_type.h"
-#include "src/pl/ob_pl_allocator.h"
+#include "src/pl/ob_pl.h"
 #include "src/sql/engine/expr/ob_expr_sql_udt_utils.h"
 #define private public
 #undef private

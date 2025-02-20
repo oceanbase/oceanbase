@@ -11,7 +11,6 @@
  */
 
 #include "ob_tx_elr_util.h"
-#include "common/ob_clock_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "ob_trans_event.h"
 

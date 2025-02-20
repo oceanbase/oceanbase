@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_cg_service.h"
-#include "share/datum/ob_datum_util.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
-#include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
 #include "sql/resolver/dml/ob_delete_resolver.h"  // for resolve partition expr
 #include "sql/engine/expr/ob_expr_lob_utils.h"

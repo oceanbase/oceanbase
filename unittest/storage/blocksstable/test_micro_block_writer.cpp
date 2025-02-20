@@ -15,7 +15,6 @@
 #define protected public
 #include "storage/blocksstable/ob_micro_block_writer.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
-#include "storage/ob_i_store.h"
 #include "ob_row_generate.h"
 
 namespace oceanbase

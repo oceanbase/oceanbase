@@ -14,8 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-#include "ob_log_part_trans_task.h"
 
+#include "ob_log_part_trans_task.h"
 #include "lib/string/ob_string.h"                   // ObString
 #include "share/schema/ob_schema_service.h"         // OB_INVALID_DDL_OP
 #include "share/schema/ob_table_schema.h"           // ObTableSchema
@@ -26,11 +26,9 @@
 #include "storage/blocksstable/ob_row_reader.h"     // ObRowReader
 #include "storage/lob/ob_ext_info_callback.h"       // ObExtInfoLog
 
-#include "ob_log_binlog_record.h"                   // ObLogBR
 #include "ob_log_binlog_record_pool.h"              // ObLogBRPool
 #include "ob_log_utils.h"                           // obj2str
 #include "ob_log_common.h"                          // ALL_DDL_OPERATION_TABLE_DDL_STMT_STR_COLUMN_ID
-#include "ob_obj2str_helper.h"                      // ObObj2strHelper
 #include "ob_log_instance.h"                        // TCTX
 #include "ob_log_part_trans_dispatcher.h"           // PartTransDispatcher
 #include "storage/tx/ob_clog_encrypt_info.h"
@@ -38,11 +36,9 @@
 #include "ob_log_ls_op_processor.h"                 // ObLogLSOpProcessor
 #include "ob_log_part_trans_parser.h"               // IObLogPartTransParser
 #include "ob_log_batch_buffer.h"                    // IObLogBatchBuffer
-#include "ob_log_store_task.h"                      // ObLogStoreTask
 #include "ob_log_factory.h"                         // ObLogStoreTaskFactory ReadLogBufFactory
 #include "ob_log_resource_collector.h"              // IObLogResourceCollector
 #include "ob_cdc_lob_data_merger.h"                 // IObCDCLobDataMerger
-#include "ob_log_schema_cache_info.h"               // ColumnSchemaInfo
 #include "ob_cdc_udt.h"                             // ObCDCUdtValueMap
 
 #define PARSE_INT64(name, obj, val, INVALID_VALUE, check_value) \

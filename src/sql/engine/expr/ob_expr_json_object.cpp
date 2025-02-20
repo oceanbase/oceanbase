@@ -15,10 +15,7 @@
 #include "common/ob_smart_call.h"
 #include "ob_expr_json_object.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_cast.h"
 #include "share/ob_json_access_utils.h"
-#include "lib/hash/ob_hashset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

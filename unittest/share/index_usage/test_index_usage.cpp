@@ -13,9 +13,7 @@
 #include <gtest/gtest.h>
 #define private public  // 获取私有成员
 #include "share/index_usage/ob_index_usage_info_mgr.h"
-#include "lib/utility/ob_test_util.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

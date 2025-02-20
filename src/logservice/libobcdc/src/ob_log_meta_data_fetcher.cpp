@@ -10,7 +10,6 @@
 
 #define USING_LOG_PREFIX DATA_DICT
 
-#include "lib/utility/ob_macro_utils.h"  // RETRY_FUNC
 #include "ob_log_meta_data_fetcher.h"
 #include "ob_log_fetcher.h"
 

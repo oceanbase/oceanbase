@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_fetcher_bg_worker.h"
-#include "share/ob_thread_mgr.h"
 #include "ob_log_fetcher.h"
 
 namespace oceanbase

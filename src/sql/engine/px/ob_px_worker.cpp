@@ -12,14 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_px_worker.h"
-#include "lib/time/ob_time_utility.h"
-#include "sql/engine/px/ob_px_worker_stat.h"
-#include "sql/engine/px/ob_px_interruption.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "observer/omt/ob_tenant.h"
-#include "share/rc/ob_tenant_base.h"
-#include "share/rc/ob_context.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

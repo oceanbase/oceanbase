@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/rc/ob_rc.h"
+#include "ob_rc.h"
 #include "lib/rc/context.h"
 
 namespace oceanbase

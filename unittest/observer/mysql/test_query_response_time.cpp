@@ -11,7 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
 #include "observer/mysql/ob_query_response_time.h"
 #include "sql/resolver/ob_stmt_type.h"
 

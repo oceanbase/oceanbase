@@ -1,12 +1,9 @@
-#include "io/easy_maccept.h"
+#include "easy_maccept.h"
 #include <sys/epoll.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include "easy_define.h"
-#include "io/easy_log.h"
 #include "io/easy_socket.h"
 
 #define ma_log(level, fd, format, ...) easy_ ## level ## _log ("easy dispatch socket: fd=%d remote=%s " format, fd, easy_peername(fd), ## __VA_ARGS__)

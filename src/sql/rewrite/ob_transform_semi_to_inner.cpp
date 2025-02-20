@@ -13,11 +13,9 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_semi_to_inner.h"
 #include "sql/rewrite/ob_transform_utils.h"
-#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/optimizer/ob_log_function_table.h"
-#include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_log_values_table_access.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

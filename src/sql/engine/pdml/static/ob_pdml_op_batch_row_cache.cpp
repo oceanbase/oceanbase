@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_pdml_op_batch_row_cache.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/dml/ob_table_modify_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

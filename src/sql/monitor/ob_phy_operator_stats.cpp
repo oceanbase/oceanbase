@@ -11,13 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_MONITOR
-#include "sql/monitor/ob_phy_operator_stats.h"
+#include "ob_phy_operator_stats.h"
 #include "sql/monitor/ob_phy_operator_monitor_info.h"
 #include "sql/engine/ob_physical_plan.h"
-#include "sql/plan_cache/ob_plan_cache_util.h"
-#include "lib/allocator/ob_allocator.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/utility/utility.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {

@@ -11,10 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <pthread.h>
-#include <string>
 #include "common/ob_smart_call.h"
-#include "lib/thread/threads.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace std;

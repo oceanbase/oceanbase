@@ -12,22 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_srv_network_frame.h"
-#include "share/ob_autoincrement_service.h"
-#include "share/ob_define.h"
 #include "share/ob_global_autoinc_service.h"
-#include "storage/ls/ob_ls_tx_service.h"
-#include "storage/slog/ob_storage_logger.h"
-#include "storage/slog/ob_storage_log.h"
-#include "storage/slog/ob_storage_log_replayer.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "src/share/sequence/ob_sequence_cache.h"
 
 namespace oceanbase

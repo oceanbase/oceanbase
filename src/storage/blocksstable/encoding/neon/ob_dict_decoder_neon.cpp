@@ -16,7 +16,6 @@
 #include <arm_neon.h>
 #endif
 
-#include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/encoding/ob_dict_decoder.h"
 #include "ob_encoding_neon_util.h"
 

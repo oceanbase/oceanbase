@@ -14,15 +14,10 @@
 
 #include "ob_sync_cmd_driver.h"
 
-#include "lib/profile/ob_perf_event.h"
 #include "obsm_row.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
-#include "rpc/obmysql/packet/ompk_eof.h"
-#include "share/ob_lob_access_utils.h"
-#include "observer/mysql/obmp_stmt_prexecute.h"
-#include "src/pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 
 namespace oceanbase

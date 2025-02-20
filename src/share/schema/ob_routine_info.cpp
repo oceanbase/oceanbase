@@ -11,10 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "lib/container/ob_array_serialization.h"
-#include "lib/container/ob_se_array_iterator.h"
 #include "ob_routine_info.h"
-#include "ob_udt_info.h"
 #include "ob_schema_getter_guard.h"
 
 namespace oceanbase

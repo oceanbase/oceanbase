@@ -11,7 +11,6 @@
  */
 
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"
-#include "share/rc/ob_tenant_base.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "rootserver/freeze/ob_major_freeze_util.h"
 

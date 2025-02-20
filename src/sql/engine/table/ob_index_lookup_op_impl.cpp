@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
-#include "lib/utility/ob_tracepoint.h"
 using namespace oceanbase::common;
 
 namespace oceanbase

@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/dblink/ob_dblink_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;

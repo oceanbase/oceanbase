@@ -12,9 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_backup_clean_mgr.h"
-#include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_clean_util.h"

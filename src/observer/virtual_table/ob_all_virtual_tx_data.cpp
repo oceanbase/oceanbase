@@ -11,10 +11,6 @@
  */
 #include "ob_all_virtual_tx_data.h"
 
-#include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant.h"
-#include "observer/omt/ob_multi_tenant.h"
-#include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase {

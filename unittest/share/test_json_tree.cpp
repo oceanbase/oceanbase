@@ -12,13 +12,10 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
-#include "lib/timezone/ob_timezone_info.h"
 #undef private
 
-#include <sys/time.h>    
 using namespace std;
 namespace oceanbase {
 namespace common {

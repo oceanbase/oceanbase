@@ -11,17 +11,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "storage/blocksstable/ob_data_buffer.h"
 #define protected public
 #define private public
-#include "storage/blocksstable/ob_macro_block_common_header.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_micro_block_header.h"
-#include "storage/tablet/ob_tablet_table_store.h"
-#include "storage/ob_i_table.h"
-#include "storage/ob_storage_struct.h"
-#include "share/scn.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase

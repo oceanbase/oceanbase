@@ -14,10 +14,6 @@
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "sql/resolver/dcl/ob_create_user_stmt.h"
 #include "sql/resolver/dcl/ob_drop_user_stmt.h"
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"

@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/tablet/ob_tablet_info.h"
-#include "share/ob_errno.h" // KR(ret)
-#include "share/ob_ls_id.h" // ls_id
 #include "share/tablet/ob_tablet_filter.h" // ObTabletFilter
 
 namespace oceanbase

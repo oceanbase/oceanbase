@@ -12,25 +12,9 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "ob_disaster_recovery_task.h"
 
-#include "lib/lock/ob_mutex.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/profile/ob_trace_id.h"
-#include "lib/alloc/ob_malloc_allocator.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "rootserver/ob_root_balancer.h"
-#include "rootserver/ob_root_service.h"
-#include "ob_rs_event_history_table_operator.h"
-#include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
+#include "ob_disaster_recovery_task.h"
 #include "observer/ob_server.h"
-#include "share/ob_server_status.h"
-#include "share/ls/ob_ls_table_operator.h"
-#include "share/ls/ob_ls_info.h"
-#include "rootserver/ob_disaster_recovery_task_mgr.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h" //for OTTZ_MGR
 
 namespace oceanbase

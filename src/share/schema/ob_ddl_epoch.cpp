@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_ddl_epoch.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "ob_ddl_epoch.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "share/ob_global_stat_proxy.h"
 

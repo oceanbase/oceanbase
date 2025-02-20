@@ -10,17 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <pthread.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
 #define private public
 #include "lib/hash/ob_hashset.h"
-#include "lib/hash/ob_hashutils.h"
 #undef private
-#include "lib/allocator/ob_malloc.h"
 
 #include "gtest/gtest.h"
 

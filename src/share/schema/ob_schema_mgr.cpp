@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
-#include "ob_schema_mgr.h"
 
-#include "lib/oblog/ob_log.h"
-#include "share/schema/ob_schema_utils.h"
-#include "lib/utility/ob_hang_fatal_error.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_get_compat_mode.h"
-#include "observer/ob_server_struct.h"
-#include "rootserver/ob_root_utils.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "lib/utility/ob_tracepoint.h"
+#include "ob_schema_mgr.h"
+#include "src/sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {

@@ -20,8 +20,6 @@
 
 #include "lib/charset/ob_byteorder.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_dtoa.h"
-#include "lib/charset/ob_uctype.h"
 #include "lib/charset/mb_wc.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_utf8_tab.h"

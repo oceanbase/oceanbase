@@ -13,13 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_recover_table_job_scheduler.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
-#include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "rootserver/standby/ob_standby_service.h"
-#include "share/location_cache/ob_location_service.h"
-#include "share/restore/ob_physical_restore_table_operator.h"
 #include "share/restore/ob_import_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "observer/ob_inner_sql_connection.h"

@@ -11,7 +11,6 @@
  */
 
 #include "lib/statistic_event/ob_stat_event.h"
-#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {

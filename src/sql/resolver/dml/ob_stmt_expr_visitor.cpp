@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/rewrite/ob_transform_utils.h"
 #include "ob_stmt_expr_visitor.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

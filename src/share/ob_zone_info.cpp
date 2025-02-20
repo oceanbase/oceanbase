@@ -12,12 +12,9 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_zone_info.h"
-#include "share/ob_define.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ob_storage_format.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/config/ob_server_config.h"
-#include "common/ob_zone_type.h"
 
 namespace oceanbase
 {

@@ -13,15 +13,8 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_alter_routine_resolver.h"
 #include "ob_alter_routine_stmt.h"
-#include "share/ob_rpc_struct.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_compile.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_router.h"
-#include "pl/ob_pl_stmt.h"
 #include "pl/parser/parse_stmt_item_type.h"
-#include "lib/utility/ob_defer.h"
 
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"

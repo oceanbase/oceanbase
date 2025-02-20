@@ -11,13 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/ob_sql.h"
 #include "sql/engine/ob_des_exec_context.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/ob_server_struct.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "lib/stat/ob_session_stat.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

@@ -11,7 +11,7 @@
  */ 
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/str_uca_type.h"
+#include "ob_uctype.h"
 
 static void __attribute__ ((noinline)) pad_max_char_help(char *str, char *end, char *buf, char buf_len)
 {

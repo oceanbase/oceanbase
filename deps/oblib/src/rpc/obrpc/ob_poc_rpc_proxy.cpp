@@ -10,8 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "rpc/obrpc/ob_poc_rpc_proxy.h"
-#include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "ob_poc_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/ob_errno.h"

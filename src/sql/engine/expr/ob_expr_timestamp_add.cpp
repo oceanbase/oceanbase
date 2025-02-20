@@ -17,13 +17,6 @@
 #include "sql/engine/expr/ob_expr_mul.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
-#include "lib/ob_date_unit_type.h"
-#include "lib/ob_name_def.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {

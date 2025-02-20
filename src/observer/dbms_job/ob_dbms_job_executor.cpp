@@ -15,15 +15,8 @@
 #include "ob_dbms_job_utils.h"
 #include "ob_dbms_job_executor.h"
 
-#include "lib/oblog/ob_log.h"
-#include "lib/mysqlclient/ob_isql_connection.h"
-#include "share/ob_define.h"
-#include "share/ob_errno.h"
-#include "share/schema/ob_schema_getter_guard.h"
 
 #include "observer/ob_inner_sql_connection_pool.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "pl/sys_package/ob_dbms_audit_mgmt.h"
 #endif

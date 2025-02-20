@@ -10,10 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "core/ob_jit_memory_manager.h"
-#include "lib/utility/ob_print_utils.h"
-#include <stdlib.h>
-
+#include "ob_jit_memory_manager.h"
 namespace oceanbase {
 namespace jit {
 namespace core {

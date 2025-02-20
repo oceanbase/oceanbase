@@ -13,26 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_i_store.h"
-#include "blocksstable/ob_storage_cache_suite.h"
-#include "lib/container/ob_array_iterator.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/statistic_event/ob_stat_event.h"
-#include "storage/blocksstable/ob_sstable.h"
-#include "storage/tablet/ob_tablet.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_dml_param.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_operator.h"
-#include "storage/access/ob_dml_param.h"
-#include "storage/ob_relative_table.h"
-#include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "blocksstable/ob_datum_row.h"
-#include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 
 namespace oceanbase
 {

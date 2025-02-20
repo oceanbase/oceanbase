@@ -11,9 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <math.h>
-#include "lib/oblog/ob_log.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_int_div.h"
 #include "sql/engine/expr/ob_expr_div.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"

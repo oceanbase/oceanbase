@@ -10,14 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include <unistd.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <time.h>
-#include "lib/container/ob_rbtree.h"
 #include "gtest/gtest.h"
-#include "logservice/palf/lsn.h"
-#include "ob_log_utils.h"
 #include "ob_cdc_lightly_sorted_list.h"
 #include "ob_log_trans_log.h"
 

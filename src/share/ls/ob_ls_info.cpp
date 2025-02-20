@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SHARE_PT
 
 #include "share/ls/ob_ls_info.h"      // for decalrations of functions in this cpp
-#include "share/config/ob_server_config.h"            // for KR(), common::ob_error_name(x)
 #include "share/ls/ob_ls_replica_filter.h" // ObLSReplicaFilter
-#include "share/ob_share_util.h"           // ObShareUtils
 #include "share/ob_all_server_tracer.h"    // SVR_TRACER
-#include "lib/string/ob_sql_string.h"      // ObSqlString
-#include "lib/utility/utility.h" // split_on()
 
 namespace oceanbase
 {

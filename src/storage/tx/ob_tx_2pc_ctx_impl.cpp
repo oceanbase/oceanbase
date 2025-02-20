@@ -12,7 +12,6 @@
 
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_committer_define.h"
 
 namespace oceanbase
 {

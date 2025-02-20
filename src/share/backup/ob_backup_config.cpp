@@ -15,18 +15,10 @@
 #include "ob_log_restore_config.h"
 #include "ob_backup_data_table_operator.h"
 #include "ob_backup_helper.h"
-#include "ob_backup_store.h"
 #include "ob_archive_persist_helper.h"
 #include "ob_backup_connectivity.h"
-#include "sql/parser/parse_node.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
-#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
-#include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
 
 using namespace oceanbase;
 using namespace share;

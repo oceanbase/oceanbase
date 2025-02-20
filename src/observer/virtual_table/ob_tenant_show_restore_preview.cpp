@@ -11,12 +11,9 @@
  */
 
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
-#include "lib/string/ob_fixed_length_string.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "rootserver/restore/ob_restore_util.h"
 #include "share/restore/ob_restore_uri_parser.h"
 
-#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

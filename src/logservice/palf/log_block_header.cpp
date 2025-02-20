@@ -11,10 +11,6 @@
  */
 
 #include "log_block_header.h"
-#include "lib/ob_define.h"                                    // PALF_LOG
-#include "lib/ob_errno.h"                                     // OB_SUCCESS...
-#include "lib/checksum/ob_crc64.h"                            // ob_crc64
-#include "lib/utility/serialization.h"
 
 namespace oceanbase
 {

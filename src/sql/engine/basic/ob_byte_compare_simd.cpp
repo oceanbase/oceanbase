@@ -16,7 +16,6 @@
 #include <immintrin.h>
 #endif
 
-#include <stdlib.h>
 
 namespace oceanbase
 {

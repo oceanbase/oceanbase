@@ -13,9 +13,8 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_service.h"
-#include "ob_backup_schedule_task.h"
+#include "src/rootserver/backup/ob_backup_base_service.h"
 #include "ob_backup_task_scheduler.h"
-#include "rootserver/ob_root_utils.h"
 
 namespace oceanbase 
 {

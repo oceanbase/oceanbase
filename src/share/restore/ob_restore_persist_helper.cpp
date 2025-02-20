@@ -11,14 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "share/restore/ob_restore_persist_helper.h"
+#include "ob_restore_persist_helper.h"
 #include "share/restore/ob_physical_restore_info.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/backup/ob_backup_struct.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/oblog/ob_log_module.h"
-#include "common/ob_smart_var.h"
 
 using namespace oceanbase;
 using namespace common;

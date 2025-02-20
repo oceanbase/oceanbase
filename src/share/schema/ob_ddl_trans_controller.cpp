@@ -9,10 +9,8 @@
 // See the Mulan PubL v2 for more details.
 
 #define USING_LOG_PREFIX RS
-#include "share/schema/ob_ddl_trans_controller.h"
-#include "share/schema/ob_multi_version_schema_service.h"
+#include "ob_ddl_trans_controller.h"
 #include "rootserver/ob_root_service.h"
-#include "share/ob_srv_rpc_proxy.h"
 
 
 namespace oceanbase

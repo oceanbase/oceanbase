@@ -14,18 +14,9 @@
 
 #include "observer/virtual_table/ob_all_virtual_proxy_schema.h"
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
-#include "observer/ob_server_struct.h" // GCTX
 #include "observer/ob_inner_sql_result.h"
-#include "share/ob_errno.h" // KR(ret)
-#include "share/schema/ob_part_mgr_util.h" // ObPartitionIterator
-#include "share/schema/ob_schema_mgr.h" // ObSimpleDatabaseSchema
-#include "share/inner_table/ob_inner_table_schema_constants.h" // OB_ALL_XXX_TNAME
-#include "share/location_cache/ob_location_service.h" // ObLocationService
-#include "lib/string/ob_sql_string.h" // ObSqlString
-#include "sql/session/ob_sql_session_info.h" // ObSqlSessionInfo
-#include "sql/parser/ob_parser.h" // ObParser
+#include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/dml/ob_select_resolver.h" // ObSelectResolver
-#include "sql/resolver/ob_resolver_utils.h" // ObResolverUtils
 
 namespace oceanbase
 {

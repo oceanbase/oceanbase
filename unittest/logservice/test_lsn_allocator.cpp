@@ -11,11 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <string>
-#include <pthread.h>
 
-#include "share/scn.h"
 #define private public
 #include "logservice/palf/lsn_allocator.h"
 #undef private

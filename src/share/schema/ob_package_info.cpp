@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
-#include "share/schema/ob_package_info.h"
+#include "ob_package_info.h"
 #include "share/schema/ob_trigger_info.h"
 
 namespace oceanbase

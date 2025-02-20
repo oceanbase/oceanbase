@@ -12,9 +12,8 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/utility/ob_print_utils.h"
-#include "lib/string/ob_string.h"
-#include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
+#include "deps/oblib/src/lib/allocator/ob_malloc.h"
 namespace oceanbase
 {
 namespace common

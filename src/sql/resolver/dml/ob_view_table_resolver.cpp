@@ -12,11 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_view_table_resolver.h"
-#include "share/schema/ob_table_schema.h"
-#include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
 using namespace common;

@@ -13,10 +13,6 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_profile_resolver.h"
 #include "sql/resolver/ddl/ob_create_profile_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_schema_service.h"
 
 namespace oceanbase
 {

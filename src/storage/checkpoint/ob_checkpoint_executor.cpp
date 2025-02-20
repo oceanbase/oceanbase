@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/ls/ob_ls.h"
-#include "storage/checkpoint/ob_checkpoint_executor.h"
+#include "ob_checkpoint_executor.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
-#include "storage/checkpoint/ob_data_checkpoint.h"
-#include "share/ob_force_print_log.h"
-#include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 

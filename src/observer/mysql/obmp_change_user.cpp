@@ -12,22 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/mysql/obmp_change_user.h"
-#include "observer/mysql/obmp_utils.h"
-#include "lib/string/ob_sql_string.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "sql/ob_sql.h"
-#include "sql/ob_end_trans_callback.h"
-#include "sql/session/ob_sql_session_mgr.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/session/ob_user_resource_mgr.h"
-#include "sql/parser/ob_parser.h"
-#include "sql/parser/ob_parser_utils.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
 
 

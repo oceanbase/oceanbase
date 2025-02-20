@@ -14,13 +14,8 @@
 
 #include "ob_all_server_task.h"
 
-#include "lib/profile/ob_trace_id.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_server_status.h"
 #include "rootserver/ob_server_manager.h"
-#include "rootserver/ob_disaster_recovery_task_mgr.h"
 #include "rootserver/ob_root_utils.h"
-#include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
 #include "ob_heartbeat_service.h"
 

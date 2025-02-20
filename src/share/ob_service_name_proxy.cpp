@@ -11,18 +11,9 @@
  */
 #define USING_LOG_PREFIX SHARE
 
-#include "ob_service_name_proxy.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/string/ob_sql_string.h"
+#include "ob_service_name_proxy.h"
 #include "observer/ob_server_struct.h"
-#include "common/ob_timeout_ctx.h"
-#include "share/ob_share_util.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_tenant_event_def.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_service_epoch_proxy.h"

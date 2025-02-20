@@ -14,8 +14,7 @@
 
 #include "sql/resolver/cmd/ob_create_restore_point_resolver.h"
 #include "sql/resolver/cmd/ob_create_restore_point_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/cmd/ob_variable_set_resolver.h"
+#include "src/sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {

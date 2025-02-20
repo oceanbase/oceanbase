@@ -11,10 +11,7 @@
  */
 
 #include "ob_archive_allocator.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
 #include "ob_archive_task.h"           // ObArchiveLogFetchTask ObArchiveSendTask
-#include "share/ob_ls_id.h"            // ObLSID
 #include "ob_archive_task_queue.h"     // ObArchiveTaskStatus
 
 namespace oceanbase

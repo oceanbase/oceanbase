@@ -11,9 +11,7 @@
  */
 
 #include "ob_xa_trans_heartbeat_worker.h"
-#include "share/ob_thread_pool.h"
 #include "storage/tx/ob_xa_service.h"
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

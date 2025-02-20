@@ -14,8 +14,6 @@
 
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_macro_block_meta.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
 
 namespace oceanbase
 {

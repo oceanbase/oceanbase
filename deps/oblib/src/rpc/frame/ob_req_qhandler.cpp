@@ -14,7 +14,6 @@
 
 #include "rpc/frame/ob_req_qhandler.h"
 
-#include "rpc/ob_request.h"
 #include "rpc/frame/ob_req_translator.h"
 #include "rpc/frame/ob_req_processor.h"
 

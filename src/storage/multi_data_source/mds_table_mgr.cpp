@@ -9,21 +9,10 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/container/ob_se_array.h"
-#include "lib/ob_errno.h"
-#include "mds_ctx.h"
-#include "ob_tablet_id.h"
-#include "storage/multi_data_source/mds_table_order_flusher.h"
 #define USING_LOG_PREFIX MDS
 
 #include "mds_table_mgr.h"
-#include "mds_table_handle.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/ls/ob_ls_tablet_service.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/tablet/ob_tablet_iterator.h"
-#include "storage/multi_data_source/mds_table_base.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase {
 

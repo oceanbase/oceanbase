@@ -11,9 +11,6 @@
  */
 
 #include "ob_all_virtual_ha_diagnose.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase

@@ -11,22 +11,7 @@
  */
 
 #include "buffer_ctx.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/utility/serialization.h"
-#include "lib/utility/utility.h"
-#include "runtime_utility/mds_factory.h"
-#include "compile_utility/map_type_index_in_tuple.h"
-#include "share/rc/ob_tenant_base.h"
 #include "storage/multi_data_source/compile_utility/compile_mapper.h"
-#include "storage/multi_data_source/mds_ctx.h"
-#include "storage/multi_data_source/mds_writer.h"
-#include "storage/multi_data_source/runtime_utility/common_define.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tx/ob_trans_define.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
-#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {

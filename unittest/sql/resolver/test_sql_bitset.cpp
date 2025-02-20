@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/container/ob_bit_set.h"
-#include <cstring>
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;

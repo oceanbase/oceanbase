@@ -14,12 +14,8 @@
 #include "ob_ddl_tablet_scheduler.h"
 #include "rootserver/ob_root_service.h"
 #include "share/ob_ddl_checksum.h"
-#include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_ddl_common.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/scn.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "storage/ddl/ob_ddl_lock.h"
+#include "src/observer/ob_inner_sql_connection.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;

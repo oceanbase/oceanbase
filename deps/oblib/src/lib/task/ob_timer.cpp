@@ -10,13 +10,10 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/task/ob_timer.h"
+#include "ob_timer.h"
 #include "lib/task/ob_timer_monitor.h"
-#include "lib/time/ob_time_utility.h"
 #include "lib/thread/ob_thread_name.h"
-#include "lib/string/ob_string.h"
 #include "lib/stat/ob_diagnose_info.h"
-#include "common/ob_clock_generator.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/allocator/ob_malloc.h"
 

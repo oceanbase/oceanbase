@@ -12,12 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "test_optimizer_utils.h"
-#include "sql/ob_sql_utils.h"
-#include "sql/resolver/dml/ob_dml_stmt.h"
-#include "sql/plan_cache/ob_sql_parameterization.h"
-#include "sql/rewrite/ob_transform_project_pruning.h"
-#include "sql/engine/ob_physical_plan.h"
-#include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 
 namespace test

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/oblog/ob_log.h"
 #include "ob_log_miner_test_utils.h"
 #include "gtest/gtest.h"
 #define private public

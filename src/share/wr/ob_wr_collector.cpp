@@ -12,13 +12,8 @@
 
 #define USING_LOG_PREFIX WR
 
-#include "deps/oblib/src/lib/mysqlclient/ob_mysql_proxy.h"
-#include "observer/ob_server_struct.h"
 #include "share/wr/ob_wr_collector.h"
 #include "share/wr/ob_wr_task.h"
-#include "share/ob_define.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "share/rc/ob_tenant_base.h"
 #include "sql/plan_cache/ob_plan_cache.h"

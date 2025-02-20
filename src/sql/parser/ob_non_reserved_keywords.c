@@ -12,12 +12,7 @@
 
 #include "ob_non_reserved_keywords.h"
 #include <stdio.h>
-#include <ctype.h>
-#include <strings.h>
-#include <string.h>
-#include <stdlib.h>
 #include "lib/alloc/alloc_assist.h"
-#include "sql/parser/sql_parser_mysql_mode_tab.h"
 #include "sql/parser/parse_define.h"
 
 int32_t get_next_id(char c)

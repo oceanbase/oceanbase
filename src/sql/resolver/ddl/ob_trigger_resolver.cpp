@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
-#include "sql/resolver/ddl/ob_trigger_stmt.h"
-#include "pl/parser/ob_pl_parser.h"
-#include "pl/ob_pl_resolver.h"
-#include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_create_routine_resolver.h"
 #include "pl/parser/parse_stmt_item_type.h"
 #include "pl/ob_pl_package.h"

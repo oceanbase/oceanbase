@@ -13,14 +13,6 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "ob_granule_pump.h"
-#include "sql/engine/px/ob_granule_iterator_op.h"
-#include "sql/engine/px/ob_granule_util.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_part_mgr_util.h"
-#include "sql/engine/dml/ob_table_modify_op.h"
-#include "sql/engine/ob_engine_op_traits.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase

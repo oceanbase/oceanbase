@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_reader.h"
-#include "storage/tx/ob_trans_ctx_mgr.h"
-#include "storage/tx_table/ob_tx_table.h"
-#include "share/ob_force_print_log.h"
 #include "storage/access/ob_aggregated_store.h"
 
 namespace oceanbase

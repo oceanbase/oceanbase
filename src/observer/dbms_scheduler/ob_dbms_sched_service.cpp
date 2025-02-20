@@ -11,9 +11,6 @@
  */
 
 #include "observer/dbms_scheduler/ob_dbms_sched_service.h"
-#include "lib/ob_define.h"              // is_user_tenant is_sys_tenant
-#include "share/rc/ob_tenant_base.h"    // MTL_*
-#include "observer/ob_server_struct.h"  // GCTX
 #define USING_LOG_PREFIX SERVER
 
 namespace oceanbase

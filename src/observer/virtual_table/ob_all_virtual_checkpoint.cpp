@@ -11,10 +11,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_checkpoint.h"
-#include "storage/checkpoint/ob_checkpoint_executor.h"
-#include "logservice/ob_log_base_type.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ls/ob_ls.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;

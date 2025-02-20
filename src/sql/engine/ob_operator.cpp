@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "share/rc/ob_tenant_base.h"
 #include "ob_operator.h"
 #include "ob_operator_factory.h"
-#include "sql/engine/ob_exec_context.h"
-#include "common/ob_smart_call.h"
-#include "sql/engine/ob_exec_feedback_info.h"
 #include "observer/ob_server.h"
 
 namespace oceanbase

@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_route_service.h"
 #include "lib/thread/thread_mgr.h"  // MTL
-#include "share/ob_thread_pool.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_mgr.h"    // TG*
-#include "ob_ls_log_stat_info.h"    // LogStatRecordArray
-#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;

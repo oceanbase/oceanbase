@@ -12,16 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
-#include "lib/net/ob_addr.h"
-#include "lib/hash/ob_hashmap.h"
-#include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/ob_sql_trans_control.h"
-#include "sql/executor/ob_job_control.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_physical_plan_ctx.h"
-#include "sql/ob_phy_table_location.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
+#include "ob_task_executor_ctx.h"
 #include "observer/ob_server.h"
 
 using namespace oceanbase::common;

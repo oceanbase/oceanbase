@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX  LIB_TIME
 
 #include "lib/timezone/ob_oracle_format_models.h"
-#include "lib/timezone/ob_time_convert.h"
 
 namespace oceanbase
 {

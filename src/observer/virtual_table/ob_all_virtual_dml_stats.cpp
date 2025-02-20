@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_dml_stats.h"
-#include "observer/ob_server.h"
 
 namespace oceanbase
 {

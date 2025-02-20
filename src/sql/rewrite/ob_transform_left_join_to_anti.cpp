@@ -13,12 +13,8 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "ob_transform_left_join_to_anti.h"
-#include "common/ob_common_utility.h"
-#include "share/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 
 namespace oceanbase
 {

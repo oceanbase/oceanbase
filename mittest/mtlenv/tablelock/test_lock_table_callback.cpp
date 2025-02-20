@@ -19,13 +19,9 @@
 #define protected public
 #define private public
 
-#include "common/rowkey/ob_store_rowkey.h"
 #include "storage/ls/ob_freezer.h"
-#include "storage/memtable/ob_memtable_util.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "table_lock_common_env.h"
 
 namespace oceanbase

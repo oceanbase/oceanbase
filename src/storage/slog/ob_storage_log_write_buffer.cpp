@@ -13,12 +13,7 @@
 #define USING_LOG_PREFIX STORAGE_REDO
 
 #include "ob_storage_log_write_buffer.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/ob_errno.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/allocator/ob_malloc.h"
 #include "storage/slog/ob_storage_log_item.h"
-#include "common/log/ob_log_constants.h"
 
 namespace oceanbase
 {

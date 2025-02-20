@@ -12,16 +12,7 @@
 #define USING_LOG_PREFIX PALF
 
 #include "log_io_worker.h"
-#include <time.h>                             // timespce
-#include <sys/prctl.h>                        // prctl
-#include "lib/ob_errno.h"                     // OB_SUCCESS
-#include "lib/stat/ob_session_stat.h"         // Session
-#include "lib/thread/ob_thread_name.h"        // set_thread_name
-#include "share/rc/ob_tenant_base.h"          // mtl_free
-#include "share/ob_throttling_utils.h"        //ObThrottlingUtils
-#include "log_io_task.h"                      // LogIOTask
 #include "palf_env_impl.h"                    // PalfEnvImpl
-#include "log_throttle.h"                     // LogWritingThrottle
 
 namespace oceanbase
 {

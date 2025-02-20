@@ -11,13 +11,7 @@
  */
 
 #include "dynamic_buffer.h"
-#include "lib/atomic/ob_atomic.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_utility.h"
 #include "share/rc/ob_tenant_base.h"
-#include <cstdint>
 
 namespace oceanbase
 {

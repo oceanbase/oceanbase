@@ -12,11 +12,8 @@
 
 #include "lib/queue/ob_lighty_queue.h"
 
-#include <sys/syscall.h>
-#include <unistd.h>
 
 #include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {

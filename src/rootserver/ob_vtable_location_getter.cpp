@@ -14,12 +14,8 @@
 
 #include "ob_vtable_location_getter.h"
 
-#include "lib/container/ob_array_serialization.h"
-#include "lib/container/ob_array_iterator.h"
 #include "rootserver/ob_unit_manager.h"
 #include "share/ob_all_server_tracer.h"
-#include "share/ob_unit_table_operator.h"
-#include "rootserver/ob_root_utils.h"
 
 namespace oceanbase
 {

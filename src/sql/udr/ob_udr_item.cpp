@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_QRR
-#include "lib/utility/ob_print_utils.h"
 #include "sql/udr/ob_udr_item.h"
 
 namespace oceanbase

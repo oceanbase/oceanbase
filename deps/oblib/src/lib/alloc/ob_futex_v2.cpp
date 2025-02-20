@@ -13,8 +13,6 @@
 #ifndef ENABLE_SANITY
 #else
 #include "ob_futex_v2.h"
-#include <linux/futex.h>
-#include "lib/ob_abort.h"
 
 inline int futex_v2_wake(volatile int *p, int val)
 {

@@ -12,12 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_prepare_stmt_struct.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_print_utils.h"
 #include "sql/plan_cache/ob_ps_sql_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
-#include "sql/parser/parse_node.h"
 
 namespace oceanbase
 {

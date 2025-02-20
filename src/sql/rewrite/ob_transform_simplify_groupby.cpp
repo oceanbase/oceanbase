@@ -14,7 +14,6 @@
 #include "ob_transform_simplify_groupby.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::sql;
 

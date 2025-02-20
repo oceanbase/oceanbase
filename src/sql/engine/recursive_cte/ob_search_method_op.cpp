@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/ob_operator.h"
 #include "ob_search_method_op.h"
 
 using namespace oceanbase::sql;

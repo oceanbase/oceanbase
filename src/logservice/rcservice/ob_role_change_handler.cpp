@@ -11,10 +11,6 @@
  */
 
 #include "ob_role_change_handler.h"
-#include "lib/container/ob_fixed_array.h"
-#include "lib/lock/ob_spin_lock.h"
-#include "lib/ob_define.h"
-#include "share/ob_errno.h"
 namespace oceanbase
 {
 using namespace common;

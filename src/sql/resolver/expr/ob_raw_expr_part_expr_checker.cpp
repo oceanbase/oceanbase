@@ -11,9 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase
 {

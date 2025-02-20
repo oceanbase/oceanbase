@@ -11,7 +11,6 @@
  */
 
 #include "ob_tenant_weak_read_stat.h"
-#include "lib/ob_define.h"
 namespace oceanbase
 {
 namespace transaction

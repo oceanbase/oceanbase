@@ -14,10 +14,7 @@
 #define private public
 #define protected public
 #include "share/ob_thread_mgr.h"
-#include "share/cache/ob_kv_storecache.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#include "lib/utility/ob_tracepoint.h"
-// #include "ob_cache_get_stressor.h"
 #include "observer/ob_signal_handle.h"
 #include "ob_cache_test_utils.h"
 #include "share/ob_tenant_mgr.h"

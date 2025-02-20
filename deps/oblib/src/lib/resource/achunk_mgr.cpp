@@ -12,18 +12,8 @@
 
 #define USING_LOG_PREFIX LIB
 
-#include <new>
-#include <stdlib.h>
-#include <sys/mman.h>
-#include "lib/resource/achunk_mgr.h"
+#include "achunk_mgr.h"
 #include "lib/utility/utility.h"
-#include "lib/allocator/ob_tc_malloc.h"
-#include "lib/allocator/ob_mod_define.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/alloc/alloc_struct.h"
-#include "lib/alloc/alloc_failed_reason.h"
-#include "lib/alloc/memory_sanity.h"
-#include "deps/oblib/src/lib/alloc/malloc_hook.h"
 
 using namespace oceanbase::lib;
 int ObLargePageHelper::large_page_type_ = INVALID_LARGE_PAGE_TYPE;

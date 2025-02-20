@@ -11,10 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_test_util.h"
-#include "lib/restore/ob_storage.h"
-#include "lib/restore/ob_storage_cos_base.h"
-#include "lib/allocator/page_arena.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "test_backup_access_cos.h"
 

@@ -12,17 +12,8 @@
  */
 
 #include "ob_expr_xmlcast.h"
-#include "share/object/ob_obj_cast.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "lib/xml/ob_xml_parser.h"
-#include "lib/xml/ob_xml_tree.h"
-#include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xpath.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_spi.h"
+#include "src/pl/ob_pl.h"
 
 #define USING_LOG_PREFIX SQL_ENG
 

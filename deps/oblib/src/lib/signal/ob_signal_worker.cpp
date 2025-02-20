@@ -11,9 +11,7 @@
  */
 
 #include "lib/signal/ob_signal_worker.h"
-#include <poll.h>
 #include <sys/prctl.h>
-#include "lib/allocator/ob_malloc.h"
 #include "lib/signal/ob_signal_processor.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/utility/ob_defer.h"

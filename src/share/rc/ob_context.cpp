@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/rc/ob_context.h"
-#include "lib/coro/co_var.h"
-#include "lib/rc/ob_rc.h"
-#include "lib/utility/ob_macro_utils.h"
 #include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::common;

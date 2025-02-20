@@ -10,9 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/atomic/ob_atomic.h"
 #include "lib/profile/ob_trace_id.h"
-#include "lib/utility/ob_serialization_helper.h"
 using namespace oceanbase;
 using namespace oceanbase::common;
 

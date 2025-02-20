@@ -11,13 +11,8 @@
  */
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <thread>
 #define private public
 #define protected public
-#include "storage/tx/ob_trans_define.h"
-#include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_redo_submitter.h"
 #define USING_LOG_PREFIX TRANS
 

@@ -12,15 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "obmp_utils.h"
-#include "obmp_base.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "lib/utility/ob_proto_trans_util.h"
 #include "observer/mysql/obmp_utils.h"
-#include "rpc/obmysql/ob_2_0_protocol_utils.h"
-#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
-#include "lib/container/ob_bit_set.h"
-#include "share/ob_rpc_struct.h"
 #include "sql/session/ob_sess_info_verify.h"
 namespace oceanbase
 {

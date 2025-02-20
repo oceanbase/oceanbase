@@ -16,8 +16,6 @@
 
 
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "share/ob_simple_mem_limit_getter.h"
-#include "storage/lob/ob_lob_seq.h"
 
 namespace oceanbase
 {

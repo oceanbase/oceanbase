@@ -12,8 +12,6 @@
 
 #include "lib/thread/ob_dynamic_thread_pool.h"
 #include <gtest/gtest.h>
-#include <malloc.h>
-#include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
 
 using namespace oceanbase::common;

@@ -12,14 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_sequence_ddl_proxy.h"
-#include "lib/string/ob_string.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/sequence/ob_sequence_option_builder.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "rootserver/ob_ddl_operator.h"
 

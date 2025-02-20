@@ -11,14 +11,8 @@
  */
 
 #include "ob_archive_io.h"
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/utility/ob_macro_utils.h"
-#include "lib/utility/ob_tracepoint.h"            // EventTable
-#include "share/ob_device_manager.h"              // ObIODevice
 #include "share/backup/ob_backup_io_adapter.h"    // ObBackupIoAdapter
 #include "share/ob_debug_sync.h"                  // DEBUG_SYNC
-#include "share/ob_debug_sync_point.h"            // LOG_ARCHIVE_PUSH_LOG
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

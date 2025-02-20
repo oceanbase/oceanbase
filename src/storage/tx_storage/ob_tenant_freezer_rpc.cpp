@@ -12,15 +12,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 
+#include "ob_tenant_freezer_rpc.h"
 #include "observer/ob_server.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
-#include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "storage/tx_storage/ob_tenant_freezer_common.h"
-#include "storage/multi_data_source/mds_table_mgr.h"
 
 namespace oceanbase
 {

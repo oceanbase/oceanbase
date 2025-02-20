@@ -10,11 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "storage/checkpoint/ob_data_checkpoint.h"
+#include "ob_data_checkpoint.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "storage/ls/ob_ls.h"
-#include "storage/memtable/ob_memtable.h"
-#include "storage/ls/ob_freezer.h"
 
 namespace oceanbase
 {

@@ -14,10 +14,6 @@
 
 #include "io/easy_io.h"
 #include "ob_req_handler.h"
-#include "lib/ob_abort.h"
-#include "lib/ob_define.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/serialization.h"
 #include "common/ob_clock_generator.h"
 
 using namespace oceanbase::rpc::frame;

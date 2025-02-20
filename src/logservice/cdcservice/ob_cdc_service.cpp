@@ -11,10 +11,8 @@
  */
 
 #include "ob_cdc_service.h"
-#include "ob_cdc_service_monitor.h"
 #include "logservice/ob_log_service.h"
 #include "share/backup/ob_archive_persist_helper.h" // share::ObArchivePersistHelper
-#include "logservice/restoreservice/ob_remote_log_source_allocator.h" // ObResSrcAlloctor::free
 
 namespace oceanbase
 {

@@ -20,8 +20,6 @@
 #include "storage/ls/ob_ls.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "mtlenv/tablelock/table_lock_common_env.h"
-#include "mtlenv/tablelock/table_lock_tx_common_env.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 

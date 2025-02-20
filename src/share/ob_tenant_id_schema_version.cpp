@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/ob_tenant_id_schema_version.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_transaction.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/string/ob_sql_string.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "common/ob_timeout_ctx.h"
+#include "ob_tenant_id_schema_version.h"
 #include "rootserver/ob_root_utils.h"
-#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {

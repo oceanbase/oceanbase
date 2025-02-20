@@ -11,7 +11,6 @@
  */
 
 #include "ob_inner_sql_read_context.h"
-#include "ob_inner_sql_connection.h"
 
 namespace oceanbase
 {

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_row_queue.h"
-#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {

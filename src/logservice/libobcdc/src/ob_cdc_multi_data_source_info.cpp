@@ -14,8 +14,6 @@
 
 #define USING_LOG_PREFIX OBLOG_PARSER
 
-#include "lib/ob_errno.h"
-#include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_macro_utils.h"
 
 #include "ob_cdc_multi_data_source_info.h"

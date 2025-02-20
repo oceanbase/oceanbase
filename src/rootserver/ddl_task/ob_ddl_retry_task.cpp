@@ -12,16 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ddl_retry_task.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/rc/context.h"
-#include "share/schema/ob_multi_version_schema_service.h"
-#include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_sim_point.h"
-#include "rootserver/ddl_task/ob_ddl_scheduler.h"
-#include "rootserver/ob_root_service.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
-#include "storage/tablelock/ob_table_lock_service.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

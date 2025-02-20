@@ -13,10 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_grants.h"
 
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_schema_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_priv_common.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase

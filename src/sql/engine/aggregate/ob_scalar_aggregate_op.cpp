@@ -14,7 +14,6 @@
 
 #include "sql/engine/aggregate/ob_scalar_aggregate_op.h"
 #include "sql/engine/px/ob_px_util.h"
-#include "lib/number/ob_number_v2.h"
 
 
 namespace oceanbase

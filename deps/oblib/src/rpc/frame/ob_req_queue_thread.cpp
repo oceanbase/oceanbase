@@ -14,18 +14,8 @@
 
 #include "rpc/frame/ob_req_queue_thread.h"
 
-#include "lib/atomic/ob_atomic.h"
-#include "lib/profile/ob_profile_log.h"
-#include "lib/profile/ob_profile_type.h"
-#include "lib/thread_local/ob_tsi_factory.h"
-#include "lib/utility/utility.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_trace_log.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/ob_define.h"
-#include "lib/worker.h"
 #include "rpc/ob_request.h"
-#include "rpc/obrpc/ob_rpc_packet.h"
 
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;

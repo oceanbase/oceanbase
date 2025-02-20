@@ -11,11 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "ob_define.h"
-#include "share/ob_replica_info.h"
+#include "ob_replica_info.h"
 #include "rootserver/ob_locality_util.h"
-#include "lib/container/ob_se_array_iterator.h"
-#include "lib/container/ob_array_iterator.h"
 
 namespace oceanbase
 {

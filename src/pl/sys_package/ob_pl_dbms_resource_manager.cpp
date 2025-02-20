@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX PL
 #include "ob_pl_dbms_resource_manager.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
-#include "sql/privilege_check/ob_ora_priv_check.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

@@ -12,8 +12,6 @@
 
 #include "storage/tablelock/ob_table_lock_iterator.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "storage/tablelock/ob_table_lock_common.h"
-#include "storage/blocksstable/ob_datum_row.h"  // ObStoreRowFlag
 
 namespace oceanbase
 {

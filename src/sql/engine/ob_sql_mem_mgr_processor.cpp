@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_sql_mem_mgr_processor.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase {
 

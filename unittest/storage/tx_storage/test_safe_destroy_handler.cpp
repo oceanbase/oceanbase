@@ -11,8 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #define USING_LOG_PREFIX STORAGETEST
 

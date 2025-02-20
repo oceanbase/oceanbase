@@ -11,7 +11,6 @@
 */
 
 #include "lib/charset/ob_dtoa.h"
-#include "lib/charset/ob_mysql_global.h"
 
 #define DTOA_OVERFLOW 9999
 #define MAX_DECPT_FOR_F_FORMAT DBL_DIG

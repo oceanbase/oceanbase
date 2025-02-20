@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_tablet_ls_map.h"
-#include "lib/lock/ob_qsync_lock.h" // ObQSyncLock
-#include "common/ob_clock_generator.h" // ObClockGenerator
-#include "lib/objectpool/ob_concurrency_objpool.h" // op_alloc, op_free
 
 namespace oceanbase
 {

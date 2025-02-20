@@ -11,9 +11,6 @@
  */
 
 #include "ob_trans_submit_log_cb.h"
-#include "lib/stat/ob_session_stat.h"
-#include "share/ob_cluster_version.h"
-#include "ob_trans_service.h"
 #include "ob_trans_part_ctx.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 

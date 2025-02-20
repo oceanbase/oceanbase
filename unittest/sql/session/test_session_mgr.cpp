@@ -11,14 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <stdlib.h>
-#include <algorithm>
-#include <pthread.h>
-#include <sys/time.h>
-#include "lib/stat/ob_session_stat.h"
 #include "sql/session/ob_sql_session_mgr.h"
-#include "lib/random/ob_random.h"
-#include "rpc/obmysql/obsm_struct.h"
 
 using namespace std;
 using namespace oceanbase;

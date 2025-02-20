@@ -12,23 +12,10 @@
 
 #define USING_LOG_PREFIX PL
 
-#include "pl/ob_pl_package_manager.h"
-#include "pl/ob_pl.h"
+#include "ob_pl_package_manager.h"
 #include "pl/ob_pl_package.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_compile.h"
-#include "pl/ob_pl_stmt.h"
-#include "pl/ob_pl_package_state.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/plan_cache/ob_cache_object_factory.h"
-#include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/ob_sql_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_req_time_service.h"
-#include "lib/file/file_directory_utils.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
-#include "sql/session/ob_session_val_map.h"
 
 namespace oceanbase
 {

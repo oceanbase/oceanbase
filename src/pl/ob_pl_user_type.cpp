@@ -12,21 +12,11 @@
 
 #define USING_LOG_PREFIX PL
 
+#include "ob_pl_user_type.h"
 #include "observer/mysql/obsm_utils.h"
-#include "pl/ob_pl_user_type.h"
-#include "common/object/ob_object.h"
-#include "common/ob_smart_call.h"
-#include "rpc/obmysql/ob_mysql_util.h"
 #include "pl/ob_pl_code_generator.h"
-#include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_package.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "pl/ob_pl_allocator.h"
-#include "share/ob_lob_access_utils.h"
 #include "observer/mysql/ob_query_driver.h"
-#include "lib/json_type/ob_json_parse.h"
 
 namespace oceanbase
 {

@@ -12,26 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "ob_opt_stat_sql_service.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_statement.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "lib/utility/ob_print_utils.h"
-#include "lib/compress/ob_compressor_pool.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "share/config/ob_server_config.h"
-#include "share/schema/ob_schema_utils.h"
-#include "share/schema/ob_schema_service.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "observer/ob_sql_client_decorator.h"
-#include "observer/ob_server_struct.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "lib/charset/ob_charset.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 
 #define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \

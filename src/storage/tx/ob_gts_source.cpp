@@ -10,17 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_gts_define.h"
 #include "ob_gts_source.h"
-#include "ob_gts_rpc.h"
-//#include "ob_ts_worker.h"
-#include "lib/utility/utility.h"
-#include "lib/utility/ob_tracepoint.h"
-#include "ob_trans_part_ctx.h"
 #include "ob_trans_service.h"
 #include "ob_timestamp_access.h"
-#include "ob_location_adapter.h"
-#include "share/ob_ls_id.h"
 
 namespace oceanbase
 {

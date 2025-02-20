@@ -11,8 +11,6 @@
  */
 
 #include "ob_micro_block_writer.h"
-#include "lib/checksum/ob_crc64.h"
-#include "storage/ob_i_store.h"
 
 namespace oceanbase
 {

@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "lib/oblog/ob_log.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "lib/allocator/ob_malloc.h"
 #include "share/config/ob_server_config.h"

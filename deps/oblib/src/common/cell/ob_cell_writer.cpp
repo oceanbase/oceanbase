@@ -12,7 +12,6 @@
 
 #include "common/cell/ob_cell_writer.h"
 #include "common/object/ob_object.h"
-#include "lib/timezone/ob_time_convert.h"
 namespace oceanbase
 {
 namespace common

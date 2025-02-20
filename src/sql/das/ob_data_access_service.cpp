@@ -12,17 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "observer/ob_srv_network_frame.h"
-#include "observer/mysql/ob_query_retry_ctrl.h"
 #include "sql/das/ob_data_access_service.h"
-#include "sql/das/ob_das_define.h"
-#include "sql/das/ob_das_extra_data.h"
-#include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_das_utils.h"
-#include "sql/ob_phy_table_location.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/das/ob_das_retry_ctrl.h"
-#include "storage/tx/ob_trans_service.h"
 #include "sql/das/ob_das_parallel_handler.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"

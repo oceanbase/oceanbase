@@ -13,7 +13,6 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_memstore_info.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
-#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

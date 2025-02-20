@@ -12,10 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_select_stmt_printer.h"
-#include "sql/ob_sql_context.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "lib/allocator/page_arena.h"
 namespace oceanbase
 {
 using namespace common;

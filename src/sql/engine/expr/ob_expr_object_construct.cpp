@@ -13,13 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr_object_construct.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl.h"
-#include "pl/ob_pl_user_type.h"
-#include "sql/ob_spi.h"
 #include "pl/ob_pl_resolver.h"
 
 namespace oceanbase

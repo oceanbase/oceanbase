@@ -14,25 +14,11 @@
 
 #include "observer/mysql/obmp_stmt_prepare.h"
 
-#include "lib/worker.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/stat/ob_session_stat.h"
-#include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/packet/ompk_prepare.h"
+#include "deps/oblib/src/rpc/obmysql/packet/ompk_prepare.h"
 #include "rpc/obmysql/packet/ompk_field.h"
-#include "observer/mysql/ob_mysql_result_set.h"
-#include "observer/mysql/ob_async_plan_driver.h"
-#include "observer/mysql/ob_sync_cmd_driver.h"
-#include "observer/mysql/ob_sync_plan_driver.h"
-#include "rpc/obmysql/obsm_struct.h"
 #include "observer/omt/ob_tenant.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "sql/ob_sql_context.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
-#include "observer/ob_req_time_service.h"
-#include "observer/mysql/obmp_utils.h"
+#include "lib/signal/ob_signal_struct.h"
 
 namespace oceanbase
 {

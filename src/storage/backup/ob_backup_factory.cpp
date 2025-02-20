@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/backup/ob_backup_factory.h"
-#include "lib/objectpool/ob_concurrency_objpool.h"
 
 namespace oceanbase {
 namespace backup {

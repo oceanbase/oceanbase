@@ -12,12 +12,6 @@
 
 #include "obsm_utils.h"
 
-#include "lib/time/ob_time_utility.h"
-#include "lib/charset/ob_dtoa.h"
-#include "common/ob_field.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_udt_info.h"
-#include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"

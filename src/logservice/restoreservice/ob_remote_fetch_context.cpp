@@ -11,10 +11,6 @@
  */
 
 #include "ob_remote_fetch_context.h"
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
-#include "lib/time/ob_time_utility.h"
-#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {

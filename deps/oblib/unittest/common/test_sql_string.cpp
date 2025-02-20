@@ -14,7 +14,6 @@
 #include <string>
 
 #include "lib/string/ob_sql_string.h"
-#include "lib/string/ob_string.h"
 
 namespace oceanbase
 {

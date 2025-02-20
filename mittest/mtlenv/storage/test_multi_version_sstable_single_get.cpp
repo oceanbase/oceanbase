@@ -16,12 +16,8 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "storage/mock_access_service.h"
-#include "storage/mock_ls_tablet_service.h"
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
-#include "share/scn.h"
 
 namespace oceanbase
 {

@@ -11,8 +11,6 @@
  */
 
 #include "common/log/ob_log_generator.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

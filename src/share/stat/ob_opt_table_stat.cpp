@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "share/stat/ob_opt_table_stat.h"
-#include "lib/utility/ob_unify_serialize.h"
-#include "lib/utility/ob_macro_utils.h"
 namespace oceanbase {
 namespace common {
 using namespace sql;

@@ -12,10 +12,7 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
-#include "lib/lock/ob_spin_rwlock.h"
-#include "lib/coro/testing.h"
 
 namespace oceanbase
 {

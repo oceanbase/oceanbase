@@ -10,13 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/inner_table/ob_inner_table_schema.h"
 #include "observer/virtual_table/ob_global_variables.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/system_variable/ob_system_variable_factory.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

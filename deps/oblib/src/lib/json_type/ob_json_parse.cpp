@@ -13,7 +13,6 @@
 
 #define USING_LOG_PREFIX SQL
 #include "ob_json_parse.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase {
 namespace common {

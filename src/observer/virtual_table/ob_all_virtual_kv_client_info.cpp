@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
-#include "observer/ob_server.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 

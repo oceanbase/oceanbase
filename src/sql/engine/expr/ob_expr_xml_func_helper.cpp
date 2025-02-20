@@ -12,17 +12,8 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/ob_errno.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "lib/xml/ob_xpath.h"
-#include "lib/xml/ob_xml_bin.h"
-#include "lib/xml/ob_xml_util.h"
-#include "lib/xml/ob_xml_parser.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/ob_exec_context.h"
-#include "sql/ob_result_set.h"
 #include "sql/ob_spi.h"
 #include "lib/xml/ob_binary_aggregate.h"
 #ifdef OB_BUILD_ORACLE_PL

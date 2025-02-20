@@ -13,16 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/table/ob_link_scan_op.h"
-#include "sql/engine/ob_exec_context.h"
-#include "observer/ob_server_struct.h"
-#include "share/schema/ob_dblink_mgr.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
-#include "lib/mysqlclient/ob_mysql_connection_pool.h"
-#include "sql/ob_sql_utils.h"
 #include "sql/dblink/ob_tm_service.h"
-#include "sql/dblink/ob_dblink_utils.h"
-#include "lib/string/ob_hex_utils_base.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_connection.h"

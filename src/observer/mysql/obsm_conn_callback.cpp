@@ -11,15 +11,10 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include <openssl/ssl.h>
 #include "observer/mysql/obsm_conn_callback.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
-#include "rpc/obmysql/obsm_struct.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_handshake.h"
 #include "lib/random/ob_mysql_random.h"
-#include "observer/ob_server_struct.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_srv_task.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"

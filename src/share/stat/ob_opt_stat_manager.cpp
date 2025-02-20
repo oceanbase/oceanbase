@@ -11,18 +11,8 @@
  */
 
 #define USING_LOG_PREFIX COMMON
-#include "lib/oblog/ob_log.h"
-#include "lib/oblog/ob_log_module.h"
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_opt_stat_service.h"
-#include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "share/stat/ob_dbms_stats_utils.h"
-#include "share/stat/ob_basic_stats_estimator.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase

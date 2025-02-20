@@ -14,16 +14,10 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
-#include <gtest/gtest.h>
-#include <thread>
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
-#include "storage/mockcontainer/mock_ob_end_trans_callback.h"
-#include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "share/schema/ob_table_dml_param.h"
 #include "storage/ob_dml_running_ctx.h"
-#include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
 {

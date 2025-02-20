@@ -14,16 +14,10 @@
 
 #include "ob_tenant_weak_read_service.h"
 
-#include "lib/allocator/ob_mod_define.h"                        // ObModIds
-#include "lib/rc/ob_rc.h"
-#include "share/ob_thread_mgr.h"                                // TG
-#include "observer/ob_server_struct.h"                          // GCTX
 
 #include "ob_weak_read_service_rpc.h"                           // ObIWrsRpc
 #include "ob_weak_read_util.h"                                  // ObWeakReadUtil
-#include "storage/ob_super_block_struct.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
-#include "share/location_cache/ob_location_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "lib/ash/ob_active_session_guard.h"
 

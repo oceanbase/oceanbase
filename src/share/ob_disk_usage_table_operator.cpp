@@ -10,13 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_disk_usage_table_operator.h"
-#include "lib/number/ob_number_v2.h"
+#include "ob_disk_usage_table_operator.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema.h"
-#include "storage/ob_disk_usage_reporter.h"
-#include "lib/container/ob_iarray.h"
+#include "src/observer/report/ob_i_disk_report.h"
 
 namespace oceanbase
 {

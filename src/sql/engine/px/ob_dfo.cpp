@@ -11,11 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/px/ob_dfo.h"
+#include "ob_dfo.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

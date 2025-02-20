@@ -11,20 +11,13 @@
  */
 
 #define UNUSED(param) (void)param
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
-#include <cassert>
 #include <cstring>
 #include <fstream>
-#include <iterator>
-#include <iostream>
 
 #include <gtest/gtest.h>
 
 #include "sql/parser/ob_sql_parser.h"
 #include "sql/parser/parse_malloc.h"
-#include "sql/parser/parser_proxy_func.h"
 
 extern "C"
 {

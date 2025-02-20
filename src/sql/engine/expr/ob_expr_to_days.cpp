@@ -12,10 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_to_days.h"
-#include "lib/timezone/ob_time_convert.h"
-#include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_util.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 

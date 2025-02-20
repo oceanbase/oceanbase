@@ -13,16 +13,8 @@
 #define USING_LOG_PREFIX RPC_OBMYSQL
 
 #include "rpc/obmysql/ob_mysql_handler.h"
-#include "lib/compress/zlib/ob_zlib_compressor.h"
 #include "rpc/ob_request.h"
-#include "rpc/obmysql/ob_mysql_packet.h"
-#include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "rpc/obmysql/ob_virtual_cs_protocol_processor.h"
-#include "rpc/obmysql/ob_2_0_protocol_struct.h"
 #include "rpc/obmysql/packet/ompk_handshake.h"
-#include "rpc/obmysql/packet/ompk_ok.h"
-#include "rpc/obmysql/packet/ompk_handshake_response.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rpc;

@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_macro_block_common_header.h"
-#include "lib/string/ob_string.h"
-#include "share/ob_errno.h"
-#include "share/ob_force_print_log.h"
 #include "ob_block_sstable_struct.h"
 
 namespace oceanbase

@@ -11,16 +11,9 @@
  * This file contains implementation for geometry cast.
  */
 
-#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX LIB
 
 #include "lib/geo/ob_geometry_cast.h"
-#include "lib/geo/ob_geo_func_register.h"
-#include "lib/geo/ob_geo_func_common.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
-#include "lib/geo/ob_geo_wkb_visitor.h"
-#include "lib/geo/ob_geo_wkb_size_visitor.h"
-#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase
 {

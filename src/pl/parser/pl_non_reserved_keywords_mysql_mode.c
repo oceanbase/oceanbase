@@ -11,7 +11,6 @@
  */
 
 #include <stdio.h>
-#include "lib/alloc/alloc_assist.h"
 #include "sql/parser/ob_non_reserved_keywords.h"
 #include "pl/parser/pl_parser_mysql_mode_tab.h"
 

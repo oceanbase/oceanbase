@@ -11,12 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
-#include "sql/engine/px/datahub/ob_dh_msg_ctx.h"
-#include "sql/engine/px/ob_dfo.h"
-#include "sql/engine/px/ob_px_util.h"
-#include "sql/engine/px/datahub/ob_dh_msg.h"
-#include "sql/engine/ob_exec_context.h"
+#include "ob_dh_opt_stats_gather.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
 
 using namespace oceanbase::sql;

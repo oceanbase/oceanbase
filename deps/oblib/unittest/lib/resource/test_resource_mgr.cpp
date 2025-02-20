@@ -12,10 +12,7 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/ob_define.h"
-#include "lib/ob_errno.h"
 #include "lib/container/ob_array.h"
-#include "lib/resource/ob_resource_mgr.h"
 #undef private
 namespace oceanbase
 {

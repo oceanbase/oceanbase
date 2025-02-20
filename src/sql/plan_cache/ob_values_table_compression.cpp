@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_values_table_compression.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/expr/ob_expr_version.h"
 

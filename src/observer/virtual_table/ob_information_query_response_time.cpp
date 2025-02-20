@@ -11,13 +11,6 @@
  */
 
 #include "ob_information_query_response_time.h"
-#include "lib/container/ob_array_serialization.h"
-#include "share/schema/ob_schema_getter_guard.h"
-#include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_schema_utils.h"
-#include "observer/ob_server_struct.h"
-#include "observer/ob_server.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

@@ -13,10 +13,6 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_pointonsurface.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_srs.h"
-#include "lib/geo/ob_geo_func_register.h"
-#include "share/object/ob_obj_cast_util.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_interior_point_visitor.h"
 

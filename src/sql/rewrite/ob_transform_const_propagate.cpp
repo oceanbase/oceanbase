@@ -12,15 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 
-#include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_const_propagate.h"
-#include "sql/rewrite/ob_transform_utils.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

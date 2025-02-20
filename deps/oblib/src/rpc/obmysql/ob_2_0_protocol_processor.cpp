@@ -14,11 +14,7 @@
 
 #include "rpc/obmysql/ob_2_0_protocol_processor.h"
 #include "rpc/obmysql/ob_mysql_util.h"
-#include "rpc/obmysql/ob_mysql_request_utils.h"
-#include "rpc/obmysql/ob_2_0_protocol_struct.h"
 #include "lib/checksum/ob_crc16.h"
-#include "lib/checksum/ob_crc64.h"
-#include "common/object/ob_object.h"
 #include "rpc/obmysql/obsm_struct.h"
 #include "lib/compress/zlib/ob_zlib_compressor.h"
 

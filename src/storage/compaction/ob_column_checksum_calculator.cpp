@@ -13,11 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_column_checksum_calculator.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_column_schema.h"
-#include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "share/ob_task_define.h"
-#include "share/ob_force_print_log.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;

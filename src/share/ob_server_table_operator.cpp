@@ -12,15 +12,8 @@
 
 #define USING_LOG_PREFIX RS
 
-#include "share/ob_server_table_operator.h"
 
-#include "lib/mysqlclient/ob_mysql_result.h"
-#include "lib/string/ob_sql_string.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/inner_table/ob_inner_table_schema.h"
-#include "share/config/ob_server_config.h"
-#include "share/ob_dml_sql_splicer.h"
-#include "common/ob_timeout_ctx.h"
+#include "ob_server_table_operator.h"
 #include "rootserver/ob_root_utils.h"
 #include "rootserver/ob_heartbeat_service.h"
 

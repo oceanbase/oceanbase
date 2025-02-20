@@ -12,8 +12,8 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
-#include "share/backup/ob_backup_io_adapter.h"
 #include "ob_log_miner_file_manager.h"
+#include "share/backup/ob_backup_io_adapter.h"
 #include "ob_log_miner_batch_record.h"
 #include "ob_log_miner_args.h"
 #include "ob_log_miner_logger.h"

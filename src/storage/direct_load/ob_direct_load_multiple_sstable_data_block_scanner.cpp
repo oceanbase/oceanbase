@@ -13,10 +13,7 @@
 
 #include "storage/direct_load/ob_direct_load_multiple_sstable_data_block_scanner.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
-#include "storage/direct_load/ob_direct_load_multiple_datum_row.h"
-#include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_index_entry_compare.h"
-#include "storage/direct_load/ob_direct_load_sstable_data_block.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 
 namespace oceanbase

@@ -13,15 +13,9 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_tcl_executor.h"
 
-#include "lib/encrypt/ob_encrypted_helper.h"
-#include "share/ob_rpc_struct.h"
-#include "share/schema/ob_schema_struct.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "sql/ob_sql_trans_control.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
 #include "sql/resolver/tcl/ob_start_trans_stmt.h"
 #include "sql/resolver/tcl/ob_savepoint_stmt.h"
-#include "sql/engine/ob_exec_context.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_dbms_xa.h"
 #include "sql/dblink/ob_tm_service.h"

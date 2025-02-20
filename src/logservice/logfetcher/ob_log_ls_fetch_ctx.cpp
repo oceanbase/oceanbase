@@ -12,14 +12,12 @@
 
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
-#include "ob_log_ls_fetch_ctx.h"
 
+#include "ob_log_ls_fetch_ctx.h"
 #include "lib/hash_func/murmur_hash.h"        // murmurhash
 
 #include "ob_log_utils.h"                     // get_timestamp
 #include "ob_log_config.h"                    // ObLogFetcherConfig
-#include "ob_log_ls_fetch_mgr.h"              // IObLogLSFetchMgr
-#include "ob_log_trace_id.h"                  // ObLogTraceIdGuard
 #include "ob_log_fetcher_err_handler.h"       // TCTX
 #include "ob_log_fetcher.h"                   // IObLogFetcher
 #include "logservice/common_util/ob_log_time_utils.h"

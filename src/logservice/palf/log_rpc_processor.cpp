@@ -11,8 +11,6 @@
  */
 
 #include "log_rpc_processor.h"
-#include "palf_env.h"
-#include "log_define.h"
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase
