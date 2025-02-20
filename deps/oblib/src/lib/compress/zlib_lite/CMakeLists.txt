@@ -16,6 +16,7 @@ add_library(zlib_lite_src OBJECT
   zlib_lite_src/uncompr.c
   zlib_lite_src/zutil.c
 )
+target_include_directories(zlib_lite_src PUBLIC "${DEP_DIR}/include/")
 
 add_library(zlib_lite_adaptor OBJECT
   zlib_lite_adaptor.cpp
@@ -37,7 +38,6 @@ target_compile_options(zlib_lite_src PRIVATE ${ZLIB_LITE_COMPILE_DEFINITIONS})
 target_compile_options(zlib_lite_adaptor PRIVATE ${ZLIB_LITE_COMPILE_DEFINITIONS})
 
 if(${ARCHITECTURE} STREQUAL "x86_64")
-  target_include_directories(zlib_lite_src PUBLIC "${DEP_DIR}/include/")
   target_include_directories(zlib_lite_adaptor PUBLIC "${DEP_DIR}/include/")
   target_compile_options(zlib_lite_adaptor PUBLIC -DENABLE_QPL_COMPRESSION)
 
