@@ -1151,8 +1151,8 @@ int ObMPPacketSender::resize_ezbuf(const int64_t size)
     const int64_t remain_data_size = ez_buf_->last - ez_buf_->pos;
     char *buf = NULL;
     if (size - sizeof(easy_buf_t) < remain_data_size) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("new size is too little", K(remain_data_size), K(size), K(ret));
+      ret = OB_SUCCESS;
+      LOG_WARN("new size is too little, need alloc bigger", K(remain_data_size), K(size));
     } else if (OB_ISNULL(buf = (char*)SQL_REQ_OP.alloc_sql_response_buffer(req_, size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate memory failed", K(size), K(ret));
