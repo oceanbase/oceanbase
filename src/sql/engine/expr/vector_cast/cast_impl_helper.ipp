@@ -162,41 +162,62 @@ public:
   /// 3. that is, when dividing, scale_factor should be uint64_t.
   ///@param [in] scale >= 0, negative scale for decimalint is illegal
   template<typename T, typename scale_type, class = typename std::enable_if<sizeof(T) < sizeof(int128_t)>::type>
-  static inline int64_t scale_to_integer(T &lhs,
+  static inline int64_t scale_to_integer(const T &lhs,
                                          scale_type &scale_factor,
                                          int16_t scale,
+                                         int &err,
                                          bool round_up = true) {
-    uint64_t sf = static_cast<int64_t>(scale_factor);
-    int64_t q = lhs;
+    T q = lhs;
+    int64_t sf = static_cast<int64_t>(scale_factor);
+    err = 0;
     if (OB_LIKELY(sf > 1)) {
       bool is_neg = lhs < 0;
       if (is_neg) { q = -lhs; }
-      int64_t r = q % sf;
+      T r = q % sf;
       q = q / sf;
       round_up &= (r >= (sf>>1));
       if (round_up) { q = q + 1; }
       if (is_neg) { q = -q; }
     }
-    return q;
+    int64_t out_val = 0;
+    if (OB_UNLIKELY(q > INT64_MAX)) {
+      out_val = INT64_MAX;
+      err = OB_ERRNO_ERANGE;
+    } else if (OB_UNLIKELY(q < INT64_MIN)) {
+      out_val = INT64_MIN;
+      err = OB_ERRNO_ERANGE;
+    } else {
+      out_val = q;
+    }
+    return out_val;
   }
   template<unsigned Bits, typename scale_type>
   static inline int64_t scale_to_integer(const wide::ObWideInteger<Bits> &lhs,
                                          const scale_type &scale_factor,
                                          int16_t scale,
+                                         int &err,
                                          bool round_up = true) {
     int64_t q = 0;
     int64_t decint = static_cast<int64_t>(lhs);
     if (OB_UNLIKELY(scale == 0)) {
-      q = (lhs < INT64_MIN) ? INT64_MIN : (lhs > INT64_MAX ? INT64_MAX : decint);
+      if (OB_UNLIKELY(lhs > INT64_MAX)) {
+        q = INT64_MAX;
+        err = OB_ERRNO_ERANGE;
+      } else if (OB_UNLIKELY(lhs < INT64_MIN)) {
+        q = INT64_MIN;
+        err = OB_ERRNO_ERANGE;
+      } else {
+        q = decint;
+      }
     } else if (OB_LIKELY(INT64_MIN <= lhs && lhs <= INT64_MAX)) {
       uint64_t sf = pow10(scale);
-      q = scale_to_integer(decint, sf, scale, round_up);
+      q = scale_to_integer(decint, sf, scale, err, round_up);
     } else {
       static const uint64_t constexpr DIGITS10_BASE = 10000000000000000000ULL; // 10^19
       if (scale > 19) {
         wide::ObWideInteger<Bits> num = lhs / DIGITS10_BASE;
         scale_type sf = get_scale_factor<scale_type>(scale - 19);
-        q = scale_to_integer(num, sf, scale - 19, round_up);
+        q = scale_to_integer(num, sf, scale - 19, err, round_up);
       } else {
         bool is_neg = (lhs < 0);
         wide::ObWideInteger<Bits> num = (is_neg ? -lhs : lhs);
@@ -208,7 +229,15 @@ public:
         if (round_up) { num = num + 1; }
         if (is_neg) { num = -num; }
         q = static_cast<int64_t>(num);
-        q = (num < INT64_MIN) ? INT64_MIN : (num > INT64_MAX ? INT64_MAX : q);
+        if (OB_UNLIKELY(num > INT64_MAX)) {
+          q = INT64_MAX;
+          err = OB_ERRNO_ERANGE;
+        } else if (OB_UNLIKELY(num < INT64_MIN)) {
+          q = INT64_MIN;
+          err = OB_ERRNO_ERANGE;
+        } else {
+          q = static_cast<int64_t>(num);
+        }
       }
     }
     return q;
@@ -218,36 +247,51 @@ public:
   static inline uint64_t scale_to_unsigned_integer(T &lhs,
                                                    scale_type &scale_factor,
                                                    int16_t scale,
+                                                   int &err,
                                                    bool round_up = true) {
-    uint64_t sf = static_cast<int64_t>(scale_factor);
-    uint64_t q = lhs;
+    T q = lhs;
+    uint64_t sf = static_cast<uint64_t>(scale_factor);
+    err = 0;
     if (OB_LIKELY(sf > 1)) {
       int64_t r = q % sf;
       q = q / sf;
       round_up &= (r >= (sf>>1));
       if (round_up) { q = q + 1; }
     }
-    return q;
+    uint64_t out_val = 0;
+    if (OB_UNLIKELY(q > UINT64_MAX)) {
+      out_val = INT64_MAX;
+      err = OB_ERRNO_ERANGE;
+    } else {
+      out_val = q;
+    }
+    return out_val;
   }
   template<unsigned Bits, typename scale_type>
   static inline uint64_t scale_to_unsigned_integer(const wide::ObWideInteger<Bits> &lhs,
                                                    const scale_type &scale_factor,
                                                    int16_t scale,
+                                                   int &err,
                                                    bool round_up = true) {
     uint64_t q = 0;
     uint64_t decint = static_cast<int64_t>(lhs);
     if (OB_UNLIKELY(scale == 0)) {
-      q = (lhs > UINT64_MAX ? UINT64_MAX : decint);
+      if (OB_UNLIKELY(lhs > UINT64_MAX)) {
+        q = UINT64_MAX;
+        err = OB_ERRNO_ERANGE;
+      } else {
+        q = decint;
+      }
     } else if (OB_LIKELY(lhs <= UINT64_MAX)) {
       uint64_t sf = pow10(scale);
-      q = scale_to_unsigned_integer(decint, sf, scale, round_up);
+      q = scale_to_unsigned_integer(decint, sf, scale, err, round_up);
     } else {
       static const uint64_t constexpr DIGITS10_BASE = 10000000000000000000ULL; // 10^19
       wide::ObWideInteger<Bits> num;
       if (scale > 19) {
         num = lhs / DIGITS10_BASE;
         scale_type sf = get_scale_factor<scale_type>(scale - 19);
-        q = scale_to_unsigned_integer(num, sf, scale - 19, round_up);
+        q = scale_to_unsigned_integer(num, sf, scale - 19, err, round_up);
       } else {
         wide::ObWideInteger<Bits> remain;
         uint64_t sf = pow10(scale);
@@ -255,7 +299,12 @@ public:
             divide<wide::IgnoreOverFlow>(lhs, sf, num, remain);
         round_up &= (remain >= (sf >> 1));
         if (round_up) { num = num + 1; }
-        q = (num > UINT64_MAX ? UINT64_MAX : static_cast<int64_t>(num));
+        if (OB_UNLIKELY(num > UINT64_MAX)) {
+          q = UINT64_MAX;
+          err = OB_ERRNO_ERANGE;
+        } else {
+          q = static_cast<uint64_t>(num);
+        }
       }
     }
     return q;
@@ -303,6 +352,7 @@ public:
       int64_t &int_part, int64_t &dec_part)
   {
     int ret = OB_SUCCESS;
+    int err = 0;
     if (scale < 6) {  // 20010528.1430 -> 20010528, 143000 000
       if (OB_UNLIKELY(decint > INT64_MAX)) {
         ret = OB_INVALID_DATE_VALUE;
@@ -315,14 +365,14 @@ public:
       }
     } else {  // 20010528.1430307654321 -> 20010528, 143031 000
       calc_type sf = get_scale_factor<calc_type>(scale);
-      int_part = CastHelperImpl::scale_to_integer(decint, sf, scale, false);
+      int_part = CastHelperImpl::scale_to_integer(decint, sf, scale, err, false);
       calc_type sf_minus6 = get_scale_factor<calc_type>(scale - 6);
       if (scale < 19) {
         int64_t remain = decint - sf * int_part;
-        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6);
+        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6, err);
       } else {
         calc_type remain = decint - sf * int_part;
-        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6);
+        dec_part = CastHelperImpl::scale_to_integer(remain, sf_minus6, scale - 6, err);
       }
       dec_part *= 1000;
     }

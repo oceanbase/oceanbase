@@ -486,7 +486,7 @@ struct ToIntegerCastImpl
             } else {
               OUT_TYPE out_val = int_val;
               bool need_range_check = std::is_same<OUT_TYPE, int64_t>::value
-                                      ? out_type_ < ObInt32Type : out_type_ < ObUInt32Type;
+                                      ? out_type_ < ObIntType : out_type_ < ObUInt64Type;
               if (need_range_check && CAST_FAIL(numeric_range_check(out_val, type_min_val_,
                                                                     type_max_val_, out_val))) {
                 SQL_LOG(WARN, "int_range_check failed", K(ret));
@@ -534,9 +534,15 @@ struct ToIntegerCastImpl
         {
           int ret = OB_SUCCESS;
           IN_TYPE lhs = *reinterpret_cast<const IN_TYPE *>(arg_vec_->get_payload(idx));
-          int64_t out_val = CastHelperImpl::scale_to_integer(lhs, sf_, in_scale_);
           int warning = OB_SUCCESS;
-          if (out_type_ < ObIntType && CAST_FAIL(int_range_check(out_type_, out_val, out_val))) {
+          int err = 0;
+          int64_t out_val = CastHelperImpl::scale_to_integer(lhs, sf_, in_scale_, err);
+          if (OB_ERRNO_ERANGE == err && (INT64_MIN == out_val || INT64_MAX == out_val)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+          }
+          if (CAST_FAIL(ret)) {
+            SQL_LOG(WARN, "decimalint int failed", K(ret));
+          } else if (out_type_ < ObIntType && CAST_FAIL(int_range_check(out_type_, out_val, out_val))) {
             SQL_LOG(WARN, "int_range_check failed", K(ret), K(expr.extra_));
           } else {
             res_vec_->set_int(idx, out_val);
@@ -577,11 +583,22 @@ struct ToIntegerCastImpl
         OB_INLINE int operator() (const ObExpr &expr, int idx)
         {
           int ret = OB_SUCCESS;
-          IN_TYPE lhs = *reinterpret_cast<const IN_TYPE *>(arg_vec_->get_payload(idx));
-          uint64_t out_val = (lhs < 0) ? 0 :
-                              CastHelperImpl::scale_to_unsigned_integer(lhs, sf_, in_scale_);
           int warning = OB_SUCCESS;
-          if ((out_type_ < ObUInt64Type && CM_NEED_RANGE_CHECK(expr.extra_))
+          int err = 0;
+          IN_TYPE lhs = *reinterpret_cast<const IN_TYPE *>(arg_vec_->get_payload(idx));
+          uint64_t out_val = 0;
+          if (OB_UNLIKELY(lhs < 0)) {
+            out_val = 0;
+            ret = OB_DATA_OUT_OF_RANGE;
+          } else {
+            out_val = CastHelperImpl::scale_to_unsigned_integer(lhs, sf_, in_scale_, err);
+          }
+          if (OB_ERRNO_ERANGE == err && (0 == out_val || UINT64_MAX == out_val)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+          }
+          if (CAST_FAIL(ret)) {
+            SQL_LOG(WARN, "decimalint uint failed", K(ret));
+          } else if ((out_type_ < ObUInt64Type && CM_NEED_RANGE_CHECK(expr.extra_))
               && CAST_FAIL(uint_upper_check(out_type_, out_val))) {
             SQL_LOG(WARN, "int_range_check failed", K(ret), K(expr.extra_));
           } else {

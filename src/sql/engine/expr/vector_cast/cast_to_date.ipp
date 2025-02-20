@@ -192,7 +192,8 @@ struct ToDateCastImpl
             ret = OB_INVALID_DATE_VALUE;
             SQL_LOG(WARN, "invalid date value", K(ret), K(lhs));
           } else {
-            uint64_t uint64 = CastHelperImpl::scale_to_unsigned_integer(lhs, sf_, in_scale_, false);
+            int err = 0;
+            uint64_t uint64 = CastHelperImpl::scale_to_unsigned_integer(lhs, sf_, in_scale_, err, false);
             int64_t int64 = uint64;
             if (OB_UNLIKELY(uint64 > INT64_MAX)) {
               int64 = INT64_MAX;
