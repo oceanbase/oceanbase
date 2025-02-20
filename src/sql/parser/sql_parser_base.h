@@ -72,35 +72,21 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
-#define YYABORT_NO_MEMORY                                       \
+#define YYABORT_WITH_ERROR(err_code)                            \
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;           \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {     \
+      result->extra_errno_ = err_code;                          \
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
   } while(0)
 
-#define YYABORT_UNEXPECTED                           \
-  do {                                               \
-    if (OB_UNLIKELY(NULL == result)) {                                    \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED;          \
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
-
-#define YYABORT_TOO_BIG_DISPLAYWIDTH                           \
-  do {                                               \
-    if (OB_UNLIKELY(NULL == result)) {                                    \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_TOO_BIG_DISPLAYWIDTH;          \
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
+#define YYABORT_NO_MEMORY YYABORT_WITH_ERROR(OB_PARSER_ERR_NO_MEMORY)
+#define YYABORT_UNEXPECTED YYABORT_WITH_ERROR(OB_PARSER_ERR_UNEXPECTED)
+#define YYABORT_TOO_BIG_DISPLAYWIDTH YYABORT_WITH_ERROR(OB_PARSER_ERR_TOO_BIG_DISPLAYWIDTH)
+#define YYABORT_UNDECLARE_VAR YYABORT_WITH_ERROR(OB_PARSER_ERR_UNDECLARED_VAR)
+#define YYABORT_NOT_VALID_ROUTINE_NAME YYABORT_WITH_ERROR(OB_PARSER_ERR_NOT_VALID_ROUTINE_NAME)
 
 #define YYABORT_STRING_LITERAL_TOO_LONG(result)                 \
   do {                                                          \
@@ -111,26 +97,6 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
     } else {/*do nothing*/}                                     \
     yyerror(yylloc, yyextra, "string literal is too long\n", yytext); \
     return ERROR;                                               \
-  } while(0)
-
-#define YYABORT_UNDECLARE_VAR                 \
-  do {                                                          \
-    if (OB_UNLIKELY(NULL == result)) {                          \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
-  } while(0)
-
-#define YYABORT_NOT_VALID_ROUTINE_NAME                          \
-  do {                                                          \
-    if (OB_UNLIKELY(NULL == result)) {                          \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_NOT_VALID_ROUTINE_NAME;\
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
   } while(0)
 
 #define YYABORT_PARSE_SQL_ERROR YYERROR
@@ -489,9 +455,10 @@ do {                                                                            
         store_pl_symbol(node, result->param_nodes_, result->tail_param_node_); \
       } else if (is_add_alas_name) { \
         int64_t idx = INVALID_INDEX; \
-        if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && OB_UNLIKELY(0 != lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx))) { \
+        int lookup_pl_symbol_ret = OB_PARSER_SUCCESS; \
+        if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && OB_UNLIKELY(0 != (lookup_pl_symbol_ret = lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx)))) { \
           yyerror(NULL, result, "failed to lookup pl symbol\n");    \
-          YYABORT_UNEXPECTED; \
+          YYABORT_WITH_ERROR(lookup_pl_symbol_ret); \
         } else if (NULL != node->children_[0] && T_COLUMN_REF == node->children_[0]->type_ && INVALID_INDEX == idx) { \
           /*do nothing*/ \
         } else {\
@@ -508,9 +475,10 @@ do {                                                                            
       } \
       else { \
         int64_t idx = INVALID_INDEX; \
-        if (OB_UNLIKELY(0 != lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx))) { \
+        int lookup_pl_symbol_ret = OB_PARSER_SUCCESS; \
+        if (OB_UNLIKELY(0 != (lookup_pl_symbol_ret = lookup_pl_symbol(result->pl_parse_info_.pl_ns_, node->str_value_, node->str_len_, &idx)))) { \
           yyerror(NULL, result, "failed to lookup pl symbol\n");    \
-          YYABORT_UNEXPECTED; \
+          YYABORT_WITH_ERROR(lookup_pl_symbol_ret); \
         } else if (INVALID_INDEX != idx) { \
           copy_and_skip_symbol(result, start, end); \
           check_need_malloc(result, 21); \
