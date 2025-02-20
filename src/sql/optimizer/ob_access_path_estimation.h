@@ -241,6 +241,16 @@ private:
                                               bool is_geo_index,
                                               ObIArray<common::ObNewRange> &scan_ranges);
 
+  static int get_valid_partition_info(ObOptimizerContext &ctx,
+                                      ObIAllocator &allocator,
+                                      const ObTablePartitionInfo &table_partition_info,
+                                      ObIArray<ObTablePartitionInfo *> &valid_partition_infos,
+                                      ObTablePartitionInfo *&valid_partition_info);
+
+  static int get_valid_partition_info(ObOptimizerContext &ctx,
+                                      const ObTablePartitionInfo &table_partition_info,
+                                      ObTablePartitionInfo &valid_partition_info);
+
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
@@ -376,7 +386,8 @@ public:
            uint64_t ref_table_id,
            const ObDMLStmt *stmt,
            const ObTablePartitionInfo &table_partition_info,
-           const ObIArray<ColumnItem> &range_columns);
+           const ObIArray<ColumnItem> &range_columns,
+           const ObIArray<common::ObNewRange> &ranges);
 
   int get_scan_range_partitions(ObExecContext &exec_ctx,
                                 const ObNewRange &scan_range,
