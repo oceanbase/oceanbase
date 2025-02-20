@@ -754,6 +754,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
         // 4.0 new heap table has hidden primary key (tablet seq)
         if (OB_SUCC(ret) && (0 == get_primary_key_size() || is_organization_set_to_heap())
+            && !is_external_table_
             && (TOM_HEAP_ORGANIZED == table_mode_.table_organization_mode_ ||
               (TOM_INDEX_ORGANIZED == table_mode_.table_organization_mode_ &&
               TOM_TABLE_WITHOUT_PK == table_mode_.pk_exists_))) {
