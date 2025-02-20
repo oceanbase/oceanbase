@@ -655,7 +655,7 @@ bool ObTmpWriteBufferPool::need_to_shrink(bool &is_auto)
     if (shrink_ctx_.is_valid()) {
       if (shrink_ctx_.is_auto()) {
         // if used_page_num exceeds threshold during auto-shrinking, stop shrinking
-        b_ret = AUTO_SHRINKING_WATERMARK_L1 >= max_used_page_watermark;
+        b_ret = AUTO_SHRINKING_WATERMARK_L1 / 2 >= max_used_page_watermark;
       } else {
         // manual-shrinking would stop if memory_limit increase during shrinking
         b_ret = false;
