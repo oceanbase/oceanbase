@@ -27,7 +27,7 @@ using Ref = ObRaQueue::Ref;
 class ObLeafQueue : public ObRaQueue
 {
 public:
-  ObLeafQueue() : ObRaQueue()
+  ObLeafQueue() : ObRaQueue(), ref_(nullptr)
   {
   }
   ~ObLeafQueue() {
@@ -56,14 +56,14 @@ private:
   int64_t xref(int64_t seq, int64_t x) {
     return ATOMIC_AAF(ref_ + seq % capacity_, x);
   }
-  int64_t* ref_;
+  int64_t* ref_{nullptr};
 };
 
 using ObRWLock = obsys::ObRWLock;
 class ObRootQueue : public ObRaQueue
 {
 public:
-  ObRootQueue() : ObRaQueue()
+  ObRootQueue() : ObRaQueue(), SlotLock_(nullptr)
   {
   }
   ~ObRootQueue()
