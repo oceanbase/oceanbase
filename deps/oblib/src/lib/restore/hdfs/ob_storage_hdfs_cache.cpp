@@ -314,30 +314,25 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
            K(storage_info->hdfs_extension_));
   } else {
     obHdfsBuilderSetNameNode(hdfs_builder, namenode.ptr());
-    if (OB_LIKELY(kerberos_config.is_kerberized())) {
-      // Setup kerberized client can fallback to access with simple auth
-      const int rv = obHdfsBuilderConfSetStr(
-          hdfs_builder, "ipc.client.fallback-to-simple-auth-allowed", "true");
-      if (0 != rv) {
+    // Setup kerberized client can fallback to access with simple auth
+    const int rv = obHdfsBuilderConfSetStr(
+        hdfs_builder, "ipc.client.fallback-to-simple-auth-allowed", "true");
+    if (0 != rv) {
+      ret = OB_HDFS_INVALID_ARGUMENT;
+      OB_LOG(WARN, "failed to set conf for fall back simple auth", K(ret), K(rv));
+    }
+    if (OB_SUCC(ret) && OB_LIKELY(kerberos_config.is_kerberized())) {
+      OB_LOG(TRACE, "storage info krb 5conf", K(ret), K(kerberos_config.krb5conf_path));
+      const char *krb5conf = kerberos_config.krb5conf_path;
+      if (OB_ISNULL(krb5conf)) {
         ret = OB_HDFS_INVALID_ARGUMENT;
-        OB_LOG(WARN, "failed to set conf for fall back simple auth", K(ret), K(rv));
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
+        OB_LOG(WARN, "failed to get krb5conf", K(ret), K(krb5conf_path));
+      } else if (OB_UNLIKELY(!check_file_exists_(krb5conf))) {
+        ret = OB_FILE_NOT_EXIST;
+        OB_LOG(WARN, "krb5conf path not exists", K(ret), K(krb5conf));
       } else {
-        OB_LOG(TRACE, "storage info krb 5conf", K(ret), K(kerberos_config.krb5conf_path));
-        const char *krb5conf = kerberos_config.krb5conf_path;
-        if (OB_ISNULL(krb5conf)) {
-          ret = OB_HDFS_INVALID_ARGUMENT;
-          OB_LOG(WARN, "failed to get krb5conf", K(ret), K(krb5conf_path));
-        } else if (OB_UNLIKELY(!check_file_exists_(krb5conf))) {
-          ret = OB_FILE_NOT_EXIST;
-          OB_LOG(WARN, "krb5conf path not exists", K(ret), K(krb5conf));
-        } else {
-          // Setup kerberos conf
-          obHdfsBuilderSetKerb5Conf(hdfs_builder, krb5conf);
-        }
+        // Setup kerberos conf
+        obHdfsBuilderSetKerb5Conf(hdfs_builder, krb5conf);
       }
 
       if (OB_FAIL(ret)) {
