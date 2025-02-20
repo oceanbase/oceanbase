@@ -102,7 +102,7 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
     LOG_WARN("failed to finish create tenant", KR(tmp_ret), KR(ret));
     ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
-  FLOG_INFO("[CREATE_TENANT] finish create tenant", KR(ret), K(create_tenant_arg_),
+  FLOG_INFO("[CREATE_TENANT] finish create tenant", KR(ret), K(tenant_id), K(create_tenant_arg_),
       "cost", ObTimeUtility::fast_current_time() - start_time);
   return ret;
 }
@@ -504,6 +504,9 @@ int ObParallelCreateTenantExecutor::check_can_create_user_ls_(ObParallelCreateNo
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_USER_CREATE_TENANT_END_FAIL);
+ERRSIM_POINT_DEF(ERRSIM_META_CREATE_TENANT_END_FAIL);
+
 int ObParallelCreateTenantExecutor::finish_create_tenant_(const int ret_code)
 {
   int ret = OB_SUCCESS;
@@ -521,20 +524,24 @@ int ObParallelCreateTenantExecutor::finish_create_tenant_(const int ret_code)
       create_tenant_end_arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
       // finish create tenant
       if (OB_FAIL(create_tenant_end_arg.init(meta_tenant_id))) {
-        LOG_WARN("failed to init create tenant end arg", KR(tmp_ret), K(meta_tenant_id));
+        LOG_WARN("failed to init create tenant end arg", KR(ret), K(meta_tenant_id));
       } else if (OB_FAIL(common_rpc_->to_rs(*rs_mgr_).timeout(ctx_.get_timeout())
             .create_tenant_end(create_tenant_end_arg))) {
-        LOG_WARN("failed to create tenant end", KR(tmp_ret), K(create_tenant_end_arg), K(ctx_));
+        LOG_WARN("failed to create tenant end", KR(ret), K(create_tenant_end_arg), K(ctx_));
+      } else if (OB_FAIL(ERRSIM_META_CREATE_TENANT_END_FAIL)) {
+        LOG_WARN("ERRSIM_META_CREATE_TENANT_END_FAIL", KR(ret));
       } else if (OB_FAIL(create_tenant_end_arg.init(user_tenant_id))) {
-        LOG_WARN("failed to init create tenant end arg", KR(tmp_ret), K(user_tenant_id));
+        LOG_WARN("failed to init create tenant end arg", KR(ret), K(user_tenant_id));
       } else if (tenant_role.is_primary() && OB_FAIL(common_rpc_->to_rs(*rs_mgr_)
             .timeout(ctx_.get_timeout()).create_tenant_end(create_tenant_end_arg))) {
-        LOG_WARN("failed to create tenant end", KR(tmp_ret), K(create_tenant_end_arg), K(ctx_));
+        LOG_WARN("failed to create tenant end", KR(ret), K(create_tenant_end_arg), K(ctx_));
+      } else if (OB_FAIL(ERRSIM_USER_CREATE_TENANT_END_FAIL)) {
+        LOG_WARN("ERRSIM_USER_CREATE_TENANT_END_FAIL", KR(ret));
       } else {
         LOG_INFO("successfully create tenant", KR(ret), K(user_tenant_id));
       }
     }
-    if ((OB_FAIL(ret_code) || OB_FAIL(ret)) && tenant_role.is_primary()) {
+    if ((OB_FAIL(ret) || OB_FAIL(ret_code)) && tenant_role.is_primary()) {
       // failed to create tenant, so force drop tenant
       const ObString tenant_name = create_tenant_arg_.tenant_schema_.get_tenant_name();
       obrpc::ObDropTenantArg drop_tenant_arg;
