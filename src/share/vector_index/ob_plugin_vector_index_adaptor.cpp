@@ -246,6 +246,7 @@ void free_memdata_resource(ObVectorIndexRecordType type,
     LOG_INFO("delete vector index", K(type), KP(memdata->index_), K(lbt())); // remove later
     memdata->index_ = nullptr;
   }
+  free_hnswsq_array_data(memdata, allocator);
   memdata->is_init_ = false;
 }
 
