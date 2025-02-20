@@ -1873,7 +1873,7 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     ObSqlString hint;
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+index(%s idx_data_table_id)*/ table_id, table_type, index_type FROM "\
+    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ index(%s idx_data_table_id)*/ table_id, table_type, index_type FROM "\
                                                 "(SELECT TABLE_ID, SCHEMA_VERSION, TABLE_TYPE, INDEX_TYPE, IS_DELETED, ROW_NUMBER() OVER " \
                                                 "(PARTITION BY TABLE_ID ORDER BY SCHEMA_VERSION DESC) AS RN FROM %s " \
                                                 "WHERE TENANT_ID = %lu AND DATA_TABLE_ID = %lu AND SCHEMA_VERSION <= %ld) V "\
