@@ -81,6 +81,7 @@
   #include "src/storage/mview/ob_major_mv_merge_info.h"
   #include "src/storage/truncate_info/ob_truncate_info.h"
   #include "src/storage/mview/ob_mview_mds.h"
+  #include "src/storage/tablet/ob_tablet_ddl_complete_mds_data.h"
 #endif
 /**************************************************************************************************/
 
@@ -288,9 +289,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
                     ::oceanbase::storage::ObTruncateInfo,\
                     false)
-  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
-  //                   ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
-  //                   false)
+  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+                    ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
+                    false)
   // # 余留位置（此行之前占位）
 #endif
 

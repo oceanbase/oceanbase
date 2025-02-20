@@ -404,6 +404,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_space_usage.cpp
   tablet/ob_tablet_block_aggregated_info.cpp
   tablet/ob_tablet_macro_info_iterator.cpp
+  tablet/ob_tablet_ddl_complete_mds_data.cpp
 )
 
 ob_set_subtarget(ob_storage tx_wrs
