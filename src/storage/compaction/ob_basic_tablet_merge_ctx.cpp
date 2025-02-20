@@ -38,6 +38,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_cs_replica_(false),
     is_backfill_(false),
     for_unittest_(false),
+    is_cs_replica_force_full_merge_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
@@ -87,6 +88,7 @@ void ObStaticMergeParam::reset()
   tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   co_base_snapshot_version_ = 0;
   for_unittest_ = false;
+  is_cs_replica_force_full_merge_ = false;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -267,7 +269,7 @@ int ObStaticMergeParam::cal_major_merge_param(
       K(sstable_meta_hdl), KPC(this));
   } else {
     read_base_version_ = base_table->get_snapshot_version();
-    if (1 == schema_->get_progressive_merge_num() || force_full_merge || is_rebuild_column_store_) {
+    if (1 == schema_->get_progressive_merge_num() || force_full_merge || is_rebuild_column_store_ || is_cs_replica_force_full_merge_) {
       is_full_merge_ = true;
     } else {
       is_full_merge_ = false;
@@ -1221,8 +1223,11 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     }
     static_param_.encoding_granularity_ = medium_info->encoding_granularity_;
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
+    ObCOMajorMergePolicy::ObCOMajorMergeType medium_info_co_major_merge_type = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
     if (!static_param_.is_cs_replica_) {
-      static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
+      static_param_.co_major_merge_type_ = medium_info_co_major_merge_type;
+    } else {
+      static_param_.is_cs_replica_force_full_merge_ = ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(medium_info_co_major_merge_type);
     }
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info));
   }

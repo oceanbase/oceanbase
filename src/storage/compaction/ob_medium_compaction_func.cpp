@@ -923,7 +923,7 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
   } else {
     medium_info.co_major_merge_type_ = major_merge_type;
     LOG_INFO("success to init co major merge type",
-             "merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(major_merge_type));
+            "merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(major_merge_type));
   }
   return ret;
 }
