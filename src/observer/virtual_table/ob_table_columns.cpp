@@ -1014,6 +1014,8 @@ int ObTableColumns::deduce_column_attributes(
           LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
         }
       }
+    } else if (result_type.is_enum_or_set() && OB_FAIL(extend_type_info.assign(select_item.expr_->get_enum_set_values()))) {
+      LOG_WARN("failed to assign enum values", K(ret));
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
