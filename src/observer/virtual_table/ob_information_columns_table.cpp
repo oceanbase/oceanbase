@@ -808,26 +808,24 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
 
             if (OB_SUCC(ret) && lib::is_mysql_mode() && column_schema->is_invisible_column()) {
               int64_t append_len = sizeof("INVISIBLE");
-              int64_t cur_len = extra.length();
-
-              if (cur_len > 0) {
+              if (extra.length() > 0) {
                 append_len += 1;
               }
-              int64_t buf_len = cur_len + append_len;
-
+              int64_t buf_len = extra.length() + append_len;
+              int64_t cur_pos = extra.length();
               char *buf = NULL;
               if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 SERVER_LOG(WARN, "fail to allocate memory", K(ret));
-              } else if (FALSE_IT(MEMCPY(buf, extra.ptr(), cur_len))) {
-              } else if (cur_len == 0
-                         && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", "INVISIBLE"))) {
+              } else if (FALSE_IT(MEMCPY(buf, extra.ptr(), extra.length()))) {
+              } else if (extra.length() == 0
+                  && OB_FAIL(databuff_printf(buf, buf_len, cur_pos, "%s", "INVISIBLE"))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
-              } else if (cur_len > 0
-                         && OB_FAIL(databuff_printf(buf, buf_len, cur_len, "%s", " INVISIBLE"))) {
+              } else if (extra.length() > 0
+                  && OB_FAIL(databuff_printf(buf, buf_len, cur_pos, "%s", " INVISIBLE"))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print on Mysql invisible column", K(ret));
               } else {
-                extra = ObString(buf_len, buf);
+                extra = ObString(cur_pos, buf);
               }
             }
 
