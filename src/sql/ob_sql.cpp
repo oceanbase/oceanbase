@@ -1759,7 +1759,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
   }
 
   LOG_TRACE("arrive handle pl execute", K(ret), K(sql), K(is_prepare_protocol), K(is_dynamic_sql), K(lbt()));
-
+  FLT_SET_TAG(pl_handle_sql_execute_sql, sql);
+  int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(pctx)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1773,7 +1774,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
   } else {
     result.get_session().set_exec_min_cluster_version();
   }
-
+  int64_t end_time = ObTimeUtility::current_time();
+  FLT_SET_TAG(pl_handle_sql_execute_time, end_time - start_time);
   if (OB_FAIL(ret) && OB_SUCCESS == result.get_errcode()) {
     result.set_errcode(ret);
   }
