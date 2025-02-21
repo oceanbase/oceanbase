@@ -1391,9 +1391,9 @@ public:
   int add_all_row(ObTableQueryDListResult &other);
   virtual int add_row(const common::ObIArray<ObObj> &row) override;
   virtual bool reach_batch_size_or_result_size(const int32_t batch_count, const int64_t max_result_size) override;
-  void save_row_count_only(const int row_count) { reset_except_property(); row_count_ += row_count; }
+  void save_row_count_only(const int row_count) { reset(); row_count_ += row_count; }
   virtual int get_row(ObNewRow &row) override;
-  void reset_except_property();
+  void reset();
 private:
   int64_t current_ = 0;
 

@@ -2338,7 +2338,7 @@ ObTableQueryIterableResult::ObTableQueryIterableResult()
   }
 
 
-void ObTableQueryIterableResult::reset_except_property()
+void ObTableQueryIterableResult::reset()
 {
   row_count_ = 0;
   allocator_.reset();

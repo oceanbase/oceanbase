@@ -381,7 +381,7 @@ int ObMergeTableQueryResultIterator<Row, Compare>::ObRowCacheIterator::ObRowCach
       } else {
         if (OB_FAIL(iterable_result_->get_row(new_row))) {
           if (ret == OB_ARRAY_OUT_OF_RANGE) {
-            SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_ OB_ITER_END", K(ret));
+            SERVER_LOG(DEBUG, "fail to get_row after refreshing iterable_result_ OB_ITER_END", K(ret));
             ret = OB_ITER_END;
           } else {
             SERVER_LOG(WARN, "fail to get_row after refreshing iterable_result_", K(ret));

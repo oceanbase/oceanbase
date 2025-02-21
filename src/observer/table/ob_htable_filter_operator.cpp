@@ -1696,11 +1696,26 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
       continue;
     }
 
-    // if only check exist, just return row_count_ as 1
+    // if only check exist, add one row to iterable_result_
+    // cannot just set row_count_ as 1
     if (check_existence_only_) {
-      next_result->save_row_count_only(1);
-      ret = OB_ITER_END;
-      break;
+      ObHTableCellEntity *row = nullptr;
+      if (OB_FAIL(htable_row->get_row(row))) {
+        LOG_WARN("fail to get row from htable row", K(ret));
+      } else {
+        if (std::is_same<ResultType, ObTableQueryResult>::value) {
+          one_result_->save_row_count_only(1);
+        } else if (std::is_same<ResultType, ObTableQueryIterableResult>::value) {
+          iterable_result_->reset();
+          if (OB_FAIL(iterable_result_->add_row(*row->get_ob_row(), row->get_family()))) {
+            LOG_WARN("fail to add row", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ret = OB_ITER_END;
+        }
+      }
+      break; // break out this while loops
     }
 
     /* @todo check batch limit and size limit */
@@ -1723,7 +1738,7 @@ int ObHTableFilterOperator::get_next_result_internal(ResultType *&next_result)
     }
   }  // end while
 
-  if (!row_iterator_->has_more_result()) {
+  if (OB_SUCC(ret) && !row_iterator_->has_more_result()) {
     ret = OB_ITER_END;
   }
 
