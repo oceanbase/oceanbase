@@ -1168,12 +1168,9 @@ int ObTableLoadStoreCtx::handle_pre_sort_success()
   } else if (OB_UNLIKELY(!write_ctx_.enable_pre_sort_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected pre sort not enabled", KR(ret));
-  } else if (OB_FAIL(write_ctx_.pre_sorter_->get_table_store(data_store_table_ctx_->insert_table_store_))) {
-    LOG_WARN("fail to get table store", KR(ret));
   } else if (OB_FAIL(start_merge_op())) {
     LOG_WARN("fail to start merge op", KR(ret));
   } else {
-    write_ctx_.pre_sorter_->reset();
     // 清空trans store, 释放内存, 里面也没啥东西
     clear_committed_trans_stores();
   }

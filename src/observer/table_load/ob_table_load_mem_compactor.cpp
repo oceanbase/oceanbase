@@ -550,6 +550,7 @@ int ObTableLoadMemCompactor::finish()
     LOG_WARN("fail to add tables", KR(ret));
   } else {
     mem_ctx_.reset();
+    task_scheduler_->stop();
     if (OB_FAIL(op_->on_success())) {
       LOG_WARN("fail to handle success", KR(ret));
     }

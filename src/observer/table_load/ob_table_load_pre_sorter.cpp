@@ -342,8 +342,18 @@ int ObTableLoadPreSorter::handle_pre_sort_thread_finish()
 int ObTableLoadPreSorter::finish()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(store_ctx_->handle_pre_sort_success())) {
-    LOG_WARN("fail to handle pre sort success", KR(ret));
+  ObDirectLoadTableStore &table_store = store_ctx_->data_store_table_ctx_->insert_table_store_;
+  table_store.clear();
+  table_store.set_table_data_desc(mem_ctx_.table_data_desc_);
+  table_store.set_multiple_sstable();
+  if (OB_FAIL(table_store.add_tables(mem_ctx_.tables_handle_))) {
+    LOG_WARN("fail to add tables", KR(ret));
+  } else {
+    mem_ctx_.reset();
+    sample_task_scheduler_->stop();
+    if (OB_FAIL(store_ctx_->handle_pre_sort_success())) {
+      LOG_WARN("fail to handle pre sort success", KR(ret));
+    }
   }
   return ret;
 }
