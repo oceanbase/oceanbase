@@ -5034,14 +5034,17 @@ public:
       is_called_sql_(true),
       proxy_(nullptr),
       try_check_tick_(0),
-      worker_check_status_times_(0)
+      worker_check_status_times_(0),
+      query_ctx_(NULL)
   {
   }
   ObRawExprFactory(ObRawExprFactory &expr_factory) : allocator_(expr_factory.allocator_),
                                                      expr_store_(allocator_),
                                                      proxy_(&expr_factory),
                                                      try_check_tick_(0),
-                                                     worker_check_status_times_(0)
+                                                     worker_check_status_times_(0),
+                                                     query_ctx_(NULL)
+
   {
   }
   ~ObRawExprFactory() {
@@ -5134,12 +5137,15 @@ public:
       }
       expr_store_.destroy();
     }
+    query_ctx_ = NULL;
   }
 
   inline common::ObIAllocator &get_allocator() { return allocator_; }
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> &get_expr_store() { return expr_store_; }
   void set_is_called_sql(const bool is_called_sql) { is_called_sql_ = is_called_sql; }
   inline uint64_t inc_worker_check_status_times() { return ++worker_check_status_times_; }
+  void set_query_ctx(ObQueryCtx *query_ctx) { query_ctx_ = query_ctx; }
+  ObQueryCtx *get_query_ctx() { return query_ctx_; }
   TO_STRING_KV("", "");
 private:
   common::ObIAllocator &allocator_;
@@ -5149,6 +5155,7 @@ private:
   ObRawExprFactory *proxy_;
   int64_t try_check_tick_;
   mutable uint64_t worker_check_status_times_;
+  ObQueryCtx *query_ctx_; // used for type demotion add constraint, may remove it later.
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };

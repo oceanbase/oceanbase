@@ -38,23 +38,6 @@ public:
   };
 
 public:
-  class DisableTypeDemotionGuard
-  {
-  public:
-    explicit DisableTypeDemotionGuard(sql::ObSQLSessionInfo &session_info);
-    ~DisableTypeDemotionGuard()
-    {
-      if (OB_NOT_NULL(query_ctx_)) {
-        query_ctx_->type_demotion_flag_ = ori_type_demotion_flag_;
-        query_ctx_ = NULL;
-      }
-    }
-  private:
-    ObQueryCtx *query_ctx_;
-    int8_t ori_type_demotion_flag_;
-  };
-
-public:
   // The Type Demotion for comparison types currently serves to optimize comparisons between
   // constants and columns by downgrading the constant's type to match the column's type.
   // This avoids adding a cast to the column, thereby enhancing query performance.

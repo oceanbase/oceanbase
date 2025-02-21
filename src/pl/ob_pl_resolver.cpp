@@ -19,7 +19,6 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_wrap_enum_set.h"
-#include "sql/resolver/expr/ob_raw_expr_type_demotion.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "ob_pl_compile.h"
 #ifdef OB_BUILD_ORACLE_PL
@@ -2520,7 +2519,6 @@ int ObPLResolver::fill_record_type(
     OX (resolver_ctx.allocator_ = &(alloc));      \
     OX (resolver_ctx.schema_checker_ = &schema_checker);     \
     OX (resolver_ctx.session_info_ = &(ctx.session_info_));  \
-    ObRawExprTypeDemotion::DisableTypeDemotionGuard type_demotion_guard(ctx.session_info_); \
     OX (resolver_ctx.expr_factory_ = &expr_factory);         \
     OX (resolver_ctx.stmt_factory_ = &stmt_factory);         \
     OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));        \

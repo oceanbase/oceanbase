@@ -169,18 +169,6 @@ bool ObRawExprTypeDemotion::need_constraint(const ObObjType from_type, const ObO
   return need_constraint;
 }
 
-ObRawExprTypeDemotion::DisableTypeDemotionGuard::DisableTypeDemotionGuard(
-    ObSQLSessionInfo &session_info) : query_ctx_(NULL), ori_type_demotion_flag_(0)
-{
-  if (OB_NOT_NULL(session_info.get_cur_exec_ctx()) &&
-      OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_query_ctx())) {
-    query_ctx_ = session_info.get_cur_exec_ctx()->get_query_ctx();
-    ori_type_demotion_flag_ = query_ctx_->type_demotion_flag_;
-    query_ctx_->type_demotion_flag_ = 0;
-    query_ctx_->type_demotion_flag_inited_ = 1;
-  }
-}
-
 int ObRawExprTypeDemotion::init_query_ctx_flags(bool &disabled)
 {
   int ret = OB_SUCCESS;
@@ -190,7 +178,7 @@ int ObRawExprTypeDemotion::init_query_ctx_flags(bool &disabled)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session or expr factory is null", K(ret), KP(session_), KP(expr_factory_));
   } else if (OB_ISNULL(exec_ctx = const_cast<ObExecContext *>(session_->get_cur_exec_ctx()))
-          || OB_ISNULL(query_ctx_ = exec_ctx->get_query_ctx())) {
+          || OB_ISNULL(query_ctx_ = expr_factory_->get_query_ctx())) {
     // exec ctx and query ctx may be null, in which case the type demotion is disabled.
     disabled = true;
     LOG_TRACE("Type demotion is disabled because of null ctx", KP(exec_ctx), KP_(query_ctx));

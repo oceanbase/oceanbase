@@ -2941,6 +2941,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
     } else {
       resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(context.schema_guard_);
+      resolver_ctx.expr_factory_->set_query_ctx(resolver_ctx.query_ctx_);
       if (OB_FAIL(resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_, session_id))) {
         LOG_WARN("init schema checker failed", K(ret));
       }
