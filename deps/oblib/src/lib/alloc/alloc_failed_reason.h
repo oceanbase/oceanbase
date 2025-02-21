@@ -70,7 +70,9 @@ public:
 char *alloc_failed_msg();
 
 AllocFailedCtx &g_alloc_failed_ctx();
-void print_alloc_failed_msg();
+void print_alloc_failed_msg(uint64_t tenant_id, uint64_t ctx_id,
+                            int64_t ctx_hold, int64_t ctx_limit,
+                            int64_t tenant_hold, int64_t tenant_limit);
 
 } // end of namespace lib
 } // end of namespace oceanbase
