@@ -18,6 +18,7 @@
 #include "lib/guard/ob_shared_guard.h"          // ObShareGuard
 #include "lib/ash/ob_ash_bkgd_sess_inactive_guard.h"
 #include "lib/container/ob_array.h"
+#include "rpc/obmysql/ob_mysql_packet.h"
 
 #define ASH_PROGRAM_STR_LEN 64
 #define ASH_MODULE_STR_LEN 32
@@ -230,6 +231,7 @@ public:
         prev_read_(0),
         prev_write_(0),
         flags_(0),
+        mysql_cmd_(-1),
         fixup_index_(-1),
         fixup_ash_buffer_()
   {}
@@ -367,13 +369,14 @@ public:
       uint64_t has_user_action_                         : 1; //user has specified action information and will no longer use the internally defined action.
     };
   };
+  int64_t mysql_cmd_;
 
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_touch_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
       K_(is_active_session), K_(inner_sql_wait_type_id), K_(pcode), K_(tm_idle_cpu_cycles),
       K_(fixup_index), K_(fixup_ash_buffer), K_(retry_wait_event_no), K_(retry_plan_line_id),
-      K_(flags));
+      K_(flags), K_(mysql_cmd));
 
 private:
 

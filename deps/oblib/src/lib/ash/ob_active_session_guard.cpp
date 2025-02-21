@@ -356,6 +356,22 @@ int64_t ObAshBuffer::append(const ObActiveSessionStat &stat)
     buffer_[idx].p3_ = stat.retry_wait_event_p3_;
     buffer_[idx].plan_line_id_ = stat.retry_plan_line_id_;
   }
+  if (stat.action_[0] == '\0') {
+    if (stat.mysql_cmd_ != -1) {
+      MEMCCPY(buffer_[idx].action_,
+          oceanbase::obmysql::ObMySQLPacket::get_mysql_cmd_name(static_cast<oceanbase::obmysql::ObMySQLCmd>(stat.mysql_cmd_)),
+          '\0',
+          sizeof(stat.action_) - 1);
+      buffer_[idx].action_[sizeof(stat.action_) - 1] = '\0';
+    } else if (stat.pcode_ != 0) {
+      MEMCCPY(buffer_[idx].action_,
+          obrpc::ObRpcPacketSet::instance().name_of_pcode(
+              static_cast<oceanbase::obrpc::ObRpcPacketCode>(stat.pcode_)),
+          '\0',
+          sizeof(stat.action_) - 1);
+      buffer_[idx].action_[sizeof(stat.action_) - 1] = '\0';
+    }
+  }
   return idx;
 }
 

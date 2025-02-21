@@ -113,9 +113,6 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
         = static_cast<const obrpc::ObRpcPacket&>(req.get_packet());
     NG_TRACE_EXT(start_rpc, OB_ID(addr), RPC_REQ_OP.get_peer(&req), OB_ID(pcode), packet.get_pcode());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
-    if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
-      ObLocalDiagnosticInfo::set_service_action(obrpc::ObRpcPacketSet::instance().name_of_pcode(packet.get_pcode()));
-    }
 
 #ifdef ERRSIM
     THIS_WORKER.set_module_type(packet.get_module_type());
@@ -136,7 +133,7 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
           = static_cast<const obmysql::ObMySQLRawPacket &>(req.get_packet());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
     if (OB_NOT_NULL(di) && !di->get_ash_stat().has_user_action_) {
-      ObLocalDiagnosticInfo::set_service_action(obmysql::ObMySQLPacket::get_mysql_cmd_name(pkt.get_cmd()));
+      ObLocalDiagnosticInfo::get()->get_ash_stat().mysql_cmd_ = static_cast<int64_t>(pkt.get_cmd());
     }
   }
   // record trace id
