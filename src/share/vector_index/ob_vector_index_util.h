@@ -146,6 +146,16 @@ private:
   ObArenaAllocator allocator_;
 };
 
+struct IvfIndexTableInfo {
+  IvfIndexTableInfo() : table_id_(OB_INVALID_ID), schema_version_(OB_INVALID_ID) {}
+  IvfIndexTableInfo(const uint64_t table_id, const uint64_t schema_version)
+    : table_id_(table_id), schema_version_(schema_version) {}
+  ~IvfIndexTableInfo() {}
+  TO_STRING_KV(K(table_id_), K(schema_version_));
+  uint64_t table_id_;
+  uint64_t schema_version_;
+};
+
 class ObVectorIndexUtil final
 {
   class ObExprVecIvfCenterIdCtx : public sql::ObExprOperatorCtx
@@ -242,6 +252,12 @@ public:
       const ObIndexType index_type,
       const int64_t vec_cid_col_id,
       uint64_t &tid);
+  static int get_vector_index_tids(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      const ObIndexType index_type,
+      const int64_t col_id,
+      ObIArray<IvfIndexTableInfo> &tids);
   static int get_vector_index_param(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,

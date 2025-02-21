@@ -243,9 +243,11 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       int64_t pq_dim = arr->size() / pq_m;
       if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, pq_cache, pq_cent_table_id, pq_cent_tablet_id, tmp_allocator, pq_centers))) {
         LOG_WARN("failed to get centers", K(ret));
-      } else if (pq_centers.count() % pq_m != 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid pq centers", K(ret), K(pq_m), K(pq_centers.count()));
+      } else if (pq_centers.count() == 0 || pq_centers.count() % pq_m != 0) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(ERROR, "invalid size of pq centers", K(ret), K(pq_centers.count()), K(pq_m));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+          "size of pq centers, should be greater than zero and able to devide m exactly");
       } else {
         center_size_per_m = pq_centers.count() / pq_m;
       }

@@ -20086,17 +20086,29 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(raw_expr);
   for (int i = 0; OB_SUCC(ret) && i < index_type_array.count(); ++i) {
     uint64_t vec_index_tid = OB_INVALID_ID;
-    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(
+    ObArray<IvfIndexTableInfo> tids;
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tids(
         schema_checker_->get_schema_guard(),
         *table_schema,
         index_type_array.at(i),
         column_id,
-        vec_index_tid))) {
+        tids))) {
       LOG_WARN("fail to get vector index tid", K(ret), KPC(table_schema));
-    } else if (vec_index_tid == OB_INVALID_ID) {
+    } else if (tids.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("can not get vecter index tid", K(ret), K(column_id), K(i), K(index_type_array.at(i)), KPC(table_schema));
+    } else if (tids.count() > 1 && !session_info_->get_ddl_info().is_ddl()) {
+      // tmp disallow dml while doing rebuild
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Executing DML during IVF index reconstruction");
+      LOG_WARN("Executing DML during IVF index reconstruction is not supported", K(ret), K(tids));
     } else {
+      int64_t last_shcema_version = OB_INVALID_ID;
+      for (int j = 0; j < tids.count(); ++j) {
+        if (last_shcema_version == OB_INVALID_ID || tids.at(j).schema_version_ > last_shcema_version) {
+          vec_index_tid = tids.at(j).table_id_;
+        }
+      }
       CopySchemaExpr copier(*params_.expr_factory_);
       ObRawExpr *part_expr = stmt->get_part_expr(table_id, vec_index_tid);
       ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_id, vec_index_tid);
