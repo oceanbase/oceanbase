@@ -151,9 +151,11 @@ int ObExprToChar::calc_result_typeN(ObExprResType &type,
         break;
       }
       case ObDateTC:
+      case ObMySQLDateTC:
       case ObTimeTC:
       case ObYearTC:
       case ObDateTimeTC:
+      case ObMySQLDateTimeTC:
       case ObOTimestampTC:
       case ObIntervalTC: {
         type.set_varchar();
@@ -594,9 +596,11 @@ int ObExprToCharCommon::eval_to_char(const ObExpr &expr,
     if (OB_SUCC(ret)) {
       switch (input_tc) {
         case ObDateTC:
+        case ObMySQLDateTC:
         case ObTimeTC:
         case ObYearTC:
         case ObDateTimeTC:
+        case ObMySQLDateTimeTC:
         case ObOTimestampTC: {
           OZ(datetime_to_char(expr, ctx, alloc, *input, fmt, nlsparam, res));
           break;
@@ -871,9 +875,11 @@ int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
           }
           switch (input_tc) {
           case ObDateTC:
+          case ObMySQLDateTC:
           case ObTimeTC:
           case ObYearTC:
           case ObDateTimeTC:
+          case ObMySQLDateTimeTC:
           case ObOTimestampTC: {
             OZ(datetime_to_char(expr, ctx, alloc, in_ptr, in_len, fmt, nlsparam, res));
             break;
@@ -990,6 +996,11 @@ int ObExprToCharCommon::convert_timelike_to_str(
                                          result_buf_len, pos);
       break;
     }
+    case ObMySQLDateTC: {
+      ret = ObTimeConverter::mdate_to_str(input.get_mysql_date(), result_buf,
+                                         result_buf_len, pos);
+      break;
+    }
     default: {
       ret = OB_INVALID_DATE_VALUE;
       LOG_WARN("input value is invalid", K(ret));
@@ -1020,6 +1031,10 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
       ret = ObTimeConverter::date_to_ob_time(input.get_date(), ob_time);
       break;
     }
+    case ObMySQLDateTC: {
+      ret = ObTimeConverter::mdate_to_ob_time(input.get_mysql_date(), ob_time);
+      break;
+    }
     case ObOTimestampTC: {
       // oracle timestamp / timestamp with time zone / timestamp with local time zone
       const ObOTimestampData &otdata = (ObTimestampTZType == input_type)
@@ -1029,7 +1044,13 @@ int ObExprToCharCommon::convert_to_ob_time(ObEvalCtx &ctx,
       break;
     }
     case ObDateTimeTC: {
-      ret = ObTimeConverter::datetime_to_ob_time(input.get_datetime(), NULL, ob_time);
+      ret = ObTimeConverter::datetime_to_ob_time(
+          input.get_datetime(), input_type == ObTimestampType ? tz_info : NULL,
+          ob_time);
+      break;
+    }
+    case ObMySQLDateTimeTC: {
+      ret = ObTimeConverter::mdatetime_to_ob_time(input.get_mysql_datetime(), ob_time);
       break;
     }
     default: {
@@ -1108,9 +1129,9 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
       res.reset();
       // handle case of mysql mode when input has no format string
       if (is_mysql_mode()) {
-        if (input_meta.type_ == ObDateTimeType || input_meta.type_ == ObTimestampType) {
-          const ObTimeZoneInfo *tz_info_use = (ObTimestampType == input_meta.type_) ?
-                          tz_info : NULL;
+        if (ob_is_datetime_or_mysql_datetime_tc(input_meta.type_)) {
+          const ObTimeZoneInfo *tz_info_use =
+              (ObTimestampType == input_meta.type_) ? tz_info : NULL;
           char *result_buf = NULL;
           int64_t pos = 0;
           int64_t result_buf_len = MAX_DATETIME_BUFFER_SIZE;
@@ -1118,13 +1139,22 @@ int ObExprToCharCommon::datetime_to_char(const ObExpr &expr,
           if (OB_ISNULL(result_buf = static_cast<char *>(alloc.alloc(result_buf_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate buff", K(ret), K(result_buf_len));
-          } else if (OB_FAIL(ObTimeConverter::datetime_to_str(input.get_datetime(), tz_info_use,
-              nls_format, scale, result_buf, result_buf_len, pos))) {
-            LOG_WARN("failed to convert datetime to string", K(ret), K(input.get_datetime()), KP(tz_info_use),
-                  K(nls_format), K(scale), KP(result_buf), K(pos));
-          }
-          if (OB_SUCC(ret)) {
-             res = ObString(pos, result_buf);
+          } else if (ObMySQLDateTimeType == input_meta.type_ &&
+                     OB_FAIL(ObTimeConverter::mdatetime_to_str(
+                         input.get_mysql_datetime(), tz_info_use, nls_format,
+                         scale, result_buf, result_buf_len, pos))) {
+            LOG_WARN("failed to convert datetime to string", K(ret),
+                     K(input.get_mysql_datetime()), KP(tz_info_use), K(nls_format),
+                     K(scale), KP(result_buf), K(pos));
+          } else if (ObDateTimeTC == ob_obj_type_class(input_meta.type_) &&
+                     OB_FAIL(ObTimeConverter::datetime_to_str(
+                         input.get_datetime(), tz_info_use, nls_format, scale,
+                         result_buf, result_buf_len, pos))) {
+            LOG_WARN("failed to convert datetime to string", K(ret),
+                     K(input.get_datetime()), KP(tz_info_use), K(nls_format),
+                     K(scale), KP(result_buf), K(pos));
+          } else {
+            res = ObString(pos, result_buf);
           }
         } else {
           if (OB_FAIL(convert_timelike_to_str(expr, ctx, alloc, input,

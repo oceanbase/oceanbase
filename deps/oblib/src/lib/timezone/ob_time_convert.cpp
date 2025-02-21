@@ -4848,7 +4848,7 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
       || OB_UNLIKELY(scale > MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len), K(ob_time), K(scale));
-  } else if (!valid_oracle_year(ob_time)) {
+  } else if (lib::is_oracle_mode() && !valid_oracle_year(ob_time)) {
     ret = OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
     LOG_WARN("invalid oracle timestamp", K(ret), K(ob_time));
   } else {
