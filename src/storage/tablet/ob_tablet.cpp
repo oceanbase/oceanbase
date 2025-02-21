@@ -375,6 +375,9 @@ int ObTablet::init_for_first_time_creation(
   } else if (FALSE_IT(set_initial_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet for first time creation", K(ret), K(*this));
@@ -476,12 +479,15 @@ int ObTablet::init_for_merge(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr/* link_writer, tmp_tablet do no write */))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_tablet_schema_mismatch(old_tablet, *storage_schema_addr_.ptr_, is_convert_co_merge))) {
     LOG_ERROR("find error while checking tablet schema mismatch", K(ret), KPC(param.storage_schema_), K(old_tablet), K(param.compaction_info_));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -596,6 +602,9 @@ int ObTablet::init_for_shared_merge(
   } else if (FALSE_IT(set_initial_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet for shared major compaction", K(ret), K(param), K(old_tablet), KPC(this));
@@ -739,6 +748,9 @@ int ObTablet::init_with_migrate_param(
       } else if (FALSE_IT(set_initial_addr())) {
       } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
         LOG_WARN("failed to increase macro ref cnt", K(ret));
+      /* NOTICE!!!
+       * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+       * it will lead to a macro block refcnt leak. */
       } else {
         is_inited_ = true;
         LOG_INFO("succeeded to init tablet with migration tablet param", K(ret), K(param), KPC(this));
@@ -810,14 +822,17 @@ int ObTablet::init_for_defragment(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr/* link_writer, tmp_tablet do no write */))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
-                                             table_store_addr_.get_ptr()->get_minor_sstables(),
-                                             storage_schema_addr_.get_ptr()->is_row_store()))) {
+  table_store_addr_.get_ptr()->get_minor_sstables(),
+  storage_schema_addr_.get_ptr()->is_row_store()))) {
     LOG_WARN("failed to init table store cache", K(ret), KPC(this));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -973,10 +988,13 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr/* link_writer, tmp_tablet do no write */))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -1226,8 +1244,6 @@ int ObTablet::init_with_update_medium_info(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr/* link_writer, tmp_tablet do no write */))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_medium_list())) {
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
@@ -1236,6 +1252,11 @@ int ObTablet::init_with_update_medium_info(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_read_info(allocator, nullptr /*tablet*/, storage_schema_addr_.get_ptr()->is_cs_replica_compat()))) {
       LOG_WARN("failed to build read info", K(ret));
+    } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+      LOG_WARN("failed to increase macro ref cnt", K(ret));
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
     } else {
       if (old_tablet.get_tablet_meta().has_next_tablet_) {
         set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -1395,8 +1416,6 @@ int ObTablet::init_with_replace_members(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr/* link_writer, tmp_tablet do no write */))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) { // full tablet only increases data macro blocks' ref cnt
-    LOG_WARN("failed to increase sstables ref cnt", K(ret));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
   } else if (need_generate_cs_replica_cg_array) {
@@ -1435,6 +1454,11 @@ int ObTablet::init_with_replace_members(
       table_store_addr_.get_ptr()->get_minor_sstables(),
       storage_schema_addr_.get_ptr()->is_row_store()))) {
     LOG_WARN("failed to init table store cache", K(ret), KPC(this));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) { // full tablet only increases data macro blocks' ref cnt
+    LOG_WARN("failed to increase sstables ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -1516,10 +1540,13 @@ int ObTablet::init_with_mds_sstable(
   } else if (OB_FAIL(init_aggregated_info(allocator, nullptr))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -1696,10 +1723,13 @@ int ObTablet::inner_init_compat_normal_tablet(
   } else if (CLICK_FAIL(init_aggregated_info(allocator, nullptr))) {
     LOG_WARN("fail to init aggregated info", K(ret));
   } else if (FALSE_IT(set_initial_addr())) {
-  } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -2059,6 +2089,9 @@ int ObTablet::deserialize_for_replay(
       LOG_WARN("fail to deserialize with id array", K(ret));
     } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
       LOG_WARN("failed to increase macro ref cnt", K(ret));
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
     } else {
       pos = new_pos;
       is_inited_ = true;
@@ -2171,8 +2204,7 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
       ALLOC_AND_INIT(allocator, table_store_addr_, (*this));
     }
   }
-  if (FAILEDx(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  if (OB_FAIL(ret)) {
   } else {
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
     ObStorageSchema *schema = nullptr;
@@ -2196,6 +2228,12 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
         LOG_WARN("fail to deserialize post work for next tablet", K(ret));
       }
     }
+    if (FAILEDx(inner_inc_macro_ref_cnt())) {
+      LOG_WARN("failed to increase macro ref cnt", K(ret));
+    }
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
     if (OB_SUCC(ret)) {
       is_inited_ = true;
       LOG_INFO("succeed to load deserialize tablet", K(ret), KPC(this));
