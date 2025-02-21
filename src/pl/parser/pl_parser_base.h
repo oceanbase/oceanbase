@@ -113,6 +113,17 @@ extern int merge_child(ParseNode *node,
 extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
 extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num, ...);
 extern int parse_sql_stmt(ParseResult *parse_result);
+extern int check_cursor_node(ParseNode **param, void *malloc_pool, ParseNode *source_tree, bool can_has_paramlist);
+
+#define check_and_split_cursor_node(node, can_has_paramlist) \
+ParseNode *name_node = node; \
+ParseNode *param_node = NULL; \
+do { \
+  parse_ctx->global_errno_ = check_cursor_node(&param_node, parse_ctx->mem_pool_, node, can_has_paramlist); \
+  if (parse_ctx->global_errno_ != OB_PARSER_SUCCESS) { \
+    (obpl_oracle_parse_fatal_error(parse_ctx->global_errno_, YYLEX_PARAM, "check cursor source tree '%s' failed\n", #node)); \
+  } \
+} while (0)
 
 #ifdef OB_BUILD_ORACLE_PL
 extern const NonReservedKeyword *oracle_pl_non_reserved_keyword_lookup(const char *word);

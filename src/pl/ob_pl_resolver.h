@@ -864,22 +864,24 @@ private:
   int resolve_condition(const common::ObString &name,
                         const ObPLBlockNS &ns,
                         const ObPLConditionValue **value);
-  int resolve_cursor(ObPLCompileUnitAST &func,
-                     const ObPLBlockNS &ns,
-                     const ObString &db_name,
-                     const ObString &package_name,
-                     const ObString &cursor_name,
-                     int64_t &index);
   int resolve_cursor(const ObStmtNodeTree *parse_tree,
                      const ObPLBlockNS &ns,
                      int64_t &index,
                      ObPLCompileUnitAST &func);
-  int resolve_cursor(const common::ObString &name,
-                     const ObPLBlockNS &ns,
-                     int64_t &cursor,
-                     ObPLCompileUnitAST &func,
-                     bool check_mode = false,
-                     bool for_external_cursor = false);
+  int resolve_package_cursor(uint64_t package_id,
+                             const ObString &cursor_name,
+                             int64_t &index,
+                             ObPLCompileUnitAST &func);
+  int resolve_local_cursor(const common::ObString &name,
+                           const ObPLBlockNS &ns,
+                           int64_t &cursor,
+                           ObPLCompileUnitAST &func,
+                           bool check_mode = false,
+                           bool for_external_cursor = false);
+  int resolve_obj_access_ref_for_cursor_node(const ObStmtNodeTree *node,
+                                             ObIArray<ObObjAccessIdent> &access_idents);
+  int resolve_obj_access_ref_for_cursor_param_node(const ObStmtNodeTree *node,
+                                                   const ObStmtNodeTree *&param_node);
   int resolve_questionmark_cursor(const int64_t symbol_idx, 
                                   ObPLBlockNS &ns, 
                                   int64_t &cursor);
