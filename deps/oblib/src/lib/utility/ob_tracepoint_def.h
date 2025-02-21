@@ -613,4 +613,9 @@ GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of 
 GLOBAL_ERRSIM_POINT_DEF(2502, EN_ENABLE_SHARED_STORAGE_COLUMN_GROUP, "whether to enable column group under shared storage mode");
 GLOBAL_ERRSIM_POINT_DEF(2503, EN_OBJECT_STORAGE_IO_RETRY, "whether to enable probability-based retries for object storage IO");
 
+// PL begin 2550 - 2600
+GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
+GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
+// PL end
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
