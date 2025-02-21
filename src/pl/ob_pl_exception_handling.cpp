@@ -473,7 +473,11 @@ bool ObPLEH::is_internal_error(int error_code)
     || OB_ERR_SESSION_INTERRUPTED == error_code
     || OB_ERR_QUERY_INTERRUPTED == error_code
     || OB_TIMEOUT == error_code
-    || OB_EAGAIN == error_code;
+    || OB_TRANS_TIMEOUT == error_code
+    || OB_TRANS_STMT_TIMEOUT == error_code
+    || OB_EAGAIN == error_code
+    || OB_NOT_MASTER == error_code
+    || OB_SNAPSHOT_DISCARDED == error_code;
 }
 
 ObPLConditionType ObPLEH::eh_classify_exception(const char *sql_state)

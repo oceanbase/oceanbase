@@ -505,4 +505,9 @@ GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enabl
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
 
+// PL begin 2550 - 2600
+GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
+GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
+// PL end
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
