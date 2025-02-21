@@ -2336,8 +2336,6 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
   } else if (OB_UNLIKELY(by_pass_batch_size_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("by pass group row is not init", K(ret), K(by_pass_batch_size_));
-  } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(brs_))) {
-    LOG_WARN("fail to eval aggr param batch", K(ret), K(brs_));
   } else if (OB_ISNULL(brs_.skip_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "unexpected null skip", K(ret));

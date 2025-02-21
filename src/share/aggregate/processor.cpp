@@ -674,6 +674,17 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     SQL_LOG(WARN, "not inited", K(ret));
+  } else {
+    ObBatchRows tmp_brs;
+    tmp_brs.size_ = batch_size;
+    tmp_brs.skip_ = const_cast<ObBitVector *>(&skip);
+    tmp_brs.end_ = false;
+    tmp_brs.all_rows_active_ = (skip.accumulate_bit_cnt(batch_size) == 0);
+    if (OB_FAIL(eval_aggr_param_batch(tmp_brs))) {
+      SQL_LOG(WARN, "eval aggregate params failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(agg_rows)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "unexpected null aggregate rows", K(ret));
