@@ -1128,6 +1128,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       const uint64_t data_table_id,
       const uint64_t database_id,
       const ObString &index_name_without_prefix,
+      const bool check_data_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema *&index_table_schema);
 

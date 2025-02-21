@@ -5932,6 +5932,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                 origin_table_schema.get_table_id(),
                 origin_table_schema.get_database_id(),
                 drop_index_arg->index_name_,
+                true/*check_data_table_id*/,
                 schema_guard,
                 index_table_schema))) {
               LOG_WARN("get index schema by name failed", K(ret));
@@ -6099,7 +6100,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
           // 2. check confilicts with new index name
           // 3. alter table rename index
           if (OB_FAIL(get_index_schema_by_name(origin_table_schema.get_tenant_id(),
-            origin_table_schema.get_table_id(), origin_table_schema.get_database_id(), ori_index_name,
+            origin_table_schema.get_table_id(), origin_table_schema.get_database_id(), ori_index_name, true/*check_data_table_id*/,
             schema_guard, orig_index_schema))) {
             LOG_WARN("get index schema by name failed", K(ret), K(ori_index_name), K(origin_table_schema));
           } else if (OB_ISNULL(orig_index_schema)) {
@@ -6774,6 +6775,7 @@ int ObDDLService::get_index_schema_by_name(
     const uint64_t data_table_id,
     const uint64_t database_id,
     const ObString &index_name_without_prefix,
+    const bool check_data_table_id,
     ObSchemaGetterGuard &schema_guard,
     const ObTableSchema *&index_table_schema)
 {
@@ -6796,6 +6798,12 @@ int ObDDLService::get_index_schema_by_name(
                                               is_index,
                                               index_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(index_table_schema));
+    } else if (check_data_table_id && nullptr != index_table_schema && data_table_id != index_table_schema->get_data_table_id()) {
+      ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+      LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, index_name_without_prefix.length(), index_name_without_prefix.ptr());
+      LOG_WARN("get index table schema failed", K(tenant_id),
+          K(database_id), K(index_table_name), K(index_table_schema->get_table_id()), K(ret));
+      index_table_schema = nullptr;
     }
   }
   return ret;
@@ -6841,6 +6849,7 @@ int ObDDLService::rename_dropping_index_name(
                 orig_index_schema.get_data_table_id(),
                 orig_index_schema.get_database_id(),
                 new_pure_index_name,
+                false/*check_data_table_id*/,
                 schema_guard,
                 index_schema_with_new_name))) {
       LOG_WARN("get index schema by name failed", K(ret));
