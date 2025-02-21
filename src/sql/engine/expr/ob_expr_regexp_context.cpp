@@ -1011,6 +1011,10 @@ int ObExprHsRegexCtx::init(ObExprStringBuf &string_buf,
   }
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(pattern = origin_pattern_utf8)) { // TODO: preprocess pattern for oracle
+  } else if (pattern.length() > MAX_PATTERN_LEN) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pattern is too long, max length is 2000", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "hyperscan regex engine, supported pattern's maximum length is 2000");
   } else if (reusable &&
              inited_ &&
              pattern_ == ObString(0, pattern.length(), pattern.ptr()) &&

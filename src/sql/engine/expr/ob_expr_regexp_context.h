@@ -162,6 +162,7 @@ private:
 #if defined(__x86_64__)
 class ObExprHsRegexCtx : public ObExprOperatorCtx
 {
+  static const int MAX_PATTERN_LEN = 2000;
 public:
   ObExprHsRegexCtx();
   virtual ~ObExprHsRegexCtx();
