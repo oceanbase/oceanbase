@@ -345,7 +345,9 @@ public:
     int ret = common::OB_SUCCESS;
     bool has_enclosed = (INT64_MAX != format_.field_enclosed_char_);
     bool single_char_term = static_cast<unsigned> (opt_param_.field_term_c_) < 0x80
-                               && static_cast<unsigned> (opt_param_.line_term_c_) < 0x80;
+                               && static_cast<unsigned> (opt_param_.line_term_c_) < 0x80
+                               && format_.field_term_str_.length() == 1
+                               && format_.line_term_str_.length() == 1;
     switch (format_.cs_type_) {
     case common::CHARSET_UTF8MB4:
       if (has_enclosed) {
