@@ -678,9 +678,9 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     LOG_WARN("failed to check is odps external table or not", K(ret));
   } else if (!args.external_table_files_.empty() &&
       is_odps_external_table) {
-    if (scan_ops.empty() || scan_ops.count() != gi_task_array_map_.count()) {
+    if (scan_ops.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()), K(gi_task_array_map_.count()));
+      LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()));
     } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
