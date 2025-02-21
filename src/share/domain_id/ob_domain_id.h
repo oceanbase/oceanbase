@@ -23,6 +23,12 @@ namespace oceanbase
 namespace share
 {
 
+enum ObRowkeyIdExprType {
+  FUNC_LOOKUP = 0,
+  DOMAIN_ID_MERGE = 1,
+  VEC_IDX_QUERY = 2
+};
+
 typedef common::ObSEArray<uint64_t, 2> DomainIdxs; // only support upper 5 col for each domain types
 
 class ObDomainIdUtils final

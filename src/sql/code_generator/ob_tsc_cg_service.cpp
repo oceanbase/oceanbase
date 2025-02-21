@@ -889,7 +889,7 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
       LOG_WARN("failed to extract vector access columns", K(ret));
     }
   } else if (op.is_scan_domain_id_table(scan_table_id)) {
-    if (OB_FAIL(extract_rowkey_domain_id_access_columns(op, scan_ctdef, access_exprs))) {
+    if (OB_FAIL(extract_rowkey_domain_id_access_columns(op, scan_ctdef, access_exprs, ObRowkeyIdExprType::DOMAIN_ID_MERGE))) {
       LOG_WARN("fail to extract rowkey doc access columns", K(ret));
     }
   } else if (op.need_doc_id_index_back() && scan_table_id == op.get_doc_id_index_table_id()) {
@@ -1449,7 +1449,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     }
   } else if (cg_ctx.is_func_lookup_ && table_id == op.get_rowkey_doc_table_id()) {
     const bool output_rowkey = !cg_ctx.is_func_lookup_;
-    if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, output_rowkey, output_cids))) {
+    if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, output_rowkey, output_cids, ObRowkeyIdExprType::FUNC_LOOKUP))) {
       LOG_WARN("fail to extract rowkey doc output columns ids", K(ret));
     }
   } else if ((op.is_post_vec_idx_scan()
@@ -1461,7 +1461,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
       LOG_WARN("failed to extract vector das output column ids", K(ret));
     }
   } else if (op.is_scan_domain_id_table(table_id)) {
-    if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, true, output_cids))) {
+    if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, true, output_cids, ObRowkeyIdExprType::DOMAIN_ID_MERGE))) {
       LOG_WARN("fail to extract rowkey doc output columns ids", K(ret));
     }
   } else if (cg_ctx.is_merge_fts_index_) {
@@ -2499,7 +2499,7 @@ int ObTscCgService::extract_vec_ir_access_columns(
         break;
       }
       case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
-        if (OB_FAIL(extract_rowkey_domain_id_access_columns(op, scan_ctdef, access_exprs))) {
+        if (OB_FAIL(extract_rowkey_domain_id_access_columns(op, scan_ctdef, access_exprs, ObRowkeyIdExprType::VEC_IDX_QUERY))) {
           LOG_WARN("fail to extract rowkey vid access columns", K(ret));
         }
         break;
@@ -2981,7 +2981,7 @@ int ObTscCgService::extract_vector_das_output_column_ids(const ObTableSchema &in
         break;
       }
       case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
-        if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, true, output_cids))) {
+        if (OB_FAIL(extract_rowkey_domain_id_output_columns_ids(index_schema, op, scan_ctdef, true, output_cids, ObRowkeyIdExprType::VEC_IDX_QUERY))) {
           LOG_WARN("fail to extract rowkey vid output column ids", K(ret));
         }
         // do nothing now
@@ -3419,9 +3419,13 @@ int ObTscCgService::extract_rowkey_doc_access_columns(
 {
   int ret = OB_SUCCESS;
   bool doc_id_is_found = false;
-  const ObIArray<ObRawExpr *> &exprs = op.get_rowkey_id_exprs();
+  const ObIArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>> &exprs = op.get_rowkey_id_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    ObRawExpr *expr = exprs.at(i);
+    if (ObRowkeyIdExprType::FUNC_LOOKUP != exprs.at(i).first) {
+      continue;
+    }
+
+    ObRawExpr *expr = exprs.at(i).second;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(exprs));
@@ -3603,13 +3607,18 @@ int ObTscCgService::generate_das_scan_ctdef_with_domain_id(
 int ObTscCgService::extract_rowkey_domain_id_access_columns(
     const ObLogTableScan &op,
     const ObDASScanCtDef &scan_ctdef,
-    ObIArray<ObRawExpr*> &access_exprs)
+    ObIArray<ObRawExpr*> &access_exprs,
+    ObRowkeyIdExprType type)
 {
   int ret = OB_SUCCESS;
   bool domain_id_is_found = false;
-  const ObIArray<ObRawExpr *> &exprs = op.get_rowkey_id_exprs();
+  const ObIArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>> &exprs = op.get_rowkey_id_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    ObRawExpr *expr = exprs.at(i);
+    if (type != exprs.at(i).first) {
+      continue;
+    }
+
+    ObRawExpr *expr = exprs.at(i).second;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(exprs));
@@ -3641,15 +3650,20 @@ int ObTscCgService::extract_rowkey_domain_id_output_columns_ids(
     const ObLogTableScan &op,
     const ObDASScanCtDef &scan_ctdef,
     const bool need_output_rowkey,
-    ObIArray<uint64_t> &output_cids)
+    ObIArray<uint64_t> &output_cids,
+    ObRowkeyIdExprType type)
 {
   int ret = OB_SUCCESS;
   bool domain_id_is_found = false;
-  const ObIArray<ObRawExpr *> &exprs = op.get_rowkey_id_exprs();
+  const ObIArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>> &exprs = op.get_rowkey_id_exprs();
   ObArray<ObRawExpr *> access_exprs;
   // NOTE(liyao): ivf pq have 2 domain id index cols, so cannot exit the loop when domain_id_is_found == true
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    ObRawExpr *expr = exprs.at(i);
+    if (type != exprs.at(i).first) {
+      continue;
+    }
+
+    ObRawExpr *expr = exprs.at(i).second;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, expr is nullptr", K(ret), K(i), K(exprs));

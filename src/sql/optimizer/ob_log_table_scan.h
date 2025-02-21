@@ -886,7 +886,7 @@ public:
   inline uint64_t get_rowkey_doc_table_id() const { return rowkey_doc_tid_; }
   inline uint64_t get_multivalue_col_idx() const { return multivalue_col_idx_; }
   inline int32_t get_multivalue_type() const { return multivalue_type_; }
-  inline const common::ObIArray<ObRawExpr *> &get_rowkey_id_exprs() const { return rowkey_id_exprs_; }
+  inline const common::ObIArray<std::pair<ObRowkeyIdExprType, ObRawExpr *>> &get_rowkey_id_exprs() const { return rowkey_id_exprs_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
   inline int has_exec_param(bool &bool_ret) const
@@ -1139,7 +1139,8 @@ protected: // memeber variables
   // begin for table scan with doc id
   bool is_tsc_with_doc_id_;
   uint64_t rowkey_doc_tid_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
+
+  common::ObSEArray<std::pair<ObRowkeyIdExprType, ObRawExpr*>, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
   uint64_t multivalue_col_idx_;
   int32_t multivalue_type_;
   // end for table scan with doc id

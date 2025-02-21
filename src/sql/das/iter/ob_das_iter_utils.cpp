@@ -3075,7 +3075,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
                    vec_aux_ctdef->access_pk_) {
           iter_tree = aux_lookup_iter;
         } else if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, aux_lookup_ctdef, aux_lookup_rtdef, data_table_ctdef, data_table_rtdef,
-                                                 nullptr, nullptr, related_tablet_ids, trans_desc, snapshot,
+                                                 attach_ctdef, attach_rtdef, related_tablet_ids, trans_desc, snapshot,
                                                  related_tablet_ids.lookup_tablet_id_, aux_lookup_iter, iter_tree,
                                                  batch_count))) {
           LOG_WARN("failed to create local lookup iter", K(ret));

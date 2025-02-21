@@ -182,12 +182,14 @@ private:
                                            ObIArray<uint64_t> &output_cids);
   int extract_rowkey_domain_id_access_columns(const ObLogTableScan &op,
                                               const ObDASScanCtDef &scan_ctdef,
-                                              ObIArray<ObRawExpr*> &access_exprs);
+                                              ObIArray<ObRawExpr*> &access_exprs,
+                                              ObRowkeyIdExprType type);
   int extract_rowkey_domain_id_output_columns_ids(const share::schema::ObTableSchema &schema,
                                                   const ObLogTableScan &op,
                                                   const ObDASScanCtDef &scan_ctdef,
                                                   const bool need_output_rowkey,
-                                                  ObIArray<uint64_t> &output_cids);
+                                                  ObIArray<uint64_t> &output_cids,
+                                                  ObRowkeyIdExprType type);
   int extract_vector_hnsw_das_output_column_ids(const ObLogTableScan &op,
                                                 const ObDASScanCtDef &scan_ctdef,
                                                 ObIArray<uint64_t> &output_cids);

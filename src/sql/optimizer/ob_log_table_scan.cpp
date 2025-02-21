@@ -264,9 +264,19 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get text retrieval exprs", K(ret));
   } else if ((is_post_vec_idx_scan() || is_pre_vec_idx_scan()) && OB_FAIL(get_vec_idx_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get text retrieval exprs", K(ret));
-  } else if (OB_FAIL(append(all_exprs, rowkey_id_exprs_))) {
-    LOG_WARN("failed to append rowkey doc exprs", K(ret));
-  } else if (has_func_lookup() && OB_FAIL(get_func_lookup_calc_exprs(all_exprs))) {
+  }
+
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < rowkey_id_exprs_.count(); ++i) {
+      ObRawExpr *expr = rowkey_id_exprs_.at(i).second;
+      if (OB_FAIL(all_exprs.push_back(expr))) {
+        LOG_WARN("failed to append rowkey id exprs", K(ret), K(i));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  }else if (has_func_lookup() && OB_FAIL(get_func_lookup_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get functional lookup exprs", K(ret));
   } else if (use_index_merge() && OB_FAIL(get_index_merge_calc_exprs(all_exprs))) {
     LOG_WARN("failed to get index merge calc exprs", K(ret));
@@ -308,7 +318,7 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
     } else { /*do nothing*/ }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_id_exprs_.count(); ++i) {
-    ObRawExpr *expr = rowkey_id_exprs_.at(i);
+    ObRawExpr *expr = rowkey_id_exprs_.at(i).second;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expr", K(ret));
@@ -3943,7 +3953,7 @@ int ObLogTableScan::prepare_rowkey_vid_dep_exprs()
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(get_plan()->get_optimizer_context().get_expr_factory(),
               *col_schema, column_expr))) {
         LOG_WARN("failed to build rowkey doc id column expr", K(ret), K(i), KPC(col_schema));
-      } else if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
+      } else if (OB_FAIL(rowkey_id_exprs_.push_back(std::make_pair(ObRowkeyIdExprType::VEC_IDX_QUERY, column_expr)))) {
         LOG_WARN("fail to push back column expr", K(ret));
       }
     }
@@ -3955,7 +3965,7 @@ int ObLogTableScan::prepare_rowkey_vid_dep_exprs()
     } else if (OB_FAIL(ObRawExprUtils::build_column_expr(get_plan()->get_optimizer_context().get_expr_factory(),
             *col_schema, column_expr))) {
       LOG_WARN("failed to build rowkey vec vid column expr", K(ret), K(vec_vid_col_id), KPC(col_schema));
-    } else if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
+    } else if (OB_FAIL(rowkey_id_exprs_.push_back(std::make_pair(ObRowkeyIdExprType::VEC_IDX_QUERY, column_expr)))) {
       LOG_WARN("failed to build rowkey doc id column expr", K(ret), K(vec_vid_col_id), KPC(col_schema));
     }
   }
@@ -4285,7 +4295,7 @@ int ObLogTableScan::prepare_hnsw_vector_access_exprs()
           KP(index_id_vid_column), KP(index_id_type_column),
           KP(index_id_scn_column), KP(index_id_vector_column),
           KP(snapshot_key_column), KP(snapshot_data_column));
-    } else if (!is_tsc_with_domain_id() && OB_FAIL(prepare_rowkey_vid_dep_exprs())) {
+    } else if (OB_FAIL(prepare_rowkey_vid_dep_exprs())) {
       LOG_WARN("fail to prepare rowkey vid dep exprs", K(ret));
     /* column must add in order, same as ObVectorHNSWColumnIdx*/
     } else if (OB_FAIL(vc_info.aux_table_column_.push_back(delta_vid_column))) {
@@ -4501,7 +4511,7 @@ int ObLogTableScan::prepare_func_lookup_dep_exprs()
         } else if (OB_FAIL(ObRawExprUtils::build_column_expr(get_plan()->get_optimizer_context().get_expr_factory(),
                 *col_schema, column_expr))) {
           LOG_WARN("failed to build rowkey doc id column expr", K(ret), K(i), KPC(col_schema));
-        } else if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
+        } else if (OB_FAIL(rowkey_id_exprs_.push_back(std::make_pair(ObRowkeyIdExprType::FUNC_LOOKUP, column_expr)))) {
           LOG_WARN("fail to push back column expr", K(ret));
         }
       }
@@ -4513,7 +4523,7 @@ int ObLogTableScan::prepare_func_lookup_dep_exprs()
       } else if (OB_FAIL(ObRawExprUtils::build_column_expr(get_plan()->get_optimizer_context().get_expr_factory(),
               *col_schema, column_expr))) {
         LOG_WARN("failed to build rowkey doc id column expr", K(ret), K(doc_id_col_id), KPC(col_schema));
-      } else if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
+      } else if (OB_FAIL(rowkey_id_exprs_.push_back(std::make_pair(ObRowkeyIdExprType::FUNC_LOOKUP, column_expr)))) {
         LOG_WARN("fail to push back column expr", K(ret));
       }
     }
@@ -5102,7 +5112,7 @@ int ObLogTableScan::prepare_rowkey_domain_id_dep_exprs()
           }
 
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(rowkey_id_exprs_.push_back(column_expr))) {
+            if (OB_FAIL(rowkey_id_exprs_.push_back(std::make_pair(ObRowkeyIdExprType::DOMAIN_ID_MERGE, column_expr)))) {
               LOG_WARN("fail to push back column expr", K(ret));
             }
           }
