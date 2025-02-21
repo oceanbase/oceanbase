@@ -921,6 +921,9 @@ int ObExprMultiSet::eval_composite_relative_anonymous_block(ObExecContext &exec_
     CREATE_WITH_TEMP_CONTEXT(lib::ContextParam().set_mem_attr(MTL_ID(),
                                                               GET_PL_MOD_STRING(pl::OB_PL_MULTISET),
                                                               ObCtxIds::DEFAULT_CTX_ID)) {
+      char old_sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
+      MEMCPY(old_sql_id, exec_ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(exec_ctx.get_sql_ctx()->sql_id_));
+      MEMSET(exec_ctx.get_sql_ctx()->sql_id_, '\0', (int32_t)sizeof(exec_ctx.get_sql_ctx()->sql_id_));
       if (OB_FAIL(GCTX.pl_engine_->execute(exec_ctx,
                                           params,
                                           OB_INVALID_ID,
@@ -929,6 +932,7 @@ int ObExprMultiSet::eval_composite_relative_anonymous_block(ObExecContext &exec_
         LOG_WARN("failed to execute PS anonymous bolck",
                  K(ret), K(pl), K(params), K(out_args));
       }
+      MEMCPY(exec_ctx.get_sql_ctx()->sql_id_, old_sql_id, (int32_t)sizeof(old_sql_id));
     }
   }
 
