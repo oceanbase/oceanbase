@@ -2043,6 +2043,31 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   }
 #endif
 
+  float valid_ratio = 1.0;
+  if (OB_SUCC(ret) && ctx->is_bitmaps_valid(true/*is_extra*/)) {
+    float incr_valid_ratio = 1.0;
+    float snap_valid_ratio = 1.0;
+    int64_t incr_cnt = 0;
+    int64_t snap_cnt = 0;
+    if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), incr_cnt))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+      LOG_WARN("failed to get snap index number.", K(ret));
+    } else if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), snap_cnt))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+      LOG_WARN("failed to get snap index number.", K(ret));
+    } else {
+      uint64_t valid_cnt = roaring::api::roaring64_bitmap_get_cardinality(ctx->extra_bitmaps_->insert_bitmap_);
+      if (incr_cnt != 0) {
+        incr_valid_ratio = (float) valid_cnt / (float) incr_cnt;
+      }
+      if (snap_cnt != 0) {
+        snap_valid_ratio = (float) valid_cnt / (float) snap_cnt;
+      }
+      valid_ratio = incr_valid_ratio < snap_valid_ratio ? incr_valid_ratio : snap_valid_ratio;
+      valid_ratio = valid_ratio < 1.0 ? valid_ratio : 1.0;
+    }
+  }
+
   if (OB_SUCC(ret)) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
     TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
@@ -2056,7 +2081,8 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          delta_res_cnt,
                                          query_cond->ef_search_,
                                          ibitmap,
-                                         true/*reverse_filter*/))) {
+                                         true,/*reverse_filter*/
+                                         valid_ratio))) {
       ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("knn search delta failed.", K(ret), K(dim));
     }
@@ -2076,7 +2102,8 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          snap_res_cnt,
                                          query_cond->ef_search_,
                                          dbitmap,
-                                         is_pre_filter/*reverse_filter*/))) {
+                                         is_pre_filter,/*reverse_filter*/
+                                         valid_ratio))) {
       ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("knn search snap failed.", K(ret), K(dim));
     }

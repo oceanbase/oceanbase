@@ -60,9 +60,10 @@ int add_index(obvectorlib::VectorIndexPtr index_handler,float* vector_list, int6
 int get_index_number(obvectorlib::VectorIndexPtr index_handler, int64_t &size);
 
 int get_index_type(obvectorlib::VectorIndexPtr index_handler);
+int cal_distance_by_id(obvectorlib::VectorIndexPtr index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances);
 int knn_search(obvectorlib::VectorIndexPtr index_handler,float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, int64_t &result_size, int ef_search,
-               void* invalid = NULL, bool reverse_filter = false);
+               void* invalid = NULL, bool reverse_filter = false, float valid_ratio = 1.0);
 
 int fserialize(obvectorlib::VectorIndexPtr index_handler, std::ostream& out_stream);
 
