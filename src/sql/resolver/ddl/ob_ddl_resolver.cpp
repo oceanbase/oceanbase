@@ -3111,13 +3111,29 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_null(ObColumnSchemaV2 
       LOG_WARN("duplicate NULL specifications", K(ret));
     } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
               && OB_DDL_ADD_COLUMN != (static_cast<AlterColumnSchema &>(column)).alter_type_) {
-      if (!column.has_not_null_constraint()) {
-        ret = OB_COLUMN_CANT_CHANGE_TO_NULLALE;
-        LOG_WARN("column to be modified to NULL cannot be modified to NULL", K(ret));
-      } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
+      // To modify column to nullable.
+      // 1. Primary key column can not insert NULL due to is_nullable_ = true, keep the attribute after the drop pk op.
+      // And modify column null should set is_nullable_ = true after drop pk op. (Modify null successfully is not compatible with the Oracle)
+      // 2. With not null constraint.
+      if (!column.has_not_null_constraint()) { // without not null cst.
+        if (stmt::T_ALTER_TABLE != stmt_->get_stmt_type()
+            || column.is_nullable()
+            || column.is_rowkey_column()) {
+          ret = OB_COLUMN_CANT_CHANGE_TO_NULLALE;
+          LOG_WARN("column to be modified to NULL cannot be modified to NULL", K(ret),
+            "stmt_type", stmt_->get_stmt_type(), "is_null", column.is_nullable(), "is_rowkey", column.is_rowkey_column(),
+            K(column));
+        } else {
+          column.set_nullable(true);
+        }
+      } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type() // with not null cst.
               && OB_FAIL(drop_not_null_constraint(column))) {
         LOG_WARN("drop not null constraint failed", K(ret));
       } else {
+        if (!column.is_rowkey_column()) {
+          // After drop pk op, the column should set null by setting nullable and dropping not null flag.
+          column.set_nullable(true);
+        }
         column.drop_not_null_cst();
       }
     }
