@@ -1326,7 +1326,7 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
       LOG_WARN("failed to get snap index number.", K(ret));
     } else {
-      LOG_INFO("get snap index element and array", K(ret), K(snap_index_size), K(vid_array->count()));
+      LOG_INFO("get snap index element and array", K(ret), K(snap_index_size));
     }
     free_hnswsq_array_data(snap_data_, get_allocator());
   }
