@@ -527,7 +527,7 @@ int ObExprToCharCommon::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
   if (is_oracle_mode()) {
     CK(rt_expr.arg_cnt_ >= 1 && rt_expr.arg_cnt_ <= 3);
-    rt_expr.eval_func_ = &ObExprToCharCommon::eval_to_char;
+    rt_expr.eval_func_ = &ObExprOracleToChar::eval_oracle_to_char;
     // for static engine batch
     if ((1 == rt_expr.arg_cnt_ && rt_expr.args_[0]->is_batch_result())
         || (2 == rt_expr.arg_cnt_
