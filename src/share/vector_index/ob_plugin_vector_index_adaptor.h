@@ -399,6 +399,7 @@ public:
 
   int get_dim(int64_t &dim);
   int get_hnsw_param(ObVectorIndexParam *&param);
+  int vsag_query_vids(float* vector, const int64_t* vids, int64_t count, const float *&distance, bool is_sanp);
 
   // for virtual table
   int fill_vector_index_info(ObVectorIndexInfo &info);
@@ -546,7 +547,6 @@ private:
                       ObVectorQueryConditions *query_cond,
                       int64_t dim, float *query_vector,
                       ObVectorQueryVidIterator *&vids_iter);
-
   int get_current_scn(share::SCN &current_scn);
 
 private:

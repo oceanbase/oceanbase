@@ -141,8 +141,8 @@ public:
       dim_(0),
       search_vec_(nullptr),
       distance_calc_(nullptr),
-      is_primary_pre_with_rowkey_with_filter_(false) {
-        saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
+      is_primary_pre_with_rowkey_with_filter_(false),
+      go_brute_force_(false) {
       }
 
   virtual ~ObDASHNSWScanIter() {}
@@ -185,8 +185,12 @@ private:
   int process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_hnsw(ObIAllocator &allocator, bool is_vectorized);
   int process_adaptor_state_pre_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
-  int process_adaptor_state_pre_filter_with_idx_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
-  int process_adaptor_state_pre_filter_with_rowkey(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int process_adaptor_state_pre_filter_with_idx_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, int64_t *&vids,
+                        int& brute_cnt, bool is_vectorized);
+  int process_adaptor_state_pre_filter_with_rowkey(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, int64_t *&vids,
+                        int& brute_cnt, bool is_vectorized);
+  int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    int64_t *&brute_vids, int& brute_cnt);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_next_single_row(bool is_vectorized);
 
@@ -230,13 +234,13 @@ private:
     ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx());
     return ObDasVecScanUtils::get_rowkey(allocator, ctdef, rtdef, rowkey);
   }
-  int get_rowkey_pre_filter(bool is_vectorized);
 
   int init_sort(const ObDASVecAuxScanCtDef *ir_ctdef, ObDASVecAuxScanRtDef *ir_rtdef);
   int set_vec_index_param(ObString vec_index_param) { return ob_write_string(vec_op_alloc_, vec_index_param, vec_index_param_); }
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
+  static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 
 private:
   lib::MemoryContext mem_context_;
@@ -289,10 +293,9 @@ private:
   double selectivity_;
 
   ObExpr* search_vec_;
-
-  common::ObSEArray<common::ObRowkey *, 16> saved_rowkeys_;
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
+  bool go_brute_force_;
 };
 
 
@@ -307,17 +310,17 @@ public:
   ~ObSimpleMaxHeap() {}
   int init();
   int release();
-  void push(ObRowkey &rowkey, double distiance);
+  void push(int64_t vid, double distiance);
   void max_heap_sort();
-  ObRowkey* at(uint64_t idx);
+  int64_t at(uint64_t idx);
   double value_at(uint64_t idx);
   uint64_t get_size() const { return size_; }
 
 private:
   struct ObSortItem {
-    ObRowkey rowkey_;
+    int64_t vid_;
     double distance_;
-    ObSortItem(const ObRowkey& rowkey, double distance) : rowkey_(rowkey), distance_(distance) {}
+    ObSortItem(int64_t vid, double distance) : vid_(vid), distance_(distance) {}
 
     bool operator<(const ObSortItem& other) const {
         return distance_ < other.distance_;

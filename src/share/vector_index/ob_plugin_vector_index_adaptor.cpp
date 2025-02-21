@@ -2001,6 +2001,23 @@ void ObPluginVectorIndexAdaptor::print_vectors(float *vecs, int64_t count, int64
   }
 }
 
+int ObPluginVectorIndexAdaptor::vsag_query_vids(float* vector, const int64_t* vids,
+                                                int64_t count, const float *&distance,
+                                                bool is_snap)
+{
+  INIT_SUCC(ret);
+  void *index = is_snap ? get_snap_index() : get_incr_index();
+  if (OB_ISNULL(index)) {
+    // its normal, there maybe have no snap index
+    distance = nullptr;
+  } else {
+    ret = obvectorutil::cal_distance_by_id(is_snap ? get_snap_index() : get_incr_index(),
+                                            vector,
+                                            vids, count, distance);
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContext *ctx,
                                                 ObVectorQueryConditions *query_cond,
                                                 int64_t dim, float *query_vector,
@@ -2067,7 +2084,6 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
       valid_ratio = valid_ratio < 1.0 ? valid_ratio : 1.0;
     }
   }
-
   if (OB_SUCC(ret)) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
     TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);

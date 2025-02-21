@@ -171,6 +171,7 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     dim_ = vec_aux_ctdef_->dim_;
     selectivity_ = vec_aux_ctdef_->selectivity_;
     is_primary_pre_with_rowkey_with_filter_ = vec_aux_ctdef_->can_use_vec_pri_opt();
+    rowkey_vid_iter_->set_scan_param(rowkey_vid_scan_param_);
   }
 
   return ret;
@@ -199,7 +200,7 @@ int ObDASHNSWScanIter::inner_reuse()
     mem_context_->reset_remain_one_page();
   }
   vec_op_alloc_.reset();
-  saved_rowkeys_.reset();
+  go_brute_force_ = false;
 
   if (OB_SUCC(ret) && OB_FAIL(set_vec_index_param(vec_aux_ctdef_->vec_index_param_))) {
     LOG_WARN("failed to set vec index param", K(ret));
@@ -266,8 +267,6 @@ int ObDASHNSWScanIter::inner_release()
     adaptor_vid_iter_->~ObVectorQueryVidIterator();
     adaptor_vid_iter_ = nullptr;
   }
-
-  saved_rowkeys_.reset();
   tx_desc_ = nullptr;
   snapshot_ = nullptr;
 
@@ -448,195 +447,13 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
   int ret = OB_SUCCESS;
 
   ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
-  if (vec_aux_ctdef_->is_post_filter() || is_primary_pre_with_rowkey_with_filter_) {
-    if (OB_FAIL(process_adaptor_state_hnsw(allocator, is_vectorized))) {
-      LOG_WARN("failed to process adaptor state hnsw", K(ret));
-    }
-  } else if (vec_aux_ctdef_->is_pre_filter()) {
-    if (OB_FAIL(get_rowkey_pre_filter(is_vectorized))) {
-      LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
-    } else if (saved_rowkeys_.count() < ObDasVecScanUtils::MAX_BRUTE_FORCE_SIZE) {
-      if (OB_FAIL(process_adaptor_state_brute_force(allocator, is_vectorized))) {
-        LOG_WARN("failed to process adaptor state brute force", K(ret));
-      }
-    } else {
-      if (OB_FAIL(process_adaptor_state_hnsw(allocator, is_vectorized))) {
-        LOG_WARN("failed to process adaptor state hnsw", K(ret));
-      }
-    }
-
-    if (nullptr != mem_context_) {
-      mem_context_->reset_remain_one_page();
-    }
+  if (OB_FAIL(process_adaptor_state_hnsw(allocator, is_vectorized))) {
+    LOG_WARN("failed to process adaptor state hnsw", K(ret));
   }
 
-  return ret;
-}
-
-int ObDASHNSWScanIter::get_rowkey_pre_filter(bool is_vectorized)
-{
-  const ObDASScanCtDef * ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
-  ObDASScanRtDef *rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx());
-
-  return ObDasVecScanUtils::get_rowkey_pre_filter(vec_op_alloc_, is_vectorized, inv_idx_scan_iter_,
-                                                  ctdef, rtdef, saved_rowkeys_);
-}
-
-int ObDASHNSWScanIter::process_adaptor_state_brute_force(ObIAllocator &allocator, bool is_vectorized)
-{
-  int ret = OB_SUCCESS;
-
-  ObString search_vec;
-  if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_, search_vec))) {
-    LOG_WARN("failed to get real search vec", K(ret));
+  if (nullptr != mem_context_) {
+    mem_context_->reset_remain_one_page();
   }
-
-  ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
-  if (OB_SUCC(ret) && ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0], *sort_rtdef_->eval_ctx_, dis_type)) {
-    LOG_WARN("failed to get distance type.", K(ret));
-  }
-
-  // init heap
-  uint64_t limit = limit_param_.limit_ + limit_param_.offset_;
-  uint64_t saved_rowkey_count = saved_rowkeys_.count();
-  uint64_t capaticy = limit > saved_rowkey_count ? saved_rowkey_count : limit;
-  ObSimpleMaxHeap max_heap(&allocator, capaticy);
-  if (OB_SUCC(ret) && OB_FAIL(max_heap.init())) {
-    LOG_WARN("failed to init max heap.", K(ret));
-  }
-
-  const ObDASScanCtDef *com_aux_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_com_aux_tbl_idx(), ObTSCIRScanType::OB_VEC_COM_AUX_SCAN);
-  const ObDASScanRtDef *com_aux_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_com_aux_tbl_idx());
-  int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-
-  if (OB_SUCC(ret)) {
-    // get vector by rowkey, calc distance and push to heap
-    int64_t cur_idx = 0;
-    int64_t sort_count = 0;
-    while (OB_SUCC(ret) && cur_idx < saved_rowkey_count) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && cur_idx < saved_rowkey_count; ++i) {
-        if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(*saved_rowkeys_[cur_idx++], com_aux_vec_scan_param_, com_aux_vec_ctdef->ref_table_id_))) {
-          LOG_WARN("failed to set lookup key", K(ret));
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(do_com_aux_vec_table_scan())) {
-        LOG_WARN("failed to do com aux vec table scan", K(ret));
-      } else {
-        for (int i = 0; OB_SUCC(ret) && i < batch_row_count && sort_count < saved_rowkey_count; ++i) {
-          ObString vector;
-          if (OB_FAIL(get_vector_from_com_aux_vec_table(allocator, vector))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get vector from com aux vec table.", K(ret), K(i));
-            }
-          } else if (OB_ISNULL(vector.ptr())) {
-            // compatible with VSAG, ignoring null vector.
-            sort_count++;
-          } else {
-            double distance = 0.0;
-            const float *data_l = reinterpret_cast<const float*>(search_vec.ptr());
-            const float *data_r = reinterpret_cast<const float*>(vector.ptr());
-            if (OB_FAIL(ObExprVectorDistance::DisFunc<float>::distance_funcs[dis_type](data_l, data_r, dim_, distance))) {
-              LOG_WARN("failed to calc distance", K(ret));
-            } else {
-              distance = sort_ctdef_->sort_exprs_[0]->type_ == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ? -1 * distance : distance;
-              max_heap.push(*saved_rowkeys_[sort_count++], distance);
-            }
-          }
-        }
-
-        int tmp_ret = ret;
-        ret = OB_SUCCESS;
-        if (OB_FAIL(reuse_com_aux_vec_iter())) {
-          LOG_WARN("failed to reuse com aux vec iter.", K(ret));
-        } else {
-          ret = tmp_ret;
-        }
-
-        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
-      }
-
-      if (OB_SUCC(ret)) {
-        max_heap.max_heap_sort();
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (max_heap.get_size() == 0) {
-    ret = OB_ITER_END;
-  }
-
-  uint64_t heap_size = max_heap.get_size();
-  int64_t *vids = nullptr;
-  float *distances = nullptr;
-
-  if (OB_SUCC(ret)) {
-    // get vid by top k rowkey from rowkey-vid table.
-    if (OB_ISNULL(vids = static_cast<int64_t *>(vec_op_alloc_.alloc(sizeof(int64_t) * heap_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator vids", K(ret));
-    } else if (OB_ISNULL(distances = static_cast<float *>(vec_op_alloc_.alloc(sizeof(float) * heap_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator distances", K(ret));
-    } else {
-      const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
-
-      int64_t heap_idx = 0;
-      int64_t vid_idx = 0;
-      while (OB_SUCC(ret) && heap_idx < heap_size) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && heap_idx < heap_size; ++i) {
-          ObRowkey *rowkey;
-          if (OB_ISNULL(rowkey = max_heap.at(heap_idx++))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get rowkey from max heap.", K(ret));
-          } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(*rowkey, rowkey_vid_scan_param_, rowkey_vid_ctdef->ref_table_id_))) {
-            LOG_WARN("failed to set rowkey.", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret) && OB_FAIL(do_rowkey_vid_table_scan())) {
-          LOG_WARN("do do rowkey vid table scan failed", K(ret));
-        }
-
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && vid_idx < heap_size; ++i) {
-          int64_t vid = -1;
-          if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
-            }
-          } else {
-            vids[vid_idx] = vid;
-            distances[vid_idx] = max_heap.value_at(vid_idx);
-            vid_idx++;
-          }
-        }
-      }
-
-      int tmp_ret = ret;
-      if (OB_FAIL(reuse_rowkey_vid_iter())) {
-        LOG_WARN("failed to reuse rowkey vid iter.", K(ret));
-      } else {
-        ret = tmp_ret;
-      }
-
-      ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
-    }
-  }
-
-  // init adaptor_vid_iter_
-  if (OB_SUCC(ret)) {
-    void *iter_buff = nullptr;
-    if (OB_ISNULL(iter_buff = vec_op_alloc_.alloc(sizeof(ObVectorQueryVidIterator)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator adaptor vid iter.", K(ret));
-    } else if (OB_FALSE_IT(adaptor_vid_iter_ = new(iter_buff) ObVectorQueryVidIterator())) {
-    } else if (OB_FAIL(adaptor_vid_iter_->init(heap_size, vids, distances, &vec_op_alloc_))) {
-      LOG_WARN("iter init failed.", K(ret));
-    }
-  }
-
   return ret;
 }
 
@@ -670,20 +487,136 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
   return ret;
 }
 
+int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force(
+                        ObVectorQueryAdaptorResultContext *ada_ctx,
+                        ObPluginVectorIndexAdaptor* adaptor,
+                        int64_t *&brute_vids,
+                        int& brute_cnt)
+{
+  INIT_SUCC(ret);
+  ObString search_vec;
+  const float* distances_inc = nullptr;
+  const float* distances_snap = nullptr;
+  uint64_t limit = limit_param_.limit_ + limit_param_.offset_;
+  uint64_t capaticy = limit > brute_cnt ? brute_cnt : limit;
+  ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
+  ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
+  ObSimpleMaxHeap max_heap(&allocator, capaticy);
+  // query brute distances
+  if (capaticy == 0) {
+    // limit or vid is null, no need to query
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(adaptor)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("shouldn't be null.", K(ret));
+  } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_, search_vec))) {
+    LOG_WARN("failed to get real search vec", K(ret));
+  } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0], *sort_rtdef_->eval_ctx_, dis_type))) {
+    LOG_WARN("failed to get distance type.", K(ret));
+  } else if (OB_FAIL(max_heap.init())) {
+    LOG_WARN("failed to init max heap.", K(ret));
+  } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_inc, false))) {
+    LOG_WARN("failed to query vids.", K(ret), K(brute_cnt));
+  } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_snap, true))) {
+    LOG_WARN("failed to query vids.", K(ret), K(brute_cnt));
+  } else if (distances_inc == nullptr && distances_snap == nullptr) {
+    // do nothing
+  } else if (distances_inc == nullptr || distances_snap == nullptr) {
+    for (int i = 0; i < brute_cnt && OB_SUCC(ret); ++i) {
+      double distance = distances_inc == nullptr ? distances_snap[i] : distances_inc[i];
+      // if distances == -1, means vid not exist
+      if (distance != -1) {
+        max_heap.push(brute_vids[i], distance);
+      }
+    }
+  } else {
+    for (int i = 0; i < brute_cnt && OB_SUCC(ret); ++i) {
+      double distance = distances_inc[i] == -1 ? distances_snap[i] : distances_inc[i];
+      // if distances == -1, means vid not exist
+      if (distance != -1) {
+        max_heap.push(brute_vids[i], distance);
+      }
+    }
+  }
+
+  // sort
+  if (OB_SUCC(ret)) {
+    max_heap.max_heap_sort();
+  }
+
+  // check heap size
+  if (OB_FAIL(ret)) {
+  } else if (max_heap.get_size() == 0) {
+    ret = OB_ITER_END;
+  } else {
+    uint64_t heap_size = max_heap.get_size();
+    int64_t *vids = nullptr;
+    float *distances = nullptr;
+    // alloc final res
+    if (OB_ISNULL(vids = static_cast<int64_t *>(vec_op_alloc_.alloc(sizeof(int64_t) * heap_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator vids", K(ret));
+    } else if (OB_ISNULL(distances = static_cast<float *>(vec_op_alloc_.alloc(sizeof(float) * heap_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator distances", K(ret));
+    } else {
+      int64_t heap_idx = 0;
+      int64_t vid_idx = 0;
+      // init final res
+      while (OB_SUCC(ret) && heap_idx < heap_size) {
+        int res_vid = max_heap.at(heap_idx);
+        float res_dis = max_heap.value_at(heap_idx);
+        vids[heap_idx] = res_vid;
+        distances[heap_idx] = res_dis;
+        heap_idx++;
+      }
+
+      // init adaptor_vid_iter_
+      void *iter_buff = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(iter_buff = vec_op_alloc_.alloc(sizeof(ObVectorQueryVidIterator)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocator adaptor vid iter.", K(ret));
+      } else if (OB_FALSE_IT(adaptor_vid_iter_ = new(iter_buff) ObVectorQueryVidIterator())) {
+      } else if (OB_FAIL(adaptor_vid_iter_->init(heap_size, vids, distances, &vec_op_alloc_))) {
+        LOG_WARN("iter init failed.", K(ret));
+      }
+    }
+  }
+
+  // release distances
+  if (OB_NOT_NULL(distances_inc)) {
+    adaptor->get_incr_data()->mem_ctx_->Deallocate((void *)distances_inc);
+    distances_inc = nullptr;
+  }
+
+  if (OB_NOT_NULL(distances_snap)) {
+    adaptor->get_snap_data_()->mem_ctx_->Deallocate((void *)distances_snap);
+    distances_snap = nullptr;
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
     ObVectorQueryAdaptorResultContext *ada_ctx,
     ObPluginVectorIndexAdaptor* adaptor,
     bool is_vectorized)
 {
   int ret = OB_SUCCESS;
+  int64_t *brute_vids = nullptr;
+  int brute_cnt = 0;
   if (is_primary_pre_with_rowkey_with_filter_) {
-    if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, is_vectorized))) {
+    if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
       LOG_WARN("hnsw pre filter(rowkey vid iter) failed to query result.", K(ret));
     }
-  } else if (OB_FAIL(process_adaptor_state_pre_filter_with_idx_filter(ada_ctx, adaptor, is_vectorized))) {
+  } else if (OB_FAIL(process_adaptor_state_pre_filter_with_idx_filter(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
     LOG_WARN("hnsw pre filter(idx iter) failed to query result.", K(ret));
   }
   if (OB_FAIL(ret)) {
+  } else if (go_brute_force_) {
+    if (OB_FAIL(process_adaptor_state_pre_filter_brute_force(ada_ctx, adaptor, brute_vids, brute_cnt))) {
+      LOG_WARN("hnsw pre filter(brute force) failed to query result.", K(ret));
+    }
   } else if (adaptor->check_if_complete_data(ada_ctx)) {
     if (OB_FAIL(process_adaptor_state_post_filter(ada_ctx, adaptor))) {
       LOG_WARN("failed to process adaptor state post filter", K(ret));
@@ -712,6 +645,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
 int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
                         ObVectorQueryAdaptorResultContext *ada_ctx,
                         ObPluginVectorIndexAdaptor* adaptor,
+                        int64_t *&vids,
+                        int& brute_cnt,
                         bool is_vectorized)
 {
   int ret = OB_SUCCESS;
@@ -722,104 +657,46 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
   } else if (!ada_ctx->is_bitmaps_valid(true/*is_extra*/) && OB_FAIL(ada_ctx->init_bitmaps(true/*is_extra*/))) {
       LOG_WARN("init bitmaps failed.", K(ret));
   } else {
-    const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
-    int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-    bool index_end = false;
-    while (OB_SUCC(ret) && !index_end) {
-      if (!is_vectorized) {
-        for (int i = 0; OB_SUCC(ret) && i < batch_row_count; ++i) {
-          int64_t vid = 0;
-          if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
-            }
-            index_end = true;
-          } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
-            LOG_WARN("failed to add valid vid", K(ret));
-          }
-        }
-      } else {
-        rowkey_vid_iter_->clear_evaluated_flag();
-        int64_t scan_row_cnt = 0;
-        if (OB_FAIL(rowkey_vid_iter_->get_next_rows(scan_row_cnt, batch_row_count))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("failed to get next row.", K(ret));
-          }
-          index_end = true;
-        }
-
-        if (OB_FAIL(ret) && OB_ITER_END != ret) {
-        } else if (scan_row_cnt > 0) {
-          ret = OB_SUCCESS;
-        }
-
-        if (OB_SUCC(ret)) {
-          ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
-          ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-          lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
-
-          for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
-            int64_t vid = vid_datum[i].get_int();
-            if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
-              LOG_WARN("failed to add valid vid", K(ret));
-            }
-          }
-        }
-      }
-    } // end while
-  }
-
-  if (OB_ITER_END != ret) {
-    LOG_WARN("get next row failed.", K(ret));
-  } else {
-    ret = OB_SUCCESS;
-  }
-
-  return ret;
-}
-
-int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
-    ObVectorQueryAdaptorResultContext *ada_ctx,
-    ObPluginVectorIndexAdaptor* adaptor,
-    bool is_vectorized)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(ada_ctx) || OB_ISNULL(adaptor)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("shouldn't be null.", K(ret), K(ada_ctx), K(adaptor));
-  } else {
-    if (!ada_ctx->is_bitmaps_valid(true/*is_extra*/) && OB_FAIL(ada_ctx->init_bitmaps(true/*is_extra*/))) {
-        LOG_WARN("init bitmaps failed.", K(ret));
+    vids = nullptr;
+    brute_cnt = 0;
+    ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
+    if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * MAX_HNSW_BRUTE_FORCE_SIZE)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator vids", K(ret));
     } else {
-      const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(),
-                                                                                     ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+      go_brute_force_ = true;
+      const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(), ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
       int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-      uint64_t saved_rowkey_cnt = saved_rowkeys_.count();
-
-      int64_t count = 0;
       bool index_end = false;
-
-      while (OB_SUCC(ret) && count < saved_rowkey_cnt && !index_end) {
-
-        for (int64_t i = 0; OB_SUCC(ret) && i < batch_row_count && count < saved_rowkey_cnt; ++i) {
-          if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(*saved_rowkeys_[count++], rowkey_vid_scan_param_, rowkey_vid_ctdef->ref_table_id_))) {
-            LOG_WARN("failed to set lookup key", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret) && OB_FAIL(do_rowkey_vid_table_scan())) {
-          LOG_WARN("do do aux table scan failed", K(ret));
-        }
-
+      while (OB_SUCC(ret) && !index_end) {
+        bool add_brute = (brute_cnt + batch_row_count) < MAX_HNSW_BRUTE_FORCE_SIZE;
         if (!is_vectorized) {
-          for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !index_end; ++i) {
+          for (int i = 0; OB_SUCC(ret) && i < batch_row_count; ++i) {
             int64_t vid = 0;
             if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
-              ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+              if (OB_UNLIKELY(OB_ITER_END != ret)) {
+                LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
+              }
               index_end = true;
-            } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
-              LOG_WARN("failed to add valid vid", K(ret));
+            } else if (go_brute_force_ && add_brute) {
+              vids[brute_cnt] = vid;
+              ++brute_cnt;
+            } else {
+              // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
+              // do not choose brue force, just add vids to bitmap
+              if (go_brute_force_) {
+                go_brute_force_ = false;
+                lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
+                for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
+                  if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vids[j]))) {
+                    LOG_WARN("failed to add valid vid", K(ret));
+                  }
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
+                LOG_WARN("failed to add valid vid", K(ret));
+              }
             }
           }
         } else {
@@ -840,27 +717,76 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
           if (OB_SUCC(ret)) {
             ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
             ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
+            if (go_brute_force_ && add_brute) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datum[i].get_int();
+                vids[brute_cnt] = vid;
+                ++brute_cnt;
+              }
+            } else {
+              lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
 
-            for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
-              int64_t vid = vid_datum[i].get_int();
-              if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
-                LOG_WARN("failed to add valid vid", K(ret));
+              // first, add vids into bitmap
+              if (go_brute_force_) {
+                go_brute_force_ = false;
+                for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
+                  if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vids[j]))) {
+                    LOG_WARN("failed to add valid vid", K(ret));
+                  }
+                }
+              }
+              // then add this batch into bitmap
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datum[i].get_int();
+                if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
+                  LOG_WARN("failed to add valid vid", K(ret));
+                }
               }
             }
           }
         }
+      } // end while
+    }
+  }
 
-        int tmp_ret = ret;
-        ret = OB_SUCCESS;
-        if (OB_FAIL(reuse_rowkey_vid_iter())) {
-          LOG_WARN("failed to reuse rowkey vid iter.", K(ret));
-        } else {
-          ret = tmp_ret;
-        }
-      }
+  if (OB_ITER_END != ret) {
+    LOG_WARN("get next row failed.", K(ret));
+  } else {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
 
-      index_end = false;
+int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
+    ObVectorQueryAdaptorResultContext *ada_ctx,
+    ObPluginVectorIndexAdaptor* adaptor,
+    int64_t *&vids,
+    int &brute_cnt,
+    bool is_vectorized)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ada_ctx) || OB_ISNULL(adaptor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("shouldn't be null.", K(ret), K(ada_ctx), K(adaptor));
+  } else {
+    vids = nullptr;
+    brute_cnt = 0;
+    ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
+    int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
+    if (!ada_ctx->is_bitmaps_valid(true/*is_extra*/) && OB_FAIL(ada_ctx->init_bitmaps(true/*is_extra*/))) {
+        LOG_WARN("init bitmaps failed.", K(ret));
+    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * batch_row_count)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator vids", K(ret));
+    } else {
+      go_brute_force_ = true;
+      int64_t count = 0;
+      bool index_end = false;
+      const ObDASScanCtDef *rowkey_vid_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(),
+                                                                                     ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+
+      // scan pre-filter iter and set rowkey_vid_iter key range
       while (OB_SUCC(ret) && !index_end) {
         if (!is_vectorized) {
           for (int i = 0; OB_SUCC(ret) && i < batch_row_count && !index_end; ++i) {
@@ -908,17 +834,38 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
           LOG_WARN("do do aux table scan failed", K(ret));
         }
 
-        if (!is_vectorized) {
+        bool add_brute = (brute_cnt + batch_row_count) < MAX_HNSW_BRUTE_FORCE_SIZE;
+
+        if (OB_FAIL(ret)) {
+        } else if (!is_vectorized) {
           for (int i = 0; OB_SUCC(ret) && i < batch_row_count; ++i) {
             int64_t vid = 0;
             if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
               if (OB_UNLIKELY(OB_ITER_END != ret)) {
                 LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
               }
-            } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
-              LOG_WARN("failed to add valid vid", K(ret));
+            } else if (go_brute_force_ && add_brute) {
+              vids[brute_cnt] = vid;
+              brute_cnt++;
+            } else {
+              // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
+              // do not choose brue force, just add vids to bitmap
+              if (go_brute_force_) {
+                go_brute_force_ = false;
+                lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
+                for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
+                  if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vids[j]))) {
+                    LOG_WARN("failed to add valid vid", K(ret));
+                  }
+                }
+              }
+
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
+                LOG_WARN("failed to add valid vid", K(ret));
+              }
             }
-          }
+          } // end for
         } else {
           rowkey_vid_iter_->clear_evaluated_flag();
           int64_t scan_row_cnt = 0;
@@ -936,12 +883,30 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
           if (OB_SUCC(ret)) {
             ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
             ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
 
-            for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
-              int64_t vid = vid_datum[i].get_int();
-              if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
-                LOG_WARN("failed to add valid vid", K(ret));
+            if (go_brute_force_ && add_brute) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datum[i].get_int();
+                vids[brute_cnt] = vid;
+                brute_cnt++;
+              }
+            } else {
+              lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
+              // first, add vids into bitmap
+              if (go_brute_force_) {
+                go_brute_force_ = false;
+                for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
+                  if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vids[j]))) {
+                    LOG_WARN("failed to add valid vid", K(ret));
+                  }
+                }
+              }
+              // then add this batch into bitmap
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datum[i].get_int();
+                if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
+                  LOG_WARN("failed to add valid vid", K(ret));
+                }
               }
             }
           }
@@ -1494,7 +1459,6 @@ int ObDASHNSWScanIter::do_rowkey_vid_table_scan()
                                                   tx_desc_, snapshot_, rowkey_vid_scan_param_,
                                                   inv_idx_scan_iter->get_scan_param().is_get_))) {
       LOG_WARN("failed to init scan param", K(ret));
-    } else if (OB_FALSE_IT(rowkey_vid_iter_->set_scan_param(rowkey_vid_scan_param_))) {
     } else if (OB_FAIL(rowkey_vid_iter_->do_table_scan())) {
       LOG_WARN("failed to do table scan", K(ret));
     } else {
@@ -1586,7 +1550,7 @@ int ObSimpleMaxHeap::init()
     LOG_WARN("allocator is null", K(ret));
   } else if (OB_ISNULL(heap_ = static_cast<ObSortItem *>(allocator_->alloc(sizeof(ObSortItem) * capacity_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
+    LOG_WARN("allocate memory failed", K(ret), K(capacity_));
   } else {
     init_ = true;
   }
@@ -1610,9 +1574,9 @@ int ObSimpleMaxHeap::release()
   return ret;
 }
 
-void ObSimpleMaxHeap::push(ObRowkey &rowkey, double distiance)
+void ObSimpleMaxHeap::push(int64_t vid, double distiance)
 {
-  ObSortItem item(rowkey, distiance);
+  ObSortItem item(vid, distiance);
 
   if (size_ < capacity_) {
     heap_[size_] = item;
@@ -1629,13 +1593,13 @@ void ObSimpleMaxHeap::max_heap_sort()
   lib::ob_sort(heap_, heap_ + size_);
 }
 
-ObRowkey* ObSimpleMaxHeap::at(uint64_t idx)
+int64_t ObSimpleMaxHeap::at(uint64_t idx)
 {
-  ObRowkey *rowkey = nullptr;
+  int64_t vid = 0;
   if (idx < size_) {
-    rowkey = &heap_[idx].rowkey_;
+    vid = heap_[idx].vid_;
   }
-  return rowkey;
+  return vid;
 }
 
 double ObSimpleMaxHeap::value_at(uint64_t idx)

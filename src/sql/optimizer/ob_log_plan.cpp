@@ -15541,7 +15541,7 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
-  } else if (table_scan->is_post_vec_idx_scan()) {
+  } else if (table_scan->is_post_vec_idx_scan() || table_scan->is_hnsw_vec_scan()) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
                                                     topn_expr,
                                                     get_stmt()->get_limit_expr(),
