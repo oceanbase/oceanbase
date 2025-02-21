@@ -7947,8 +7947,13 @@ int ObTransformUtils::append_hashset(ObRawExpr *expr,
     LOG_WARN("failed to set key", K(ret), K(expr));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(append_hashset(expr->get_param_expr(i),
-                                            expr_set)))) {
+      if (OB_ISNULL(expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret), K(i));
+      } else if (T_OP_ROW == expr->get_expr_type()
+                 && expr->get_param_expr(i)->is_const_expr()) {
+        // skip processing const exprs in inlist
+      } else if (OB_FAIL(SMART_CALL(append_hashset(expr->get_param_expr(i), expr_set)))) {
         LOG_WARN("failed to append hashset", K(ret));
       }
     }
