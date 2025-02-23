@@ -83,7 +83,7 @@
                                                                                 "spare2 ) VALUES %s " \
                                                                                 "ON DUPLICATE KEY UPDATE " \
                                                                                 " spare2 = COALESCE(spare2, 0) + 1," \
-                                                                                "last_analyzed = usec_to_time(%ld) "
+                                                                                "last_analyzed = last_analyzed "
 
 #define UPDATE_TABLE_STAT_FAILCOUNT_VALUE  " (%lu, %lu, %ld, 0, 0, 0, -1, -1, 0, 0, -1, -1, 0, 0, 0, 0, 0, 1, 1)"
 #define REPLACE_COL_STAT_SQL "REPLACE INTO __all_column_stat(tenant_id," \
@@ -2157,7 +2157,7 @@ int ObOptStatSqlService::update_table_stat_failed_count(
     LOG_WARN("get unexpected null", K(ret), K(value_str));
   } else if (OB_FAIL(raw_sql.append_fmt(
                UPDATE_TABLE_STAT_FAILCOUNT_SQL, share::OB_ALL_TABLE_STAT_TNAME,
-               value_str.ptr(), ObTimeUtility::current_time()))) {
+               value_str.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret), K(raw_sql));
   } else {
     ObMySQLTransaction trans;

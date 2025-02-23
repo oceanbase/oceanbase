@@ -6114,6 +6114,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to gather table stats", K(ret));
     int tmp_ret_code = ret;
     if ((stat_table.is_async_gather_ || task_info.type_ == ObOptStatGatherType::AUTO_GATHER) &&
+        (OB_ERR_INTERRUPTED != ret) &&
         OB_FAIL(update_analyze_failed_count(stat_param, failed_part_and_subpart_ids, stat_table))) {
       LOG_WARN("failed to update ANALYZE failed-count when gather table stats", K(ret));
     }
