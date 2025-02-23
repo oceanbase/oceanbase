@@ -1197,23 +1197,29 @@ int ObPushdownFilterExecutor::init_filter_param(
           LOG_WARN("failed to push back col offset", K(ret));
         } else {
           blocksstable::ObStorageDatum default_datum;
-          const common::ObObj &def_cell = col_params.at(idx)->get_orig_default_value();
-          const common::ObObjMeta &obj_meta = col_params.at(idx)->get_meta_type();
           col_param = col_params.at(idx);
+          const common::ObObj &def_cell = col_param->get_orig_default_value();
+          const common::ObObjMeta &obj_meta = col_param->get_meta_type();
           if (OB_FAIL(col_params_.push_back(col_param))) {
             LOG_WARN("failed to push back col param", K(ret));
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
-            } else if (obj_meta.is_lob_storage() && !def_cell.is_null()) {
-              // lob def value must have no lob header when not null
-              // When do lob pushdown, should add lob header for default value
-              ObString data = default_datum.get_string();
-              ObString out;
-              if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
-                LOG_WARN("failed to fill lob header for column", K(ret), K(idx), K(def_cell), K(data));
-              } else {
-                default_datum.set_string(out);
+            } else if (!def_cell.is_null()) {
+              if (need_padding && obj_meta.is_fixed_len_char_type()) {
+                if (OB_FAIL(storage::pad_column(obj_meta, col_param->get_accuracy(), allocator_, default_datum))) {
+                  LOG_WARN("failed to pad column", K(ret), K(i), K(idx), K(obj_meta), K(default_datum));
+                }
+              } else if (obj_meta.is_lob_storage()) {
+                // lob def value must have no lob header when not null
+                // When do lob pushdown, should add lob header for default value
+                ObString data = default_datum.get_string();
+                ObString out;
+                if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+                  LOG_WARN("failed to fill lob header for column", K(ret), K(idx), K(def_cell), K(data));
+                } else {
+                  default_datum.set_string(out);
+                }
               }
             }
           }
