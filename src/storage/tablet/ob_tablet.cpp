@@ -254,6 +254,9 @@ int ObTablet::init_for_first_time_creation(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet for first time creation", K(ret), KPC(sstable), K(*this));
@@ -396,6 +399,9 @@ int ObTablet::init_for_merge(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -478,6 +484,9 @@ int ObTablet::init_for_mds_table_dump(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (CLICK_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -562,6 +571,9 @@ int ObTablet::init_with_migrate_param(
       } else if (FALSE_IT(set_mem_addr())) {
       } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
         LOG_WARN("failed to increase macro ref cnt", K(ret));
+      /* NOTICE!!!
+       * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+       * it will lead to a macro block refcnt leak. */
       } else {
         is_inited_ = true;
         LOG_INFO("succeeded to init tablet with migration tablet param", K(ret), K(param), KPC(this));
@@ -633,6 +645,9 @@ int ObTablet::init_for_defragment(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -741,6 +756,9 @@ int ObTablet::init_for_sstable_replace(
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
+  /* NOTICE!!!
+   * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+   * it will lead to a macro block refcnt leak. */
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -977,8 +995,6 @@ int ObTablet::init_with_update_medium_info(
   } else if (OB_FAIL(check_medium_list())) {
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (FALSE_IT(set_mem_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else if (OB_FAIL(check_medium_list())) {
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else {
@@ -986,6 +1002,11 @@ int ObTablet::init_with_update_medium_info(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_read_info(allocator))) {
       LOG_WARN("failed to build read info", K(ret));
+    } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+      LOG_WARN("failed to increase macro ref cnt", K(ret));
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
     } else {
       if (old_tablet.get_tablet_meta().has_next_tablet_) {
         set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -1279,8 +1300,7 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
       ALLOC_AND_INIT(allocator, table_store_addr_, (*this));
     }
   }
-  if (FAILEDx(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
+  if (OB_FAIL(ret)) {
   } else {
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
     ObStorageSchema *schema = nullptr;
@@ -1299,6 +1319,12 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
         LOG_WARN("fail to deserialize post work for next tablet", K(ret));
       }
     }
+    if (FAILEDx(inner_inc_macro_ref_cnt())) {
+      LOG_WARN("failed to increase macro ref cnt", K(ret));
+    }
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
     if (OB_SUCC(ret)) {
       version_ = TABLET_VERSION_V2;
       is_inited_ = true;
