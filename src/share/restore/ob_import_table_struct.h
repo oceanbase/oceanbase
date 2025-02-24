@@ -121,6 +121,7 @@ public:
   operator Status() const { return status_; }
   bool is_valid() const { return status_ >= INIT && status_ < MAX; }
   bool is_finish() const { return FINISH == status_; }
+  bool is_doing() const { return DOING == status_; }
 
   Status get_status() const { return status_; }
   ObImportTableTaskStatus get_next_status(const int err_code);
