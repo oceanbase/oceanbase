@@ -85,6 +85,11 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
   } else if (!pkt.each_sqc_has_full_data_) {
     // if each sqc only has partial data of left, gather all k(k=dop) thread's result
     piece_ctx.total_rows_ += pkt.total_rows_;
+    if (piece_ctx.ndv_info_.count() == 0
+        && OB_FAIL(ObJoinFilterCountRowPieceMsgCtx::init_target_ndv_info(pkt.ndv_info_,
+                                                                         piece_ctx.ndv_info_))) {
+      LOG_WARN("failed to init ndv_info", K(ret));
+    }
     for (int64_t i = 0; i < pkt.ndv_info_.count() && OB_SUCC(ret); ++i) {
       if (OB_FAIL(
             ObJoinFilterNdv::gather_piece_ndv(pkt.ndv_info_.at(i), piece_ctx.ndv_info_.at(i)))) {

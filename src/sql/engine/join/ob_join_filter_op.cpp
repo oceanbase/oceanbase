@@ -1664,12 +1664,30 @@ int ObJoinFilterOp::send_datahub_count_row_msg(int64_t &total_row_count,
       LOG_WARN("unexpected null msg", K(ret));
     } else {
       total_row_count = whole_msg->get_total_rows();
-      for (int64_t i = 0; i < ndv_info.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(ndv_info.at(i)->assign(whole_msg->ndv_info_.at(i)))) {
-          LOG_WARN("failt to assign ObJoinFilterNdv", K(ret));
-        } else if (use_hllc_estimate_ndv()) {
-          group_controller_->join_filter_ops_.at(i)->total_ndv_ =
-            whole_msg->get_ndv_info().at(i).bf_ndv_;
+      //Lessons learned:
+      //I strongly recommend using a new package type next time, instead of adding members to the old structure,
+      //to avoid compatibility considerations during the upgrade process.
+      //Because it is difficult to directly retrieve the package version information from a pile of complex code and data member variables,
+      //or you may easily forget these border cases, especially when you think you have already covered the basic cases and completed the task
+      //Then we can use a 'switch' statement to handle all package types.
+      if (whole_msg->ndv_info_.count() == 0) {
+        //do nothing, whole_msg may send from a lower version(4.3.3) Datahub
+        //which only have whole_msg->get_total_rows() and whole_msg->ndv_info_.count() == 0
+      } else if (whole_msg->ndv_info_.count() != ndv_info.count()) {
+        // defence code
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter ndv info count is not equal to the current datahub ", K(ret),
+                 K(whole_msg->ndv_info_.count()), K(ndv_info.count()));
+      } else {
+        for (int64_t i = 0; i < ndv_info.count() && OB_SUCC(ret); ++i) {
+          LOG_TRACE("[NDV_BLOOM_FILTER][JoinFilter]: receive ndv info ",
+                    K(whole_msg->ndv_info_.at(i)));
+          if (OB_FAIL(ndv_info.at(i)->assign(whole_msg->ndv_info_.at(i)))) {
+            LOG_WARN("failt to assign ObJoinFilterNdv", K(i), K(ret));
+          } else if (use_hllc_estimate_ndv()) {
+            group_controller_->join_filter_ops_.at(i)->total_ndv_ =
+              whole_msg->get_ndv_info().at(i).bf_ndv_;
+          }
         }
       }
     }
