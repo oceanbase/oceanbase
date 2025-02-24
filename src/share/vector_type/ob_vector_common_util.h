@@ -276,6 +276,9 @@ public:
     HeapCenterItemTemp() : distance_(DBL_MAX), center_with_buf_(nullptr) {}
     HeapCenterItemTemp(const double distance, ObCenterWithBuf<CENTER_T>* center_with_buf) :
       distance_(distance), center_with_buf_(center_with_buf) {}
+    void set_vec_dim(const ObVecWithDim<VEC_T>& vec_dim) {
+      vec_dim_ = vec_dim;
+    }
     double distance_;
     ObCenterWithBuf<CENTER_T>* center_with_buf_;
     // for pq, need center idx to get center vector
@@ -493,8 +496,11 @@ int ObVectorCentorClusterHelper<VEC_T, CENTER_T>::push_center(
         SHARE_LOG(WARN, "failed to new from src", K(ret), K(center));
       } else {
         HeapCenterItemTemp new_top(distance, old_center_with_buf);
-        if (save_center_vec && OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
-          SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+        if (save_center_vec) {
+          new_top.set_vec_dim(top.vec_dim_);
+          if (OB_FAIL(new_top.vec_dim_.reuse_from_src(center_vec, dim_))) {
+            SHARE_LOG(WARN, "failed to new from src", K(ret), K(center_vec));
+          }
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(max_heap_.replace_top(new_top))) {
