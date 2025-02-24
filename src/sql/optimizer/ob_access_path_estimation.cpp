@@ -587,6 +587,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   ObCandiTabletLocSEArray chosen_partitions;
   ObSEArray<common::ObNewRange, 4> chosen_scan_ranges;
   ObSEArray<EstResultHelper, 4> result_helpers;
+  ObSEArray<ObTablePartitionInfo *, 4> valid_partition_infos;
   OPT_TRACE_TIME_USED;
   OPT_TRACE_MEM_USED;
   OPT_TRACE_TITLE("BEGIN STORAGE CARDINALITY ESTIMATION");
@@ -615,9 +616,9 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
     RangePartitionHelper calc_range_partition_helper;
     chosen_scan_ranges.reuse();
     chosen_partitions.reuse();
-    SMART_VAR(ObTablePartitionInfo, tmp_part_info) {
+    SMART_VAR(ObTablePartitionInfo, index_part_info) {
       const ObTablePartitionInfo *table_part_info = NULL;
-      int64_t total_part_cnt = 0;
+      ObTablePartitionInfo* valid_part_info = NULL;
       if (OB_ISNULL(ap = paths.at(i)) || OB_ISNULL(ap->parent_) || OB_ISNULL(ap->parent_->get_plan()) ||
           OB_ISNULL(table_part_info = ap->table_partition_info_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -629,16 +630,25 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         result_helper->path_ = ap;
         result_helper->result_.valid_partition_count_ = ap->est_cost_info_.index_meta_info_.index_part_count_;
         result_helper->total_scan_range_count_ = get_scan_range_count(ap->est_cost_info_.ranges_);
-        total_part_cnt = table_part_info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
         ObPhysicalPlanCtx *plan_ctx = ctx.get_exec_ctx()->get_physical_plan_ctx();
         const int64_t cur_time = plan_ctx->has_cur_time() ?
             plan_ctx->get_cur_time().get_timestamp() : ObTimeUtility::current_time();
+        OPT_TRACE("Process index", ap->index_id_, "ref table", table_part_info->get_ref_table_id());
+        if (partition_limit >= result_helper->result_.valid_partition_count_ || partition_limit <= 0) {
+          // do storage estimation for all partitions
+        } else if (OB_FAIL(get_valid_partition_info(ctx, arena, *table_part_info, valid_partition_infos, valid_part_info))) {
+          LOG_WARN("failed to assign table part info", K(ret));
+        } else {
+          result_helper->result_.valid_partition_count_ = valid_part_info->get_phy_tbl_location_info().get_partition_cnt();
+          table_part_info = valid_part_info;
+        }
+        OPT_TRACE("There are", result_helper->result_.valid_partition_count_, "valid partitions in index", ap->index_id_);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(tmp_part_info.assign(*table_part_info))) {
+      } else if (OB_FAIL(index_part_info.assign(*table_part_info))) {
         LOG_WARN("failed to assign table part info", K(ret));
       } else if (!ap->is_global_index_ && ap->ref_table_id_ != ap->index_id_ &&
-                OB_FAIL(tmp_part_info.replace_final_location_key(*ctx.get_exec_ctx(),
+                OB_FAIL(index_part_info.replace_final_location_key(*ctx.get_exec_ctx(),
                                                                  ap->index_id_,
                                                                  true))) {
         LOG_WARN("failed to replace final location key", K(ret));
@@ -646,12 +656,13 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
                                                           ap->is_global_index_ ? ap->get_index_table_id() : ap->get_ref_table_id(),
                                                           ap->parent_->get_plan()->get_stmt(),
                                                           *table_part_info,
-                                                          ap->est_cost_info_.range_columns_))) {
+                                                          ap->est_cost_info_.range_columns_,
+                                                          ap->est_cost_info_.ranges_))) {
         LOG_WARN("failed to init range partition helper", K(ret));
       } else if (!calc_range_partition_helper.get_all_partition_is_valid()) {
         // choose partitions for each range
         const ObCandiTabletLocIArray &ori_partitions = table_part_info->get_phy_tbl_location_info().get_phy_part_loc_info_list();
-        const ObCandiTabletLocIArray &index_partitions = tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
+        const ObCandiTabletLocIArray &index_partitions = index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
         if (OB_FAIL(add_storage_estimation_task_by_ranges(ctx,
                                                           arena,
                                                           *ctx.get_exec_ctx(),
@@ -667,7 +678,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
           LOG_WARN("failed to add task by ranges", K(ret));
         }
       } else {
-        const ObCandiTabletLocIArray &index_partitions = tmp_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
+        const ObCandiTabletLocIArray &index_partitions = index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
         if (OB_FAIL(add_storage_estimation_task(ctx,
                                                 arena,
                                                 prefer_addrs,
@@ -719,6 +730,12 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
     if (NULL != tasks.at(i)) {
       tasks.at(i)->~ObBatchEstTasks();
       tasks.at(i) = NULL;
+    }
+  }
+  for (int64_t i = 0; i < valid_partition_infos.count(); ++i) {
+    if (NULL != valid_partition_infos.at(i)) {
+      valid_partition_infos.at(i)->~ObTablePartitionInfo();
+      valid_partition_infos.at(i) = NULL;
     }
   }
   is_success &= !need_fallback;
@@ -1345,6 +1362,98 @@ int ObAccessPathEstimation::choose_storage_estimation_ranges(const int64_t range
       }
     }
   }
+  return ret;
+}
+
+int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
+                                                     ObIAllocator &allocator,
+                                                     const ObTablePartitionInfo &table_partition_info,
+                                                     ObIArray<ObTablePartitionInfo *> &valid_partition_infos,
+                                                     ObTablePartitionInfo *&valid_partition_info)
+{
+  int ret = OB_SUCCESS;
+  bool find_valid_info = false;
+  for (int i = 0; OB_SUCC(ret) && !find_valid_info && i < valid_partition_infos.count(); i ++) {
+    if (OB_ISNULL(valid_partition_infos.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (valid_partition_infos.at(i)->get_ref_table_id() == table_partition_info.get_ref_table_id()) {
+      find_valid_info = true;
+      valid_partition_info = valid_partition_infos.at(i);
+    }
+  }
+  if (OB_SUCC(ret) && !find_valid_info) {
+    void *ptr = allocator.alloc(sizeof(ObTablePartitionInfo));
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ptr), K(ret));
+    } else {
+      valid_partition_info = new(ptr)ObTablePartitionInfo();
+      if (OB_FAIL(get_valid_partition_info(ctx, table_partition_info, *valid_partition_info))) {
+        LOG_WARN("failed to get valid partition info", K(ret));
+      } else if (OB_FAIL(valid_partition_infos.push_back(valid_partition_info))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
+                                                     const ObTablePartitionInfo &table_partition_info,
+                                                     ObTablePartitionInfo &valid_partition_info)
+{
+  int ret = OB_SUCCESS;
+  valid_partition_info.set_table_location(table_partition_info.get_table_location());
+  ObArray<int64_t> all_part_ids;
+  ObArray<ObOptTableStat> part_stats;
+  const ObCandiTableLoc &table_loc = table_partition_info.get_phy_tbl_location_info();
+  const ObCandiTabletLocIArray &all_partitions = table_loc.get_phy_part_loc_info_list();
+  ObCandiTableLoc &valid_table_loc = valid_partition_info.get_phy_tbl_location_info_for_update();
+  ObCandiTabletLocIArray &valid_partitions = valid_table_loc.get_phy_part_loc_info_list_for_update();
+  OPT_TRACE("partition_index_dive_limit is less than the count of partitions, "\
+            "check whether there are empty partitions in table", table_partition_info.get_ref_table_id());
+  OPT_TRACE_BEGIN_SECTION;
+  if (OB_ISNULL(ctx.get_session_info()) ||
+      OB_ISNULL(ctx.get_opt_stat_manager()) ||
+      OB_UNLIKELY(all_partitions.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(table_partition_info), K(ctx.get_session_info()), K(ctx.get_opt_stat_manager()));
+  } else {
+    valid_table_loc.set_table_location_key(table_loc.get_table_location_key(), table_loc.get_ref_table_id());
+    valid_table_loc.set_duplicate_type(table_loc.get_duplicate_type());
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
+    const ObOptTabletLoc &part_loc = all_partitions.at(i).get_partition_location();
+    if (OB_FAIL(all_part_ids.push_back(part_loc.get_partition_id()))) {
+      LOG_WARN("failed to push back part id", K(ret));
+    }
+  }
+  if (FAILEDx(ctx.get_opt_stat_manager()->get_table_stat(ctx.get_session_info()->get_effective_tenant_id(),
+                                                         table_partition_info.get_ref_table_id(),
+                                                         all_part_ids,
+                                                         part_stats))) {
+    LOG_WARN("failed to get table stats", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
+    const ObOptTableStat &stat = part_stats.at(i);
+    if (stat.get_last_analyzed() <= 0 || stat.get_row_count() > 0) {
+      if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
+        LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
+      }
+    } else {
+      OPT_TRACE("partition", stat.get_partition_id(), "is empty with stat version", stat.get_last_analyzed());
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (valid_partitions.empty()) {
+      OPT_TRACE("All partitions are empty, choose partitions from all");
+      if (OB_FAIL(valid_partitions.assign(all_partitions))) {
+        LOG_WARN("failed to assign tablet loc", K(ret));
+      }
+    }
+  }
+  OPT_TRACE_END_SECTION;
   return ret;
 }
 
@@ -2731,7 +2840,8 @@ int RangePartitionHelper::init(uint64_t table_id,
                                uint64_t ref_table_id,
                                const ObDMLStmt *stmt,
                                const ObTablePartitionInfo &table_partition_info,
-                               const ObIArray<ColumnItem> &range_columns)
+                               const ObIArray<ColumnItem> &range_columns,
+                               const ObIArray<common::ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
   all_partition_is_valid_ = false;
@@ -2760,6 +2870,33 @@ int RangePartitionHelper::init(uint64_t table_id,
               part_projector_.empty() && gen_projector_.empty() &&
               sub_part_projector_.empty() && sub_gen_projector_.empty())) {
     all_partition_is_valid_ = true;
+  } else {
+    all_partition_is_valid_ = true;
+    int64_t min_projector = INT64_MAX;
+    for (int64_t i = 0; i < part_projector_.count(); i ++) {
+      min_projector = std::min(min_projector, part_projector_.at(i));
+    }
+    for (int64_t i = 0; i < sub_part_projector_.count(); i ++) {
+      min_projector = std::min(min_projector, sub_part_projector_.at(i));
+    }
+    for (int64_t i = 0; i < gen_projector_.count(); i ++) {
+      min_projector = std::min(min_projector, gen_projector_.at(i));
+    }
+    for (int64_t i = 0; i < sub_gen_projector_.count(); i ++) {
+      min_projector = std::min(min_projector, sub_gen_projector_.at(i));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && all_partition_is_valid_ && i < ranges.count(); i ++) {
+      int64_t equal_prefix_count = -1;
+      int64_t range_prefix_count = -1;
+      if (ranges.at(i).is_whole_range() || ranges.at(i).is_false_range()) {
+        // do nothing
+      } else if (min_projector >= 0 &&
+                 min_projector < ranges.at(i).start_key_.length() &&
+                 (!ranges.at(i).start_key_.ptr()[min_projector].is_min_value() ||
+                  !ranges.at(i).end_key_.ptr()[min_projector].is_max_value())) {
+        all_partition_is_valid_ = false;
+      }
+    }
   }
   if (OB_SUCC(ret) && !all_partition_is_valid_) {
     const ObCandiTabletLocIArray &part_loc_info_array =
