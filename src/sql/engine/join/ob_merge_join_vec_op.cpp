@@ -1500,8 +1500,9 @@ int ObMergeJoinVecOp::output_one_side_until_end(
     if (OB_FAIL(brs_.copy(cursor.cur_brs_))) {
       LOG_WARN("copy ObBatchRows failed", K(ret));
     } else {
-      brs_.all_rows_active_ = false;
-      brs_.size_ = cursor.cur_batch_idx_ + output_row_cnt;
+      for (int64_t i = cursor.cur_batch_idx_ + output_row_cnt; i < brs_.size_; ++i) {
+        brs_.set_skip(i);
+      }
       for (int64_t i = 0; i <  output_row_cnt; ++i) {
         cursor.cur_brs_->set_skip(i + cursor.cur_batch_idx_);
       }
