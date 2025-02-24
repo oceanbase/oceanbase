@@ -256,11 +256,13 @@ public:
     tenant_id_(tenant_id),
     ref_cnt_(0),
     allocator_(allocator),
-    param_()
+    param_(),
+    inner_allocator_("IvfBuHel", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_)
   {}
   virtual ~ObIvfBuildHelper() = default;
   virtual int init(ObString &init_str);
   ObIAllocator *get_allocator() { return allocator_; }
+  ObIAllocator &get_inner_allocator() { return inner_allocator_; }
 
   void inc_ref();
   bool dec_ref_and_check_release();
@@ -274,6 +276,7 @@ protected:
   ObIAllocator *allocator_; // allocator for alloc helper self
   lib::ObMutex lock_;
   ObVectorIndexParam param_;
+  ObArenaAllocator inner_allocator_;
 };
 
 

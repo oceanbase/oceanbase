@@ -826,10 +826,7 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
 int ObIvfBuildHelper::init(ObString &init_str)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_allocator())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("adaptor allocator invalid.", K(ret));
-  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(init_str, ObVectorIndexType::VIT_IVF_INDEX, param_))) {
+  if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(init_str, ObVectorIndexType::VIT_IVF_INDEX, param_))) {
     LOG_WARN("failed to parse params.", K(ret));
   }
   return ret;
@@ -851,12 +848,9 @@ bool ObIvfBuildHelper::dec_ref_and_check_release()
 // ------------------ ObIvfFlatBuildHelper implement ------------------
 ObIvfFlatBuildHelper::~ObIvfFlatBuildHelper()
 {
-  if (OB_NOT_NULL(allocator_)) {
-    if (OB_NOT_NULL(executor_)) {
-      executor_->~ObSingleKmeansExecutor();
-      allocator_->free(executor_);
-      executor_ = nullptr;
-    }
+  if (OB_NOT_NULL(executor_)) {
+    executor_->~ObSingleKmeansExecutor();
+    executor_ = nullptr;
   }
 }
 
@@ -868,15 +862,12 @@ int ObIvfFlatBuildHelper::init_kmeans_ctx(const int64_t dim)
   ObVectorNormalizeInfo *norm_info = nullptr;
   if (OB_NOT_NULL(executor_)) {
     // do nothing
-  } else if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr allocator", K(ret));
   } else if (0 >= param_.nlist_ || 0 >= param_.sample_per_nlist_ || 0 >= dim || VIDA_MAX <= param_.dist_algorithm_) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(param_));
   } else if ((VIDA_IP == param_.dist_algorithm_ || VIDA_COS == param_.dist_algorithm_) &&
               FALSE_IT(norm_info = &norm_info_)) { // IP和COS算法需要归一化
-  } else if (OB_ISNULL(executor_ = OB_NEWx(ObSingleKmeansExecutor, allocator_))) {
+  } else if (OB_ISNULL(executor_ = OB_NEWx(ObSingleKmeansExecutor, &inner_allocator_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected new ObElkanKmeansAlgo", K(ret));
   } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
@@ -896,20 +887,9 @@ int ObIvfFlatBuildHelper::init_kmeans_ctx(const int64_t dim)
 // ------------------ ObIvfSq8BuildHelper implement ------------------
 ObIvfSq8BuildHelper::~ObIvfSq8BuildHelper()
 {
-  if (OB_NOT_NULL(allocator_)) {
-    if (OB_NOT_NULL(min_vector_)) {
-      allocator_->free(min_vector_);
-      min_vector_ = nullptr;
-    }
-    if (OB_NOT_NULL(max_vector_)) {
-      allocator_->free(max_vector_);
-      max_vector_ = nullptr;
-    }
-    if (OB_NOT_NULL(step_vector_)) {
-      allocator_->free(step_vector_);
-      step_vector_ = nullptr;
-    }
-  }
+  min_vector_ = nullptr;
+  max_vector_ = nullptr;
+  step_vector_ = nullptr;
 }
 
 int ObIvfSq8BuildHelper::update(const float *vector, int64_t dim)
@@ -975,13 +955,13 @@ int ObIvfSq8BuildHelper::get_result(int row_pos, float *&vector)
 int ObIvfSq8BuildHelper::init_result_vectors(int64_t vec_dim)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(min_vector_ = static_cast<float*>(allocator_->alloc(vec_dim * sizeof(float))))) {
+  if (OB_ISNULL(min_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
-  } else if (OB_ISNULL(max_vector_ = static_cast<float*>(allocator_->alloc(vec_dim * sizeof(float))))) {
+  } else if (OB_ISNULL(max_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
-  } else if (OB_ISNULL(step_vector_ = static_cast<float*>(allocator_->alloc(vec_dim * sizeof(float))))) {
+  } else if (OB_ISNULL(step_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
   } else {
@@ -999,12 +979,9 @@ int ObIvfSq8BuildHelper::init_result_vectors(int64_t vec_dim)
 // ------------------ ObIvfPqBuildHelper implement ------------------
 ObIvfPqBuildHelper::~ObIvfPqBuildHelper()
 {
-  if (OB_NOT_NULL(allocator_)) {
-    if (OB_NOT_NULL(executor_)) {
-      executor_->~ObMultiKmeansExecutor();
-      allocator_->free(executor_);
-      executor_ = nullptr;
-    }
+  if (OB_NOT_NULL(executor_)) {
+    executor_->~ObMultiKmeansExecutor();
+    executor_ = nullptr;
   }
 }
 
@@ -1016,16 +993,13 @@ int ObIvfPqBuildHelper::init_ctx(const int64_t dim)
   ObVectorNormalizeInfo *norm_info = nullptr;
   if (OB_NOT_NULL(executor_)) {
     // do nothing
-  } else if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr allocator", K(ret));
   } else if (0 >= param_.nlist_ || 0 >= param_.sample_per_nlist_ || 0 >= dim || VIDA_MAX <= param_.dist_algorithm_
             || param_.m_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(param_));
   } else if ((VIDA_IP == param_.dist_algorithm_ || VIDA_COS == param_.dist_algorithm_) &&
               FALSE_IT(norm_info = &norm_info_)) { // The IP and COS algorithms need to be normalized
-  } else if (OB_ISNULL(executor_ = OB_NEWx(ObMultiKmeansExecutor, allocator_))) {
+  } else if (OB_ISNULL(executor_ = OB_NEWx(ObMultiKmeansExecutor, &inner_allocator_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected new ObElkanKmeansAlgo", K(ret));
   } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
