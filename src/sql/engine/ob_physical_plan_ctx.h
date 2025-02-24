@@ -540,6 +540,7 @@ public:
   bool get_main_xa_trans_branch() const { return main_xa_trans_branch_; }
   ObIArray<uint64_t> &get_dblink_ids() { return dblink_ids_; }
   inline int keep_dblink_id(uint64_t dblink_id) { return add_var_to_array_no_dup(dblink_ids_, dblink_id); }
+  bool is_param_datum_frame_inited() const { return param_frame_ptrs_.count() > 0; }
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);

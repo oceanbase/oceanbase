@@ -758,6 +758,11 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
         && out_ctx->get_physical_plan_ctx() != NULL
         && (&params == &out_ctx->get_physical_plan_ctx()->get_param_store())) {
       phy_plan_ctx = out_ctx->get_physical_plan_ctx();
+      if (OB_UNLIKELY(!phy_plan_ctx->is_param_datum_frame_inited())) {
+        if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
+          LOG_WARN("init datum param store failed", K(ret));
+        }
+      }
     } else {
       phy_plan_ctx = &tmp_phy_plan_ctx;
       for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
