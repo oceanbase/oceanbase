@@ -585,10 +585,11 @@ int ObIndexBlockTreeCursor::locate_rowkey_in_curr_block(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(read_next_level_row(curr_path_item_->curr_row_idx_))) {
     LOG_WARN("Fail to read next level row", K(ret), KPC(curr_path_item_), K(rowkey));
+  } else {
+    LOG_DEBUG("[INDEX_BLOCK] Index block tree search: ",
+        K(cursor_path_.depth()), KPC(curr_path_item_), K(idx_row_parser_));
   }
 
-  LOG_DEBUG("[INDEX_BLOCK] Index block tree search: ",
-      K(cursor_path_.depth()), KPC(curr_path_item_), K(idx_row_parser_), K_(row));
   return ret;
 }
 
