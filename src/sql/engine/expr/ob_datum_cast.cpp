@@ -5282,6 +5282,7 @@ CAST_FUNC_NAME(mdatetime, datetime)
       int64_t out_val = in_val.datetime_;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
       ObObjType out_type = expr.datum_meta_.type_;
+      int warning = OB_SUCCESS;
       const common::ObTimeZoneInfo *tz_info_local = NULL;
       ObSolidifiedVarsGetter helper(expr, ctx, session);
       ObDateSqlMode date_sql_mode = get_date_sql_mode(expr);
@@ -5295,7 +5296,7 @@ CAST_FUNC_NAME(mdatetime, datetime)
         } else if (ObDateTimeType == out_type) {
           ret = ObTimeConverter::mdatetime_to_datetime(in_val, out_val, date_sql_mode);
         }
-        if (OB_FAIL(ret)) {
+        if (CAST_FAIL(ret)) {
         } else {
           res_datum.set_datetime(out_val);
         }
@@ -5401,8 +5402,9 @@ CAST_FUNC_NAME(mdatetime, date)
     {
       ObMySQLDateTime in_val = child_res->get_int();
       int32_t out_val = 0;
+      int warning = OB_SUCCESS;
       ObDateSqlMode date_sql_mode = get_date_sql_mode(expr);
-      if (OB_FAIL(ObTimeConverter::mdatetime_to_date(in_val, out_val, date_sql_mode))) {
+      if (CAST_FAIL(ObTimeConverter::mdatetime_to_date(in_val, out_val, date_sql_mode))) {
         LOG_WARN("mdatetime_to_date failed", K(ret), K(in_val));
       } else {
         res_datum.set_date(out_val);
@@ -6033,6 +6035,7 @@ CAST_FUNC_NAME(mdate, datetime)
     {
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
       ObObjType out_type = expr.datum_meta_.type_;
+      int warning = OB_SUCCESS;
       const common::ObTimeZoneInfo *tz_info_local = NULL;
       ObSolidifiedVarsGetter helper(expr, ctx, session);
       ObDateSqlMode date_sql_mode = get_date_sql_mode(expr);
@@ -6042,7 +6045,7 @@ CAST_FUNC_NAME(mdate, datetime)
         ObTimeConvertCtx cvrt_ctx(tz_info_local, ObTimestampType == out_type);
         ObMySQLDate in_val = child_res->get_mysql_date();
         int64_t out_val = 0;
-        if (OB_FAIL(ObTimeConverter::mdate_to_datetime(in_val, cvrt_ctx, out_val, date_sql_mode))) {
+        if (CAST_FAIL(ObTimeConverter::mdate_to_datetime(in_val, cvrt_ctx, out_val, date_sql_mode))) {
           LOG_WARN("date_to_datetime failed", K(ret), K(in_val), K(in_type));
         } else {
           res_datum.set_datetime(out_val);
@@ -6098,8 +6101,9 @@ CAST_FUNC_NAME(mdate, date)
     {
       ObMySQLDate in_val = child_res->get_mysql_date();
       int32_t out_val = 0;
+      int warning = OB_SUCCESS;
       ObDateSqlMode date_sql_mode = get_date_sql_mode(expr);
-      if (OB_FAIL(ObTimeConverter::mdate_to_date(in_val, out_val, date_sql_mode))) {
+      if (CAST_FAIL(ObTimeConverter::mdate_to_date(in_val, out_val, date_sql_mode))) {
         LOG_WARN("date_to_date failed", K(ret), K(in_val));
       } else {
         res_datum.set_date(out_val);
@@ -7629,8 +7633,8 @@ CAST_FUNC_NAME(time, date)
       } else if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_value, NULL, out_val))) {
         LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
       } else {
-          res_datum.set_date(out_val);
-        }
+        res_datum.set_date(out_val);
+      }
     }
   }
   return ret;

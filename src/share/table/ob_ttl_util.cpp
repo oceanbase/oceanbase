@@ -987,7 +987,7 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
                 find_col = true;
                 if (OB_FAIL(row_cell_ids_.push_back(idx))) {
                   LOG_WARN("fail to push back", K(ret), K(idx));
-                } else if (ob_is_mysql_datetime_or_datetime(col_schema->get_data_type())) {
+                } else if (ob_is_datetime_or_mysql_datetime(col_schema->get_data_type())) {
                   has_datetime_col = true;
                 }
               }

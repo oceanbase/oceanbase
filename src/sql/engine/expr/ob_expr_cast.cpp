@@ -416,7 +416,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     if (is_explicit_cast
         && !lib::is_oracle_mode()
         && (ObTimeType == dst_type.get_type()
-          || ob_is_mysql_datetime_or_datetime(dst_type.get_type()))
+          || ob_is_datetime_or_mysql_datetime(dst_type.get_type()))
         && scale > 6) {
       ret = OB_ERR_TOO_BIG_PRECISION;
       LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", OB_MAX_DATETIME_PRECISION);

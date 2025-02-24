@@ -358,11 +358,11 @@ int ObExprStrToDate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (ob_is_mysql_date_or_date(rt_expr.datum_meta_.type_)) {
+  if (ob_is_date_or_mysql_date(rt_expr.datum_meta_.type_)) {
     rt_expr.eval_func_ = calc_str_to_date_expr_date;
   } else if (ObTimeType == rt_expr.datum_meta_.type_) {
     rt_expr.eval_func_ = calc_str_to_date_expr_time;
-  } else if (ob_is_mysql_datetime_or_datetime(rt_expr.datum_meta_.type_)) {
+  } else if (ob_is_datetime_or_mysql_datetime(rt_expr.datum_meta_.type_)) {
     rt_expr.eval_func_ = calc_str_to_date_expr_datetime;
   } else {
     ret = OB_ERR_UNEXPECTED;

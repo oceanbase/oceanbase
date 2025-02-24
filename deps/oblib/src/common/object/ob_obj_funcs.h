@@ -930,7 +930,7 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
     if (OB_SUCC(ret)) {                                                 \
       if (lib::is_oracle_mode() && params.need_cast_expr_) {                                            \
         ret = databuff_printf(buffer, length, pos, "%s", CAST_PREFIX_ORACLE);                           \
-      } else if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_mysql_datetime_or_datetime(obj.get_type())) {  \
+      } else if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {  \
         ret = databuff_printf(buffer, length, pos, "CAST('"); \
       } else if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ObTimestampType == obj.get_type()) {                         \
         ret = databuff_printf(buffer, length, pos, "%s %s", CAST_PREFIX_MYSQL_TIMESTAMP, NORMAL_PREFIX);\
@@ -947,7 +947,7 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
                                             obj.get_scale(), buffer, length, pos); \
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \
-      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_mysql_datetime_or_datetime(obj.get_type())) {                    \
+      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {                    \
         if (obj.get_scale() > 0 && obj.get_scale() <= 6) {                                                                         \
           ret = databuff_printf(buffer, length, pos, "' AS %s (%d))", CAST_PREFIX_MYSQL_DATETIME, obj.get_scale());                \
         } else {                                                                                                                   \
@@ -1034,7 +1034,7 @@ DEF_DATETIME_FUNCS(ObTimestampType, timestamp, int64_t);
   {                                                                     \
     UNUSED(params);                                                    \
     int ret = OB_SUCCESS;                                               \
-    if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_mysql_date_or_date(obj.get_type())) {       \
+    if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_date_or_mysql_date(obj.get_type())) {       \
       ret = databuff_printf(buffer, length, pos, "DATE '");            \
     } else {                                                           \
       ret = databuff_printf(buffer, length, pos, "'");                 \

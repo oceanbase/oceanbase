@@ -3977,7 +3977,7 @@ static int mdatetime_datetime(const ObObjType expect_type, ObObjCastParams &para
       ret = ObTimeConverter::mdatetime_to_datetime(in.get_mysql_datetime(), value, date_sql_mode);
     }
 
-    if (OB_FAIL(ret)) {
+    if (CAST_FAIL(ret)) {
     } else {
       out.set_datetime(expect_type, value);
     }
@@ -4076,7 +4076,7 @@ static int mdatetime_date(const ObObjType expect_type, ObObjCastParams &params,
     const ObTimeZoneInfo *tz_info = (ObTimestampType == in.get_type()) ? params.dtc_params_.tz_info_ : NULL;
     int32_t value = 0;
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
-    if (OB_FAIL(ObTimeConverter::mdatetime_to_date(in.get_mysql_datetime(), value, date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdatetime_to_date(in.get_mysql_datetime(), value, date_sql_mode))) {
       LOG_WARN("mdatetime to date failed", K(ret), K(in.get_mysql_datetime()), K(out.get_type()));
     } else {
       out.set_date(value);
@@ -4753,8 +4753,8 @@ static int mdate_datetime(const ObObjType expect_type, ObObjCastParams &params,
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
     int64_t value = 0;
-    if (OB_FAIL(ObTimeConverter::mdate_to_datetime(in.get_mysql_date(), cvrt_ctx, value,
-                                                   date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdate_to_datetime(in.get_mysql_date(), cvrt_ctx, value,
+                                                   date_sql_mode,  params.gen_query_range_))) {
       LOG_WARN("date_to_datetime failed", K(ret), K(in.get_date()));
     } else {
       out.set_datetime(expect_type, value);
@@ -4878,7 +4878,7 @@ static int mdate_date(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     ObDateSqlMode date_sql_mode = get_date_sql_mode(cast_mode);
     int32_t value = 0;
-    if (OB_FAIL(ObTimeConverter::mdate_to_date(in.get_mysql_date(), value, date_sql_mode))) {
+    if (CAST_FAIL(ObTimeConverter::mdate_to_date(in.get_mysql_date(), value, date_sql_mode))) {
       LOG_WARN("date_to_date failed", K(ret), K(in.get_datetime()), K(in.is_mysql_date()));
     } else {
       out.set_date(value);

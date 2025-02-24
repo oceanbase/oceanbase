@@ -1452,13 +1452,17 @@ inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_i
 inline bool ob_is_xml_pl_type(const ObObjType type, const uint64_t udt_id) {
   return (ObExtendType == type) && (udt_id == static_cast<uint64_t>(T_OBJ_XML));
 }
-inline bool ob_is_mysql_datetime_or_datetime(const ObObjType type)
+inline bool ob_is_datetime_or_mysql_datetime(const ObObjType type)
 {
   return ObMySQLDateTimeType == type || ObDateTimeType == type;
 }
-inline bool ob_is_mysql_date_or_date(const ObObjType type)
+inline bool ob_is_date_or_mysql_date(const ObObjType type)
 {
   return ObMySQLDateType == type || ObDateType == type;
+}
+inline bool ob_is_datetime_or_mysql_datetime_tc(ObObjType type)
+{
+  return ObDateTimeTC == ob_obj_type_class(type) || ObMySQLDateTimeTC == ob_obj_type_class(type);
 }
 inline bool ob_is_mysql_compact_dates_type(const ObObjType type)
 {

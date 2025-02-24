@@ -3735,12 +3735,12 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
       if (OB_SUCC(ret) && !is_allow) {
         if (part_value_expr_type == part_column_expr_type) {
           is_allow = true;
-        } else if (ob_is_mysql_datetime_or_datetime(part_value_expr_type)
-            && ob_is_mysql_datetime_or_datetime(part_column_expr_type)) {
+        } else if (ob_is_datetime_or_mysql_datetime(part_value_expr_type)
+            && ob_is_datetime_or_mysql_datetime(part_column_expr_type)) {
           // partition type allows conversion between mysqldatetime and datetime
           is_allow = true;
-        } else if (ob_is_mysql_datetime_or_datetime(part_column_expr_type)
-                  && ( ob_is_mysql_date_or_date(part_value_expr_type)
+        } else if (ob_is_datetime_or_mysql_datetime(part_column_expr_type)
+                  && ( ob_is_date_or_mysql_date(part_value_expr_type)
                     || ObTimeType == part_value_expr_type)) {
           is_allow = true;
         }
