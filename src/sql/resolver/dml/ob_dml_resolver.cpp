@@ -4113,16 +4113,32 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
         switch(type->getSubtype(i)->getKind()) {
           case orc::TypeKind::BOOLEAN:
           case orc::TypeKind::BYTE:
-            column_schema.set_data_type(ObTinyIntType);
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObNumberType);
+            } else {
+              column_schema.set_data_type(ObTinyIntType);
+            }
             break;
           case orc::TypeKind::SHORT:
-            column_schema.set_data_type(ObSmallIntType);
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObNumberType);
+            } else {
+              column_schema.set_data_type(ObSmallIntType);
+            }
             break;
           case orc::TypeKind::INT:
-            column_schema.set_data_type(ObInt32Type);
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObNumberType);
+            } else {
+              column_schema.set_data_type(ObInt32Type);
+            }
             break;
           case orc::TypeKind::LONG:
-            column_schema.set_data_type(ObIntType);
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObNumberType);
+            } else {
+              column_schema.set_data_type(ObIntType);
+            }
             break;
           case orc::TypeKind::FLOAT:
             column_schema.set_data_type(ObFloatType);
@@ -4135,10 +4151,13 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
             column_schema.set_data_type(ObCharType);
             uint64_t max_len = type->getSubtype(i)->getMaximumLength();
             if (max_len <= 0) {
-              column_schema.set_data_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+              int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                                   OB_MAX_MYSQL_VARCHAR_LENGTH;
+              column_schema.set_data_length(ob_max_varchar_len);
             } else {
               column_schema.set_data_length(static_cast<int64_t>(max_len));
             }
+            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case orc::TypeKind::STRING:
@@ -4148,15 +4167,28 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
             column_schema.set_data_type(ObVarcharType);
             uint64_t max_len = type->getSubtype(i)->getMaximumLength();
             if (max_len <= 0) {
-              column_schema.set_data_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+              int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                                   OB_MAX_MYSQL_VARCHAR_LENGTH;
+              column_schema.set_data_length(ob_max_varchar_len);
             } else {
               column_schema.set_data_length(static_cast<int64_t>(max_len));
             }
+            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case orc::TypeKind::TIMESTAMP:
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObTimestampNanoType);
+            } else {
+              column_schema.set_data_type(ObDateTimeType);
+            }
+            break;
           case orc::TypeKind::TIMESTAMP_INSTANT:
-            column_schema.set_data_type(ObTimestampType);
+            if (lib::is_oracle_mode()) {
+              column_schema.set_data_type(ObTimestampLTZType);
+            } else {
+              column_schema.set_data_type(ObTimestampType);
+            }
             break;
           case orc::TypeKind::DATE:
             column_schema.set_data_type(ObDateType);
@@ -4230,17 +4262,44 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
             LOG_WARN("failed to set column name", K(ret), K(field_name));
           }
 
+          parquet::Type::type phy_type = column->physical_type();
+          const parquet::LogicalType* logical_type = column->logical_type().get();
+          // 处理logical type
+          if (OB_ISNULL(logical_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("logical type is null", K(ret));
+          }
+          bool no_log_type = logical_type->is_none();
+          bool is_utc = ObParquetTableRowIterator::is_parquet_store_utc(logical_type);
+          bool is_unsigned = logical_type->is_int()
+                          && !static_cast<const parquet::IntLogicalType*>(logical_type)->is_signed();
+
           if (OB_SUCC(ret)) {
             // 根据Parquet类型设置对应的OB类型
-            switch(column->physical_type()) {
+            switch(phy_type) {
               case parquet::Type::BOOLEAN:
-                column_schema.set_data_type(ObTinyIntType);
+                if (lib::is_oracle_mode()) {
+                  column_schema.set_data_type(ObNumberType);
+                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
+                } else {
+                  column_schema.set_data_type(!is_unsigned ? ObTinyIntType : ObUTinyIntType);
+                }
                 break;
               case parquet::Type::INT32:
-                column_schema.set_data_type(ObInt32Type);
+                if (lib::is_oracle_mode()) {
+                  column_schema.set_data_type(ObNumberType);
+                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
+                } else {
+                  column_schema.set_data_type(!is_unsigned ? ObInt32Type : ObUInt32Type);
+                }
                 break;
               case parquet::Type::INT64:
-                column_schema.set_data_type(ObIntType);
+                if (lib::is_oracle_mode()) {
+                  column_schema.set_data_type(!is_unsigned ? ObNumberType : ObUNumberType);
+                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
+                } else {
+                  column_schema.set_data_type(!is_unsigned ? ObIntType : ObUInt64Type);
+                }
                 break;
               case parquet::Type::FLOAT:
                 column_schema.set_data_type(ObFloatType);
@@ -4252,27 +4311,22 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
               case parquet::Type::FIXED_LEN_BYTE_ARRAY:
               {
                 column_schema.set_data_type(ObVarcharType);
+                int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                                     OB_MAX_MYSQL_VARCHAR_LENGTH;
                 int type_len = column->type_length() <= 0 ?
-                                OB_MAX_ORACLE_VARCHAR_LENGTH : column->type_length();
+                                ob_max_varchar_len : column->type_length();
                 column_schema.set_data_length(type_len);
                 break;
               }
               case parquet::Type::INT96: // 通常用于timestamp
-                column_schema.set_data_type(ObTimestampType);
+                column_schema.set_data_type(lib::is_oracle_mode() ?
+                                            ObTimestampLTZType : ObTimestampType);
                 break;
-              case parquet::Type::UNDEFINED:
               default:
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "this Parquet type");
                 break;
             }
-          }
-
-          // 处理logical type
-          const parquet::LogicalType* logical_type = column->logical_type().get();
-          if (OB_ISNULL(logical_type)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("logical type is null", K(ret));
           }
 
           if (OB_SUCC(ret)) {
@@ -4288,13 +4342,27 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
               case parquet::LogicalType::Type::STRING:
               {
                 column_schema.set_data_type(ObVarcharType);
+                int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                                     OB_MAX_MYSQL_VARCHAR_LENGTH;
                 int type_len = column->type_length() <= 0 ?
-                                OB_MAX_ORACLE_VARCHAR_LENGTH : column->type_length();
+                                ob_max_varchar_len : column->type_length();
                 column_schema.set_data_length(type_len);
                 break;
               }
+              case parquet::LogicalType::Type::TIME:
+                column_schema.set_data_type(ObTimeType);
+                break;
+              case parquet::LogicalType::Type::ENUM:
+                column_schema.set_data_type(ObEnumType);
+                break;
               case parquet::LogicalType::Type::TIMESTAMP:
-                column_schema.set_data_type(ObTimestampType);
+                if (is_utc) {
+                  column_schema.set_data_type(lib::is_oracle_mode() ?
+                                              ObTimestampLTZType : ObTimestampType);
+                } else {
+                  column_schema.set_data_type(lib::is_oracle_mode() ?
+                                              ObTimestampNanoType : ObDateTimeType);
+                }
                 break;
               default:
                 // 使用physical type的映射
@@ -4347,7 +4415,13 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
   ObSEArray<ObString, 16> field_contents;
 
   int64_t col_cnt = 0;
-  ObFileReader reader_;
+  ObExternalStreamFileReader reader_;
+
+  if (OB_SUCC(ret)) {
+    reader_.init(table_schema.get_external_file_location(),
+                table_schema.get_external_file_location_access_info(),
+                format.csv_format_.compression_algorithm_, allocator);
+  }
 
   struct Functor {
     int64_t &col_cnt_;
@@ -4398,9 +4472,11 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
   struct Functor handle_one_line(col_cnt, is_parse_header, allocator, field_contents);
 
   if (OB_SUCC(ret)) {
-    ObString file_name = sampled_file_name.after('%');
+    ObString file_name = ObSQLUtils::is_external_files_on_local_disk(
+                                                      table_schema.get_external_file_location()) ?
+                                                  sampled_file_name.after('%') : sampled_file_name;
     ObSqlString full_file_name;
-    const char *loc_ptr = table_location.ptr();
+    const char *loc_ptr = table_schema.get_external_file_location().ptr();
     const bool has_trailing_slash = (loc_ptr[strlen(loc_ptr) - 1] == '/');
 
     if (OB_FAIL(full_file_name.append_fmt("%s%s%.*s",
@@ -4408,7 +4484,7 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
                                         has_trailing_slash ? "" : "/",
                                         file_name.length(), file_name.ptr()))) {
       LOG_WARN("failed to append file path", K(ret), K(loc_ptr), K(file_name));
-    } else if (OB_FAIL(reader_.open(full_file_name.string(), false))) {
+    } else if (OB_FAIL(reader_.open(full_file_name.string()))) {
       LOG_WARN("failed to open file", K(ret), K(full_file_name));
     }
   }
@@ -4428,7 +4504,7 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(reader_.pread(buf.get_data(), buf.count(), 0, read_size))) {
+        if (OB_FAIL(reader_.read(buf.get_data(), buf.count(), read_size))) {
           LOG_WARN("failed to read file", K(ret));
         } else {
           // 尝试解析当前buffer中的数据
@@ -4481,7 +4557,9 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
     if (OB_SUCC(ret)) {
       column_schema.set_data_type(ObVarcharType);
 
-      column_schema.set_data_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+      int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                           OB_MAX_MYSQL_VARCHAR_LENGTH;
+      column_schema.set_data_length(ob_max_varchar_len);
 
       if (OB_FAIL(temp_str.assign_fmt("%s%d", N_EXTERNAL_FILE_COLUMN_PREFIX, i + 1))) {
         LOG_WARN("failed to assign fmt", K(ret));
@@ -4941,7 +5019,9 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
       }
 
       if (OB_SUCC(ret)) {
-        ObString file_name = sampled_file_name.after('%');
+        ObString file_name = ObSQLUtils::is_external_files_on_local_disk(
+                                                        table_schema.get_external_file_location()) ?
+                                                  sampled_file_name.after('%') : sampled_file_name;
         const char *loc_ptr = tmp_location.ptr();
         const bool has_trailing_slash = (loc_ptr[tmp_location.length() - 1] == '/');
         int64_t file_size = 0;
@@ -5018,7 +5098,9 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
       }
 
       if (OB_SUCC(ret)) {
-        ObString file_name = sampled_file_name.after('%');
+        ObString file_name = ObSQLUtils::is_external_files_on_local_disk(
+                                                        table_schema.get_external_file_location()) ?
+                                                  sampled_file_name.after('%') : sampled_file_name;
         const char *loc_ptr = tmp_location.ptr();
         const bool has_trailing_slash = (loc_ptr[tmp_location.length() - 1] == '/');
 

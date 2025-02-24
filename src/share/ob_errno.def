@@ -2841,6 +2841,7 @@ DEFINE_ERROR(OB_PLUGIN_DLOPEN_FAILED, -11077, -1, "HY000", "Failed to open libra
 DEFINE_ERROR(OB_PLUGIN_ERROR, -11078, -1, "HY000", "Plugin internal error");
 DEFINE_ERROR_EXT(OB_CATALOG_EXIST, -11079, -1, "HY000", "Can't create catalog;catalog exists", "Can't create catalog '%.*s'; catalog exists");
 DEFINE_ERROR_EXT(OB_CATALOG_NOT_EXIST, -11080, -1, "HY000", "Catalog not exists", "Catalog '%.*s' doesn\'t exist");
+DEFINE_ERROR(OB_SKIP_PARSE_HEADER_CONFLICT, -11081, -1, "HY000", "skip_header and parse_header cannot be used at the same time");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

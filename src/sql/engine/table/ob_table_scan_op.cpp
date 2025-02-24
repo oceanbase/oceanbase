@@ -1475,7 +1475,8 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                                                 key_ranges,
                                                 range_allocator,
                                                 key_ranges,
-                         tab_loc->loc_meta_->is_external_files_on_disk_))) {
+                                                tab_loc->loc_meta_->is_external_files_on_disk_,
+                                                ctx_))) {
       LOG_WARN("failed to prepare single scan range for external table", K(ret));
     }
   } else if (OB_FAIL(MY_CTDEF.get_query_range_provider().get_ss_tablet_ranges(range_allocator,

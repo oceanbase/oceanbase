@@ -248,12 +248,18 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
                   ctx.get_allocator(),
                   full_path,
                   file_urls, file_sizes));
+      bool is_local_file_on_disk = ObSQLUtils::is_external_files_on_local_disk(
+                                                        table_schema->get_external_file_location());
       for (int i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
         ObExternalFileInfo file;
         file.file_id_ = i + 1;
         file.file_size_ = file_sizes.at(i);
-        file.file_url_ = file_urls.at(i).after('%');
-        file.file_addr_ = GCTX.self_addr();
+        ObString file_url = file_urls.at(i);
+        if (is_local_file_on_disk) {
+          ObString ip_port = file_url.split_on(ip_delimiter);
+          OZ (file.file_addr_.parse_from_string(ip_port));
+        }
+        file.file_url_ = file_url;
         file.part_id_ = table_schema->is_partitioned_table() ? i + 1 : 0;
         OZ (external_files.push_back(file));
       }

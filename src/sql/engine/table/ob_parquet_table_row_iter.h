@@ -70,6 +70,7 @@ public:
   int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
   int get_next_rows(int64_t &count, int64_t capacity) override;
+  static bool is_parquet_store_utc(const parquet::LogicalType *logtype);
 
   virtual int get_next_row(ObNewRow *&row) override {
     UNUSED(row);
@@ -134,7 +135,6 @@ private:
     bool check_char_len(const char *ptr, int32_t len);
 
     static bool is_ob_type_store_utc(const ObDatumMeta &meta);
-    static bool is_parquet_store_utc(const parquet::LogicalType *logtype);
 
     ObEvalCtx &eval_ctx_;
     ObExpr *file_col_expr_;

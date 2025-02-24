@@ -298,7 +298,8 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                     ObIArray<ObNewRange *> &ranges,
                                                     ObIAllocator &range_allocator,
                                                     ObIArray<ObNewRange *> &new_range,
-                                                    bool is_file_on_disk) {
+                                                    bool is_file_on_disk,
+                                                    ObExecContext &ctx) {
   int ret = OB_SUCCESS;
   ObSEArray<ObExternalFileInfo, 16> file_urls;
   ObSEArray<ObNewRange *, 4> tmp_ranges;
@@ -310,19 +311,44 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
     LOG_WARN("unexpected error", K(ret));
   } else if (OB_FAIL(tmp_ranges.assign(ranges))) {
     LOG_WARN("failed to assign array", K(ret));
-  } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
-                                  table_id, partition_ids, is_file_on_disk, range_allocator, file_urls,
-                                  tmp_ranges.empty() ? NULL : &tmp_ranges))) {
-    LOG_WARN("get external table file error", K(ret), K(partition_ids));
-  } else if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
-      LOG_WARN("fail to get external table location", K(ret));
-  } else if (is_file_on_disk
-            && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
-                                                                       all_locations))) {
-      //For recovered cluster, the file addr may not in the cluster. Then igore it.
-      LOG_WARN("filter files in location failed", K(ret));
-  } else {
-    new_range.reset();
+  }
+
+  bool is_external_object = is_external_object_id(table_id);
+  const ObTableSchema *table_schema = NULL;
+
+  if (OB_SUCC(ret) && is_external_object) {
+    const ObSqlSchemaGuard& sql_schema_guard = ctx.get_sql_ctx()->cur_stmt_->get_query_ctx()->sql_schema_guard_;
+    if (OB_FAIL(sql_schema_guard.get_table_schema(table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_external_object) {
+      if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
+                              tenant_id, table_id, partition_ids, file_urls, table_schema, ctx))) {
+        LOG_WARN("failed to get mocked external table files", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
+                            tenant_id, table_id, partition_ids, is_file_on_disk,
+                            range_allocator, file_urls, tmp_ranges.empty() ? NULL : &tmp_ranges))) {
+        LOG_WARN("failed to get external files by part ids", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
+        LOG_WARN("fail to get external table location", K(ret));
+    } else if (is_file_on_disk
+              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(file_urls,
+                                                                        all_locations))) {
+        //For recovered cluster, the file addr may not in the cluster. Then igore it.
+        LOG_WARN("filter files in location failed", K(ret));
+    } else {
+      new_range.reset();
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_format_or_properties, is_odps_external_table))) {

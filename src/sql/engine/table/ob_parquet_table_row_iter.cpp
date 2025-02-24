@@ -299,7 +299,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
   parquet::Type::type phy_type = col_desc->physical_type();
   bool no_log_type = log_type->is_none();
   if (no_log_type && parquet::Type::BOOLEAN == phy_type) {
-    if (ob_is_decimal_int_tc(datum_type.type_)) {
+    if (ob_is_number_or_decimal_int_tc(datum_type.type_)) {
       func = &DataLoader::load_decimal_any_col;
     } else if (ob_is_integer_type(datum_type.type_)) {
       func = &DataLoader::load_bool_to_int64_vec;
@@ -1152,7 +1152,7 @@ int ObParquetTableRowIterator::DataLoader::load_time_nanos_col()
   return ret;
 }
 
-bool ObParquetTableRowIterator::DataLoader::is_parquet_store_utc(const parquet::LogicalType *logtype)
+bool ObParquetTableRowIterator::is_parquet_store_utc(const parquet::LogicalType *logtype)
 {
   return logtype->is_timestamp() ? static_cast<const parquet::TimestampLogicalType*>(logtype)->is_adjusted_to_utc() : true;
 }

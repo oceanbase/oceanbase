@@ -9752,6 +9752,11 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
       }
       case T_SKIP_HEADER: {
         format.csv_format_.skip_header_lines_ = node->children_[0]->value_;
+        if (format.csv_format_.parse_header_  && format.csv_format_.skip_header_lines_ > 0) {
+          ret = OB_SKIP_PARSE_HEADER_CONFLICT;
+          LOG_USER_ERROR(OB_SKIP_PARSE_HEADER_CONFLICT);
+          LOG_WARN("failed. skip_header and parse_header cannot be used at the same time", K(ret));
+        }
         break;
       }
       case T_SKIP_BLANK_LINE: {
@@ -9887,9 +9892,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.1, parse_header");
         } else {
-          format.csv_format_.parse_header_ = node->children_[0]->value_;
-          if (format.csv_format_.parse_header_ && format.csv_format_.skip_header_lines_ == 0) {
-            format.csv_format_.skip_header_lines_ = 1;
+          if (format.csv_format_.skip_header_lines_ > 0) {
+            ret = OB_SKIP_PARSE_HEADER_CONFLICT;
+            LOG_USER_ERROR(OB_SKIP_PARSE_HEADER_CONFLICT);
+            LOG_WARN("failed. skip_header and parse_header cannot be used at the same time", K(ret));
+          } else {
+            format.csv_format_.parse_header_ = node->children_[0]->value_;
+            if (format.csv_format_.parse_header_ && format.csv_format_.skip_header_lines_ == 0) {
+              format.csv_format_.skip_header_lines_ = 1;
+            }
           }
         }
         break;
