@@ -29,12 +29,7 @@ int ObTransformOrExpansion::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  bool is_stmt_valid = false;
-  if (OB_FAIL(check_stmt_valid_for_expansion(stmt, is_stmt_valid))) {
-    LOG_WARN("failed to check stmt valid for expansion", K(ret));
-  } else if (!is_stmt_valid) {
-    /* do nothing */
-  } else if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
+  if (OB_FAIL(transform_in_joined_table(parent_stmts, stmt, trans_happened))) {
     LOG_WARN("failed to do or expansion in joined condition", K(ret));
   } else if (trans_happened) {
     /* do nothing */
@@ -1192,11 +1187,39 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
     /*do nothing */
   } else if (OB_FAIL(has_odd_function(stmt, has_odd_func))) {
     LOG_WARN("failed to check has odd function", K(ret));
-} else if (has_odd_func) {
+  } else if (has_odd_func) {
     /*do nothing */
     OPT_TRACE("stmt has odd function, will not expand or expr");
   } else {
     is_valid = true;
+  }
+  //check all views strict deterministic
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt.get_table_size(); i++) {
+    TableItem *table_item = stmt.get_table_items().at(i);
+    bool view_deterministic = true;
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (table_item->is_fake_cte_table()) {
+      is_valid = false;
+    } else if (table_item->is_has_sample_info()) {
+      is_valid = false;
+    } else if (!table_item->is_generated_table()) {
+      //do nothing
+    } else if (OB_ISNULL(table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::check_stmt_strict_deterministic(table_item->ref_query_,
+                                                                         ctx_->session_info_,
+                                                                         ctx_->schema_checker_,
+                                                                         true,
+                                                                         true,
+                                                                         view_deterministic))) {
+      LOG_WARN("failed to check stmt strict deterministic", K(ret));
+    } else if (!view_deterministic) {
+      is_valid = false;
+      OPT_TRACE("view not strict deterministic, will not expand or expr");
+    }
   }
   return ret;
 }
@@ -3429,28 +3452,6 @@ int ObTransformOrExpansion::check_left_bottom_table(ObSelectStmt &stmt,
     }
   } else if (rel_table == table){
     left_bottom = true;
-  }
-  return ret;
-}
-
-int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool &is_stmt_valid)
-{
-  int ret = OB_SUCCESS;
-  is_stmt_valid = true;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && is_stmt_valid && i < stmt->get_table_size(); i++) {
-    TableItem *table_item = stmt->get_table_items().at(i);
-    if (OB_ISNULL(table_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (table_item->is_fake_cte_table()) {
-      is_stmt_valid = false;
-    } else if (table_item->is_has_sample_info()) {
-      is_stmt_valid = false;
-    }
   }
   return ret;
 }

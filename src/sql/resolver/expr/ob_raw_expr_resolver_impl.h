@@ -53,6 +53,7 @@ public:
   int check_name_type(ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   // types and constants
   int recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
+  static bool should_not_contain_window_clause(const ObItemType func_type);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolverImpl);
@@ -180,7 +181,6 @@ private:
   inline bool is_sys_connect_by_path_expr_valid_scope(ObStmtScope scope) const;
   int process_prior_node(const ParseNode &node, ObRawExpr *&expr);
   inline bool is_prior_expr_valid_scope(ObStmtScope scope) const;
-  static bool should_not_contain_window_clause(const ObItemType func_type);
   static bool should_contain_order_by_clause(const ObItemType func_type);
   int resolve_udf_node(const ParseNode *node, ObUDFInfo &udf_info);
   int process_sqlerrm_node(const ParseNode *node, ObRawExpr *&expr);

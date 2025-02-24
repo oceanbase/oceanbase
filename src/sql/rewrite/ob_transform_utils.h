@@ -1982,6 +1982,12 @@ public:
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);
+  static int check_stmt_strict_deterministic(const ObSelectStmt *stmt,
+                                            ObSQLSessionInfo *session_info,
+                                            ObSchemaChecker *schema_checker,
+                                            bool check_current_stmt,
+                                            bool check_basic_deterministic,
+                                            bool &strict_deterministic);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

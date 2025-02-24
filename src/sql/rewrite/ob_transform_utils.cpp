@@ -19,6 +19,7 @@
 #include "share/ob_errno.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "common/ob_common_utility.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
@@ -15790,6 +15791,118 @@ int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
   }
   if (OB_SUCC(ret)) {
     ctx->equal_sets_.reuse();
+  }
+  return ret;
+}
+
+// under strict check mode, on the basis of meeting the basic deterministic criteria defined at ObRawExprInfoExtractor::add_deterministic
+// it is also required that the statement, even if different execution algorithms are chosen, cannot change the result set.
+int ObTransformUtils::check_stmt_strict_deterministic(const ObSelectStmt *stmt,
+                                                      ObSQLSessionInfo *session_info,
+                                                      ObSchemaChecker *schema_checker,
+                                                      bool check_current_stmt,
+                                                      bool check_basic_deterministic,
+                                                      bool &strict_deterministic)
+{
+  int ret = OB_SUCCESS;
+  strict_deterministic = true;
+  bool basic_deterministic = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (!check_current_stmt) {
+    //do nothing
+  } else if (check_basic_deterministic && OB_FAIL(stmt->is_query_deterministic(basic_deterministic))) {
+    LOG_WARN("failed to check query deterministic", K(ret));
+  } else if (!basic_deterministic) {
+    strict_deterministic = false;
+  } else {
+    ObSEArray<ObRawExpr*, 4> order_exprs;
+    bool is_order_exprs_unique = false;
+    // check order by + limit
+    if (stmt->has_limit()) {
+      if (stmt->get_order_items().empty()) {
+        strict_deterministic = false;
+      } else if (OB_FAIL(stmt->get_order_exprs(order_exprs))) {
+        LOG_WARN("failed to get order exprs", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::check_stmt_unique(stmt,
+                                                             session_info,
+                                                             schema_checker,
+                                                             order_exprs,
+                                                             true,
+                                                             is_order_exprs_unique))) {
+        LOG_WARN("failed to check stmt unique", K(ret));
+      } else if (!is_order_exprs_unique) {
+        bool order_exprs_fd_sel_items = true;
+        for (int64_t i = 0; OB_SUCC(ret) && order_exprs_fd_sel_items && i < stmt->get_select_item_size(); ++i) {
+          bool expr_calculable = false;
+          if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(stmt->get_select_item(i).expr_,
+                                                                order_exprs, true, false,
+                                                                expr_calculable))) {
+            LOG_WARN("failed to check expr calculable by exprs", K(ret));
+          } else if (!expr_calculable) {
+            order_exprs_fd_sel_items = false;
+          }
+        }
+        strict_deterministic &= order_exprs_fd_sel_items;
+      }
+    }
+    // check window function with rank
+    for (int64_t i = 0; OB_SUCC(ret) && strict_deterministic && i < stmt->get_window_func_count(); ++i) {
+      const ObWinFunRawExpr *win_expr = stmt->get_window_func_expr(i);
+      is_order_exprs_unique = false;
+      order_exprs.reuse();
+      if (OB_ISNULL(win_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("window function expr is null", K(ret));
+      } else if (!ObRawExprResolverImpl::should_not_contain_window_clause(win_expr->get_func_type()) &&
+                  win_expr->upper_.type_ != BOUND_UNBOUNDED &&
+                  win_expr->lower_.type_ != BOUND_UNBOUNDED) {
+        // 1.Window functions that satisfy should_not_contain_window_clause judgement
+        //   will reset upper/lower bound. However, they themselves rely on sorting semantics.
+        // 2.If a window function define a window depending on current_row,
+        //   its calculation results are also sensitive to sorting.
+      } else if (OB_FAIL(order_exprs.assign(win_expr->get_partition_exprs()))) {
+        LOG_WARN("failed to assign partition exprs", K(ret));
+      } else if (OB_FAIL(win_expr->get_order_exprs(order_exprs))) {
+        LOG_WARN("failed to get order exprs", K(ret));
+      } else if (order_exprs.empty()) {
+        strict_deterministic = false;
+      } else if (OB_FAIL(ObTransformUtils::check_stmt_unique(stmt,
+                                                             session_info,
+                                                             schema_checker,
+                                                             order_exprs,
+                                                             true,
+                                                             is_order_exprs_unique))) {
+        LOG_WARN("failed to check stmt unique", K(ret));
+      } else if (!is_order_exprs_unique) {
+        strict_deterministic = false;
+      }
+    }
+  }
+  //check all views strict deterministic
+  for (int64_t i = 0; OB_SUCC(ret) && strict_deterministic && i < stmt->get_table_size(); i++) {
+    TableItem *table_item = stmt->get_table_items().at(i);
+    bool view_deterministic = true;
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (!table_item->is_generated_table()) {
+      //do nothing
+    } else if (OB_ISNULL(table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(ObTransformUtils::check_stmt_strict_deterministic(table_item->ref_query_,
+                                                                                    session_info,
+                                                                                    schema_checker,
+                                                                                    true,
+                                                                                    true,
+                                                                                    view_deterministic)))) {
+      LOG_WARN("failed to check stmt strict deterministic", K(ret));
+    } else if (!view_deterministic) {
+      strict_deterministic = false;
+      OPT_TRACE("view not strict deterministic, will not expand or expr");
+    }
   }
   return ret;
 }
