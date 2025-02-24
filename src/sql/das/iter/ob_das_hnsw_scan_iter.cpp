@@ -678,7 +678,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
                 LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
               }
               index_end = true;
-            } else if (go_brute_force_ && add_brute) {
+            } else if (go_brute_force_ && add_brute && brute_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
               vids[brute_cnt] = vid;
               ++brute_cnt;
             } else {
@@ -717,7 +717,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
           if (OB_SUCC(ret)) {
             ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
             ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
-            if (go_brute_force_ && add_brute) {
+            if (go_brute_force_ && add_brute && (brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE)) {
               for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
                 int64_t vid = vid_datum[i].get_int();
                 vids[brute_cnt] = vid;
@@ -776,7 +776,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
     int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
     if (!ada_ctx->is_bitmaps_valid(true/*is_extra*/) && OB_FAIL(ada_ctx->init_bitmaps(true/*is_extra*/))) {
         LOG_WARN("init bitmaps failed.", K(ret));
-    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * batch_row_count)))) {
+    } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * MAX_HNSW_BRUTE_FORCE_SIZE)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocator vids", K(ret));
     } else {
@@ -844,7 +844,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
               if (OB_UNLIKELY(OB_ITER_END != ret)) {
                 LOG_WARN("failed to get vector from rowkey vid table.", K(ret), K(i));
               }
-            } else if (go_brute_force_ && add_brute) {
+            } else if (go_brute_force_ && add_brute && brute_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
               vids[brute_cnt] = vid;
               brute_cnt++;
             } else {
@@ -884,7 +884,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
             ObExpr *vid_expr = vec_aux_ctdef_->inv_scan_vec_id_col_;
             ObDatum *vid_datum = vid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
 
-            if (go_brute_force_ && add_brute) {
+            if (go_brute_force_ && add_brute && (brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE)) {
               for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
                 int64_t vid = vid_datum[i].get_int();
                 vids[brute_cnt] = vid;
@@ -1184,6 +1184,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     }
 
     ObDatum *vec_datum = NULL;
+    LOG_DEBUG("print_vector_query_condition", K(query_cond.query_limit_), K(query_cond.ef_search_));
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(OB_FAIL(search_vec_->eval(*(sort_rtdef_->eval_ctx_), vec_datum)))) {
       LOG_WARN("eval vec arg failed", K(ret));
