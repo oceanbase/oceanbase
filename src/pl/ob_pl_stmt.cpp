@@ -2006,7 +2006,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               if (OB_SUCC(ret) && data_type.is_cursor_type()) {
                 const ObPLCursor *cursor = nullptr;
                 int64_t idx = OB_INVALID_INDEX;
-                OZ (package_manager.get_package_cursor(resolve_ctx_, parent_id, name, cursor, idx));
+                // only collect package header cursor dependency info, to avoid recursive resolve
+                OZ (package_manager.get_package_spec_cursor(resolve_ctx_, parent_id, name, cursor, idx));
                 CK (OB_NOT_NULL(cursor));
                 OZ (ObPLDependencyUtil::add_dependency_objects(get_dependency_table(), cursor->get_value().get_ref_objects()));
               }

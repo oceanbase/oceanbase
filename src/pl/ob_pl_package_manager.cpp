@@ -819,6 +819,34 @@ int ObPLPackageManager::get_package_cursor(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+int ObPLPackageManager::get_package_spec_cursor(const ObPLResolveCtx &resolve_ctx,
+                                           uint64_t package_id,
+                                           const ObString &cursor_name,
+                                           const ObPLCursor *&cursor,
+                                           int64_t &cursor_idx)
+{
+  int ret = OB_SUCCESS;
+  cursor = NULL;
+  cursor_idx = OB_INVALID_INDEX;
+  if (OB_INVALID_ID == package_id || cursor_name.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("package id or var name invalid", K(package_id), K(cursor_name), K(ret));
+  } else {
+    ObPLPackage *package_spec = NULL;
+    if (OB_FAIL(get_cached_package_spec(resolve_ctx, package_id, package_spec))) {
+      LOG_WARN("get cached package spec failed", K(package_id), K(ret));
+    } else if (OB_ISNULL(package_spec)){
+      ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+      LOG_WARN("package not exist", K(package_id), K(ret));
+    } else {
+      if (OB_FAIL(package_spec->get_cursor(cursor_name, cursor, cursor_idx))) {
+        LOG_WARN("package get var failed", K(package_id), K(cursor_name), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLPackageManager::get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                                            uint64_t package_id,
                                            const ObString &cursor_name,
