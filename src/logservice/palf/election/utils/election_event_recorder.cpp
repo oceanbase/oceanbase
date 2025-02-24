@@ -20,7 +20,7 @@ namespace palf
 namespace election
 {
 
-static constexpr int INFO_MAX_LEN = 128;
+static constexpr int INFO_MAX_LEN = 1024;
 #define DO_IF_SUCC(stmt) if (OB_SUCC(ret) && CLICK_FAIL(stmt)) {}
 
 int64_t EventRecorder::to_string(char *buf, const int64_t len) const
