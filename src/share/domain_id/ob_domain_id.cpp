@@ -147,7 +147,7 @@ int ObDomainIdUtils::check_column_need_domain_id_merge(
           if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
             LOG_WARN("fail to get simple index infos", K(ret), K(table_schema));
           } else {
-            for (int64_t i = 0; OB_SUCC(ret) && !res; ++i) {
+            for (int64_t i = 0; OB_SUCC(ret) && !res && i < simple_index_infos.count(); ++i) {
               const ObIndexType index_type = simple_index_infos.at(i).index_type_;
               if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
                 res = true;
