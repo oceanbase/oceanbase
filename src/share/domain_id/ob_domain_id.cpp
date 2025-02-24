@@ -423,8 +423,8 @@ int ObDomainIdUtils::check_has_domain_index(const void *table_schema, ObIArray<i
       int64_t domain_type = ObDomainIDType::MAX;
       uint64_t domain_tid = simple_index_infos.at(i).table_id_;
       if (is_rowkey_doc_aux(simple_index_infos.at(i).index_type_)) {
-        for (int64_t i = 0; OB_SUCC(ret) && ObDomainIDType::MAX == domain_type; ++i) {
-          const ObIndexType index_type = simple_index_infos.at(i).index_type_;
+        for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count(); ++j) {
+          const ObIndexType index_type = simple_index_infos.at(j).index_type_;
           if (schema::is_fts_index(index_type) && !schema::is_rowkey_doc_aux(index_type)) {
             domain_type = ObDomainIDType::DOC_ID; // only one
           }
