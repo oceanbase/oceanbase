@@ -127,11 +127,6 @@ private:
       int64_t &required_size);
   int inner_report_result_(const ObLSMigrationTask &task);
   int report_to_rebuild_service_();
-  int get_ls_info_(
-      const int64_t cluster_id,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      share::ObLSInfo &ls_info);
   int get_ls_migration_task_with_nolock_(ObLSMigrationTask &task) const;
   int check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const;
   int switch_next_stage_with_nolock_(const int32_t result);

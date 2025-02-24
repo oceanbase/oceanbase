@@ -1337,6 +1337,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   bool is_need_rebuild = false;
   ObMigrationStatus migrate_status;
   bool tx_blocked = false;
+  int64_t required_data_disk_size = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -1349,6 +1350,11 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
   } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
     LOG_WARN("check tx ls state error", K(ret),KPC(this));
+  } else if (OB_ISNULL(get_tablet_svr())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(get_tablet_svr()->get_ls_migration_required_size(required_data_disk_size))) {
+    LOG_WARN("fail to get required data disk size for migration", KR(ret));
   } else {
     // The readable point of the primary tenant is weak read ts,
     // and the readable point of the standby tenant is readable scn
@@ -1370,6 +1376,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
       ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
       ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
       ls_info.tx_blocked_ = tx_blocked;
+      ls_info.required_data_disk_size_ = required_data_disk_size;
       if (tx_blocked) {
         TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
       }

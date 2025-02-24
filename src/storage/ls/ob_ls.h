@@ -99,6 +99,7 @@ struct ObLSVTInfo
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
   bool tx_blocked_;
+  int64_t required_data_disk_size_;
   TO_STRING_KV(K_(ls_id),
                K_(replica_type),
                K_(ls_state),
@@ -110,7 +111,8 @@ struct ObLSVTInfo
                K_(rebuild_seq),
                K_(tablet_change_checkpoint_scn),
                K_(transfer_scn),
-               K_(tx_blocked));
+               K_(tx_blocked),
+               K_(required_data_disk_size));
 };
 
 // 诊断虚表统计信息

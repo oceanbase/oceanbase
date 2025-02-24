@@ -1113,6 +1113,7 @@ int ObLSMigrationHandler::check_before_do_task_()
 int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t required_size = 0;
 
   if (!is_inited_) {
@@ -1123,8 +1124,14 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
         K(arg));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(arg.dst_.get_replica_type())) {
     LOG_INFO("dst has no ssstore, no need check disk space", K(arg));
-  } else if (OB_FAIL(get_ls_required_size_(arg, required_size))) {
-    LOG_WARN("failed to get ls required size", K(ret), K(arg));
+  } else if (OB_TMP_FAIL(get_ls_required_size_(arg, required_size))) {
+    // use OB_TMP_FAIL to ignore return value because when tenant is restoring,
+    // inner table may not created yet, which is not readable,
+    // get_ls_required_size may fail, migration task could fail all the time,
+    // so we have to ignore the return value
+    LOG_WARN("failed to get ls required size", KR(tmp_ret), K(arg));
+  }
+  if (OB_FAIL(ret)) {
   } else if (required_size > 0) {
     if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
       if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
@@ -1144,43 +1151,63 @@ int ObLSMigrationHandler::get_ls_required_size_(
   int ret = OB_SUCCESS;
   required_size = 0;
   const uint64_t tenant_id = MTL_ID();
-  ObLSInfo ls_info;
+  uint64_t data_version = 0;
+  ObSqlString sql;
+  int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("start to get log stream required data disk size before migration", K(tenant_id), K(arg));
 
-  if (OB_FAIL(get_ls_info_(arg.cluster_id_, tenant_id, arg.ls_id_, ls_info))) {
-    LOG_WARN("failed to get ls info", K(ret), K(arg), K(tenant_id), KPC(ls_));
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not inited", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+  } else if (DATA_VERSION_4_2_5_3 > data_version) {
+    LOG_TRACE("data version not promoted, do no check required size", K(tenant_id), K(data_version));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server rpc proxy", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT MAX(required_data_disk_size) AS required_size "
+                                    "FROM %s "
+                                    "WHERE tenant_id = %lu AND ls_id = %ld",
+                                    OB_ALL_VIRTUAL_LS_INFO_TNAME, tenant_id, arg.ls_id_.id()))) {
+    LOG_WARN("fail to construct sql to get required_data_disk_size", KR(ret), K(tenant_id), K(arg));
   } else {
-    const common::ObIArray<ObLSReplica> &replicas = ls_info.get_replicas();
-    for (int64_t i = 0; OB_SUCC(ret) && i < replicas.count(); ++i) {
-      if (replicas.at(i).get_required_size() > required_size) {
-        required_size = replicas.at(i).get_required_size();
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      // TODO@jingyu.cr: need to avoid reading virtual table during migration, get ls required size through RPC
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("failed to read", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get sql result", KR(ret), K(sql));
+      } else {
+        ret = result->next();
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("ls replica not found", KR(ret), K(sql));
+        } else if (OB_FAIL(ret)) {
+          LOG_WARN("failed to get required_data_disk_size", KR(ret), K(sql));
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "required_size", required_size, int64_t);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to get required_data_disk_size from result", KR(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_ITER_END != result->next()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expect only one row", KR(ret), K(sql));
+          }
+        }
       }
     }
   }
-  return ret;
-}
-
-int ObLSMigrationHandler::get_ls_info_(
-    const int64_t cluster_id,
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    share::ObLSInfo &ls_info)
-{
-  int ret = OB_SUCCESS;
-  ls_info.reset();
-  share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls migration handler do not init", K(ret));
-  } else if (cluster_id < 0 || OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get ls info get invalid argument", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else if (nullptr == lst_operator) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
-             ls_->get_ls_id(), share::ObLSTable::DEFAULT_MODE, ls_info))) {
-    LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), "ls id", ls_->get_ls_id());
-  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_INFO("finish get log stream required data disk size before migration",
+           KR(ret), K(tenant_id), K(arg), K(required_size), K(data_version), K(begin_time), K(cost));
   return ret;
 }
 
