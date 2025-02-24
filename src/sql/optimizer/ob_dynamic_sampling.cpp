@@ -537,10 +537,12 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   return ret;
 }
 
-int ObDSStatItem::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
+int ObDSStatItem::gen_expr(common::ObIAllocator &allocator, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObSqlString expr_str;
+  ObString new_filter_string;
+  ObString new_col_name;
   switch (type_) {
       case OB_DS_ROWCOUNT:
       case OB_DS_OUTPUT_COUNT:
@@ -560,11 +562,17 @@ int ObDSStatItem::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
       if (OB_ISNULL(column_expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(column_expr_));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          allocator,
+                                                          column_expr_->get_column_name(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+        LOG_WARN("fail to generate new name with escape character", K(ret), K(column_expr_->get_column_name()));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                          lib::is_oracle_mode() ? "APPROX_COUNT_DISTINCT(\"%.*s\")" :
                                                                  "APPROX_COUNT_DISTINCT(`%.*s`)",
-                                         column_expr_->get_column_name().length(),
-                                         column_expr_->get_column_name().ptr()))) {
+                                         new_col_name.length(),
+                                         new_col_name.ptr()))) {
         LOG_WARN("failed to print buf", K(ret));
       }
       break;
@@ -573,11 +581,17 @@ int ObDSStatItem::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
       if (OB_ISNULL(column_expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(column_expr_));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                                                          allocator,
+                                                          column_expr_->get_column_name(),
+                                                          new_col_name,
+                                                          lib::is_oracle_mode()))) {
+        LOG_WARN("fail to generate new name with escape character", K(ret), K(column_expr_->get_column_name()));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                          lib::is_oracle_mode() ? "SUM(CASE WHEN \"%.*s\" IS NULL THEN 1 ELSE 0 END)" :
                                                                  "SUM(CASE WHEN `%.*s` IS NULL THEN 1 ELSE 0 END)",
-                                          column_expr_->get_column_name().length(),
-                                          column_expr_->get_column_name().ptr()))) {
+                                          new_col_name.length(),
+                                          new_col_name.ptr()))) {
         LOG_WARN("failed to print buf", K(ret));
       }
       break;
@@ -630,7 +644,7 @@ int ObDynamicSampling::gen_select_filed(ObSqlString &select_fields)
     SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
       if (i != 0 && OB_FAIL(select_fields.append(", "))) {
         LOG_WARN("failed to append delimiter", K(ret));
-      } else if (OB_FAIL(ds_stat_items_.at(i)->gen_expr(buf, OB_MAX_SQL_LENGTH, pos))) {
+      } else if (OB_FAIL(ds_stat_items_.at(i)->gen_expr(allocator_, buf, OB_MAX_SQL_LENGTH, pos))) {
         LOG_WARN("failed to gen select expr", K(ret));
       } else if (OB_FAIL(select_fields.append(buf, pos))) {
         LOG_WARN("failed to append stat item expr", K(ret));
@@ -645,9 +659,32 @@ int ObDynamicSampling::add_table_info(const ObString &db_name,
                                       const ObString &alias_name)
 {
   int ret = OB_SUCCESS;
-  db_name_ = db_name;
-  table_name_ = table_name;
-  alias_name_ = alias_name;
+  ObString new_db_name;
+  ObString new_tbl_name;
+  ObString new_alias_name;
+  if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+              allocator_,
+              db_name,
+              new_db_name,
+              lib::is_oracle_mode()))) {
+    LOG_WARN("fail to generate new name with escape character", K(ret), K(db_name));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                    allocator_,
+                    table_name,
+                    new_tbl_name,
+                    lib::is_oracle_mode()))) {
+    LOG_WARN("fail to generate new name with escape character", K(ret), K(table_name));
+  } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                    allocator_,
+                    alias_name,
+                    new_alias_name,
+                    lib::is_oracle_mode()))) {
+    LOG_WARN("fail to generate new name with escape character", K(ret), K(alias_name));
+  } else {
+    db_name_ = new_db_name;
+    table_name_ = new_tbl_name;
+    alias_name_ = new_alias_name;
+  }
   return ret;
 }
 

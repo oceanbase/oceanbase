@@ -54,7 +54,7 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
     LOG_WARN("failed to add no_rewrite", K(ret));
   } else if (OB_FAIL(add_no_use_das_hint(ctx_.get_allocator(), param.data_table_name_))) {
     LOG_WARN("failed to no use das hint", K(ret));
-  } else if (OB_FAIL(add_from_table(param.db_name_, param.data_table_name_))) {
+  } else if (OB_FAIL(add_from_table(ctx_.get_allocator(), param.db_name_, param.data_table_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_index_info(ctx_.get_allocator(),
                                      param.data_table_name_,
