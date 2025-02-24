@@ -92,7 +92,7 @@ int ObChecksumValidator::deal_with_special_table_at_last(bool &finish_validate)
   } else if (OB_FAIL(simple_schema_->get_tablet_ids(tmp_tablet_ids))) {
     LOG_WARN("fail to get tablet_ids from simple table schema", KR(ret), KPC_(simple_schema));
   } else if (OB_FAIL(tablet_ls_pair_cache_.get_tablet_ls_pairs(
-      tenant_id_, tmp_tablet_ids, cur_tablet_ls_pair_array_))) {
+      table_id_, tmp_tablet_ids, cur_tablet_ls_pair_array_))) {
     LOG_WARN("failed to get tablet ls pairs from cache", KR(ret));
   } else if (OB_UNLIKELY(cur_tablet_ls_pair_array_.empty())) {
     ret = OB_ERR_UNEXPECTED;
