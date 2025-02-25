@@ -165,7 +165,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_range)
 
   STORAGE_LOG(INFO, "part_est", K(part_est), K(ddl_kv_part_est), K(ddl_merge_part_est));
   ASSERT_EQ(ddl_kv_part_est, ddl_merge_part_est);
-  ASSERT_TRUE(part_est.logical_row_count_ > ddl_merge_part_est.logical_row_count_);
+  ASSERT_EQ(part_est, ddl_merge_part_est);
 }
 
 TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_left_range)
