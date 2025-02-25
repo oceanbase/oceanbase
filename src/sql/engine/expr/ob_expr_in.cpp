@@ -362,11 +362,11 @@ int ObExprInOrNotIn::ObExprInCtx::init_hashset(VecValueTypeClass vec_tc,
   return ret;
 }
 
-bool ObExprInOrNotIn::ObExprInCtx::need_rebuild_hashset()
+bool ObExprInOrNotIn::ObExprInCtx::need_rebuild_hashset(bool use_colht)
 {
   bool need_rebuild = false;
-  if ((this->use_colht_ && (!this->int_ht_.inited() && !this->str_ht_.inited())) ||
-    (!this->use_colht_ && !this->static_engine_hashset_.inited())) {
+  if ((use_colht && (!this->int_ht_.inited() && !this->str_ht_.inited())) ||
+    (!use_colht && !this->static_engine_hashset_.inited())) {
     need_rebuild = true;
   }
   return need_rebuild;
@@ -2381,11 +2381,11 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
     } else if (OB_FAIL(build_hash_set(right_param_num, expr, ctx, exec_ctx, in_ctx, cnt_null))) {
       LOG_WARN("failed to build hash set", K(ret), K(in_ctx->use_colht_));
     }
-  } else if (in_ctx->need_rebuild_hashset()) {
+  } else if (in_ctx->need_rebuild_hashset(use_colht)) {
     // Rebuild the hashset as needed when different operators in the plan contain
     // the same 'in' expr but use different interfaces (row, batch, vector) for evaluation.
     // Both eval_row() and eval_batch() for 'in' always use static_engine_hashset(ObHashSet).
-    if (OB_FAIL(in_ctx->init_hashset(vec_tc, right_param_num, in_ctx->use_colht_, cs_type, cmp_end_space))) {
+    if (OB_FAIL(in_ctx->init_hashset(vec_tc, right_param_num, use_colht, cs_type, cmp_end_space))) {
       LOG_WARN("failed to reinit hashset", K(ret));
     } else if (OB_FAIL(build_hash_set(right_param_num, expr, ctx, exec_ctx, in_ctx, cnt_null))) {
       LOG_WARN("failed to rebuild hash set", K(ret), K(in_ctx->use_colht_));

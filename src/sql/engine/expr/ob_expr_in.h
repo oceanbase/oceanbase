@@ -424,7 +424,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator
     int init_hash_vals(int64_t size);
     int init_hashset(VecValueTypeClass vec_tc,int64_t param_num, bool use_colhashset,
                      common::ObCollationType cs_type, bool cmp_end_space);
-    bool need_rebuild_hashset();
+    bool need_rebuild_hashset(bool use_colht);
     int init_static_engine_hashset(int64_t param_num);
     int init_static_engine_hashset_vecs(int64_t param_num,
                                         int64_t row_dimension,
