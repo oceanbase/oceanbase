@@ -262,6 +262,10 @@ public:
   {
     return hash_rollup_info_.valid() ? &hash_rollup_info_ : nullptr;
   }
+  bool is_hash_rollup_groupby() const
+  {
+    return hash_rollup_info_.valid();
+  }
 
 private:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
