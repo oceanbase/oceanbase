@@ -2289,7 +2289,7 @@ void ObAsyncIOChannel::get_events()
         RequestHolder holder(req);
         req->dec_ref("os_dec"); // ref for file system
         req->time_log_.return_ts_ = io_return_time;
-        ATOMIC_FAS(&device_channel_->used_io_depth_, req->io_size_);
+        ATOMIC_FAS(&device_channel_->used_io_depth_, get_io_depth(req->io_size_));
         const int system_errno = io_events_->get_ith_ret_code(i);
         const int complete_size = io_events_->get_ith_ret_bytes(i);
         if (OB_LIKELY(0 == system_errno)) { // io succ
