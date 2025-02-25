@@ -1620,8 +1620,6 @@ BEGIN(in_c_comment);
 ":"{identifier}"."{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
-  char *header = str_toupper(yytext, 4);
-  bool is_for_trigger = (0 == strncmp(":NEW", header, 4)) || (0 == strncmp(":OLD", header, 4));
   if (IS_FOR_REMAP) {
     bool is_contain_colon = (0 == strncmp(":", yytext, 1));
     char *dot_p = strstr(yytext, ".");
@@ -1643,20 +1641,24 @@ BEGIN(in_c_comment);
       node->children_[1] = tb_node;
       return REMAP_DATABASE_TABLE_NAME;
     }
-  } else if (is_for_trigger) {
-    malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
-    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
-    if (IS_FAST_PARAMETERIZE) {
-      yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-      yylval->node->sql_str_off_ = yylloc->first_column - 1;
-      check_malloc(yylval->node->raw_text_);
-      STORE_PARAM_NODE();
-    } else {
-      yylval->node->sql_str_off_ = yylloc->first_column - 1;
-      return QUESTIONMARK;
-    }
   } else {
-    YY_UNEXPECTED_ERROR("Named binding is only for trigger\n");
+    char *header = str_toupper(yytext, 4);
+    bool is_for_trigger = (0 == strncmp(":NEW", header, 4)) || (0 == strncmp(":OLD", header, 4));
+    if (is_for_trigger) {
+      malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+      yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+      if (IS_FAST_PARAMETERIZE) {
+        yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+        yylval->node->sql_str_off_ = yylloc->first_column - 1;
+        check_malloc(yylval->node->raw_text_);
+        STORE_PARAM_NODE();
+      } else {
+        yylval->node->sql_str_off_ = yylloc->first_column - 1;
+        return QUESTIONMARK;
+      }
+    } else {
+      YY_UNEXPECTED_ERROR("Named binding is only for trigger\n");
+    }
   }
 }
 
