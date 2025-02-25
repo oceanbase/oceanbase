@@ -653,7 +653,8 @@ public:
     }
     // nested transaction already supported In 32x and can only rollback nested sql.
     // for forigen key, we keep old logic and do not retry. for pl will retry current nested sql.
-    else if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_) {
+    else if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_
+             && !is_direct(v)) {
       // right now, top session will retry, bug we can do something here like refresh XXX cache.
       // in future, nested session can retry if nested transaction is supported.
       v.no_more_test_ = true;
@@ -694,6 +695,12 @@ private:
     bool is_fk_nested = (parent_ctx != nullptr && parent_ctx->get_das_ctx().is_fk_cascading_);
     bool is_online_stat_gathering_nested = (parent_ctx != nullptr && parent_ctx->is_online_stats_gathering());
     return is_pl_nested || is_fk_nested || is_online_stat_gathering_nested;
+  }
+
+  bool is_direct(ObRetryParam &v) const
+  {
+    ObExecContext *parent_ctx = v.session_.get_cur_exec_ctx();
+    return nullptr == parent_ctx ? false : parent_ctx->get_table_direct_insert_ctx().get_is_direct();
   }
 };
 
