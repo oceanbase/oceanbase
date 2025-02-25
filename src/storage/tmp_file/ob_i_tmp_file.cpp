@@ -174,8 +174,12 @@ ObITmpFileHandle & ObITmpFileHandle::operator=(const ObITmpFileHandle &other)
 void ObITmpFileHandle::reset()
 {
   if (ptr_ != nullptr) {
-    ptr_->dec_ref_cnt();
-    if (ptr_->get_ref_cnt() == 0) {
+    int64_t ref_cnt = -1;
+    ptr_->dec_ref_cnt(ref_cnt);
+    if (OB_UNLIKELY(ref_cnt < 0)) {
+      int ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid ref cnt", K(ret), KP(ptr_), K(ref_cnt));
+    } else if (ref_cnt == 0) {
       ptr_->~ObITmpFile();
     }
     ptr_ = nullptr;

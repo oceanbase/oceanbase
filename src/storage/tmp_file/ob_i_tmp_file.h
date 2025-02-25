@@ -237,6 +237,10 @@ public:
   OB_INLINE int64_t get_dir_id() const { return dir_id_; }
   OB_INLINE void inc_ref_cnt() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE void dec_ref_cnt() { ATOMIC_AAF(&ref_cnt_, -1); }
+  OB_INLINE void dec_ref_cnt(int64_t &ref_cnt)
+  {
+    ref_cnt = ATOMIC_AAF(&ref_cnt_, -1);
+  }
   OB_INLINE int64_t get_ref_cnt() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void set_data_page_flush_level(int64_t data_page_flush_level)
   {

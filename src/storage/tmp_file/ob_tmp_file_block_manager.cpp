@@ -752,7 +752,6 @@ int ObTmpFileBlockManager::release_tmp_file_page(const int64_t block_index,
   return ret;
 }
 
-// only called by ObTmpFileBlockHandle::reset()
 int ObTmpFileBlockManager::remove_tmp_file_block_(const int64_t block_index)
 {
   int ret = OB_SUCCESS;
