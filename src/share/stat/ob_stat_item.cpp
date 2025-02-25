@@ -523,8 +523,20 @@ int ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int6
         LOG_WARN("failed to assign", K(ret));
       }
     } else if (OB_UNLIKELY(cg_macro_arr.count() != cg_macro_cnt_arr_.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(cg_macro_arr), K(cg_macro_cnt_arr_));
+      if (cg_macro_arr.count() == 1) {
+        cg_macro_cnt_arr_.at(0) += cg_macro_arr.at(0);
+      } else if (cg_macro_cnt_arr_.count() == 1) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < cg_macro_arr.count(); ++i) {
+          if (i == 0) {
+            cg_macro_cnt_arr_.at(0) += cg_macro_arr.at(0);
+          } else if (OB_FAIL(cg_macro_cnt_arr_.push_back(cg_macro_arr.at(i)))) {
+            LOG_WARN("failed to push back macro cnt", K(ret));
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(cg_macro_arr), K(cg_macro_cnt_arr_));
+      }
     } else {
       for (int64_t i = 0; i < cg_macro_arr.count(); ++i) {
         cg_macro_cnt_arr_.at(i) += cg_macro_arr.at(i);
@@ -538,8 +550,21 @@ int ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int6
           LOG_WARN("failed to assign", K(ret));
         }
       } else if (OB_UNLIKELY(cg_micro_arr.count() != cg_micro_cnt_arr_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(cg_micro_arr), K(cg_micro_cnt_arr_));
+        if (cg_micro_arr.count() == 1) {
+          cg_micro_cnt_arr_.at(0) += cg_micro_arr.at(0);
+        } else if (cg_micro_cnt_arr_.count() == 1) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < cg_micro_arr.count(); ++i) {
+            if (i == 0) {
+              cg_micro_cnt_arr_.at(0) += cg_micro_arr.at(0);
+            } else if (OB_FAIL(cg_micro_cnt_arr_.push_back(cg_micro_arr.at(i)))) {
+              LOG_WARN("failed to push back micro cnt", K(ret));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(cg_micro_arr), K(cg_micro_cnt_arr_));
+        }
+
       } else {
         for (int64_t i = 0; i < cg_micro_arr.count(); ++i) {
           cg_micro_cnt_arr_.at(i) += cg_micro_arr.at(i);
