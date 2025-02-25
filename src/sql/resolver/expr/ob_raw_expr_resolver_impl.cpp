@@ -437,6 +437,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                                   | (type_val[0] & 0x000000000000ffff);
                     val.set_int(v);
                     need_set = false;
+                  } else if (final_type.is_associative_array_type()) {
+                    c_expr->set_udt_id(final_type.get_user_type_id());
                   } else {
                     ret = OB_NOT_SUPPORTED;
                     LOG_WARN("cast composite only support udt or basic type", K(ret), K(access_idxs));
@@ -7096,6 +7098,35 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
         }
       }
       break;
+    case T_FUN_SYS_CAST: {
+      ObRawExpr* param0 = NULL;
+      ObRawExpr* param1 = NULL;
+      if (2 != func_expr.get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param count", K(ret), K(func_expr.get_param_count()));
+      } else if (OB_ISNULL(param0 = func_expr.get_param_expr(0)) || OB_ISNULL(param1 = func_expr.get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param is unexpected null", K(ret), K(param0), K(param1));
+      } else {
+        const ObObj &param = param1->get_result_type().get_param();
+        ParseNode parse_node;
+        parse_node.value_ = param.get_int();
+        ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+        if (ob_is_extend(obj_type) && OB_NOT_NULL(ctx_.secondary_namespace_)) {
+          const pl::ObUserDefinedType *user_type = NULL;
+          if (OB_FAIL(ctx_.secondary_namespace_->get_pl_data_type_by_id(param1->get_udt_id(), user_type))) {
+            LOG_WARN("failed to get pl data type by id", K(ret), K(param1->get_udt_id()));
+          } else if (OB_ISNULL(user_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null user_type", K(ret));
+          } else if (T_NULL != param0->get_expr_type() && user_type->is_associative_array_type()) {
+            ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+            LOG_WARN("invalid expr cast to associative array", K(ret), K(param0->get_expr_type()));
+          }
+        }
+      }
+      break;
+    }
     default:
       break;
   }

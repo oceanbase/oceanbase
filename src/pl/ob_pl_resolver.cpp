@@ -9933,6 +9933,85 @@ bool ObPLResolver::is_json_type_compatible(const ObUserDefinedType *actual_param
 #endif
 }
 
+int ObPLResolver::check_composite_cast(const ObPLINS &ns,
+                                       ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is NULL", K(ret));
+  } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+    ObRawExpr *src = expr->get_param_expr(0);
+    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr->get_param_expr(1));
+    uint64_t udt_id = expr->get_param_expr(1)->get_udt_id();
+    ObObj param;
+    ParseNode parse_node;
+    ObObjType obj_type;
+    CK (OB_NOT_NULL(src), OB_NOT_NULL(const_expr));
+    CK (expr->get_param_expr(1)->is_const_raw_expr());
+    OX (param = const_expr->get_value());
+    OX (parse_node.value_ = param.get_int());
+    OX (obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]));
+    if (OB_FAIL(ret)) {
+    } else if (T_REF_QUERY == src->get_expr_type() && static_cast<ObQueryRefRawExpr *>(src)->is_multiset()) {
+      // cast(multiset(...) as udt)
+      if (ObExtendType != obj_type || OB_INVALID_ID == udt_id) {
+        ret = OB_ERR_INVALID_MULTISET;
+        LOG_WARN("MULTISET expression not allowed", K(ret));
+      } else {
+        const ObUserDefinedType *dst_udt = NULL;
+        OZ (ns.get_user_type(udt_id, dst_udt));
+        CK (OB_NOT_NULL(dst_udt));
+        if (OB_SUCC(ret) && dst_udt->is_collection_type()) {
+          ret = OB_ERR_INVALID_CAST_UDT;
+          LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
+        }
+      }
+    } else if (ObExtendType == obj_type
+               && OB_INVALID_ID != udt_id
+               && !(src->get_expr_type() == T_QUESTIONMARK ||
+              (udt_id == T_OBJ_XML && src->get_expr_type() == T_FUN_SYS_CAST
+              && src->get_param_expr(0)->get_expr_type() == T_QUESTIONMARK))) {
+      if (ObNullType == src->get_result_type().get_type()) {
+        // do nothing
+      } else if (src->get_result_type().is_user_defined_sql_type() ||
+                 (src->get_result_type().is_geometry() && is_oracle_mode() && udt_id == T_OBJ_SDO_GEOMETRY)) {
+        // allow pl udt cast to sql udt type
+        // allow oracle gis cast to pl extend
+      } else if (ObExtendType != src->get_result_type().get_type()) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid cast a normal type to udt", K(ret));
+      } else if (udt_id == src->get_udt_id()) {
+        // do nothing
+      } else {
+        const ObUserDefinedType *src_udt = NULL;
+        const ObUserDefinedType *dst_udt = NULL;
+        OZ (ns.get_user_type(src->get_udt_id(), src_udt));
+        OZ (ns.get_user_type(udt_id, dst_udt));
+        CK (OB_NOT_NULL(src_udt), OB_NOT_NULL(dst_udt));
+        if (OB_SUCC(ret)) {
+          if (src_udt->is_collection_type() && dst_udt->is_collection_type()) {
+            const ObCollectionType *src_coll_type = static_cast<const ObCollectionType*>(src_udt);
+            const ObCollectionType *dst_coll_type = static_cast<const ObCollectionType*>(dst_udt);
+            if (!(src_coll_type->get_element_type().get_obj_type() == dst_coll_type->get_element_type().get_obj_type()
+                && (!src_coll_type->get_element_type().is_obj_type() ? src_coll_type->get_element_type().get_user_type_id() == dst_coll_type->get_element_type().get_user_type_id() : true))) {
+              ret = OB_ERR_INVALID_TYPE_FOR_OP;
+              LOG_WARN("collection to cast has different elements", K(ret), K(src_coll_type->get_element_type()), K(dst_coll_type->get_element_type()));
+            }
+          } else {
+            ret = OB_ERR_INVALID_CAST_UDT;
+            LOG_WARN("src or dst type can not cast", K(ret), K(src_udt->is_collection_type()), K(dst_udt->is_collection_type()));
+          }
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+    OZ (SMART_CALL(check_composite_cast(ns, expr->get_param_expr(i))));
+  }
+  return ret;
+}
+
 int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
                                              uint64_t actual_param_type_id,
                                              uint64_t formal_param_type_id,
@@ -10186,6 +10265,9 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
     OZ (enum_set_wrapper.analyze_expr(expr));
   }
   OZ (formalize_expr(*expr));
+
+  // check expr cast composite
+  OZ (check_composite_cast(current_block_->get_namespace(), expr));
 
   // Step 4: check complex cast legal
   // 原来是step2，移动这里是因为result type需要deduce一把才能出来结果。
