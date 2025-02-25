@@ -677,6 +677,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
                 row_count_assigned_to_block += row_count_needed_to_block;
                 file_start += row_count_needed_to_block;
               }
+              if (splited_file_info.row_count_ + splited_file_info.row_start_ == splited_file_info.file_size_) {
+                splited_file_info.row_count_ = INT64_MAX;
+              }
               OZ (temp_block_files.push_back(splited_file_info));
             } else if (remaining_row_count_in_file > 0) {
               ObExternalFileInfo splited_file_info = sqc_files.at(file_idx);
@@ -687,6 +690,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
               if (remaining_row_count_in_file >= (1 - DROP_FACTOR) * row_count_needed_to_block) {
                 droped_row_count_on_last_loop = expected_row_count_to_block - row_count_assigned_to_block;
                 expected_row_count_to_block = row_count_assigned_to_block;
+              }
+              if (splited_file_info.row_count_ + splited_file_info.row_start_ == splited_file_info.file_size_) {
+                splited_file_info.row_count_ = INT64_MAX;
               }
               OZ (temp_block_files.push_back(splited_file_info));
             } else { //remaining_row_count_in_file == 0
