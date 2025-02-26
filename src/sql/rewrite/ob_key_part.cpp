@@ -1435,8 +1435,8 @@ int ObKeyPart::remove_in_params_vals(const ObIArray<int64_t> &val_idx)
   return ret;
 }
 
-int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
-                               bool contain_row, bool &is_bound_modified)
+int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, ObExecContext *exec_ctx,
+                             const int64_t cur_datetime, bool contain_row, bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   int64_t start_cmp = 0;
@@ -1444,10 +1444,10 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int
   if (OB_UNLIKELY(!is_normal_key())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, exec_ctx, pos_,
                                                normal_keypart_->start_, start_cmp, common::CO_LE, true))) {
     LOG_WARN("failed to try cast value type", K(ret));
-  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, pos_,
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, exec_ctx, pos_,
                                                normal_keypart_->end_, end_cmp, common::CO_LE, false))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
@@ -1479,8 +1479,9 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, const int
 }
 
 int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime,
-                              ObIAllocator &alloc, const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
-                              common::ObCmpOp cmp_op /* CO_EQ */, bool left_border /*true*/)
+                              ObIAllocator &alloc, ObExecContext *exec_ctx, const ObKeyPartPos &pos,
+                              ObObj &value, int64_t &cmp, common::ObCmpOp cmp_op /* CO_EQ */,
+                              bool left_border /*true*/)
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
@@ -1507,8 +1508,29 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, const int6
     expect_type.set_type(pos.column_type_.get_type());
     expect_type.set_collation_type(collation_type);
     expect_type.set_type_infos(&pos.get_enum_set_values());
+    if (pos.column_type_.is_enum_set_with_subschema()) {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec_ctx is NULL", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(
+            pos.column_type_, exec_ctx->get_my_session(), enum_set_meta))) {
+        LOG_WARN("fail to extrac enum set meta", K(ret));
+      } else {
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+      }
+      cast_ctx.exec_ctx_ = exec_ctx;
+    }
     EXPR_CAST_OBJ_V2(expect_type, tmp_start, dest_val);
     // to check if EXPR CAST losses number precise
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(dest_val)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cast failed.", K(ret));
+    } else if (ob_is_enumset_tc(expect_type.get_type())) {
+      const_cast<ObObj *>(dest_val)->set_scale(pos.column_type_.get_accuracy().get_scale());
+      const_cast<ObObj *>(dest_val)->set_subschema_id(pos.column_type_.get_subschema_id());
+    }
     ObObjType cmp_type = ObMaxType;
     if (OB_FAIL(ret)) {
       SQL_REWRITE_LOG(WARN, "cast obj to dest type failed", K(ret), K(value), K_(pos.column_type));

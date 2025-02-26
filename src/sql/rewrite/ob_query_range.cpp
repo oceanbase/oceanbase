@@ -1887,8 +1887,9 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
           }
         }
         if (OB_SUCC(ret) && out_key_part->is_normal_key() && !out_key_part->is_question_mark()) {
-          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, query_range_ctx_->cur_datetime_,
-                                                    contain_row_, is_bound_modified))) {
+          if (OB_FAIL(out_key_part->cast_value_type(dtc_params, query_range_ctx_->exec_ctx_,
+                                                    query_range_ctx_->cur_datetime_, contain_row_,
+                                                    is_bound_modified))) {
             LOG_WARN("cast keypart value type failed", K(ret));
           } else {
             // do nothing
@@ -2164,7 +2165,7 @@ int ObQueryRange::check_row_bound(ObKeyPart *key_part,
   } else if (!is_valid) {
     // do nothing
   } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
-                                               allocator_, key_part->pos_, const_val, cmp))) {
+                                               allocator_, query_range_ctx_->exec_ctx_, key_part->pos_, const_val, cmp))) {
     LOG_WARN("failed to cast value", K(ret));
   } else if (cmp != 0 || ob_obj_type_class(const_expr->get_data_type()) !=
                          ob_obj_type_class(key_part->pos_.column_type_.get_type())) {
@@ -3240,7 +3241,7 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
     int64_t cmp = 0;
     if (OB_FAIL(ret) || !is_val_valid) {
     } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
-                                                 allocator_, pos, val, cmp))) {
+                                                 allocator_, query_range_ctx_->exec_ctx_, pos, val, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp == 0) {
       val.set_collation_type(pos.column_type_.get_collation_type());
@@ -4100,7 +4101,7 @@ int ObQueryRange::set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is
 }
 
 
-int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part,
+int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
                                          const ObDataTypeCastParams &dtc_params, const int64_t cur_datetime)
 {
   int ret = OB_SUCCESS;
@@ -4110,7 +4111,7 @@ int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKey
   } else {
     int64_t cmp = 0;
     ObObj cast_obj = const_param;
-    if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, out_key_part->pos_, cast_obj, cmp))) {
+    if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, cur_datetime, allocator_, exec_ctx, out_key_part->pos_, cast_obj, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
     }
     if (OB_FAIL(ret) || cmp != 0) {
@@ -4172,7 +4173,7 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
         }
         always_true = true;
       } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, query_range_ctx_->cur_datetime_,
-                                                   allocator_, *key_pos, val, cmp))) {
+                                                   allocator_, exec_ctx, *key_pos, val, cmp))) {
         LOG_WARN("failed to try cast value type", K(ret));
       } else if (cmp != 0) {
         if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
@@ -4236,13 +4237,13 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
           ret = OB_SUCCESS;
           if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
             LOG_WARN("failed set normal key", K(ret));
-          } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
+          } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, exec_ctx, dtc_params, cur_datetime))) {
             LOG_WARN("fail to get member of keyparts", K(ret));
           } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
             LOG_WARN("fail to push keypart", K(ret));
           }
           break;
-        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params, cur_datetime))) {
+        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, exec_ctx, dtc_params, cur_datetime))) {
           LOG_WARN("fail to get member of keyparts", K(ret));
         } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
           LOG_WARN("fail to push keypart", K(ret));
@@ -4284,7 +4285,7 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
       } else if (OB_NOT_NULL(query_range_ctx_)) {
         query_range_ctx_->cur_expr_is_precise_ = false;
       }
-    } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params, cur_datetime))) {
+    } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, exec_ctx, dtc_params, cur_datetime))) {
       LOG_WARN("fail to get member of keyparts", K(ret));
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
@@ -4346,7 +4347,7 @@ int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, c
           if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
             LOG_WARN("failed set normal key", K(ret));
           }
-        } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params,
+        } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, exec_ctx, dtc_params,
           exec_ctx->get_physical_plan_ctx()->get_cur_time().get_datetime()))) {
           LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
         }
@@ -6958,7 +6959,7 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
         //fast cast with integer value
         cur_val->set_meta_type(cur->pos_.column_type_);
         new(end + i) ObObj(*cur_val);
-      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, dtc_params,
+      } else if (OB_FAIL(cold_cast_cur_node(cur, allocator, exec_ctx, dtc_params,
                                             cur_datetime, *cur_val, always_false))) {
         LOG_WARN("cold fill cur node failed", K(ret));
       } else if (OB_LIKELY(!always_false)) {
@@ -7009,6 +7010,7 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
 
 OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
                                                  ObIAllocator &allocator,
+                                                 ObExecContext &exec_ctx,
                                                  const ObDataTypeCastParams &dtc_params,
                                                  const int64_t cur_datetime,
                                                  ObObj &cur_val,
@@ -7028,6 +7030,16 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
     expect_type.set_type(cur->pos_.column_type_.get_type());
     expect_type.set_collation_type(cur->pos_.column_type_.get_collation_type());
     expect_type.set_type_infos(&cur->pos_.get_enum_set_values());
+    if (cur->pos_.column_type_.is_enum_set_with_subschema()) {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(
+            cur->pos_.column_type_, exec_ctx.get_my_session(), enum_set_meta))) {
+        LOG_WARN("fail to extrac enum set meta", K(ret));
+      } else {
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+      }
+      cast_ctx.exec_ctx_ = &exec_ctx;
+    }
     ObAccuracy res_acc;
     if (cur->pos_.column_type_.is_decimal_int()) {
       res_acc = cur->pos_.column_type_.get_accuracy();
@@ -7047,8 +7059,9 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
     } else if (OB_ISNULL(dest_val)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cast failed.", K(ret));
-    } else if (ob_is_double_tc(expect_type.get_type())) {
+    } else if (ob_is_double_tc(expect_type.get_type()) || ob_is_enumset_tc(expect_type.get_type())) {
       const_cast<ObObj *>(dest_val)->set_scale(cur->pos_.column_type_.get_accuracy().get_scale());
+      const_cast<ObObj *>(dest_val)->set_subschema_id(cur->pos_.column_type_.get_subschema_id());
     }
     if (OB_SUCC(ret)) { // 下面这个比较是目的是检查上面的cast有没有丢失数值的精度
       int64_t cmp = 0;
@@ -7824,7 +7837,7 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
   return ret;
 }
 
-#define CAST_VALUE_TYPE(expect_type, column_type, start, include_start, end, include_end, acc) \
+#define CAST_VALUE_TYPE(expect_type, exec_ctx, column_type, start, include_start, end, include_end, acc) \
 if (OB_SUCC(ret) ) { \
   ObObj cast_obj; \
   const ObObj *dest_val = NULL; \
@@ -7845,6 +7858,7 @@ if (OB_SUCC(ret) ) { \
       }\
     }\
     ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, cm, expect_type.get_collation_type()); \
+    cast_ctx.exec_ctx_ = &exec_ctx; \
     if (ObDecimalIntType == expect_type.get_type()) {\
       cast_ctx.res_accuracy_ = &acc;\
     }\
@@ -7855,8 +7869,9 @@ if (OB_SUCC(ret) ) { \
     } else if (OB_ISNULL(dest_val)) { \
       ret = OB_ERR_UNEXPECTED; \
       LOG_WARN("dest_val is null.", K(ret)); \
-    } else if (ob_is_double_tc(expect_type.get_type())) { \
+    } else if (ob_is_double_tc(expect_type.get_type()) || ob_is_enumset_tc(expect_type.get_type())) { \
       const_cast<ObObj *>(dest_val)->set_scale(column_type.get_accuracy().get_scale()); \
+      const_cast<ObObj *>(dest_val)->set_subschema_id(column_type.get_subschema_id()); \
     } \
     if (OB_SUCC(ret)) { /* 下面这个比较是目的是检查上面的cast有没有丢失数值的精度 */ \
       int64_t cmp = 0; \
@@ -7893,6 +7908,7 @@ if (OB_SUCC(ret) ) { \
         }\
       }\
       ObCastCtx cast_ctx(&allocator, &dtc_params, cur_datetime, cm, expect_type.get_collation_type()); \
+      cast_ctx.exec_ctx_ = &exec_ctx; \
       if (ObDecimalIntType == expect_type.get_type()) {\
         cast_ctx.res_accuracy_ = &acc;\
       }\
@@ -7900,8 +7916,9 @@ if (OB_SUCC(ret) ) { \
       EXPR_CAST_OBJ_V2(expect_type, tmp_end, dest_val); \
       if (OB_FAIL(ret)) { \
         LOG_WARN("cast obj to dest type failed", K(ret), K(end), K(expect_type)); \
-      } else if (ob_is_double_tc(expect_type.get_type())) { \
+      } else if (ob_is_double_tc(expect_type.get_type()) || ob_is_enumset_tc(expect_type.get_type())) { \
         const_cast<ObObj *>(dest_val)->set_scale(column_type.get_accuracy().get_scale()); \
+        const_cast<ObObj *>(dest_val)->set_subschema_id(column_type.get_subschema_id()); \
       } \
       if (OB_SUCC(ret)) { \
         int64_t cmp = 0; \
@@ -7946,8 +7963,18 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
     expect_type.set_type(cur->pos_.column_type_.get_type());
     expect_type.set_collation_type(cur->pos_.column_type_.get_collation_type());
     expect_type.set_type_infos(&cur->pos_.get_enum_set_values());
+    if (cur->pos_.column_type_.is_enum_set_with_subschema()) {
+      const ObEnumSetMeta *enum_set_meta = NULL;
+      if (OB_FAIL(ObRawExprUtils::extract_enum_set_meta(
+            cur->pos_.column_type_, exec_ctx.get_my_session(), enum_set_meta))) {
+        LOG_WARN("fail to extrac enum set meta", K(ret));
+      } else {
+        expect_type.set_type_infos(enum_set_meta->get_str_values());
+      }
+    }
     ObIAllocator &allocator = search_state.allocator_;
-    if (cur->normal_keypart_->always_false_) {
+    if (OB_FAIL(ret)) {
+    } else if (cur->normal_keypart_->always_false_) {
       start.set_max_value();
       end.set_min_value();
       include_start = false;
@@ -8015,7 +8042,7 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
       //physical rowid range no need cast, it's will be transformed in table scan phase.
     } else {
       ObAccuracy acc(cur->pos_.column_type_.get_accuracy());
-      CAST_VALUE_TYPE(expect_type, cur->pos_.column_type_, start, include_start, end, include_end, acc);
+      CAST_VALUE_TYPE(expect_type, exec_ctx, cur->pos_.column_type_, start, include_start, end, include_end, acc);
     }
     if (OB_SUCC(ret)) {
       search_state.depth_ = static_cast<int>(cur->pos_.offset_ - skip_offset);
@@ -8372,6 +8399,7 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
         } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params,
                                                      exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
                                                      allocator_,
+                                                     &exec_ctx,
                                                      cur_param->pos_,
                                                      val,
                                                      cmp))) {
@@ -8397,7 +8425,8 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
   if (OB_SUCC(ret)) {
     if (root->is_phy_rowid_key_part() || root->is_in_key()) {
       ////physical rowid no need cast, it's will be transformed in table scan phase.
-    } else if (OB_FAIL(root->cast_value_type(dtc_params, exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
+    } else if (OB_FAIL(root->cast_value_type(dtc_params, &exec_ctx,
+                                  exec_ctx.get_physical_plan_ctx()->get_cur_time().get_datetime(),
                                              contain_row_, is_bound_modified))) {
       LOG_WARN("cast value type failed", K(ret));
     }
