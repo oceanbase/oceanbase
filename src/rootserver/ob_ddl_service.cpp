@@ -4566,8 +4566,9 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
     bool is_column_group_store = false;
     bool need_process_cs_replica = false;
     // oracle drop column instant will be drop column instant
-    if (!(is_oracle_mode && ObDDLType::DDL_DROP_COLUMN == ddl_type)
-        && OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
+    if (is_oracle_mode && ObDDLType::DDL_DROP_COLUMN == ddl_type) {
+      // ignore
+    } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
       LOG_WARN("fail to check schema is column group store", K(ret));
     } else if (is_column_group_store) {
       ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
