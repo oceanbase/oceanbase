@@ -970,7 +970,7 @@ int ObWrCollector::collect_sqlstat()
                   "    or userio_wait_delta_rank <= %ld       "
                   "    or physical_read_requests_delta_rank <= %ld       "
                   "    or executions_delta_rank <= %ld  ) "
-                  "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port",
+                  "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port, plan_type, module, action, parsing_db_id, parsing_db_name, parsing_user_id",
                   query_timeout, tenant_id, tenant_id, topnsql, topnsql, topnsql, topnsql, topnsql ))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
       } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
@@ -1416,7 +1416,7 @@ int ObWrCollector::collect_sql_plan()
                    "cpu_cost, io_cost, access_predicates, filter_predicates, startup_predicates, projection, special_predicates, "
                    "qblock_name, remarks, other_xml "
                    "from __all_virtual_sql_plan where tenant_id=%ld and sql_id in (select distinct sql_id from "
-                   "oceanbase.__all_virtual_wr_sqlstat where tenant_id = %ld and snap_id = %ld)  group by sql_id",
+                   "oceanbase.__all_virtual_wr_sqlstat where tenant_id = %ld and snap_id = %ld) ",
                    query_timeout, tenant_id, tenant_id, snap_id_))) {
       LOG_WARN("failed to assign sqlplan query string", KR(ret));
     } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, tenant_id, sql.ptr()))) {
