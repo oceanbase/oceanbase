@@ -1598,7 +1598,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                 primary_key_set_in_heap_table = true;
                 if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i))) {
                   SQL_RESV_LOG(WARN, "add heap table pk to index list failed", K(ret));
-                } else if (OB_FALSE_IT(column.set_column_flags(HEAP_TABLE_PRIMARY_KEY_FLAG))) {
+                } else if (OB_FALSE_IT(column.add_column_flag(HEAP_TABLE_PRIMARY_KEY_FLAG))) {
                 } else if (OB_FALSE_IT(column.set_rowkey_position(0))) {
                 } else { /*do nothing*/ }
               } else {
@@ -3873,7 +3873,7 @@ int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNod
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support primary key is vector column yet", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
-          } else if (OB_FALSE_IT(col->set_column_flags(HEAP_TABLE_PRIMARY_KEY_FLAG))
+          } else if (OB_FALSE_IT(col->add_column_flag(HEAP_TABLE_PRIMARY_KEY_FLAG))
                   || OB_FALSE_IT(col->set_nullable(false))
                   || OB_FALSE_IT(col->set_rowkey_position(0))){
           }  else if (!col->is_string_type()) {
