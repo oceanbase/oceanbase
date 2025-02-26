@@ -798,8 +798,9 @@ void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
   if (OB_UNLIKELY(obj->is_large_)) {
     free_block(block);
   } else {
+    int64_t max_cnt = block->max_cnt_;
     int64_t freelist_cnt = block->freelist_.push(obj);
-    if (OB_LIKELY(1 != freelist_cnt && block->max_cnt_ != freelist_cnt)) {
+    if (OB_LIKELY(1 != freelist_cnt && max_cnt != freelist_cnt)) {
       return;
     }
     const int sc_idx = block->sc_idx_;
@@ -816,7 +817,7 @@ void ObjectSetV2::do_free_object(AObject *obj, ABlock *block)
         } else if (ABlock::EMPTY == block->status_ ) {
           need_free = true;
         }
-      } else if (block->max_cnt_ == freelist_cnt) {
+      } else if (max_cnt == freelist_cnt) {
         if (ABlock::FULL == block->status_) {
           block->status_ = ABlock::EMPTY;
         } else if (ABlock::PARTITIAL == block->status_) {
