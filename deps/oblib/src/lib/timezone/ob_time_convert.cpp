@@ -4986,12 +4986,19 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
           case ObDFMFlag::FF8:
           case ObDFMFlag::FF9: {
             int64_t scale = elem.elem_flag_ - ObDFMFlag::FF1 + 1;
-            int adjust_max_scale = (lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
-                    ? MAX_SCALE_FOR_ORACLE_TEMPORAL
-                    : MAX_SCALE_FOR_TEMPORAL;
-            ret = data_fmt_nd(buf, buf_len, pos, scale,
+            if ((lib::is_mysql_mode() && !(HAS_TYPE_ORACLE(ob_time.mode_))) &&
+                elem.elem_flag_ > ObDFMFlag::FF6) {
+              ret = OB_INVALID_DATE_FORMAT;
+              LOG_WARN("max scale of timestamp in mysql mode is 6", K(elem.elem_flag_));
+            } else {
+              int adjust_max_scale =
+                  (lib::is_oracle_mode() || HAS_TYPE_ORACLE(ob_time.mode_))
+                      ? MAX_SCALE_FOR_ORACLE_TEMPORAL
+                      : MAX_SCALE_FOR_TEMPORAL;
+              ret = data_fmt_nd(buf, buf_len, pos, scale,
                                 ob_time.parts_[DT_USEC] /
                                     power_of_10[adjust_max_scale - scale]);
+            }
             break;
           }
           case ObDFMFlag::HH:
