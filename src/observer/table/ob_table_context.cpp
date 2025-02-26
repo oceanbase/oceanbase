@@ -2456,7 +2456,7 @@ const ObDASScanCtDef* ObTableApiScanCtDef::get_lookup_ctdef() const
   const ObDASBaseCtDef *attach_ctdef = attach_spec_.attach_ctdef_;
   if (nullptr == attach_ctdef) {
     lookup_ctdef = lookup_ctdef_;
-  } else if (DAS_OP_DOC_ID_MERGE == attach_ctdef->op_type_) {
+  } else if (DAS_OP_DOMAIN_ID_MERGE == attach_ctdef->op_type_) {
     OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
     if (OB_NOT_NULL(lookup_ctdef_)) {
       lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_ctdef->children_[0]);
@@ -2465,7 +2465,7 @@ const ObDASScanCtDef* ObTableApiScanCtDef::get_lookup_ctdef() const
     OB_ASSERT(2 == attach_ctdef->children_cnt_ && attach_ctdef->children_ != nullptr);
     if (DAS_OP_TABLE_SCAN == attach_ctdef->children_[1]->op_type_) {
       lookup_ctdef = static_cast<ObDASScanCtDef*>(attach_ctdef->children_[1]);
-    } else if (DAS_OP_DOC_ID_MERGE == attach_ctdef->children_[1]->op_type_) {
+    } else if (DAS_OP_DOMAIN_ID_MERGE == attach_ctdef->children_[1]->op_type_) {
       ObDASDocIdMergeCtDef *doc_id_merge_ctdef = static_cast<ObDASDocIdMergeCtDef *>(attach_ctdef->children_[1]);
       OB_ASSERT(2 == doc_id_merge_ctdef->children_cnt_ && doc_id_merge_ctdef->children_ != nullptr);
       lookup_ctdef = static_cast<ObDASScanCtDef*>(doc_id_merge_ctdef->children_[0]);

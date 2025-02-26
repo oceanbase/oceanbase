@@ -2338,14 +2338,8 @@ int ObTableDmlCgService::generate_tsc_ctdef(ObTableCtx &ctx,
     LOG_WARN("fail to get column ids", K(ret));
   } else if (OB_FAIL(tsc_ctdef.access_column_ids_.assign(column_ids))) {
     LOG_WARN("fail to assign column ids", K(ret), K(column_ids));
-  } else if (need_doc_id) {
-    uint64_t rowkey_doc_col_id = OB_INVALID_ID;
-    uint64_t ft_col_id = OB_INVALID_ID;
-    if (OB_FAIL(table_schema->get_fulltext_column_ids(rowkey_doc_col_id, ft_col_id))) {
-      LOG_WARN("fail to get fulltext column ids", K(ret));
-    } else {
-      tsc_ctdef.doc_id_idx_ = table_schema->get_column_idx(rowkey_doc_col_id);
-    }
+  } else if (need_doc_id && OB_FAIL(ObTableFtsUtil::init_fts_domain_info(ctx, column_ids, tsc_ctdef))) {
+    LOG_WARN("fail to fts domain info", K(ret), K(column_ids));
   }
 
   if (OB_SUCC(ret)) {
@@ -3395,21 +3389,8 @@ int ObTableTscCgService::extract_select_output_column_ids(const ObTableCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
   } else if (ctx.is_tsc_with_doc_id() && index_schema->is_user_table()) {
-    uint64_t doc_id_col_id = OB_INVALID_ID;
-    uint64_t ft_col_id = OB_INVALID_ID;
-    if (OB_FAIL(index_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id))) {
-      LOG_WARN("fail to get fulltext column ids", K(ret));
-    } else if (OB_INVALID_ID == doc_id_col_id) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get doc id column", K(ret));
-    } else {
-      bool is_found = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < tsc_out_cols.count() && !is_found; ++i) {
-        if (tsc_out_cols.at(i) == doc_id_col_id) {
-          das_tsc_ctdef.doc_id_idx_ = i;
-          is_found = true;
-        }
-      }
+    if (OB_FAIL(ObTableFtsUtil::init_fts_domain_info(ctx, tsc_out_cols, das_tsc_ctdef))) {
+      LOG_WARN("fail to fts domain info", K(ret), K(tsc_out_cols));
     }
   }
   LOG_DEBUG("[table cg service] extract das output column ids", K(ret), K(table_id),
@@ -3567,7 +3548,7 @@ int ObTableTscCgService::generate_tsc_ctdef(const ObTableCtx &ctx,
   const int64_t filter_exprs_cnt = ctx.get_filter_exprs().count();
   bool query_cs_replica = false;
   ObDASBaseCtDef *root_ctdef = nullptr;
-  ObDASDocIdMergeCtDef *doc_id_merge_ctdef = nullptr;
+  ObDASDomainIdMergeCtDef *doc_id_merge_ctdef = nullptr;
   bool need_attach = false;
   // init scan_ctdef_.ref_table_id_
   // when scan primary index, index_table_id == ref_table_id

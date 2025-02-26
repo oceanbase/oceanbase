@@ -451,12 +451,16 @@ int ObTableFtsDmlCgService::generate_scan_with_doc_id_ctdef_if_need(ObTableCtx &
   int ret = OB_SUCCESS;
 
   bool need_doc_id_merge_iter = ctx.has_fts_index();
+  ObArray<int64_t> domain_types;
+  ObArray<uint64_t> domain_tids;
   ObArray<ObExpr*> result_outputs;
-  ObDASDocIdMergeCtDef *doc_id_merge_ctdef = nullptr;
+  ObDASDomainIdMergeCtDef *doc_id_merge_ctdef = nullptr;
   ObDASScanCtDef *rowkey_doc_scan_ctdef = nullptr;
   if (!need_doc_id_merge_iter) {
     // just skip, nothing to do
-  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_DOC_ID_MERGE, allocator, doc_id_merge_ctdef))) {
+  } else if (OB_FAIL(ObTableFtsUtil::check_domain_index(ctx, domain_types, domain_tids))) {
+    LOG_WARN("fail to check need domain id merge iter", K(ret));
+  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_DOMAIN_ID_MERGE, allocator, doc_id_merge_ctdef))) {
     LOG_WARN("fail to allocate to doc id merge ctdef", K(ret));
   } else if (OB_ISNULL(doc_id_merge_ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &allocator, 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -468,9 +472,12 @@ int ObTableFtsDmlCgService::generate_scan_with_doc_id_ctdef_if_need(ObTableCtx &
   } else if (OB_UNLIKELY(result_outputs.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, result outputs is nullptr", K(ret));
+  } else if (OB_FAIL(doc_id_merge_ctdef->domain_types_.prepare_allocate(1))) {
+    LOG_WARN("fail to allocate domain types array memory", K(ret));
   } else {
     doc_id_merge_ctdef->children_cnt_ = 2;
     doc_id_merge_ctdef->children_[0] = &scan_ctdef;
+    doc_id_merge_ctdef->domain_types_.at(0) = domain_types.at(0);
     doc_id_merge_ctdef->children_[1] = rowkey_doc_scan_ctdef;
     if (OB_FAIL(doc_id_merge_ctdef->result_output_.assign(result_outputs))) {
       LOG_WARN("fail to assign result output", K(ret));
@@ -1135,19 +1142,25 @@ int ObTableFtsTscCgService::generate_das_scan_ctdef_with_doc_id(ObIAllocator &al
                                                                const ObTableCtx &ctx,
                                                                ObTableApiScanCtDef &tsc_ctdef,
                                                                ObDASScanCtDef *scan_ctdef,
-                                                               ObDASDocIdMergeCtDef *&doc_id_merge_ctdef)
+                                                               ObDASDomainIdMergeCtDef *&doc_id_merge_ctdef)
 {
   int ret = OB_SUCCESS;
   ObArray<ObExpr*> result_outputs;
   ObDASScanCtDef *rowkey_doc_scan_ctdef = nullptr;
+  ObArray<int64_t> domain_types;
+  ObArray<uint64_t> domain_tids;
   if (OB_ISNULL(scan_ctdef)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(scan_ctdef));
-  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_DOC_ID_MERGE, alloc, doc_id_merge_ctdef))) {
+  } else if (OB_FAIL(ObTableFtsUtil::check_domain_index(ctx, domain_types, domain_tids))) {
+    LOG_WARN("fail to check need domain id merge iter", K(ret));
+  } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_DOMAIN_ID_MERGE, alloc, doc_id_merge_ctdef))) {
     LOG_WARN("fail to allocate to doc id merge ctdef", K(ret));
   } else if (OB_ISNULL(doc_id_merge_ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &alloc, 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate doc id merge ctdef child array memory", K(ret));
+  } else if (OB_FAIL(doc_id_merge_ctdef->domain_types_.prepare_allocate(1))) {
+    LOG_WARN("fail to allocate domain types array memory", K(ret));
   } else if (OB_FAIL(generate_rowkey_doc_ctdef(alloc, ctx, tsc_ctdef, rowkey_doc_scan_ctdef))) {
     LOG_WARN("fail to generate rowkey doc ctdef", K(ret));
   } else if (OB_FAIL(result_outputs.assign(scan_ctdef->result_output_))) {
@@ -1158,6 +1171,7 @@ int ObTableFtsTscCgService::generate_das_scan_ctdef_with_doc_id(ObIAllocator &al
   } else {
     doc_id_merge_ctdef->children_cnt_ = 2;
     doc_id_merge_ctdef->children_[0] = scan_ctdef;
+    doc_id_merge_ctdef->domain_types_.at(0) = domain_types.at(0);
     doc_id_merge_ctdef->children_[1] = rowkey_doc_scan_ctdef;
     if (OB_FAIL(doc_id_merge_ctdef->result_output_.assign(result_outputs))) {
       LOG_WARN("fail to assign result output", K(ret));
@@ -1271,6 +1285,85 @@ int ObTableFtsTscCgService::extract_doc_rowkey_exprs(const ObTableCtx &ctx,
       }
     } // end for
   }
+  return ret;
+}
+
+int ObTableFtsUtil::check_domain_index(const ObTableCtx &ctx,
+                                       ObIArray<int64_t> &domain_types,
+                                       ObIArray<uint64_t> &domain_tids)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = ctx.get_table_schema();
+  domain_types.reset();
+  domain_tids.reset();
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(table_schema));
+  } else if (OB_FAIL(ObDomainIdUtils::check_has_domain_index(table_schema, domain_types, domain_tids))) {
+    LOG_WARN("failed to check has domain index", K(ret));
+  } else if (domain_types.count() != domain_tids.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected domain types and tids", K(ret), K(domain_types), K(domain_tids));
+  } else if (domain_types.count() != 1 ||
+             domain_types.at(0) != ObDomainIdUtils::ObDomainIDType::DOC_ID) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("has unsupported domain index types", K(ret), K(domain_types));
+  }
+  return ret;
+}
+
+int ObTableFtsUtil::init_fts_domain_info(const ObTableCtx &ctx,
+                                         const ObIArray<uint64_t> &tsc_out_cols,
+                                         ObDASScanCtDef &das_tsc_ctdef)
+{
+  int ret = OB_SUCCESS;
+  uint64_t doc_id_col_id = OB_INVALID_ID;
+  uint64_t ft_col_id = OB_INVALID_ID;
+  const ObTableSchema *rowkey_doc_schema = nullptr;
+  const ObTableFtsCtx *fts_ctx = ctx.get_fts_ctx();
+  const ObTableSchema *table_schema = ctx.get_table_schema();
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is NULL", K(ret));
+  } else if (OB_ISNULL(fts_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fts_ctx is NULL", K(ret));
+  } else if (OB_ISNULL(rowkey_doc_schema = fts_ctx->get_rowkey_doc_schema())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey doc schema is NULL", K(ret));
+  } else if (OB_FAIL(das_tsc_ctdef.domain_tids_.init(1))) {
+    LOG_WARN("fail to init domain tid", K(ret));
+  } else if (OB_FAIL(das_tsc_ctdef.domain_types_.init(1))) {
+    LOG_WARN("fail to init domain type", K(ret));
+  } else if (OB_FAIL(das_tsc_ctdef.domain_id_idxs_.init(1))) {
+    LOG_WARN("fail to init domain id idx", K(ret));
+  } else if (OB_FAIL(das_tsc_ctdef.domain_tids_.push_back(rowkey_doc_schema->get_table_id()))) {
+    LOG_WARN("fail to push back table id", K(ret));
+  } else if (OB_FAIL(das_tsc_ctdef.domain_types_.push_back(ObDomainIdUtils::ObDomainIDType::DOC_ID))) {
+    LOG_WARN("fail to push back domain type", K(ret));
+  } else if (OB_FAIL(table_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id))) {
+      LOG_WARN("fail to get fulltext column ids", K(ret));
+  } else if (OB_INVALID_ID == doc_id_col_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get doc id column", K(ret));
+  } else {
+    bool is_found = false;
+    DomainIdxs domain_idx;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tsc_out_cols.count() && !is_found; ++i) {
+      if (tsc_out_cols.at(i) == doc_id_col_id) {
+        if (OB_FAIL(domain_idx.push_back(i))) {
+          LOG_WARN("fail to push back domain idx", K(ret));
+        }
+        is_found = true;
+      }
+    }
+    if (is_found && OB_SUCC(ret)) {
+      if (OB_FAIL(das_tsc_ctdef.domain_id_idxs_.push_back(domain_idx))) {
+        LOG_WARN("fail to push back domain idx", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -71,7 +71,7 @@ public:
                                                  const ObTableCtx &ctx,
                                                  ObTableApiScanCtDef &tsc_ctdef,
                                                  ObDASScanCtDef *scan_ctdef,
-                                                 ObDASDocIdMergeCtDef *&doc_id_merge_ctdef);
+                                                 ObDASDomainIdMergeCtDef *&doc_id_merge_ctdef);
   static int get_fts_schema(const ObTableCtx &ctx, uint64_t table_id, const ObTableSchema *&index_schema);
   static int extract_text_ir_access_columns(const ObTableCtx &ctx,
                                             ObDASScanCtDef &scan_ctdef,
@@ -102,6 +102,17 @@ private:
                                        ObDASScanCtDef *&rowkey_doc_scan_ctdef);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableFtsTscCgService);
+};
+
+class ObTableFtsUtil
+{
+public:
+  static int check_domain_index(const ObTableCtx &ctx,
+                                ObIArray<int64_t> &domain_types,
+                                ObIArray<uint64_t> &domain_tids);
+  static int init_fts_domain_info(const ObTableCtx &ctx,
+                                  const ObIArray<uint64_t> &tsc_out_cols,
+                                  ObDASScanCtDef &das_tsc_ctdef);
 };
 
 } // end namespace table

@@ -215,7 +215,7 @@ int ObTableApiScanExecutor::pushdown_attach_task_to_das(ObDASScanOp &target_op)
   ObDASAttachRtInfo *attach_rtinfo = tsc_rtdef_.attach_rtinfo_;
   const ObTableApiScanCtDef &tsc_ctdef = scan_spec_.get_ctdef();
   if (tb_ctx_.is_global_index_scan() && nullptr != tsc_ctdef.lookup_ctdef_
-      && DAS_OP_DOC_ID_MERGE == tsc_ctdef.attach_spec_.attach_ctdef_->op_type_) {
+      && DAS_OP_DOMAIN_ID_MERGE == tsc_ctdef.attach_spec_.attach_ctdef_->op_type_) {
     // just skip, and doc id merge will be attach into global lookup iter.
   } else if (OB_FAIL(target_op.reserve_related_buffer(attach_rtinfo->related_scan_cnt_))) {
     LOG_WARN("reserve related buffer failed", K(ret), K(attach_rtinfo->related_scan_cnt_));
