@@ -846,7 +846,7 @@ OB_INLINE int ObExprDateFormat::calc_year_month(COMMON_PART_FORMAT_FUNC_ARG_DECL
   int ret = OB_SUCCESS;
   IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
   if (std::is_same<IN_TYPE, ObMySQLDate>::value || std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
-    ret = ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time);
+    ret = ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ob_time, true);
     get_parts(ob_time);
   } else if (OB_FAIL(ObTimeConverter::parse_date_usec<IN_TYPE>(in_val, tz_offset,lib::is_oracle_mode(), date, usec))) {
     LOG_WARN("get date and usec from vec failed", K(ret));
