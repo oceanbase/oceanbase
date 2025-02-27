@@ -136,7 +136,7 @@ int ObExprArrayFirst::eval_array_first(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     bool found_res = false;
     for (uint32_t i = 0; i < arr_dim && !found_res && OB_SUCC(ret); i++) {
       ObSQLUtils::clear_expr_eval_flags(*expr.args_[0], ctx);
-      if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, src_arrs, i))) {
+      if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, src_arrs, expr.arg_cnt_ - 1, i))) {
         LOG_WARN("failed to set lambda para", K(ret), K(i));
       } else if (OB_FAIL(expr.args_[0]->eval(ctx, datum_val))) {
         LOG_WARN("failed to eval args", K(ret));

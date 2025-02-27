@@ -127,6 +127,7 @@ int ObExprArrayMapCommon::eval_src_arrays(const ObExpr &expr, ObEvalCtx &ctx, Ob
                                           ObIArrayType **arr_obj, uint32_t &arr_dim, bool &is_null_res)
 {
   int ret = OB_SUCCESS;
+  bool is_first_arr = true;
   for (int64_t i = 1; i < expr.arg_cnt_ && OB_SUCC(ret) && !is_null_res; i++) {
     ObDatum *datum = NULL;
     const uint16_t meta_id = expr.args_[i]->obj_meta_.get_subschema_id();
@@ -137,7 +138,8 @@ int ObExprArrayMapCommon::eval_src_arrays(const ObExpr &expr, ObEvalCtx &ctx, Ob
       is_null_res = true;
     } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, meta_id, datum->get_string(), arr_obj[i - 1]))) {
       LOG_WARN("construct array obj failed", K(ret));
-    } else if (arr_dim == 0) {
+    } else if (is_first_arr) {
+      is_first_arr = false;
       arr_dim = arr_obj[i - 1]->size();
     } else if (arr_dim != arr_obj[i - 1]->size()) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -148,7 +150,7 @@ int ObExprArrayMapCommon::eval_src_arrays(const ObExpr &expr, ObEvalCtx &ctx, Ob
 }
 
 int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tmp_allocator, ObExprArrayMapInfo *info,
-                                            ObIArrayType **arr_obj, uint32_t arr_dim,
+                                            ObIArrayType **arr_obj, uint32_t arr_obj_size, uint32_t arr_dim,
                                             ObExpr *lambda_expr, ObIArrayType *&lambda_arr)
 {
   int ret = OB_SUCCESS;
@@ -162,7 +164,7 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
   // fill the lambda array
   for (uint32_t i = 0; i < arr_dim && OB_SUCC(ret); i++) {
     ObSQLUtils::clear_expr_eval_flags(*lambda_expr, ctx);
-    if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, arr_obj, i))) {
+    if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, arr_obj, arr_obj_size, i))) {
       LOG_WARN("failed to set lambda para", K(ret), K(i));
     } else if (OB_FAIL(lambda_expr->eval(ctx, datum))) {
       LOG_WARN("failed to eval args", K(ret));
@@ -199,6 +201,7 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
                                           ObEvalCtx &ctx,
                                           ObExprArrayMapInfo *info,
                                           ObIArrayType **arr_obj,
+                                          uint32_t arr_obj_size,
                                           uint32_t idx)
 {
   int ret = OB_SUCCESS;
@@ -207,6 +210,12 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
     uint32_t para_idx = info->param_idx_[j];
     if (lambda_para == NULL) {
       // do nothing
+    } else if (para_idx >= arr_obj_size) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid para idx", K(ret), K(j), K(para_idx), K(arr_obj_size));
+    } else if (idx >= arr_obj[para_idx]->size()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid idx", K(ret), K(j), K(idx), K(arr_obj[para_idx]->size()));
     } else if (arr_obj[para_idx]->get_format() != ArrayFormat::Vector && arr_obj[para_idx]->is_null(idx)) {
       lambda_para->locate_datum_for_write(ctx).set_null();
     } else {
@@ -514,7 +523,7 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObExprArrayMapInfo *info = static_cast<ObExprArrayMapInfo *>(expr.extra_info_);
-  ObIArrayType *src_arrs[expr.arg_cnt_];
+  ObIArrayType *src_arrs[expr.arg_cnt_ - 1];
   uint32_t arr_dim = 0;
   ObIArrayType *lambda_arr = NULL;
   bool is_null_res = false;
@@ -528,7 +537,7 @@ int ObExprArrayMap::eval_array_map(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     LOG_WARN("failed to eval src arrays", K(ret));
   } else if (is_null_res) {
     // do nothing
-  } else if (OB_FAIL(eval_lambda_array(ctx, tmp_allocator, info, src_arrs, arr_dim, expr.args_[0], lambda_arr))) {
+  } else if (OB_FAIL(eval_lambda_array(ctx, tmp_allocator, info, src_arrs, expr.arg_cnt_ - 1, arr_dim, expr.args_[0], lambda_arr))) {
     LOG_WARN("failed to eval lambda array", K(ret));
   }
 

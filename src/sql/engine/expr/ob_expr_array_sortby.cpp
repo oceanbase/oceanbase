@@ -125,7 +125,7 @@ int ObExprArraySortby::eval_array_sortby(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_WARN("failed to eval src arrays", K(ret));
   } else if (is_null_res) {
     // do nothing
-  } else if (OB_FAIL(eval_lambda_array(ctx, tmp_allocator, info, src_arrs, arr_dim, expr.args_[0], lambda_arr))) {
+  } else if (OB_FAIL(eval_lambda_array(ctx, tmp_allocator, info, src_arrs, expr.arg_cnt_ - 1, arr_dim, expr.args_[0], lambda_arr))) {
     LOG_WARN("failed to eval lambda array", K(ret));
   } else if (OB_FAIL(lambda_arr->init())) {
     LOG_WARN("array init failed", K(ret));

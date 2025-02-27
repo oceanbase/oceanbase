@@ -67,12 +67,13 @@ protected:
   static int eval_src_arrays(const ObExpr &expr, ObEvalCtx &ctx, ObArenaAllocator &tmp_allocator,
                              ObIArrayType **arr_obj, uint32_t &arr_dim, bool &is_null_res);
   static int eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tmp_allocator, ObExprArrayMapInfo *info,
-                               ObIArrayType **arr_obj, uint32_t arr_dim,
+                               ObIArrayType **arr_obj, uint32_t arr_obj_size, uint32_t arr_dim,
                                ObExpr *lambda_expr, ObIArrayType *&lambda_arr);
   static int set_lambda_para(ObIAllocator &alloc,
                              ObEvalCtx &ctx,
                              ObExprArrayMapInfo *info,
                              ObIArrayType **arr_obj,
+                             uint32_t arr_obj_size,
                              uint32_t idx);
 
   int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth, ObArray<ObExpr *> &param_exprs) const;

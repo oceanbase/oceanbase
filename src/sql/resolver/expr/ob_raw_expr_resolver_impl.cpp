@@ -3653,10 +3653,16 @@ int ObRawExprResolverImpl::process_lambda_func_node(const ParseNode *node, ObRaw
       LOG_WARN("fail to replace lambda params", K(ret));
     } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr1)))) {
       LOG_WARN("resolve function child failed", K(ret));
-    } else if (sub_expr1->is_query_ref_expr()) {
+    } else if (!sub_expr1->is_const_raw_expr()
+               && !sub_expr1->is_const_or_param_expr()
+               && !sub_expr1->is_column_ref_expr()
+               && !sub_expr1->is_sys_func_expr()
+               && !sub_expr1->is_op_expr()
+               && !sub_expr1->is_var_expr()
+               && !sub_expr1->is_case_op_expr()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("query expr isn't supported in lambda function", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "query expr in lambda function");
+      LOG_WARN("expr isn't supported in lambda function", K(ret), K(sub_expr1->get_expr_class()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "expr in lambda function");
     } else if (OB_FAIL(func_expr->add_param_expr(sub_expr1))) {
       LOG_WARN("fail to add param expr to expr", K(ret));
     }
