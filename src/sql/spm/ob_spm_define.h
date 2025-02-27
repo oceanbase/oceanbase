@@ -351,10 +351,10 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t cache_node_empty_:               1;
       uint64_t spm_force_disable_:              1;
       uint64_t has_fixed_plan_to_check_:        1;
-      uint64_t need_spm_timeout_:               1;
-      uint64_t evolution_task_in_two_plan_set_: 1;
-      uint64_t baseline_exists_:                1;
-      uint64_t has_better_baseline_:            1;
+      uint64_t need_spm_timeout_:               1; // FARM COMPAT WHITELIST
+      uint64_t evolution_task_in_two_plan_set_: 1; // FARM COMPAT WHITELIST
+      uint64_t baseline_exists_:                1; // FARM COMPAT WHITELIST
+      uint64_t has_better_baseline_:            1; // FARM COMPAT WHITELIST
       uint64_t reserved_:                      55;
     };
   };
