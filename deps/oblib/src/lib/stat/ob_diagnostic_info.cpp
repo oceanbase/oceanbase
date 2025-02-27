@@ -277,6 +277,7 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
     desc.p1_ = ash_stat_.p1_;
     desc.p2_ = ash_stat_.p2_;
     desc.p3_ = ash_stat_.p3_;
+    desc.wait_time_ = curr_wait_.wait_time_;
     ash_stat_.fixup_last_stat(desc);
 
     ash_stat_.reset_event();

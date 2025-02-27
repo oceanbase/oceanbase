@@ -6893,7 +6893,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
       } else if (OB_FAIL(sql_string.append_fmt(
         "WITH session_data AS ( "
             " SELECT svr_ip, svr_port, program, module, action, sql_id, plan_hash, "
-                    "p1, p2, p3, count_weight, event_id "
+                    "p1, p2, p3, count_weight, event_id, time_waited "
             "FROM ( "
                 ))) {
           LOG_WARN("Failed to append top io sql");
@@ -6912,9 +6912,10 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
       } else if (sql_string.append_fmt(
         "sql_event_data AS ( "
           "SELECT svr_ip, svr_port, NULL AS program, NULL AS module, NULL AS action, sql_id, plan_hash, event_id, "
-                 "SUM(p1 * count_weight) AS  event_sum_p1, "
-                 "SUM(p2 * count_weight) AS  event_sum_p2, "
-                 "SUM(p3 * count_weight) AS  event_sum_p3, "
+                 "SUM(p1) AS  event_sum_p1, "
+                 "SUM(p2) AS  event_sum_p2, "
+                 "SUM(p3) AS  event_sum_p3, "
+                 "SUM(time_waited) AS  event_sum_time_waited, "
                  "SUM(count_weight) AS event_count, "
                  "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, sql_id, plan_hash "
                                     "ORDER BY SUM(count_weight) DESC) AS event_rank "
@@ -6930,6 +6931,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
                  "sum(event_sum_p1) AS sql_sum_p1, "
                  "sum(event_sum_p2) AS sql_sum_p2, "
                  "sum(event_sum_p3) AS sql_sum_p3, "
+                 "sum(event_sum_time_waited) AS sql_sum_time_waited, "
                  "sum(event_count) AS sql_count, ROW_NUMBER() OVER (ORDER BY sum(event_count) DESC) AS sql_rank "
           "FROM sql_event_data "
           "GROUP BY svr_ip, svr_port, sql_id, plan_hash "
@@ -6939,9 +6941,9 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
       } else if (sql_string.append_fmt(
         "sql_all_data AS ( "
           "SELECT sed.svr_ip, sed.svr_port, sed.program, sed.module, sed.action, sed.sql_id, sed.plan_hash, "
-                 "sed.event_id, sed.event_sum_p1, sed.event_sum_p2, sed.event_sum_p3, sed.event_count, "
-                 "sed.event_rank, sd.sql_sum_p1, sd.sql_sum_p2, sd.sql_sum_p3, sd.sql_count, "
-                 "sd.sql_rank, en.event_name, en.type "
+                 "sed.event_id, sed.event_sum_p1, sed.event_sum_p2, sed.event_sum_p3, sed.event_sum_time_waited, "
+                 "sed.event_count, sed.event_rank, sd.sql_sum_p1, sd.sql_sum_p2, sd.sql_sum_p3, "
+                 "sd.sql_sum_time_waited, sd.sql_count, sd.sql_rank, en.event_name, en.type "
           "FROM sql_event_data sed "
           "LEFT JOIN sql_data sd "
             "ON sed.svr_ip = sd.svr_ip "
@@ -6957,9 +6959,10 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
       } else if (sql_string.append_fmt(
         "module_event_data AS ( "
           "SELECT svr_ip, svr_port, program, module, action, NULL AS sql_id, NULL AS plan_hash, event_id, "
-                 "SUM(p1 * count_weight) AS  event_sum_p1, "
-                 "SUM(p2 * count_weight) AS  event_sum_p2, "
-                 "SUM(p3 * count_weight) AS  event_sum_p3, "
+                 "SUM(p1) AS  event_sum_p1, "
+                 "SUM(p2) AS  event_sum_p2, "
+                 "SUM(p3) AS  event_sum_p3, "
+                 "SUM(time_waited) AS  event_sum_time_waited, "
                  "SUM(count_weight) AS event_count, "
                  "ROW_NUMBER() OVER (PARTITION BY svr_ip, svr_port, program, module, action "
                                      "ORDER BY SUM(count_weight) DESC) AS event_rank "
@@ -6978,6 +6981,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
                   "sum(event_sum_p1) AS module_sum_p1, "
                   "sum(event_sum_p2) AS module_sum_p2, "
                   "sum(event_sum_p3) AS module_sum_p3, "
+                  "sum(event_sum_time_waited) AS module_sum_time_waited, "
                   "sum(event_count) AS module_count, "
                   "ROW_NUMBER() OVER (ORDER BY sum(event_count) DESC) AS module_rank "
           "FROM module_event_data "
@@ -6989,8 +6993,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
         "module_all_data AS ( "
           "SELECT med.svr_ip, med.svr_port, med.program, med.module, med.action, med.sql_id, "
                  "med.plan_hash, med.event_id, med.event_sum_p1, med.event_sum_p2, med.event_sum_p3, "
-                 "med.event_count, med.event_rank, md.module_sum_p1, md.module_sum_p2, "
-                 "md.module_sum_p3, md.module_count, md.module_rank, en.event_name, en.type "
+                 "med.event_sum_time_waited, med.event_count, med.event_rank, md.module_sum_p1, md.module_sum_p2, "
+                 "md.module_sum_p3, md.module_sum_time_waited, md.module_count, md.module_rank, en.event_name, en.type "
           "FROM module_event_data med "
           "LEFT JOIN module_data md "
             "ON med.svr_ip = md.svr_ip "
@@ -7017,6 +7021,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
               "sad.event_sum_p1 AS EVENT_SUM_P1, "
               "sad.event_sum_p2 AS EVENT_SUM_P2, "
               "sad.event_sum_p3 AS EVENT_SUM_P3, "
+              "sad.event_sum_time_waited AS EVENT_SUM_TIME_WAITED, "
               "sad.event_count AS  EVENT_COUNT, "
               "sad.event_rank AS EVENT_RANK, "
               "sad.sql_sum_p1 AS ROW_SUM_P1, "
@@ -7038,6 +7043,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
               "mad.event_sum_p1 AS EVENT_SUM_P1, "
               "mad.event_sum_p2 AS EVENT_SUM_P2, "
               "mad.event_sum_p3 AS EVENT_SUM_P3, "
+              "mad.event_sum_time_waited AS EVENT_SUM_TIME_WAITED,"
               "mad.event_count AS  EVENT_COUNT, "
               "mad.event_rank AS EVENT_RANK, "
               "mad.module_sum_p1 AS ROW_SUM_P1, "
@@ -7092,6 +7098,7 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "EVENT_SUM_P1", event_sum_p1, int64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "EVENT_SUM_P2", event_sum_p2, int64_t);
             EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "EVENT_SUM_P3", event_sum_p3, int64_t);
+            EXTRACT_INT_FIELD_FOR_ASH_STR(*result, "EVENT_SUM_TIME_WAITED", event_sum_time_waited, int64_t);
 
             if (event_rank > 1) {
               row_count = 0;
@@ -7104,14 +7111,19 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
             char event_ratio_char[64] = "";
             calc_ratio(event_count, num_samples, event_ratio_char);
 
+            //ash采样到一个等待事件可以认为这个等待事件花费了1秒
+            //对于时长t > 1秒等待事件，ash采样n次就可以认为这个等待事件花费了n秒
+            //对于时长t < 1秒的等待事件，ash采样到这个事件的概率只有t，因此也可以认为采样一次这个事件花费了1秒
+            //IO等待事件大多数很短，对于p1,p2,p3它只记录了一次等待事件三个阶段消耗的时间，因此而忽略了采样到等待事件的概率远小于1
+            //因此这里计算p1,p2,p3相对于整个等待事件的比例，然后利用等待事件的时长估算p1,p2,p3的时长
             char event_sum_p1_s_char[64] = "";
-            calc_avg_active_sessions(event_sum_p1, 1000000.0, event_sum_p1_s_char);
+            calc_avg_active_sessions(event_sum_p1 * event_count, event_sum_time_waited, event_sum_p1_s_char);
 
             char event_sum_p2_s_char[64] = "";
-            calc_avg_active_sessions(event_sum_p2, 1000000.0, event_sum_p2_s_char);
+            calc_avg_active_sessions(event_sum_p2 * event_count, event_sum_time_waited, event_sum_p2_s_char);
 
             char event_sum_p3_s_char[64] = "";
-            calc_avg_active_sessions(event_sum_p3, 1000000.0, event_sum_p3_s_char);
+            calc_avg_active_sessions(event_sum_p3 * event_count, event_sum_time_waited, event_sum_p3_s_char);
 
             char program_module_action_char[ASH_PROGRAM_STR_LEN + ASH_MODULE_STR_LEN + ASH_ACTION_STR_LEN + 3] = "";
             if (OB_SUCC(ret) && module_char[0] != '\0') {
