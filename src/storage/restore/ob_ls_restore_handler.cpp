@@ -2604,11 +2604,7 @@ int ObLSQuickRestoreFinishState::leader_quick_restore_finish_()
     LOG_WARN("quick restore is not supported now", K(ret), KPC(ls_));
   } else if (ls_restore_arg_->get_restore_type().is_normal_restore()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
-    bool all_finish = false;
-    if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
-      LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
-    } else if (!all_finish) {
-    } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
+    if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), K(next_status), KPC(ls_));
     } else {
       LOG_INFO("succ to advance leader restore status to restore major from quick restore finish", K(ret));
@@ -2629,12 +2625,8 @@ int ObLSQuickRestoreFinishState::follower_quick_restore_finish_()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("quick restore is not supported now", K(ret), KPC(ls_));
   } else {
-    ObLSRestoreStatus leader_restore_status;
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
-    if (OB_FAIL(request_leader_status_(leader_restore_status))) {
-      LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)
-        && OB_FAIL(advance_status_(*ls_, next_status))) {
+    if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance statsu", K(ret), KPC(ls_), K(next_status));
     }
   }
