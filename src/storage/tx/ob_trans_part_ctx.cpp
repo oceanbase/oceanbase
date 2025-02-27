@@ -1247,9 +1247,13 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
           } else {
             TRANS_LOG(WARN, "need not drive 2pc phase when 2pc blocking", K(ret), KPC(this));
           }
-        } else if (get_upstream_state() <= ObTxState::PREPARE
-                   && OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
-          TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
+        } else if (get_upstream_state() <= ObTxState::PREPARE) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+            TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
+          } else if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
+            TRANS_LOG(WARN, "post prepare request failed", K(ret), KPC(this));
+          }
         }
       }
 
@@ -4104,6 +4108,7 @@ ERRSIM_POINT_DEF(ERRSIM_DELAY_TX_SUBMIT_LOG);
 int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id_)
   {
     if (big_segment_info_.segment_buf_.is_active()) {
@@ -4129,6 +4134,8 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
         if (get_upstream_state() < ObTxState::PREPARE) {
           if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
             TRANS_LOG(WARN, "drive 2pc prepare phase failed", K(ret), K(*this));
+          } else if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
+            TRANS_LOG(WARN, "retry to post preapre request failed", K(tmp_ret), KPC(this));
           }
         } else if (get_upstream_state() > ObTxState::PREPARE ||
                    get_downstream_state() >= ObTxState::PREPARE) {
@@ -7557,6 +7564,8 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
       bool no_need_submit_log = false;
       if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
         TRANS_LOG(WARN, "do prepare failed after redo sync", K(tmp_ret), KPC(this));
+      } else if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
+        TRANS_LOG(WARN, "retry to post preapre request failed", K(tmp_ret), KPC(this));
       }
     } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->check_redo_sync_completed(
                    trans_id_, exec_info_.max_applied_log_ts_, redo_sync_finish,
@@ -7578,7 +7587,10 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
 
         if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
           TRANS_LOG(WARN, "do prepare failed after redo sync", K(tmp_ret), KPC(this));
+        } else if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
+          TRANS_LOG(WARN, "retry to post preapre request failed", K(tmp_ret), KPC(this));
         }
+
       }
     } else {
       if (need_retry_by_task) {
@@ -7587,6 +7599,12 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
       ret = OB_EAGAIN;
       TRANS_LOG(INFO, "redo sync will retry", K(ret), K(redo_sync_finish), K(tmp_max_read_version),
                 K(dup_table_follower_max_read_version_), KPC(this));
+      if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+        TRANS_LOG(WARN, "set 2pc trans timer for dup table failed", K(ret), K(tmp_ret), KPC(this));
+      }
+      if (OB_TMP_FAIL(ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_())) {
+        TRANS_LOG(WARN, "retry to post preapre request failed", K(tmp_ret), KPC(this));
+      }
     }
   }
 

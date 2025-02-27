@@ -380,6 +380,9 @@ int ObTxCycleTwoPhaseCommitter::decide_downstream_msg_type_(bool &need_submit,
     if (is_sub2pc()) {
       need_submit = true;
       msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ;
+    } else if(is_dup_tx()) {
+      need_submit = true;
+      msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ;
     } else {
       need_submit = false;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {

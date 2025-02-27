@@ -333,6 +333,9 @@ public:
   virtual bool is_sub2pc() const = 0;
   // only persist redo and commit info
   int prepare_redo();
+
+  virtual bool is_dup_tx() const = 0;
+
   // continue execution of two phase commit
   int continue_execution(const bool is_rollback);
 
@@ -380,7 +383,6 @@ private:
   //
   //  NB: We should take both upstream and downstream into consideration.
   int decide_downstream_msg_type_(bool &need_submit, ObTwoPhaseCommitMsgType &msg_type);
-  int retransmit_downstream_msg_();
   int retransmit_upstream_msg_(const ObTxState state);
   int retransmit_downstream_msg_(const int64_t participant);
 
@@ -393,6 +395,7 @@ private:
 protected:
   // Means we collect all downstream responses
   bool all_downstream_collected_();
+  int retransmit_downstream_msg_();
 protected:
   // colloected_ is the bit set for storing responses from participants
   //
