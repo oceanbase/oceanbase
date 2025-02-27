@@ -18,6 +18,7 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_macro_block.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/blocksstable/index_block/ob_agg_row_struct.h"
 #include "storage/column_store/ob_column_store_util.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
@@ -41,27 +42,44 @@ class ObIndexBlockRowParser;
 
 struct ObIndexBlockRowDesc
 {
+public:
   ObIndexBlockRowDesc();
-  ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc);
+  explicit ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc);
   int init(const ObDataStoreDesc &data_store_desc, ObIndexBlockRowParser &idx_row_parser, ObDatumRow &index_row);
-  OB_INLINE const ObDataStoreDesc * get_data_store_desc() const { return data_store_desc_; }
-  OB_INLINE void set_data_store_desc(const ObDataStoreDesc *data_store_desc) { data_store_desc_ = data_store_desc; }
+  bool is_valid() const;
   OB_INLINE void set_for_clustered_index() { is_clustered_index_ = true; }
-  OB_INLINE bool is_valid() const
+
+public:
+  ObRowStoreType get_row_store_type() const { return row_store_type_; }
+  void set_row_store_type(const ObRowStoreType row_store_type) { row_store_type_ = row_store_type; }
+  ObCompressorType get_compressor_type() const { return compressor_type_; }
+  void set_compressor_type(const ObCompressorType compressor_type) { compressor_type_ = compressor_type; }
+  int64_t get_schema_version() const { return schema_version_; }
+  void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  int64_t get_master_key_id() const { return master_key_id_; }
+  void set_master_key_id(const int64_t master_key_id) { master_key_id_ = master_key_id; }
+  int64_t get_encrypt_id() const { return encrypt_id_; }
+  void set_encrypt_id(const int64_t encrypt_id) { encrypt_id_ = encrypt_id; }
+  const char * get_encrypt_key() const { return encrypt_key_; }
+  void set_encrypt_key(const char * encrypt_key)
   {
-    bool ret = true;
-    if (OB_UNLIKELY((is_macro_node_ && macro_block_count_ != 1) /*data macro row*/
-        || (is_data_block_ && micro_block_count_ != 1) /*any leaf row*/
-        || (is_secondary_meta_ && macro_block_count_ != 0) /*sec meta leaf row*/
-        || (nullptr == data_store_desc_))) {
-      ret = false;
-    }
-    return ret;
+    MEMCPY(encrypt_key_, encrypt_key, sizeof(encrypt_key_));
   }
+  share::SCN get_end_scn() const { return end_scn_; }
+  int set_end_scn_by_snapshot_version(const int64_t snapshot_version);
+  void set_end_scn(const share::SCN end_scn) { end_scn_ = end_scn; }
+  bool is_major_or_meta_merge_type() const { return compaction::is_major_or_meta_merge_type(merge_type_); }
+  void set_merge_type(const compaction::ObMergeType merge_type) { merge_type_ = merge_type; }
 
 private:
-  // TODO(baichangmin): set RowDesc to class.
-  const ObDataStoreDesc *data_store_desc_; // TODO(baichangmin): do not use pointer or reference here.
+  ObCompressorType compressor_type_;
+  ObRowStoreType row_store_type_;
+  int64_t schema_version_;
+  int64_t master_key_id_;
+  int64_t encrypt_id_;
+  char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  share::SCN end_scn_;
+  compaction::ObMergeType merge_type_;
 
 public:
   union {
@@ -93,7 +111,14 @@ public:
   bool is_clustered_index_;
   bool has_macro_block_bloom_filter_;
 
-  TO_STRING_KV(KP_(data_store_desc),
+  TO_STRING_KV(K_(compressor_type),
+               K_(row_store_type),
+               K_(schema_version),
+               K_(master_key_id),
+               K_(encrypt_id),
+               KP_(encrypt_key),
+               K_(end_scn),
+               K_(merge_type),
                KP_(aggregated_row),
                K_(row_key),
                K_(macro_id),

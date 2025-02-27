@@ -420,7 +420,8 @@ TEST_F(TestIndexDumper, get_from_mem_and_change_row_store_type)
       desc.get_desc().row_store_type_ = common::ObRowStoreType::DUMMY_ROW_STORE;
       ASSERT_NE(desc.get_desc().row_store_type_, mem_desc.row_store_type_);
       ASSERT_EQ(OB_SUCCESS, row_desc.init(desc.get_desc(), row_parser, load_row));
-      ASSERT_EQ(desc.get_desc().row_store_type_, mem_desc.row_store_type_);
+      ASSERT_NE(desc.get_desc().row_store_type_, mem_desc.row_store_type_);
+      ASSERT_EQ(row_desc.row_store_type_, row_parser.header_->row_store_type_);
       ASSERT_EQ(OB_SUCCESS,row_builder.build_row(row_desc, new_row));
       for (int64_t i = 0; i < TEST_ROWKEY_COLUMN_CNT + 3; ++i) {
         bool bret = ObDatum::binary_equal(load_row.storage_datums_[i], new_row->storage_datums_[i]);

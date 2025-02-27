@@ -2361,20 +2361,12 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     ObIndexBlockRowDesc &row_desc)
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc *data_desc = nullptr;
-  if (OB_UNLIKELY(nullptr == row_desc.get_data_store_desc())) {
+  if (OB_UNLIKELY(!row_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid null data store desc", K(ret));
-  } else if (FALSE_IT(data_desc = const_cast<ObDataStoreDesc *>(
-                          row_desc.get_data_store_desc()))) {
-  } else if (OB_FAIL(data_desc->static_desc_->end_scn_.convert_for_tx(
-                 macro_meta.val_.snapshot_version_))) {
-    STORAGE_LOG(WARN, "fail to convert scn", K(ret),
-                K(macro_meta.val_.snapshot_version_));
+    LOG_WARN("fail to set row desc from meta, invalid argument", K(ret), K(row_desc));
+  } else if (OB_FAIL(row_desc.set_end_scn_by_snapshot_version(macro_meta.val_.snapshot_version_))) {
+    LOG_WARN("fail to convert scn", K(ret), K(macro_meta.val_.snapshot_version_));
   } else {
-    ObStaticDataStoreDesc *static_desc = data_desc->static_desc_;
-    static_desc->snapshot_version_ = macro_meta.val_.snapshot_version_;
-
     row_desc.is_secondary_meta_ = false;
     row_desc.is_macro_node_ = true;
 
@@ -2386,32 +2378,31 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
       row_desc.logic_micro_id_ = clustered_micro_info->logic_micro_id_;
       row_desc.shared_data_macro_id_ = macro_meta.val_.macro_id_;
       // Row store type, compress type, encrypt info, and schema version.
-      data_desc->row_store_type_ = index_store_desc.get_row_store_type();
-      static_desc->compressor_type_ = index_store_desc.get_compressor_type();
-      static_desc->master_key_id_ = index_store_desc.get_master_key_id();
-      static_desc->encrypt_id_ = index_store_desc.get_encrypt_id();
-      MEMCPY(static_desc->encrypt_key_, index_store_desc.get_encrypt_key(), sizeof(static_desc->encrypt_key_));
-      static_desc->schema_version_ = index_store_desc.get_schema_version();
+      row_desc.set_row_store_type(index_store_desc.get_row_store_type());
+      row_desc.set_compressor_type(index_store_desc.get_compressor_type());
+      row_desc.set_master_key_id(index_store_desc.get_master_key_id());
+      row_desc.set_encrypt_id(index_store_desc.get_encrypt_id());
+      row_desc.set_encrypt_key(index_store_desc.get_encrypt_key());
+      row_desc.set_schema_version(index_store_desc.get_schema_version());
     } else {
       row_desc.macro_id_ = macro_meta.val_.macro_id_;
       row_desc.block_offset_ = macro_meta.val_.block_offset_;
       row_desc.block_size_ = macro_meta.val_.block_size_;
       // Row store type, compress type, encrypt info, and schema version.
       if (index_store_desc.get_major_working_cluster_version() >= CLUSTER_VERSION_4_3_5_1) {
-        const ObRowStoreType data_row_store_type = macro_meta.val_.row_store_type_;
-        if (ObRowStoreType::ENCODING_ROW_STORE == data_row_store_type) {
-          data_desc->row_store_type_ = ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE;
+        if (ObRowStoreType::ENCODING_ROW_STORE == macro_meta.val_.row_store_type_) {
+          row_desc.set_row_store_type(ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE);
         } else {
-          data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
+          row_desc.set_row_store_type(macro_meta.val_.row_store_type_);
         }
       } else {
-        data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
+        row_desc.set_row_store_type(macro_meta.val_.row_store_type_);
       }
-      static_desc->compressor_type_ = macro_meta.val_.compressor_type_;
-      static_desc->master_key_id_ = macro_meta.val_.master_key_id_;
-      static_desc->encrypt_id_ = macro_meta.val_.encrypt_id_;
-      MEMCPY(static_desc->encrypt_key_, macro_meta.val_.encrypt_key_, sizeof(static_desc->encrypt_key_));
-      static_desc->schema_version_ = macro_meta.val_.schema_version_;
+      row_desc.set_compressor_type(macro_meta.val_.compressor_type_);
+      row_desc.set_master_key_id(macro_meta.val_.master_key_id_);
+      row_desc.set_encrypt_id(macro_meta.val_.encrypt_id_);
+      row_desc.set_encrypt_key(macro_meta.val_.encrypt_key_);
+      row_desc.set_schema_version(macro_meta.val_.schema_version_);
     }
 
     // Set macro block bloom filter flag for macro row.
@@ -2625,7 +2616,6 @@ ObDataIndexBlockBuilder::ObDataIndexBlockBuilder()
     meta_row_allocator_("DataMidIdxRow"),
     macro_meta_dumper_(),
     micro_helper_(),
-    macro_row_desc_(),
     index_tree_root_ctx_(nullptr),
     meta_block_writer_(nullptr),
     meta_row_(),
@@ -2986,6 +2976,7 @@ int ObDataIndexBlockBuilder::append_row(const ObMicroBlockDesc &micro_block_desc
 
     // Append index row into clustered index block writer.
     if (OB_SUCC(ret) && micro_index_clustered()) {
+      row_desc.set_for_clustered_index();
       if (OB_FAIL(clustered_index_writer_->append_row(row_desc))) {
         STORAGE_LOG(WARN, "fail to append row to clustered index block", K(ret), K(row_desc));
       }
@@ -3143,16 +3134,17 @@ int ObDataIndexBlockBuilder::append_index_micro_block_and_macro_meta(
   }
 
   // Build macro meta row and append to data macro block.
+  ObIndexBlockRowDesc macro_row_desc;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(generate_macro_meta_row_desc(leaf_block_desc, macro_row_desc_))) {
+  } else if (OB_FAIL(generate_macro_meta_row_desc(leaf_block_desc, macro_row_desc))) {
     STORAGE_LOG(WARN, "fail to append next row", K(ret), K(leaf_block_desc));
-  } else if (OB_UNLIKELY(block_id != macro_row_desc_.macro_id_)) {
+  } else if (OB_UNLIKELY(block_id != macro_row_desc.macro_id_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "expect macro id equal", K(ret), K(leaf_block_desc), K_(macro_row_desc));
+    STORAGE_LOG(WARN, "expect macro id equal", K(ret), K(leaf_block_desc), K(macro_row_desc));
   // Set macro id to special value (DEFAULT_IDX_ROW_MACRO_ID) for macro meta
   // at the end of the data macro block.
-  } else if (FALSE_IT(macro_row_desc_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID)) {
-  } else if (OB_FAIL(write_meta_block(macro_block, block_id, macro_row_desc_, ddl_start_row_offset))) {
+  } else if (FALSE_IT(macro_row_desc.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID)) {
+  } else if (OB_FAIL(write_meta_block(macro_block, block_id, macro_row_desc, ddl_start_row_offset))) {
     STORAGE_LOG(WARN, "fail to build meta block", K(ret));
   } else {
     index_tree_root_ctx_->last_macro_size_ =
@@ -3170,7 +3162,7 @@ int ObDataIndexBlockBuilder::append_index_micro_block_and_macro_meta(
     STORAGE_LOG(
         WARN, "error!!!fail to write leaf/meta block into data macro block",
         K(ret), K_(estimate_leaf_block_size), K_(estimate_meta_block_size),
-        K(leaf_block_desc), K_(macro_row_desc));
+        K(leaf_block_desc), K(macro_row_desc));
     STORAGE_LOG(INFO, "print error leaf block");
     micro_writer_->dump_diagnose_info();
     STORAGE_LOG(INFO, "print error meta block");
@@ -3294,7 +3286,14 @@ int ObDataIndexBlockBuilder::generate_macro_meta_row_desc(
     ObIndexBlockRowDesc &macro_row_desc)
 {
   int ret = OB_SUCCESS;
-  macro_row_desc.set_data_store_desc(index_store_desc_);
+  macro_row_desc.set_merge_type(index_store_desc_->get_merge_type());
+  macro_row_desc.set_end_scn(index_store_desc_->get_end_scn());
+  macro_row_desc.set_row_store_type(index_store_desc_->get_row_store_type());
+  macro_row_desc.set_compressor_type(index_store_desc_->get_compressor_type());
+  macro_row_desc.set_master_key_id(index_store_desc_->get_master_key_id());
+  macro_row_desc.set_encrypt_id(index_store_desc_->get_encrypt_id());
+  macro_row_desc.set_encrypt_key(index_store_desc_->get_encrypt_key());
+  macro_row_desc.set_schema_version(index_store_desc_->get_schema_version());
   if (OB_UNLIKELY(!micro_block_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro block desc", K(ret), K(micro_block_desc));

@@ -147,32 +147,30 @@ int ObClusteredIndexBlockWriter::init(const ObDataStoreDesc &data_store_desc,
   return ret;
 }
 
-int ObClusteredIndexBlockWriter::append_row(const ObIndexBlockRowDesc &old_row_desc)
+int ObClusteredIndexBlockWriter::append_row(const ObIndexBlockRowDesc &row_desc)
 {
   int ret = OB_SUCCESS;
   const ObDatumRow *row_to_append = nullptr;
-  // Shallow copy from normal row_desc and set for clustered row_desc.
-  ObIndexBlockRowDesc clustered_row_desc = old_row_desc;
-  clustered_row_desc.set_for_clustered_index();
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("fail to append row in clustered index writer, not inited", K(ret), K(is_inited_));
-  } else if (OB_FAIL(check_order(clustered_row_desc))) {
-    LOG_WARN("fail to check order", K(ret), K(clustered_row_desc));
-  } else if (OB_FAIL(row_builder_.build_row(clustered_row_desc, row_to_append))) {
-    LOG_WARN("fail to build index row", K(ret), K(clustered_row_desc));
+  } else if (OB_FAIL(check_order(row_desc))) {
+    LOG_WARN("fail to check order", K(ret), K(row_desc));
+  } else if (OB_FAIL(row_builder_.build_row(row_desc, row_to_append))) {
+    LOG_WARN("fail to build index row", K(ret), K(row_desc));
   } else if (OB_FAIL(micro_writer_->append_row(*row_to_append))) {
     LOG_ERROR("fail to append index row to clustered index block writer",
-              K(ret), K(clustered_row_desc), KPC(row_to_append));
+              K(ret), K(row_desc), KPC(row_to_append));
   } else {
     last_rowkey_.reset();
     row_allocator_.reuse();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(clustered_row_desc.row_key_.deep_copy(last_rowkey_, row_allocator_))) {
-    LOG_WARN("fail to deep copy last rowkey", K(ret), K(clustered_row_desc));
+  } else if (OB_FAIL(row_desc.row_key_.deep_copy(last_rowkey_, row_allocator_))) {
+    LOG_WARN("fail to deep copy last rowkey", K(ret), K(row_desc));
   } else {
-    LOG_DEBUG("clustered writer succeed to append row", K(ret), K(clustered_row_desc), K(old_row_desc));
+    LOG_DEBUG("clustered writer succeed to append row", K(ret), K(row_desc));
   }
   return ret;
 }
@@ -531,6 +529,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
         }
 
         // Append clustered row to clustered writer.
+        clustered_row_desc.set_for_clustered_index();
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(append_row(clustered_row_desc))) {
           LOG_WARN("fail to append clustered row", K(ret), K(clustered_row_desc));
@@ -676,6 +675,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
           idx_row_header->is_major_node() ? 0 : index_info.minor_meta_info_->row_count_delta_;
 
       // Append clustered row to clustered writer.
+      clustered_row_desc.set_for_clustered_index();
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(append_row(clustered_row_desc))) {
         LOG_WARN("fail to append clustered row", K(ret), K(clustered_row_desc), K(index_info));

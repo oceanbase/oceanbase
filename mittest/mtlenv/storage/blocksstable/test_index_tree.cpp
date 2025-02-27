@@ -889,9 +889,6 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   const MacroBlockId first_macro_id = data_writer.macro_handles_[0].get_macro_id();
   ASSERT_TRUE(first_macro_id.is_valid());
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
-  // get macro row
-  ObIndexBlockRowDesc &macro_row_desc = builder->macro_row_desc_;
-  ASSERT_EQ(macro_row_desc.macro_id_, ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID);
 
   ObDataMacroBlockMeta macro_meta;
   ObIndexBlockLoader index_block_loader;
@@ -922,11 +919,11 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   int64_t pos = sizeof(ObMacroBlockCommonHeader);
   ObSSTableMacroBlockHeader macro_header;
   OK(macro_header.deserialize(macro_block_buf, macro_block_size, pos));
-  ASSERT_EQ(macro_header.fixed_header_.idx_block_offset_, macro_row_desc.block_offset_); // n-1 level block offset
-  ASSERT_EQ(macro_header.fixed_header_.idx_block_size_, macro_row_desc.block_size_); // n-1 level block size
+  ASSERT_EQ(macro_header.fixed_header_.idx_block_offset_, macro_meta.val_.block_offset_); // n-1 level block offset
+  ASSERT_EQ(macro_header.fixed_header_.idx_block_size_, macro_meta.val_.block_size_); // n-1 level block size
 
-  int64_t size = macro_row_desc.block_size_;
-  const char *leaf_block_buf = macro_block_buf + macro_row_desc.block_offset_;
+  int64_t size = macro_meta.val_.block_size_;
+  const char *leaf_block_buf = macro_block_buf + macro_meta.val_.block_offset_;
   int64_t payload_size = 0;
   const char *payload_buf = nullptr;
   ObMicroBlockHeader header;

@@ -422,7 +422,6 @@ private:
   compaction::ObLocalArena meta_row_allocator_; // Used to apply for memory whose lifetime is row
   ObBaseIndexBlockDumper macro_meta_dumper_;
   ObMicroBlockBufferHelper micro_helper_;
-  ObIndexBlockRowDesc macro_row_desc_;
   ObIndexTreeRootCtx *index_tree_root_ctx_;
   ObIMicroBlockWriter *meta_block_writer_;
   ObDatumRow meta_row_;

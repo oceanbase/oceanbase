@@ -142,8 +142,8 @@ TEST_F(TestIndexBlockRowStruct, test_normal)
   ret = row_builder.init(allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObIndexBlockRowDesc row_desc;
-  row_desc.data_store_desc_ = &desc_.get_desc();
+  ObIndexBlockRowDesc row_desc(desc_.get_desc());
+  // row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;
   ASSERT_TRUE(row_desc.is_valid());
 
@@ -173,7 +173,7 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   ObIndexBlockRowBuilder row_builder;
   ASSERT_EQ(OB_SUCCESS, row_builder.init(allocator_, data_desc_.get_desc(), data_desc_.get_desc()));
 
-  ObIndexBlockRowDesc row_desc;
+  ObIndexBlockRowDesc row_desc(desc_.get_desc());
   row_desc.block_size_ = 1024;
   row_desc.is_deleted_ = false;
   row_desc.block_offset_ = 128;
@@ -183,7 +183,7 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   row_desc.aggregated_row_ = &agg_row;
   row_desc.is_serialized_agg_row_ = false;
 
-  row_desc.data_store_desc_ = &desc_.get_desc();
+  // row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;
   const ObDatumRow *row;
   ret = row_builder.build_row(row_desc, row);
@@ -244,8 +244,8 @@ TEST_F(TestIndexBlockRowStruct, test_set_rowkey)
   ret = row_builder.init(allocator_, data_desc_.get_desc(), data_desc_.get_desc());
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  ObIndexBlockRowDesc row_desc;
-  row_desc.data_store_desc_ = &desc_.get_desc();
+  ObIndexBlockRowDesc row_desc(desc_.get_desc());
+  // row_desc.data_store_desc_ = &desc_.get_desc();
   ASSERT_TRUE(row_desc.is_valid());
 
   const ObDatumRow *row;
