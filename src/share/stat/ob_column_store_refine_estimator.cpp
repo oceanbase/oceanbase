@@ -57,8 +57,6 @@ int ObColumnStoreRefineEstimator::estimate(const ObOptStatGatherParam &param,
   } else if (!param.partition_infos_.empty() &&
               OB_FAIL(fill_partition_info(allocator, param, param.partition_infos_.at(0)))) {
     LOG_WARN("failed to add partition info", K(ret));
-  } else {
-    src_tab_stat->set_partition_id(param.partition_infos_.at(0).part_id_);
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
