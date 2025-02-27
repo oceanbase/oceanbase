@@ -924,6 +924,7 @@ public:
       const char *authorization,
       const char *extension,
       const int64_t dest_id);
+  int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
   virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const override;
   int get_authorization_info(char *authorization, const int64_t length) const;
   int get_src_type(ObBackupSrcType &src_type) const;
@@ -958,6 +959,7 @@ public:
   int set(const char *root_path, const char *storage_info);
   int set(const char *root_path, const ObBackupStorageInfo *storage_info);
   int set_without_decryption(const common::ObString &backup_dest);
+  int set_storage_path(const common::ObString &storage_path_str);
   void reset();
   ObStorageType get_device_type() const;
   bool is_valid() const;
@@ -977,7 +979,7 @@ public:
 
 private:
   int alloc_and_init();
-  int parse_backup_dest_str_(const char *backup_dest);
+  int parse_backup_dest_str_(const char *backup_dest, const bool only_parse_for_unique_path);
   void root_path_trim_();
 
   char *root_path_;

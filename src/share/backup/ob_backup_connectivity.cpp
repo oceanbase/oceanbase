@@ -2105,7 +2105,10 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
     ObBackupDestAttribute access_info_option;
     ObBackupDestAttribute attribute_option;
     ObMySQLTransaction trans;
-    if (OB_FAIL(backup_dest.set(path.str()))) {
+    if (is_sys_tenant(tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("sys tenant is not supported", K(ret));
+    } else if (OB_FAIL(backup_dest.set_storage_path(path.str()))) {
       LOG_WARN("failed to set backup dest", K(ret));
     }
     if (OB_SUCC(ret) && has_access_info) {

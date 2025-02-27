@@ -1172,6 +1172,33 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64
   return ret;
 }
 
+int ObBackupStorageInfo::set_endpoint(const common::ObStorageType device_type, const char *storage_info)
+{
+  int ret = OB_SUCCESS;
+  bool has_needed_extension = false;
+
+  if (is_valid()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("storage info init twice", K(ret));
+  } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
+  } else if (FALSE_IT(device_type_ = device_type)) {
+  } else if (OB_STORAGE_FILE == device_type_){
+    //don't need endpoint
+  } else if (0 == strlen(storage_info)) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("storage info is empty", K(ret), K_(device_type));
+  } else if (OB_FAIL(parse_storage_info_(storage_info, has_needed_extension))) {
+    LOG_WARN("parse storage info failed", K(ret), KP(storage_info), K_(device_type));
+  } else if (OB_UNLIKELY(0 == strlen(endpoint_))) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("backup device is not nfs, endpoint do not allow to be empty", K(ret),K_(device_type), K_(endpoint));
+  }
+
+  return ret;
+}
+
 int ObBackupStorageInfo::get_storage_info_str(char *storage_info, const int64_t info_len) const
 {
   int ret = OB_SUCCESS;
@@ -1438,7 +1465,7 @@ int ObBackupDest::alloc_and_init()
   return ret;
 }
 
-int ObBackupDest::parse_backup_dest_str_(const char *backup_dest)
+int ObBackupDest::parse_backup_dest_str_(const char *backup_dest, const bool only_parse_for_unique_path)
 {
   int ret = OB_SUCCESS;
   ObString bakup_dest_str(backup_dest);
@@ -1470,8 +1497,10 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest)
       if ('?' == backup_dest[pos]) {
         ++pos;
       }
-      if (OB_FAIL(storage_info_->set(type, backup_dest + pos))) {
+      if (!only_parse_for_unique_path && OB_FAIL(storage_info_->set(type, backup_dest + pos))) {
         LOG_WARN("failed to init storage_info", K(ret), K(type), K(pos), K(backup_dest));
+      } else if (only_parse_for_unique_path && OB_FAIL(storage_info_->set_endpoint(type, backup_dest + pos))) {
+        LOG_WARN("failed to set endpoint", K(ret), K(type), K(pos), K(backup_dest));
       }
     }
   }
@@ -1490,7 +1519,7 @@ int ObBackupDest::set(const char *backup_dest)
     LOG_WARN("invalid args", K(ret), KP(backup_dest));
   } else if (OB_FAIL(alloc_and_init())) {
     LOG_WARN("failed to alloc and init backup dest", K(ret));
-  } else if (OB_FAIL(parse_backup_dest_str_(backup_dest))) {
+  } else if (OB_FAIL(parse_backup_dest_str_(backup_dest, false/*parse all storage_info attr*/))) {
     LOG_WARN("failed to parse backup dest str", K(ret), K(backup_dest));
   } else {
     root_path_trim_();
@@ -1624,6 +1653,38 @@ int ObBackupDest::set_without_decryption(const common::ObString &backup_dest) {
       LOG_WARN("fail to set backup dest", K(ret));
     }
   }
+  return ret;
+}
+
+// oss://backup_dir/?host=xxx.com -> root_path=oss://backup_dir/  endpoint=host=xxx.com
+// file:///root_backup_dir"
+int ObBackupDest::set_storage_path(const common::ObString &storage_path_str)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  char *backup_dest_str = NULL;
+  reset();
+  if (is_valid()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("cannot init twice", K(ret), K(*this));
+  } else if (storage_path_str.empty() || storage_path_str.length() >= OB_MAX_BACKUP_PATH_LENGTH) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("storage path is empty", K(ret), K(storage_path_str));
+  } else if (OB_FAIL(alloc_and_init())) {
+    LOG_WARN("failed to alloc and init backup dest", K(ret));
+  } else if (OB_ISNULL(backup_dest_str = reinterpret_cast<char *>(allocator.alloc(storage_path_str.length()+1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", KR(ret));
+  } else {
+    MEMCPY(backup_dest_str, storage_path_str.ptr(), storage_path_str.length());
+    backup_dest_str[storage_path_str.length()] = '\0';
+    if (OB_FAIL(parse_backup_dest_str_(backup_dest_str, true/*only parse for unique path*/))) {
+      LOG_WARN("failed to parse backup dest str", K(ret), K(backup_dest_str));
+    } else {
+      root_path_trim_();
+    }
+  }
+
   return ret;
 }
 
@@ -4685,7 +4746,8 @@ int ObBackupDestAttributeParser::ExtraArgsCb::match(const char *key, const char 
     }
   }
   if (!found) {
-    LOG_TRACE("KV pair ignored by common backup dest option parser", K(key), K(value), K(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("KV pair do not match any action", K(key), K(value), K(ret));
   }
   return ret;
 }
