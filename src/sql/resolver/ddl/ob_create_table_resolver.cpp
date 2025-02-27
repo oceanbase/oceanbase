@@ -3873,10 +3873,13 @@ int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNod
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support primary key is vector column yet", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create primary key on vector column is");
+          } else if (column_list_node->num_child_ > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+            ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+            LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
           } else if (OB_FALSE_IT(col->add_column_flag(HEAP_TABLE_PRIMARY_KEY_FLAG))
                   || OB_FALSE_IT(col->set_nullable(false))
                   || OB_FALSE_IT(col->set_rowkey_position(0))){
-          }  else if (!col->is_string_type()) {
+          } else if (col->is_string_lob() || !col->is_string_type()) {
             /* do nothing */
           } else if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, false))) {
             SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
@@ -3964,7 +3967,7 @@ int ObCreateTableResolver::resolve_single_column_primary_key_node(const ParseNod
         } else if (ObTimestampTZType == column_schema->get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
-        } else if (ob_is_string_tc(column_schema->get_data_type())) {
+        } else if (ob_is_string_tc(column_schema->get_data_type()) && !column_schema->is_string_lob()) {
           int64_t length = 0;
           if (OB_FAIL(column_schema->get_byte_length(length, false, false))) {
             SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
