@@ -773,7 +773,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       : TCONF.tb_black_list.str();
 
   const bool enable_direct_load_inc = (1 == TCONF.enable_direct_load_inc);
-  const bool is_mock_fail_on_init = (TCONF.test_mode_on = 1 && TCONF.test_mode_init_fail != 0);
+  const bool is_mock_fail_on_init = (0 != TCONF.test_mode_on && 0 != TCONF.test_mode_init_fail);
 
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
