@@ -263,6 +263,10 @@ public:
   ObVectorCentorClusterHelper(ObIAllocator &allocator, const VEC_T *const_vec, oceanbase::sql::ObExprVectorDistance::ObVecDisType dis_type, int64_t dim, int64_t nprobe)
       : alloc_(allocator), const_vec_(const_vec), dis_type_(dis_type), dim_(dim), nprobe_(nprobe), max_heap_(max_compare_)
   {
+    // fixme: use euclidean dis type instead dot
+    if (dis_type == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+      dis_type_ = oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
+    }
   }
 
   int push_center(const CENTER_T &center, VEC_T *center_vec, const int64_t dim, bool save_center_vec = false);
