@@ -137,14 +137,29 @@ TEST_F(TestUpgradePath, last_lts) // 421x
   versions.insert(DATA_VERSION_4_2_1_10);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_1_10, path), OB_SUCCESS);
   check_upgrade_path(path, {
+    {DATA_VERSION_4_2_1_11, true},
     {DATA_VERSION_4_2_2_0, false},
     {DATA_VERSION_4_2_2_1, false},
     {DATA_VERSION_4_2_3_0, false},
     {DATA_VERSION_4_2_3_1, false},
     {DATA_VERSION_4_2_4_0, false},
     {DATA_VERSION_4_2_5_0, false},
-    {DATA_VERSION_4_2_5_1, true},
-    {DATA_VERSION_4_2_5_2, true},
+    {DATA_VERSION_4_2_5_1, false},
+    {DATA_VERSION_4_2_5_2, false},
+    {DATA_VERSION_4_2_5_3, true},
+  });
+  // 421 11
+  versions.insert(DATA_VERSION_4_2_1_11);
+  ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_1_11, path), OB_SUCCESS);
+  check_upgrade_path(path, {
+    {DATA_VERSION_4_2_2_0, false},
+    {DATA_VERSION_4_2_2_1, false},
+    {DATA_VERSION_4_2_3_0, false},
+    {DATA_VERSION_4_2_3_1, false},
+    {DATA_VERSION_4_2_4_0, false},
+    {DATA_VERSION_4_2_5_0, false},
+    {DATA_VERSION_4_2_5_1, false},
+    {DATA_VERSION_4_2_5_2, false},
     {DATA_VERSION_4_2_5_3, true},
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::get_upgrade_path_last_size_());
@@ -244,7 +259,6 @@ TEST_F(TestUpgradePath, fail)
   int ret = OB_SUCCESS;
   ObUpgradePath path;
   ASSERT_NE(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_0_0, path), OB_SUCCESS);
-  ASSERT_NE(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_1_11, path), OB_SUCCESS);
 }
 
 // 在已有的基础上增加421BP11

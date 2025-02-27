@@ -227,6 +227,8 @@ public:
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 10)
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 11)
+
 class ObUpgradeFor4220Processor : public ObBaseUpgradeProcessor
 {
 public:
