@@ -830,7 +830,7 @@ void ObRangeSplitInfo::reset()
 }
 
 ObPartitionRangeSpliter::ObPartitionRangeSpliter()
-  : allocator_(),
+  : allocator_("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     parallel_ranger_(allocator_)
 {
 }
@@ -1294,7 +1294,7 @@ int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_
     STORAGE_LOG(WARN, "Invalid argument to calc parallel target array", K(ret), K(range_info_array),
                 K(total_size), K(expected_task_count));
   } else {
-    ObArenaAllocator local_allocator;
+    ObArenaAllocator local_allocator("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const int64_t avg_task_size = MAX(total_size / expected_task_count, 1);
     const int64_t split_task_size = MAX(avg_task_size / 2, 1);
     const int64_t task_size_high_watermark = MAX(avg_task_size *
