@@ -82,7 +82,7 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
   if (OB_UNLIKELY(is_in_tablegroup && ! table_schema.is_global_index_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table is in tablegroup, should init balance group by tablegroup", KR(ret), K(table_schema));
-  } else if (table_schema.is_duplicate_table()) {
+  } else if (table_schema.is_duplicate_table() || table_schema.is_broadcast_table()) {
     // All tenant's duplicate tables belong to the same balance group
     if (OB_FAIL(bg_name_str.append_fmt("%s", DUP_TABLE_BG_NAME))) {
       LOG_WARN("assign failed", KR(ret), K(table_schema));

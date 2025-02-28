@@ -352,7 +352,7 @@ int ObTransferPartitionCommand::check_table_schema_(
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Partition not exists");
     }
   } else {
-    is_dup_table = table_schema->is_duplicate_table();
+    is_dup_table = table_schema->is_duplicate_table() || table_schema->is_broadcast_table();
   }
   return ret;
 }

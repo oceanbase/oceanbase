@@ -387,7 +387,7 @@ int ObAllBalanceGroupBuilder::check_table_schemas_in_tablegroup_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", KR(ret), KP(table_schema), K(idx));
     } else if (OB_UNLIKELY(OB_INVALID_ID == table_schema->get_tablegroup_id()
-        || table_schema->is_duplicate_table())) {
+        || table_schema->is_duplicate_table() || table_schema->is_broadcast_table())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table_schema in tablegroup", KR(ret), KPC(table_schema));
     }
@@ -817,7 +817,7 @@ int ObAllBalanceGroupBuilder::add_new_part_(
   ObLSID dest_ls_id;
   bool in_new_part_group = false;
   const uint64_t table_id = table_schema.get_table_id();
-  const bool is_dup_table = table_schema.is_duplicate_table();
+  const bool is_dup_table = table_schema.is_duplicate_table() || table_schema.is_broadcast_table();
   uint64_t tablet_size = 0;
 
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(callback_)) {
