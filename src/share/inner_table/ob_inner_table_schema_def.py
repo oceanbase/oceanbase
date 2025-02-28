@@ -7943,6 +7943,7 @@ def_table_schema(
 # 540: __all_catalog_privilege_history
 # 541: __all_tenant_flashback_log_scn
 # 542: __sslog_table
+# 543: __all_license
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -40892,6 +40893,7 @@ def_table_schema(
 
 # 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
+# 21639: DBA_OB_LICENSE
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

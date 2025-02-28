@@ -268,6 +268,7 @@ constexpr int OB_ERR_KILL_CLIENT_SESSION = -4401;
 constexpr int OB_ERR_KILL_CLIENT_SESSION_FAILED = -4402;
 constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IO_TIMEOUT = -4404;
+constexpr int OB_LICENSE_EXPIRED = -4406;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2341,6 +2342,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_KILL_CLIENT_SESSION_FAILED__USER_ERROR_MSG "Kill Client Session failed"
 #define OB_IMPROPER_OS_PARAM__USER_ERROR_MSG "OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IO_TIMEOUT__USER_ERROR_MSG "IO timeout"
+#define OB_INVALID_LICENSE__USER_ERROR_MSG "license is invalid because: %s"
+#define OB_LICENSE_EXPIRED__USER_ERROR_MSG "license is expired"
+#define OB_LICENSE_SCOPE_EXCEEDED__USER_ERROR_MSG "current license does not allow this operation: %s"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -5112,6 +5116,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_IMPROPER_OS_PARAM__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4404, IO timeout"
 #define OB_IO_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4404, IO timeout"
+#define OB_INVALID_LICENSE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4405, license is invalid because: %s"
+#define OB_INVALID_LICENSE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4405, license is invalid because: %s"
+#define OB_LICENSE_EXPIRED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4406, license is expired"
+#define OB_LICENSE_EXPIRED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4406, license is expired"
+#define OB_LICENSE_SCOPE_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4407, current license does not allow this operation: %s"
+#define OB_LICENSE_SCOPE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4407, current license does not allow this operation: %s"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -9191,7 +9201,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2402];
+extern int g_all_ob_errnos[2405];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

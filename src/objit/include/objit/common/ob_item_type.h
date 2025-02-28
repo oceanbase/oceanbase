@@ -2761,6 +2761,8 @@ typedef enum ObItemType
   T_SCHED_CALENDAR_INTERVAL = 4805,
   T_SCHED_CALENDAR_BY = 4806,
   T_SCHED_CALENDAR_BY_LIST = 4807,
+
+  T_LOAD_LICENSE = 4808,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
