@@ -287,6 +287,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObOptStatGatherParam gather_param;
   ObArenaAllocator allocator("SplitGatherStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+  ObArenaAllocator tmp_allocator("SplitTmpStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
   const ObIArray<PartInfo> &partition_infos = stat_level == PARTITION_LEVEL ? param.part_infos_ : param.subpart_infos_;
   if (OB_UNLIKELY((stat_level != PARTITION_LEVEL && stat_level != SUBPARTITION_LEVEL) ||
                    !gather_helper.is_split_gather_ ||
@@ -326,10 +327,20 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
           }
         } else {
           int64_t idx_col = 0;
-          ObOptTableStat part_Stat;
-          ObSEArray<ObOptTableStat *, 1> all_tstats;
-          if (OB_FAIL(all_tstats.push_back(&part_Stat))) {
-            LOG_WARN("faile to push back", K(ret));
+          ObSEArray<ObOptTableStat *, 8> all_tstats;
+          for (int64_t i = 0; OB_SUCC(ret) && i < gather_partition_infos.count(); ++i) {
+            ObOptTableStat *opt_stat = NULL;
+            void *p = NULL;
+            if (OB_ISNULL(p = tmp_allocator.alloc(sizeof(ObOptTableStat)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate opt table stat", K(ret));
+            } else if (OB_FALSE_IT(opt_stat = new(p) ObOptTableStat())) {
+            } else if (OB_FAIL(all_tstats.push_back(opt_stat))) {
+              LOG_WARN("faile to push back", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            // do nothing
           } else if (OB_FAIL(fetch_gather_table_snapshot_read(trans.get_connection(), gather_param.tenant_id_, gather_param.sepcify_scn_))) {
             LOG_WARN("failed to fetch gather table snapshot read", K(ret));
             ret = OB_SUCCESS;//if we failed to get the read snapshot, just skip, not specify the snapshot
@@ -384,6 +395,12 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
             } while(OB_SUCC(ret) && idx_col < param.column_params_.count());
           }
           gather_param.sepcify_scn_ = 0;//Try to ensure that the stat of a partition are collected in a snapshot
+          for (int64_t i = 0; i < all_tstats.count(); ++i) {
+            if (NULL != all_tstats.at(i)) {
+              all_tstats.at(i)->~ObOptTableStat();
+            }
+          }
+          tmp_allocator.reuse();
         }
       }
     } while (OB_SUCC(ret) && idx_part < partition_infos.count());
