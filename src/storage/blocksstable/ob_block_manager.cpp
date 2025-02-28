@@ -538,22 +538,6 @@ int ObBlockManager::get_macro_block_info(
   return ret;
 }
 
-int ObBlockManager::get_all_macro_ids(ObArray<MacroBlockId> &ids_array) {
-  int ret = OB_SUCCESS;
-  ids_array.reset();
-  ObBlockManager::GetAllMacroBlockIdFunctor getter(ids_array);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ids_array.reserve(block_map_.count()))) {
-    LOG_WARN("fail to reserver macro id array", K(ret), "block count",
-             block_map_.count());
-  } else if (OB_FAIL(block_map_.for_each(getter))) {
-    LOG_WARN("fail to for each block map", K(ret));
-  }
-  return ret;
-}
-
 int ObBlockManager::check_macro_block_free(const MacroBlockId &macro_id,
                                            bool &is_free) const {
   int ret = OB_SUCCESS;
