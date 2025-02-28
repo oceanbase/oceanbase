@@ -647,6 +647,7 @@ int ObCOMergeBatchExeDag::decide_retry_strategy(const int error_code, ObDagRetry
 {
   int ret = OB_SUCCESS;
   retry_status = DAG_CAN_RETRY;
+
   if (OB_TRANS_CTX_NOT_EXIST == error_code
       || OB_SERVER_OUTOF_DISK_SPACE == error_code) {
     retry_status = DAG_AND_DAG_NET_SKIP_RETRY;
@@ -1478,6 +1479,7 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
   int64_t allowed_schedule_dag_count_place_holder = 1;
 
   if (!ObCOTabletMergeCtx::is_cg_could_schedule(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx])) {
+    LOG_TRACE("cannot create cg dag", K(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx]), K(start_cg_idx));
   } else if (OB_FAIL(init_cg_schedule_status_for_row_store())) {
     LOG_WARN("failed to init cg schedule status", K(ret));
   } else if (OB_FAIL(inner_create_exe_dags(start_cg_idx, start_cg_idx + 1, max_cg_idx, allowed_schedule_dag_count_place_holder,
@@ -1513,7 +1515,10 @@ int ObCOMergeDagNet::inner_create_column_store_dag(
         ++end_cg_idx;
       } while (end_cg_idx < tmp_end_cg_idx
           && ObCOTabletMergeCtx::is_cg_could_schedule(schedule_status_array[end_cg_idx]));
+    } else {
+      LOG_TRACE("cannot create cg dag", K(schedule_status_array[end_cg_idx]));
     }
+
     if (start_cg_idx == end_cg_idx) {
       // move to next cg
       ++end_cg_idx;
@@ -1607,9 +1612,14 @@ int ObCOMergeDagNet::inner_add_exe_dags_into_scheduler(
     } else {
       unscheduled_dag_idx = idx + 1;
       ObMutexGuard guard(ctx_lock_);
-      MARK_CG_SCHEDULE_STATUS(start_cg_idx,
-                              end_cg_idx,
-                              ObCOTabletMergeCtx::CG_SCHE_STATUS_SCHEDULED);
+      for (int64_t i = start_cg_idx; i < end_cg_idx; ++i) {
+        if (ObCOTabletMergeCtx::CG_SCHE_STATUS_FAILED == co_merge_ctx_->cg_schedule_status_array_[i] ||
+            ObCOTabletMergeCtx::CG_SCHE_STATUS_FINISHED == co_merge_ctx_->cg_schedule_status_array_[i]) {
+          LOG_INFO("cg status has been marked, cannot update", K(i), K(start_cg_idx), K(end_cg_idx), K(co_merge_ctx_->cg_schedule_status_array_[i]));
+        } else {
+          co_merge_ctx_->cg_schedule_status_array_[i] = ObCOTabletMergeCtx::CG_SCHE_STATUS_SCHEDULED;
+        }
+      }
     }
   }
   return ret;
