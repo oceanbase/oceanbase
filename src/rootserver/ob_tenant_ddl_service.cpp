@@ -1654,11 +1654,13 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
   const ObCreateTenantArg &create_tenant_arg = arg.create_tenant_arg_;
+  const int64_t start_ts = ObTimeUtility::current_time();
   ObCurTraceId::TraceId old_trace_id = OB_ISNULL(ObCurTraceId::get_trace_id()) ?
     ObCurTraceId::TraceId() : *ObCurTraceId::get_trace_id();
   ObCurTraceId::TraceId new_trace_id;
   new_trace_id.init(GCONF.self_addr_);
-  FLOG_INFO("[CREATE_TENANT] change trace_id for create tenant", K(new_trace_id), K(tenant_id));
+  FLOG_INFO("[CREATE_TENANT] change trace_id for create tenant", K(old_trace_id), K(new_trace_id),
+      K(tenant_id));
   common::ObTraceIdGuard trace_id_guard(new_trace_id);
   TIMEGUARD_INIT(create_normal_tenant, 10_s);
   FLOG_INFO("[CREATE_TENANT] STEP 2. start create normal tenant", K(tenant_id));
@@ -1717,7 +1719,8 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   } else if (is_meta_tenant(tenant_id) && OB_FAIL(ERRSIM_CREATE_META_NORMAL_TENANT_ERROR)) {
     LOG_WARN("ERRSIM_CREATE_META_NORMAL_TENANT_ERROR hit", KR(ret));
   }
-  FLOG_INFO("[CREATE_TENANT] STEP 2. finish create normal tenant", KR(ret), K(new_trace_id), K(tenant_id));
+  FLOG_INFO("[CREATE_TENANT] STEP 2. finish create normal tenant", KR(ret), K(new_trace_id),
+      K(old_trace_id), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -5989,6 +5992,7 @@ int ObTenantDDLService::set_tenant_schema_charset_and_collation(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CREATE_TENANT_CHECK_FAIL);
 int ObTenantDDLService::create_tenant_check_(const obrpc::ObCreateTenantArg &arg,
     bool &need_create,
     share::schema::ObSchemaGetterGuard &schema_guard)
@@ -6019,6 +6023,8 @@ int ObTenantDDLService::create_tenant_check_(const obrpc::ObCreateTenantArg &arg
     LOG_WARN("ptr is null", KR(ret), KP_(sql_proxy));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(ERRSIM_CREATE_TENANT_CHECK_FAIL)) {
+    LOG_WARN("ERRSIM_CREATE_TENANT_CHECK_FAIL", KR(ret));
   } else {
     // check tenant exist
     bool tenant_exist = false;

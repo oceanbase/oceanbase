@@ -1366,6 +1366,8 @@ bool ObCreateTenantSchemaResult::is_valid() const
   bool valid = true;
   if (tenant_exist_) {
   // if tenant_exist_ is true, other values should be invalid
+  } else if (!is_valid_tenant_id(user_tenant_id_)) {
+    valid = false;
   } else if (!is_user_tenant(user_tenant_id_)) {
     valid = false;
   }
