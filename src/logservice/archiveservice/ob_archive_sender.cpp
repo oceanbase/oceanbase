@@ -801,6 +801,13 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_SERVER_OUTOF_DISK_SPACE == ret_code) {
+    // server out of disk space
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_SERVER_OUTOF_DISK_SPACE, "msg", "archive device is full", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (OB_BACKUP_PERMISSION_DENIED == ret_code) {
     // backup permission denied
     if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
@@ -829,6 +836,41 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
+  } else if (OB_TIMEOUT == ret_code) {
+    // archive push log timeout
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_TIMEOUT, "msg", "archive push log time out", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_FILE_OR_DIRECTORY_PERMISSION_DENIED == ret_code) {
+    // file or directory permission denied
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, "msg", "file or directory permission denied", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret_code) {
+    // file or directory not exist
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_NO_SUCH_FILE_OR_DIRECTORY, "msg", "file or directory not exist", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_FILE_OR_DIRECTORY_EXIST == ret_code) {
+    // file or directory exist
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_FILE_OR_DIRECTORY_EXIST, "msg", "file or directory already exist", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_DATA_OUT_OF_RANGE == ret_code) {
+    // data out of range
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_DATA_OUT_OF_RANGE, "msg", "data out of range", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (is_ignore_ret_code_(ret_code)) {
   } else {
     ARCHIVE_LOG(ERROR, "archive sender encounter fatal error", K(ret), K(id), K(key), K(ret_code));
@@ -846,10 +888,21 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code
     || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code
     || OB_IO_LIMIT == ret_code
+    || OB_OSS_ERROR == ret_code
+    || OB_COS_ERROR == ret_code
+    || OB_S3_ERROR == ret_code
     || OB_BACKUP_PERMISSION_DENIED == ret_code
     || OB_ERR_AES_ENCRYPT == ret_code
     || OB_ERR_AES_DECRYPT == ret_code
-    || OB_BACKUP_IO_PROHIBITED == ret_code;
+    || OB_BACKUP_IO_PROHIBITED == ret_code
+    || OB_TIMEOUT == ret_code
+    || OB_FILE_OR_DIRECTORY_PERMISSION_DENIED == ret_code
+    || OB_NO_SUCH_FILE_OR_DIRECTORY == ret_code
+    || OB_FILE_OR_DIRECTORY_EXIST == ret_code
+    || OB_SERVER_OUTOF_DISK_SPACE == ret_code
+    || OB_DATA_OUT_OF_RANGE == ret_code
+    || OB_EAGAIN == ret_code
+    || OB_CANCELED == ret_code;
 }
 
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const
