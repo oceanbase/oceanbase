@@ -342,7 +342,7 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
     LOG_WARN("invalid of row_id", K(ret), K(block_id), K_(block_id_cnt));
   } else {
     if (reader.file_size_ != file_size_) {
-      reader.reset_cursor(file_size_);
+      reader.reset_cursor(file_size_, false);
       blk = NULL;
     }
     if (NULL != blk && blk->contain(block_id)) {
