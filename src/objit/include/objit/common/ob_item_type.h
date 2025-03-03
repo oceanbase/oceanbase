@@ -2763,6 +2763,10 @@ typedef enum ObItemType
   T_SCHED_CALENDAR_BY_LIST = 4807,
 
   T_LOAD_LICENSE = 4808,
+
+  // parser config: range ngram
+  T_PARSER_MIN_NGRAM_SIZE = 4809,
+  T_PARSER_MAX_NGRAM_SIZE = 4810,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
