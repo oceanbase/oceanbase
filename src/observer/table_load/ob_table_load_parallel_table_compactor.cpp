@@ -225,7 +225,7 @@ public:
       if (OB_SUCC(ret)) {
         ObDirectLoadMultipleSSTableRangeSplitter range_splitter;
         if (OB_FAIL(range_splitter.init(sstable_array, parallel_table_compactor_->table_data_desc_,
-                                        &ctx_->schema_.datum_utils_))) {
+                                        &parallel_table_compactor_->op_->merge_table_ctx_->store_table_ctx_->schema_->datum_utils_))) {
           LOG_WARN("fail to init range splitter", KR(ret));
         } else if (OB_FAIL(range_splitter.split_range(tablet_ctx_->ranges_,
                                                       parallel_table_compactor_->thread_count_,
@@ -423,7 +423,7 @@ public:
     ObDirectLoadMultipleSSTableCompactParam compact_param;
     compact_param.tablet_id_ = tablet_ctx_->tablet_id_;
     compact_param.table_data_desc_ = parallel_table_compactor_->table_data_desc_;
-    compact_param.datum_utils_ = &ctx_->schema_.datum_utils_;
+    compact_param.datum_utils_ = &parallel_table_compactor_->op_->merge_table_ctx_->store_table_ctx_->schema_->datum_utils_;
     if (OB_FAIL(compactor_.init(compact_param))) {
       LOG_WARN("fail to init sstable compactor", KR(ret));
     }
