@@ -4745,9 +4745,12 @@ int ObBackupDestAttributeParser::ExtraArgsCb::match(const char *key, const char 
       }
     }
   }
-  if (!found) {
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_SUCC(ret) && !found) {
+    ObSqlString err_msg;
+    err_msg.append_fmt("key '%s' is not exist, changing '%s' is", key, key);
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("KV pair do not match any action", K(key), K(value), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
   }
   return ret;
 }

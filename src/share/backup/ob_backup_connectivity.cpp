@@ -2129,7 +2129,12 @@ int ObBackupChangeExternalStorageDestUtil::change_external_storage_dest(const ob
         char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
         if (OB_SUCC(ret) && '\0' != attribute_option.src_info_[0]) {
           if (OB_FAIL(change_src_info(trans, gen_user_tenant_id(tenant_id), attribute_option, backup_dest))) {
-            LOG_WARN("failed to change src info", K(ret), K(tenant_id));
+            if (OB_ITER_END == ret) {
+              ret = OB_ENTRY_NOT_EXIST;
+              LOG_WARN("path is not exist, please check the path", K(ret), K(tenant_id));
+            } else {
+              LOG_WARN("failed to change src info", K(ret), K(tenant_id));
+            }
           } else {
             LOG_INFO("admin change external storage dest", K(arg));
           }
