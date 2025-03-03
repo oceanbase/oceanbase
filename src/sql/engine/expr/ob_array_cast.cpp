@@ -333,6 +333,9 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
       LOG_WARN("unexpected element type", K(ret), K(elem_type->type_id_));
     } else if (OB_FAIL(ObArrayTypeObjFactory::construct(alloc, *array_type, child_array))) {
       LOG_WARN("failed to add null to array", K(ret));
+    } else if (json_arr->element_count() == 0 && array_type->element_type_->type_id_ != OB_BASIC_TYPE) {
+      ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+      LOG_WARN("array dimension dismatch", K(ret), K(array_type->element_type_->type_id_));
     }
     for (int i = 0; i < json_arr->element_count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(add_json_node_to_array(alloc, *(*json_arr)[i], array_type->element_type_, child_array))) {
@@ -683,6 +686,9 @@ int ObArrayCastUtils::string_cast(common::ObIAllocator &alloc, ObString &arr_tex
   } else if (j_node->json_type() != ObJsonNodeType::J_ARRAY) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid text. not json type", K(ret), K(arr_text), K(j_node->json_type()));
+  } else if (j_node->element_count() == 0 && dst_elem_type->type_id_ != OB_BASIC_TYPE) {
+    ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+    LOG_WARN("array dimension dismatch", K(ret), K(dst_elem_type->type_id_));
   } else {
     for (int i = 0; i < j_node->element_count() && OB_SUCC(ret); i++) {
       ObJsonArray *json_arr = static_cast<ObJsonArray *>(j_node);
