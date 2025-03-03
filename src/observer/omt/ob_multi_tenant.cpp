@@ -1854,9 +1854,14 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       is_prepare_unit_gc = removed_tenant->is_prepare_unit_gc();
       prepare_unit_gc_ts = removed_tenant->get_prepare_unit_gc_ts();
       const int64_t unit_gc_wait_time = GCONF.unit_gc_wait_time;
-      if (GCONF._enable_unit_gc_wait && is_prepare_unit_gc) {
-        need_force_kill_session = (prepare_unit_gc_ts > 0 &&
-            ObTimeUtility::current_time() - prepare_unit_gc_ts > unit_gc_wait_time);
+      if (GCONF._enable_unit_gc_wait) {
+        if (!is_prepare_unit_gc) {
+          removed_tenant->set_prepare_unit_gc();
+          need_force_kill_session = false;
+        } else {
+          need_force_kill_session = (prepare_unit_gc_ts > 0 &&
+              ObTimeUtility::current_time() - prepare_unit_gc_ts > unit_gc_wait_time);
+        }
       } else {
         need_force_kill_session = true;
       }
