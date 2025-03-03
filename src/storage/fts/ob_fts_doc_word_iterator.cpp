@@ -260,7 +260,7 @@ int ObFTDocWordScanIterator::build_key_range(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer for rowkey", K(ret));
   } else {
-    common::ObObj *objs= new common::ObObj[ROWKEY_COLUMN_COUNT * 2];
+    common::ObObj *objs= new (buf) common::ObObj[ROWKEY_COLUMN_COUNT * 2];
     objs[0].set_varbinary(doc_id.get_string());
     objs[1] = common::ObObj::make_min_obj();
     objs[2].set_varbinary(doc_id.get_string());
