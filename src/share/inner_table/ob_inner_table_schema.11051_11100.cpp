@@ -792,14 +792,29 @@ int ObInnerTableSchema::all_virtual_tablet_sstable_macro_info_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("macro_range", //column_name
+    ADD_COLUMN_SCHEMA("start_key", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_RANGE_LENGTH, //column_length
+      OB_MAX_ROW_KEY_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("end_key", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_ROW_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

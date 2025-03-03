@@ -58,7 +58,8 @@ class ObAllVirtualTabletSSTableMacroInfo : public common::ObVirtualTableScannerI
     OCCUPY_SIZE,
     MICRO_BLOCK_CNT,
     DATA_CHECKSUM,
-    MACRO_RANGE,
+    START_KEY,
+    END_KEY,
     BLOCK_TYPE,
     COMPRESSOR_NAME,
     ROW_STORE_TYPE
@@ -127,7 +128,8 @@ private:
   common::ObSEArray<ObColDesc, 16> cols_desc_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
-  char range_buf_[common::OB_MAX_RANGE_LENGTH + 1]; // extra byte for '\0'
+  char start_key_buf_[common::OB_MAX_ROW_KEY_LENGTH + 1]; // extra byte for '\0'
+  char end_key_buf_[common::OB_MAX_ROW_KEY_LENGTH + 1]; // extra byte for '\0'
   storage::ObTableStoreIterator table_store_iter_;
   blocksstable::ObSSTable *curr_sstable_;
   blocksstable::ObSSTableMetaHandle curr_sstable_meta_handle_;

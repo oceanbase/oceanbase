@@ -84,6 +84,10 @@ ObAllVirtualTabletSSTableMacroInfo::ObAllVirtualTabletSSTableMacroInfo()
     block_idx_(0),
     iter_buf_(nullptr)
 {
+  memset(ip_buf_, 0, sizeof(ip_buf_));
+  memset(start_key_buf_, 0, sizeof(start_key_buf_));
+  memset(end_key_buf_, 0, sizeof(end_key_buf_));
+  memset(objs_, 0, sizeof(objs_));
 }
 
 ObAllVirtualTabletSSTableMacroInfo::~ObAllVirtualTabletSSTableMacroInfo()
@@ -102,6 +106,9 @@ void ObAllVirtualTabletSSTableMacroInfo::reset()
     iter_buf_ = nullptr;
   }
 
+  memset(ip_buf_, 0, sizeof(ip_buf_));
+  memset(start_key_buf_, 0, sizeof(start_key_buf_));
+  memset(end_key_buf_, 0, sizeof(end_key_buf_));
   memset(objs_, 0, sizeof(objs_));
 
   ObVirtualTableScannerIterator::reset();
@@ -379,10 +386,19 @@ int ObAllVirtualTabletSSTableMacroInfo::gen_row(
         //data_checksum
         cur_row_.cells_[i].set_int(macro_info.data_checksum_);
         break;
-      case MACRO_RANGE: {
-        //macro_range
-        if (macro_info.store_range_.to_plain_string(range_buf_, sizeof(range_buf_)) >= 0) {
-          cur_row_.cells_[i].set_varchar(range_buf_);
+      case START_KEY: {
+        if (macro_info.store_range_.get_start_key().to_plain_string(start_key_buf_, sizeof(start_key_buf_)) >= 0) {
+          cur_row_.cells_[i].set_varchar(start_key_buf_);
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          // if error occur, set to null
+          cur_row_.cells_[i].set_null();
+        }
+        break;
+      }
+      case END_KEY: {
+        if (macro_info.store_range_.get_end_key().to_plain_string(end_key_buf_, sizeof(end_key_buf_)) >= 0) {
+          cur_row_.cells_[i].set_varchar(end_key_buf_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         } else {
           // if error occur, set to null
