@@ -266,7 +266,7 @@ public:
   int alloc_task(T *&task);
   int get_dag_ret() const { return dag_ret_; };
   ObDagStatus get_dag_status() const { return dag_status_; }
-  int64_t get_priority() const { return priority_; }
+  ObDagPrio::ObDagPrioEnum get_priority() const { return priority_; }
   void set_priority(ObDagPrio::ObDagPrioEnum prio) { priority_ = prio; }
   const ObDagId &get_dag_id() const { return id_; }
   int set_dag_id(const ObDagId &dag_id);
@@ -789,6 +789,8 @@ public:
   template<typename T>
   int alloc_dag(T *&dag);
   template<typename T>
+  int alloc_dag_with_priority(const ObDagPrio::ObDagPrioEnum &prio, T *&dag);
+  template<typename T>
   int create_and_add_dag_net(const ObIDagInitParam *param);
   void free_dag(ObIDag &dag, ObIDag *parent_dag);
   template<typename T>
@@ -1034,6 +1036,30 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
         dag = static_cast<T*>(new_dag);
       }
     }
+  }
+  return ret;
+}
+
+template <typename  T>
+int ObTenantDagScheduler::alloc_dag_with_priority(
+    const ObDagPrio::ObDagPrioEnum &prio, T *&dag)
+{
+  int ret = OB_SUCCESS;
+  dag = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (prio < ObDagPrio::DAG_PRIO_COMPACTION_HIGH
+     || prio >= ObDagPrio::DAG_PRIO_MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "get invalid arg", K(ret), K(prio));
+  } else if (OB_FAIL(alloc_dag(dag))) {
+    COMMON_LOG(WARN, "failed to alloc dag", K(ret));
+  } else if (OB_ISNULL(dag)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag should not be null", K(ret), KP(dag));
+  } else {
+    dag->set_priority(prio);
   }
   return ret;
 }

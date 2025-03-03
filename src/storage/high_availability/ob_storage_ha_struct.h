@@ -26,6 +26,7 @@
 #include "ob_ls_transfer_info.h"
 #include "common/ob_learner_list.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
+#include "share/scheduler/ob_dag_scheduler_config.h"
 
 namespace oceanbase
 {
@@ -305,6 +306,9 @@ struct ObMigrationUtils
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       int64_t &rebuild_seq);
+  static int get_dag_priority(
+      const ObMigrationOpType::TYPE &type,
+      share::ObDagPrio::ObDagPrioEnum &prio);
 };
 
 struct ObCopyTableKeyInfo final
