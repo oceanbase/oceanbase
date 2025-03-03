@@ -521,6 +521,35 @@ void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
   }
 }
 
+int ObSQLUtils::clear_expr_eval_flags_norecursive(const ObExpr &expr, ObEvalCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObExpr*, 8> exprs;
+
+  if (OB_FAIL(exprs.push_back(&expr))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    do {
+      const ObExpr *current = NULL;
+      if (OB_FAIL(exprs.pop_back(current))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        if (current->eval_func_ != NULL || T_OP_ROW == current->type_) {
+          current->get_eval_info(ctx).clear_evaluated_flag();
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < current->arg_cnt_; i++) {
+          if (OB_FAIL(exprs.push_back(current->args_[i]))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+      }
+    } while (exprs.count() > 0 && OB_SUCCESS == ret);
+  }
+  return ret;
+}
+
 int ObSQLUtils::calc_sql_expression_without_row(
   ObExecContext &exec_ctx,
   const ObISqlExpression &expr,
@@ -543,9 +572,9 @@ int ObSQLUtils::calc_sql_expression_without_row(
     } else {
       ObDatum *datum = NULL;
       ObEvalCtx eval_ctx(exec_ctx, allocator);
-      clear_expr_eval_flags(*new_expr, eval_ctx);
-      OZ(new_expr->eval(eval_ctx, datum)); // sql exprs called here
-      OZ(datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
+      OZ (clear_expr_eval_flags_norecursive(*new_expr, eval_ctx));
+      OZ (new_expr->eval(eval_ctx, datum)); // sql exprs called here
+      OZ (datum->to_obj(result, new_expr->obj_meta_, new_expr->obj_datum_map_));
     }
   }
   return ret;
