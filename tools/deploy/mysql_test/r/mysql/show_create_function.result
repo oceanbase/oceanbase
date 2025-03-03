@@ -1,0 +1,38 @@
+------connect to test01------
+show create function test.f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	CREATE DEFINER = `admin`@`%` FUNCTION `f1`(a INT, b INT) RETURNS int(11)
+    DETERMINISTIC
+BEGIN
+RETURN a + b;
+END	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+show create function test.f2;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f2	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	CREATE DEFINER = `test03`@`%` FUNCTION `f2`(a INT, b INT) RETURNS int(11)
+    DETERMINISTIC
+BEGIN
+RETURN a + b; 
+END	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+------connect to test02------
+show create function test.f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+show create function test.f2;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f2	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+------connect to test03------
+show create function test.f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+show create function test.f2;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f2	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_AUTO_CREATE_USER	CREATE DEFINER = `test03`@`%` FUNCTION `f2`(a INT, b INT) RETURNS int(11)
+    DETERMINISTIC
+BEGIN
+RETURN a + b; 
+END	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci

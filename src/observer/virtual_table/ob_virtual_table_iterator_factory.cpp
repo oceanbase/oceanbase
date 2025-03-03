@@ -1210,7 +1210,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           {
             ObShowCreateProcedure *create_proc = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowCreateProcedure, create_proc))) {
-              vt_iter = static_cast<ObVirtualTableIterator *>(create_proc);
+              if (OB_FAIL(session->get_session_priv_info(create_proc->get_session_priv()))) {
+                SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else if (OB_FAIL(create_proc->get_role_id_array().assign(session->get_enable_role_array()))) {
+                SERVER_LOG(WARN, "fail to assign role id array", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(create_proc);
+              }
             }
             break;
           }
