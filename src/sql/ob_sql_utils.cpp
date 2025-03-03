@@ -4395,7 +4395,7 @@ int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &ds
       LOG_WARN("fail to alloc new obj", K(ret));
     } else if (src.get_obj_cnt() != key_types_->count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("keys are not match with columns", K(ret));
+      LOG_WARN("keys are not match with columns", K(ret), K_(base_table_id), KPC(key_types_), K(src), KPC(table_schema_));
     }
     lib::CompatModeGuard g(lib::Worker::CompatMode::MYSQL);
     for (int64_t nth_obj = 0; OB_SUCC(ret) && nth_obj < src.get_obj_cnt(); ++nth_obj) {
