@@ -98,6 +98,12 @@ public:
   int get_package_expr(const ObPLResolveCtx &resolve_ctx, sql::ObRawExprFactory &expr_factory,
                        uint64_t package_id, int64_t expr_idx, sql::ObRawExpr *&expr);
 
+  int get_package_spec_cursor(const ObPLResolveCtx &resolve_ctx,
+                              uint64_t package_id,
+                              const ObString &cursor_name,
+                              const ObPLCursor *&cursor,
+                              int64_t &cursor_idx);
+
   int get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                          uint64_t package_id,
                          int64_t cursor_idx,
