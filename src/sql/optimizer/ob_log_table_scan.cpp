@@ -1232,7 +1232,7 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   } else if (is_table_without_pk && is_index_global_ && index_back_ &&
              OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
     LOG_WARN("failed to get part column exprs", K(ret));
-  } else if ((has_lob_column || index_back_ || has_func_lookup()) &&
+  } else if ((has_lob_column || index_back_ || has_func_lookup() || is_tsc_with_domain_id()) &&
              OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
     LOG_WARN("failed to generate rowkey exprs", K(ret));
   } else { /*do nothing*/ }
