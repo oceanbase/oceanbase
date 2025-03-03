@@ -14,6 +14,8 @@
 #define private public
 #define protected public
 #include "share/vector_type/ob_vector_l2_distance.h"
+#include "share/vector_type/ob_vector_cosine_distance.h"
+#include "share/vector_type/ob_vector_ip_distance.h"
 #include "share/vector_type/ob_vector_add.h"
 #include "share/vector_type/ob_vector_div.h"
 #undef private
@@ -76,6 +78,80 @@ TEST_F(TestSimdVectorOp, l2_distance)
   }
 
   std::cout << "normal l2 distance: " << dur_normal/1000000.0 << "ms, simd l2 distance: " << dur_simd/1000000.0 << "ms" << std::endl;
+  std::cout << "simd is " << double(dur_normal)/double(dur_simd) << "x faster than normal" << std::endl;
+}
+
+TEST_F(TestSimdVectorOp, cosine_distance)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  float vec1[3] = {0, 1, 2};
+  float vec2[3] = {3, 4, 5};
+  double similarity_normal = 0;
+  double similarity_simd = 0;
+  ASSERT_EQ(OB_SUCCESS, cosine_similarity_normal(vec1, vec2, 3, similarity_normal));
+  ASSERT_EQ(OB_SUCCESS, ObVectorCosineDistance<float>::cosine_similarity_func(vec1, vec2, 3, similarity_simd));
+  ASSERT_EQ(similarity_normal, similarity_simd);
+
+  const int VEC_SIZE = 1000;
+  const int LOOP_SIZE = 100000;
+  float vec3[VEC_SIZE] = {0};
+  float vec4[VEC_SIZE] = {0};
+  std::srand(static_cast<unsigned int>(std::time(0)));
+  long dur_normal = 0;
+  long dur_simd = 0;
+  for (int j = 0; j < LOOP_SIZE; ++j) {
+    for (int i = 0; i < VEC_SIZE; ++i) {
+      vec3[i] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+      vec4[i] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    }
+
+    system_clock::time_point start_normal = high_resolution_clock::now();
+    ASSERT_EQ(OB_SUCCESS, cosine_similarity_normal(vec3, vec4, VEC_SIZE, similarity_normal));
+    dur_normal += duration_cast<nanoseconds>(high_resolution_clock::now() - start_normal).count();
+
+    system_clock::time_point start_simd = high_resolution_clock::now();
+    ASSERT_EQ(OB_SUCCESS, ObVectorCosineDistance<float>::cosine_similarity_func(vec3, vec4, VEC_SIZE, similarity_simd));
+    dur_simd += duration_cast<nanoseconds>(high_resolution_clock::now() - start_simd).count();
+  }
+
+  std::cout << "normal cosine distance: " << dur_normal/1000000.0 << "ms, simd cosine distance: " << dur_simd/1000000.0 << "ms" << std::endl;
+  std::cout << "simd is " << double(dur_normal)/double(dur_simd) << "x faster than normal" << std::endl;
+}
+
+TEST_F(TestSimdVectorOp, ip_distance)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  float vec1[3] = {0, 1, 2};
+  float vec2[3] = {3, 4, 5};
+  double distance_normal = 0;
+  double distance_simd = 0;
+  ASSERT_EQ(OB_SUCCESS, ip_distance_normal(vec1, vec2, 3, distance_normal));
+  ASSERT_EQ(OB_SUCCESS, ObVectorIpDistance<float>::ip_distance_func(vec1, vec2, 3, distance_simd));
+  ASSERT_EQ(distance_normal, distance_simd);
+
+  const int VEC_SIZE = 1000;
+  const int LOOP_SIZE = 100000;
+  float vec3[VEC_SIZE] = {0};
+  float vec4[VEC_SIZE] = {0};
+  std::srand(static_cast<unsigned int>(std::time(0)));
+  long dur_normal = 0;
+  long dur_simd = 0;
+  for (int j = 0; j < LOOP_SIZE; ++j) {
+    for (int i = 0; i < VEC_SIZE; ++i) {
+      vec3[i] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+      vec4[i] = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    }
+
+    system_clock::time_point start_normal = high_resolution_clock::now();
+    ASSERT_EQ(OB_SUCCESS, ip_distance_normal(vec3, vec4, VEC_SIZE, distance_normal));
+    dur_normal += duration_cast<nanoseconds>(high_resolution_clock::now() - start_normal).count();
+
+    system_clock::time_point start_simd = high_resolution_clock::now();
+    ASSERT_EQ(OB_SUCCESS, ObVectorIpDistance<float>::ip_distance_func(vec3, vec4, VEC_SIZE, distance_simd));
+    dur_simd += duration_cast<nanoseconds>(high_resolution_clock::now() - start_simd).count();
+  }
+
+  std::cout << "normal ip distance: " << dur_normal/1000000.0 << "ms, simd ip distance: " << dur_simd/1000000.0 << "ms" << std::endl;
   std::cout << "simd is " << double(dur_normal)/double(dur_simd) << "x faster than normal" << std::endl;
 }
 
