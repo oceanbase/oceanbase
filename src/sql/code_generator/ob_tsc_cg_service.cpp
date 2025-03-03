@@ -1549,8 +1549,9 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     LOG_WARN("store group id expr failed", K(ret));
   } else if (OB_FAIL(extract_das_column_ids(das_output_cols, output_cids))) {
     LOG_WARN("extract column ids failed", K(ret));
-  } else if (op.has_func_lookup() && op.get_real_index_table_id() == table_id) {
+  } else if ((op.has_func_lookup() || op.is_pre_vec_idx_scan()) && op.get_real_index_table_id() == table_id) {
     // main scan in functional lookup, need to output extra rowkey exprs for further lookup on functional index
+    // main scan in pre-filter vec index scan, need to output extra rowkey exprs for further lookup on rowkey-vid table
     ObArray<uint64_t> rowkey_column_ids;
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(MTL_ID(), op.get_real_ref_table_id(), table_schema))) {
