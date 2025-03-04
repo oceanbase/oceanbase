@@ -180,15 +180,31 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
 int ObDASHNSWScanIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   if (OB_NOT_NULL(inv_idx_scan_iter_) && OB_FAIL(inv_idx_scan_iter_->reuse())) {
     LOG_WARN("failed to reuse inv idx scan iter", K(ret));
-  } else if (!com_aux_vec_iter_first_scan_ && OB_FAIL(reuse_com_aux_vec_iter())) {
+    tmp_ret = ret;
+    ret = OB_SUCCESS;
+  }
+  if (!com_aux_vec_iter_first_scan_ && OB_FAIL(reuse_com_aux_vec_iter())) {
     LOG_WARN("failed to reuse com aux vec iter", K(ret));
-  } else if (!rowkey_vid_iter_first_scan_ && OB_FAIL(reuse_rowkey_vid_iter())) {
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+  if (!rowkey_vid_iter_first_scan_ && OB_FAIL(reuse_rowkey_vid_iter())) {
     LOG_WARN("failed to reuse rowkey vid iter", K(ret));
-  } else if (!vid_rowkey_iter_first_scan_ && OB_FAIL(reuse_vid_rowkey_iter())) {
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+  if (!vid_rowkey_iter_first_scan_ && OB_FAIL(reuse_vid_rowkey_iter())) {
     LOG_WARN("failed to reuse vid rowkey iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+  }
+
+  // return first error code
+  if (tmp_ret != OB_SUCCESS) {
+    ret = tmp_ret;
   }
 
   if (OB_NOT_NULL(adaptor_vid_iter_)) {
