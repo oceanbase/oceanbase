@@ -386,8 +386,9 @@ public:
   int eval_group_extra_result(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                               const int32_t cur_group_id) override
   {
-    int ret = OB_NOT_IMPLEMENT;
-    SQL_LOG(WARN, "not implemented", K(ret), K(*this));
+    UNUSEDx(agg_ctx, agg_col_id, cur_group_id);
+    int ret = OB_SUCCESS;
+    // do nothing
     return ret;
   }
 
@@ -954,7 +955,7 @@ public:
           }
         }
       }
-      if (OB_SUCC(ret) && aggr_info.has_order_by_
+      if (OB_SUCC(ret)
           && OB_FAIL(static_cast<Aggregate *>(agg_)->eval_group_extra_result(agg_ctx, agg_col_id,
                                                                              group_id))) {
         SQL_LOG(WARN, "eval_inner_agg_failed", K(ret));

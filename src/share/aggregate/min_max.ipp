@@ -376,6 +376,20 @@ public:
     // do nothing
     return ret;
   }
+
+  int eval_group_extra_result(RuntimeContext &agg_ctx, const int32_t agg_col_id, const int32_t cur_group_id) override
+  {
+    int ret = OB_SUCCESS;
+    char *agg_cell = nullptr;
+    int32_t agg_cell_len = 0;
+    if (agg_ctx.win_func_agg_ && helper::is_var_len_agg_cell(vec_tc)) {
+      agg_ctx.get_agg_payload(agg_col_id, cur_group_id, agg_cell, agg_cell_len);
+      if (OB_FAIL(set_tmp_var_agg_data(agg_ctx, agg_col_id, agg_cell))) {
+        SQL_LOG(WARN, "store tmp result failed", K(ret));
+      }
+    }
+    return ret;
+  }
 private:
   int set_tmp_var_agg_data(RuntimeContext &agg_ctx, const int32_t agg_col_id, char *agg_cell)
   {
