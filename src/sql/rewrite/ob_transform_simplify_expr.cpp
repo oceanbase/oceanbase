@@ -2592,7 +2592,10 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
   ObItemType opp_type = T_INVALID;
   bool is_valid = true;
   uint64_t key = 0;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(ctx_) ||
+      OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(expr), K_(ctx), K(expr_factory), K(ret));
   } else if (!expr->is_op_expr() || expr->get_expr_type() != T_OP_NOT) {
@@ -2629,6 +2632,11 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       ObRawExpr *temp = NULL;
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(cur, temp, *expr_factory))) {
         LOG_WARN("try create bool expr failed", K(ret));
+      } else if (OB_ISNULL(temp)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+        LOG_WARN("fail to formalize", K(ret));
       } else {
         expr = temp;
         is_valid = false;
@@ -2686,7 +2694,9 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
         if (OB_SUCC(ret)) {
           expr = new_expr;
           trans_happened = true;
-          if (OB_FAIL(push_expr_map.set_refactored(key, new_expr))) {
+          if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+            LOG_WARN("fail to formalize", K(ret));
+          } else if (OB_FAIL(push_expr_map.set_refactored(key, new_expr))) {
             LOG_WARN("failed to add push expr into map", K(ret));
           }
         }
@@ -2719,7 +2729,9 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       }
       if (OB_SUCC(ret)) {
         expr = new_expr;
-        if (OB_FAIL(push_expr_map.set_refactored(key, new_expr))) {
+        if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("fail to formalize", K(ret));
+        } else if (OB_FAIL(push_expr_map.set_refactored(key, new_expr))) {
           LOG_WARN("failed to add push expr into map", K(ret));
         }
         trans_happened = true;
@@ -2908,7 +2920,10 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
                                                               bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(expr), K_(ctx), K_(ctx_->expr_factory), K(ret));
   } else {
@@ -2936,6 +2951,11 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
         ObRawExpr *temp = NULL;
         if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_conds.at(0), temp, *ctx_->expr_factory_))) {
           LOG_WARN("try create bool expr failed", K(ret));
+        }  else if (OB_ISNULL(temp)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null expr", K(ret));
+        } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+          LOG_WARN("fail to formalize", K(ret));
         } else {
           expr = temp;
           trans_happened = true;
@@ -3092,7 +3112,10 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
   ObOpRawExpr* new_expr = NULL;
   ObItemType new_type = T_OP_AND == expr_type ? T_OP_OR : T_OP_AND;
   ObRawExpr* new_param = NULL;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(ctx_) ||
+      OB_ISNULL(factory = ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K(expr), K_(ctx), K(factory), K(ret));
   }
@@ -3126,6 +3149,11 @@ int ObTransformSimplifyExpr::do_pull_similar(ObDMLStmt *stmt,
       ObRawExpr *temp = NULL;
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(intersection.at(0), temp, *factory))) {
         LOG_WARN("try create bool expr failed", K(ret));
+      } else if (OB_ISNULL(temp)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+        LOG_WARN("fail to formalize", K(ret));
       } else {
         new_expr = static_cast<ObOpRawExpr*>(temp);
       }
@@ -3249,7 +3277,9 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
   ObItemType new_type = T_OP_AND == expr_type ? T_OP_OR : T_OP_AND;
   ObOpRawExpr *op_expr = NULL;
   expr = NULL;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(factory = ctx_->expr_factory_)) {
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(factory = ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null pointer error", K_(ctx), K(factory), K(ret));
   }
@@ -3284,6 +3314,11 @@ int ObTransformSimplifyExpr::gen_not_intersect_param(ObRawExpr* &expr,
     ObRawExpr *new_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(params.at(0), new_expr, *factory))) {
       LOG_WARN("try create bool expr failed", K(ret));
+    } else if (OB_ISNULL(new_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("fail to formalize", K(ret));
     } else {
       expr = new_expr;
     }
