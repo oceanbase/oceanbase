@@ -2816,7 +2816,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       ObRawExpr *ref_expr = NULL;
       bool domain_id_need_column_ref_expr = false;
       if (ObDomainIdUtils::is_domain_id_index_col(col_schema)
-          && OB_FAIL(check_domain_id_need_column_ref_expr(*stmt, domain_id_need_column_ref_expr))) {
+          && OB_FAIL(check_domain_id_need_column_ref_expr(*stmt, domain_id_need_column_ref_expr, col_schema))) {
         LOG_WARN("fail to check domain id need column ref expr", K(ret), KPC(col_schema));
       } else if (col_schema->is_generated_column()) {
         column_item.set_default_value(ObObj()); // set null to generated default value
@@ -20824,12 +20824,36 @@ int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
   return ret;
 }
 
-int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &need_column_ref_expr)
+int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, bool &need_column_ref_expr, const ObColumnSchemaV2 *col_schema)
 {
   int ret = OB_SUCCESS;
   need_column_ref_expr = false;
   if (stmt.is_delete_stmt() || stmt.is_update_stmt()) {
-    need_column_ref_expr = true;
+    if (col_schema->is_doc_id_column()) {
+      const share::schema::ObTableSchema *table = nullptr;
+      ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+      const ObSimpleTableSchemaV2 *index_schema = nullptr;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), table))) {
+        LOG_WARN("fail to get ddl table schema", K(ret));
+      } else if (OB_FAIL(table->get_simple_index_infos(simple_index_infos))) {
+        LOG_WARN("get simple_index_infos failed", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && !need_column_ref_expr && i < simple_index_infos.count(); ++i) {
+        ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
+        if (is_doc_rowkey_aux(index_info.index_type_)) {
+          need_column_ref_expr = true;
+        }
+      }
+      if (OB_SUCC(ret) && !need_column_ref_expr) {
+        // TODO: @zyx439997 fix the bug. id = 2025022600107346118
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(1000 * 1000)) {
+          LOG_WARN("funlltext is being built, so need wait.");
+        }
+      }
+    } else {
+      need_column_ref_expr = true;
+    }
   } else if (stmt.is_select_stmt() && OB_ISNULL(upper_insert_resolver_)) {
     need_column_ref_expr = true;
   } else if (stmt.is_select_stmt() && OB_NOT_NULL(upper_insert_resolver_)) {

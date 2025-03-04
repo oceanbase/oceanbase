@@ -1132,7 +1132,8 @@ protected:
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
   int check_domain_id_need_column_ref_expr(
       ObDMLStmt &stmt,
-      bool &need_column_ref_expr);
+      bool &need_column_ref_expr,
+      const ObColumnSchemaV2 *col_schema);
   int check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
                                          const ObColumnSchemaV2 &column_schema,
                                          ObRawExpr *ref_expr,
