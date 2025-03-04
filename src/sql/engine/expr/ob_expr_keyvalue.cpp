@@ -51,7 +51,6 @@ int ObExprKeyValue::calc_result_typeN(ObExprResType &type,
         || ObMediumTextType == types[0].get_type()
         || ObLongTextType == types[0].get_type()) {
       type.set_type(types[0].get_type());
-      type.set_length(types[0].get_length());
     } else {
       type.set_varchar();
     }
@@ -80,6 +79,9 @@ int ObExprKeyValue::calc_result_typeN(ObExprResType &type,
       types[i].set_calc_collation_level(type.get_collation_level());
       types[i].set_calc_length_semantics(length_semantic);
     }
+  }
+  if (OB_SUCC(ret)) {
+    type.set_length(types[0].get_length());
   }
   return ret;
 }

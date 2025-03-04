@@ -64,7 +64,6 @@ int ObExprSplitPart::calc_result_typeN(ObExprResType &type,
         || ObMediumTextType == types[0].get_type()
         || ObLongTextType == types[0].get_type()) {
       type.set_type(types[0].get_type());
-      type.set_length(types[0].get_length());
     } else {
       type.set_varchar();
     }
@@ -98,6 +97,9 @@ int ObExprSplitPart::calc_result_typeN(ObExprResType &type,
     if (param_num == 4) {
       types[3].set_calc_type(ObIntType);
     }
+  }
+  if (OB_SUCC(ret)) {
+    type.set_length(types[0].get_length());
   }
   return ret;
 }
