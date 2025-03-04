@@ -25,6 +25,7 @@ namespace observer
 {
 using namespace common;
 using namespace storage;
+using namespace share::schema;
 
 ObTableLoadDataRowDeleteHandler::ObTableLoadDataRowDeleteHandler()
   : store_ctx_(nullptr), is_inited_(false)
@@ -62,7 +63,7 @@ int ObTableLoadDataRowDeleteHandler::handle_delete_row(const ObTabletID &tablet_
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < store_ctx_->index_store_table_ctxs_.count(); ++i) {
       ObTableLoadStoreIndexTableCtx *index_table_ctx = store_ctx_->index_store_table_ctxs_.at(i);
-      if (!index_table_ctx->schema_->is_local_unique_index()) {
+      if (!is_local_unique_index_table(index_table_ctx->schema_->index_type_)) {
         ObTableLoadIndexTableBuilder *index_builder = nullptr;
         if (OB_FAIL(index_table_ctx->get_delete_table_builder(index_builder))) {
           LOG_WARN("fail to get index table builder", KR(ret));

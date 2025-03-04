@@ -107,7 +107,7 @@ int ObTableLoadMergeRootOp::switch_next_op(bool is_parent_called)
     case Status::INSERT_PHASE: {
       bool have_local_unique_index = false;
       for (int i = 0; i < store_ctx_->index_store_table_ctxs_.size(); i++) {
-        if (store_ctx_->index_store_table_ctxs_.at(i)->schema_->is_local_unique_index()) {
+        if (is_local_unique_index_table(store_ctx_->index_store_table_ctxs_.at(i)->schema_->index_type_)) {
           have_local_unique_index = true;
           break;
         }

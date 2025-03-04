@@ -212,7 +212,7 @@ int ObTableLoadMergeIndexTableOp::inner_init()
     }
     // dml_row_handler_
     if (OB_SUCC(ret)) {
-      if (store_table_ctx_->schema_->is_local_unique_index() &&
+      if (is_local_unique_index_table(store_table_ctx_->schema_->index_type_) &&
           ObTableLoadMergerPhaseType::INSERT == merge_phase_ctx_->phase_) {
         ObTableLoadUniqueIndexRowHandler *index_row_handler = nullptr;
         if (OB_ISNULL(inner_ctx_.dml_row_handler_ = index_row_handler =
@@ -232,7 +232,7 @@ int ObTableLoadMergeIndexTableOp::inner_init()
       }
     }
     // merge_mode_
-    if (store_table_ctx_->schema_->is_local_unique_index() &&
+    if (is_local_unique_index_table(store_table_ctx_->schema_->index_type_) &&
         ObTableLoadMergerPhaseType::INSERT == merge_phase_ctx_->phase_) {
       inner_ctx_.merge_mode_ = ObDirectLoadMergeMode::MERGE_WITH_CONFLICT_CHECK;
     } else {
@@ -248,7 +248,7 @@ int ObTableLoadMergeIndexTableOp::inner_init()
     inner_ctx_.is_del_lob_ = false;
     merge_table_ctx_ = &inner_ctx_;
     if (OB_SUCC(ret)) {
-      if (store_table_ctx_->schema_->is_local_unique_index() &&
+      if (is_local_unique_index_table(store_table_ctx_->schema_->index_type_) &&
           ObTableLoadMergerPhaseType::INSERT == merge_phase_ctx_->phase_) {
         if (OB_FAIL(static_cast<ObTableLoadStoreDataTableCtx *>(store_ctx_->data_store_table_ctx_)
                       ->init_build_delete_table())) {
@@ -267,7 +267,7 @@ int ObTableLoadMergeIndexTableOp::inner_close()
 {
   int ret = OB_SUCCESS;
   FLOG_INFO("ObTableLoadMergeIndexTableOp FINISH");
-  if (store_table_ctx_->schema_->is_local_unique_index() &&
+  if (is_local_unique_index_table(store_table_ctx_->schema_->index_type_) &&
       ObTableLoadMergerPhaseType::INSERT == merge_phase_ctx_->phase_) {
     if (OB_FAIL(static_cast<ObTableLoadStoreDataTableCtx *>(store_ctx_->data_store_table_ctx_)
                   ->close_build_delete_table())) {
