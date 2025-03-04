@@ -423,7 +423,7 @@ int ObHTableDeleteExecutor::get_next_row()
     ObHTableFilter &filter = query.htable_filter();
     for (int64_t i = 0; OB_SUCC(ret) && i < ops->count(); i++) {
       const ObTableOperation &op = ops->at(i);
-      if (OB_FAIL(build_range(op.entity(), query))) {
+      if (OB_FAIL(build_range(op.entity()))) {
         LOG_WARN("fail to build range", K(ret), K(op.entity()));
       } else if (OB_FAIL(generate_filter(op.entity(), filter))) {
         LOG_WARN("fail to generate htable filter", K(ret), K(op.entity()));
@@ -445,7 +445,7 @@ int ObHTableDeleteExecutor::get_next_row_by_entity()
     LOG_WARN("entity of operation is null", K(ret));
   } else {
     ObHTableFilter &filter = query.htable_filter();
-    if (OB_FAIL(build_range(*entity, query))) {
+    if (OB_FAIL(build_range(*entity))) {
       LOG_WARN("fail to build range", K(ret), K(entity));
     } else if (OB_FAIL(generate_filter(*entity, filter))) {
       LOG_WARN("fail to generate htable filter", K(ret), K(entity));
@@ -469,52 +469,41 @@ int ObHTableDeleteExecutor::close()
   return ret;
 }
 
-int ObHTableDeleteExecutor::build_range(const ObITableEntity &entity, ObTableQuery &query)
+int ObHTableDeleteExecutor::build_range(const ObITableEntity &entity)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<common::ObNewRange> &key_ranges = tb_ctx_.get_key_ranges();
   key_ranges.reset();
   // generate scan range
-  if (OB_FAIL(query.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
-    LOG_WARN("fail to add K", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
-    LOG_WARN("fail to add Q", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
-    LOG_WARN("fail to add T", K(ret));
-  } else if (OB_FAIL(query.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
-    LOG_WARN("fail to add V", K(ret));
+  ObHTableCellEntity3 htable_cell(&entity);
+  ObString row = htable_cell.get_rowkey();
+  if (htable_cell.last_get_is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("K is null", K(ret), K(entity));
   } else {
-    ObHTableCellEntity3 htable_cell(&entity);
-    ObString row =  htable_cell.get_rowkey();
+    ObString qualifier = htable_cell.get_qualifier();
+    ObNewRange range;
+    pk_objs_start_[0].set_varbinary(row);
+    pk_objs_start_[2].set_min_value();
+    pk_objs_end_[0].set_varbinary(row);
+    pk_objs_end_[2].set_max_value();
+    // delete column family when qualifier is null
     if (htable_cell.last_get_is_null()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("K is null", K(ret), K(entity));
+      pk_objs_start_[1].set_min_value();
+      pk_objs_end_[1].set_max_value();
     } else {
-      ObString qualifier = htable_cell.get_qualifier();
-      ObNewRange range;
-      pk_objs_start_[0].set_varbinary(row);
-      pk_objs_start_[2].set_min_value();
-      pk_objs_end_[0].set_varbinary(row);
-      pk_objs_end_[2].set_max_value();
-      // delete column family when qualifier is null
-      if (htable_cell.last_get_is_null()) {
-        pk_objs_start_[1].set_min_value();
-        pk_objs_end_[1].set_max_value();
-      } else {
-        pk_objs_start_[1].set_varbinary(qualifier);
-        pk_objs_end_[1].set_varbinary(qualifier);
-      }
-      range.start_key_.assign(pk_objs_start_, 3);
-      range.end_key_.assign(pk_objs_end_, 3);
-      range.border_flag_.set_inclusive_start();
-      range.border_flag_.set_inclusive_end();
+      pk_objs_start_[1].set_varbinary(qualifier);
+      pk_objs_end_[1].set_varbinary(qualifier);
+    }
+    range.start_key_.assign(pk_objs_start_, 3);
+    range.end_key_.assign(pk_objs_end_, 3);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
 
-      if (OB_FAIL(key_ranges.push_back(range))) {
-        LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
-      }
+    if (OB_FAIL(key_ranges.push_back(range))) {
+      LOG_WARN("fail to push back hdelete scan range", K(ret), K(key_ranges));
     }
   }
-
   return ret;
 }
 
