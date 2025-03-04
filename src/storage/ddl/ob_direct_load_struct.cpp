@@ -2941,7 +2941,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
           ObStorageDatum &datum_cell = cur_row->storage_datums_[i];
           if (i >= schema_item.rowkey_column_num_ && i < schema_item.rowkey_column_num_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()) {
             // skip multi version column
-          } else if (datum_cell.is_null()) {
+          } else if (datum_cell.is_null() || datum_cell.is_nop()) {
             //ignore null
           } else if (OB_UNLIKELY(i >= column_items.count()) || OB_UNLIKELY(!column_items.at(i).is_valid_)) {
             ret = OB_ERR_UNEXPECTED;
