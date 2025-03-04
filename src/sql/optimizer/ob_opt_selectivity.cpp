@@ -95,6 +95,11 @@ double ObIndependentModel::combine_filters_selectivity(ObIArray<double> &selecti
   return combine_selectivity;
 }
 
+double ObIndependentModel::combine_ndvs(double rows, ObIArray<double> &ndvs) const
+{
+  return ObOptSelectivity::combine_ndvs(rows, ndvs);
+}
+
 double ObPartialCorrelationModel::combine_filters_selectivity(ObIArray<double> &selectivities) const
 {
   double selectivity = 1.0;
@@ -109,6 +114,11 @@ double ObPartialCorrelationModel::combine_filters_selectivity(ObIArray<double> &
   return selectivity;
 }
 
+double ObPartialCorrelationModel::combine_ndvs(double rows, ObIArray<double> &ndvs) const
+{
+  return ObOptSelectivity::combine_ndvs(rows, ndvs);
+}
+
 double ObFullCorrelationModel::combine_filters_selectivity(ObIArray<double> &selectivities) const
 {
   double combine_selectivity = 1.0;
@@ -116,6 +126,18 @@ double ObFullCorrelationModel::combine_filters_selectivity(ObIArray<double> &sel
     combine_selectivity = std::min(combine_selectivity, selectivities.at(i));
   }
   return combine_selectivity;
+}
+
+double ObFullCorrelationModel::combine_ndvs(double rows, ObIArray<double> &ndvs) const
+{
+  double max_ndv = 0;
+  for (int64_t i = 0; i < ndvs.count(); i ++) {
+    max_ndv = std::max(max_ndv, ndvs.at(i));
+  }
+  if (rows >= 0.0) {
+    max_ndv = std::min(rows, max_ndv);
+  }
+  return std::min(max_ndv, rows);
 }
 
 int OptColumnMeta::assign(const OptColumnMeta &other)
@@ -2914,7 +2936,11 @@ int ObOptSelectivity::calculate_distinct_in_single_table(const OptTableMetas &ta
     LOG_WARN("failed filter column by equal set", K(ret));
   } else if (OB_FAIL(calculate_expr_ndv(filtered_exprs, expr_ndv, table_metas, ctx, ambient_card, est_type))) {
     LOG_WARN("fail to calculate expr ndv", K(ret));
-  } else if (ctx.get_compat_version() < COMPAT_VERSION_4_2_4) {
+  } else if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3)) {
+    rows = ctx.get_correlation_model().combine_ndvs(ambient_card, expr_ndv);
+  } else if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_4)) {
+    rows = combine_ndvs(ambient_card, expr_ndv);
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr_ndv.count(); ++i) {
       if (0 == i) {
         rows *= expr_ndv.at(i);
@@ -2922,8 +2948,6 @@ int ObOptSelectivity::calculate_distinct_in_single_table(const OptTableMetas &ta
         rows *= expr_ndv.at(i) / std::sqrt(2);
       }
     }
-  } else {
-    rows = combine_ndvs(ambient_card, expr_ndv);
   }
   LOG_TRACE("succeed to calculate distinct in single table", K(rel_id), K(ambient_card), K(rows), K(expr_ndv), K(exprs));
 
@@ -4212,7 +4236,8 @@ int ObOptSelectivity::remove_ignorable_func_for_est_sel(const ObRawExpr *&expr)
         T_FUN_SYS_TO_BINARY_DOUBLE == expr->get_expr_type() ||
         T_FUN_SYS_SET_COLLATION == expr->get_expr_type() ||
         T_FUN_SYS_TO_TIMESTAMP == expr->get_expr_type() ||
-        T_FUN_SYS_TO_TIMESTAMP_TZ  == expr->get_expr_type()) {
+        T_FUN_SYS_TO_TIMESTAMP_TZ  == expr->get_expr_type() ||
+        T_FUN_SYS_ALIGN_DATE4CMP == expr->get_expr_type()) {
       const ObRawExpr *child_expr = NULL;
       if (OB_UNLIKELY(1 > expr->get_param_count()) ||
           OB_ISNULL(child_expr = expr->get_param_expr(0))) {
@@ -4932,9 +4957,11 @@ int ObHistSelHelper::init(const OptTableMetas &table_metas,
   uint64_t column_id = col.get_column_id();
   column_expr_ = &col;
   const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
+  table_meta_ = table_meta;
   is_valid_ = false;
   handlers_.reuse();
   part_rows_.reuse();
+  ObObj dummy1, dummy2;
   if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id()) {
     // do nothing
   } else if (NULL == ctx.get_opt_stat_manager() ||
@@ -4944,6 +4971,9 @@ int ObHistSelHelper::init(const OptTableMetas &table_metas,
   } else if (OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(ctx.get_session_info()));
+  // load column min max into column meta from statistics
+  } else if (OB_FAIL(ObOptSelectivity::get_column_min_max(table_metas, ctx, col, dummy1, dummy1))) {
+    LOG_WARN("failed to load column min max", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_meta->get_hist_parts().count(); i ++) {
       ObOptColumnStatHandle column_stat;
@@ -5057,12 +5087,50 @@ int ObHistEqualSelHelper::inner_get_sel(const OptSelectivityCtx &ctx,
   } else if (idx < 0 || idx >= histogram.get_bucket_size() || !is_equal) {
     sel = 0.0;
     is_rare_value = true;
+    if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3) &&
+        OB_FAIL(refine_out_of_bounds_sel(ctx, *new_value, sel, is_rare_value))) {
+      LOG_WARN("failed to refine out of bounds sel", K(ret));
+    }
   } else {
     sel = static_cast<double>(histogram.get(idx).endpoint_repeat_count_)
         / histogram.get_sample_size();
   }
   if (OB_SUCC(ret) && hist_scale_ > 0) {
     sel /= hist_scale_;
+  }
+  return ret;
+}
+
+int ObHistEqualSelHelper::refine_out_of_bounds_sel(const OptSelectivityCtx &ctx,
+                                                   const ObObj &value,
+                                                   double &sel,
+                                                   bool &is_rare_value)
+{
+  int ret = OB_SUCCESS;
+  sel = 0.0;
+  is_rare_value = true;
+  double increase_rows_ratio = 0.0;
+  int value_cmp_min = 0;
+  int value_cmp_max = 0;
+  const OptColumnMeta *column_meta_ = NULL;
+  if (OB_ISNULL(column_expr_) || OB_ISNULL(column_expr_) || OB_ISNULL(table_meta_) ||
+      OB_ISNULL(column_meta_ = table_meta_->get_column_meta(column_expr_->get_column_id()))) {
+    // do nothing
+  } else if (OB_FAIL(value.compare(column_meta_->get_min_value(), value_cmp_min)) ||
+             OB_FAIL(value.compare(column_meta_->get_max_value(), value_cmp_max))) {
+    ret = OB_SUCCESS;
+  } else if (value_cmp_min >= 0 && value_cmp_max <= 0) {
+    // do nothing
+  } else if (OB_FAIL(table_meta_->get_increase_rows_ratio(ctx.get_opt_ctx(), increase_rows_ratio))) {
+    LOG_WARN("failed to get extra rows", K(ret));
+  } else if (increase_rows_ratio < OB_DOUBLE_EPSINON || increase_rows_ratio < density_) {
+    // do nothing
+  } else {
+    is_rare_value = false;
+    double distinct_sel = 1.0 / std::max(1.0, column_meta_->get_base_ndv());
+    sel = std::min(increase_rows_ratio, distinct_sel);
+    LOG_TRACE("succeed to refine out of bounds selectivity",
+        K(sel), KPC(column_meta_), K(increase_rows_ratio));
   }
   return ret;
 }

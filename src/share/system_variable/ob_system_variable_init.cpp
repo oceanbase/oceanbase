@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-#include "ob_system_variable_init.h"
-#include "share/system_variable/ob_system_variable_factory.h"
+#include "share/system_variable/ob_system_variable_init.h"
+#include "ob_system_variable_factory.h"
 #include "share/object/ob_obj_cast.h"
 using namespace oceanbase::common;
 
@@ -3306,7 +3306,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.2.5.1" ;
+      ObSysVars[234].default_value_ = "4.2.5.3" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
