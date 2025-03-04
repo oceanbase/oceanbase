@@ -2297,7 +2297,13 @@ int ObWindowFunctionVecOp::set_null_results_of_wf(WinFuncColExpr &wf, const int6
   case common::VEC_DISCRETE:
   case common::VEC_CONTINUOUS: {
     ObBitmapNullVectorBase *data = static_cast<ObBitmapNullVectorBase *>(wf_expr->get_vector(eval_ctx_));
-    data->get_nulls()->bit_not(nullres_skip, batch_size);
+    for (int i = 0; i < batch_size; i++) {
+      if (nullres_skip.at(i)) {
+        continue;
+      } else {
+        data->set_null(i);
+      }
+    }
     break;
   }
   case common::VEC_UNIFORM: {

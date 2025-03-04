@@ -547,15 +547,18 @@ protected:
         }
       } else {
         if (all_not_null) {
+          bool has_data = false;
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             if (skip.at(i)) {
             } else if (OB_FAIL(AddRow<Derived>::do_op(derived, agg_ctx, *columns, i,
                                                             agg_col_id, agg_cell, tmp_res,
                                                             calc_info))) {
               SQL_LOG(WARN, "add row failed", K(ret));
+            } else {
+              has_data = true;
             }
           } // end for
-          if (agg_cell != nullptr) {
+          if (OB_SUCC(ret) && agg_cell != nullptr && has_data) {
             NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
             not_nulls.set(agg_col_id);
           }
