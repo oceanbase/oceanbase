@@ -724,7 +724,9 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
     sqc_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
       if (files.at(i).file_size_ <= SMALL_FILE_SIZE) {
-        OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
+        share::ObExternalFileInfo small_file = files.at(i);
+        small_file.file_size_ = INT64_MAX;
+        OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(small_file));
       }
     }
   }

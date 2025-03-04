@@ -1070,7 +1070,6 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
         OZ (table_schema->get_max_part_idx(max_part_idx, true/*without default*/));
 
         if (OB_SUCC(ret) && partitions_to_del.count() > 0) {
-          has_partition_changed = true;
           ObAlterTableStmt *alter_table_stmt = NULL;
           OZ (create_alter_table_stmt(exec_ctx, table_schema, database_schema, partitions_to_del.count(), ObAlterTableArg::DROP_PARTITION, alter_table_stmt));
           if (OB_SUCC(ret)) {

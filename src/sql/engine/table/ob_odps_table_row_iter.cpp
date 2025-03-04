@@ -2476,8 +2476,27 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
                                                        odps_partition_downloader))) {
         LOG_WARN("failed create odps partition downloader", K(ret), K(i), K(odps_partition.part_id_), K(odps_partition.file_url_));
       } else {
-        *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
-        odps_partition_downloader->Complete();
+        try {
+          *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
+          odps_partition_downloader->Complete();
+        } catch (apsara::odps::sdk::OdpsException& ex) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+          }
+        } catch (const std::exception& ex) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+          }
+        } catch (...) {
+          if (OB_SUCC(ret)) {
+            ret = OB_ODPS_ERROR;
+            LOG_WARN("caught exception when create odps upload session", K(ret));
+          }
+        }
       }
     }
   }
@@ -2502,8 +2521,27 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString part_spec,
     if (OB_FAIL(odps_driver.create_downloader(part_spec, odps_partition_downloader))) {
       LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
     } else {
-      row_count = odps_partition_downloader->GetRecordCount();
-      odps_partition_downloader->Complete();
+      try {
+        row_count = odps_partition_downloader->GetRecordCount();
+        odps_partition_downloader->Complete();
+      } catch (apsara::odps::sdk::OdpsException& ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+        }
+      } catch (const std::exception& ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+        }
+      } catch (...) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when create odps upload session", K(ret));
+        }
+      }
     }
   }
   return ret;
