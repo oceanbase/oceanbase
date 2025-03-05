@@ -137,7 +137,7 @@ double ObFullCorrelationModel::combine_ndvs(double rows, ObIArray<double> &ndvs)
   if (rows >= 0.0) {
     max_ndv = std::min(rows, max_ndv);
   }
-  return std::min(max_ndv, rows);
+  return max_ndv;
 }
 
 int OptColumnMeta::assign(const OptColumnMeta &other)
@@ -3051,7 +3051,11 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
       LOG_WARN("failed to push back", K(ret));
     }
   }
-  if (ctx.get_compat_version() < COMPAT_VERSION_4_2_4) {
+  if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_5_BP3)) {
+    rows = ctx.get_correlation_model().combine_ndvs(need_refine ? origin_rows : -1, single_ndvs);
+  } else if (ctx.check_opt_compat_version(COMPAT_VERSION_4_2_4)) {
+    rows = combine_ndvs(need_refine ? origin_rows : -1, single_ndvs);
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < single_ndvs.count(); ++i) {
       if (0 == i) {
         rows *= single_ndvs.at(i);
@@ -3063,8 +3067,6 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
     if (OB_SUCC(ret) && need_refine && origin_rows >= 0.0) {
       rows = std::min(rows, origin_rows);
     }
-  } else {
-    rows = combine_ndvs(need_refine ? origin_rows : -1, single_ndvs);
   }
   LOG_TRACE("succeed to calculate distinct", K(ctx), K(origin_rows), K(rows), K(single_ndvs), K(exprs));
   return ret;
