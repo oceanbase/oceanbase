@@ -1586,7 +1586,7 @@ int ObUnitManager::create_alter_resource_tenant_unit_num_rs_job(
 {
   int ret = OB_SUCCESS;
   job_id = 0;
-  const int64_t extra_info_len = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+  const int64_t extra_info_len = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
   HEAP_VAR(char[extra_info_len], extra_info) {
     memset(extra_info, 0, extra_info_len);
     int64_t pos = 0;

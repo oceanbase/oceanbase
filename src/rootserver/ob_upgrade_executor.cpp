@@ -315,7 +315,7 @@ int ObUpgradeExecutor::execute(
     // NOTICE: don't add any `else if` after set_execute_mark_().
   } else {
     const uint64_t tenant_id = (1 == tenant_ids.count()) ?  tenant_ids.at(0) : 0;
-    const int64_t BUF_LEN = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
+    const int64_t BUF_LEN = common::MAX_ROOTSERVICE_JOB_EXTRA_INFO_LENGTH;
     char extra_buf[BUF_LEN] = {'\0'};
     int64_t job_id = OB_INVALID_ID;
     uint64_t current_data_version = 0;

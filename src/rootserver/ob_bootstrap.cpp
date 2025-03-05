@@ -1325,7 +1325,7 @@ int ObBootstrap::gen_multiple_zone_deployment_sys_tenant_locality_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone list count unexpected", K(ret));
   } else {
-    const int64_t BUFF_SIZE = 256; // 256 is enough for sys tenant
+    const int64_t BUFF_SIZE = 32 * MAX_ZONE_LENGTH; // 4096
     char locality_str[BUFF_SIZE] = "";
     bool first = true;
     int64_t pos = 0;
