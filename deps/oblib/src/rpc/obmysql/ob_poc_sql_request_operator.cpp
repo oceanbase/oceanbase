@@ -103,6 +103,7 @@ int ObPocSqlRequestOperator::release_packet(ObRequest* req, void* read_handle, O
 
 int ObPocSqlRequestOperator::write_response(ObRequest* req, const char* buf, int64_t sz)
 {
+  ObWaitEventGuard guard(ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT, 0);
   ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
   return sess->write_data(buf, sz);
 }

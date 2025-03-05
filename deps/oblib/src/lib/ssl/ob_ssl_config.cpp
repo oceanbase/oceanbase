@@ -655,10 +655,8 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           }
         }
     } else {
-      ERR_clear_error();
       if (0 < (wbytes = SSL_write(ssl, buf, nbytes))) {
       } else {
-        wbytes = -1;
         int ssl_error = 0;
         ssl_error = SSL_get_error(ssl, wbytes);
         if (SSL_ERROR_WANT_WRITE == ssl_error) {
@@ -668,8 +666,9 @@ ssize_t ob_write_regard_ssl(int fd, const void *buf, size_t nbytes)
           COMMON_LOG_RET(ERROR, OB_ERR_SYS, "SSL_write want read", K(fd));
         } else {
           errno = EIO;
-          COMMON_LOG_RET(ERROR, OB_ERR_SYS, "ssl write faild", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
+          COMMON_LOG_RET(WARN, OB_ERR_SYS, "ssl write failed, it might be that the peer has closed the connection", K(fd), K(ERR_error_string(ERR_get_error(), NULL)));
         }
+        ERR_clear_error();
       }
     }
   }
