@@ -75,7 +75,10 @@ int ObCreateTableLikeResolver::resolve(const ParseNode &parse_tree)
             SQL_RESV_LOG(WARN, "create temporary table like not supported!", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "create oracle temporary table like");
           } else {
-            create_table_like_stmt->set_table_type(share::schema::TMP_TABLE);
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "create temporary table like not supported!", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create mysql temporary table like");
+            // create_table_like_stmt->set_table_type(share::schema::TMP_TABLE);
           }
         }
       } else {
