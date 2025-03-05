@@ -34,7 +34,9 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
   if (op.need_foreign_key_checks()) {
     const ObExprPtrIArray &old_row = dml_ctdef.old_row_;
     const ObExprPtrIArray &new_row = dml_ctdef.new_row_;
+    const bool save_in_ignore_cascading = op.get_exec_ctx().get_das_ctx().in_ignore_cascading_;
     op.get_exec_ctx().get_das_ctx().is_fk_cascading_ = true;
+    op.get_exec_ctx().get_das_ctx().in_ignore_cascading_ = dml_ctdef.das_base_ctdef_.is_ignore_;
     LOG_DEBUG("do foreign_key_handle", K(old_row), K(new_row));
     if (OB_FAIL(op.check_stack())) {
       LOG_WARN("fail to check stack", K(ret));
@@ -46,7 +48,13 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
         if (ACTION_CHECK_EXIST == fk_arg.ref_action_) {
           // insert or update.
           bool is_foreign_key_cascade = ObSQLUtils::is_fk_nested_sql(&op.get_exec_ctx());
-          if (is_foreign_key_cascade) {
+          bool in_ignore_cascading = false;
+          ObExecContext* parent_ctx = op.get_exec_ctx().get_parent_ctx();
+          if (OB_NOT_NULL(parent_ctx)) {
+            in_ignore_cascading = parent_ctx->get_das_ctx().in_ignore_cascading_;
+          }
+
+          if (is_foreign_key_cascade && !in_ignore_cascading) {
             // nested update can not check parent row.
             LOG_DEBUG("skip foreign_key_check_exist in nested session");
           } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false, fk_arg.use_das_scan_))) {
@@ -112,6 +120,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
     } // for
     //fk cascading end
     op.get_exec_ctx().get_das_ctx().is_fk_cascading_ = false;
+    op.get_exec_ctx().get_das_ctx().in_ignore_cascading_ = save_in_ignore_cascading;
   } else {
     LOG_DEBUG("skip foreign_key_handle");
   }
