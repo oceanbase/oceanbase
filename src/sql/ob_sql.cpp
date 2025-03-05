@@ -757,7 +757,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (expr->get_result_type().is_user_defined_sql_type() ||
+        if (context->session_info_->is_varparams_sql_prepare()) {
+          // question mark expr has no valid result type in prepare stage
+        } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
             ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
           uint16_t subschema_id = expr->get_result_type().get_subschema_id();
@@ -1498,7 +1500,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           }
           context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
-          if (OB_SUCC(ret) && pl_prepare_ctx.is_dbms_sql_) {
+          if (OB_SUCC(ret) && !pl_prepare_ctx.is_parser_dynamic_sql_) {
             ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
           }
           if (OB_FAIL(ret)) {
