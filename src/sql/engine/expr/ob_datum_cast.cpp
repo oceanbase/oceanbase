@@ -1324,8 +1324,12 @@ static OB_INLINE int common_string_datetime(const ObExpr &expr,
         ObDateSqlMode date_sql_mode;
         date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(expr.extra_);
         date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(expr.extra_);
-        if (CAST_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale, date_sql_mode))) {
-          LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+        if (OB_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale, date_sql_mode))) {
+          if (ret == OB_ERR_UNEXPECTED_TZ_TRANSITION && CM_IS_WARN_ON_FAIL(cast_mode)) {
+            ret = OB_SUCCESS;
+          } else if (CAST_FAIL(ret)) {
+            LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+          }
         } else {
         // check zero date for scale over mode
           if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) &&
@@ -1364,8 +1368,12 @@ static OB_INLINE int common_string_mdatetime(const ObExpr &expr,
     date_sql_mode.no_zero_in_date_ =
       CM_IS_EXPLICIT_CAST(expr.extra_) ? false : CM_IS_NO_ZERO_IN_DATE(expr.extra_);
     ObTimeConvertCtx cvrt_ctx(NULL, false, need_truncate);
-    if (CAST_FAIL(ObTimeConverter::str_to_mdatetime(in_str, cvrt_ctx, out_val, &res_scale, date_sql_mode))) {
-      LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+    if (OB_FAIL(ObTimeConverter::str_to_mdatetime(in_str, cvrt_ctx, out_val, &res_scale, date_sql_mode))) {
+      if (ret == OB_ERR_UNEXPECTED_TZ_TRANSITION && CM_IS_WARN_ON_FAIL(cast_mode)) {
+        ret = OB_SUCCESS;
+      } else if (CAST_FAIL(ret)) {
+        LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+      }
     } else {
     // check zero date for scale over mode
       if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) &&

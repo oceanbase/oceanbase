@@ -6311,8 +6311,12 @@ static int common_string_datetime(const ObObjType expect_type, ObObjCastParams &
                                                 date_sql_mode) :
               ObTimeConverter::str_to_datetime(utf8_string, cvrt_ctx, mdt_value.datetime_,
                                                &res_scale, date_sql_mode);
+      if (ret == OB_ERR_UNEXPECTED_TZ_TRANSITION && CM_IS_WARN_ON_FAIL(cast_mode)) {
+        ret = OB_SUCCESS;
+      } else if (CAST_FAIL(ret)) {
+        LOG_WARN("str_to_datetime failed", K(ret), K(utf8_string));
+      }
       value = mdt_value.datetime_;
-      CAST_RET(ret);
     }
   }
   return ret;

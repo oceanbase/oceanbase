@@ -465,6 +465,8 @@ int ObTimeConverter::str_to_mdatetime(const ObString &str, const ObTimeConvertCt
     ob_time.is_tz_name_valid_ = false;
     if (OB_FAIL(ob_time_to_mdatetime(ob_time, value))) {
       LOG_WARN("failed to convert ob time to mdatetime", K(ret), K(ob_time), K(value));
+    } else {
+      ret = OB_ERR_UNEXPECTED_TZ_TRANSITION;
     }
   } else if (OB_FAIL(ob_time_to_mdatetime(ob_time, value))) {
     LOG_WARN("failed to convert ob time to datetime", K(ret));
