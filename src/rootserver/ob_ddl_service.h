@@ -556,6 +556,20 @@ public:
       const ObTableSchema &child_table_schema,
       sql::ObSchemaChecker &schema_checker,
       const ObForeignKeyRefType &expected_cst_type);
+  //  Dont rebuild trigger if
+  //  1. database name has changed.
+  //  2. base_table name has changed.
+  //  3. database of the trigger does no exist.
+  //  4. same name trigger has existed.
+  int check_and_construct_restore_trigger_info(
+        const obrpc::ObAlterTableArg &alter_table_arg,
+        ObSchemaGetterGuard &src_tenant_schema_guard,
+        ObSchemaGetterGuard &dst_tenant_schema_guard,
+        const ObTableSchema &orig_table_schema,
+        const ObTableSchema &hidden_table_schema,
+        const ObTriggerInfo &src_trigger_info,
+        ObTriggerInfo &new_trigger_info,
+        bool &need_rebuild);
   /**
    * This function is called by the DDL RESTORE TABLE TASK.
    * This task will create a hidden table, but will not be associated with the original table,
@@ -1502,6 +1516,7 @@ private:
       common::ObIAllocator &allocator,
       const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
+      const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       ObSchemaGetterGuard &src_tenant_schema_guard,
