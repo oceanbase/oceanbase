@@ -304,7 +304,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
           LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, arg.index_name_.length(), arg.index_name_.ptr());
         }
       }
-    } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_table_schema->get_index_type()) {
+    } else if (!arg.is_inner_ && ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY == index_table_schema->get_index_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support to drop index with a name reserved by the heap table", K(ret), KPC(index_table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping index with a name reserved by the heap table is");
