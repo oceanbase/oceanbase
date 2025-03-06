@@ -754,4 +754,3 @@ static inline void OB_PUT_MB2(unsigned char *s, uint16 code) {
 }
 
 #endif /* OCEANBASE_LIB_OBMYSQL_OB_CTYPE_ */
-

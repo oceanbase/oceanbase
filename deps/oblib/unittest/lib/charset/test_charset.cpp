@@ -18,6 +18,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_template_helper.h"
+#include "lib/charset/ob_tis620ci_sort_scanner.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "gtest/gtest.h"
@@ -908,6 +909,118 @@ TEST_F(TestCharset, basic_collation_handler_test)
     }
   }
 }
+
+void debug_print_hex(const char* str,const char* sort_str )
+{
+  // 以16进制格式打印每个字符
+  fprintf(stdout, "origin str = \"%s\"\n", str);
+  for (int i = 0; str[i] != '\0'; i++) {
+      fprintf(stdout, "%02X ",(unsigned char)str[i]);
+  }
+  fprintf(stdout, "\n");
+  for (int i = 0; sort_str[i] != '\0'; i++) {
+      fprintf(stdout, "%02X ",(unsigned char)sort_str[i]);
+  }
+  fprintf(stdout, "\n");
+}
+TEST_F(TestCharset, tis620_sortkey_test)
+{
+  ObArenaAllocator alloc;
+  ObCollationType coll = CS_TYPE_TIS620_THAI_CI;
+  const ObCharsetInfo * cs = ObCharset::get_charset(coll);
+  if (OB_NOT_NULL(cs)) {
+//test move state
+    const char tis620_str1[] = {'\x41','\xE7','\x42','\xE7','\x43','\xE9','\x44','\0'};//0x41E742E743E944
+    int len1 = 7;
+    char sort_dst1[] = {'\0','\0','\0','\0','\0','\0','\0','\0'};//0x41E742E743E944
+    const char tis620_str2[] = {'\x41','\xE7','\x42','\xE8','\x43','\xE9','\x44','\0'};//0x41E742E843E944
+    char sort_dst2[] = {'\0','\0','\0','\0','\0','\0','\0','\0'};//0x41E742E743E944
+    int len2 = 7;
+    const char tis620_str3[] = {'\x41','\xE7','\xE8','\xE9','\x42','\x43','\x44','\0'};
+    int len3 = 7;
+    char sort_dst3[] = {'\0','\0','\0','\0','\0','\0','\0','\0'};//0x41E742E743E944
+    const char tis620_str4[] = {'\xE7','\xE7','\xE8','\xE9','\xE9','\xE8','\xE7','\0'};
+    int len4 = 7;
+    char sort_dst4[] = {'\0','\0','\0','\0','\0','\0','\0','\0'};//0x41E742E743E944
+
+    ObString dst1;
+    ObString dst2;
+    if (cs->mbmaxlen <= 1) {
+      dst1 = ObString(tis620_str1);
+      dst2 = ObString(tis620_str2);
+    } else {
+      ASSERT_EQ(0, ObCharset::charset_convert(alloc, ObString(tis620_str1), CS_TYPE_UTF8MB4_BIN, coll, dst1));
+      ASSERT_EQ(0, ObCharset::charset_convert(alloc, ObString(tis620_str2), CS_TYPE_UTF8MB4_BIN, coll, dst2));
+    }
+    char*str1 = dst1.ptr();
+    char*end1 = dst1.ptr() + dst1.length();
+    char*str2 = dst2.ptr();
+    char*end2 = dst2.ptr() + dst2.length();
+
+    fprintf(stdout, "Test for mysql 5x: \n");
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str1), len1,pointer_cast<uchar*>(sort_dst1), len1);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str2), len2,pointer_cast<uchar*>(sort_dst2), len2);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str3), len3, pointer_cast<uchar*>(sort_dst3), len3);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str4), len4, pointer_cast<uchar*>(sort_dst4), len4);
+    debug_print_hex(tis620_str1, sort_dst1);
+    debug_print_hex(tis620_str2, sort_dst2);
+    debug_print_hex(tis620_str3, sort_dst3);
+    debug_print_hex(tis620_str4, sort_dst4);
+
+    fprintf(stdout, "Test for mysql 4x: \n");
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str1), len1, pointer_cast<uchar*>(sort_dst1), len1, 2);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str2), len2, pointer_cast<uchar*>(sort_dst2), len2, 2);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str3), len3, pointer_cast<uchar*>(sort_dst3), len3, 2);
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str4), len4, pointer_cast<uchar*>(sort_dst4), len4,2);
+    debug_print_hex(tis620_str1, sort_dst1);
+    debug_print_hex(tis620_str2, sort_dst2);
+    debug_print_hex(tis620_str3, sort_dst3);
+    debug_print_hex(tis620_str4, sort_dst4);
+
+
+//test swap
+    const char tis620_str5[] = {'\xE0','\xAA','\xE0','\xAA','\xE0','\xAA','\xE7','\0'};
+    int len5 = 7;
+    char sort_dst5[] = {'\0','\0','\0','\0','\0','\0','\0','\0'};
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str5), len5, pointer_cast<uchar*>(sort_dst5), len5);
+    debug_print_hex(tis620_str5, sort_dst5);
+
+    const char tis620_str6[] = {'\xE0','\xAA','\x41','\xE7','\x42','\xE7','\xE0','\xAA','\xE7','\0'};
+    int len6 = 9;
+    char sort_dst6[] = {'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0'};
+    debug_tis620_sortkey(pointer_cast<const uchar*>(tis620_str6), len6, pointer_cast<uchar*>(sort_dst6), len6);
+    debug_print_hex(tis620_str6, sort_dst6);
+
+
+//test strnncoll/strnncollsp
+    const char c1[] = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+    int llen1 = 41;
+    const char c2[] = "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH";
+    int llen2 = 41;
+    if (OB_NOT_NULL(cs->coll->strnncoll)) {
+      fprintf(stdout, ">> strnncoll = %d for text1 = \"%s\" vs text2 = \"%s\"\n",
+                cs->coll->strnncoll(cs, pointer_cast<const uchar*>(c1), llen1, pointer_cast<const uchar*>(c2), llen2, true),c1,c2);
+    }
+    const char c3[] = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh!";
+    int llen3 = 41;
+    const char c4[] = "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH";
+    int llen4 = 40;
+    if (OB_NOT_NULL(cs->coll->strnncollsp)) {
+      fprintf(stdout, ">> strnncoll = %d for text1 = \"%s\" vs text2 = \"%s\"\n",
+                cs->coll->strnncollsp(cs, pointer_cast<const uchar*>(c3), llen3, pointer_cast<const uchar*>(c4), llen4, true),c3,c4);
+    }
+
+    const char c5[] = "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH ";
+    int llen5 = 41;
+    const char c6[] = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+    int llen6 = 40;
+    if (OB_NOT_NULL(cs->coll->strnncollsp)) {
+      fprintf(stdout, ">> strnncoll = %d for text1 = \"%s\" vs text2 = \"%s\"\n",
+                cs->coll->strnncollsp(cs, pointer_cast<const uchar*>(c5), llen5, pointer_cast<const uchar*>(c6), llen6, true),c5,c6);
+    }
+  }
+}
+
 TEST_F(TestCharset, basic_charset_handler_test)
 {
   ObArenaAllocator alloc;
