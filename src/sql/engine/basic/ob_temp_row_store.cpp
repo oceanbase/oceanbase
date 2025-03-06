@@ -239,29 +239,37 @@ int ObTempRowStoreBase<RA>::RowBlock::calc_row_size(const common::ObIArray<ObExp
   for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
     if (reordered && row_meta.project_idx(col_idx) < row_meta.fixed_cnt_) {
       continue;
-    }
-    ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-    VectorFormat format = vec->get_format();
-    if (VEC_DISCRETE == format) {
-      ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
-      if (!disc_vec->is_null(batch_idx)) {
-        ObLength *lens = disc_vec->get_lens();
-        size += lens[batch_idx];
+    } else if (exprs.at(col_idx)->is_nested_expr() && !is_uniform_format(exprs.at(col_idx)->get_format(ctx))) {
+      int64_t len = 0;
+      if (OB_FAIL(ObArrayExprUtils::calc_nested_expr_data_size(*exprs.at(col_idx), ctx, batch_idx, len))) {
+        SQL_ENG_LOG(WARN, "fail to calc nested expr data size", K(ret));
+      } else {
+        size += len;
       }
-    } else if (VEC_CONTINUOUS == format) {
-      ObContinuousBase *cont_vec = static_cast<ObContinuousBase*>(vec);
-      uint32_t *offsets = cont_vec->get_offsets();
-      size += (offsets[batch_idx + 1] - offsets[batch_idx]);
-    } else if (is_uniform_format(format)) {
-      ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
-      ObDatum *datums = uni_vec->get_datums();
-      const uint64_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT64_MAX;
-      size += datums[batch_idx & idx_mask].len_;
-    } else if (VEC_FIXED == format) {
-      ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase*>(vec);
-      size += fixed_vec->get_length();
+    } else {
+      ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
+      VectorFormat format = vec->get_format();
+      if (VEC_DISCRETE == format) {
+        ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
+        if (!disc_vec->is_null(batch_idx)) {
+          ObLength *lens = disc_vec->get_lens();
+          size += lens[batch_idx];
+        }
+      } else if (VEC_CONTINUOUS == format) {
+        ObContinuousBase *cont_vec = static_cast<ObContinuousBase*>(vec);
+        uint32_t *offsets = cont_vec->get_offsets();
+        size += (offsets[batch_idx + 1] - offsets[batch_idx]);
+      } else if (is_uniform_format(format)) {
+        ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+        ObDatum *datums = uni_vec->get_datums();
+        const uint64_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT64_MAX;
+        size += datums[batch_idx & idx_mask].len_;
+      } else if (VEC_FIXED == format) {
+        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase*>(vec);
+        size += fixed_vec->get_length();
+      }
+      LOG_DEBUG("calc row size", K(col_idx), K(size), K(format));
     }
-    LOG_DEBUG("calc row size", K(col_idx), K(size), K(format));
   }
   return ret;
 }
