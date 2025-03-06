@@ -13972,6 +13972,10 @@ int ObDMLResolver::resolve_outline_data_hints()
                                     hints,
                                     qb_name))) {
       LOG_WARN("failed to resolve outline data hints", K(ret));
+    } else if (OB_UNLIKELY(0 == global_hint.max_concurrent_)) {
+      ret = OB_REACH_MAX_CONCURRENT_NUM;
+      LOG_USER_ERROR(OB_REACH_MAX_CONCURRENT_NUM, global_hint.max_concurrent_);
+      LOG_WARN("SQL reach max concurrent num 0", K(ret));
     } else if (hints.empty() && !global_hint.has_hint_exclude_concurrent()
                && ObGlobalHint::UNSET_MAX_CONCURRENT != global_hint.max_concurrent_) {
       /* max concurrent outline, do not ignore other hint */
