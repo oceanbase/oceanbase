@@ -797,13 +797,9 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece cache is null.", K(ret), K(stmt_id));
   } else if (NULL != column_map) {
-    if (OB_FAIL(ob_create_row(THIS_WORKER.get_sql_arena_allocator(), 
-                              src_row.get_count(), 
-                              row))) {
+    if (OB_FAIL(ob_create_row(arena_allocator, src_row.get_count(), row))) {
       LOG_WARN("create row fail.", K(ret), K(stmt_id));
-    } else if (OB_FAIL(ob_write_row_by_projector(THIS_WORKER.get_sql_arena_allocator(), 
-                                                 src_row, 
-                                                 row))) {
+    } else if (OB_FAIL(ob_write_row_by_projector(arena_allocator, src_row, row))) {
       LOG_WARN("wirte tmp row fail.", K(stmt_id));
     }
   } else {
@@ -851,11 +847,16 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("piece is null before use.", K(ret), K(stmt_id), K(i));
       } else if (is_lob_storage(value.get_type())) {
-        ObTextStringIter iter(value);
-        if (OB_FAIL(iter.init(0, &session, &(THIS_WORKER.get_sql_arena_allocator())))) {
-          LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
-        } else if (OB_FAIL(iter.get_full_data(str))) {
-          LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+        if (OB_FAIL(ObQueryDriver::convert_text_value_charset(
+                value, target_charset_type, arena_allocator, &session))) {
+          LOG_WARN("convert text value charset failed", K(ret), K(value));
+        } else {
+          ObTextStringIter iter(value);
+          if (OB_FAIL(iter.init(0, &session, &arena_allocator))) {
+            LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
+          } else if (OB_FAIL(iter.get_full_data(str))) {
+            LOG_WARN("Lob: get full data failed ", K(ret), K(value));
+          }
         }
       } else if (ob_is_string_type(value.get_type())) {
         if (CS_TYPE_INVALID != value.get_collation_type()
