@@ -11974,6 +11974,8 @@ int ObPLResolver::resolve_construct(const ObQualifiedName &q_name,
     OZ (resolve_collection_construct(q_name, udf_info, &user_type, expr));
   } else if (user_type.is_record_type() || user_type.is_opaque_type()) {
     OZ (resolve_object_construct(q_name, udf_info, user_type, expr));
+  } else if (user_type.is_associative_array_type()) {
+    OZ (resolve_associative_array_construct(q_name, udf_info, &user_type, expr));
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only allow collection construct and user define record construct", K(ret), K(user_type));
@@ -12293,6 +12295,32 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
     }
   }
   OX (expr = coll_expr);
+#else
+  UNUSEDx(q_name, udf_info, user_type, expr);
+#endif
+  return ret;
+}
+
+int ObPLResolver::resolve_associative_array_construct(const ObQualifiedName &q_name,
+                                               const ObUDFInfo &udf_info,
+                                               const ObUserDefinedType *user_type,
+                                               ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  ObConstRawExpr *null_expr = NULL;
+  ObObj obj;
+  CK (OB_NOT_NULL(udf_info.ref_expr_));
+  if (OB_SUCC(ret) &&
+      (udf_info.param_names_.count() > 0 || udf_info.ref_expr_->get_param_exprs().count() > 0)) { // only support empty constructor for associative array
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
+  }
+  OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
+  CK (OB_NOT_NULL(null_expr));
+  OX (obj.set_null());
+  OX (null_expr->set_value(obj));
+  OX (expr = null_expr);
 #else
   UNUSEDx(q_name, udf_info, user_type, expr);
 #endif

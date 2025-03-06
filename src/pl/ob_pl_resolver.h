@@ -361,6 +361,10 @@ public:
                                    const sql::ObUDFInfo &udf_info,
                                    const ObUserDefinedType *user_type,
                                    sql::ObRawExpr *&expr);
+  int resolve_associative_array_construct(const ObQualifiedName &q_name,
+                                   const ObUDFInfo &udf_info,
+                                   const ObUserDefinedType *user_type,
+                                   sql::ObRawExpr *&expr);
   int resolve_qualified_name(sql::ObQualifiedName &q_name,
                              ObIArray<sql::ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs,
