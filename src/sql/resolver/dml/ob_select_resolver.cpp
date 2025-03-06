@@ -2516,6 +2516,10 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     } else if (OB_FAIL(recursive_check_grouping_columns(select_stmt, select_item.expr_, false))) {
       LOG_WARN("failed to recursive check grouping columns", K(ret));
     } else {/*do nothing*/}
+
+    if (OB_SUCC(ret) && OB_FAIL(select_item.expr_->fast_check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    }
   } // end for
 
   if (OB_SUCC(ret)) {

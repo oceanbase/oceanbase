@@ -3087,7 +3087,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
 {
   int ret = OB_SUCCESS;
   bool is_external = false;
-  if (OB_ISNULL(stmt_) || OB_ISNULL(stmt_->get_query_ctx())) {
+  if (OB_ISNULL(get_basic_stmt()) || OB_ISNULL(get_basic_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
   } else if (q_name.is_sys_func()) {

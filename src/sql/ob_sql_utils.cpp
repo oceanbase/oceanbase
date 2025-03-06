@@ -769,6 +769,9 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
       phy_plan_ctx.set_timeout_timestamp(
           out_ctx->get_physical_plan_ctx()->get_timeout_timestamp());
     }
+    if (expr != NULL && OB_FAIL(expr->fast_check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    }
     for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
       if (OB_FAIL(phy_plan_ctx.get_param_store_for_update().push_back(params.at(i)))) {
         LOG_WARN("failed to push back element", K(ret));

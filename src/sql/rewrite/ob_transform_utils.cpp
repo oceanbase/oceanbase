@@ -7937,7 +7937,7 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
 {
   int ret = OB_SUCCESS;
   int64_t set_size = 32;
-  hash::ObHashSet<uint64_t> expr_set;
+  hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
   if (OB_ISNULL(parent)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(parent));
@@ -8001,13 +8001,15 @@ int ObTransformUtils::remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
 }
 
 int ObTransformUtils::append_hashset(ObRawExpr *expr,
-                                     hash::ObHashSet<uint64_t> &expr_set)
+                                     hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set)
 {
   int ret = OB_SUCCESS;
   uint64_t key = reinterpret_cast<uint64_t>(expr);
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     // do nothing
   } else if (OB_FAIL(expr_set.set_refactored(key))) {
@@ -8024,7 +8026,7 @@ int ObTransformUtils::append_hashset(ObRawExpr *expr,
 }
 
 int ObTransformUtils::find_hashset(ObRawExpr *expr,
-                                   hash::ObHashSet<uint64_t> &expr_set,
+                                   hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                                    ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
@@ -8032,6 +8034,8 @@ int ObTransformUtils::find_hashset(ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->fast_check_status())) {
+    LOG_WARN("check status failed", K(ret));
   } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
     if (OB_FAIL(add_var_to_array_no_dup(common_exprs, expr))) {
       LOG_WARN("failed to append expr", K(ret));
