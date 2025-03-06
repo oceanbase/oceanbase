@@ -2272,37 +2272,39 @@ int ObRecordType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
   if (OB_FAIL(ret)) {
   } else if (src->is_null() || src->get_ext() == 0) {
     dst->set_null();
-  } else if (dst->is_null() || dst->get_ext() == 0) {
-    int64_t ptr = 0;
-    OZ (newx(ctx.allocator_, &ctx, ptr));
-    OX (dst->set_extend(ptr, get_type(), get_init_size(get_member_count())));
-  }
-  CK (src->is_pl_extend() && ObPLType::PL_RECORD_TYPE == src->get_meta().get_extend_type());
-  if (OB_SUCC(ret)) {
-    ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src->get_ext());
-    ObPLComposite *dst_composite = reinterpret_cast<ObPLComposite*>(dst->get_ext());
-    ObPLRecord* src_record = static_cast<ObPLRecord*>(src_composite);
-    ObPLRecord* dst_record = static_cast<ObPLRecord*>(dst_composite);
-    CK (OB_NOT_NULL(src_composite) && src_composite->is_record());
-    CK (OB_NOT_NULL(dst_composite) && dst_composite->is_record());
-    CK (OB_NOT_NULL(src_record));
-    CK (OB_NOT_NULL(dst_record));
-    CK (OB_NOT_NULL(dst_record->get_allocator()));
+  } else {
+    if (dst->is_null() || dst->get_ext() == 0) {
+      int64_t ptr = 0;
+      OZ (newx(ctx.allocator_, &ctx, ptr));
+      OX (dst->set_extend(ptr, get_type(), get_init_size(get_member_count())));
+    }
+    CK (src->is_pl_extend() && ObPLType::PL_RECORD_TYPE == src->get_meta().get_extend_type());
     if (OB_SUCC(ret)) {
-      ObPLResolveCtx resolve_ctx(*dst_record->get_allocator(),
-                                  ctx.session_info_,
-                                  ctx.schema_guard_,
-                                  ctx.package_guard_,
-                                  ctx.sql_proxy_,
-                                  false);
-      for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-        const ObPLDataType *type = get_record_member_type(i);
-        ObObj* src_obj = NULL;
-        ObObj *dst_obj = NULL;
-        OZ (src_record->get_element(i, src_obj));
-        OZ (dst_record->get_element(i, dst_obj));
-        CK (OB_NOT_NULL(type));
-        OZ (type->convert(resolve_ctx, src_obj, dst_obj));
+      ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src->get_ext());
+      ObPLComposite *dst_composite = reinterpret_cast<ObPLComposite*>(dst->get_ext());
+      ObPLRecord* src_record = static_cast<ObPLRecord*>(src_composite);
+      ObPLRecord* dst_record = static_cast<ObPLRecord*>(dst_composite);
+      CK (OB_NOT_NULL(src_composite) && src_composite->is_record());
+      CK (OB_NOT_NULL(dst_composite) && dst_composite->is_record());
+      CK (OB_NOT_NULL(src_record));
+      CK (OB_NOT_NULL(dst_record));
+      CK (OB_NOT_NULL(dst_record->get_allocator()));
+      if (OB_SUCC(ret)) {
+        ObPLResolveCtx resolve_ctx(*dst_record->get_allocator(),
+                                    ctx.session_info_,
+                                    ctx.schema_guard_,
+                                    ctx.package_guard_,
+                                    ctx.sql_proxy_,
+                                    false);
+        for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
+          const ObPLDataType *type = get_record_member_type(i);
+          ObObj* src_obj = NULL;
+          ObObj *dst_obj = NULL;
+          OZ (src_record->get_element(i, src_obj));
+          OZ (dst_record->get_element(i, dst_obj));
+          CK (OB_NOT_NULL(type));
+          OZ (type->convert(resolve_ctx, src_obj, dst_obj));
+        }
       }
     }
   }
@@ -3267,67 +3269,79 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
 
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dst));
-  CK (OB_LIKELY(src->is_ext()));
-  CK (OB_LIKELY(dst->is_ext()));
-  CK (OB_NOT_NULL(src_table = reinterpret_cast<ObPLCollection *>(src->get_ext())));
-  CK (OB_NOT_NULL(dst_table = reinterpret_cast<ObPLCollection *>(dst->get_ext())));
-  CK (OB_NOT_NULL(dst_table->get_allocator()));
-  OZ (element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size));
-  OX (collection_allocator = dynamic_cast<ObPLAllocator1 *>(dst_table->get_allocator()));
-  CK (OB_NOT_NULL(collection_allocator));
+  if (OB_FAIL(ret)) {
+  } else if (src->is_null() || src->get_ext() == 0) {
+    dst->set_null();
+  } else {
+    CK (OB_LIKELY(src->is_ext()));
+    if (OB_SUCC(ret) && (dst->is_null() || dst->get_ext() == 0)) {
+      int64_t ptr = 0;
+      int64_t init_size = 0;
+      OZ (newx(ctx.allocator_, &ctx, ptr));
+      OZ (get_size(PL_TYPE_INIT_SIZE, init_size));
+      OX (dst->set_extend(ptr, get_type(), init_size));
+    }
+    CK (OB_LIKELY(dst->is_ext()));
+    CK (OB_NOT_NULL(src_table = reinterpret_cast<ObPLCollection *>(src->get_ext())));
+    CK (OB_NOT_NULL(dst_table = reinterpret_cast<ObPLCollection *>(dst->get_ext())));
+    CK (OB_NOT_NULL(dst_table->get_allocator()));
+    OZ (element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size));
+    OX (collection_allocator = dynamic_cast<ObPLAllocator1 *>(dst_table->get_allocator()));
+    CK (OB_NOT_NULL(collection_allocator));
 
-  if (OB_SUCC(ret) && src_table->get_count() > 0
-    && OB_ISNULL(table_data
-      = static_cast<char *>(
-          collection_allocator->alloc(element_init_size * src_table->get_count())))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc table data", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    ObPLResolveCtx resolve_ctx(*collection_allocator,
-                                ctx.session_info_,
-                                ctx.schema_guard_,
-                                ctx.package_guard_,
-                                ctx.sql_proxy_,
-                                false);
-    for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
-      ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
-      ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
-      if (src_table_pos->is_invalid_type()) {
-        OX (dst_table_pos->set_type(ObMaxType));
-      } else {
-        OX (new (dst_table_pos)ObObj());
-        OZ (element_type_.convert(resolve_ctx, src_table_pos, dst_table_pos));
+    if (OB_SUCC(ret) && src_table->get_count() > 0
+      && OB_ISNULL(table_data
+        = static_cast<char *>(
+            collection_allocator->alloc(element_init_size * src_table->get_count())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc table data", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      ObPLResolveCtx resolve_ctx(*collection_allocator,
+                                  ctx.session_info_,
+                                  ctx.schema_guard_,
+                                  ctx.package_guard_,
+                                  ctx.sql_proxy_,
+                                  false);
+      for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
+        ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
+        ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
+        if (src_table_pos->is_invalid_type()) {
+          OX (dst_table_pos->set_type(ObMaxType));
+        } else {
+          OX (new (dst_table_pos)ObObj());
+          OZ (element_type_.convert(resolve_ctx, src_table_pos, dst_table_pos));
+        }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    dst_table->set_type(src_table->get_type());
-    dst_table->set_allocator(collection_allocator);
-    dst_table->set_count(src_table->get_count());
-    if (src_table->get_count() > 0) {
-      dst_table->set_first(1);
-      dst_table->set_last(src_table->get_count());
-    } else {
-      dst_table->set_first(OB_INVALID_INDEX);
-      dst_table->set_last(OB_INVALID_INDEX);
-    }
-    dst_table->set_data(reinterpret_cast<ObObj*>(table_data), src_table->get_count());
+    if (OB_SUCC(ret)) {
+      dst_table->set_type(src_table->get_type());
+      dst_table->set_allocator(collection_allocator);
+      dst_table->set_count(src_table->get_count());
+      if (src_table->get_count() > 0) {
+        dst_table->set_first(1);
+        dst_table->set_last(src_table->get_count());
+      } else {
+        dst_table->set_first(OB_INVALID_INDEX);
+        dst_table->set_last(OB_INVALID_INDEX);
+      }
+      dst_table->set_data(reinterpret_cast<ObObj*>(table_data), src_table->get_count());
 
-    ObElemDesc elem_desc;
-    elem_desc.set_pl_type(element_type_.get_type());
-    elem_desc.set_not_null(element_type_.get_not_null());
-    if (OB_ISNULL(element_type_.get_data_type())) {
-      int64_t field_cnt = OB_INVALID_COUNT;
-      elem_desc.set_obj_type(common::ObExtendType);
-      elem_desc.set_udt_id(element_type_.get_user_type_id());
-      OZ (element_type_.get_field_count(ctx, field_cnt));
-      OX (elem_desc.set_field_count(field_cnt));
-    } else {
-      elem_desc.set_data_type(*(element_type_.get_data_type()));
-      elem_desc.set_field_count(1);
+      ObElemDesc elem_desc;
+      elem_desc.set_pl_type(element_type_.get_type());
+      elem_desc.set_not_null(element_type_.get_not_null());
+      if (OB_ISNULL(element_type_.get_data_type())) {
+        int64_t field_cnt = OB_INVALID_COUNT;
+        elem_desc.set_obj_type(common::ObExtendType);
+        elem_desc.set_udt_id(element_type_.get_user_type_id());
+        OZ (element_type_.get_field_count(ctx, field_cnt));
+        OX (elem_desc.set_field_count(field_cnt));
+      } else {
+        elem_desc.set_data_type(*(element_type_.get_data_type()));
+        elem_desc.set_field_count(1);
+      }
+      OX (dst_table->set_element_desc(elem_desc));
     }
-    OX (dst_table->set_element_desc(elem_desc));
   }
   return ret;
 }
